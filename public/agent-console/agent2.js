@@ -267,17 +267,21 @@
     DOM.btnResetSession.addEventListener('click', resetTestSession);
     DOM.btnGeneratePayload.addEventListener('click', generateSamplePayload);
     
-    // Track changes
+    // Track changes (with null checks for optional fields)
     const inputs = [
       DOM.inputGreetingInitial,
       DOM.inputGreetingReturn,
       DOM.inputAckWord,
       DOM.inputRobotChallengeLine
-    ];
+    ].filter(Boolean);
+    
     inputs.forEach(input => {
       input.addEventListener('input', () => { state.isDirty = true; });
     });
-    DOM.inputRobotChallengeEnabled.addEventListener('change', () => { state.isDirty = true; });
+    
+    if (DOM.inputRobotChallengeEnabled) {
+      DOM.inputRobotChallengeEnabled.addEventListener('change', () => { state.isDirty = true; });
+    }
   }
 
   /* --------------------------------------------------------------------------
@@ -324,17 +328,17 @@
       }
     }
     
-    DOM.statClarifiers.textContent = config.clarifiers?.length || 0;
-    DOM.statVocabulary.textContent = config.discovery?.vocabulary?.length || 0;
+    if (DOM.statClarifiers) DOM.statClarifiers.textContent = config.clarifiers?.length || 0;
+    if (DOM.statVocabulary) DOM.statVocabulary.textContent = config.discovery?.vocabulary?.length || 0;
     
-    // Greeting
-    DOM.inputGreetingInitial.value = config.greetings?.initial || '';
-    DOM.inputGreetingReturn.value = config.greetings?.returnCaller || '';
+    // Legacy Greeting (backward compatibility - these fields may not exist in new UI)
+    if (DOM.inputGreetingInitial) DOM.inputGreetingInitial.value = config.greetings?.initial || '';
+    if (DOM.inputGreetingReturn) DOM.inputGreetingReturn.value = config.greetings?.returnCaller || '';
     
     // Discovery style
-    DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
-    DOM.inputRobotChallengeEnabled.checked = config.discovery?.style?.robotChallenge?.enabled || false;
-    DOM.inputRobotChallengeLine.value = config.discovery?.style?.robotChallenge?.line || '';
+    if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
+    if (DOM.inputRobotChallengeEnabled) DOM.inputRobotChallengeEnabled.checked = config.discovery?.style?.robotChallenge?.enabled || false;
+    if (DOM.inputRobotChallengeLine) DOM.inputRobotChallengeLine.value = config.discovery?.style?.robotChallenge?.line || '';
     
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
