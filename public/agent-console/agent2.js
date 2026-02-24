@@ -695,11 +695,53 @@
         state.greetings = response.data;
         console.log('[Greetings] State updated:', state.greetings);
         console.log('[Greetings] Rules loaded:', state.greetings.interceptor?.rules);
+        
+        // Auto-migrate if old schema detected
+        await checkAndMigrateSchema();
+        
         renderGreetings();
       }
     } catch (error) {
       console.error('[Greetings] Load failed:', error);
       showToast('error', 'Load Failed', 'Could not load greetings configuration.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * CHECK AND AUTO-MIGRATE OLD SCHEMA
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function checkAndMigrateSchema() {
+    const rules = state.greetings.interceptor?.rules || [];
+    
+    if (rules.length === 0) return;
+    
+    // Check if any rule has old schema (has 'id' but not 'ruleId')
+    const hasOldSchema = rules.some(r => r.id && !r.ruleId);
+    
+    if (hasOldSchema) {
+      console.log('[Greetings] Old schema detected, auto-migrating...');
+      
+      try {
+        const response = await AgentConsoleAuth.apiFetch(
+          `/api/admin/agent2/${state.companyId}/greetings/migrate-schema`,
+          { method: 'POST' }
+        );
+        
+        if (response.success) {
+          console.log('[Greetings] Schema migrated successfully:', response.data);
+          
+          // Reload greetings to get migrated data
+          const reloadResponse = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/${state.companyId}/greetings`);
+          if (reloadResponse.success && reloadResponse.data) {
+            state.greetings = reloadResponse.data;
+            console.log('[Greetings] Reloaded after migration:', state.greetings);
+          }
+        }
+      } catch (error) {
+        console.error('[Greetings] Auto-migration failed:', error);
+      }
     }
   }
   
@@ -795,25 +837,18 @@
     const sortedRules = [...rules].sort((a, b) => (b.priority || 50) - (a.priority || 50));
     
     const rowsHtml = sortedRules.map(rule => {
-      console.log('[Greetings] Rendering rule - ALL FIELDS:', JSON.stringify(rule, null, 2));
-      console.log('[Greetings] Rule keys:', Object.keys(rule));
-      
       const isEnabled = rule.enabled !== false;
       const hasAudio = Boolean(rule.audioUrl);
-      const matchBadgeColor = rule.matchType === 'EXACT' ? '#16a34a' : (rule.matchType === 'CONTAINS' ? '#3b82f6' : '#a855f7');
+      
+      // Support both old and new field names for matchType
+      const matchType = rule.matchType || rule.matchMode || 'EXACT';
+      const matchBadgeColor = matchType === 'EXACT' ? '#16a34a' : (matchType === 'CONTAINS' ? '#3b82f6' : '#a855f7');
       
       const triggersDisplay = (rule.triggers || []).join(', ') || '—';
-      // Check both new and old field names
+      
+      // Support both old and new field names for response and ruleId
       const responseDisplay = rule.response || rule.responseText || '—';
       const actualRuleId = rule.ruleId || rule.id || `rule-${Date.now()}`;
-      
-      console.log('[Greetings] Rule fields:', { 
-        ruleId: rule.ruleId, 
-        id: rule.id,
-        response: rule.response,
-        responseText: rule.responseText,
-        responseDisplay 
-      });
       
       return `
         <div style="display: grid; grid-template-columns: 50px 60px 80px 1fr 1fr 100px 80px; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; align-items: center; ${!isEnabled ? 'opacity: 0.5;' : ''}">
@@ -826,7 +861,7 @@
           <div style="font-weight: 600; font-size: 0.875rem;">${rule.priority || 50}</div>
           <div>
             <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; background: ${matchBadgeColor}; color: white;">
-              ${rule.matchType || 'EXACT'}
+              ${matchType}
             </span>
           </div>
           <div style="font-size: 0.875rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(triggersDisplay)}">
@@ -1116,9 +1151,10 @@
     DOM.greetingRuleModalTitle.textContent = 'Edit Greeting Rule';
     DOM.inputRuleIdEdit.value = rule.ruleId || rule.id || '';
     DOM.inputRulePriority.value = rule.priority || 50;
-    DOM.inputRuleMatchType.value = rule.matchType || 'EXACT';
+    // Support both old and new field names for matchType
+    DOM.inputRuleMatchType.value = rule.matchType || rule.matchMode || 'EXACT';
     DOM.inputRuleTriggers.value = (rule.triggers || []).join(', ');
-    // Support both new and old field names
+    // Support both new and old field names for response
     DOM.inputRuleResponse.value = rule.response || rule.responseText || '';
     DOM.inputRuleAudio.value = rule.audioUrl || '';
     DOM.btnPlayRuleAudio.style.display = rule.audioUrl ? 'block' : 'none';

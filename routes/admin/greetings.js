@@ -1306,6 +1306,95 @@ router.post(
     }
 );
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * POST /:companyId/greetings/migrate-schema
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Migrate old greeting rules to new schema
+ * Converts: id → ruleId, responseText → response, matchMode → matchType
+ * 
+ * RESPONSE:
+ * {
+ *   success: true,
+ *   data: { rulesMigrated: number, rulesDeleted: number }
+ * }
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+router.post(
+    '/:companyId/greetings/migrate-schema',
+    authenticateJWT,
+    requirePermission(PERMISSIONS.CONFIG_WRITE),
+    async (req, res) => {
+        try {
+            const { companyId } = req.params;
+            
+            logger.info(`[${MODULE_ID}] Migrating greeting schema`, { companyId });
+            
+            const company = await v2Company.findById(companyId);
+            
+            if (!company) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Company not found'
+                });
+            }
+            
+            const oldRules = company.aiAgentSettings?.agent2?.greetings?.interceptor?.rules || [];
+            
+            if (oldRules.length === 0) {
+                return res.json({
+                    success: true,
+                    message: 'No rules to migrate',
+                    data: { rulesMigrated: 0, rulesDeleted: 0 }
+                });
+            }
+            
+            logger.info(`[${MODULE_ID}] Found ${oldRules.length} rules to migrate`, { companyId });
+            
+            // Migrate each rule to new schema
+            const migratedRules = oldRules.map(rule => ({
+                ruleId: rule.ruleId || rule.id || `migrated-${Date.now()}`,
+                enabled: rule.enabled !== false,
+                priority: rule.priority || 50,
+                matchType: rule.matchType || rule.matchMode || 'EXACT',
+                triggers: rule.triggers || [],
+                response: rule.response || rule.responseText || '',
+                audioUrl: rule.audioUrl || null,
+                audioTextHash: rule.audioTextHash || null,
+                audioGeneratedAt: rule.audioGeneratedAt || null,
+                createdAt: rule.createdAt || new Date(),
+                updatedAt: new Date()
+            }));
+            
+            // Replace old rules with migrated rules
+            company.aiAgentSettings.agent2.greetings.interceptor.rules = migratedRules;
+            
+            company.markModified('aiAgentSettings');
+            await company.save();
+            
+            logger.info(`[${MODULE_ID}] Schema migration complete`, {
+                companyId,
+                rulesMigrated: migratedRules.length
+            });
+            
+            res.json({
+                success: true,
+                data: {
+                    rulesMigrated: migratedRules.length,
+                    rules: migratedRules
+                }
+            });
+            
+        } catch (error) {
+            logger.error(`[${MODULE_ID}] Error migrating schema:`, error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to migrate greeting schema'
+            });
+        }
+    }
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORT ROUTER
 // ═══════════════════════════════════════════════════════════════════════════
