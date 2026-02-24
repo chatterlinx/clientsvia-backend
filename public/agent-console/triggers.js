@@ -259,6 +259,18 @@
         closeGptSettingsModal();
       }
     });
+    
+    // ElevenLabs setup link
+    document.addEventListener('click', (e) => {
+      if (e.target.id === 'link-elevenlabs-setup' || e.target.closest('#link-elevenlabs-setup')) {
+        e.preventDefault();
+        window.open(`/company-profile.html?companyId=${encodeURIComponent(state.companyId)}#elevenlabs`, '_blank');
+      }
+      if (e.target.id === 'link-audio-help' || e.target.closest('#link-audio-help')) {
+        e.preventDefault();
+        window.open(`/company-profile.html?companyId=${encodeURIComponent(state.companyId)}#elevenlabs`, '_blank');
+      }
+    });
   }
 
   /* --------------------------------------------------------------------------
