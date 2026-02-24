@@ -432,15 +432,9 @@
      SAVE CONFIG
      -------------------------------------------------------------------------- */
   async function saveConfig() {
-    const returnCallerText = DOM.inputGreetingReturn ? DOM.inputGreetingReturn.value.trim() : '';
     const updates = {
-      greetings: {
-        initial: DOM.inputGreetingInitial ? DOM.inputGreetingInitial.value.trim() : '',
-        returnCaller: {
-          enabled: Boolean(returnCallerText),
-          text: returnCallerText
-        }
-      },
+      // IMPORTANT: Greetings are managed by dedicated /greetings endpoints.
+      // Do not write partial greetings here, or we risk overwriting callStart/interceptor/audio fields.
       discovery: {
         ...state.config.discovery,
         style: {
@@ -958,7 +952,7 @@
         DOM.inputCallStartAudio.value = response.audioUrl;
         DOM.btnPlayCallStartAudio.style.display = 'block';
         btn.textContent = 'Regenerate';
-        DOM.callStartAudioStatus.innerHTML = '<span style="color: #16a34a;">✅ Audio generated! Click Save Changes to keep it.</span>';
+        DOM.callStartAudioStatus.innerHTML = '<span style="color: #16a34a;">✅ Audio generated and saved.</span>';
         
         showToast('success', 'Audio Generated', response.cached ? 'Using cached audio' : 'Audio created with your ElevenLabs voice');
       }

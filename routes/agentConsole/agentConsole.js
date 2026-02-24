@@ -757,7 +757,40 @@ router.patch(
         company.aiAgentSettings.agent2 = {};
       }
       
-      Object.assign(company.aiAgentSettings.agent2, updates);
+      // Merge updates safely. Avoid replacing nested greetings structures with partial payloads.
+      if (updates && typeof updates === 'object') {
+        for (const [key, value] of Object.entries(updates)) {
+          if (key === 'greetings' && value && typeof value === 'object') {
+            const currentGreetings = company.aiAgentSettings.agent2.greetings || {};
+            const nextGreetings = { ...currentGreetings, ...value };
+
+            if (value.callStart && typeof value.callStart === 'object') {
+              nextGreetings.callStart = {
+                ...(currentGreetings.callStart || {}),
+                ...value.callStart
+              };
+            }
+            if (value.interceptor && typeof value.interceptor === 'object') {
+              const currentInterceptor = currentGreetings.interceptor || {};
+              const nextInterceptor = {
+                ...currentInterceptor,
+                ...value.interceptor
+              };
+              if (value.interceptor.shortOnlyGate && typeof value.interceptor.shortOnlyGate === 'object') {
+                nextInterceptor.shortOnlyGate = {
+                  ...(currentInterceptor.shortOnlyGate || {}),
+                  ...value.interceptor.shortOnlyGate
+                };
+              }
+              nextGreetings.interceptor = nextInterceptor;
+            }
+
+            company.aiAgentSettings.agent2.greetings = nextGreetings;
+          } else {
+            company.aiAgentSettings.agent2[key] = value;
+          }
+        }
+      }
       await company.save();
       
       // Invalidate truth cache for this company
