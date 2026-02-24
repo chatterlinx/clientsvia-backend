@@ -122,7 +122,6 @@
     inputMaxWords: document.getElementById('input-max-words'),
     toggleBlockIntentWords: document.getElementById('toggle-block-intent-words'),
     inputIntentWords: document.getElementById('input-intent-words'),
-    btnSeedGreetings: document.getElementById('btn-seed-greetings'),
     greetingRulesList: document.getElementById('greeting-rules-list'),
     btnAddGreetingRule: document.getElementById('btn-add-greeting-rule'),
     
@@ -711,17 +710,17 @@
    * ───────────────────────────────────────────────────────────────────────
    * CHECK AND AUTO-MIGRATE OLD SCHEMA
    * ───────────────────────────────────────────────────────────────────────
+   * Automatically migrates old greeting rules from legacy schema to new schema
+   * ───────────────────────────────────────────────────────────────────────
    */
   async function checkAndMigrateSchema() {
     const rules = state.greetings.interceptor?.rules || [];
-    
-    if (rules.length === 0) return;
     
     // Check if any rule has old schema (has 'id' but not 'ruleId')
     const hasOldSchema = rules.some(r => r.id && !r.ruleId);
     
     if (hasOldSchema) {
-      console.log('[Greetings] Old schema detected, auto-migrating...');
+      console.log('[Greetings] Old schema detected, auto-migrating to new schema...');
       
       try {
         const response = await AgentConsoleAuth.apiFetch(
@@ -731,6 +730,7 @@
         
         if (response.success) {
           console.log('[Greetings] Schema migrated successfully:', response.data);
+          showToast('success', 'Migrated', `Greeting rules updated to new schema (${response.data.rulesMigrated} rules)`);
           
           // Reload greetings to get migrated data
           const reloadResponse = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/${state.companyId}/greetings`);
@@ -827,7 +827,7 @@
     if (rules.length === 0) {
       DOM.greetingRulesList.innerHTML = `
         <div style="padding: 40px 20px; text-align: center; color: #6b7280;">
-          <p>No greeting rules yet. Click "Add Rule" or "Seed From Global" to get started.</p>
+          <p>No greeting rules yet. Click "Add Rule" to create your first greeting response.</p>
         </div>
       `;
       return;
@@ -1072,40 +1072,6 @@
     } catch (error) {
       console.error('[Greetings] Save interceptor failed:', error);
       showToast('error', 'Save Failed', error.message || 'Could not save interceptor settings.');
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * SEED FROM GLOBAL (Load Default Greeting Rules)
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  async function seedGlobalGreetings() {
-    if (!confirm('Load default greeting rules?\n\nThis will add 4 standard greeting rules (hi/hello, good morning, good afternoon, good evening) if they don\'t already exist.')) {
-      return;
-    }
-    
-    try {
-      const response = await AgentConsoleAuth.apiFetch(
-        `/api/admin/agent2/${state.companyId}/greetings/seed-global`,
-        { method: 'POST' }
-      );
-      
-      if (response.success) {
-        const { rulesAdded, rules } = response.data;
-        
-        if (rulesAdded === 0) {
-          showToast('info', 'Already Loaded', 'All default greeting rules already exist.');
-        } else {
-          showToast('success', 'Rules Added', `${rulesAdded} default greeting rules added successfully.`);
-          
-          // Reload greetings to show new rules
-          await loadGreetings();
-        }
-      }
-    } catch (error) {
-      console.error('[Greetings] Seed global failed:', error);
-      showToast('error', 'Seed Failed', error.message || 'Could not load default greeting rules.');
     }
   }
   
@@ -1472,9 +1438,6 @@
       DOM.inputIntentWords.addEventListener('blur', saveGreetingInterceptor);
     }
     
-    if (DOM.btnSeedGreetings) {
-      DOM.btnSeedGreetings.addEventListener('click', seedGlobalGreetings);
-    }
     
     if (DOM.btnAddGreetingRule) {
       DOM.btnAddGreetingRule.addEventListener('click', openAddGreetingRuleModal);
@@ -1729,7 +1692,7 @@
       gate.style.borderColor = '#dc2626';
       gate.style.background = '#fef2f2';
       badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NO RULES</span>';
-      status.innerHTML = 'Enabled but no greeting rules configured. Click "Seed From Global" or "Add Rule".';
+      status.innerHTML = 'Enabled but no greeting rules configured. Click "Add Rule" to create greeting responses.';
       status.style.color = '#dc2626';
     } else {
       // SUCCESS: Has rules
