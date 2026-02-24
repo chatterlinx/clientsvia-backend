@@ -40,13 +40,68 @@ const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 const Agent2SpeechPreprocessor = require('./Agent2SpeechPreprocessor');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
+const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
 
+// Cache for company trigger variables (per call, keyed by companyId)
+const triggerVariablesCache = new Map();
+
 // ────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Substitute trigger card variables in text (e.g., {diagnosticfee} → "80 dollars")
+ * These are stored in CompanyTriggerSettings.companyVariables, separate from
+ * the general aiAgentSettings.variables used by placeholderReplacer.
+ * 
+ * @param {string} text - Text potentially containing {variable} placeholders
+ * @param {string} companyId - Company ID to load variables for
+ * @returns {Promise<string>} Text with variables substituted
+ */
+async function substituteTriggerVariables(text, companyId) {
+  if (!text || typeof text !== 'string' || !companyId) return text;
+  
+  // Check if text contains any placeholders
+  if (!text.includes('{')) return text;
+  
+  try {
+    // Check cache first
+    let variables = triggerVariablesCache.get(companyId);
+    
+    if (!variables) {
+      const settings = await CompanyTriggerSettings.findOne({ companyId }).lean();
+      if (settings?.companyVariables) {
+        variables = settings.companyVariables instanceof Map
+          ? Object.fromEntries(settings.companyVariables)
+          : settings.companyVariables;
+      } else {
+        variables = {};
+      }
+      triggerVariablesCache.set(companyId, variables);
+    }
+    
+    if (Object.keys(variables).length === 0) return text;
+    
+    // Replace placeholders (case-insensitive)
+    let result = text;
+    for (const [varName, value] of Object.entries(variables)) {
+      if (!value) continue;
+      const regex = new RegExp(`\\{${varName}\\}`, 'gi');
+      result = result.replace(regex, value);
+    }
+    
+    return result;
+  } catch (err) {
+    logger.warn('[Agent2Discovery] Failed to substitute trigger variables', { 
+      companyId, 
+      error: err.message 
+    });
+    return text;
+  }
+}
 
 function safeArr(v) {
   return Array.isArray(v) ? v : (v ? [v] : []);
@@ -1312,8 +1367,22 @@ class Agent2DiscoveryRunner {
         nextAction
       });
 
+      // Substitute trigger card variables in response text for TTS fallback
+      // e.g., {diagnosticfee} → "80 dollars"
+      // This ensures if audio is missing/invalid, TTS reads actual values not placeholders
+      const finalResponse = await substituteTriggerVariables(response, companyId);
+      
+      if (finalResponse !== response) {
+        emit('A2_TRIGGER_VARIABLES_SUBSTITUTED', {
+          cardId: card.id,
+          originalLength: response.length,
+          finalLength: finalResponse.length,
+          hadPlaceholders: true
+        });
+      }
+
       return {
-        response,
+        response: finalResponse,
         matchSource: 'AGENT2_DISCOVERY',
         state: nextState,
         audioUrl: audioUrl || null,
