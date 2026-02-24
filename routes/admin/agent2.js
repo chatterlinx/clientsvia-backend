@@ -1641,20 +1641,27 @@ router.post('/:companyId/generate-trigger-audio',
         return res.status(404).json({ success: false, error: 'Company not found' });
       }
 
-      // Get company's ElevenLabs voice settings
-      const voiceId = company.elevenLabsVoiceId || company.aiAgentSettings?.voice?.elevenLabsVoiceId;
+      // Get company's ElevenLabs voice settings from the correct path
+      const voiceSettings = company.aiAgentSettings?.voiceSettings;
+      const voiceId = voiceSettings?.voiceId;
+      
       if (!voiceId) {
         return res.status(400).json({
           success: false,
           error: 'No ElevenLabs voice configured for this company',
-          hint: 'Configure voice in Company Profile → ElevenLabs section'
+          hint: 'Configure voice in Company Profile → Voice Settings section',
+          debugInfo: {
+            hasAiAgentSettings: Boolean(company.aiAgentSettings),
+            hasVoiceSettings: Boolean(voiceSettings),
+            voiceSettingsKeys: voiceSettings ? Object.keys(voiceSettings) : []
+          }
         });
       }
 
-      const stability = company.aiAgentSettings?.voice?.stability ?? 0.5;
-      const similarityBoost = company.aiAgentSettings?.voice?.similarityBoost ?? 0.75;
-      const styleExaggeration = company.aiAgentSettings?.voice?.styleExaggeration ?? 0;
-      const aiModel = company.aiAgentSettings?.voice?.aiModel || 'eleven_multilingual_v2';
+      const stability = voiceSettings?.stability ?? 0.5;
+      const similarityBoost = voiceSettings?.similarityBoost ?? 0.75;
+      const styleExaggeration = voiceSettings?.style ?? 0;
+      const aiModel = voiceSettings?.model || 'eleven_turbo_v2_5';
 
       // Generate audio using ElevenLabs
       logger.info('[Agent2Audio] Generating audio', {
