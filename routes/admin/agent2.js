@@ -760,15 +760,24 @@ function validatePublishReadiness(companyDoc) {
   const discovery = agent2.discovery || {};
   const bookingPrompts = agent2.bookingPrompts || {};
   const recoveryMessages = settings.llm0Controls?.recoveryMessages || {};
+  const fallback = discovery.playbook?.fallback || {};
+  const discoveryHandoff = discovery.discoveryHandoff || {};
+  const voiceSettings = settings.voiceSettings || {};
 
   const requiredChecks = [
+    { key: 'agent2.greetings.callStart.text', ok: Boolean((callStart.text || '').trim()) },
     { key: 'agent2.bookingPrompts.askName', ok: Boolean((bookingPrompts.askName || '').trim()) },
     { key: 'agent2.bookingPrompts.askPhone', ok: Boolean((bookingPrompts.askPhone || '').trim()) },
     { key: 'llm0Controls.recoveryMessages.audioUnclear', ok: Boolean((recoveryMessages.audioUnclear || '').trim()) },
     { key: 'llm0Controls.recoveryMessages.noSpeech', ok: Boolean((recoveryMessages.noSpeech || '').trim()) },
     { key: 'agent2.greetings.callStart.emergencyFallback', ok: Boolean((callStart.emergencyFallback || '').trim()) },
     { key: 'agent2.greetings.returnCaller.text', ok: Boolean(returnCallerText.trim()) },
-    { key: 'agent2.discovery.holdMessage', ok: Boolean((discovery.holdMessage || '').trim()) }
+    { key: 'agent2.discovery.holdMessage', ok: Boolean((discovery.holdMessage || '').trim()) },
+    { key: 'agent2.discovery.discoveryHandoff.consentQuestion', ok: Boolean((discoveryHandoff.consentQuestion || '').trim()) },
+    { key: 'agent2.discovery.playbook.fallback.noMatchAnswer', ok: Boolean((fallback.noMatchAnswer || '').trim()) },
+    { key: 'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured', ok: Boolean((fallback.noMatchWhenReasonCaptured || '').trim()) },
+    { key: 'agent2.discovery.playbook.fallback.noMatchClarifierQuestion', ok: Boolean((fallback.noMatchClarifierQuestion || '').trim()) },
+    { key: 'voiceSettings.voiceId', ok: Boolean((voiceSettings.voiceId || '').trim()) }
   ];
 
   const missingKeys = requiredChecks.filter(item => !item.ok).map(item => item.key);
@@ -776,6 +785,35 @@ function validatePublishReadiness(companyDoc) {
     ready: missingKeys.length === 0,
     missingKeys
   };
+}
+
+function getInvalidRequiredFieldUpdates(updates) {
+  const invalid = [];
+  const isBlank = (v) => typeof v === 'string' && v.trim() === '';
+
+  if (updates?.greetings?.callStart?.text !== undefined && isBlank(updates.greetings.callStart.text)) {
+    invalid.push('agent2.greetings.callStart.text');
+  }
+  if (updates?.greetings?.callStart?.emergencyFallback !== undefined && isBlank(updates.greetings.callStart.emergencyFallback)) {
+    invalid.push('agent2.greetings.callStart.emergencyFallback');
+  }
+  if (updates?.discovery?.holdMessage !== undefined && isBlank(updates.discovery.holdMessage)) {
+    invalid.push('agent2.discovery.holdMessage');
+  }
+  if (updates?.discovery?.discoveryHandoff?.consentQuestion !== undefined && isBlank(updates.discovery.discoveryHandoff.consentQuestion)) {
+    invalid.push('agent2.discovery.discoveryHandoff.consentQuestion');
+  }
+  if (updates?.discovery?.playbook?.fallback?.noMatchAnswer !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchAnswer)) {
+    invalid.push('agent2.discovery.playbook.fallback.noMatchAnswer');
+  }
+  if (updates?.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchWhenReasonCaptured)) {
+    invalid.push('agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured');
+  }
+  if (updates?.discovery?.playbook?.fallback?.noMatchClarifierQuestion !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchClarifierQuestion)) {
+    invalid.push('agent2.discovery.playbook.fallback.noMatchClarifierQuestion');
+  }
+
+  return invalid;
 }
 
 // ============================================================================
@@ -953,6 +991,15 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
   try {
     const { companyId } = req.params;
     const updates = safeObject(req.body, {});
+    const invalidRequiredUpdates = getInvalidRequiredFieldUpdates(updates);
+    if (invalidRequiredUpdates.length > 0) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_REQUIRED_SPEECH_FIELD_UPDATE',
+        message: 'Required speech fields cannot be set to blank.',
+        invalidFields: invalidRequiredUpdates
+      });
+    }
 
     const beforeCompany = await v2Company.findById(companyId)
       .select('aiAgentSettings agentSettings twilioConfig')
