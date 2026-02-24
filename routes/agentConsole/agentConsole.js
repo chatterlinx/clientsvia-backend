@@ -26,6 +26,13 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigCacheService = require('../../services/ConfigCacheService');
 
+// Trigger models for comprehensive truth assembly
+const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
+const GlobalTrigger = require('../../models/GlobalTrigger');
+const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
+const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+const TriggerAudio = require('../../models/TriggerAudio');
+
 const MODULE_ID = 'AGENT_CONSOLE_API';
 const VERSION = 'AC1.0';
 
@@ -164,6 +171,11 @@ async function readAgent2Truth(companyId) {
   
   const agent2 = company.aiAgentSettings?.agent2 || {};
   
+  // ─────────────────────────────────────────────────────────────────────────
+  // TRIGGER CARDS: Full data assembly (mirrors buildMergedTriggerList)
+  // ─────────────────────────────────────────────────────────────────────────
+  const triggerData = await assembleTriggerTruth(companyId);
+  
   return {
     enabled: agent2.enabled !== false,
     discoveryEnabled: agent2.discovery?.enabled !== false,
@@ -179,7 +191,8 @@ async function readAgent2Truth(companyId) {
       enabled: agent2.llmFallback?.enabled || false,
       model: agent2.llmFallback?.model || 'gpt-4o-mini'
     },
-    triggerCardsCount: agent2.triggerCards?.length || 0,
+    // Full trigger data instead of just counts
+    triggers: triggerData,
     clarifiersCount: agent2.clarifiers?.length || 0,
     vocabularyCount: agent2.discovery?.vocabulary?.length || 0,
     globalNegativeKeywordsCount: agent2.globalNegativeKeywords?.length || 0,
@@ -187,6 +200,178 @@ async function readAgent2Truth(companyId) {
       enabled: agent2.bridge?.enabled || false,
       thresholdMs: agent2.bridge?.thresholdMs || 1100
     }
+  };
+}
+
+/**
+ * Assemble comprehensive trigger truth for a company
+ * Includes: global triggers, local triggers, overrides, audio status, company variables
+ */
+async function assembleTriggerTruth(companyId) {
+  // Load company trigger settings
+  const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+  
+  // Load global triggers if company has an active group
+  let globalTriggers = [];
+  let activeGroup = null;
+  
+  if (settings?.activeGroupId) {
+    globalTriggers = await GlobalTrigger.findByGroupId(settings.activeGroupId);
+    const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+    if (group) {
+      activeGroup = {
+        groupId: group.groupId,
+        name: group.name,
+        icon: group.icon,
+        version: group.version,
+        publishedVersion: group.publishedVersion
+      };
+    }
+  }
+  
+  // Load local triggers for this company
+  const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+  
+  // Load company-specific audio
+  const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
+  const audioMap = new Map();
+  audioRecordings.forEach(a => audioMap.set(a.ruleId, a));
+  
+  // Build disabled/override sets
+  const disabledGlobalSet = new Set(settings?.disabledGlobalTriggerIds || []);
+  const partialOverrideMap = new Map();
+  if (settings?.partialOverrides) {
+    const overrides = settings.partialOverrides instanceof Map 
+      ? settings.partialOverrides 
+      : new Map(Object.entries(settings.partialOverrides || {}));
+    overrides.forEach((value, key) => partialOverrideMap.set(key, value));
+  }
+  
+  // Full overrides by ruleId
+  const fullOverrideByRuleId = new Map();
+  localTriggers.forEach(lt => {
+    if (lt.isOverride && lt.overrideOfRuleId) {
+      fullOverrideByRuleId.set(lt.overrideOfRuleId, lt);
+    }
+  });
+  
+  // Company variables
+  let companyVariables = {};
+  if (settings?.companyVariables) {
+    companyVariables = settings.companyVariables instanceof Map
+      ? Object.fromEntries(settings.companyVariables)
+      : (typeof settings.companyVariables === 'object' ? settings.companyVariables : {});
+  }
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // Assemble merged trigger list
+  // ─────────────────────────────────────────────────────────────────────────
+  const triggers = [];
+  
+  // Process global triggers
+  for (const gt of globalTriggers) {
+    // Skip if fully overridden
+    if (fullOverrideByRuleId.has(gt.ruleId)) continue;
+    
+    const partialOverride = partialOverrideMap.get(gt.triggerId);
+    const isDisabled = disabledGlobalSet.has(gt.triggerId);
+    const companyAudio = audioMap.get(gt.ruleId);
+    
+    const effectiveAnswerText = partialOverride?.answerText || gt.answerText;
+    const hasValidAudio = companyAudio && companyAudio.isValid && 
+                          companyAudio.textHash === TriggerAudio.hashText(effectiveAnswerText);
+    
+    triggers.push({
+      triggerId: gt.triggerId,
+      ruleId: gt.ruleId,
+      label: gt.label,
+      scope: 'GLOBAL',
+      originGroupId: gt.groupId,
+      isEnabled: !isDisabled,
+      isOverridden: Boolean(partialOverride),
+      overrideType: partialOverride ? 'PARTIAL' : null,
+      priority: gt.priority,
+      responseMode: gt.responseMode || 'standard',
+      match: {
+        keywords: gt.keywords || [],
+        phrases: gt.phrases || [],
+        negativeKeywords: gt.negativeKeywords || []
+      },
+      answer: {
+        answerText: effectiveAnswerText,
+        hasAudio: Boolean(hasValidAudio),
+        audioNeedsRegeneration: companyAudio && !hasValidAudio
+      },
+      followUp: {
+        question: gt.followUpQuestion || '',
+        nextAction: gt.followUpNextAction || ''
+      },
+      // LLM fact pack if applicable
+      llmFactPack: gt.responseMode === 'llm' ? {
+        includedFacts: gt.llmFactPack?.includedFacts || '',
+        excludedFacts: gt.llmFactPack?.excludedFacts || '',
+        backupAnswer: gt.llmFactPack?.backupAnswer || ''
+      } : null
+    });
+  }
+  
+  // Process local triggers (pure local + full overrides)
+  for (const lt of localTriggers) {
+    const companyAudio = audioMap.get(lt.ruleId);
+    const hasValidAudio = companyAudio && companyAudio.isValid && 
+                          companyAudio.textHash === TriggerAudio.hashText(lt.answerText);
+    
+    triggers.push({
+      triggerId: lt.triggerId,
+      ruleId: lt.ruleId,
+      label: lt.label,
+      scope: 'LOCAL',
+      isOverride: lt.isOverride || false,
+      overrideOfRuleId: lt.overrideOfRuleId || null,
+      isEnabled: lt.enabled !== false,
+      priority: lt.priority,
+      responseMode: lt.responseMode || 'standard',
+      match: {
+        keywords: lt.keywords || [],
+        phrases: lt.phrases || [],
+        negativeKeywords: lt.negativeKeywords || []
+      },
+      answer: {
+        answerText: lt.answerText || '',
+        hasAudio: Boolean(hasValidAudio),
+        audioNeedsRegeneration: companyAudio && !hasValidAudio
+      },
+      followUp: {
+        question: lt.followUpQuestion || '',
+        nextAction: lt.followUpNextAction || ''
+      },
+      // LLM fact pack if applicable
+      llmFactPack: lt.responseMode === 'llm' ? {
+        includedFacts: lt.llmFactPack?.includedFacts || '',
+        excludedFacts: lt.llmFactPack?.excludedFacts || '',
+        backupAnswer: lt.llmFactPack?.backupAnswer || ''
+      } : null
+    });
+  }
+  
+  // Sort by priority (higher = processed first in matching)
+  triggers.sort((a, b) => b.priority - a.priority);
+  
+  return {
+    activeGroup,
+    companyVariables,
+    summary: {
+      totalTriggers: triggers.length,
+      globalTriggers: triggers.filter(t => t.scope === 'GLOBAL').length,
+      localTriggers: triggers.filter(t => t.scope === 'LOCAL').length,
+      enabledTriggers: triggers.filter(t => t.isEnabled).length,
+      disabledTriggers: triggers.filter(t => !t.isEnabled).length,
+      llmTriggers: triggers.filter(t => t.responseMode === 'llm').length,
+      standardTriggers: triggers.filter(t => t.responseMode === 'standard').length,
+      triggersWithAudio: triggers.filter(t => t.answer.hasAudio).length,
+      triggersNeedingAudio: triggers.filter(t => t.answer.audioNeedsRegeneration).length
+    },
+    triggers
   };
 }
 
