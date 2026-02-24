@@ -36,6 +36,10 @@ const TriggerAudio = require('../../models/TriggerAudio');
 const MODULE_ID = 'AGENT_CONSOLE_API';
 const VERSION = 'AC1.0';
 
+// Truth Export routes (Lane A, B, C, D)
+const truthExportRouter = require('./truthExport');
+router.use('/truth', truthExportRouter);
+
 /* ============================================================================
    TRUTH CACHE — Short TTL to prevent Mongo hammering
    ============================================================================ */
