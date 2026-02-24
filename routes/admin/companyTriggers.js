@@ -287,8 +287,16 @@ router.get('/:companyId/triggers',
 
       const groups = await GlobalTriggerGroup.listActiveGroups();
       
-      const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
-      const companyVariables = settings?.companyVariables ? Object.fromEntries(settings.companyVariables) : {};
+      const settings = await CompanyTriggerSettings.findOne({ companyId });
+      let companyVariables = {};
+      
+      if (settings?.companyVariables) {
+        if (settings.companyVariables instanceof Map) {
+          companyVariables = Object.fromEntries(settings.companyVariables);
+        } else if (typeof settings.companyVariables === 'object') {
+          companyVariables = settings.companyVariables;
+        }
+      }
 
       return res.json({
         success: true,
