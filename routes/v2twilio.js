@@ -115,6 +115,43 @@ async function getRedis() {
   }
 }
 
+/**
+ * Ensure a CallSummary exists for this Twilio call.
+ * This protects against direct webhooks to /:companyID/voice that bypass /voice.
+ */
+async function ensureCallSummaryRegistered({ companyId, fromNumber, callSid, direction = 'inbound' }) {
+  if (!CallSummaryService || !companyId || !callSid || !fromNumber) {
+    return { ok: false, reason: 'missing_prerequisites' };
+  }
+
+  try {
+    const CallSummary = require('../models/CallSummary');
+    const existing = await CallSummary.findOne({ companyId, twilioSid: callSid })
+      .select('_id callId')
+      .lean();
+
+    if (existing) {
+      return { ok: true, existing: true, callId: existing.callId };
+    }
+
+    const context = await CallSummaryService.startCall({
+      companyId: String(companyId),
+      phone: fromNumber,
+      twilioSid: callSid,
+      direction
+    });
+
+    return { ok: true, existing: false, callId: context?.callId || null };
+  } catch (error) {
+    logger.warn('[CALL CENTER] Failed to ensure call registration (non-blocking)', {
+      companyId: String(companyId),
+      callSid,
+      error: error.message
+    });
+    return { ok: false, reason: error.message };
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 🛡️ GREETING TEXT VALIDATOR - Prevents code/JSON from being read aloud
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2743,6 +2780,28 @@ router.post('/:companyID/voice', async (req, res) => {
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
+    }
+
+    // Safety net: if Twilio webhook is pointed directly at this route,
+    // register the call summary so Call Review does not stay blank.
+    const callSid = req.body?.CallSid;
+    const fromNumber = req.body?.From;
+    if (callSid && fromNumber) {
+      const registration = await ensureCallSummaryRegistered({
+        companyId: company._id,
+        fromNumber,
+        callSid,
+        direction: 'inbound'
+      });
+
+      logger.info('[CALL CENTER] /:companyId/voice registration guard', {
+        companyId: companyID,
+        callSid,
+        registered: registration.ok,
+        existing: registration.existing === true,
+        callId: registration.callId || null,
+        reason: registration.reason || null
+      });
     }
     
     // Set up gather for continued conversation
