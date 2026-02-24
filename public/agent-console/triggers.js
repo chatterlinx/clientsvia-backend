@@ -527,13 +527,22 @@
     state.detectedVariables.clear();
     
     for (const trigger of state.triggers) {
+      // Standard trigger fields
       const answerText = trigger.answer?.answerText || '';
       const followUpQuestion = trigger.followUp?.question || '';
       
+      // LLM trigger fields (fact packs and backup answer)
+      const includedFacts = trigger.llmFactPack?.includedFacts || '';
+      const excludedFacts = trigger.llmFactPack?.excludedFacts || '';
+      const backupAnswer = trigger.llmFactPack?.backupAnswer || '';
+      
       const answerVars = extractVariablesFromText(answerText);
       const followUpVars = extractVariablesFromText(followUpQuestion);
+      const includedVars = extractVariablesFromText(includedFacts);
+      const excludedVars = extractVariablesFromText(excludedFacts);
+      const backupVars = extractVariablesFromText(backupAnswer);
       
-      [...answerVars, ...followUpVars].forEach(v => state.detectedVariables.add(v));
+      [...answerVars, ...followUpVars, ...includedVars, ...excludedVars, ...backupVars].forEach(v => state.detectedVariables.add(v));
     }
     
     renderVariables();
