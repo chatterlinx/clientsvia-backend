@@ -49,7 +49,7 @@ function initElements() {
   els.availabilityJson = document.getElementById('availability-json');
   
   els.btnBack = document.getElementById('btn-back');
-  els.btnDownloadTruth = document.getElementById('btn-download-truth');
+  // Note: btnDownloadTruth is now handled by shared/truthButton.js
   els.btnConnect = document.getElementById('btn-connect');
   els.btnDisconnect = document.getElementById('btn-disconnect');
   els.btnTestConnection = document.getElementById('btn-test-connection');
@@ -380,34 +380,7 @@ async function previewAvailability() {
   }
 }
 
-async function downloadTruthJson() {
-  els.btnDownloadTruth.disabled = true;
-  
-  try {
-    const data = await apiFetch('/truth');
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
-    a.download = `truth_${companyId}_${timestamp}.json`;
-    
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showToast('Truth JSON downloaded', 'success');
-  } catch (err) {
-    console.error('Failed to download truth:', err);
-    showToast('Failed to download: ' + err.message, 'error');
-  } finally {
-    els.btnDownloadTruth.disabled = false;
-  }
-}
+// Note: downloadTruthJson removed - now handled by shared/truthButton.js
 
 async function loadCompanyInfo() {
   try {
@@ -433,7 +406,7 @@ function initEventHandlers() {
     window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(companyId)}`;
   });
   
-  els.btnDownloadTruth.addEventListener('click', downloadTruthJson);
+  // Note: btnDownloadTruth event listener removed - handled by shared/truthButton.js
   els.btnConnect.addEventListener('click', connectCalendar);
   els.btnDisconnect.addEventListener('click', disconnectCalendar);
   els.btnTestConnection.addEventListener('click', testConnection);

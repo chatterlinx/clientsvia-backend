@@ -37,10 +37,9 @@
      DOM REFERENCES
      -------------------------------------------------------------------------- */
   const DOM = {
-    // Header
+    // Header - Note: btnDownloadTruth in header handled by shared/truthButton.js
     headerCompanyName: document.getElementById('header-company-name'),
     headerCompanyId: document.getElementById('header-company-id'),
-    btnDownloadTruth: document.getElementById('btn-download-truth'),
     btnLogout: document.getElementById('btn-logout'),
     btnBackToProfile: document.getElementById('btn-back-to-profile'),
     
@@ -107,8 +106,7 @@
   }
 
   function setupEventListeners() {
-    // Master Download Truth Button (header)
-    DOM.btnDownloadTruth.addEventListener('click', downloadTruthJson);
+    // Note: Header Download Truth Button handled by shared/truthButton.js
     
     // Back to Company Profile (both buttons)
     const navigateToCompanyProfile = () => {
@@ -305,8 +303,8 @@
      -------------------------------------------------------------------------- */
   function setLoading(isLoading) {
     state.isLoading = isLoading;
-    DOM.btnDownloadTruth.disabled = isLoading;
     DOM.btnRefreshTruth.disabled = isLoading;
+    if (DOM.btnDownloadTruthInline) DOM.btnDownloadTruthInline.disabled = isLoading;
   }
 
   /* --------------------------------------------------------------------------

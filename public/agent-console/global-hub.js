@@ -36,8 +36,7 @@
      DOM REFERENCES
      -------------------------------------------------------------------------- */
   const DOM = {
-    // Header
-    btnDownloadTruth: document.getElementById('btn-download-truth'),
+    // Header - Note: btnDownloadTruth removed, handled by shared/truthButton.js
     btnBack: document.getElementById('btn-back'),
     btnBackToProfile: document.getElementById('btn-back-to-profile'),
     
@@ -113,7 +112,7 @@
       });
     }
     
-    DOM.btnDownloadTruth.addEventListener('click', downloadTruthJson);
+    // Note: btnDownloadTruth event listener removed - handled by shared/truthButton.js
     
     // First names
     DOM.btnViewFirstnames.addEventListener('click', openFirstnamesModal);
@@ -309,39 +308,7 @@
     }
   }
 
-  /* --------------------------------------------------------------------------
-     DOWNLOAD TRUTH
-     -------------------------------------------------------------------------- */
-  async function downloadTruthJson() {
-    if (!state.companyId) {
-      showToast('warning', 'No Company', 'Select a company to download truth data.');
-      return;
-    }
-    
-    try {
-      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
-      const jsonString = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      const now = new Date();
-      const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 16);
-      const filename = `truth_${state.companyId}_${timestamp}.json`;
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast('success', 'Downloaded', `Truth file saved as ${filename}`);
-    } catch (error) {
-      console.error('[GlobalHub] Download failed:', error);
-      showToast('error', 'Download Failed', 'Could not download truth data.');
-    }
-  }
+  // Note: downloadTruthJson removed - handled by shared/truthButton.js
 
   /* --------------------------------------------------------------------------
      UTILITIES
