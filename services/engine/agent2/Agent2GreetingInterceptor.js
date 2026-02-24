@@ -113,20 +113,31 @@ function containsIntentWord(text, intentWords) {
 function matchesRule(input, rule) {
   const inputNorm = normalizeText(input);
   const triggers = safeArr(rule.triggers).map(t => normalizeText(t));
-  const matchMode = `${rule.matchMode || 'EXACT'}`.toUpperCase();
+  // V2 Schema Update (Feb 2026): matchMode → matchType
+  const matchType = `${rule.matchType || rule.matchMode || 'EXACT'}`.toUpperCase();
 
   for (const trigger of triggers) {
     if (!trigger) continue;
 
-    if (matchMode === MATCH_MODES.EXACT) {
+    if (matchType === 'EXACT' || matchType === MATCH_MODES.EXACT) {
       // EXACT: Input must exactly equal the trigger (after normalization)
       if (inputNorm === trigger) {
         return { matched: true, trigger };
       }
-    } else if (matchMode === MATCH_MODES.FUZZY) {
-      // FUZZY: Input must contain the trigger as a substring
+    } else if (matchType === 'FUZZY' || matchType === MATCH_MODES.FUZZY || matchType === 'CONTAINS') {
+      // FUZZY/CONTAINS: Input must contain the trigger as a substring
       if (inputNorm.includes(trigger)) {
         return { matched: true, trigger };
+      }
+    } else if (matchType === 'REGEX') {
+      // REGEX: Advanced pattern matching
+      try {
+        const regex = new RegExp(trigger, 'i');
+        if (regex.test(inputNorm)) {
+          return { matched: true, trigger };
+        }
+      } catch (err) {
+        logger.warn('[Agent2GreetingInterceptor] Invalid regex in rule', { trigger });
       }
     }
   }
@@ -205,9 +216,11 @@ class Agent2GreetingInterceptor {
     // ─────────────────────────────────────────────────────────────────────────
     // GATE 2: Word count check (short-only gate)
     // ─────────────────────────────────────────────────────────────────────────
-    const maxWords = typeof interceptorConfig.maxWordsToQualify === 'number'
-      ? interceptorConfig.maxWordsToQualify
-      : 2;
+    // V2 Schema Update (Feb 2026): maxWordsToQualify → shortOnlyGate.maxWords
+    const shortOnlyGate = safeObj(interceptorConfig.shortOnlyGate, {});
+    const maxWords = typeof shortOnlyGate.maxWords === 'number'
+      ? shortOnlyGate.maxWords
+      : (typeof interceptorConfig.maxWordsToQualify === 'number' ? interceptorConfig.maxWordsToQualify : 2);
     const wordCount = countWords(inputText);
     result.proof.wordCount = wordCount;
     result.proof.maxWordsToQualify = maxWords;
@@ -221,7 +234,12 @@ class Agent2GreetingInterceptor {
     // ─────────────────────────────────────────────────────────────────────────
     // GATE 3: Intent word check (blocks greeting if real intent detected)
     // ─────────────────────────────────────────────────────────────────────────
-    if (interceptorConfig.blockIfContainsIntentWords !== false) {
+    // V2 Schema Update (Feb 2026): blockIfContainsIntentWords → shortOnlyGate.blockIfIntentWords
+    const blockIfIntentWords = shortOnlyGate.blockIfIntentWords !== false
+      ? true
+      : (interceptorConfig.blockIfContainsIntentWords !== false);
+    
+    if (blockIfIntentWords) {
       const intentWords = safeArr(interceptorConfig.intentWords);
       const intentCheck = containsIntentWord(inputText, intentWords);
       
@@ -253,7 +271,8 @@ class Agent2GreetingInterceptor {
       if (matchResult.matched) {
         // INTERCEPTED
         result.intercepted = true;
-        result.proof.matchedRuleId = rule.id || null;
+        // V2 Schema Update (Feb 2026): rule.id → rule.ruleId
+        result.proof.matchedRuleId = rule.ruleId || rule.id || null;
         result.proof.matchedTrigger = matchResult.trigger;
         result.proof.event = 'A2_GREETING_INTERCEPTED';
 
@@ -262,7 +281,8 @@ class Agent2GreetingInterceptor {
           result.response = rule.audioUrl;
           result.responseSource = 'audio';
         } else {
-          result.response = rule.responseText || "Hi! How can I help you?";
+          // V2 Schema Update (Feb 2026): rule.responseText → rule.response
+          result.response = rule.response || rule.responseText || "Hi! How can I help you?";
           result.responseSource = 'tts';
         }
 
@@ -273,7 +293,7 @@ class Agent2GreetingInterceptor {
         result.stateUpdate = { greeted: true };
 
         logger.info('[Agent2GreetingInterceptor] INTERCEPTED', {
-          ruleId: rule.id,
+          ruleId: rule.ruleId || rule.id,
           trigger: matchResult.trigger,
           responseSource: result.responseSource
         });
@@ -333,24 +353,29 @@ class Agent2GreetingInterceptor {
   static validateConfig(config) {
     const errors = [];
     const interceptorConfig = safeObj(config?.interceptor, {});
+    const shortOnlyGate = safeObj(interceptorConfig.shortOnlyGate, {});
 
-    if (typeof interceptorConfig.maxWordsToQualify !== 'number' ||
-        interceptorConfig.maxWordsToQualify < 1 ||
-        interceptorConfig.maxWordsToQualify > 10) {
-      errors.push('maxWordsToQualify must be a number between 1 and 10');
+    // V2 Schema Update (Feb 2026): maxWordsToQualify → shortOnlyGate.maxWords
+    const maxWords = shortOnlyGate.maxWords || interceptorConfig.maxWordsToQualify;
+    if (typeof maxWords !== 'number' || maxWords < 1 || maxWords > 10) {
+      errors.push('maxWords must be a number between 1 and 10');
     }
 
     const rules = safeArr(interceptorConfig.rules);
     for (let i = 0; i < rules.length; i++) {
       const rule = rules[i];
-      if (!rule.id) {
-        errors.push(`Rule at index ${i} is missing an id`);
+      // V2 Schema Update (Feb 2026): rule.id → rule.ruleId
+      const ruleId = rule.ruleId || rule.id;
+      if (!ruleId) {
+        errors.push(`Rule at index ${i} is missing a ruleId`);
       }
       if (!safeArr(rule.triggers).length) {
-        errors.push(`Rule "${rule.id || i}" has no triggers`);
+        errors.push(`Rule "${ruleId || i}" has no triggers`);
       }
-      if (!rule.responseText && !rule.audioUrl) {
-        errors.push(`Rule "${rule.id || i}" has no response (responseText or audioUrl required)`);
+      // V2 Schema Update (Feb 2026): rule.responseText → rule.response
+      const response = rule.response || rule.responseText;
+      if (!response && !rule.audioUrl) {
+        errors.push(`Rule "${ruleId || i}" has no response (response or audioUrl required)`);
       }
     }
 

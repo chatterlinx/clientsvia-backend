@@ -180,8 +180,26 @@ async function readAgent2Truth(companyId) {
     enabled: agent2.enabled !== false,
     discoveryEnabled: agent2.discovery?.enabled !== false,
     greetings: {
+      // Legacy greetings (backward compatibility)
       initial: agent2.greetings?.initial || null,
-      returnCaller: agent2.greetings?.returnCaller || null
+      returnCaller: agent2.greetings?.returnCaller || null,
+      
+      // V2 Greetings System (Feb 2026)
+      callStart: agent2.greetings?.callStart || {
+        enabled: true,
+        text: '',
+        audioUrl: null
+      },
+      interceptor: {
+        enabled: agent2.greetings?.interceptor?.enabled !== false,
+        shortOnlyGate: agent2.greetings?.interceptor?.shortOnlyGate || {
+          maxWords: 2,
+          blockIfIntentWords: true
+        },
+        intentWords: agent2.greetings?.interceptor?.intentWords || [],
+        rulesCount: agent2.greetings?.interceptor?.rules?.length || 0,
+        rules: agent2.greetings?.interceptor?.rules || []
+      }
     },
     discoveryStyle: {
       ackWord: agent2.discovery?.style?.ackWord || 'Ok.',
