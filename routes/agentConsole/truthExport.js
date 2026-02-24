@@ -686,22 +686,29 @@ function buildAuditProof(uiTruth, complianceTruth) {
   const hardcodedStringCount = complianceTruth?.hardcodedSpeechScan?.violations?.total || 0;
   const totalRequiredSpeechFields = complianceTruth?.uiCoverageReport?.totalComponents || 0;
   const uiBackedStringCount = complianceTruth?.uiCoverageReport?.compliantComponents || 0;
-  const denominator = Math.max(hardcodedStringCount + uiBackedStringCount, 1);
-  const hardcodedRatio = Number((hardcodedStringCount / denominator).toFixed(4));
+  const uiDrivenSpeechPercent = totalRequiredSpeechFields > 0
+    ? Math.min(100, Math.max(0, Math.round((uiBackedStringCount / totalRequiredSpeechFields) * 100)))
+    : 0;
+  const totalUiLines = uiTruth.totalLines || 0;
+  const hardcodedFindingsPer1kLines = totalUiLines > 0
+    ? Number(((hardcodedStringCount / totalUiLines) * 1000).toFixed(2))
+    : 0;
 
   return {
     totalUiBytes: uiTruth.totalBytes || 0,
     totalUiFiles: uiTruth.totalFiles || 0,
-    totalUiLines: uiTruth.totalLines || 0,
+    totalUiLines,
     modalCount: uiTruth.modalDiscovery?.totalModals || 0,
     pageCount: uiTruth.pageDiscovery?.totalPages || 0,
     hardcodedFindings: findings,
     complianceScore: {
       totalRequiredSpeechFields,
       uiBackedStringCount,
-      hardcodedStringCount,
-      hardcodedRatio,
-      methodology: 'hardcodedRatio = hardcodedStringCount / (hardcodedStringCount + uiBackedStringCount)'
+      uiDrivenSpeechPercent,
+      hardcodedFindingsCount: hardcodedStringCount,
+      hardcodedFindingsPer1kLines,
+      isHardcodedFree: hardcodedStringCount === 0,
+      methodology: 'uiDrivenSpeechPercent = uiBackedStringCount / totalRequiredSpeechFields; hardcodedFindingsPer1kLines = hardcodedFindingsCount / totalUiLines * 1000'
     }
   };
 }
@@ -1064,11 +1071,12 @@ function computeTruthStatus(uiTruth, complianceTruth) {
     issues,
     manifestGaps,
     complianceScoring: {
-      method: 'Average of UI coverage (% of components with editors) and speech compliance (0% if any hardcoded, 100% if none)',
-      uiCoveragePercent: uiCompliancePercent,
-      speechCompliancePercent,
-      overallPercent: overallCompliance,
-      denominator: `${complianceTruth.uiCoverageReport?.totalComponents || 0} UI components + hardcoded speech scan`
+      method: 'Average of UI editor coverage and hardcoded-free status',
+      uiDrivenSpeechPercent: uiCompliancePercent,
+      hardcodedFindingsCount: hardcodedCount,
+      isHardcodedFree: hardcodedCount === 0,
+      hardcodedFindingsPer1kLines: Number((((hardcodedCount || 0) / Math.max(uiTruth.totalLines || 1, 1)) * 1000).toFixed(2)),
+      overallPercent: overallCompliance
     },
     manifestVersion: truthManifest.manifestVersion
   };

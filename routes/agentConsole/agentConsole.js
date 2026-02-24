@@ -672,7 +672,7 @@ router.get(
     
     try {
       const company = await v2Company.findById(companyId)
-        .select('aiAgentSettings.agent2 companyName')
+        .select('aiAgentSettings.agent2 aiAgentSettings.llm0Controls aiAgentSettings.voiceSettings companyName')
         .lean();
       
       if (!company) {
@@ -715,6 +715,8 @@ router.get(
         companyId,
         companyName: company.companyName,
         agent2: company.aiAgentSettings?.agent2 || {},
+        llm0Controls: company.aiAgentSettings?.llm0Controls || {},
+        voiceSettings: company.aiAgentSettings?.voiceSettings || {},
         triggerStats: {
           activeGroupId,
           activeGroupName: activeGroupInfo?.name || null,
@@ -786,6 +788,15 @@ router.patch(
             }
 
             company.aiAgentSettings.agent2.greetings = nextGreetings;
+          } else if (key === 'llm0Controls' && value && typeof value === 'object') {
+            company.aiAgentSettings.llm0Controls = {
+              ...(company.aiAgentSettings.llm0Controls || {}),
+              ...value,
+              recoveryMessages: {
+                ...((company.aiAgentSettings.llm0Controls || {}).recoveryMessages || {}),
+                ...(value.recoveryMessages || {})
+              }
+            };
           } else {
             company.aiAgentSettings.agent2[key] = value;
           }
@@ -801,7 +812,8 @@ router.patch(
       
       res.json({
         success: true,
-        agent2: company.aiAgentSettings.agent2
+        agent2: company.aiAgentSettings.agent2,
+        llm0Controls: company.aiAgentSettings.llm0Controls || {}
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Update Agent 2 config failed: ${error.message}`);
@@ -824,7 +836,7 @@ router.get(
     
     try {
       const company = await v2Company.findById(companyId)
-        .select('aiAgentSettings.bookingLogic googleCalendar companyName businessHours')
+        .select('aiAgentSettings.bookingLogic aiAgentSettings.agent2.bookingPrompts aiAgentSettings.agent2.discovery.holdMessage googleCalendar companyName businessHours')
         .lean();
       
       if (!company) {
@@ -835,12 +847,69 @@ router.get(
         companyId,
         companyName: company.companyName,
         bookingLogic: company.aiAgentSettings?.bookingLogic || {},
+        bookingPrompts: company.aiAgentSettings?.agent2?.bookingPrompts || {},
+        holdMessage: company.aiAgentSettings?.agent2?.discovery?.holdMessage || '',
         calendarConnected: !!company.googleCalendar?.accessToken,
         businessHours: company.businessHours
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Get Booking config failed: ${error.message}`);
       res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
+ * PATCH /:companyId/booking/config
+ *
+ * Update Booking config and required speech fields.
+ */
+router.patch(
+  '/:companyId/booking/config',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const updates = req.body || {};
+
+    try {
+      const company = await v2Company.findById(companyId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      if (!company.aiAgentSettings) company.aiAgentSettings = {};
+      if (!company.aiAgentSettings.bookingLogic) company.aiAgentSettings.bookingLogic = {};
+      if (!company.aiAgentSettings.agent2) company.aiAgentSettings.agent2 = {};
+      if (!company.aiAgentSettings.agent2.bookingPrompts) company.aiAgentSettings.agent2.bookingPrompts = {};
+      if (!company.aiAgentSettings.agent2.discovery) company.aiAgentSettings.agent2.discovery = {};
+
+      const bookingLogicUpdates = updates.bookingLogic || {};
+      Object.assign(company.aiAgentSettings.bookingLogic, bookingLogicUpdates);
+
+      const bookingPromptsUpdates = updates.bookingPrompts || {};
+      Object.assign(company.aiAgentSettings.agent2.bookingPrompts, bookingPromptsUpdates);
+
+      if (typeof updates.holdMessage === 'string') {
+        company.aiAgentSettings.agent2.discovery.holdMessage = updates.holdMessage.trim();
+      }
+
+      company.markModified('aiAgentSettings');
+      await company.save();
+
+      truthCache.delete(companyId);
+      await ConfigCacheService.invalidateBookingConfig(companyId);
+      await ConfigCacheService.invalidateAgent2Config(companyId);
+
+      return res.json({
+        success: true,
+        bookingLogic: company.aiAgentSettings.bookingLogic,
+        bookingPrompts: company.aiAgentSettings.agent2.bookingPrompts,
+        holdMessage: company.aiAgentSettings.agent2.discovery.holdMessage || ''
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Update Booking config failed: ${error.message}`);
+      return res.status(500).json({ error: error.message });
     }
   }
 );

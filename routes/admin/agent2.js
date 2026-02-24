@@ -781,9 +781,36 @@ function validatePublishReadiness(companyDoc) {
   ];
 
   const missingKeys = requiredChecks.filter(item => !item.ok).map(item => item.key);
+  const uiEditorMap = {
+    'agent2.greetings.callStart.text': 'agent2.html#call-start-greeting',
+    'agent2.greetings.callStart.emergencyFallback': 'agent2.html#call-start-greeting',
+    'agent2.greetings.returnCaller.text': 'agent2.html#return-caller-recognition',
+    'agent2.bookingPrompts.askName': 'booking.html#booking-prompts',
+    'agent2.bookingPrompts.askPhone': 'booking.html#booking-prompts',
+    'llm0Controls.recoveryMessages.audioUnclear': 'agent2.html#recovery-messages',
+    'llm0Controls.recoveryMessages.noSpeech': 'agent2.html#recovery-messages',
+    'agent2.discovery.holdMessage': 'booking.html#booking-prompts',
+    'agent2.discovery.discoveryHandoff.consentQuestion': 'agent2.html#discovery-fallback-messages',
+    'agent2.discovery.playbook.fallback.noMatchAnswer': 'agent2.html#discovery-fallback-messages',
+    'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured': 'agent2.html#discovery-fallback-messages',
+    'agent2.discovery.playbook.fallback.noMatchClarifierQuestion': 'agent2.html#discovery-fallback-messages',
+    'voiceSettings.voiceId': 'company-profile.html#voice-settings'
+  };
+  const missingUiEditors = missingKeys.map((key) => ({
+    key,
+    uiLocation: uiEditorMap[key] || 'agent2.html'
+  }));
+  const blockingErrors = missingKeys.map((key) => ({
+    code: 'MISSING_REQUIRED_UI_SPEECH_FIELD',
+    key,
+    message: `Required UI speech field is missing: ${key}`
+  }));
   return {
     ready: missingKeys.length === 0,
-    missingKeys
+    missingKeys,
+    blockingErrors,
+    missingUiEditors,
+    hardcodedSpeechFindings: []
   };
 }
 
@@ -975,7 +1002,10 @@ router.get('/:companyId/publish-readiness', authenticateJWT, requirePermission(P
       success: true,
       data: {
         ready: result.ready,
-        missingKeys: result.missingKeys
+        missingKeys: result.missingKeys,
+        blockingErrors: result.blockingErrors,
+        missingUiEditors: result.missingUiEditors,
+        hardcodedSpeechFindings: result.hardcodedSpeechFindings
       }
     });
   } catch (error) {
@@ -1032,7 +1062,10 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
           success: false,
           code: 'PUBLISH_BLOCKED_MISSING_SPEECH_CONFIG',
           message: 'Cannot publish/activate: required UI-driven speech fields are missing.',
-          missingKeys: readiness.missingKeys
+          missingKeys: readiness.missingKeys,
+          blockingErrors: readiness.blockingErrors,
+          missingUiEditors: readiness.missingUiEditors,
+          hardcodedSpeechFindings: readiness.hardcodedSpeechFindings
         });
       }
     }

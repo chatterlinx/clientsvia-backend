@@ -29,6 +29,8 @@
     companyId: null,
     companyName: null,
     config: null,
+    bookingPrompts: {},
+    holdMessage: '',
     calendarConnected: false,
     testBookingCtx: null,
     isDirty: false
@@ -56,6 +58,9 @@
     inputSlotDuration: document.getElementById('input-slot-duration'),
     inputBufferMinutes: document.getElementById('input-buffer-minutes'),
     inputAdvanceDays: document.getElementById('input-advance-days'),
+    inputBookingAskName: document.getElementById('input-booking-ask-name'),
+    inputBookingAskPhone: document.getElementById('input-booking-ask-phone'),
+    inputHoldMessage: document.getElementById('input-hold-message'),
     
     // Confirmation
     inputConfirmationMessage: document.getElementById('input-confirmation-message'),
@@ -156,7 +161,10 @@
       DOM.inputSlotDuration,
       DOM.inputBufferMinutes,
       DOM.inputAdvanceDays,
-      DOM.inputConfirmationMessage
+      DOM.inputConfirmationMessage,
+      DOM.inputBookingAskName,
+      DOM.inputBookingAskPhone,
+      DOM.inputHoldMessage
     ];
     inputs.forEach(input => {
       input.addEventListener('change', () => { state.isDirty = true; });
@@ -173,6 +181,8 @@
       const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/booking/config`);
       state.companyName = data.companyName;
       state.config = data.bookingLogic || {};
+      state.bookingPrompts = data.bookingPrompts || {};
+      state.holdMessage = data.holdMessage || '';
       state.calendarConnected = data.calendarConnected;
       
       DOM.headerCompanyName.textContent = state.companyName;
@@ -215,6 +225,9 @@
     // Confirmation
     DOM.inputConfirmationMessage.value = config.confirmationMessage || '';
     DOM.inputSmsConfirmation.checked = config.enableSmsConfirmation || false;
+    DOM.inputBookingAskName.value = data.bookingPrompts?.askName || '';
+    DOM.inputBookingAskPhone.value = data.bookingPrompts?.askPhone || '';
+    DOM.inputHoldMessage.value = data.holdMessage || '';
     
     state.isDirty = false;
   }
@@ -229,16 +242,25 @@
     }
     
     const updates = {
-      slotDuration: parseInt(DOM.inputSlotDuration.value, 10),
-      bufferMinutes: parseInt(DOM.inputBufferMinutes.value, 10),
-      advanceBookingDays: parseInt(DOM.inputAdvanceDays.value, 10),
-      confirmationMessage: DOM.inputConfirmationMessage.value.trim(),
-      enableSmsConfirmation: DOM.inputSmsConfirmation.checked
+      bookingLogic: {
+        slotDuration: parseInt(DOM.inputSlotDuration.value, 10),
+        bufferMinutes: parseInt(DOM.inputBufferMinutes.value, 10),
+        advanceBookingDays: parseInt(DOM.inputAdvanceDays.value, 10),
+        confirmationMessage: DOM.inputConfirmationMessage.value.trim(),
+        enableSmsConfirmation: DOM.inputSmsConfirmation.checked
+      },
+      bookingPrompts: {
+        askName: DOM.inputBookingAskName.value.trim(),
+        askPhone: DOM.inputBookingAskPhone.value.trim()
+      },
+      holdMessage: DOM.inputHoldMessage.value.trim()
     };
     
     try {
-      // Note: In a real implementation, this would PATCH to booking config endpoint
-      // For now, we'll show success but note this needs backend implementation
+      await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/booking/config`, {
+        method: 'PATCH',
+        body: updates
+      });
       showToast('success', 'Saved', 'Booking configuration updated successfully.');
       state.isDirty = false;
       

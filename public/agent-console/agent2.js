@@ -78,7 +78,8 @@
       }
     },
     currentGreetingRule: null,
-    currentAudioPlayer: null
+    currentAudioPlayer: null,
+    llm0Controls: {}
   };
 
   /* --------------------------------------------------------------------------
@@ -111,6 +112,7 @@
     // Call Start Greeting
     toggleCallStartEnabled: document.getElementById('toggle-call-start-enabled'),
     inputCallStartText: document.getElementById('input-call-start-text'),
+    inputCallStartEmergencyFallback: document.getElementById('input-call-start-emergency-fallback'),
     inputCallStartAudio: document.getElementById('input-call-start-audio'),
     btnPlayCallStartAudio: document.getElementById('btn-play-call-start-audio'),
     btnGenerateCallStartAudio: document.getElementById('btn-generate-call-start-audio'),
@@ -155,6 +157,12 @@
     inputAckWord: document.getElementById('input-ack-word'),
     inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
     inputRobotChallengeLine: document.getElementById('input-robot-challenge-line'),
+    inputRecoveryAudioUnclear: document.getElementById('input-recovery-audio-unclear'),
+    inputRecoveryNoSpeech: document.getElementById('input-recovery-no-speech'),
+    inputDiscoveryConsentQuestion: document.getElementById('input-discovery-consent-question'),
+    inputFallbackNoMatchAnswer: document.getElementById('input-fallback-no-match-answer'),
+    inputFallbackNoMatchWhenReasonCaptured: document.getElementById('input-fallback-no-match-when-reason-captured'),
+    inputFallbackNoMatchClarifierQuestion: document.getElementById('input-fallback-no-match-clarifier-question'),
     
     // Test Panel
     testInput: document.getElementById('test-input'),
@@ -278,7 +286,13 @@
       DOM.inputGreetingInitial,
       DOM.inputGreetingReturn,
       DOM.inputAckWord,
-      DOM.inputRobotChallengeLine
+      DOM.inputRobotChallengeLine,
+      DOM.inputRecoveryAudioUnclear,
+      DOM.inputRecoveryNoSpeech,
+      DOM.inputDiscoveryConsentQuestion,
+      DOM.inputFallbackNoMatchAnswer,
+      DOM.inputFallbackNoMatchWhenReasonCaptured,
+      DOM.inputFallbackNoMatchClarifierQuestion
     ].filter(Boolean);
     
     inputs.forEach(input => {
@@ -298,6 +312,7 @@
       const response = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`);
       state.companyName = response.companyName;
       state.config = response.agent2 || {};
+      state.llm0Controls = response.llm0Controls || {};
       state.triggerStats = response.triggerStats || {};
       
       DOM.headerCompanyName.textContent = state.companyName;
@@ -309,6 +324,7 @@
       
       // Use defaults
       state.config = {};
+      state.llm0Controls = {};
       state.triggerStats = {};
       renderConfig();
     }
@@ -351,6 +367,12 @@
     if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
     if (DOM.inputRobotChallengeEnabled) DOM.inputRobotChallengeEnabled.checked = config.discovery?.style?.robotChallenge?.enabled || false;
     if (DOM.inputRobotChallengeLine) DOM.inputRobotChallengeLine.value = config.discovery?.style?.robotChallenge?.line || '';
+    if (DOM.inputDiscoveryConsentQuestion) DOM.inputDiscoveryConsentQuestion.value = config.discovery?.discoveryHandoff?.consentQuestion || '';
+    if (DOM.inputFallbackNoMatchAnswer) DOM.inputFallbackNoMatchAnswer.value = config.discovery?.playbook?.fallback?.noMatchAnswer || '';
+    if (DOM.inputFallbackNoMatchWhenReasonCaptured) DOM.inputFallbackNoMatchWhenReasonCaptured.value = config.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured || '';
+    if (DOM.inputFallbackNoMatchClarifierQuestion) DOM.inputFallbackNoMatchClarifierQuestion.value = config.discovery?.playbook?.fallback?.noMatchClarifierQuestion || '';
+    if (DOM.inputRecoveryAudioUnclear) DOM.inputRecoveryAudioUnclear.value = state.llm0Controls?.recoveryMessages?.audioUnclear || '';
+    if (DOM.inputRecoveryNoSpeech) DOM.inputRecoveryNoSpeech.value = state.llm0Controls?.recoveryMessages?.noSpeech || '';
     
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
@@ -443,10 +465,31 @@
             enabled: DOM.inputRobotChallengeEnabled.checked,
             line: DOM.inputRobotChallengeLine.value.trim()
           }
+        },
+        discoveryHandoff: {
+          ...(state.config.discovery?.discoveryHandoff || {}),
+          consentQuestion: DOM.inputDiscoveryConsentQuestion?.value?.trim() || ''
+        },
+        playbook: {
+          ...(state.config.discovery?.playbook || {}),
+          fallback: {
+            ...(state.config.discovery?.playbook?.fallback || {}),
+            noMatchAnswer: DOM.inputFallbackNoMatchAnswer?.value?.trim() || '',
+            noMatchWhenReasonCaptured: DOM.inputFallbackNoMatchWhenReasonCaptured?.value?.trim() || '',
+            noMatchClarifierQuestion: DOM.inputFallbackNoMatchClarifierQuestion?.value?.trim() || ''
+          }
         }
       },
       consentPhrases: state.config.consentPhrases,
-      escalationPhrases: state.config.escalationPhrases
+      escalationPhrases: state.config.escalationPhrases,
+      llm0Controls: {
+        ...(state.llm0Controls || {}),
+        recoveryMessages: {
+          ...(state.llm0Controls?.recoveryMessages || {}),
+          audioUnclear: DOM.inputRecoveryAudioUnclear?.value?.trim() || '',
+          noSpeech: DOM.inputRecoveryNoSpeech?.value?.trim() || ''
+        }
+      }
     };
     
     try {
@@ -456,6 +499,7 @@
       });
       
       state.config = data.agent2;
+      state.llm0Controls = data.llm0Controls || state.llm0Controls;
       state.isDirty = false;
       
       showToast('success', 'Saved', 'Agent 2.0 configuration updated successfully.');
@@ -732,6 +776,9 @@
     if (DOM.toggleCallStartEnabled && state.greetings.callStart) {
       DOM.toggleCallStartEnabled.checked = state.greetings.callStart.enabled !== false;
       DOM.inputCallStartText.value = state.greetings.callStart.text || '';
+      if (DOM.inputCallStartEmergencyFallback) {
+        DOM.inputCallStartEmergencyFallback.value = state.greetings.callStart.emergencyFallback || '';
+      }
       DOM.inputCallStartAudio.value = state.greetings.callStart.audioUrl || '';
       
       // Show/hide play button based on audio availability
@@ -890,12 +937,13 @@
     try {
       const enabled = DOM.toggleCallStartEnabled.checked;
       const text = DOM.inputCallStartText.value.trim();
+      const emergencyFallback = DOM.inputCallStartEmergencyFallback?.value?.trim() || '';
       
       const response = await AgentConsoleAuth.apiFetch(
         `/api/admin/agent2/${state.companyId}/greetings/call-start`,
         {
           method: 'PUT',
-          body: { enabled, text }
+          body: { enabled, text, emergencyFallback }
         }
       );
       

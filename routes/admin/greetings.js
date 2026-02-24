@@ -272,7 +272,7 @@ router.put(
     async (req, res) => {
         try {
             const { companyId } = req.params;
-            const { enabled, text } = req.body;
+            const { enabled, text, emergencyFallback } = req.body;
             
             logger.info(`[${MODULE_ID}] Updating call start greeting`, { companyId });
             
@@ -288,6 +288,13 @@ router.put(
                 return res.status(400).json({
                     success: false,
                     error: 'Text cannot exceed 500 characters'
+                });
+            }
+
+            if (emergencyFallback && emergencyFallback.length > 500) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Emergency fallback cannot exceed 500 characters'
                 });
             }
             
@@ -318,6 +325,9 @@ router.put(
             // Update call start greeting
             company.aiAgentSettings.agent2.greetings.callStart.enabled = enabled;
             company.aiAgentSettings.agent2.greetings.callStart.text = newText;
+            if (emergencyFallback !== undefined) {
+                company.aiAgentSettings.agent2.greetings.callStart.emergencyFallback = String(emergencyFallback || '').trim();
+            }
             
             if (audioInvalidated) {
                 // Clear audio if text changed

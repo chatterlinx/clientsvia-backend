@@ -140,7 +140,7 @@
              ═══════════════════════════════════════════════════════════════ -->
         
         <!-- Call Start Greeting -->
-        <div class="card" id="card-call-start-greeting">
+        <div class="card" id="call-start-greeting">
           <div class="card-header">
             <div style="display: flex; align-items: center; gap: 12px;">
               <h2 class="card-title" style="margin: 0;">🎙️ Call Start Greeting</h2>
@@ -193,6 +193,17 @@
                 </button>
               </div>
               <p class="form-hint" id="call-start-audio-status">Optional. If provided, plays audio instead of TTS.</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Emergency Fallback (required)</label>
+              <textarea
+                class="form-textarea"
+                id="input-call-start-emergency-fallback"
+                rows="2"
+                maxlength="500"
+                placeholder="Sorry — I am having trouble right now. Let me connect you with our team."></textarea>
+              <p class="form-hint">Used only when primary greeting/playback fails. Must be UI-configured.</p>
             </div>
           </div>
         </div>
@@ -283,6 +294,48 @@
                   <p>No greeting rules yet. Click "Add Rule" or "Seed From Global" to get started.</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recovery Messages -->
+        <div class="card" id="recovery-messages">
+          <div class="card-header">
+            <h2 class="card-title">Recovery Messages (Required)</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Audio Unclear</label>
+              <textarea class="form-textarea" id="input-recovery-audio-unclear" rows="2" placeholder="I'm sorry, the audio was unclear. Could you repeat that?"></textarea>
+            </div>
+            <div class="form-group mb-0">
+              <label class="form-label">No Speech</label>
+              <textarea class="form-textarea" id="input-recovery-no-speech" rows="2" placeholder="I didn't hear anything. Could you please say that again?"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discovery Fallback Messages -->
+        <div class="card" id="discovery-fallback-messages">
+          <div class="card-header">
+            <h2 class="card-title">Discovery Fallback Messages (Required)</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Consent Question</label>
+              <textarea class="form-textarea" id="input-discovery-consent-question" rows="2" placeholder="Would you like me to help you get that scheduled?"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">No Match Answer</label>
+              <textarea class="form-textarea" id="input-fallback-no-match-answer" rows="2" placeholder="Ok. How can I help you today?"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">No Match When Reason Captured</label>
+              <textarea class="form-textarea" id="input-fallback-no-match-when-reason-captured" rows="2" placeholder="Got it. What would you like to do next?"></textarea>
+            </div>
+            <div class="form-group mb-0">
+              <label class="form-label">No Match Clarifier Question</label>
+              <textarea class="form-textarea" id="input-fallback-no-match-clarifier-question" rows="2" placeholder="Could you clarify that for me?"></textarea>
             </div>
           </div>
         </div>
