@@ -526,34 +526,51 @@
       `;
     }).join('');
     
-    DOM.variablesTableBody.querySelectorAll('.variable-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const varName = e.target.dataset.variable;
-        const value = e.target.value.trim();
-        await saveVariable(varName, value);
-      });
-      
-      input.addEventListener('blur', async (e) => {
-        const varName = e.target.dataset.variable;
-        const value = e.target.value.trim();
-        await saveVariable(varName, value);
-      });
-    });
+    // Use event delegation to handle dynamically rendered inputs
+    DOM.variablesTableBody.removeEventListener('change', handleVariableChange);
+    DOM.variablesTableBody.removeEventListener('blur', handleVariableBlur);
+    DOM.variablesTableBody.addEventListener('change', handleVariableChange);
+    DOM.variablesTableBody.addEventListener('blur', handleVariableBlur, true);
+  }
+  
+  function handleVariableChange(e) {
+    if (e.target.classList.contains('variable-input')) {
+      const varName = e.target.dataset.variable;
+      const value = e.target.value.trim();
+      console.log('[Variables] Change event:', varName, '=', value);
+      saveVariable(varName, value);
+    }
+  }
+  
+  function handleVariableBlur(e) {
+    if (e.target.classList.contains('variable-input')) {
+      const varName = e.target.dataset.variable;
+      const value = e.target.value.trim();
+      console.log('[Variables] Blur event:', varName, '=', value);
+      saveVariable(varName, value);
+    }
   }
   
   async function saveVariable(varName, value) {
+    console.log('[Variables] Saving:', varName, '=', value);
+    
     try {
       state.companyVariables.set(varName, value);
       
-      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/variables`, {
+      const varsToSave = Object.fromEntries(state.companyVariables);
+      console.log('[Variables] Sending to API:', varsToSave);
+      
+      const result = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/variables`, {
         method: 'PUT',
         body: { 
-          variables: Object.fromEntries(state.companyVariables)
+          variables: varsToSave
         }
       });
       
+      console.log('[Variables] Save result:', result);
+      
       renderVariables();
-      showToast('success', 'Variable Saved', `{${varName}} updated successfully`);
+      showToast('success', 'Variable Saved', `{${varName}} = ${value}`);
       
     } catch (error) {
       console.error('[Variables] Save failed:', error);
