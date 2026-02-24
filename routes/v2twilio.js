@@ -143,10 +143,11 @@ async function ensureCallSummaryRegistered({ companyId, fromNumber, callSid, dir
 
     return { ok: true, existing: false, callId: context?.callId || null };
   } catch (error) {
-    logger.warn('[CALL CENTER] Failed to ensure call registration (non-blocking)', {
+    logger.error('[CALL CENTER] Failed to ensure call registration (non-blocking)', {
       companyId: String(companyId),
       callSid,
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
     return { ok: false, reason: error.message };
   }
@@ -1441,11 +1442,14 @@ router.post('/voice', async (req, res) => {
         req.session.callCenterContext = callContext;
         
       } catch (callCenterErr) {
-        // Non-blocking: Log but continue with call
-        logger.warn('[CALL CENTER] Customer recognition failed (non-blocking)', {
+        // Non-blocking: call still continues even if recognition fails,
+        // but log with full stack so issues surface in monitoring.
+        logger.error('[CALL CENTER] Customer recognition failed (non-blocking)', {
           error: callCenterErr.message,
+          stack: callCenterErr.stack,
           companyId: company._id.toString(),
-          phone: req.body.From
+          phone: req.body.From,
+          callSid: req.body.CallSid
         });
       }
     }

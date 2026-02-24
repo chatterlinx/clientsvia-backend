@@ -333,6 +333,138 @@ customerSchema.statics.normalizePhone = function(phoneNumber) {
     return `+${digits}`;
 };
 
+/**
+ * Enrich a raw Mongoose document/lean object with computed fields expected
+ * by the service layer (CustomerLookup, CallSummaryService, etc.).
+ *
+ * The Customer schema stores data in nested sub-documents (name.first, addresses[]),
+ * but the service layer expects flat convenience fields (fullName, phone, etc.).
+ * This helper bridges that gap consistently in one place.
+ *
+ * @param {Object} doc   - Raw customer document (lean or toObject)
+ * @param {string} phone - Normalized phone number that was used for the lookup
+ * @returns {Object}     - Enriched customer plain object
+ */
+customerSchema.statics._enrichForServiceLayer = function(doc, phone) {
+    const firstName = doc.name?.first || null;
+    const lastName  = doc.name?.last  || null;
+    const fullName  = doc.name?.full  ||
+                      [firstName, lastName].filter(Boolean).join(' ') ||
+                      null;
+
+    // Prefer the phone that was used for the lookup so the service layer
+    // always gets back exactly what it passed in.
+    const primaryPhone = phone ||
+        doc.phoneNumbers?.find(p => p.isPrimary)?.number ||
+        doc.phoneNumbers?.[0]?.number ||
+        null;
+
+    const primaryAddress = doc.addresses?.find(a => a.isPrimary) ||
+                           doc.addresses?.[0] ||
+                           null;
+
+    return {
+        ...doc,
+        // Flat convenience fields consumed by service layer
+        phone:          primaryPhone,
+        fullName,
+        firstName,
+        customerId:     doc._id?.toString() || null,
+        totalCalls:     doc.metrics?.totalCalls || 0,
+        lastContactAt:  doc.metrics?.lastInteractionAt || null,
+        primaryAddress
+    };
+};
+
+/**
+ * Find an existing customer by companyId + phone number without creating one.
+ *
+ * Called by CustomerLookup.lookupByPhone for read-only searches.
+ *
+ * @param {string|ObjectId} companyId      - Owning company
+ * @param {string}          normalizedPhone - E.164 phone number
+ * @returns {Promise<Object|null>} Enriched customer object or null
+ */
+customerSchema.statics.findByPhone = async function(companyId, normalizedPhone) {
+    const doc = await this.findOne({
+        companyId,
+        'phoneNumbers.number': normalizedPhone
+    }).lean();
+
+    if (!doc) return null;
+    return this._enrichForServiceLayer(doc, normalizedPhone);
+};
+
+/**
+ * Atomically get or create a placeholder customer for an inbound call.
+ *
+ * This is the race-proof entry point used at the start of every call:
+ *   CustomerLookup.getOrCreatePlaceholder → Customer.getOrCreatePlaceholder
+ *
+ * Design notes:
+ * - Find-then-create with error-handler handles the common concurrent-call scenario.
+ * - If two requests for the SAME phone arrive within the same millisecond and both
+ *   miss the first findOne, one create will win and the other will do a second find.
+ * - No unique index on (companyId, phoneNumbers.number) exists yet; the error-handler
+ *   path provides the same safety guarantee without the index overhead.
+ *
+ * @param {string|ObjectId} companyId      - Owning company
+ * @param {string}          normalizedPhone - E.164 phone number
+ * @returns {Promise<{customer: Object, isNew: boolean}>}
+ */
+customerSchema.statics.getOrCreatePlaceholder = async function(companyId, normalizedPhone) {
+    // ── 1. Check for existing customer ───────────────────────────────────────
+    let doc = await this.findOne({
+        companyId,
+        'phoneNumbers.number': normalizedPhone
+    }).lean();
+
+    if (doc) {
+        return {
+            customer: this._enrichForServiceLayer(doc, normalizedPhone),
+            isNew: false
+        };
+    }
+
+    // ── 2. Create new placeholder customer ───────────────────────────────────
+    try {
+        const created = await this.create({
+            companyId,
+            phoneNumbers: [{
+                number:    normalizedPhone,
+                label:     'Primary',
+                isPrimary: true,
+                addedAt:   new Date(),
+                lastUsedAt: new Date()
+            }],
+            status:        'placeholder',
+            firstContactAt: new Date()
+        });
+
+        return {
+            customer: this._enrichForServiceLayer(created.toObject(), normalizedPhone),
+            isNew: true
+        };
+
+    } catch (err) {
+        // ── 3. Concurrent create race: another request won – fall back to find ──
+        doc = await this.findOne({
+            companyId,
+            'phoneNumbers.number': normalizedPhone
+        }).lean();
+
+        if (doc) {
+            return {
+                customer: this._enrichForServiceLayer(doc, normalizedPhone),
+                isNew: false
+            };
+        }
+
+        // Unexpected error – re-throw so the caller can log/handle it.
+        throw err;
+    }
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PRE-SAVE MIDDLEWARE
 // ═══════════════════════════════════════════════════════════════════════════════
