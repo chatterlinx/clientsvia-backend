@@ -217,27 +217,15 @@
       
       const startTime = Date.now();
       
-      // Fetch truth JSON
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token - please log in');
-      }
-      
+      // Fetch truth JSON using centralized auth (same as other Agent Console endpoints)
       const url = `${CONFIG.API_ENDPOINT}?companyId=${encodeURIComponent(companyId)}`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      // Check if AgentConsoleAuth is available (should be loaded before this script)
+      if (typeof AgentConsoleAuth === 'undefined' || !AgentConsoleAuth.apiFetch) {
+        throw new Error('AgentConsoleAuth not available - ensure lib/auth.js is loaded first');
       }
       
-      const truth = await response.json();
+      const truth = await AgentConsoleAuth.apiFetch(url);
       const fetchTime = Date.now() - startTime;
       
       // Validate truth structure
