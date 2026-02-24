@@ -108,6 +108,9 @@
     /** Selected call for detail view */
     selectedCall: null,
 
+    /** Selected calls for bulk operations */
+    selectedCallSids: new Set(),
+
     /** UI state */
     isLoading: false,
     isModalOpen: false
@@ -139,6 +142,13 @@
     // Call list
     callListBody: document.getElementById('call-list-body'),
     callCount: document.getElementById('call-count'),
+
+    // Bulk selection
+    selectAllCheckbox: document.getElementById('select-all-checkbox'),
+    bulkActionsBar: document.getElementById('bulk-actions-bar'),
+    bulkActionsCount: document.getElementById('bulk-actions-count'),
+    btnClearSelection: document.getElementById('btn-clear-selection'),
+    btnDeleteSelected: document.getElementById('btn-delete-selected'),
 
     // Pagination
     paginationContainer: document.getElementById('pagination-container'),
@@ -243,6 +253,11 @@
     // Pagination
     DOM.btnPrevPage.addEventListener('click', () => goToPage(state.currentPage - 1));
     DOM.btnNextPage.addEventListener('click', () => goToPage(state.currentPage + 1));
+
+    // Bulk selection
+    DOM.selectAllCheckbox.addEventListener('change', handleSelectAll);
+    DOM.btnClearSelection.addEventListener('click', clearSelection);
+    DOM.btnDeleteSelected.addEventListener('click', deleteSelectedCalls);
 
     // Modal
     DOM.modalClose.addEventListener('click', closeModal);
@@ -349,6 +364,9 @@
    * Render the call list table
    */
   function renderCallList() {
+    // Clear selection when re-rendering
+    clearSelection();
+
     if (state.calls.length === 0) {
       renderEmptyState('No calls found');
       DOM.callCount.textContent = '0 calls';
@@ -360,12 +378,23 @@
     const rows = state.calls.map(call => renderCallRow(call)).join('');
     DOM.callListBody.innerHTML = rows;
 
-    // Attach click handlers
+    // Attach click handlers for row (but not checkbox)
     DOM.callListBody.querySelectorAll('tr[data-callsid]').forEach(row => {
-      row.addEventListener('click', () => {
+      // Click on row (except checkbox) opens detail
+      row.addEventListener('click', (e) => {
+        if (e.target.type === 'checkbox') return;
         const callSid = row.dataset.callsid;
         loadCallDetails(callSid);
       });
+
+      // Checkbox change handler
+      const checkbox = row.querySelector('.call-checkbox');
+      if (checkbox) {
+        checkbox.addEventListener('change', (e) => {
+          e.stopPropagation();
+          handleRowCheckboxChange(row, checkbox.checked);
+        });
+      }
     });
   }
 
@@ -380,6 +409,7 @@
     const turns = call.turnCount || 0;
     const problems = call.problemCount || 0;
     const hasViolations = call.hasHardcodedViolation || false;
+    const isSelected = state.selectedCallSids.has(call.callSid);
 
     // Determine provenance badge
     let provenanceBadge;
@@ -397,7 +427,10 @@
       : `<span class="problems-count problems-none">0</span>`;
 
     return `
-      <tr data-callsid="${escapeHtml(call.callSid)}">
+      <tr data-callsid="${escapeHtml(call.callSid)}" class="${isSelected ? 'selected' : ''}">
+        <td>
+          <input type="checkbox" class="call-checkbox" ${isSelected ? 'checked' : ''} title="Select this call">
+        </td>
         <td class="call-time">${escapeHtml(time)}</td>
         <td class="call-phone">${escapeHtml(formatPhone(call.fromPhone))}</td>
         <td class="call-duration">${escapeHtml(duration)}</td>
@@ -416,7 +449,7 @@
   function renderEmptyState(message) {
     DOM.callListBody.innerHTML = `
       <tr>
-        <td colspan="7">
+        <td colspan="8">
           <div class="empty-state">
             <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M22 16.92V19.92C22 20.47 21.55 20.92 21 20.92H3C2.45 20.92 2 20.47 2 19.92V16.92" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -790,6 +823,149 @@
   }
 
   /* ==========================================================================
+     SECTION 9B: BULK SELECTION & DELETE
+     ========================================================================== */
+
+  /**
+   * Handle "Select All" checkbox change
+   */
+  function handleSelectAll() {
+    const isChecked = DOM.selectAllCheckbox.checked;
+    
+    if (isChecked) {
+      state.calls.forEach(call => state.selectedCallSids.add(call.callSid));
+    } else {
+      state.selectedCallSids.clear();
+    }
+
+    updateRowSelectionUI();
+    updateBulkActionsBar();
+  }
+
+  /**
+   * Handle individual row checkbox change
+   * @param {HTMLElement} row - The table row element
+   * @param {boolean} isChecked - Whether checkbox is checked
+   */
+  function handleRowCheckboxChange(row, isChecked) {
+    const callSid = row.dataset.callsid;
+    
+    if (isChecked) {
+      state.selectedCallSids.add(callSid);
+      row.classList.add('selected');
+    } else {
+      state.selectedCallSids.delete(callSid);
+      row.classList.remove('selected');
+    }
+
+    updateSelectAllCheckbox();
+    updateBulkActionsBar();
+  }
+
+  /**
+   * Update the "Select All" checkbox state based on individual selections
+   */
+  function updateSelectAllCheckbox() {
+    const totalCalls = state.calls.length;
+    const selectedCount = state.selectedCallSids.size;
+    
+    if (selectedCount === 0) {
+      DOM.selectAllCheckbox.checked = false;
+      DOM.selectAllCheckbox.indeterminate = false;
+    } else if (selectedCount === totalCalls) {
+      DOM.selectAllCheckbox.checked = true;
+      DOM.selectAllCheckbox.indeterminate = false;
+    } else {
+      DOM.selectAllCheckbox.checked = false;
+      DOM.selectAllCheckbox.indeterminate = true;
+    }
+  }
+
+  /**
+   * Update all row checkboxes to match selection state
+   */
+  function updateRowSelectionUI() {
+    DOM.callListBody.querySelectorAll('tr[data-callsid]').forEach(row => {
+      const callSid = row.dataset.callsid;
+      const checkbox = row.querySelector('.call-checkbox');
+      const isSelected = state.selectedCallSids.has(callSid);
+
+      if (checkbox) {
+        checkbox.checked = isSelected;
+      }
+      row.classList.toggle('selected', isSelected);
+    });
+  }
+
+  /**
+   * Update the bulk actions bar visibility and count
+   */
+  function updateBulkActionsBar() {
+    const count = state.selectedCallSids.size;
+    
+    if (count > 0) {
+      DOM.bulkActionsBar.classList.add('visible');
+      DOM.bulkActionsCount.textContent = `${count} selected`;
+    } else {
+      DOM.bulkActionsBar.classList.remove('visible');
+    }
+  }
+
+  /**
+   * Clear all selections
+   */
+  function clearSelection() {
+    state.selectedCallSids.clear();
+    DOM.selectAllCheckbox.checked = false;
+    DOM.selectAllCheckbox.indeterminate = false;
+    updateRowSelectionUI();
+    updateBulkActionsBar();
+  }
+
+  /**
+   * Delete all selected calls
+   */
+  async function deleteSelectedCalls() {
+    const count = state.selectedCallSids.size;
+    
+    if (count === 0) {
+      showToast('warning', 'No Selection', 'Please select calls to delete.');
+      return;
+    }
+
+    const confirmMsg = `Are you sure you want to delete ${count} call${count !== 1 ? 's' : ''}? This action cannot be undone.`;
+    
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+
+    const callSidsToDelete = Array.from(state.selectedCallSids);
+
+    try {
+      showToast('info', 'Deleting...', `Deleting ${count} call${count !== 1 ? 's' : ''}...`);
+      
+      const response = await AgentConsoleAuth.apiFetch(
+        `${CONFIG.API_BASE}/${state.companyId}/calls/bulk-delete`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callSids: callSidsToDelete })
+        }
+      );
+
+      const deletedCount = response.deletedCount || count;
+      showToast('success', 'Deleted', `Successfully deleted ${deletedCount} call${deletedCount !== 1 ? 's' : ''}.`);
+      
+      clearSelection();
+      loadCalls();
+
+    } catch (error) {
+      console.error('[CallConsole] Failed to delete calls:', error);
+      showToast('error', 'Delete Failed', error.message || 'Could not delete selected calls.');
+    }
+  }
+
+  /* ==========================================================================
      SECTION 10: MODAL MANAGEMENT
      ========================================================================== */
   
@@ -970,7 +1146,7 @@
     if (isLoading) {
       DOM.callListBody.innerHTML = `
         <tr class="loading-row">
-          <td colspan="7">
+          <td colspan="8">
             <div class="loading-spinner"></div>
           </td>
         </tr>

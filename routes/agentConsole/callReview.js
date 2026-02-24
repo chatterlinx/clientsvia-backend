@@ -22,9 +22,10 @@
  * 
  * ============================================================================
  * ENDPOINTS:
- * - GET  /:companyId/calls          — List calls with filters
- * - GET  /:companyId/calls/:callSid — Get detailed call with provenance
- * - GET  /:companyId/calls/export   — Export calls for compliance
+ * - GET    /:companyId/calls             — List calls with filters
+ * - GET    /:companyId/calls/:callSid    — Get detailed call with provenance
+ * - GET    /:companyId/calls/export      — Export calls for compliance
+ * - DELETE /:companyId/calls/bulk-delete — Bulk delete calls
  * 
  * ============================================================================
  * @module routes/agentConsole/callReview
@@ -845,6 +846,109 @@ router.get(
 
       res.status(500).json({
         error: 'Failed to get call details',
+        message: error.message,
+        requestId
+      });
+    }
+  }
+);
+
+/**
+ * DELETE /:companyId/calls/bulk-delete
+ * 
+ * Bulk delete multiple calls by their session IDs/CallSids
+ * Supports deletion by twilioCallSid or MongoDB _id
+ */
+router.delete(
+  '/:companyId/calls/bulk-delete',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { callSids } = req.body;
+    const requestId = `bulk_delete_${Date.now()}`;
+
+    logger.info(`[${MODULE_ID}] Bulk delete calls request`, {
+      companyId,
+      callSidsCount: callSids?.length,
+      requestId
+    });
+
+    if (!Array.isArray(callSids) || callSids.length === 0) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'callSids must be a non-empty array',
+        requestId
+      });
+    }
+
+    if (callSids.length > 100) {
+      return res.status(400).json({
+        error: 'Limit exceeded',
+        message: 'Cannot delete more than 100 calls at once',
+        requestId
+      });
+    }
+
+    try {
+      // Build query to match by twilioCallSid OR by _id
+      const mongoObjectIds = [];
+      const twilioCallSids = [];
+
+      for (const sid of callSids) {
+        if (sid.match(/^[a-f0-9]{24}$/i)) {
+          mongoObjectIds.push(sid);
+        } else {
+          twilioCallSids.push(sid);
+        }
+      }
+
+      const query = {
+        companyId,
+        $or: []
+      };
+
+      if (twilioCallSids.length > 0) {
+        query.$or.push({ 'channelIdentifiers.twilioCallSid': { $in: twilioCallSids } });
+      }
+      if (mongoObjectIds.length > 0) {
+        query.$or.push({ _id: { $in: mongoObjectIds } });
+      }
+
+      // If no valid identifiers, return early
+      if (query.$or.length === 0) {
+        return res.json({
+          success: true,
+          deletedCount: 0,
+          requestId
+        });
+      }
+
+      // Perform deletion
+      const result = await ConversationSession.deleteMany(query);
+
+      logger.info(`[${MODULE_ID}] Bulk delete completed`, {
+        requestId,
+        companyId,
+        requestedCount: callSids.length,
+        deletedCount: result.deletedCount
+      });
+
+      res.json({
+        success: true,
+        deletedCount: result.deletedCount,
+        requestId
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Bulk delete failed: ${error.message}`, {
+        requestId,
+        companyId,
+        callSidsCount: callSids.length,
+        stack: error.stack
+      });
+
+      res.status(500).json({
+        error: 'Bulk delete failed',
         message: error.message,
         requestId
       });
