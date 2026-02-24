@@ -472,10 +472,48 @@ router.get(
         return res.status(404).json({ error: 'Company not found' });
       }
       
+      // Load trigger stats
+      const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+      const GlobalTrigger = require('../../models/GlobalTrigger');
+      const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
+      const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
+      
+      const triggerSettings = await CompanyTriggerSettings.findOne({ companyId });
+      const activeGroupId = triggerSettings?.activeGroupId;
+      
+      let triggerCount = 0;
+      let activeGroupInfo = null;
+      
+      if (activeGroupId) {
+        const group = await GlobalTriggerGroup.findByGroupId(activeGroupId);
+        if (group) {
+          activeGroupInfo = {
+            groupId: group.groupId,
+            name: group.name,
+            icon: group.icon
+          };
+        }
+        
+        const globalTriggers = await GlobalTrigger.findByGroupId(activeGroupId);
+        const disabledSet = new Set(triggerSettings?.disabledGlobalTriggerIds || []);
+        const globalEnabledCount = globalTriggers.filter(gt => !disabledSet.has(gt.triggerId)).length;
+        triggerCount += globalEnabledCount;
+      }
+      
+      const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+      const localEnabledCount = localTriggers.filter(lt => !lt.isOverride && lt.enabled !== false && lt.isDeleted !== true).length;
+      triggerCount += localEnabledCount;
+      
       res.json({
         companyId,
         companyName: company.companyName,
-        agent2: company.aiAgentSettings?.agent2 || {}
+        agent2: company.aiAgentSettings?.agent2 || {},
+        triggerStats: {
+          activeGroupId,
+          activeGroupName: activeGroupInfo?.name || null,
+          activeGroupIcon: activeGroupInfo?.icon || null,
+          totalActiveCount: triggerCount
+        }
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Get Agent 2 config failed: ${error.message}`);
