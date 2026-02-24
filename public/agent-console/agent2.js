@@ -679,10 +679,15 @@
    */
   async function loadGreetings() {
     try {
+      console.log('[Greetings] Loading greetings config...');
       const response = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/${state.companyId}/greetings`);
+      
+      console.log('[Greetings] API response:', response);
       
       if (response.success && response.data) {
         state.greetings = response.data;
+        console.log('[Greetings] State updated:', state.greetings);
+        console.log('[Greetings] Rules loaded:', state.greetings.interceptor?.rules);
         renderGreetings();
       }
     } catch (error) {
@@ -763,6 +768,9 @@
     
     const rules = state.greetings.interceptor?.rules || [];
     
+    console.log('[Greetings] Rendering rules, count:', rules.length);
+    console.log('[Greetings] Rules data:', rules);
+    
     if (rules.length === 0) {
       DOM.greetingRulesList.innerHTML = `
         <div style="padding: 40px 20px; text-align: center; color: #6b7280;">
@@ -776,12 +784,14 @@
     const sortedRules = [...rules].sort((a, b) => (b.priority || 50) - (a.priority || 50));
     
     const rowsHtml = sortedRules.map(rule => {
+      console.log('[Greetings] Rendering rule:', rule);
       const isEnabled = rule.enabled !== false;
       const hasAudio = Boolean(rule.audioUrl);
       const matchBadgeColor = rule.matchType === 'EXACT' ? '#16a34a' : (rule.matchType === 'CONTAINS' ? '#3b82f6' : '#a855f7');
       
       const triggersDisplay = (rule.triggers || []).join(', ') || '—';
       const responseDisplay = rule.response || '—';
+      console.log('[Greetings] Rule response field:', { response: rule.response, responseDisplay });
       
       return `
         <div style="display: grid; grid-template-columns: 50px 60px 80px 1fr 1fr 100px 80px; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; align-items: center; ${!isEnabled ? 'opacity: 0.5;' : ''}">
