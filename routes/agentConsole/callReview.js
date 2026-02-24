@@ -44,14 +44,24 @@ const VERSION = 'CR1.0';
 
 /* ============================================================================
    MODELS — Call Data Storage
+   
+   Real call data is stored in two models:
+   - ConversationSession: Full session with turns, slots, discovery, booking state
+   - CallTrace: Snapshot of call context after call ends
+   
+   ConversationSession is the primary source for Call Console as it has:
+   - Full transcript (turns array)
+   - Channel identifiers (twilioCallSid, callerPhone)
+   - Discovery state, booking state, conversation memory
    ============================================================================ */
 
-let CallLog;
+const ConversationSession = require('../../models/ConversationSession');
+let CallTrace;
 try {
-  CallLog = require('../../models/CallLog');
+  CallTrace = require('../../models/CallTrace');
 } catch (err) {
-  logger.warn(`[${MODULE_ID}] CallLog model not found, using fallback`);
-  CallLog = null;
+  logger.warn(`[${MODULE_ID}] CallTrace model not found`);
+  CallTrace = null;
 }
 
 /* ============================================================================
@@ -270,16 +280,98 @@ function inferProvenanceFromContext(turn, callMeta) {
 }
 
 /* ============================================================================
-   HELPER: Calculate Call Summary Metrics
+   HELPER: Transform ConversationSession to Call Summary
    ============================================================================ */
 
 /**
- * Calculate summary metrics for a call
- * @param {Object} call - Call document
+ * Transform a ConversationSession document to the call list summary format
+ * @param {Object} session - ConversationSession document
+ * @returns {Object} Call summary for list view
+ */
+function transformSessionToCallSummary(session) {
+  const turns = session.turns || [];
+  const agentTurns = turns.filter(t => t.role === 'assistant');
+  const callerTurns = turns.filter(t => t.role === 'user');
+  
+  // Analyze provenance from turn metadata
+  let uiOwnedCount = 0;
+  let fallbackCount = 0;
+  let hardcodedCount = 0;
+
+  agentTurns.forEach(turn => {
+    const source = turn.responseSource?.toLowerCase() || '';
+    
+    // Map responseSource to provenance types
+    if (source === 'template' || source === 'triage' || source === 'state_machine' || 
+        source === 'quick_answer' || source === 'greeting' || source === 'booking') {
+      uiOwnedCount++;
+    } else if (source === 'llm' || source === 'llm_fallback') {
+      // LLM responses could be fallback - check if fallback was active
+      if (session.conversationMemory?.isFallbackActive) {
+        fallbackCount++;
+      } else {
+        uiOwnedCount++; // LLM with context is UI-driven
+      }
+    } else if (source === 'silence') {
+      // Silence events don't count
+    } else {
+      // Unknown source - potentially hardcoded
+      // For now, mark as UI-owned if it has a known source pattern
+      if (source) {
+        uiOwnedCount++;
+      } else {
+        hardcodedCount++;
+      }
+    }
+  });
+
+  // Calculate duration
+  let durationSeconds = session.metrics?.durationSeconds;
+  if (!durationSeconds && session.startedAt && session.endedAt) {
+    durationSeconds = Math.round((new Date(session.endedAt) - new Date(session.startedAt)) / 1000);
+  }
+
+  // Detect problems
+  const problems = [];
+  if (session.conversationMemory?.offRailsCount > 2) {
+    problems.push({ message: `Went off-rails ${session.conversationMemory.offRailsCount} times` });
+  }
+  if (session.status === 'error') {
+    problems.push({ message: 'Session ended with error' });
+  }
+
+  return {
+    callSid: session.channelIdentifiers?.twilioCallSid || session._id.toString(),
+    fromPhone: session.channelIdentifiers?.callerPhone || 'Unknown',
+    toPhone: session.channelIdentifiers?.calledNumber || '',
+    startTime: session.startedAt,
+    endTime: session.endedAt,
+    durationSeconds: durationSeconds || 0,
+    turnCount: turns.length,
+    agentTurnCount: agentTurns.length,
+    callerTurnCount: callerTurns.length,
+    uiOwnedCount,
+    fallbackCount,
+    hardcodedCount,
+    hasHardcodedViolation: hardcodedCount > 0,
+    hasFallback: fallbackCount > 0 || session.conversationMemory?.isFallbackActive,
+    problemCount: problems.length + hardcodedCount,
+    status: session.status,
+    outcome: session.outcome,
+    mode: session.mode
+  };
+}
+
+/* ============================================================================
+   HELPER: Calculate Call Summary Metrics (for enriched turns)
+   ============================================================================ */
+
+/**
+ * Calculate summary metrics for enriched turns
+ * @param {Array} turns - Array of turns with provenance
  * @returns {Object} Summary metrics
  */
-function calculateCallSummary(call) {
-  const turns = call.turns || [];
+function calculateCallSummary(turns) {
   const agentTurns = turns.filter(t => t.speaker === 'agent');
   
   let uiOwnedCount = 0;
@@ -287,10 +379,10 @@ function calculateCallSummary(call) {
   let hardcodedCount = 0;
 
   agentTurns.forEach(turn => {
-    const type = turn.provenance?.type || turn.sourceAttribution?.type;
+    const type = turn.provenance?.type;
     if (type === 'UI_OWNED') uiOwnedCount++;
     else if (type === 'FALLBACK') fallbackCount++;
-    else hardcodedCount++;
+    else if (type === 'HARDCODED') hardcodedCount++;
   });
 
   return {
@@ -301,8 +393,7 @@ function calculateCallSummary(call) {
     fallbackCount,
     hardcodedCount,
     hasHardcodedViolation: hardcodedCount > 0,
-    hasFallback: fallbackCount > 0,
-    problemCount: (call.problems || []).length + hardcodedCount
+    hasFallback: fallbackCount > 0
   };
 }
 
@@ -388,74 +479,54 @@ router.get(
     });
 
     try {
-      // Build query
-      const query = { companyId };
+      // Build query for ConversationSession
+      // Note: companyId in ConversationSession is ObjectId, need to handle both string and ObjectId
+      const query = { 
+        companyId: companyId,
+        channel: 'voice' // Only show voice calls in Call Console
+      };
 
-      // Date filter
+      // Date filter - ConversationSession uses startedAt
       const dateFilter = buildDateFilter(dateRange);
       if (dateFilter) {
-        query.startTime = dateFilter;
+        query.startedAt = dateFilter;
       }
 
       // Search filter
       if (search) {
         query.$or = [
-          { callSid: { $regex: search, $options: 'i' } },
-          { fromPhone: { $regex: search, $options: 'i' } },
-          { toPhone: { $regex: search, $options: 'i' } }
+          { 'channelIdentifiers.twilioCallSid': { $regex: search, $options: 'i' } },
+          { 'channelIdentifiers.callerPhone': { $regex: search, $options: 'i' } },
+          { 'channelIdentifiers.calledNumber': { $regex: search, $options: 'i' } }
         ];
       }
 
-      // If no CallLog model, return mock data for development
-      if (!CallLog) {
-        const mockCalls = generateMockCalls(companyId, limitNum);
-        return res.json({
-          success: true,
-          requestId,
-          page: pageNum,
-          limit: limitNum,
-          total: 42,
-          totalPages: Math.ceil(42 / limitNum),
-          calls: mockCalls,
-          _mock: true
-        });
-      }
-
-      // Execute query
-      const [calls, total] = await Promise.all([
-        CallLog.find(query)
-          .sort({ startTime: -1 })
+      // Execute query on ConversationSession
+      const [sessions, total] = await Promise.all([
+        ConversationSession.find(query)
+          .sort({ startedAt: -1 })
           .skip(skip)
           .limit(limitNum)
           .lean(),
-        CallLog.countDocuments(query)
+        ConversationSession.countDocuments(query)
       ]);
 
-      // Calculate summaries and filter by status if needed
-      let processedCalls = calls.map(call => {
-        const summary = calculateCallSummary(call);
-        return {
-          callSid: call.callSid,
-          fromPhone: call.fromPhone,
-          toPhone: call.toPhone,
-          startTime: call.startTime,
-          durationSeconds: call.durationSeconds,
-          ...summary
-        };
-      });
+      // Transform sessions to call list format
+      const calls = sessions.map(session => transformSessionToCallSummary(session));
 
       // Status filter (post-processing)
+      let filteredCalls = calls;
       if (status === 'clean') {
-        processedCalls = processedCalls.filter(c => !c.hasHardcodedViolation && c.problemCount === 0);
+        filteredCalls = calls.filter(c => !c.hasHardcodedViolation && c.problemCount === 0);
       } else if (status === 'violations') {
-        processedCalls = processedCalls.filter(c => c.hasHardcodedViolation);
+        filteredCalls = calls.filter(c => c.hasHardcodedViolation);
       } else if (status === 'problems') {
-        processedCalls = processedCalls.filter(c => c.problemCount > 0);
+        filteredCalls = calls.filter(c => c.problemCount > 0);
       }
 
       logger.info(`[${MODULE_ID}] List calls success`, {
         requestId,
-        returned: processedCalls.length,
+        returned: filteredCalls.length,
         total
       });
 
@@ -466,7 +537,7 @@ router.get(
         limit: limitNum,
         total,
         totalPages: Math.ceil(total / limitNum),
-        calls: processedCalls
+        calls: filteredCalls
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] List calls failed: ${error.message}`, {
@@ -495,59 +566,51 @@ router.get(
   requirePermission(PERMISSIONS.CONFIG_READ),
   async (req, res) => {
     const { companyId } = req.params;
-    const { dateRange = 'week', search = '', status = '' } = req.query;
+    const { dateRange = 'week', search = '' } = req.query;
     const requestId = `calls_export_${Date.now()}`;
 
     logger.info(`[${MODULE_ID}] Export calls request`, { companyId, requestId, dateRange });
 
     try {
-      // Build query (similar to list but no pagination)
-      const query = { companyId };
+      // Build query
+      const query = { 
+        companyId,
+        channel: 'voice'
+      };
+      
       const dateFilter = buildDateFilter(dateRange);
       if (dateFilter) {
-        query.startTime = dateFilter;
+        query.startedAt = dateFilter;
       }
       if (search) {
         query.$or = [
-          { callSid: { $regex: search, $options: 'i' } },
-          { fromPhone: { $regex: search, $options: 'i' } }
+          { 'channelIdentifiers.twilioCallSid': { $regex: search, $options: 'i' } },
+          { 'channelIdentifiers.callerPhone': { $regex: search, $options: 'i' } }
         ];
       }
 
-      if (!CallLog) {
-        return res.json({
-          success: true,
-          requestId,
-          exportedAt: new Date().toISOString(),
-          companyId,
-          dateRange,
-          calls: generateMockCalls(companyId, 10),
-          _mock: true
-        });
-      }
-
-      const calls = await CallLog.find(query)
-        .sort({ startTime: -1 })
+      const sessions = await ConversationSession.find(query)
+        .sort({ startedAt: -1 })
         .limit(1000)
         .lean();
 
-      // Process with full provenance
-      const exportData = calls.map(call => {
-        const enrichedTurns = (call.turns || []).map(turn => 
-          enrichTurnWithProvenance(turn, call)
-        );
-        const summary = calculateCallSummary({ ...call, turns: enrichedTurns });
-
+      // Process with summaries
+      const exportData = sessions.map(session => {
+        const summary = transformSessionToCallSummary(session);
         return {
-          callSid: call.callSid,
-          fromPhone: call.fromPhone,
-          toPhone: call.toPhone,
-          startTime: call.startTime,
-          durationSeconds: call.durationSeconds,
-          summary,
-          turns: enrichedTurns,
-          problems: call.problems || [],
-          llmUsage: call.llmUsage || null
+          ...summary,
+          discovery: session.discovery || null,
+          booking: session.booking || null,
+          conversationMemory: {
+            currentStage: session.conversationMemory?.currentStage,
+            offRailsCount: session.conversationMemory?.offRailsCount || 0
+          },
+          turns: (session.turns || []).map(t => ({
+            role: t.role,
+            content: t.content,
+            timestamp: t.timestamp,
+            responseSource: t.responseSource
+          }))
         };
       });
 
@@ -592,14 +655,25 @@ router.get(
     logger.info(`[${MODULE_ID}] Get call detail`, { companyId, callSid, requestId });
 
     try {
-      if (!CallLog) {
-        // Return mock detailed call for development
-        return res.json(generateMockCallDetail(companyId, callSid));
+      // Find session by twilioCallSid or _id
+      let session = await ConversationSession.findOne({
+        companyId,
+        'channelIdentifiers.twilioCallSid': callSid
+      }).lean();
+
+      // If not found by callSid, try by _id
+      if (!session) {
+        try {
+          session = await ConversationSession.findOne({
+            companyId,
+            _id: callSid
+          }).lean();
+        } catch (e) {
+          // Invalid ObjectId, ignore
+        }
       }
 
-      const call = await CallLog.findOne({ companyId, callSid }).lean();
-
-      if (!call) {
+      if (!session) {
         return res.status(404).json({
           error: 'Call not found',
           callSid,
@@ -607,23 +681,126 @@ router.get(
         });
       }
 
-      // Enrich turns with provenance
-      const enrichedTurns = (call.turns || []).map(turn =>
-        enrichTurnWithProvenance(turn, call)
-      );
+      // Transform turns to our format with provenance
+      const enrichedTurns = (session.turns || []).map((turn, index) => {
+        const isCaller = turn.role === 'user';
+        
+        const baseTurn = {
+          turnNumber: index + 1,
+          speaker: isCaller ? 'caller' : 'agent',
+          text: turn.content || '',
+          timestamp: turn.timestamp
+        };
 
-      const summary = calculateCallSummary({ ...call, turns: enrichedTurns });
+        if (isCaller) {
+          return { ...baseTurn, provenance: null };
+        }
+
+        // Agent turn - determine provenance from responseSource
+        const source = turn.responseSource?.toLowerCase() || '';
+        let provenance = {
+          type: 'UNKNOWN',
+          uiPath: null,
+          reason: null,
+          isViolation: false
+        };
+
+        if (source === 'template' || source === 'triage') {
+          provenance.type = 'UI_OWNED';
+          provenance.uiPath = 'triggers';
+          provenance.reason = 'Response from trigger card match';
+        } else if (source === 'state_machine' || source === 'booking') {
+          provenance.type = 'UI_OWNED';
+          provenance.uiPath = 'bookingPrompts';
+          provenance.reason = 'Response from booking state machine';
+        } else if (source === 'quick_answer') {
+          provenance.type = 'UI_OWNED';
+          provenance.uiPath = 'triggers';
+          provenance.reason = 'Quick answer from trigger';
+        } else if (source === 'greeting') {
+          provenance.type = 'UI_OWNED';
+          provenance.uiPath = 'greetings.callStart';
+          provenance.reason = 'Configured greeting';
+        } else if (source === 'llm' || source === 'llm_fallback') {
+          // Check if in fallback mode
+          if (session.conversationMemory?.isFallbackActive) {
+            provenance.type = 'FALLBACK';
+            provenance.reason = 'LLM fallback - conversation went off-rails';
+          } else {
+            provenance.type = 'UI_OWNED';
+            provenance.uiPath = 'discovery';
+            provenance.reason = 'LLM response with UI-configured context';
+          }
+        } else if (source === 'silence') {
+          provenance.type = 'UI_OWNED';
+          provenance.reason = 'Silence handler';
+        } else if (source) {
+          provenance.type = 'UI_OWNED';
+          provenance.reason = `Source: ${source}`;
+        } else {
+          // No source - mark as potentially hardcoded
+          provenance.type = 'HARDCODED';
+          provenance.isViolation = true;
+          provenance.violationSeverity = 'CRITICAL';
+          provenance.reason = 'No responseSource attribute found';
+          provenance.fixInstructions = 'Add responseSource to this turn in runtime code';
+        }
+
+        return { ...baseTurn, provenance };
+      });
+
+      const summary = calculateCallSummary(enrichedTurns);
+
+      // Build problems list
+      const problems = [];
+      if (summary.hardcodedCount > 0) {
+        problems.push({
+          message: `${summary.hardcodedCount} agent turn(s) without proper source attribution`,
+          severity: 'CRITICAL'
+        });
+      }
+      if (session.conversationMemory?.offRailsCount > 2) {
+        problems.push({
+          message: `Conversation went off-rails ${session.conversationMemory.offRailsCount} times`,
+          severity: 'HIGH'
+        });
+      }
+      if (session.status === 'error') {
+        problems.push({
+          message: 'Session ended with error status',
+          severity: 'MEDIUM'
+        });
+      }
+
+      // Build events from audit trail
+      const events = (session.conversationMemory?.auditTrail || []).map(entry => ({
+        timestamp: entry.timestamp,
+        type: entry.type,
+        data: {
+          stage: entry.stage,
+          step: entry.step,
+          ...entry.data
+        }
+      }));
+
+      // Calculate duration
+      let durationSeconds = session.metrics?.durationSeconds;
+      if (!durationSeconds && session.startedAt && session.endedAt) {
+        durationSeconds = Math.round((new Date(session.endedAt) - new Date(session.startedAt)) / 1000);
+      }
 
       res.json({
         success: true,
         requestId,
-        callSid: call.callSid,
-        fromPhone: call.fromPhone,
-        toPhone: call.toPhone,
-        startTime: call.startTime,
-        endTime: call.endTime,
-        durationSeconds: call.durationSeconds,
-        status: call.status,
+        callSid: session.channelIdentifiers?.twilioCallSid || session._id.toString(),
+        fromPhone: session.channelIdentifiers?.callerPhone || 'Unknown',
+        toPhone: session.channelIdentifiers?.calledNumber || '',
+        startTime: session.startedAt,
+        endTime: session.endedAt,
+        durationSeconds: durationSeconds || 0,
+        status: session.status,
+        outcome: session.outcome,
+        mode: session.mode,
         
         // Provenance summary
         provenanceSummary: {
@@ -634,23 +811,29 @@ router.get(
         },
 
         // LLM usage
-        llmUsage: call.llmUsage || {
+        llmUsage: {
           promptTokens: 0,
           completionTokens: 0,
-          totalTokens: 0
+          totalTokens: session.metrics?.totalTokens || 0
         },
 
         // Problems detected
-        problems: call.problems || [],
+        problems,
 
         // Full transcript with provenance
         turns: enrichedTurns,
 
-        // Raw events log
-        events: call.events || [],
+        // Events from audit trail
+        events,
 
-        // Config snapshot reference (for compliance)
-        configSnapshotId: call.configSnapshotId || null
+        // Discovery context
+        discovery: session.discovery || null,
+
+        // Booking state
+        booking: session.booking || null,
+
+        // Config snapshot reference
+        configSnapshotId: null
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Get call detail failed: ${error.message}`, {
