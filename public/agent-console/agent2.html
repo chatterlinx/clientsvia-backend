@@ -87,17 +87,155 @@
       <!-- Single Column Layout — Full Width -->
       <div class="single-column-layout-full">
         
-        <!-- Discovery Flow Status -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             🏥 CALL FLOW HEALTH MONITOR - GATEKEEPER STATUS
+             ═══════════════════════════════════════════════════════════════
+             Shows the complete call flow health from Twilio → Agent 2.0
+             ═══════════════════════════════════════════════════════════════ -->
         <div class="card">
           <div class="card-header">
-            <h2 class="card-title">Discovery Status</h2>
-            <span class="badge badge-success" id="badge-discovery-status">Active</span>
+            <h2 class="card-title">🏥 Call Flow Health Monitor</h2>
+            <button class="btn btn-secondary btn-sm" id="btn-refresh-health">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M14 2v6h-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Refresh
+            </button>
           </div>
           <div class="card-body">
-            <p class="text-muted text-sm">
-              Agent 2.0 Discovery is the <strong>only</strong> discovery system. It handles all incoming calls, 
-              captures caller intent, and prepares handoff payloads for Booking Logic.
+            <p class="text-muted text-sm" style="margin-bottom: 20px;">
+              Complete call flow status from Twilio ingress through to Agent 2.0 discovery.
             </p>
+            
+            <!-- Health Status Flow -->
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              
+              <!-- Gate 1: Twilio Configuration -->
+              <div id="health-twilio" class="health-gate" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px;">
+                <div class="health-icon" style="font-size: 1.5rem;">📞</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">Twilio Configuration</div>
+                  <div class="health-status" style="font-size: 0.75rem; color: #6b7280;">Checking...</div>
+                </div>
+                <div class="health-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                  <span id="health-twilio-badge">—</span>
+                </div>
+              </div>
+              
+              <!-- Arrow Down -->
+              <div style="display: flex; justify-content: center; margin: -8px 0;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color: #9ca3af;">
+                  <path d="M12 5v14M12 19l-4-4M12 19l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              
+              <!-- Gate 2: Spam Filter -->
+              <div id="health-spam" class="health-gate" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px;">
+                <div class="health-icon" style="font-size: 1.5rem;">🛡️</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">Spam Filter</div>
+                  <div class="health-status" style="font-size: 0.75rem; color: #6b7280;">Checking...</div>
+                </div>
+                <div class="health-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                  <span id="health-spam-badge">—</span>
+                </div>
+              </div>
+              
+              <!-- Arrow Down -->
+              <div style="display: flex; justify-content: center; margin: -8px 0;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color: #9ca3af;">
+                  <path d="M12 5v14M12 19l-4-4M12 19l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              
+              <!-- Gate 3: Call Start Greeting -->
+              <div id="health-callstart" class="health-gate" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px;">
+                <div class="health-icon" style="font-size: 1.5rem;">🎙️</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">Call Start Greeting</div>
+                  <div class="health-status" style="font-size: 0.75rem; color: #6b7280;">Checking...</div>
+                </div>
+                <div class="health-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                  <span id="health-callstart-badge">—</span>
+                </div>
+              </div>
+              
+              <!-- Arrow Down -->
+              <div style="display: flex; justify-content: center; margin: -8px 0;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color: #9ca3af;">
+                  <path d="M12 5v14M12 19l-4-4M12 19l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              
+              <!-- Gate 4: Greeting Interceptor -->
+              <div id="health-interceptor" class="health-gate" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px;">
+                <div class="health-icon" style="font-size: 1.5rem;">👋</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">Greeting Interceptor</div>
+                  <div class="health-status" style="font-size: 0.75rem; color: #6b7280;">Checking...</div>
+                </div>
+                <div class="health-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                  <span id="health-interceptor-badge">—</span>
+                </div>
+              </div>
+              
+              <!-- Arrow Down -->
+              <div style="display: flex; justify-content: center; margin: -8px 0;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color: #9ca3af;">
+                  <path d="M12 5v14M12 19l-4-4M12 19l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              
+              <!-- Gate 5: ElevenLabs Voice -->
+              <div id="health-elevenlabs" class="health-gate" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px;">
+                <div class="health-icon" style="font-size: 1.5rem;">🎤</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">ElevenLabs Voice</div>
+                  <div class="health-status" style="font-size: 0.75rem; color: #6b7280;">Checking...</div>
+                </div>
+                <div class="health-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                  <span id="health-elevenlabs-badge">—</span>
+                </div>
+              </div>
+              
+              <!-- Arrow Down -->
+              <div style="display: flex; justify-content: center; margin: -8px 0;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color: #9ca3af;">
+                  <path d="M12 5v14M12 19l-4-4M12 19l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              
+              <!-- Gate 6: Trigger Cards -->
+              <div id="health-triggers" class="health-gate" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px;">
+                <div class="health-icon" style="font-size: 1.5rem;">🎯</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">Trigger Cards</div>
+                  <div class="health-status" style="font-size: 0.75rem; color: #6b7280;">Checking...</div>
+                </div>
+                <div class="health-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                  <span id="health-triggers-badge">—</span>
+                </div>
+              </div>
+              
+            </div>
+            
+            <!-- Overall Health Summary -->
+            <div id="health-summary" style="margin-top: 20px; padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #9ca3af;">
+              <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 4px;">Overall Status</div>
+              <div id="health-summary-text" style="font-size: 0.875rem; color: #6b7280;">
+                Loading health status...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discovery Flow Stats -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Discovery Statistics</h2>
+          </div>
+          <div class="card-body">
             <div class="flex gap-4 mt-4">
               <div class="stat-box clickable" id="stat-box-triggers" title="Open Trigger Console">
                 <div class="stat-box-label">Trigger Cards</div>
