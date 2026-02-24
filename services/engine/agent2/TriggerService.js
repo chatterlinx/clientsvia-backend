@@ -30,6 +30,7 @@ const GlobalTriggerGroup = require('../../../models/GlobalTriggerGroup');
 const GlobalTrigger = require('../../../models/GlobalTrigger');
 const CompanyLocalTrigger = require('../../../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
+const TriggerAudio = require('../../../models/TriggerAudio');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // CACHE CONFIGURATION
@@ -190,6 +191,13 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
   // Load ONLY active local triggers (enabled=true, isDeleted!=true)
   const rawLocalTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
   const localTriggers = rawLocalTriggers.map(lt => lt.toMatcherFormat ? lt.toMatcherFormat() : lt);
+  
+  // Load company-specific audio recordings
+  const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
+  const audioMap = new Map();
+  audioRecordings.forEach(a => {
+    audioMap.set(a.ruleId, a);
+  });
 
   const hiddenSet = new Set(settings?.hiddenGlobalTriggerIds || []);
   
@@ -234,6 +242,7 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
     }
 
     const partialOverride = partialOverrideMap.get(gt.triggerId);
+    const companyAudio = audioMap.get(gt.ruleId);
     
     const trigger = {
       ...gt,
@@ -242,13 +251,22 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
       _isPartiallyOverridden: Boolean(partialOverride)
     };
 
+    // Apply partial override (text only - audio is always company-specific)
     if (partialOverride) {
       if (partialOverride.answerText) {
         trigger.answer = { ...trigger.answer, answerText: partialOverride.answerText };
       }
-      if (partialOverride.audioUrl) {
-        trigger.answer = { ...trigger.answer, audioUrl: partialOverride.audioUrl };
-      }
+    }
+    
+    // Apply company-specific audio (if valid for current text)
+    const effectiveAnswerText = partialOverride?.answerText || gt.answerText;
+    const hasValidAudio = companyAudio && companyAudio.isValid && 
+                          companyAudio.textHash === TriggerAudio.hashText(effectiveAnswerText);
+    
+    if (hasValidAudio) {
+      trigger.answer = { ...trigger.answer, audioUrl: companyAudio.audioUrl };
+    } else {
+      trigger.answer = { ...trigger.answer, audioUrl: '' };
     }
 
     // CANONICAL KEY: Always use ruleId for Map operations
@@ -256,10 +274,23 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
   }
 
   for (const lt of localTriggers) {
+    const companyAudio = audioMap.get(lt.ruleId);
+    
+    // Check if company has valid audio for this trigger's current text
+    const hasValidAudio = companyAudio && companyAudio.isValid && 
+                          companyAudio.textHash === TriggerAudio.hashText(lt.answerText);
+    
     const trigger = {
       ...lt,
       _scope: 'LOCAL'
     };
+    
+    // Override audio with company-specific audio
+    if (hasValidAudio) {
+      trigger.answer = { ...trigger.answer, audioUrl: companyAudio.audioUrl };
+    } else {
+      trigger.answer = { ...trigger.answer, audioUrl: '' };
+    }
 
     // CANONICAL KEY: Always use ruleId - this overwrites any global with same ruleId
     triggerMap.set(lt.ruleId, trigger);

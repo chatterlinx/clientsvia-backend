@@ -27,6 +27,10 @@
  * - DELETE /:companyId/trigger-override/:triggerId - Remove partial override
  * - PUT    /:companyId/trigger-scope      - Change trigger scope (LOCAL/GLOBAL)
  *
+ * - PUT    /:companyId/trigger-audio/:ruleId - Save company-specific audio
+ * - DELETE /:companyId/trigger-audio/:ruleId - Delete company-specific audio
+ * - PUT    /:companyId/variables          - Save company variables
+ *
  * - GET    /:companyId/duplicates         - Check for duplicate triggers
  *
  * ============================================================================
@@ -42,6 +46,7 @@ const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
 const GlobalTrigger = require('../../models/GlobalTrigger');
 const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -115,6 +120,13 @@ async function buildMergedTriggerList(companyId) {
   }
 
   const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+  
+  // Load company-specific audio for all triggers
+  const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
+  const audioMap = new Map();
+  audioRecordings.forEach(a => {
+    audioMap.set(a.ruleId, a);
+  });
 
   const disabledGlobalSet = new Set(settings?.disabledGlobalTriggerIds || []);
   
@@ -148,6 +160,16 @@ async function buildMergedTriggerList(companyId) {
 
     const partialOverride = partialOverrideMap.get(gt.triggerId);
     const isDisabled = disabledGlobalSet.has(gt.triggerId);
+    const companyAudio = audioMap.get(gt.ruleId);
+    
+    // Use answer text from partial override if exists, else from global
+    const effectiveAnswerText = partialOverride?.answerText || gt.answerText;
+    
+    // Audio is ALWAYS company-specific - never from global trigger
+    // Check if company has audio AND if it's still valid for current text
+    const hasValidAudio = companyAudio && companyAudio.isValid && 
+                          companyAudio.textHash === TriggerAudio.hashText(effectiveAnswerText);
+    const effectiveAudioUrl = hasValidAudio ? companyAudio.audioUrl : '';
     
     triggerMap.set(gt.ruleId, {
       triggerId: gt.triggerId,
@@ -166,9 +188,10 @@ async function buildMergedTriggerList(companyId) {
         negativeKeywords: gt.negativeKeywords || []
       },
       answer: {
-        answerText: partialOverride?.answerText || gt.answerText,
-        audioUrl: partialOverride?.audioUrl || gt.audioUrl || '',
-        hasAudio: Boolean(partialOverride?.audioUrl || gt.audioUrl)
+        answerText: effectiveAnswerText,
+        audioUrl: effectiveAudioUrl,
+        hasAudio: Boolean(effectiveAudioUrl),
+        audioNeedsRegeneration: companyAudio && !hasValidAudio
       },
       followUp: {
         question: gt.followUpQuestion || '',
@@ -183,6 +206,13 @@ async function buildMergedTriggerList(companyId) {
   }
 
   for (const lt of localTriggers) {
+    const companyAudio = audioMap.get(lt.ruleId);
+    
+    // Check if company has audio AND if it's still valid for current text
+    const hasValidAudio = companyAudio && companyAudio.isValid && 
+                          companyAudio.textHash === TriggerAudio.hashText(lt.answerText);
+    const effectiveAudioUrl = hasValidAudio ? companyAudio.audioUrl : '';
+    
     triggerMap.set(lt.ruleId, {
       triggerId: lt.triggerId,
       ruleId: lt.ruleId,
@@ -204,8 +234,9 @@ async function buildMergedTriggerList(companyId) {
       },
       answer: {
         answerText: lt.answerText,
-        audioUrl: lt.audioUrl || '',
-        hasAudio: Boolean(lt.audioUrl)
+        audioUrl: effectiveAudioUrl,
+        hasAudio: Boolean(effectiveAudioUrl),
+        audioNeedsRegeneration: companyAudio && !hasValidAudio
       },
       followUp: {
         question: lt.followUpQuestion || '',
@@ -683,7 +714,7 @@ router.post('/:companyId/local-triggers',
         phrases: phrases || [],
         negativeKeywords: negativeKeywords || [],
         answerText,
-        audioUrl: audioUrl || '',
+        audioUrl: '',
         followUpQuestion: followUpQuestion || '',
         followUpNextAction: followUpNextAction || '',
         isOverride: Boolean(isOverride),
@@ -695,6 +726,15 @@ router.post('/:companyId/local-triggers',
         createdBy: userId,
         updatedBy: userId
       });
+      
+      // Save audio separately if provided
+      if (audioUrl && audioUrl.trim()) {
+        await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, answerText, null, userId);
+        logger.info('[CompanyTriggers] Company-specific audio saved', {
+          companyId,
+          ruleId
+        });
+      }
 
       logger.info('[CompanyTriggers] Local trigger created', {
         companyId,
@@ -702,6 +742,7 @@ router.post('/:companyId/local-triggers',
         triggerId,
         isOverride: Boolean(isOverride),
         overrideOfRuleId,
+        hasAudio: Boolean(audioUrl),
         createdBy: userId
       });
 
@@ -804,7 +845,7 @@ router.patch('/:companyId/local-triggers/:ruleId',
       const allowedFields = [
         'label', 'description', 'enabled', 'priority',
         'keywords', 'phrases', 'negativeKeywords',
-        'answerText', 'audioUrl',
+        'answerText',
         'followUpQuestion', 'followUpNextAction',
         'tags'
       ];
@@ -815,23 +856,59 @@ router.patch('/:companyId/local-triggers/:ruleId',
           cleanUpdates[field] = updates[field];
         }
       }
+      
+      // Check if answer text changed - invalidate audio if it did
+      const textChanged = cleanUpdates.answerText && cleanUpdates.answerText !== trigger.answerText;
+      
+      // Handle audio URL separately (never store in trigger, always in TriggerAudio)
+      const audioUrl = updates.audioUrl;
+      const hasAudioUpdate = audioUrl !== undefined;
 
       Object.assign(trigger, cleanUpdates);
       trigger.updatedAt = new Date();
       trigger.updatedBy = userId;
 
       await trigger.save();
+      
+      // Handle audio changes
+      if (textChanged) {
+        await TriggerAudio.invalidateAudio(companyId, ruleId, 'ANSWER_TEXT_CHANGED');
+        logger.info('[CompanyTriggers] Audio invalidated due to text change', {
+          companyId,
+          ruleId
+        });
+      } else if (hasAudioUpdate) {
+        // Save or update company-specific audio
+        const finalAnswerText = cleanUpdates.answerText || trigger.answerText;
+        if (audioUrl && audioUrl.trim()) {
+          await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, finalAnswerText, null, userId);
+          logger.info('[CompanyTriggers] Company-specific audio saved', {
+            companyId,
+            ruleId
+          });
+        } else {
+          // Empty audio URL = delete audio
+          await TriggerAudio.deleteAudio(companyId, ruleId);
+          logger.info('[CompanyTriggers] Company-specific audio removed', {
+            companyId,
+            ruleId
+          });
+        }
+      }
 
       logger.info('[CompanyTriggers] Local trigger updated', {
         companyId,
         ruleId,
         updatedFields: Object.keys(cleanUpdates),
+        textChanged,
+        audioUpdated: hasAudioUpdate,
         updatedBy: userId
       });
 
       return res.json({
         success: true,
-        data: trigger
+        data: trigger,
+        audioInvalidated: textChanged
       });
     } catch (error) {
       logger.error('[CompanyTriggers] Update local trigger error', { error: error.message });
@@ -1164,6 +1241,94 @@ router.put('/:companyId/trigger-scope',
 
     } catch (error) {
       logger.error('[CompanyTriggers] Change scope error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// TRIGGER AUDIO (Company-Specific)
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /:companyId/trigger-audio/:ruleId
+ * Save company-specific audio for a trigger
+ */
+router.put('/:companyId/trigger-audio/:ruleId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, ruleId } = req.params;
+      const { audioUrl, answerText, voiceId } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!audioUrl || !answerText) {
+        return res.status(400).json({
+          success: false,
+          error: 'audioUrl and answerText are required'
+        });
+      }
+
+      const audio = await TriggerAudio.saveAudio(
+        companyId,
+        ruleId,
+        audioUrl,
+        answerText,
+        voiceId,
+        userId
+      );
+
+      logger.info('[TriggerAudio] Audio saved', {
+        companyId,
+        ruleId,
+        voiceId,
+        savedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          companyId,
+          ruleId,
+          audioUrl: audio.audioUrl,
+          isValid: audio.isValid,
+          textHash: audio.textHash
+        }
+      });
+    } catch (error) {
+      logger.error('[TriggerAudio] Save audio error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /:companyId/trigger-audio/:ruleId
+ * Delete company-specific audio for a trigger
+ */
+router.delete('/:companyId/trigger-audio/:ruleId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, ruleId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      await TriggerAudio.deleteAudio(companyId, ruleId);
+
+      logger.info('[TriggerAudio] Audio deleted', {
+        companyId,
+        ruleId,
+        deletedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        message: 'Audio deleted successfully'
+      });
+    } catch (error) {
+      logger.error('[TriggerAudio] Delete audio error', { error: error.message });
       return res.status(500).json({ success: false, error: error.message });
     }
   }
