@@ -671,14 +671,48 @@
      -------------------------------------------------------------------------- */
   async function handleGroupChange(e) {
     const newGroupId = e.target.value || null;
+    const previousGroupId = state.activeGroupId;
     
+    // If there was a previous group, require confirmation
+    if (previousGroupId && previousGroupId !== newGroupId) {
+      const previousGroupName = state.availableGroups.find(g => g.groupId === previousGroupId)?.name || previousGroupId;
+      const newGroupName = newGroupId ? (state.availableGroups.find(g => g.groupId === newGroupId)?.name || newGroupId) : 'None';
+      
+      state.pendingApproval = {
+        action: 'changeGroup',
+        newGroupId,
+        previousGroupId,
+        newGroupName,
+        previousGroupName
+      };
+      
+      DOM.approvalTitle.textContent = 'Change Trigger Group';
+      DOM.approvalText.innerHTML = `
+        <strong>Warning: Changing trigger groups affects live calls!</strong><br><br>
+        Current group: <strong>${escapeHtml(previousGroupName)}</strong><br>
+        New group: <strong>${newGroupId ? escapeHtml(newGroupName) : 'None (no triggers)'}</strong><br><br>
+        This will immediately change which triggers are available to callers. All disabled triggers will be reset.
+        <br><br>
+        <span style="color: var(--text-muted); font-size: 0.875rem;">Note: This setting is locked once set. Contact admin to change.</span>
+      `;
+      updateApprovalHint('Yes');
+      DOM.inputApproval.value = '';
+      DOM.modalApproval.classList.add('active');
+      DOM.inputApproval.focus();
+      
+      // Reset dropdown to previous value until confirmed
+      DOM.groupSelector.value = previousGroupId;
+      return;
+    }
+    
+    // No previous group, allow change without confirmation
     try {
       await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/active-group`, {
         method: 'PUT',
         body: { groupId: newGroupId }
       });
       
-      showToast('success', 'Group Changed', newGroupId ? `Now using "${newGroupId}" triggers` : 'No group selected');
+      showToast('success', 'Group Selected', newGroupId ? `Now using "${newGroupId}" triggers` : 'No group selected');
       await loadTriggers();
       
     } catch (error) {
@@ -985,7 +1019,7 @@
       return;
     }
     
-    const { action, trigger, newEnabledState, newScope, checkbox } = state.pendingApproval;
+    const { action, trigger, newEnabledState, newScope, checkbox, newGroupId } = state.pendingApproval;
     
     try {
       if (action === 'delete') {
@@ -1010,6 +1044,15 @@
         }
       } else if (action === 'toggleScope') {
         await toggleTriggerScope(trigger.triggerId, newScope);
+      } else if (action === 'changeGroup') {
+        await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/active-group`, {
+          method: 'PUT',
+          body: { groupId: newGroupId }
+        });
+        
+        showToast('success', 'Group Changed', newGroupId ? `Now using "${newGroupId}" triggers` : 'No group selected');
+        DOM.groupSelector.value = newGroupId || '';
+        await loadTriggers();
       }
       
       closeApprovalModal();
