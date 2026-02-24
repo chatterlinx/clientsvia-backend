@@ -93,6 +93,7 @@ const logger = require('../../utils/logger');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE CONSTANTS
@@ -408,10 +409,16 @@ router.post(
                 });
             }
             
-            // Generate audio via ElevenLabs
-            const ElevenLabsService = require('../../services/ElevenLabsService');
+            // Get voice settings for audio generation
+            const voiceSettings = company.aiAgentSettings?.voiceSettings;
+            const stability = voiceSettings?.stability ?? 0.5;
+            const similarityBoost = voiceSettings?.similarityBoost ?? 0.75;
+            const styleExaggeration = voiceSettings?.style ?? 0;
+            const aiModel = voiceSettings?.model || 'eleven_turbo_v2_5';
+            
+            // Generate filename and paths
             const textHash = hashText(text);
-            const filename = `callstart_${companyId}_${textHash}.mp3`;
+            const filename = `callstart_${companyId.slice(0, 12)}_${textHash}.mp3`;
             const audioPath = path.join(AUDIO_DIR, filename);
             const audioUrl = `${AUDIO_URL_PREFIX}/${filename}`;
             
@@ -443,8 +450,24 @@ router.post(
                 });
             }
             
-            // Generate new audio
-            const audioBuffer = await ElevenLabsService.generateSpeech(voiceId, text);
+            // Generate new audio via ElevenLabs
+            logger.info(`[${MODULE_ID}] Generating call start audio`, {
+                companyId,
+                voiceId,
+                textPreview: text.substring(0, 100),
+                model: aiModel
+            });
+            
+            const audioBuffer = await synthesizeSpeech({
+                text: text.trim(),
+                voiceId,
+                stability,
+                similarity_boost: similarityBoost,
+                style: styleExaggeration,
+                model_id: aiModel,
+                company,
+                output_format: 'mp3_44100_128'
+            });
             
             // Save audio file
             fs.writeFileSync(audioPath, audioBuffer);
@@ -1050,10 +1073,16 @@ router.post(
                 });
             }
             
-            // Generate audio via ElevenLabs
-            const ElevenLabsService = require('../../services/ElevenLabsService');
+            // Get voice settings for audio generation
+            const voiceSettings = company.aiAgentSettings?.voiceSettings;
+            const stability = voiceSettings?.stability ?? 0.5;
+            const similarityBoost = voiceSettings?.similarityBoost ?? 0.75;
+            const styleExaggeration = voiceSettings?.style ?? 0;
+            const aiModel = voiceSettings?.model || 'eleven_turbo_v2_5';
+            
+            // Generate filename and paths
             const textHash = hashText(text);
-            const filename = `rule_${companyId}_${ruleId}_${textHash}.mp3`;
+            const filename = `rule_${companyId.slice(0, 12)}_${ruleId}_${textHash}.mp3`;
             const audioPath = path.join(AUDIO_DIR, filename);
             const audioUrl = `${AUDIO_URL_PREFIX}/${filename}`;
             
@@ -1083,8 +1112,25 @@ router.post(
                 });
             }
             
-            // Generate new audio
-            const audioBuffer = await ElevenLabsService.generateSpeech(voiceId, text);
+            // Generate new audio via ElevenLabs
+            logger.info(`[${MODULE_ID}] Generating rule audio`, {
+                companyId,
+                ruleId,
+                voiceId,
+                textPreview: text.substring(0, 100),
+                model: aiModel
+            });
+            
+            const audioBuffer = await synthesizeSpeech({
+                text: text.trim(),
+                voiceId,
+                stability,
+                similarity_boost: similarityBoost,
+                style: styleExaggeration,
+                model_id: aiModel,
+                company: company.toObject(),
+                output_format: 'mp3_44100_128'
+            });
             
             // Save audio file
             fs.writeFileSync(audioPath, audioBuffer);
