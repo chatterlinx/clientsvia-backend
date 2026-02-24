@@ -226,6 +226,14 @@ class HardcodedSpeechScanner {
     const basePath = path.join(__dirname, '../../', dir);
     
     try {
+      // Check if directory exists first
+      try {
+        await fs.access(basePath);
+      } catch {
+        logger.warn(`[${MODULE_ID}] Directory not found, skipping: ${dir} (${basePath})`);
+        return;
+      }
+      
       const files = await globAsync(this.config.includePatterns[0], {
         cwd: basePath,
         ignore: this.config.excludePaths,
@@ -239,7 +247,8 @@ class HardcodedSpeechScanner {
       
     } catch (error) {
       logger.warn(`[${MODULE_ID}] Failed to scan directory: ${dir}`, {
-        error: error.message
+        error: error.message,
+        basePath
       });
     }
   }

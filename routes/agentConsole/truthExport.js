@@ -96,8 +96,16 @@ async function buildUiSourceTruth(includeContents = false, includeLargeAssets = 
   
   logger.debug(`[${MODULE_ID}] Building UI Source Truth`, {
     includeContents,
-    includeLargeAssets
+    includeLargeAssets,
+    agentConsoleDir: AGENT_CONSOLE_DIR
   });
+  
+  // Verify directory exists (helps diagnose production path issues)
+  try {
+    await fs.access(AGENT_CONSOLE_DIR);
+  } catch (err) {
+    throw new Error(`Agent Console directory not found: ${AGENT_CONSOLE_DIR}`);
+  }
   
   // File type patterns to include
   const patterns = [
@@ -812,12 +820,35 @@ router.get(
       });
       
       // Build all lanes in parallel (maximum performance)
-      const [uiTruth, runtimeTruth, buildTruth, complianceTruth] = await Promise.all([
+      // Wrap each lane in try-catch for better error diagnostics
+      const results = await Promise.allSettled([
         buildUiSourceTruth(includeContents === '1', includeLargeAssets === '1'),
         buildRuntimeTruth(companyId),
         Promise.resolve(buildBuildTruth()),
         buildComplianceTruth(companyId)
       ]);
+      
+      // Check for failures and provide detailed error info
+      const laneNames = ['uiSource', 'runtime', 'build', 'compliance'];
+      const failures = results
+        .map((r, i) => r.status === 'rejected' ? { lane: laneNames[i], error: r.reason?.message || 'Unknown error' } : null)
+        .filter(Boolean);
+      
+      if (failures.length > 0) {
+        logger.error(`[${MODULE_ID}] Lane failures detected`, {
+          companyId,
+          failures,
+          user: req.user?.email
+        });
+        
+        return res.status(500).json({
+          error: 'Truth export failed - lane errors',
+          laneFailures: failures,
+          truthVersion: TRUTH_VERSION
+        });
+      }
+      
+      const [uiTruth, runtimeTruth, buildTruth, complianceTruth] = results.map(r => r.value);
       
       // Compute overall truth status
       const truthStatus = computeTruthStatus(uiTruth, complianceTruth);
