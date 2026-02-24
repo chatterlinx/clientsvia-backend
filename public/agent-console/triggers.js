@@ -683,12 +683,8 @@
         <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
         <div>
           ${isGlobalScope ? 
-            '<span class="scope-badge global" title="Global triggers cannot be converted back to LOCAL">GLOBAL</span>' :
-            `<label class="toggle-switch" title="Local (click to convert to Global - cannot be reversed)">
-              <input type="checkbox" class="toggle-scope" 
-                     data-trigger-id="${trigger.triggerId}">
-              <span class="toggle-slider"></span>
-            </label>`
+            '<span class="scope-badge global">GLOBAL</span>' :
+            '<span class="scope-badge local">LOCAL</span>'
           }
         </div>
         <div>
