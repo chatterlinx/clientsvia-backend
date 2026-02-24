@@ -190,8 +190,9 @@ class AIAgentSettingsManager {
                 case 'aicore-live-scenarios':
                     await this.loadAiCoreLiveScenarios();
                     break;
+                // ☢️ NUKED Feb 2026: cheatSheet references removed
                 case 'aicore-cheat-sheet':
-                    await this.loadAiCoreCheatSheet();
+                    console.warn('Cheat Sheet sub-tab NUKED Feb 2026');
                     break;
                 // REMOVED Dec 2025: aicore-call-flow (Mission Control), aicore-knowledgebase, analytics
                 default:
@@ -307,24 +308,8 @@ class AIAgentSettingsManager {
         await this.aiCoreLiveScenariosManager.load();
     }
     
-    /**
-     * Load AiCore Cheat Sheet sub-tab
-     */
-    async loadAiCoreCheatSheet() {
-        console.log('🧠 [AI AGENT SETTINGS] Loading AiCore Cheat Sheet...');
-        
-        // CheatSheetManager is loaded globally from CheatSheetManager.js
-        if (typeof cheatSheetManager === 'undefined') {
-            console.error('❌ [AI AGENT SETTINGS] CheatSheetManager not found!');
-            this.showError('Cheat Sheet manager failed to load');
-            return;
-        }
-        
-        // Load cheat sheet data for this company
-        await cheatSheetManager.load(this.companyId);
-        
-        console.log('✅ [AI AGENT SETTINGS] Cheat Sheet loaded successfully');
-    }
+    // ☢️ NUKED Feb 2026: cheatSheet references removed
+    // loadAiCoreCheatSheet() - entire function removed
     
     // REMOVED Dec 2025: loadAiCoreCallFlow (replaced by Mission Control)
     // REMOVED Dec 2025: loadAiCoreKnowledgebase (always showed zeros)

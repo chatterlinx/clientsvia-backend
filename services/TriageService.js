@@ -93,7 +93,7 @@ function buildQuickRulesFromCards(cards) {
 
 /**
  * Precompute quick rules from Company manual triage rules.
- * NOTE: CheatSheet system removed Feb 2026 — manual rules may be empty.
+ * ☢️ NUKED Feb 2026: CheatSheet system removed — manual rules may be empty.
  */
 function buildQuickRulesFromManual(manualRules) {
   if (!Array.isArray(manualRules)) return [];
@@ -183,8 +183,7 @@ async function getCompanyTriageConfig(companyId, trade) {
   
   const cards = await TriageCard.find(cardQuery).lean().exec();
 
-  // Manual triage rules (formerly from CheatSheet) — system removed Feb 2026
-  // Legacy data may still exist in company.aiAgentSettings.cheatSheet.manualTriageRules
+  // ☢️ NUKED Feb 2026: CheatSheet-based manual triage rules removed
   const manualRules = [];
 
   // Merge both sources into unified quickRules

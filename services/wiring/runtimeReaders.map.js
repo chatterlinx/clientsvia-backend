@@ -25,514 +25,59 @@
 
 const RUNTIME_READERS_MAP = {
     // =========================================================================
-    // FRONT DESK - PERSONALITY
+    // ☢️ NUKED Feb 2026: ALL frontDesk.* entries removed
     // =========================================================================
-    'frontDesk.aiName': {
-        readers: [
-            {
-                file: 'services/llm/SystemPromptComposer.js',
-                function: 'composeSystemPrompt',
-                line: 45,
-                description: 'Injects AI name into system prompt',
-                required: true
-            },
-            {
-                file: 'services/llm/HybridReceptionistLLM.js',
-                function: 'generateResponse',
-                line: 120,
-                description: 'Uses AI name in self-references',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.aiName',
-        scope: 'company',
-        defaultValue: 'AI Assistant'
-    },
-
-    'frontDesk.conversationStyle': {
-        readers: [
-            {
-                file: 'services/llm/HybridReceptionistLLM.js',
-                function: 'getStyleModifiers',
-                line: 85,
-                description: 'Adjusts tone based on style (confident/balanced/polite)',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.conversationStyle',
-        scope: 'company',
-        defaultValue: 'balanced'
-    },
-    
-    'frontDesk.styleAcknowledgments': {
-        readers: [
-            {
-                file: 'services/HybridReceptionistLLM.js',
-                function: 'generateResponse',
-                line: 770,
-                description: 'Uses UI-configured styleAcknowledgments when LLM did not provide an acknowledgment (LLMQNA slot turns)',
-                required: false
-            },
-            {
-                file: 'services/ResponseRenderer.js',
-                function: 'getStyleAcknowledgment',
-                line: 304,
-                description: 'Uses UI-configured styleAcknowledgments for 0-token deterministic acknowledgments (state machine)',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.styleAcknowledgments',
-        scope: 'company',
-        defaultValue: {
-            confident: "Let's get this taken care of.",
-            balanced: 'I can help with that!',
-            polite: "I'd be happy to help."
-        }
-    },
+    // The following legacy frontDesk paths have been completely removed:
+    // - frontDesk.aiName → now in Agent 2.0
+    // - frontDesk.conversationStyle → now in Agent 2.0
+    // - frontDesk.styleAcknowledgments → now in Agent 2.0
+    // - frontDesk.conversationStyle.openers → now in Agent 2.0
+    // - frontDesk.discoveryResponseTemplates → now in Agent 2.0
+    // - frontDesk.personality.warmth → now in Agent 2.0
+    // - frontDesk.personality.speakingPace → now in Agent 2.0
+    // - frontDesk.greetingResponses → now in Agent 2.0
+    // - frontDesk.discoveryConsent.* → now in Agent 2.0
+    // - frontDesk.sttProtectedWords → now in Agent 2.0
+    // - frontDesk.discoveryFlow.* → now in Agent 2.0
+    // - frontDesk.detectionTriggers.* → now in Agent 2.0
+    // - frontDesk.bookingEnabled → now in Agent 2.0
+    // - frontDesk.common*Names → now in Agent 2.0
+    // - frontDesk.nameSpellingVariants.* → now in Agent 2.0
+    // - frontDesk.offRailsRecovery.* → now in Agent 2.0
+    // - frontDesk.confirmationRequests → now in Agent 2.0
+    // - frontDesk.fastPathBooking.* → now in Agent 2.0
+    // - frontDesk.vocabulary → now in Agent 2.0
+    // - frontDesk.escalation.* → now in Agent 2.0
+    // - frontDesk.emotions → now in Agent 2.0
+    // - frontDesk.frustration → now in Agent 2.0
+    // - frontDesk.forbiddenPhrases → now in Agent 2.0
+    // - frontDesk.loopPrevention → now in Agent 2.0
+    // - frontDesk.fallbackResponses → now in Agent 2.0
+    // - frontDesk.businessHours → now in Agent 2.0
+    // =========================================================================
 
     // =========================================================================
-    // CONVERSATION STYLE: OPENERS — Pre-prompt micro-acknowledgments
-    // Layer 0: Runs BEFORE Discovery/scenarios/LLM to eliminate dead air
+    // ☢️ NUKED Feb 2026: All frontDesk.* entries below this point removed
+    // All discovery, consent, booking intent, and response template configs 
+    // have been migrated to Agent 2.0 namespace
     // =========================================================================
-    'frontDesk.conversationStyle.openers': {
-        readers: [
-            {
-                file: 'services/engine/OpenerEngine.js',
-                function: 'selectOpener',
-                description: 'Selects micro-ack based on caller tone (frustration/urgency/general)',
-                required: false,
-                checkpoint: 'OPENER_SELECTION'
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.openers',
-        scope: 'company',
-        defaultValue: {
-            enabled: true,
-            mode: 'reflect_first',
-            general: ['Alright.', 'Okay.', 'Perfect.', 'Sounds good.', 'Understood.'],
-            frustration: ['I hear you.', "Yeah, that's frustrating.", 'Sorry about that.'],
-            urgency: ["Okay — we'll move quick.", "Alright — let's get this handled."],
-            urgencyKeywords: ['asap', 'as soon as possible', 'today', 'right now', 'immediately', 'urgent', 'emergency'],
-            frustrationKeywords: ['again', 'still', 'warranty', 'last week', 'second time', "didn't fix", 'did not fix', 'same problem', 'not working again'],
-            reflectionTemplate: '{reason_short} — okay.'
-        }
-    },
+
+    // ☢️ NUKED Feb 2026: frontDesk.detectionTriggers.*, frontDesk.bookingEnabled, 
+    // frontDesk.commonFirstNames all removed - migrated to Agent 2.0
 
     // =========================================================================
-    // V110 RESPONSE TEMPLATES — Discovery-before-discovery LLM prompt rules
-    // Three-phase response templates that drive how the agent responds
-    // during Discovery based on schedulingAccepted state.
+    // COMMON NAMES — GLOBAL (AdminSettings)
     // =========================================================================
-    'frontDesk.discoveryResponseTemplates': {
-        readers: [
-            {
-                file: 'services/HybridReceptionistLLM.js',
-                function: 'generateLLMResponse',
-                description: 'Injects phase-specific rules (pre-acceptance, post-acceptance, all-captured) into LLM prompt',
-                required: false,
-                checkpoint: 'V110_RESPONSE_TEMPLATE_INJECT'
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryResponseTemplates',
-        scope: 'company',
-        defaultValue: {
-            preAcceptance: {
-                schedulingOffer: 'Would you like me to schedule a service call?',
-                neverAssume: 'NEVER say "Let me get you scheduled" — ASK first.',
-                implicitConsentNote: 'If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm.'
-            },
-            postAcceptance: {
-                confirmTemplate: 'I have your {field} as {value} — is that correct?',
-                askTemplates: {
-                    name: "What's your first and last name?",
-                    phone: "Is the number you're calling from the best one for text updates?",
-                    address: "What's the full service address?"
-                },
-                combinedExample: "I have you at {address} — is that correct? And is the number you're calling from the best one for text updates?",
-                closer: "Once you confirm, I'll get this scheduled."
-            },
-            allCaptured: {
-                proceedMessage: "Perfect — I have everything I need. Let me get this scheduled."
-            }
-        }
-    },
-
-    'frontDesk.personality.warmth': {
-        readers: [
-            {
-                file: 'services/HybridReceptionistLLM.js',
-                function: 'buildSystemPrompt',
-                line: 1050,
-                description: 'Controls how warm/empathetic the assistant sounds (0.0 → 1.0)',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.personality.warmth',
-        scope: 'company',
-        defaultValue: 0.6
-    },
-
-    'frontDesk.personality.speakingPace': {
-        readers: [
-            {
-                file: 'services/HybridReceptionistLLM.js',
-                function: 'buildSystemPrompt',
-                line: 1050,
-                description: 'Controls how quickly the assistant moves through questions (slow/normal/fast)',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.personality.speakingPace',
-        scope: 'company',
-        defaultValue: 'normal'
-    },
-
+    // ☢️ NUKED Feb 2026: frontDesk.commonLastNames, frontDesk.nameStopWords, 
+    // frontDesk.nameSpellingVariants.* all removed - migrated to Agent 2.0
+    // Global name lists remain in AdminSettings (not frontDesk namespace)
     // =========================================================================
-    // FRONT DESK - GREETING RESPONSES
-    // =========================================================================
-    'frontDesk.greetingResponses': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 2000,
-                description: 'Greeting intercept - 0 token fast path',
-                checkpoint: 'CHECKPOINT 2.7',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.greetingResponses',
-        scope: 'company',
-        defaultValue: []
-    },
-
-    // =========================================================================
-    // FRONT DESK - DISCOVERY & CONSENT (KILL SWITCHES)
-    // =========================================================================
-    'frontDesk.discoveryConsent.forceLLMDiscovery': {
-        readers: [
-            {
-                file: 'services/engine/FrontDeskCoreRuntime.js',
-                function: 'processTurn',
-                description: 'Core runtime consumes discovery consent controls during owner routing',
-                required: true,
-                critical: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.forceLLMDiscovery',
-        scope: 'company',
-        defaultValue: false
-    },
-
-    'frontDesk.discoveryConsent.disableScenarioAutoResponses': {
-        readers: [
-            {
-                file: 'services/engine/FrontDeskCoreRuntime.js',
-                function: 'processTurn',
-                description: 'Core runtime enforces deterministic owner routing (no scenario speaker)',
-                required: true,
-                critical: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses',
-        scope: 'company',
-        defaultValue: false
-    },
-
-    'frontDesk.discoveryConsent.bookingRequiresExplicitConsent': {
-        readers: [
-            {
-                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
-                function: 'run',
-                description: 'Agent 2.0 handles consent via trigger cards',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.bookingRequiresExplicitConsent',
-        scope: 'company',
-        defaultValue: true
-    },
-
-    // V110: DB path fixed to consentYesWords (matches UI save field)
-    'frontDesk.discoveryConsent.consentPhrases': {
-        readers: [
-            {
-                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
-                function: 'run',
-                description: 'Agent 2.0 handles consent phrases via trigger cards',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.consentYesWords',
-        scope: 'company',
-        defaultValue: ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']
-    },
-
-    // V111: Company-configurable protected words for STT filler removal
-    'frontDesk.sttProtectedWords': {
-        readers: [
-            {
-                file: 'services/STTPreprocessor.js',
-                function: 'stripFillers',
-                description: 'Words that are never stripped by filler removal',
-                required: false
-            },
-            {
-                file: 'routes/v2twilio.js',
-                function: 'handleGather',
-                description: 'Passes company protected words to STT preprocessing',
-                required: false
-            },
-            {
-                file: 'services/IntelligentRouter.js',
-                function: 'route',
-                description: 'Passes company protected words to STT preprocessing',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.sttProtectedWords',
-        scope: 'company',
-        defaultValue: []
-    },
-
-    'frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 3800,
-                description: 'Which scenario types can auto-respond without LLM',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.autoReplyAllowedScenarioTypes',
-        scope: 'company',
-        defaultValue: ['FAQ', 'TROUBLESHOOT', 'EMERGENCY']
-    },
-
-    'frontDesk.discoveryFlow': {
-        readers: [
-            {
-                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
-                function: 'run',
-                description: 'Agent 2.0 Discovery owner reads flow config and produces responses',
-                required: true,
-                critical: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryFlow',
-        scope: 'company',
-        defaultValue: {}
-    },
-
-    'frontDesk.discoveryFlow.steps': {
-        readers: [
-            {
-                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
-                function: 'run',
-                description: 'Agent 2.0 evaluates and advances configured step sequence',
-                required: true,
-                critical: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryFlow.steps',
-        scope: 'company',
-        defaultValue: []
-    },
-
-    'frontDesk.discoveryFlow.enabled': {
-        readers: [
-            {
-                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
-                function: 'run',
-                description: 'Agent 2.0 checks flow enabled status before speaking',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryFlow.enabled',
-        scope: 'company',
-        defaultValue: true
-    },
-
-    // =========================================================================
-    // V94: BOOKING INTENT DETECTION (CRITICAL MVA REQUIREMENT)
-    // Without these, agent cannot detect "fix my AC" or "not cooling" as booking intent
-    // =========================================================================
-    'frontDesk.detectionTriggers.wantsBooking': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'ConsentDetector.checkConsent',
-                line: 2439,
-                description: 'Keywords that trigger booking mode (e.g., "fix", "repair", "not cooling")',
-                required: true,
-                critical: true,
-                checkpoint: 'CONSENT_DETECTION'
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
-        scope: 'company',
-        defaultValue: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send', 'broken', 'not working', 'not cooling', 'not heating']
-    },
-
-    // =========================================================================
-    // V110: DIRECT INTENT PATTERNS - Bypass consent when caller clearly wants booking
-    // These patterns bypass the consent gate. If caller says "schedule", "book",
-    // "appointment", etc., AI skips "Would you like to book?" and goes straight to booking.
-    // =========================================================================
-    'frontDesk.detectionTriggers.directIntentPatterns': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'detectDirectBookingIntent',
-                line: 4846,
-                description: 'Detects direct booking intent to bypass consent gate',
-                required: true,
-                critical: true,
-                checkpoint: 'DIRECT_BOOKING_INTENT'
-            },
-            {
-                file: 'services/wiring/BookingConfigResolver.js',
-                function: 'resolveDirectIntentPatterns',
-                line: 319,
-                description: 'Resolves direct intent patterns for booking config',
-                required: true,
-                critical: true,
-                checkpoint: 'BOOKING_CONFIG_RESOLUTION'
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns',
-        scope: 'company',
-        defaultValue: [
-            'schedule', 'book', 'appointment', 'come out', 'send someone', 'send somebody',
-            'get someone out', 'get somebody out', 'need a tech', 'need someone out',
-            'dispatch', 'service call', 'help me out', 'need help', 'somebody to help', 'someone to help'
-        ]
-    },
-
-    // =========================================================================
-    // V110: IMPLICIT CONSENT PHRASES
-    // Caller statements that count as scheduling acceptance without asking.
-    // e.g., "I need service", "send someone out", "come out"
-    // =========================================================================
-    'frontDesk.detectionTriggers.implicitConsentPhrases': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processInput.implicitConsentDetection',
-                description: 'Phrases that imply caller wants to schedule without being asked',
-                required: false,
-                critical: false,
-                checkpoint: 'IMPLICIT_CONSENT'
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.detectionTriggers.implicitConsentPhrases',
-        scope: 'company',
-        defaultValue: [
-            'need service', 'need ac service', 'need hvac service',
-            'need a service call', 'need someone to come out',
-            'send someone', 'send someone out', 'send a tech',
-            'send a technician', 'get someone out', 'get someone out here',
-            'come out', 'come take a look', 'come check',
-            'need repair', 'need a repair', 'need it fixed',
-            'need this fixed', 'need help',
-            'can you come out', 'can someone come out',
-            'i need a technician', 'i need a tech',
-            'need an appointment', 'want an appointment',
-            'need it looked at', 'need someone to look at'
-        ]
-    },
-
-    // =========================================================================
-    // FRONT DESK - BOOKING SLOTS (V110: Reads from slotRegistry + bookingFlow)
-    // =========================================================================
-    // Legacy 'frontDesk.bookingSlots' path removed. All slot config comes from
-    // 'frontDesk.slotRegistry.slots' + 'frontDesk.bookingFlow.steps'
-
-    'frontDesk.bookingEnabled': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 2750,
-                description: 'Master switch for booking functionality',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingEnabled',
-        scope: 'company',
-        defaultValue: true
-    },
-
-    // =========================================================================
-    // FRONT DESK - SLOT EXTRACTION (Name parsing, stop words, merge rules)
-    // =========================================================================
-    // =========================================================================
-    // COMMON FIRST NAMES — GLOBAL (AdminSettings, SSA 10K names)
-    // =========================================================================
-    // Source: US Social Security Administration Baby Names (1880–present)
-    // Coverage: 96.7% of the US population (10,000 names, all genders/ethnicities)
-    // Seed: data/seeds/ssaFirstNames.js
-    //
-    // GLOBAL: Stored in AdminSettings.commonFirstNames (shared by all companies).
-    // AWConfigReader intercepts reads → returns global cache (5-min TTL).
-    // Static access: AWConfigReader.getGlobalFirstNames()
-    // =========================================================================
-    'frontDesk.commonFirstNames': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: '__testHandleNameSlotTurn',
-                description: 'Single-token name disambiguation (first vs. last)',
-                required: false
-            },
-            {
-                file: 'services/engine/booking/SlotExtractor.js',
-                function: 'extractName',
-                description: 'Validates extracted names against common first names list',
-                required: false
-            },
-            {
-                file: 'services/engine/booking/BookingLogicEngine.js',
-                function: 'extractSingleNameToken (firstName)',
-                description: 'Scores first name candidates against global list',
-                required: false
-            },
-            {
-                file: 'services/STTHintsBuilder.js',
-                function: 'buildHints',
-                description: 'Feeds top 150 names to Twilio STT for speech accuracy',
-                required: false
-            }
-        ],
-        dbPath: 'AdminSettings.commonFirstNames',
-        scope: 'global',
-        defaultValue: []
-    },
-
-    // =========================================================================
-    // COMMON LAST NAMES — GLOBAL (AdminSettings, US Census 50K surnames)
-    // =========================================================================
-    // Source: US Census Bureau 2010 Decennial Census (Public Domain)
-    // Coverage: ~83% of the US population (50,000 surnames)
-    // Seed: data/seeds/censusLastNames.js
-    //
-    // GLOBAL: Stored in AdminSettings.commonLastNames (shared by all companies).
-    // AWConfigReader intercepts reads → returns global cache (5-min TTL).
-    // Static access: AWConfigReader.getGlobalLastNames()
-    // =========================================================================
-    'frontDesk.commonLastNames': {
+    'global.commonLastNames': {
         readers: [
             {
                 file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'extractSingleNameToken (lastName)',
                 description: 'Last name recognition and confidence scoring',
-                required: false
-            },
-            {
-                file: 'services/engine/booking/SlotExtractor.js',
-                function: 'extractName',
-                description: 'Last name disambiguation and STT fuzzy-match validation',
                 required: false
             }
         ],
@@ -541,42 +86,12 @@ const RUNTIME_READERS_MAP = {
         defaultValue: []
     },
 
-    // =========================================================================
-    // V111: NAME STOP WORDS (Name Rejection Words)
-    // =========================================================================
-    // Company-specific words that should NEVER be accepted as a person's name.
-    // These EXTEND the system defaults in IdentitySlotFirewall.NAME_STOPWORDS.
-    //
-    // UI: Global Settings → Name Rejection Words
-    // GLOBAL: Stored in AdminSettings.nameStopWords (shared by all companies).
-    // AWConfigReader intercepts reads → returns global cache (5-min TTL).
-    // Static access: AWConfigReader.getGlobalStopWords()
-    // Runtime: IdentitySlotFirewall.validateName() + BookingFlowRunner.isStopWord()
-    // =========================================================================
-    'frontDesk.nameStopWords': {
+    'global.nameStopWords': {
         readers: [
             {
                 file: 'utils/IdentitySlotFirewall.js',
                 function: 'validateName',
-                description: 'Global stopwords merged with system defaults for name validation',
-                required: false
-            },
-            {
-                file: 'services/engine/booking/BookingLogicEngine.js',
-                function: 'isStopWord',
-                description: 'Global stopwords merged with system defaults for booking name extraction',
-                required: false
-            },
-            {
-                file: 'services/ConversationEngine.js',
-                function: '__testHandleNameSlotTurn',
-                description: 'Stop words for name slot extraction in test helper',
-                required: false
-            },
-            {
-                file: 'routes/company/runtimeTruth.js',
-                function: 'vocabulary.nameStopWords',
-                description: 'Exposes stop word config in runtime truth diagnostic',
+                description: 'Global stopwords for name validation',
                 required: false
             }
         ],
@@ -584,124 +99,8 @@ const RUNTIME_READERS_MAP = {
         scope: 'global',
         defaultValue: []
     },
-
-    // =========================================================================
-    // FRONT DESK - NAME SPELLING VARIANTS (Mark with K or Marc with C?)
-    // =========================================================================
-    // V94: These fields control spelling confirmation for names with variants.
-    // BOTH global and slot-level must be enabled for the feature to fire.
-    // =========================================================================
     
-    'frontDesk.nameSpellingVariants': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'findSpellingVariant',
-                line: 1637,
-                description: 'Parent object for spelling variant configuration',
-                checkpoint: 'SPELLING_VARIANT_CHECK',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants',
-        scope: 'company',
-        defaultValue: { enabled: false, mode: '1_char_only', maxAsksPerCall: 1 }
-    },
-    
-    'frontDesk.nameSpellingVariants.enabled': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'findSpellingVariant',
-                line: 1640,
-                description: 'Global master switch for spelling confirmation (Mark/Marc)',
-                checkpoint: 'SPELLING_VARIANT_CHECK',
-                required: false
-            },
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 7133,
-                description: 'Checked before asking spelling variant question',
-                checkpoint: 'BOOKING_NAME_SPELLING',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled',
-        scope: 'company',
-        defaultValue: false,
-        notes: 'OFF by default - only enable for dental/medical/membership where exact spelling matters'
-    },
-    
-    'frontDesk.nameSpellingVariants.mode': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'findSpellingVariant',
-                line: 1721,
-                description: 'Determines which variants trigger spelling questions',
-                checkpoint: 'SPELLING_VARIANT_CHECK',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.mode',
-        scope: 'company',
-        defaultValue: '1_char_only',
-        notes: 'Options: 1_char_only (Mark/Marc), any_variant (includes Steven/Stephen)'
-    },
-    
-    'frontDesk.nameSpellingVariants.script': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 7400,
-                description: 'Template for spelling confirmation prompt',
-                checkpoint: 'BOOKING_NAME_SPELLING',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.script',
-        scope: 'company',
-        defaultValue: 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?',
-        notes: 'Placeholders: {optionA}, {optionB} = names, {letterA}, {letterB} = differing letters'
-    },
-    
-    'frontDesk.nameSpellingVariants.maxAsksPerCall': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'findSpellingVariant',
-                line: 1645,
-                description: 'Limits spelling questions per call to avoid annoyance',
-                checkpoint: 'SPELLING_VARIANT_CHECK',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.maxAsksPerCall',
-        scope: 'company',
-        defaultValue: 1,
-        notes: 'Recommended: 1. Set to 0 for unlimited.'
-    },
-    
-    'frontDesk.nameSpellingVariants.source': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'findSpellingVariant',
-                line: 1700,
-                description: 'Where variant groups come from: curated_list or auto_scan',
-                checkpoint: 'SPELLING_VARIANT_CHECK',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.source',
-        scope: 'company',
-        defaultValue: 'curated_list',
-        notes: 'Options: curated_list (manual), auto_scan (from commonFirstNames)'
-    },
-    
-    // Spelling confirmation now controlled by nameSpellingVariants.enabled (V110)
+    // ☢️ NUKED Feb 2026: frontDesk.nameSpellingVariants.* removed - migrated to Agent 2.0
 
     // =========================================================================
     // FRONT DESK - NAME PARSING (Last-name-first support)
@@ -716,7 +115,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.nameParsing',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.nameParsing',
         scope: 'company',
         defaultValue: { acceptLastNameOnly: false }
     },
@@ -738,7 +138,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.nameParsing.acceptLastNameOnly',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.nameParsing.acceptLastNameOnly',
         scope: 'company',
         defaultValue: true
     },
@@ -753,7 +154,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.nameParsing.lastNameOnlyPrompt',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.nameParsing.lastNameOnlyPrompt',
         scope: 'company',
         defaultValue: "Thanks — and what's your first name?"
     },
@@ -796,8 +198,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.enabled',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.enabled',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.enabled',
         scope: 'company',
         defaultValue: true
     },
@@ -812,8 +214,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.provider',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.provider',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.provider',
         scope: 'company',
         defaultValue: 'google_geocode'
     },
@@ -828,8 +230,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireCity',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireCity',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.requireCity',
         scope: 'company',
         defaultValue: true
     },
@@ -845,8 +247,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireState',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireState',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.requireState',
         scope: 'company',
         defaultValue: false // V93: Don't ask state unless business requires (geo can infer from city)
     },
@@ -861,8 +263,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireZip',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireZip',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.requireZip',
         scope: 'company',
         defaultValue: false
     },
@@ -877,8 +279,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireUnitQuestion',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.requireUnitQuestion',
         scope: 'company',
         defaultValue: true
     },
@@ -893,8 +295,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.unitQuestionMode',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.unitQuestionMode',
         scope: 'company',
         defaultValue: 'house_or_unit'
     },
@@ -909,8 +311,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.missingCityStatePrompt',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.missingCityStatePrompt',
         scope: 'company',
         defaultValue: "Got it — what city and state is that in?"
     },
@@ -925,8 +327,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.unitTypePrompt',
-        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt',
+        // ☢️ NUKED Feb 2026: frontDeskBehavior path removed
+        dbPath: 'company.aiAgentSettings.booking.addressVerification.unitTypePrompt',
         scope: 'company',
         defaultValue: "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?"
     },
@@ -979,32 +381,7 @@ const RUNTIME_READERS_MAP = {
         defaultValue: 'MEDIUM'
     },
 
-    // =========================================================================
-    // FRONT DESK - BOOKING CONTINUITY (NO HIDDEN FEATURES)
-    // =========================================================================
-    'frontDesk.offRailsRecovery.bridgeBack.resumeBooking': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 3380,
-                description: 'Appends Resume Booking Protocol after off-rails answers during BOOKING (LLM interruption)',
-                checkpoint: 'BOOKING_INTERRUPTION_*',
-                required: false
-            },
-            // V97c: NUKED - utils/resumeBookingProtocol.js deleted, functionality moved to BookingFlowRunner
-            // {
-            //     file: 'utils/resumeBookingProtocol.js',
-            //     function: 'buildResumeBookingBlock',
-            //     line: 1,
-            //     description: 'Builds the resume block using UI-configured templates and collected slots',
-            //     required: false
-            // }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.offRailsRecovery.bridgeBack.resumeBooking',
-        scope: 'company',
-        defaultValue: { enabled: true }
-    },
+    // ☢️ NUKED Feb 2026: frontDesk.offRailsRecovery.bridgeBack.resumeBooking removed
 
     'frontDesk.confirmationRequests': {
         readers: [
@@ -1837,7 +1214,8 @@ const RUNTIME_READERS_MAP = {
 
 /**
  * Get runtime readers for a specific config path
- * @param {string} configPath - e.g., 'frontDesk.slotRegistry.slots'
+ * @param {string} configPath - e.g., 'booking.addressVerification'
+ * ☢️ NUKED Feb 2026: frontDesk.* paths removed - use Agent 2.0 paths
  * @returns {Object|null} Reader info or null if not mapped
  */
 function getReaders(configPath) {

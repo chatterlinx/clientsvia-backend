@@ -4,14 +4,14 @@
  * ============================================================================
  * Purpose: Navigate between tabs from diagnostic "Fix Now" buttons
  * Architecture: Universal navigation system for multi-level tabs
- * Usage: navigateToV2('templates') or navigateToV2('cheat-sheet', 'triage')
+ * Usage: navigateToV2('templates') or navigateToV2('live-scenarios')
  * 
  * Supports:
  * - Main tabs (AiCore, CompanyOps, Billing, Intelligence)
- * - Sub-tabs (Templates, Variables, Live Scenarios, CheatSheet, etc.)
- * - Tertiary tabs (CheatSheet sub-sections like Triage, Frontline-Intel)
+ * - Sub-tabs (Templates, Variables, Live Scenarios, etc.)
  * - Field highlighting (scroll to specific form field)
  * 
+ * ☢️ NUKED Feb 2026: CheatSheet tertiary tabs removed
  * ============================================================================
  */
 
@@ -20,7 +20,7 @@ class ControlPlaneV2Navigator {
   /**
    * Navigate to a specific location in Control Plane V2
    * @param {string} target - The diagnostic target (e.g., "templates", "variables")
-   * @param {string} subTarget - Optional tertiary target (e.g., "triage" for CheatSheet)
+   * @param {string} subTarget - Optional tertiary target (deprecated - CheatSheet NUKED Feb 2026)
    * @param {string} fieldId - Optional field ID to highlight
    */
   static navigateTo(target, subTarget = null, fieldId = null) {
@@ -78,8 +78,9 @@ class ControlPlaneV2Navigator {
       'aicore-live-scenarios': { main: 'aicore', sub: 'live-scenarios' },
       'scenarios': { main: 'aicore', sub: 'live-scenarios' },
       
-      'cheat-sheet': { main: 'aicore', sub: 'cheat-sheet', tertiary: subTarget },
-      'cheatsheet': { main: 'aicore', sub: 'cheat-sheet', tertiary: subTarget },
+      // ☢️ NUKED Feb 2026: cheatSheet references removed
+      // 'cheat-sheet': { main: 'aicore', sub: 'cheat-sheet', tertiary: subTarget },
+      // 'cheatsheet': { main: 'aicore', sub: 'cheat-sheet', tertiary: subTarget },
       
       'call-flow': { main: 'aicore', sub: 'call-flow' },
       'knowledgebase': { main: 'aicore', sub: 'knowledgebase' },
@@ -134,12 +135,8 @@ class ControlPlaneV2Navigator {
         this._activateSubTab(nav.main, nav.sub);
       }
       
-      // Step 4: If tertiary tab (CheatSheet), activate it
-      if (nav.tertiary) {
-        setTimeout(() => {
-          this._activateTertiaryTab(nav.tertiary);
-        }, 300);
-      }
+      // ☢️ NUKED Feb 2026: CheatSheet tertiary tabs removed
+      // if (nav.tertiary) { ... }
       
       // Step 5: If field specified, scroll to it
       if (fieldId) {
@@ -193,16 +190,11 @@ class ControlPlaneV2Navigator {
     
     // Hide other secondary navs
     document.querySelectorAll('.subnav').forEach(nav => {
-      if (nav.id !== `${mainTab}-subnav` && nav.id !== 'cheat-subnav') {
+      if (nav.id !== `${mainTab}-subnav`) {
         nav.style.display = 'none';
       }
     });
-    
-    // Hide CheatSheet nav initially
-    const cheatNav = document.getElementById('cheat-subnav');
-    if (cheatNav && mainTab !== 'aicore') {
-      cheatNav.style.display = 'none';
-    }
+    // ☢️ NUKED Feb 2026: cheatSheet subnav references removed
   }
   
   /**
@@ -234,43 +226,10 @@ class ControlPlaneV2Navigator {
       console.warn(`🧭 [NAVIGATOR] Sub-tab button not found: ${mainTab} → ${subTab}`);
     }
     
-    // Show/hide CheatSheet nav if CheatSheet tab
-    const cheatNav = document.getElementById('cheat-subnav');
-    if (cheatNav) {
-      cheatNav.style.display = subTab === 'cheat-sheet' ? 'flex' : 'none';
-    }
+    // ☢️ NUKED Feb 2026: cheatSheet subnav references removed
   }
   
-  /**
-   * Activate tertiary tab (CheatSheet sub-tabs)
-   */
-  static _activateTertiaryTab(tertiaryTab) {
-    console.log(`🧭 [NAVIGATOR] Step 3: Activating tertiary tab: ${tertiaryTab}`);
-    
-    // Show CheatSheet tertiary nav
-    const cheatNav = document.getElementById('cheat-subnav');
-    if (cheatNav) {
-      cheatNav.style.display = 'flex';
-    } else {
-      console.warn(`🧭 [NAVIGATOR] CheatSheet nav not found`);
-      return;
-    }
-    
-    // Remove active from all CheatSheet tabs
-    document.querySelectorAll('.js-cheat-tab').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    
-    // Add active to target tertiary tab
-    const tertiaryBtn = document.querySelector(`[data-cheat-target="${tertiaryTab}"]`);
-    if (tertiaryBtn) {
-      tertiaryBtn.classList.add('active');
-      // Trigger click to load content
-      tertiaryBtn.click();
-    } else {
-      console.warn(`🧭 [NAVIGATOR] Tertiary tab button not found: ${tertiaryTab}`);
-    }
-  }
+  // ☢️ NUKED Feb 2026: _activateTertiaryTab() for CheatSheet removed entirely
   
   /**
    * Scroll to and highlight a specific field

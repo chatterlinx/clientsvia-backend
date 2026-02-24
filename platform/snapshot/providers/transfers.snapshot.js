@@ -4,9 +4,8 @@
  * ============================================================================
  * Provides: Transfer targets, after-hours routing configuration
  * 
- * DATA SOURCE: frontDeskBehavior.transfers OR aiAgentSettings.transferTargets
- * 
- * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+ * ☢️ NUKED Feb 2026: frontDeskBehavior.transfers removed
+ * DATA SOURCE: aiAgentSettings.transferTargets
  * 
  * Note: Transfers are OPTIONAL. If not configured, provider returns 
  * enabled=false with NOT_CONFIGURED status (not an error).
@@ -22,12 +21,12 @@ module.exports.getSnapshot = async function(companyId) {
         let transferRules = [];
         let dataSource = 'none';
         
-        // Check company for multiple possible locations
+        // Check company for transfer targets
         const company = await Company.findById(companyId)
-            .select('frontDeskBehavior.transfers aiAgentSettings.transferTargets')
+            .select('aiAgentSettings.transferTargets')
             .lean();
         
-        // Fallback 1: Check legacy aiAgentSettings.transferTargets
+        // Load from aiAgentSettings.transferTargets
         if (transferRules.length === 0 && company?.aiAgentSettings?.transferTargets?.length > 0) {
             transferRules = company.aiAgentSettings.transferTargets.map(target => ({
                 id: target.id,
@@ -45,20 +44,7 @@ module.exports.getSnapshot = async function(companyId) {
             dataSource = 'aiAgentSettings.transferTargets';
         }
         
-        // Fallback 2: Check frontDeskBehavior.transfers
-        if (transferRules.length === 0 && company?.frontDeskBehavior?.transfers?.targets?.length > 0) {
-            transferRules = company.frontDeskBehavior.transfers.targets.map(target => ({
-                contactNameOrQueue: target.name || target.label || 'Unnamed',
-                label: target.label || target.name || 'Unnamed',
-                phoneNumber: target.phone || target.phoneNumber || null,
-                intentTag: target.intentTag || null,
-                enabled: target.enabled !== false,
-                priority: target.priority || 10,
-                afterHoursOnly: target.afterHoursOnly || false,
-                preTransferScript: target.script || target.preTransferScript || null
-            }));
-            dataSource = 'frontDeskBehavior.transfers';
-        }
+        // ☢️ NUKED Feb 2026: frontDeskBehavior.transfers fallback removed
         
         // If still no data, return NOT_CONFIGURED (not an error)
         if (transferRules.length === 0) {

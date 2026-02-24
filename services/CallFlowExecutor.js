@@ -15,7 +15,7 @@
 
 const logger = require('../utils/logger');
 const FrontlineIntel = require('./FrontlineIntel');
-// CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+// ☢️ NUKED Feb 2026: CheatSheet system completely removed
 const BehaviorEngine = require('./BehaviorEngine');
 const EdgeCaseHandler = require('./EdgeCaseHandler');
 // Use centralized Redis factory - NO db.redisClient
@@ -26,7 +26,7 @@ const defaultCallFlowConfig = [
   { id: 'spam-filter', name: 'Spam Filter', enabled: true, locked: true },
   { id: 'frontline-intel', name: 'Frontline Intel', enabled: true, locked: false },
   { id: 'edge-cases', name: 'Edge Cases', enabled: true, locked: false },
-  { id: 'cheat-sheet', name: 'Cheat Sheet', enabled: true, locked: false },
+  // ☢️ NUKED Feb 2026: cheat-sheet step removed
   { id: 'behavior', name: 'Behavior Engine', enabled: true, locked: false },
   { id: 'llm-response', name: 'LLM Response', enabled: true, locked: true }
 ];
@@ -100,8 +100,8 @@ class CallFlowExecutor {
             baseResponse: null,
             finalResponse: null,
             finalAction: 'continue',
-            shortCircuit: false,
-            cheatSheetMeta: null
+            shortCircuit: false
+            // ☢️ NUKED Feb 2026: cheatSheetMeta removed
         };
         
         // Execute steps in callFlowConfig order
@@ -152,9 +152,7 @@ class CallFlowExecutor {
                 }
                 
                 // Metadata outputs
-                if (stepResult.cheatSheetMeta !== undefined) {
-                    context.cheatSheetMeta = stepResult.cheatSheetMeta;
-                }
+                // ☢️ NUKED Feb 2026: cheatSheetMeta handling removed
                 if (stepResult.behaviorMeta !== undefined) {
                     context.behaviorMeta = stepResult.behaviorMeta;
                 }
@@ -234,14 +232,14 @@ class CallFlowExecutor {
     }
     
     static executeEdgeCases(step, context) {
-        // Edge Cases will be handled by CheatSheetEngine in a later step
-        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Edge Cases (will execute in Cheat Sheet block)`);
+        // ☢️ NUKED Feb 2026: CheatSheet-based edge cases removed
+        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Edge Cases (legacy - no-op)`);
         return {};
     }
     
     static executeTransferRules(step, context) {
-        // Transfer Rules will be handled by CheatSheetEngine in a later step
-        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Transfer Rules (will execute in Cheat Sheet block)`);
+        // ☢️ NUKED Feb 2026: CheatSheet-based transfer rules removed
+        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Transfer Rules (legacy - no-op)`);
         return {};
     }
     
@@ -402,10 +400,9 @@ class CallFlowExecutor {
                 timestamp: new Date().toISOString()
             });
             
-            // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+            // ☢️ NUKED Feb 2026: CheatSheet system completely removed
             let finalResponse = baseResponse.text;
             let finalAction = baseResponse.action || 'continue';
-            let cheatSheetMeta = null;
             
             // ═════════════════════════════════════════════════════════════════
             // 🎭 BEHAVIOR ENGINE: Apply HYBRID tone styling (V23)
@@ -480,7 +477,7 @@ class CallFlowExecutor {
                 baseResponse,
                 finalResponse,
                 finalAction,
-                cheatSheetMeta,
+                // ☢️ NUKED Feb 2026: cheatSheetMeta removed
                 // V23: Behavior Engine metadata
                 behaviorMeta: behaviorProfile?.mode === 'HYBRID' ? {
                     tone: behaviorTone,
@@ -499,14 +496,14 @@ class CallFlowExecutor {
     }
     
     static executeGuardrails(step, context) {
-        // Guardrails are part of CheatSheetEngine
-        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Guardrails (will execute in Cheat Sheet block)`);
+        // ☢️ NUKED Feb 2026: CheatSheet guardrails removed
+        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Guardrails (legacy - no-op)`);
         return {};
     }
     
     static executeBehaviorPolish(step, context) {
-        // Behavior Polish is part of CheatSheetEngine
-        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Behavior Polish (will execute in Cheat Sheet block)`);
+        // ☢️ NUKED Feb 2026: CheatSheet behavior polish removed
+        logger.info(`[CALL FLOW EXECUTOR] ℹ️ Behavior Polish (legacy - no-op)`);
         return {};
     }
     

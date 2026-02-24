@@ -1,13 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * VARIABLE SYNC SERVICE
- * Auto-sync variables whenever CheatSheet content changes
+ * ☢️ NUKED Feb 2026: CheatSheet triggers removed
  * ═══════════════════════════════════════════════════════════════════════════
  * 
  * PURPOSE: Keep Variables table always in sync with actual usage
  * 
- * TRIGGERS:
- * - CheatSheet save (Frontline-Intel, Edge Cases, Transfer Rules, etc.)
+ * TRIGGERS (post-nuke):
  * - Scenario save
  * - Template save
  * 
@@ -156,15 +155,15 @@ class VariableSyncService {
         return [...new Set(allVars)];
     }
     
-    /**
-     * Sync variables from CheatSheet config to Variables table
-     * Called automatically after CheatSheet save
-     * 
-     * @param {string} companyId - Company ID
-     * @param {Object} config - CheatSheet config object
-     * @returns {Object} Sync result with stats
-     */
+    // ☢️ NUKED Feb 2026: syncFromCheatSheet function removed - CheatSheet system is dead
+    // The following dead code block was the full implementation (removed)
     static async syncFromCheatSheet(companyId, config) {
+        logger.warn(`🔄 [VARIABLE SYNC] syncFromCheatSheet called but CheatSheet is NUKED`);
+        return { synced: 0, source: 'cheatsheet_nuked', message: 'CheatSheet system removed Feb 2026' };
+    }
+    
+    /* ☢️ NUKED Feb 2026: Original syncFromCheatSheet implementation removed
+    static async syncFromCheatSheet_DEAD(companyId, config) {
         const startTime = Date.now();
         
         try {
@@ -433,7 +432,9 @@ class VariableSyncService {
             return { synced: 0, error: error.message };
         }
     }
+    END OF NUKED syncFromCheatSheet */
     
+    // ☢️ NUKED Feb 2026: syncSection also removed - CheatSheet section syncing is dead
     /**
      * Quick sync - extract and sync from just the changed section
      * More efficient than full sync when only one section changed

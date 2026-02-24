@@ -1132,217 +1132,9 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // -------------------------------------------------------------------
-        // CHEAT SHEET - Company-Level AI Agent Behavior Rules
-        // -------------------------------------------------------------------
-        // Global behavior rules, edge cases, transfer protocols, and guardrails
-        // Applied AFTER scenario matching to ensure consistent behavior
-        // Compiled into optimized runtime policy by PolicyCompiler service
-        cheatSheet: {
-            // Metadata & Versioning
-            version: { type: Number, default: 1 },
-            status: { 
-                type: String, 
-                enum: ['draft', 'active'], 
-                default: 'draft' 
-            },
-            updatedBy: { type: String, default: 'System' },
-            updatedAt: { type: Date, default: Date.now },
-            lastCompiledAt: { type: Date, default: null },
-            checksum: { type: String, default: null },
-            compileLock: { type: String, default: null }, // UUID for optimistic locking
-            
-            // Behavior Rules (touch-and-go protocol)
-            behaviorRules: [{
-                type: String,
-                enum: [
-                    'ACK_OK', 'NEVER_INTERRUPT', 'USE_COMPANY_NAME',
-                    'CONFIRM_ENTITIES', 'POLITE_PROFESSIONAL', 'WAIT_FOR_PAUSE'
-                ]
-            }],
-            
-            // Edge Cases (high-priority pattern-response pairs)
-            edgeCases: [{
-                id: { type: String, required: true },
-                name: { type: String, required: true },
-                triggerPatterns: [{ type: String }], // Regex patterns
-                responseText: { type: String, required: true },
-                priority: { type: Number, default: 100 },
-                enabled: { type: Boolean, default: true },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' }
-            }],
-            
-            // Transfer Rules (intent-based handoff protocol)
-            transferRules: [{
-                id: { type: String, required: true },
-                intentTag: { 
-                    type: String, 
-                    enum: ['billing', 'emergency', 'scheduling', 'technical', 'general'], 
-                    required: true 
-                },
-                contactNameOrQueue: { type: String, required: true },
-                phoneNumber: { type: String, default: null },
-                script: { type: String, default: null },
-                collectEntities: [{
-                    name: { type: String, required: true },
-                    type: { 
-                        type: String, 
-                        enum: ['PERSON', 'PHONE', 'EMAIL', 'DATE', 'TIME', 'TEXT'], 
-                        required: true 
-                    },
-                    required: { type: Boolean, default: false },
-                    prompt: { type: String, default: null },
-                    validationPattern: { type: String, default: null },
-                    validationPrompt: { type: String, default: null },
-                    maxRetries: { type: Number, default: 2 },
-                    escalateOnFail: { type: Boolean, default: true }
-                }],
-                afterHoursOnly: { type: Boolean, default: false },
-                priority: { type: Number, default: 50 },
-                enabled: { type: Boolean, default: true },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' }
-            }],
-            
-            // Guardrails (content filtering & compliance)
-            guardrails: [{
-                type: String,
-                enum: [
-                    'NO_PRICES', 'NO_DIAGNOSES', 'NO_APOLOGIES_SPAM',
-                    'NO_PHONE_NUMBERS', 'NO_URLS', 'NO_MEDICAL_ADVICE',
-                    'NO_LEGAL_ADVICE', 'NO_INTERRUPTING'
-                ]
-            }],
-            
-            // Action Allowlist (whitelist of permitted runtime actions)
-            allowedActions: [{
-                type: String,
-                enum: [
-                    'BOOK_APPT', 'TAKE_MESSAGE', 'TRANSFER_BILLING',
-                    'TRANSFER_EMERGENCY', 'TRANSFER_GENERAL', 'COLLECT_INFO',
-                    'PROVIDE_HOURS', 'PROVIDE_PRICING'
-                ]
-            }],
-            
-            // -------------------------------------------------------------------
-            // V2-ONLY FIELDS - Control Plane V2 Cheat Sheet Features
-            // -------------------------------------------------------------------
-            
-            // Booking Rules - Advanced appointment booking logic per trade/service
-            bookingRules: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                trade: { type: String, default: '' },
-                serviceType: { type: String, default: '' },
-                priority: { 
-                    type: String, 
-                    enum: ['normal', 'high', 'emergency'], 
-                    default: 'normal' 
-                },
-                daysOfWeek: [{ type: String }],
-                timeWindow: {
-                    start: { type: String, default: '08:00' },
-                    end: { type: String, default: '17:00' }
-                },
-                sameDayAllowed: { type: Boolean, default: true },
-                weekendAllowed: { type: Boolean, default: false },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' }
-            }],
-            
-            // Company Contacts - Transfer targets, emergency contacts, escalation chains
-            companyContacts: [{
-                id: { type: String, required: true },
-                name: { type: String, required: true },
-                role: { type: String, default: 'General Contact' },
-                phone: { type: String, default: null },
-                email: { type: String, default: null },
-                isPrimary: { type: Boolean, default: false },
-                availableHours: { type: String, default: '24/7' },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' }
-            }],
-            
-            // Links - Company resources (financing, portals, policies, catalogs)
-            links: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                category: { 
-                    type: String, 
-                    enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
-                    default: 'other' 
-                },
-                url: { type: String, default: '' }, // Changed: Not required, defaults to empty string
-                shortDescription: { type: String, default: '' },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' }
-            }],
-            
-            // Calculators - Quick calculators for pricing, fees, discounts
-            calculators: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                type: { 
-                    type: String, 
-                    enum: ['flat-fee', 'percentage', 'formula'], 
-                    default: 'flat-fee' 
-                },
-                baseAmount: { type: Number, default: 0 },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' }
-            }],
-            
-            // Version History - Snapshot history for Draft/Active workflow
-            versionHistory: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                snapshot: { type: mongoose.Schema.Types.Mixed, required: true },
-                checksum: { type: String, required: true },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'System' },
-                notes: { type: String, default: '' }
-            }],
-            
-            // -------------------------------------------------------------------
-            // MANUAL TRIAGE RULES - Quick keyword overrides (V22 Quick Rules)
-            // Simple rules without full TriageCard structure
-            // These are LIVE and checked alongside TriageCards in TriageService
-            // -------------------------------------------------------------------
-            manualTriageRules: [{
-                keywords: {
-                    type: [String],
-                    default: [],
-                    description: 'Keywords that must ALL be present for this rule to match'
-                },
-                excludeKeywords: {
-                    type: [String],
-                    default: [],
-                    description: 'Keywords that if ANY is present, this rule will NOT match'
-                },
-                action: {
-                    type: String,
-                    enum: ['DIRECT_TO_3TIER', 'ESCALATE_TO_HUMAN', 'EXPLAIN_AND_PUSH', 'TAKE_MESSAGE', 'END_CALL_POLITE'],
-                    default: 'DIRECT_TO_3TIER'
-                },
-                intent: { type: String, default: '' },
-                triageCategory: { type: String, default: '' },
-                serviceType: {
-                    type: String,
-                    enum: ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'OTHER'],
-                    default: 'OTHER'
-                },
-                priority: { type: Number, default: 50 },
-                enabled: { type: Boolean, default: true },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'Admin' }
-            }]
-        },
+        // ☢️ NUKED Feb 2026: cheatSheet - legacy system replaced by Agent 2.0 architecture
+        // All cheatSheet functionality (edgeCases, transferRules, guardrails, etc.) is DEAD
+        // Do NOT add any cheatSheet references back. Use Agent 2.0 systems instead.
         
         // -------------------------------------------------------------------
         // FILLER WORDS - AI Agent runtime word filtering
@@ -2115,16 +1907,16 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
-        // FRONT DESK BEHAVIOR - LLM-0 Conversation Style (UI-CONTROLLED)
+        // ☢️ NUKED Feb 2026: FRONT DESK BEHAVIOR - LEGACY SCHEMA (DO NOT USE)
         // -------------------------------------------------------------------
-        // ALL settings are visible and editable in the Control Plane.
-        // No hidden magic - admins see exactly why the agent behaves this way.
+        // This entire namespace is deprecated and scheduled for removal.
+        // All functionality has been migrated to Agent 2.0 namespace.
         // 
-        // PHILOSOPHY:
-        // - Make caller feel HEARD
-        // - Make company feel COMPETENT & CARING  
-        // - Get the BOOKING with minimum friction
-        // - Never sound robotic or like a form
+        // Schema is preserved temporarily for database migration only.
+        // DO NOT add new fields here.
+        // DO NOT read from frontDeskBehavior in new code.
+        // 
+        // MIGRATION PATH: aiAgentSettings.agent2.* replaces frontDeskBehavior.*
         // -------------------------------------------------------------------
         frontDeskBehavior: {
             // Master toggle
@@ -2202,7 +1994,7 @@ const companySchema = new mongoose.Schema({
             //
             // Config hierarchy:
             //   Global defaults → per-company override
-            //   frontDesk.conversationStyle.openers.*
+            //   ☢️ NUKED Feb 2026: frontDesk paths removed - use Agent 2.0
             //
             // Modes:
             //   reflect_first: Use reflection template if reason captured,
@@ -2665,7 +2457,7 @@ const companySchema = new mongoose.Schema({
             // ═══════════════════════════════════════════════════════════════
             // Single source of truth for whether triage runs at runtime.
             // Replaces: returnLane.enabled, autoTriageOnProblem, per-service toggles
-            // Gate: frontDesk.triage.enabled
+            // ☢️ NUKED Feb 2026: frontDesk.triage removed - use Agent 2.0
             // UI: Control Plane → Front Desk → V110 → Triage section
             // ═══════════════════════════════════════════════════════════════
             triage: {
@@ -3269,7 +3061,8 @@ const companySchema = new mongoose.Schema({
                 // ═══════════════════════════════════════════════════════════════
                 // V110: DIRECT INTENT PATTERNS - Bypass consent when caller clearly wants booking
                 // ═══════════════════════════════════════════════════════════════
-                // These patterns are checked by FrontDeskRuntime.determineLane() in V110 STRICT MODE.
+                // ☢️ NUKED Feb 2026: FrontDeskRuntime renamed to CallRuntime
+                // These patterns are checked by CallRuntime.determineLane() in V110 STRICT MODE.
                 // Without this field in the schema, mongoose silently drops the array on save,
                 // causing the detector to always read [0 items] → agent stays stuck in Discovery.
                 //
@@ -4142,7 +3935,8 @@ const companySchema = new mongoose.Schema({
         // AGENT 2.0 (ISOLATED, UI-CONTROLLED)
         // -------------------------------------------------------------------
         // A clean, modular namespace for the next-generation agent.
-        // Intentionally separate from frontDeskBehavior to prevent legacy
+        // ☢️ NUKED Feb 2026: frontDeskBehavior references removed
+        // Agent 2.0 is now the primary namespace for all agent behavior
         // routing/kill-switch entanglement.
         //
         // NOTE: Keep schema minimal early; expand only as sections are locked.

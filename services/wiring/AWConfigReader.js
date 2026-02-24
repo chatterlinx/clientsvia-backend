@@ -567,7 +567,7 @@ const AW_PATH_MAPPINGS = {
     'routing.services': 'aiAgentSettings.services',
     'routing.fillerWords': 'aiAgentSettings.fillerWords',
     'routing.fillerWords.custom': 'aiAgentSettings.fillerWords.custom',
-    // routing.cheatSheet paths REMOVED Feb 2026 — full cheat sheet nuke
+    // ☢️ NUKED Feb 2026: routing.cheatSheet paths removed
     
     // ─────────────────────────────────────────────────────────────────────────
     // ROUTING - Scenario matching thresholds (HybridScenarioSelector)

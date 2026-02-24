@@ -14,8 +14,7 @@
     "callFlowEngine.style.greeting",
     "profile.greeting",
     "aiAgentLogic.greeting",
-    "frontDeskBehavior.bookingEnabled",
-    "frontDeskBehavior.loops",
+    "frontDeskBehavior",
     "booking.enabled",
     "dynamicFlows"
   ],
@@ -61,47 +60,7 @@
       "callExperience.maxSilenceBeforePrompt",
       "callExperience.responseLength"
     ],
-    "frontDeskBehavior": [
-      "frontDeskBehavior.greeting.text",
-      "frontDeskBehavior.greeting.enabled",
-      "frontDeskBehavior.conversationStyle",
-      "frontDeskBehavior.personality.enabled",
-      "frontDeskBehavior.personality.professionalismLevel",
-      "frontDeskBehavior.personality.empathyLevel",
-      "frontDeskBehavior.personality.urgencyDetection",
-      "frontDeskBehavior.personality.conversationStyle",
-      "frontDeskBehavior.booking.enabled",
-      "frontDeskBehavior.bookingSlots",
-      "frontDeskBehavior.bookingPrompts",
-      "frontDeskBehavior.bookingTemplates",
-      "frontDeskBehavior.loopPrevention.enabled",
-      "frontDeskBehavior.loopPrevention.maxSameQuestion",
-      "frontDeskBehavior.loopPrevention.onLoop",
-      "frontDeskBehavior.loopPrevention.rephraseIntro",
-      "frontDeskBehavior.discoveryConsent.enabled",
-      "frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses",
-      "frontDeskBehavior.discoveryConsent.forceLLMDiscovery",
-      "frontDeskBehavior.fastPathBooking",
-      "frontDeskBehavior.escalation",
-      "frontDeskBehavior.emotionResponses",
-      "frontDeskBehavior.forbiddenPhrases",
-      "frontDeskBehavior.frustrationTriggers",
-      "frontDeskBehavior.nameSpellingVariants",
-      "frontDeskBehavior.commonFirstNames",
-      "frontDeskBehavior.blockPricing",
-      "frontDeskBehavior.pricingDeflection",
-      "frontDeskBehavior.vocabulary.forbiddenPhrases",
-      "frontDeskBehavior.vocabulary.preferredTerms",
-      "frontDeskBehavior.policies.blockPricing",
-      "frontDeskBehavior.policies.blockCompetitorMention",
-      "frontDeskBehavior.policies.forbiddenTopics",
-      "frontDeskBehavior.frustration.enabled",
-      "frontDeskBehavior.frustration.threshold",
-      "frontDeskBehavior.detection.minConfidence",
-      "frontDeskBehavior.detection.fallbackBehavior",
-      "frontDeskBehavior.modes.startMode",
-      "frontDeskBehavior.modes.autoTransitionToBooking"
-    ],
+    "_NUKED_frontDeskBehavior_Feb2026": "☢️ NUKED Feb 2026: All frontDeskBehavior paths removed - migrated to Agent 2.0",
     "defaultReplies": [
       "defaultReplies.notOfferedReply.quickReply",
       "defaultReplies.notOfferedReply.fullReply",
@@ -142,15 +101,10 @@
       "aiAgentLogic.greeting",
       "aiAgentLogic.variables",
       "oldConfig.*",
-      "frontDeskBehavior.bookingEnabled",
-      "frontDeskBehavior.loops.*",
+      "frontDeskBehavior.*",
       "booking.enabled"
     ],
-    "migrateNotDelete": {
-      "frontDeskBehavior.bookingEnabled": "frontDeskBehavior.booking.enabled",
-      "frontDeskBehavior.loops.maxRepetitions": "frontDeskBehavior.loopPrevention.maxSameQuestion",
-      "frontDeskBehavior.loops.variationStrategy": "frontDeskBehavior.loopPrevention.onLoop",
-      "frontDeskBehavior.loops.enabled": "frontDeskBehavior.loopPrevention.enabled"
-    }
+    "migrateNotDelete": {},
+    "_NUKED_Feb2026": "☢️ NUKED Feb 2026: All frontDeskBehavior migrations removed - everything goes to Agent 2.0"
   }
 }

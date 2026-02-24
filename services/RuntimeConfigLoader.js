@@ -25,9 +25,8 @@ const Company = require('../models/v2Company');
 
 // Config Loaders
 const LLM0ControlsLoader = require('./LLM0ControlsLoader');
-const { DEFAULT_FRONT_DESK_CONFIG } = require('../config/frontDeskPrompt');
-
-// CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+// ☢️ NUKED Feb 2026: DEFAULT_FRONT_DESK_CONFIG removed - frontDesk references completely removed
+// ☢️ NUKED Feb 2026: CheatSheet system completely removed
 
 let STTProfileService;
 try {
@@ -139,8 +138,7 @@ class RuntimeConfigLoader {
                 LLM0ControlsLoader.load(companyId, company)
             ]);
             
-            // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-            const cheatSheet = null;
+            // ☢️ NUKED Feb 2026: CheatSheet loading removed
             
             // Extract configs from company document
             const aiAgentSettings = company.aiAgentSettings || {};
@@ -156,8 +154,7 @@ class RuntimeConfigLoader {
                 // LLM-0 Controls (silence, loops, spam, etc.)
                 llm0Controls,
                 
-                // Front Desk Behavior (personality, prompts)
-                frontDesk: deepMerge(DEFAULT_FRONT_DESK_CONFIG, aiAgentSettings.frontDeskBehavior || {}),
+                // ☢️ NUKED Feb 2026: frontDesk config removed - personality/prompts now in Agent 2.0
                 
                 // Call Flow Engine (Mission Control)
                 callFlowEngine: {
@@ -176,8 +173,7 @@ class RuntimeConfigLoader {
                 // Quick Answers
                 quickAnswers: (callFlowEngine.quickAnswers || []).filter(qa => qa.enabled !== false),
                 
-                // Cheat Sheet (live version)
-                cheatSheet: cheatSheet || {},
+                // ☢️ NUKED Feb 2026: cheatSheet property removed
                 
                 // Voice Settings
                 voiceSettings: aiAgentSettings.voiceSettings || {},
@@ -222,8 +218,7 @@ class RuntimeConfigLoader {
                 companyId,
                 latencyMs: Date.now() - startTime,
                 triageCardCount: runtimeConfig.triageCards.length,
-                quickAnswerCount: runtimeConfig.quickAnswers.length,
-                hasCheatSheet: !!runtimeConfig.cheatSheet?.config
+                quickAnswerCount: runtimeConfig.quickAnswers.length
             });
             
             return runtimeConfig;
@@ -238,13 +233,7 @@ class RuntimeConfigLoader {
         }
     }
     
-    /**
-     * Load cheat sheet live config
-     * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-     */
-    static async loadCheatSheet(companyId) {
-        return null;
-    }
+    // ☢️ NUKED Feb 2026: loadCheatSheet function removed
     
     /**
      * Invalidate cache for a company (call after settings change)
@@ -276,11 +265,11 @@ class RuntimeConfigLoader {
             companyName: 'Company',
             trade: 'HVAC',
             llm0Controls: LLM0ControlsLoader.getDefaults(),
-            frontDesk: DEFAULT_FRONT_DESK_CONFIG,
+            // ☢️ NUKED Feb 2026: frontDesk config removed
             callFlowEngine: { enabled: true },
             triageCards: [],
             quickAnswers: [],
-            cheatSheet: {},
+            // ☢️ NUKED Feb 2026: cheatSheet removed from defaults
             voiceSettings: {},
             serviceAreas: [],
             bookingRules: { fields: [], style: {} },
@@ -304,7 +293,7 @@ class RuntimeConfigLoader {
                 companyId,
                 latencyMs: Date.now() - startTime,
                 hasLlm0Controls: !!config.llm0Controls,
-                hasFrontDesk: !!config.frontDesk,
+                // ☢️ NUKED Feb 2026: hasFrontDesk check removed
                 hasCallFlowEngine: !!config.callFlowEngine,
                 triageCardCount: config.triageCards?.length || 0,
                 quickAnswerCount: config.quickAnswers?.length || 0,

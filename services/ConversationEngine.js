@@ -4776,8 +4776,9 @@ async function processTurn({
         //   3. Implicit service requests ("I need service", "send someone")
         //
         // In V110, this feeds signals.deferToBookingRunner which causes
-        // FrontDeskRuntime to set schedulingAccepted (not bookingModeLocked).
-        // ConversationEngine never locks booking — FrontDeskRuntime decides.
+        // ☢️ NUKED Feb 2026: FrontDeskRuntime renamed to CallRuntime
+        // CallRuntime sets schedulingAccepted (not bookingModeLocked).
+        // ConversationEngine never locks booking — CallRuntime decides.
         //
         // Patterns are config-driven via Control Plane Wiring:
         //   frontDesk.detectionTriggers.directIntentPatterns
@@ -4803,12 +4804,12 @@ async function processTurn({
         // BOOKING INTENT DETECTION — Runs in ALL modes (including V110)
         // ═══════════════════════════════════════════════════════════════════════
         // In V110, this detects implicit consent ("I need service", "send someone")
-        // and explicit consent ("yes", "schedule"). FrontDeskRuntime handles the
+        // and explicit consent ("yes", "schedule"). CallRuntime handles the
         // difference: V110 sets schedulingAccepted instead of bookingModeLocked.
         //
         // This is the "scheduling acceptance detector" that makes V110 work:
         //   Caller: "I need AC service" → bookingIntentDetected = true
-        //   → signals.deferToBookingRunner → FrontDeskRuntime sets schedulingAccepted
+        //   → signals.deferToBookingRunner → CallRuntime sets schedulingAccepted
         //   → Info collection begins on next turn
         // ═══════════════════════════════════════════════════════════════════════
         
@@ -4945,7 +4946,7 @@ async function processTurn({
             // Defaults cover common service-trade phrases.
             //
             // This only fires when V110 is active (hasDiscoveryFlow = true).
-            // It sets consentGivenThisTurn so FrontDeskRuntime sets
+            // It sets consentGivenThisTurn so CallRuntime sets
             // schedulingAccepted instead of wasting a turn asking.
             // ═══════════════════════════════════════════════════════════════════
             if (!bookingIntentDetected && hasDiscoveryFlow) {
@@ -4986,10 +4987,10 @@ async function processTurn({
             }
 
             // ═══════════════════════════════════════════════════════════════════
-            // BOOKING INTENT HANDOFF — signal to FrontDeskRuntime
+            // BOOKING INTENT HANDOFF — signal to CallRuntime
             // ═══════════════════════════════════════════════════════════════════
             // V110: ConversationEngine signals intent but does NOT lock booking.
-            //   FrontDeskRuntime checks discoveryComplete and decides.
+            //   CallRuntime checks discoveryComplete and decides.
             //   If discovery slots are still missing → schedulingAccepted = true,
             //   info collection continues in DISCOVERY lane.
             //
@@ -5020,7 +5021,7 @@ async function processTurn({
                 const bookingOfferOpenTurn = session.booking?.consentPendingTurn || null;
                 const bookingTriggerTurn = session.metrics?.totalTurns || 0;
                 
-                log('📅 BOOKING_INTENT_HANDOFF: Signaling to FrontDeskRuntime', {
+                log('📅 BOOKING_INTENT_HANDOFF: Signaling to CallRuntime', {
                     userText: userText.substring(0, 60),
                     bookingTriggerReason,
                     yesEquivalentMatched,
@@ -5062,7 +5063,7 @@ async function processTurn({
                 session.booking.yesEquivalentMatched = yesEquivalentMatched;
                 
                 // ───────────────────────────────────────────────────
-                // V110: Do NOT lock booking — FrontDeskRuntime decides
+                // V110: Do NOT lock booking — CallRuntime decides
                 // based on discoveryComplete. Just signal intent.
                 // ───────────────────────────────────────────────────
                 // Legacy: Lock booking immediately (no Discovery Flow)
@@ -5571,7 +5572,7 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // BOOKING ENTRY — Determined by V110 state or legacy consent gate
         // ═══════════════════════════════════════════════════════════════════════
-        // V110: FrontDeskRuntime already decided the lane. If mode=BOOKING,
+        // V110: CallRuntime already decided the lane. If mode=BOOKING,
         //       it means discovery slots are complete. Honor that decision.
         // Non-V110: Legacy consent gate still applies.
         // ═══════════════════════════════════════════════════════════════════════
@@ -8376,7 +8377,7 @@ async function processTurn({
         // first. Now that scenarios/LLM have generated the response, we
         // merge the deferred scheduling signals into the final result.
         //
-        // This ensures FrontDeskRuntime sees deferToBookingRunner + the
+        // This ensures CallRuntime sees deferToBookingRunner + the
         // scenario's response (acknowledgment + funnel) in the same turn.
         // ═══════════════════════════════════════════════════════════════════
         const deferredSignals = session._deferredBookingSignals || null;
@@ -8413,10 +8414,10 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             bookingFlowState: finalBookingFlowState,
             // ═══════════════════════════════════════════════════════════════════
-            // SIGNALS — propagated to FrontDeskRuntime / v2twilio
+            // SIGNALS — propagated to CallRuntime / v2twilio
             // ═══════════════════════════════════════════════════════════════════
             // In V110, deferredBookingSignals are merged here so 
-            // FrontDeskRuntime sees schedulingAccepted + scenario reply together.
+            // CallRuntime sees schedulingAccepted + scenario reply together.
             // ═══════════════════════════════════════════════════════════════════
             signals: aiResult?.signals || {}
         };

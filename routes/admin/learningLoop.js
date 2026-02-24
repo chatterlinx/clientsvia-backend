@@ -19,105 +19,19 @@ const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const v2Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
 
+// ☢️ NUKED Feb 2026: cheatSheet routes removed
 // ============================================================================
-// ADD PHRASE TO EDGE CASES
+// ADD PHRASE TO EDGE CASES - REMOVED
 // ============================================================================
 // POST /api/admin/learning-loop/quick-add-edge-case/:companyId
+// ☢️ NUKED Feb 2026: Full cheat sheet nuke - edge cases stored in cheatSheet
 // ============================================================================
 router.post('/quick-add-edge-case/:companyId', authenticateJWT, requireRole('admin'), async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        // Accept either 'phrase' or 'triggerPhrase' from frontend
-        const phrase = req.body.phrase || req.body.triggerPhrase;
-        const category = req.body.category || 'telemarketer';
-        const action = req.body.action || req.body.actionType || 'dismiss';
-        
-        if (!phrase || phrase.trim().length < 3) {
-            return res.status(400).json({
-                success: false,
-                message: 'Phrase must be at least 3 characters'
-            });
-        }
-        
-        const company = await v2Company.findById(companyId);
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-        
-        // Initialize edge cases array if not exists
-        if (!company.aiAgentSettings) {
-            company.aiAgentSettings = {};
-        }
-        if (!company.aiAgentSettings.cheatSheet) {
-            company.aiAgentSettings.cheatSheet = {};
-        }
-        if (!Array.isArray(company.aiAgentSettings.cheatSheet.edgeCases)) {
-            company.aiAgentSettings.cheatSheet.edgeCases = [];
-        }
-        
-        // Check for duplicate
-        const normalizedPhrase = phrase.trim().toLowerCase();
-        const exists = company.aiAgentSettings.cheatSheet.edgeCases.some(
-            ec => ec.phrase?.toLowerCase() === normalizedPhrase
-        );
-        
-        if (exists) {
-            return res.status(409).json({
-                success: false,
-                message: 'This phrase already exists in Edge Cases'
-            });
-        }
-        
-        // Add the new edge case
-        const newEdgeCase = {
-            phrase: phrase.trim(),
-            category,
-            action,
-            isActive: true,
-            addedAt: new Date(),
-            addedBy: req.user.email || 'system',
-            source: 'black_box_learning'
-        };
-        
-        company.aiAgentSettings.cheatSheet.edgeCases.push(newEdgeCase);
-        company.markModified('aiAgentSettings.cheatSheet.edgeCases');
-        await company.save();
-        
-        // Clear Redis cache
-        try {
-            const { redisClient } = require('../../clients');
-            await redisClient.del(`company:${companyId}`);
-        } catch (cacheErr) {
-            logger.debug('[LEARNING LOOP] Failed to clear cache', { error: cacheErr.message });
-        }
-        
-        logger.info('[LEARNING LOOP] Added edge case from Black Box', {
-            companyId,
-            phrase: phrase.substring(0, 50),
-            category,
-            addedBy: req.user.email
-        });
-        
-        res.json({
-            success: true,
-            message: `Added "${phrase.substring(0, 30)}..." to Edge Cases`,
-            edgeCase: newEdgeCase
-        });
-        
-    } catch (error) {
-        logger.error('[LEARNING LOOP] Failed to add edge case', {
-            companyId: req.params.companyId,
-            error: error.message
-        });
-        res.status(500).json({
-            success: false,
-            message: 'Failed to add edge case',
-            error: error.message
-        });
-    }
+    res.status(410).json({
+        success: false,
+        error: 'Cheat sheet system has been removed. Edge cases are no longer supported.',
+        nukedAt: 'Feb 2026'
+    });
 });
 
 // ============================================================================
@@ -349,20 +263,21 @@ router.get('/:companyId/stats', authenticateJWT, requireRole('admin'), async (re
             });
         }
         
-        const edgeCases = company.aiAgentSettings?.cheatSheet?.edgeCases || [];
+        // ☢️ NUKED Feb 2026: cheatSheet.edgeCases removed - no longer tracked
         const blacklist = company.callFiltering?.blacklist || [];
         
         // Count items added from Black Box
-        const edgeCasesFromBlackBox = edgeCases.filter(e => e.source === 'black_box_learning').length;
         const blacklistFromBlackBox = blacklist.filter(b => b.source === 'black_box_learning').length;
         
         res.json({
             success: true,
             stats: {
+                // ☢️ NUKED Feb 2026: edgeCases removed from stats
                 edgeCases: {
-                    total: edgeCases.length,
-                    fromBlackBox: edgeCasesFromBlackBox,
-                    active: edgeCases.filter(e => e.isActive !== false).length
+                    total: 0,
+                    fromBlackBox: 0,
+                    active: 0,
+                    _note: 'NUKED Feb 2026 - cheatSheet system removed'
                 },
                 blacklist: {
                     total: blacklist.length,

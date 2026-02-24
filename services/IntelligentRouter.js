@@ -1694,9 +1694,7 @@ class IntelligentRouter {
 You are handling ${templateName} inquiries.
 Your role is to understand caller needs, provide helpful information, and guide them to the appropriate next step.`;
         
-        // LAYER 2: Frontline-Intel (cheatSheet.frontlineIntel) REMOVED Feb 2026
-        // LAYER 3: Behavior Rules (cheatSheet.behaviorRules) REMOVED Feb 2026
-        // Cheat sheet system fully nuked — Tier 2 reserved for future rebuild
+        // ☢️ NUKED Feb 2026: cheatSheet.frontlineIntel and cheatSheet.behaviorRules removed
         const behaviorRules = [];
         
         if (behaviorRules.length > 0) {

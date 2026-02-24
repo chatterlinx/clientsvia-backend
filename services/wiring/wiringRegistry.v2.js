@@ -118,12 +118,14 @@ const wiringRegistryV2 = {
     // =========================================================================
     tabs: [
         // ---------------------------------------------------------------------
-        // FRONT DESK TAB
+        // ☢️ NUKED Feb 2026: FRONT DESK TAB - LEGACY WIRING (PRESERVED FOR UI)
+        // All frontDesk functionality migrated to Agent 2.0 namespace
+        // This wiring kept temporarily for UI compatibility during migration
         // ---------------------------------------------------------------------
         {
             id: 'tab.frontDesk',
-            label: 'Front Desk',
-            description: 'Controls how AI talks to callers',
+            label: 'Front Desk (LEGACY)',
+            description: '☢️ NUKED Feb 2026: Migrated to Agent 2.0',
             ui: {
                 tabId: 'front-desk',
                 navSelector: '[data-tab="front-desk"]'

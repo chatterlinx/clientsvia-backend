@@ -4,9 +4,8 @@
  * ============================================================================
  * Provides: Pre-answer filters (spam, voicemail, abuse detection)
  * 
- * DATA SOURCE: frontDeskBehavior.callProtection
- * 
- * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+ * ☢️ NUKED Feb 2026: frontDeskBehavior.callProtection removed
+ * DATA SOURCE: aiAgentSettings.callProtection (future) or NOT_CONFIGURED
  * 
  * Note: Call protection is OPTIONAL. If not configured, provider returns 
  * enabled=false with NOT_CONFIGURED warning (not an error).
@@ -22,23 +21,8 @@ module.exports.getSnapshot = async function(companyId) {
         let edgeCases = [];
         let dataSource = 'none';
         
-        // Load from frontDeskBehavior.callProtection
-        const company = await Company.findById(companyId)
-            .select('frontDeskBehavior.callProtection')
-            .lean();
-        
-        if (company?.frontDeskBehavior?.callProtection?.rules?.length > 0) {
-            edgeCases = company.frontDeskBehavior.callProtection.rules.map(rule => ({
-                name: rule.name || 'Custom Rule',
-                type: rule.type || 'custom',
-                enabled: rule.enabled !== false,
-                priority: rule.priority || 10,
-                triggerPatterns: rule.patterns || [],
-                responseText: rule.response || '',
-                action: rule.action || 'respond'
-            }));
-            dataSource = 'frontDeskBehavior.callProtection';
-        }
+        // ☢️ NUKED Feb 2026: frontDeskBehavior.callProtection removed
+        // Call protection rules now come from aiAgentSettings.callProtection (future)
         
         // If still no data, return NOT_CONFIGURED (not an error)
         if (edgeCases.length === 0) {

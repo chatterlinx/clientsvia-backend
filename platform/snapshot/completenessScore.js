@@ -313,24 +313,7 @@ function computeCompleteness(snapshot, scopeOverride = null) {
     // 6a. RUNTIME-BLOCKING GOVERNANCE RULES (Evidence-based)
     // Platform Snapshot must NEVER show GREEN while runtime is blocked.
     // ═══════════════════════════════════════════════════════════════════════
-    const consentSnapshot = providers.controlPlane?.data?.frontDesk?.discoveryConsent;
-    const consentAllowedTypes = Array.isArray(consentSnapshot?.autoReplyAllowedScenarioTypes)
-        ? consentSnapshot.autoReplyAllowedScenarioTypes
-        : [];
-    const blockAllUntilConsent = consentSnapshot?.disableScenarioAutoResponses === true && consentAllowedTypes.length === 0;
-    if (blockAllUntilConsent) {
-        penalties.push({
-            code: 'CONSENT_SCENARIO_AUTOREPLIES_BLOCKED',
-            severity: 'YELLOW',
-            weight: PENALTY_CODES.CONSENT_SCENARIO_AUTOREPLIES_BLOCKED.weight,
-            message: 'Consent kill-switch enabled: scenarios will NOT auto-reply (runtime blocked until consent)',
-            sourcePaths: [
-                'aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses'
-            ]
-        });
-        score -= PENALTY_CODES.CONSENT_SCENARIO_AUTOREPLIES_BLOCKED.weight;
-        recommendations.push('Disable discoveryConsent.disableScenarioAutoResponses (keep bookingRequiresExplicitConsent ON)');
-    }
+    // ☢️ NUKED Feb 2026: frontDesk.discoveryConsent checks removed - Agent 2.0 handles consent
 
     const unknownTypeCount = providers.scenarioBrain?.data?.summary?.unknownScenarioTypeCount || 0;
     if (unknownTypeCount > 0) {

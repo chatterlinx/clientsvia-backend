@@ -589,12 +589,8 @@ TRANSFER RULES:
      * Show notification
      */
     showNotification(message, type = 'info') {
-        // Use existing notification system if available
-        if (window.CheatSheetManager?.prototype?.showNotification) {
-            // Try to use CheatSheetManager's notification
-        }
-        
-        // Fallback: simple toast
+        // ☢️ NUKED Feb 2026: CheatSheetManager reference removed
+        // Simple toast notification
         const toast = document.createElement('div');
         toast.style.cssText = `
             position: fixed; bottom: 20px; right: 20px; 

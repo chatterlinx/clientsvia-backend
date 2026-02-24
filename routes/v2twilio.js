@@ -26,8 +26,8 @@ const MatchDiagnostics = require('../services/MatchDiagnostics');
 const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime for call initialization
 const { initializeCall } = require('../services/v2AIAgentRuntime');
-// ☢️ NUKED Feb 22, 2026: FrontDeskCoreRuntime renamed to CallRuntime - all legacy deleted
-const { CallRuntime, FrontDeskCoreRuntime } = require('../services/engine/CallRuntime');
+// ☢️ NUKED Feb 2026: FrontDeskCoreRuntime references removed - CallRuntime is the sole runtime
+const { CallRuntime } = require('../services/engine/CallRuntime');
 const { StateStore } = require('../services/engine/StateStore');
 // NOTE: processUserInput REMOVED - HybridReceptionistLLM is the only brain now
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
@@ -3417,7 +3417,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // CORE RUNTIME - Process turn and collect events in buffer
       // ═══════════════════════════════════════════════════════════════════════════
       const T2_start = Date.now();
-      const runtimeResult = await FrontDeskCoreRuntime.processTurn(
+      const runtimeResult = await CallRuntime.processTurn(
         company.aiAgentSettings || {},
         callState,
         speechResult,
@@ -3434,7 +3434,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
       const T3_start = Date.now();
       if (runtimeResult.turnEventBuffer && runtimeResult.turnEventBuffer.length > 0) {
-        await FrontDeskCoreRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
+        await CallRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
       }
       timings.eventFlushMs = Date.now() - T3_start;
 
@@ -5369,14 +5369,13 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
     if (!config) {
       const Company = require('../models/v2Company');
       const company = await Company.findById(companyId)
-        .select('aiAgentSettings.llm0Controls.recoveryMessages aiAgentSettings.frontDeskBehavior.connectionQualityGate phoneNumber')
+        .select('aiAgentSettings.llm0Controls.recoveryMessages phoneNumber')
         .lean();
       const rm = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
-      const cqGate = company?.aiAgentSettings?.frontDeskBehavior?.connectionQualityGate || {};
+      // ☢️ NUKED Feb 2026: frontDeskBehavior.connectionQualityGate removed
       
-      // V111: Check both catastrophic config sources (LLM-0 and Connection Quality Gate)
       config = {
-        forwardNumber: rm.catastrophicForwardNumber || cqGate.transferDestination || company?.phoneNumber || '',
+        forwardNumber: rm.catastrophicForwardNumber || company?.phoneNumber || '',
         option2Action: rm.catastrophicOption2Action || 'voicemail',
         companyId,
         twilioNumber: '' // Not available from DB, will use req.body.To

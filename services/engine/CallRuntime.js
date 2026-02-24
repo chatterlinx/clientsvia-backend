@@ -599,10 +599,6 @@ class CallRuntime {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BACKWARD COMPATIBILITY ALIAS
-// ═══════════════════════════════════════════════════════════════════════════
-// For files that still import FrontDeskCoreRuntime during migration
-const FrontDeskCoreRuntime = CallRuntime;
+// ☢️ NUKED Feb 2026: FrontDeskCoreRuntime alias removed - all callers updated to use CallRuntime
 
-module.exports = { CallRuntime, FrontDeskCoreRuntime, CRITICAL_EVENTS };
+module.exports = { CallRuntime, CRITICAL_EVENTS };

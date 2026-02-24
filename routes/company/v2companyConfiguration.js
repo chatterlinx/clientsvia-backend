@@ -1605,13 +1605,14 @@ router.get('/:companyId/configuration/diagnostics/:component', async (req, res) 
         const DiagnosticService = require('../../services/DiagnosticService');
         
         // Validate component parameter
+        // ☢️ NUKED Feb 2026: 'cheatsheet' removed from valid components
         const validComponents = [
             'templates', 
             'variables', 
             'twilio', 
             'voice', 
             'scenarios',
-            'cheatsheet',
+            // 'cheatsheet', // ☢️ NUKED Feb 2026
             'frontline-intel',
             'tier-settings',
             'tier-llm',
@@ -1774,101 +1775,19 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
     }
 });
 
+// ☢️ NUKED Feb 2026: cheatSheet routes removed
 /**
  * ============================================================================
  * POST /api/company/:companyId/configuration/variables/scan-cheatsheet
- * SCAN CHEAT SHEET ONLY - Isolated from Templates/Scenarios
+ * ☢️ NUKED Feb 2026: Full cheat sheet nuke - endpoint returns 410 Gone
  * ============================================================================
- * 
- * NEW ISOLATED ENDPOINT - Scans ONLY Cheat Sheet tab data:
- *    - Frontline-Intel
- *    - Edge Cases  
- *    - Transfer Rules
- * 
- * Completely separate from template scanning - has its own button, own data,
- * own scan reports. This prevents mixing cheat sheet data with template data
- * and avoids breaking the template scanning system.
  */
 router.post('/:companyId/configuration/variables/scan-cheatsheet', async (req, res) => {
-    logger.info(`📋 [CHEAT SHEET SCAN] POST /configuration/variables/scan-cheatsheet for company: ${req.params.companyId}`);
-    
-    try {
-        const companyId = req.params.companyId;
-        
-        // Verify company exists
-        const company = await Company.findById(companyId);
-        
-        if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
-        }
-        
-        logger.info(`📋 [CHEAT SHEET SCAN] Starting cheat sheet scan for company ${companyId}`);
-        
-        // ✨ USE NEW ISOLATED CHEAT SHEET SERVICE
-        const scanReport = await EnterpriseVariableScanService.scanCheatSheetOnly(companyId, {
-            reason: 'manual',
-            triggeredBy: req.user?.email || 'system'
-        });
-        
-        logger.info(`✅ [CHEAT SHEET SCAN] Scan complete - ID: ${scanReport.scanId}`);
-        logger.info(`📊 [CHEAT SHEET SCAN] Found ${scanReport.summary.uniqueVariables} variables in cheat sheet`);
-        
-        // Build detected variables summary for frontend
-        const detectedVariablesSummary = scanReport.variables.map(def => ({
-            key: def.key,
-            label: def.label || def.key,
-            type: def.type || 'text',
-            category: def.category || 'General',
-            usageCount: def.usageCount || 0,
-            required: def.required || false,
-            source: 'Cheat Sheet'
-        }));
-        
-        // Return cheat sheet scan report
-        res.json({
-            success: true,
-            message: `Cheat sheet scan completed - ${scanReport.summary.uniqueVariables} variables found`,
-            
-            // CHEAT SHEET SCAN REPORT
-            scanReport: {
-                scanId: scanReport.scanId,
-                timestamp: scanReport.timestamp,
-                scanType: scanReport.scanType,
-                duration: scanReport.scanDuration,
-                summary: scanReport.summary,
-                sourcesScanned: scanReport.sourcesScanned
-            },
-            
-            // Variables detected in cheat sheet
-            detectedVariables: detectedVariablesSummary,
-            
-            // Full variable definitions with locations
-            variableDefinitions: scanReport.variables,
-            
-            // Metadata
-            meta: {
-                scanId: scanReport.scanId,
-                timestamp: scanReport.timestamp,
-                variablesFound: scanReport.summary.uniqueVariables,
-                totalOccurrences: scanReport.summary.totalOccurrences
-            }
-        });
-        
-    } catch (error) {
-        logger.error(`❌ [CHEAT SHEET SCAN] Error:`, error);
-        logger.error(`❌ [CHEAT SHEET SCAN] Error name:`, error.name);
-        logger.error(`❌ [CHEAT SHEET SCAN] Error message:`, error.message);
-        logger.error(`❌ [CHEAT SHEET SCAN] Error stack:`, error.stack);
-        if (error.errors) {
-            logger.error(`❌ [CHEAT SHEET SCAN] Validation errors:`, JSON.stringify(error.errors, null, 2));
-        }
-        res.status(500).json({
-            success: false,
-            error: 'Failed to scan cheat sheet',
-            message: error.message,
-            errorName: error.name
-        });
-    }
+    res.status(410).json({
+        success: false,
+        error: 'Cheat sheet system has been removed. Scanning is no longer supported.',
+        nukedAt: 'Feb 2026'
+    });
 });
 
 /**

@@ -73,17 +73,9 @@ class TriageCommandCenter {
         const cards = Array.isArray(cardsData) ? cardsData : (cardsData.cards || []);
         console.log('[TCC] Extracted cards count:', cards.length);
         
-        // Extract booking rules from cheatSheets if available
-        let bookingRules = [];
-        if (company.cheatSheets && company.cheatSheets.length > 0) {
-          // Get booking rules from the first (or live) cheatsheet
-          const cheatsheet = company.cheatSheets[0];
-          if (cheatsheet.config?.bookingRules) {
-            bookingRules = cheatsheet.config.bookingRules;
-          } else if (cheatsheet.bookingRules) {
-            bookingRules = cheatsheet.bookingRules;
-          }
-        }
+        // ☢️ NUKED Feb 2026: cheatSheet references removed
+        // Booking rules now accessed directly from company.aiAgentSettings
+        let bookingRules = company.aiAgentSettings?.bookingRules || [];
 
         this.companyContext = {
           name: company.companyName || company.businessName || company.name || 'Your Company',

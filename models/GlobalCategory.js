@@ -3,7 +3,8 @@
  * GLOBAL CATEGORY MODEL
  * ============================================================================
  * 
- * Represents categories for organizing global shared CheatSheet configurations.
+ * ☢️ NUKED Feb 2026: CheatSheet references removed
+ * Represents categories for organizing global shared configurations.
  * Examples: HVAC, Plumbing, Dental, Legal, etc.
  * 
  * KEY DESIGN:

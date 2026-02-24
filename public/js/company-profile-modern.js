@@ -4127,7 +4127,7 @@ class CompanyProfileManager {
             this.spamFilterManagerInitialized = true;
         }
         
-        // cheat-sheet tab REMOVED Feb 2026 — full cheat sheet nuke
+        // ☢️ NUKED Feb 2026: cheatSheet references removed
         
         if (tabName === 'ai-agent-settings' && !this.aiAgentSettingsInitialized) {
             logger.info('🤖 Initializing AI Agent Settings...');
@@ -4189,7 +4189,7 @@ class CompanyProfileManager {
         }
     }
 
-    // initializeCheatSheetManager REMOVED Feb 2026 — full cheat sheet nuke
+    // ☢️ NUKED Feb 2026: cheatSheet references removed
 
     /**
      * Initialize AI Agent Settings (Twilio, Diagnostics, etc.)

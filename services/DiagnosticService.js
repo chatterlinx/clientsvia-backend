@@ -58,10 +58,7 @@ class DiagnosticService {
                     return await this.checkVoice(company);
                 case 'scenarios':
                     return await this.checkScenarios(company);
-                case 'cheatsheet':
-                    return await this.checkCheatSheet(company);
-                case 'frontline-intel':
-                    return await this.checkFrontlineIntel(company);
+                // ☢️ NUKED Feb 2026: cheatsheet and frontline-intel cases removed
                 case 'tier-settings':
                     return await this.check3TierSettings(company);
                 case 'tier-llm':
@@ -1060,61 +1057,7 @@ class DiagnosticService {
         };
     }
     
-    /**
-     * ========================================================================
-     * CHEATSHEET DIAGNOSTIC
-     * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-     * ========================================================================
-     */
-    static async checkCheatSheet(company) {
-        return {
-            component: 'cheatsheet',
-            score: 0,
-            maxScore: 100,
-            status: 'REMOVED',
-            timestamp: new Date().toISOString(),
-            checks: [{
-                name: 'CheatSheet System',
-                status: 'INFO',
-                message: 'CheatSheet system removed Feb 2026 — Tier 2 reserved for future rebuild',
-                target: 'cheat-sheet'
-            }],
-            summary: {
-                total: 1,
-                passed: 0,
-                failed: 0,
-                warnings: 0
-            }
-        };
-    }
-    
-    /**
-     * ========================================================================
-     * FRONTLINE-INTEL DIAGNOSTIC (Detailed check for just the instructions)
-     * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-     * ========================================================================
-     */
-    static async checkFrontlineIntel(company) {
-        return {
-            component: 'frontline-intel',
-            score: 0,
-            maxScore: 100,
-            status: 'REMOVED',
-            timestamp: new Date().toISOString(),
-            checks: [{
-                name: 'Frontline-Intel (CheatSheet)',
-                status: 'INFO',
-                message: 'CheatSheet system removed Feb 2026 — Tier 2 reserved for future rebuild',
-                target: 'cheat-sheet'
-            }],
-            summary: {
-                total: 1,
-                passed: 0,
-                failed: 0,
-                warnings: 0
-            }
-        };
-    }
+    // ☢️ NUKED Feb 2026: checkCheatSheet and checkFrontlineIntel functions removed
     
     /**
      * ========================================================================

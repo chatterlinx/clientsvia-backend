@@ -19,8 +19,7 @@ const { redisClient } = require('../clients');
 // ═══════════════════════════════════════════════════════════════════
 const TraceLogger = require('./TraceLogger');
 
-// Cheat Sheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-const PolicyCompiler = require('./PolicyCompiler');
+// ☢️ NUKED Feb 2026: PolicyCompiler import removed - CheatSheet is dead
 const SessionManager = require('./SessionManager');
 
 // ═══════════════════════════════════════════════════════════════════
@@ -45,7 +44,7 @@ const brain1ProcessTurn = null; // REMOVED - stub to prevent crashes
 // - Easier testing/mocking
 // - Consistent initialization
 // ═══════════════════════════════════════════════════════════════════
-// CheatSheetRuntimeService REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+// ☢️ NUKED Feb 2026: CheatSheetRuntimeService completely removed
 const intelligentFallbackHandler = require('./intelligentFallbackHandler');
 const MemoryEngine = require('./MemoryEngine');
 // V115: Triage is now routed through TriageEngineRouter ONLY
@@ -570,7 +569,7 @@ class V2AIAgentRuntime {
             // 🎯 DYNAMIC CALL FLOW EXECUTION
             // ═════════════════════════════════════════════════════════════════
             // Execute steps based on callFlowConfig order and enabled flags
-            // This replaces the old hardcoded: Frontline → generateV2Response → CheatSheet
+            // ☢️ NUKED Feb 2026: CheatSheet step removed from flow
             // ═════════════════════════════════════════════════════════════════
             
             logger.info('[CALL FLOW] 🎯 Starting dynamic call flow execution', {
@@ -816,8 +815,8 @@ class V2AIAgentRuntime {
                     action: executionContext.finalAction,
                     callState: shortCircuitCallState,
                     confidence: executionContext.frontlineIntelResult?.confidence || 0.8,
-                    frontlineIntelMeta: executionContext.frontlineIntelMeta,
-                    cheatSheetMeta: executionContext.cheatSheetMeta
+                    frontlineIntelMeta: executionContext.frontlineIntelMeta
+                    // ☢️ NUKED Feb 2026: cheatSheetMeta removed
                 };
             }
             
@@ -825,7 +824,7 @@ class V2AIAgentRuntime {
             const finalResponse = contextAfterExecution.finalResponse;
             const finalAction = contextAfterExecution.finalAction;
             const frontlineIntelResult = contextAfterExecution.frontlineIntelResult;
-            const cheatSheetMeta = contextAfterExecution.cheatSheetMeta;
+            // ☢️ NUKED Feb 2026: cheatSheetMeta removed
             const baseResponse = contextAfterExecution.baseResponse;
             const behaviorMeta = contextAfterExecution.behaviorMeta; // V23: Behavior Engine
             
@@ -849,9 +848,7 @@ class V2AIAgentRuntime {
                     cost: frontlineIntelResult.cost
                 } : null,
                 
-                // Cheat Sheet metadata
-                cheatSheetApplied: cheatSheetMeta !== null,
-                cheatSheetMeta,
+                // ☢️ NUKED Feb 2026: cheatSheetApplied and cheatSheetMeta removed
                 
                 // V23: Behavior Engine metadata
                 behaviorMeta
@@ -1018,7 +1015,7 @@ class V2AIAgentRuntime {
                 action: finalAction,
                 callState: updatedCallState,
                 confidence: baseResponse.confidence || 0.8,
-                cheatSheetMeta,
+                // ☢️ NUKED Feb 2026: cheatSheetMeta removed
                 behaviorMeta // V23: Behavior Engine metadata (tone, styleInstructions, signals)
             };
             END OF LEGACY PATH - DEAD CODE */

@@ -2029,12 +2029,9 @@ const globalInstantResponseTemplateSchema = new Schema({
     },
     
     // ============================================
-    // 🧠 DEFAULT CHEAT SHEET - TEMPLATE INHERITANCE
+    // ☢️ NUKED Feb 2026: defaultCheatSheet schema preserved for DB compatibility only
+    // This field is DEPRECATED and should NOT be used in new code
     // ============================================
-    // Industry-optimized cheat sheet defaults that companies inherit
-    // when they select this template. Companies can customize from these
-    // defaults rather than starting from scratch.
-    // Multi-tenant pattern: Template → Company customization
     defaultCheatSheet: {
         // ========== BEHAVIOR RULES ==========
         // Tone & style adjustments applied to all responses

@@ -81,8 +81,9 @@ async function generateSnapshot(companyId, options = {}) {
     
     try {
         // Load company for meta info + effective config fingerprint (harmony lock)
+        // ☢️ NUKED Feb 2026: frontDeskBehavior removed from select
         const company = await Company.findById(companyId)
-            .select('companyName tradeKey industryType aiAgentSettings.frontDeskBehavior aiAgentSettings.templateReferences aiAgentSettings.scenarioControls agentSettings')
+            .select('companyName tradeKey industryType aiAgentSettings.templateReferences aiAgentSettings.scenarioControls agentSettings')
             .lean();
         
         if (company) {
@@ -113,9 +114,9 @@ async function generateSnapshot(companyId, options = {}) {
                 placeholders: 'placeholders:v1'
             };
 
+            // ☢️ NUKED Feb 2026: frontDeskBehavior removed from effectiveConfigVersion
             snapshot.meta.effectiveConfigVersion = computeEffectiveConfigVersion({
                 companyId,
-                frontDeskBehavior: company.aiAgentSettings?.frontDeskBehavior || null,
                 agentSettings: company.agentSettings || null,
                 templateReferences: company.aiAgentSettings?.templateReferences || [],
                 scenarioControls: company.aiAgentSettings?.scenarioControls || [],

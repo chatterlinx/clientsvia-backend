@@ -1275,13 +1275,14 @@ router.post('/:companyId/greetings/seed-from-global',
       // Get current Agent 2.0 config
       const current = mergeAgent2Config(company.aiAgentSettings?.agent2 || null);
       
-      // Get legacy greeting rules
-      const legacyRules = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingRules || [];
+      // ☢️ NUKED Feb 2026: frontDeskBehavior.conversationStages.greetingRules removed
+      // Legacy greeting rules no longer seeded - Agent 2.0 greetings are the only source
+      const legacyRules = [];
       
       // Get connection messages for call start greeting
       const connectionMessages = company.connectionMessages?.voice || {};
 
-      // Convert legacy rules to Agent 2.0 format
+      // Convert legacy rules to Agent 2.0 format (empty array now)
       const convertedRules = legacyRules
         .filter(rule => rule && rule.trigger && rule.response)
         .map((rule, idx) => ({

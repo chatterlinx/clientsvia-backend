@@ -455,10 +455,11 @@ class AgentExcellenceService {
   
   /**
    * Calculate Frontline Intelligence score (10% weight)
+   * ☢️ NUKED Feb 2026: cheatSheets reference removed - using empty string
    */
   static async calculateFrontlineScore(companyId, company) {
-    // Check Frontline script completeness
-    const script = company.cheatSheets?.[0]?.frontlineIntel || '';
+    // ☢️ NUKED Feb 2026: CheatSheet frontlineIntel removed
+    const script = '';
     
     // Check for key sections
     const hasMission = script.includes('MISSION') || script.includes('YOUR ROLE');

@@ -73,7 +73,7 @@ class FrontlineIntel {
      * Process caller input through Frontline-Intel
      * 
      * @param {string} userInput - Raw caller speech (from Twilio)
-     * @param {Object} company - Company document with cheatSheet
+     * @param {Object} company - Company document
      * @param {string} callerPhone - Caller's phone number
      * @param {Object} options - Processing options
      * @returns {Promise<Object>} Frontline-Intel output
@@ -114,42 +114,25 @@ class FrontlineIntel {
             };
         }
         
-        // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-        // Load Frontline-Intel script from company document (legacy path)
-        let scriptText = '';
+        // ☢️ NUKED Feb 2026: CheatSheet script loading completely removed
+        // Frontline-Intel now uses options.frontlineScript passed in by caller
+        let scriptText = options.frontlineScript || '';
         
-        {
-            const frontlineScript = company?.cheatSheets?.[0]?.config?.frontlineIntel || 
-                                   company?.cheatSheets?.[0]?.frontlineIntel ||
-                                   company?.frontlineIntel ||
-                                   '';
-            if (typeof frontlineScript === 'string') {
-                scriptText = frontlineScript;
-            } else if (frontlineScript?.instructions) {
-                scriptText = frontlineScript.instructions;
-            }
-            
-            if (scriptText.length > 0) {
-                logger.info(`✅ [FRONTLINE-INTEL] Found script in company document`, {
-                    scriptLength: scriptText.length
-                });
-            } else {
-                logger.warn(`❌ [FRONTLINE-INTEL] No frontline script found in company document`);
-            }
+        if (scriptText.length > 0) {
+            logger.info(`✅ [FRONTLINE-INTEL] Found script in options`, {
+                scriptLength: scriptText.length
+            });
+        } else {
+            logger.warn(`❌ [FRONTLINE-INTEL] No frontline script provided in options`);
         }
         
         const hasScript = scriptText.trim().length > 100;
         
         if (!hasScript) {
-            // 🚨 CRITICAL CHECKPOINT: No roadmap found!
-            logger.warn(`🚨 [FRONTLINE-INTEL] ═══════════════════════════════════════════════════`);
-            logger.warn(`🚨 [FRONTLINE-INTEL] NO FRONTLINE SCRIPT FOUND!`);
-            logger.warn(`🚨 [FRONTLINE-INTEL] The AI has NO roadmap to follow!`);
+            // No script provided
+            logger.warn(`🚨 [FRONTLINE-INTEL] NO FRONTLINE SCRIPT PROVIDED!`);
             logger.warn(`🚨 [FRONTLINE-INTEL] Script length: ${scriptText.length} chars (need > 100)`);
             logger.warn(`🚨 [FRONTLINE-INTEL] Company: ${company.companyName || company.businessName}`);
-            logger.warn(`🚨 [FRONTLINE-INTEL] CompanyId: ${company._id?.toString()}`);
-            logger.warn(`🚨 [FRONTLINE-INTEL] FIX: Go to Cheat Sheet → Frontline-Intel → Save script → Push Live`);
-            logger.warn(`🚨 [FRONTLINE-INTEL] ═══════════════════════════════════════════════════`);
             return {
                 skipped: true,
                 cleanedInput: userInput,
@@ -404,20 +387,12 @@ class FrontlineIntel {
         
         // ═══════════════════════════════════════════════════════════
         // USE PRE-PROCESSED SCRIPT (variables already substituted)
+        // ☢️ NUKED Feb 2026: Legacy cheatSheet path removed
         // ═══════════════════════════════════════════════════════════
-        // Priority: options.frontlineScript (pre-processed) > legacy location
-        let frontlineIntel = options.frontlineScript || 
-                            company?.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
-        
-        // Only apply variable replacement if we got script from legacy location
-        // (options.frontlineScript already has variables substituted)
-        if (!options.frontlineScript && frontlineIntel) {
-            logger.info('🔄 [FRONTLINE-INTEL] Using legacy script, applying variable replacement...');
-            frontlineIntel = replacePlaceholders(frontlineIntel, company);
-        }
+        let frontlineIntel = options.frontlineScript || '';
         
         logger.info('📜 [FRONTLINE-INTEL] Script ready', {
-            source: options.frontlineScript ? 'CheatSheetRuntimeService' : 'legacy',
+            source: 'options',
             scriptLength: frontlineIntel.length,
             preview: frontlineIntel.substring(0, 100) + (frontlineIntel.length > 100 ? '...' : '')
         });

@@ -55,10 +55,10 @@ class ConfigurationReadinessService {
                 twilio: null,
                 voice: null,
                 scenarios: null,
-                cheatsheet: null,
-                tierSettings: null,      // NEW: 3-Tier Intelligence settings
-                tierLlm: null,           // NEW: 3-Tier LLM connection
-                brainLlm: null,          // NEW: Control Plane Brain LLM
+                // ☢️ NUKED Feb 2026: cheatsheet component removed - legacy system dead
+                tierSettings: null,      // 3-Tier Intelligence settings
+                tierLlm: null,           // 3-Tier LLM connection
+                brainLlm: null,          // Control Plane Brain LLM
                 readiness: null
             }
         };
@@ -67,31 +67,30 @@ class ConfigurationReadinessService {
         this.checkAccountStatus(company, report);
         
         // Calculate each component in parallel
+        // ☢️ NUKED Feb 2026: checkCheatSheet removed - legacy system dead
         await Promise.all([
             this.checkTemplates(company, report),
             this.checkVariables(company, report),
             this.checkTwilio(company, report),
             this.checkVoice(company, report),
             this.checkScenarios(company, report),
-            this.checkCheatSheet(company, report),
             this.check3TierSettings(company, report),
             this.check3TierLLM(company, report),
             this.checkBrainLLM(company, report)
         ]);
         
         // Calculate total score (weighted sum)
-        // NEW WEIGHTS (10 components):
-        // Templates (15%) + Variables (15%) + CheatSheet (15%) + Twilio (10%) + Scenarios (10%)
-        // + 3-Tier Settings (10%) + 3-Tier LLM (10%) + Brain LLM (10%) + Voice (5%) = 100%
+        // ☢️ NUKED Feb 2026: CheatSheet weight removed and redistributed
+        // WEIGHTS (8 components): Templates (20%) + Variables (20%) + Twilio (10%) + Scenarios (15%)
+        // + 3-Tier Settings (12%) + 3-Tier LLM (12%) + Brain LLM (6%) + Voice (5%) = 100%
         const totalScore = 
-            (report.components.templates.score * 0.15) +
-            (report.components.variables.score * 0.15) +
-            (report.components.cheatsheet.score * 0.15) +
+            (report.components.templates.score * 0.20) +
+            (report.components.variables.score * 0.20) +
             (report.components.twilio.score * 0.10) +
-            (report.components.scenarios.score * 0.10) +
-            (report.components.tierSettings.score * 0.10) +
-            (report.components.tierLlm.score * 0.10) +
-            (report.components.brainLlm.score * 0.10) +
+            (report.components.scenarios.score * 0.15) +
+            (report.components.tierSettings.score * 0.12) +
+            (report.components.tierLlm.score * 0.12) +
+            (report.components.brainLlm.score * 0.06) +
             (report.components.voice.score * 0.05);
         
         report.score = Math.round(totalScore);
@@ -663,36 +662,10 @@ class ConfigurationReadinessService {
         report.components.scenarios = component;
     }
     
-    /**
-     * Check CheatSheet configuration (10% of total)
-     * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
-     */
-    static async checkCheatSheet(company, report) {
-        const component = {
-            name: 'CheatSheet',
-            score: 0,
-            configured: false,
-            hasLiveVersion: false,
-            hasFrontlineIntel: false,
-            hasInstructions: false,
-            liveVersionId: null,
-            sectionsPopulated: 0,
-            weight: 10,
-            note: 'CheatSheet system removed Feb 2026 — Tier 2 reserved for future rebuild'
-        };
-        
-        // CheatSheet system has been fully removed.
-        // Return a neutral score so it doesn't block Go Live readiness.
-        component.score = 100;
-        component.configured = true;
-        
-        logger.info(`[READINESS] 📖 CheatSheet: System removed — skipping check (score = 100 neutral)`);
-        
-        report.components.cheatsheet = component;
-    }
+    // ☢️ NUKED Feb 2026: checkCheatSheet function removed - entire CheatSheet system is dead
     
     /**
-     * Check 3-Tier Intelligence Settings (10% of total)
+     * Check 3-Tier Intelligence Settings (12% of total)
      * CRITICAL: 3-Tier system must be properly configured for AI to function
      */
     static async check3TierSettings(company, report) {

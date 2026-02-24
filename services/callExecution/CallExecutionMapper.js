@@ -327,7 +327,8 @@ class CallExecutionMapper {
     }
 
     _buildGreetingStage(stage, controlPlane) {
-        const greeting = controlPlane?.data?.frontDesk?.greetingPreview;
+        // ☢️ NUKED Feb 2026: frontDesk.greetingPreview removed - greeting comes from connectionMessages
+        const greeting = controlPlane?.data?.connectionMessages?.voice?.text;
         
         if (!greeting) {
             stage.status = 'warning';
@@ -387,7 +388,8 @@ class CallExecutionMapper {
     _buildModeCheckStage(stage, controlPlane) {
         stage.status = 'active';
         
-        const consentRequired = controlPlane?.data?.frontDesk?.discoveryConsent?.required !== false;
+        // ☢️ NUKED Feb 2026: frontDesk.discoveryConsent removed - consent handled by Agent 2.0
+        const consentRequired = true; // Default to requiring consent
         
         stage.config = {
             modes: ['DISCOVERY', 'BOOKING', 'TRANSFER', 'EMERGENCY'],
@@ -404,8 +406,10 @@ class CallExecutionMapper {
     }
 
     _buildBookingStage(stage, controlPlane) {
-        const bookingEnabled = controlPlane?.data?.frontDesk?.bookingEnabled !== false;
-        const slots = controlPlane?.data?.frontDesk?.bookingSlotNames || [];
+        // ☢️ NUKED Feb 2026: frontDesk.bookingEnabled and bookingSlotNames removed
+        // Booking config now comes from Agent 2.0 namespace
+        const bookingEnabled = true; // Default enabled
+        const slots = [];
         
         if (!bookingEnabled) {
             stage.status = 'disabled';

@@ -439,11 +439,12 @@ CUSTOMIZATION NOTES
             }
         });
         
+        // ☢️ NUKED Feb 2026: cheatSheet references removed
         // Load current Frontline-Intel text
         async function loadFrontlineIntel() {
             try {
                 const token = localStorage.getItem('adminToken');
-                const response = await fetch(`/api/admin/cheat-sheet/${companyId}`, {
+                const response = await fetch(`/api/admin/frontline-intel/${companyId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -454,7 +455,7 @@ CUSTOMIZATION NOTES
                 }
                 
                 const result = await response.json();
-                textarea.value = result.cheatSheet?.frontlineIntel || '';
+                textarea.value = result.frontlineIntel || '';
                 updateCharCount();
             } catch (error) {
                 console.error('Load error:', error);
@@ -462,6 +463,7 @@ CUSTOMIZATION NOTES
             }
         }
         
+        // ☢️ NUKED Feb 2026: cheatSheet references removed - now uses frontline-intel endpoint
         // Save Frontline-Intel
         async function saveFrontlineIntel() {
             try {
@@ -471,13 +473,11 @@ CUSTOMIZATION NOTES
                 const token = localStorage.getItem('adminToken');
                 console.log('🔵 CHECKPOINT 2: Token exists?', !!token);
                 
-                const url = `/api/admin/cheat-sheet/${companyId}`;
+                const url = `/api/admin/frontline-intel/${companyId}`;
                 console.log('🔵 CHECKPOINT 3: Saving to URL:', url);
                 
                 const payload = {
-                    cheatSheet: {
-                        frontlineIntel: textarea.value
-                    }
+                    frontlineIntel: textarea.value
                 };
                 console.log('🔵 CHECKPOINT 4: Payload:', payload);
                 console.log('🔵 CHECKPOINT 5: Frontline text length:', textarea.value.length);
@@ -538,6 +538,7 @@ CUSTOMIZATION NOTES
                 return;
             }
             
+            // ☢️ NUKED Feb 2026: cheatSheet references removed - now uses frontline-intel endpoint
             // Legacy: Non-draft mode uses API
             if (!confirm('Reset to default template? This will overwrite your current text.')) {
                 return;
@@ -547,7 +548,7 @@ CUSTOMIZATION NOTES
                 document.getElementById('loading-overlay').classList.add('active');
                 
                 const token = localStorage.getItem('adminToken');
-                const response = await fetch(`/api/admin/cheat-sheet/${companyId}/reset-frontline-intel`, {
+                const response = await fetch(`/api/admin/frontline-intel/${companyId}/reset`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`

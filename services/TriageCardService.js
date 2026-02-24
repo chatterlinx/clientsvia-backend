@@ -297,10 +297,10 @@ class TriageCardService {
       const activeCards = await TriageCard.findActiveByCompany(companyId);
       logger.debug('[TRIAGE CARD SERVICE] Found active AI cards', { count: activeCards.length });
 
-      // 2️⃣ Fetch manual triage rules from company settings
+      // ☢️ NUKED Feb 2026: cheatSheet.manualTriageRules removed - manual rules now live at aiAgentSettings.manualTriageRules
       const Company = require('../models/v2Company');
-      const company = await Company.findById(companyId).select('aiAgentSettings.cheatSheet.manualTriageRules');
-      const manualRules = company?.aiAgentSettings?.cheatSheet?.manualTriageRules || [];
+      const company = await Company.findById(companyId).select('aiAgentSettings.manualTriageRules');
+      const manualRules = company?.aiAgentSettings?.manualTriageRules || [];
       logger.debug('[TRIAGE CARD SERVICE] Found manual rules', { count: manualRules.length });
 
       // 3️⃣ Build compiled config structure

@@ -717,8 +717,9 @@ class BlueprintGenerator {
     }
 
     _extractBookingSlots(controlPlaneProvider) {
-        if (!controlPlaneProvider?.data?.frontDesk?.bookingSlotNames) return [];
-        return controlPlaneProvider.data.frontDesk.bookingSlotNames;
+        // ☢️ NUKED Feb 2026: frontDesk.bookingSlotNames removed
+        // Booking slots now configured in Agent 2.0 namespace
+        return [];
     }
 
     _extractCallProtectionRules(callProtectionProvider) {

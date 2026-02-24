@@ -66,11 +66,10 @@ const ALLOWED_PATHS = {
         scope: 'companyOverride',
         storage: 'CompanyResponseDefaults.afterHoursReply.fullReply'
     },
-    'controlPlane.booking.enabled': {
-        type: 'boolean',
-        scope: 'companyOverride',
-        storage: 'v2Company.frontDeskBehavior.booking.enabled'
-    },
+    // ☢️ NUKED Feb 2026: frontDeskBehavior booking paths removed
+    // controlPlane.booking.enabled, confirmName, confirmAddress, confirmPhone - all removed
+    // Booking config now lives in Agent 2.0 namespace
+    
     'controlPlane.booking.consent.required': {
         type: 'boolean',
         scope: 'companyOverride',
@@ -81,21 +80,6 @@ const ALLOWED_PATHS = {
         maxLength: 300,
         scope: 'companyOverride',
         storage: 'v2Company.aiAgentSettings.discoveryConsent.consentPhrase'
-    },
-    'controlPlane.booking.confirmName': {
-        type: 'boolean',
-        scope: 'companyOverride',
-        storage: 'v2Company.frontDeskBehavior.booking.confirmName'
-    },
-    'controlPlane.booking.confirmAddress': {
-        type: 'boolean',
-        scope: 'companyOverride',
-        storage: 'v2Company.frontDeskBehavior.booking.confirmAddress'
-    },
-    'controlPlane.booking.confirmPhone': {
-        type: 'boolean',
-        scope: 'companyOverride',
-        storage: 'v2Company.frontDeskBehavior.booking.confirmPhone'
     },
     
     // ☢️ NUKED Feb 2026: DynamicFlow patch paths removed - V110 architecture replaces Dynamic Flows
