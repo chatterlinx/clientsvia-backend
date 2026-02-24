@@ -1355,28 +1355,47 @@ router.post(
             });
             
             // Migrate each rule to new schema (convert to plain objects)
-            const migratedRules = oldRules.map(rule => {
-                // Convert Mongoose subdocument to plain object if needed
-                const plainRule = rule.toObject ? rule.toObject() : rule;
-                
-                return {
-                    ruleId: plainRule.ruleId || plainRule.id || `migrated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    enabled: plainRule.enabled !== false,
-                    priority: plainRule.priority || 50,
-                    matchType: plainRule.matchType || plainRule.matchMode || 'EXACT',
-                    triggers: Array.isArray(plainRule.triggers) ? plainRule.triggers : [],
-                    response: plainRule.response || plainRule.responseText || '',
-                    audioUrl: plainRule.audioUrl || null,
-                    audioTextHash: plainRule.audioTextHash || null,
-                    audioGeneratedAt: plainRule.audioGeneratedAt || null,
-                    createdAt: plainRule.createdAt || new Date(),
-                    updatedAt: new Date()
-                };
-            });
+            // Filter out rules with no response (required field in schema)
+            const migratedRules = oldRules
+                .map(rule => {
+                    // Convert Mongoose subdocument to plain object if needed
+                    const plainRule = rule.toObject ? rule.toObject() : rule;
+                    
+                    // Get response text from various possible field names
+                    const responseText = plainRule.response || plainRule.responseText || plainRule.text || '';
+                    
+                    return {
+                        ruleId: plainRule.ruleId || plainRule.id || `migrated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        enabled: plainRule.enabled !== false,
+                        priority: plainRule.priority || 50,
+                        matchType: plainRule.matchType || plainRule.matchMode || 'EXACT',
+                        triggers: Array.isArray(plainRule.triggers) ? plainRule.triggers : [],
+                        response: responseText,
+                        audioUrl: plainRule.audioUrl || null,
+                        audioTextHash: plainRule.audioTextHash || null,
+                        audioGeneratedAt: plainRule.audioGeneratedAt || null,
+                        createdAt: plainRule.createdAt || new Date(),
+                        updatedAt: new Date()
+                    };
+                })
+                .filter(rule => {
+                    // 'response' is required in schema - filter out rules with empty response
+                    if (!rule.response || rule.response.trim() === '') {
+                        logger.warn(`[${MODULE_ID}] Skipping rule with empty response during migration`, { 
+                            ruleId: rule.ruleId 
+                        });
+                        return false;
+                    }
+                    return true;
+                });
+            
+            const rulesSkipped = oldRules.length - migratedRules.length;
             
             logger.info(`[${MODULE_ID}] Migrated rules created`, { 
                 companyId,
+                originalCount: oldRules.length,
                 migratedCount: migratedRules.length,
+                skippedCount: rulesSkipped,
                 migratedSample: migratedRules[0]
             });
             
@@ -1402,22 +1421,34 @@ router.post(
             
             logger.info(`[${MODULE_ID}] Schema migration complete`, {
                 companyId,
-                rulesMigrated: migratedRules.length
+                rulesMigrated: migratedRules.length,
+                rulesSkipped
             });
             
             res.json({
                 success: true,
                 data: {
                     rulesMigrated: migratedRules.length,
+                    rulesSkipped,
                     rules: migratedRules
                 }
             });
             
         } catch (error) {
-            logger.error(`[${MODULE_ID}] Error migrating schema:`, error);
+            logger.error(`[${MODULE_ID}] Error migrating schema:`, {
+                message: error.message,
+                name: error.name,
+                stack: error.stack,
+                validationErrors: error.errors ? Object.keys(error.errors).map(key => ({
+                    field: key,
+                    message: error.errors[key].message
+                })) : undefined
+            });
+            
             res.status(500).json({
                 success: false,
-                error: 'Failed to migrate greeting schema'
+                error: 'Failed to migrate greeting schema',
+                details: process.env.NODE_ENV !== 'production' ? error.message : undefined
             });
         }
     }
