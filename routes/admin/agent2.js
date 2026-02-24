@@ -1657,22 +1657,64 @@ router.post('/:companyId/generate-trigger-audio',
           }
         });
       }
+      
+      // Check for placeholders and replace with company variables
+      const placeholderRegex = /\{(\w+)\}/g;
+      const placeholders = [];
+      let match;
+      while ((match = placeholderRegex.exec(text)) !== null) {
+        placeholders.push(match[1]);
+      }
+      
+      let finalText = text;
+      const missingVariables = [];
+      
+      if (placeholders.length > 0) {
+        // Load company variables
+        const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+        const settings = await CompanyTriggerSettings.findOne({ companyId });
+        const variables = settings?.companyVariables || new Map();
+        
+        // Replace placeholders with actual values
+        for (const varName of placeholders) {
+          const value = variables.get ? variables.get(varName) : variables[varName];
+          if (!value || !value.trim()) {
+            missingVariables.push(varName);
+          } else {
+            finalText = finalText.replace(new RegExp(`\\{${varName}\\}`, 'g'), value);
+          }
+        }
+        
+        // Block generation if any variables are missing
+        if (missingVariables.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'Cannot generate audio - missing variable values',
+            missingVariables,
+            message: `Please set values for: {${missingVariables.join('}, {')}}`,
+            hint: 'Fill in the red variables in the Company Variables section'
+          });
+        }
+      }
 
       const stability = voiceSettings?.stability ?? 0.5;
       const similarityBoost = voiceSettings?.similarityBoost ?? 0.75;
       const styleExaggeration = voiceSettings?.style ?? 0;
       const aiModel = voiceSettings?.model || 'eleven_turbo_v2_5';
 
-      // Generate audio using ElevenLabs
+      // Generate audio using ElevenLabs (with variables replaced)
       logger.info('[Agent2Audio] Generating audio', {
         companyId,
         ruleId,
         voiceId,
-        textLength: text.length
+        originalTextLength: text.length,
+        finalTextLength: finalText.length,
+        hadPlaceholders: placeholders.length > 0,
+        replacedVariables: placeholders
       });
 
       const buffer = await synthesizeSpeech({
-        text: text.trim(),
+        text: finalText.trim(),
         voiceId,
         stability,
         similarity_boost: similarityBoost,
