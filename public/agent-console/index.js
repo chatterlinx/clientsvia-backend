@@ -281,6 +281,9 @@
     const companyParam = `?companyId=${encodeURIComponent(state.companyId)}`;
     
     switch (page) {
+      case 'callconsole':
+        window.location.href = `${baseUrl}/callconsole.html${companyParam}`;
+        break;
       case 'agent2':
         window.location.href = `${baseUrl}/agent2.html${companyParam}`;
         break;

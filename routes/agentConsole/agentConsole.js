@@ -40,6 +40,10 @@ const VERSION = 'AC1.0';
 const truthExportRouter = require('./truthExport');
 router.use('/truth', truthExportRouter);
 
+// Call Review routes (Call Console)
+const callReviewRouter = require('./callReview');
+router.use('/', callReviewRouter);
+
 /* ============================================================================
    TRUTH CACHE — Short TTL to prevent Mongo hammering
    ============================================================================ */

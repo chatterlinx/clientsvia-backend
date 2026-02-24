@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Call Console — ClientVia Agent Console</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  
+  <!-- ================================================================
+       CALL CONSOLE — PAGE-SPECIFIC STYLES
+       Enterprise-level call review with provenance tracking
+       ================================================================ -->
+  <style>
+    /* ─────────────────────────────────────────────────────────────────────
+       CALL LIST TABLE
+       ───────────────────────────────────────────────────────────────────── */
+    .call-list-container {
+      background: var(--color-white);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-gray-200);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .call-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4) var(--space-6);
+      border-bottom: 1px solid var(--color-gray-200);
+      background: var(--color-gray-50);
+    }
+
+    .call-list-title {
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
+    }
+
+    .call-list-actions {
+      display: flex;
+      gap: var(--space-3);
+      align-items: center;
+    }
+
+    .call-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .call-table th,
+    .call-table td {
+      padding: var(--space-3) var(--space-4);
+      text-align: left;
+      border-bottom: 1px solid var(--color-gray-100);
+    }
+
+    .call-table th {
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--color-gray-50);
+    }
+
+    .call-table tbody tr {
+      cursor: pointer;
+      transition: background var(--transition-fast);
+    }
+
+    .call-table tbody tr:hover {
+      background: var(--color-primary-50);
+    }
+
+    .call-table td {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-700);
+    }
+
+    .call-sid {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+    }
+
+    .call-phone {
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-900);
+    }
+
+    .call-time {
+      color: var(--color-gray-500);
+    }
+
+    .call-duration {
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+
+    /* Provenance Status Badges */
+    .provenance-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: var(--font-weight-medium);
+    }
+
+    .provenance-badge-clean {
+      background: var(--color-success-50);
+      color: var(--color-success-600);
+    }
+
+    .provenance-badge-warning {
+      background: var(--color-warning-50);
+      color: var(--color-warning-600);
+    }
+
+    .provenance-badge-violation {
+      background: var(--color-error-50);
+      color: var(--color-error-600);
+    }
+
+    .problems-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 var(--space-2);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .problems-none {
+      background: var(--color-gray-100);
+      color: var(--color-gray-500);
+    }
+
+    .problems-some {
+      background: var(--color-error-500);
+      color: var(--color-white);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       FILTER BAR
+       ───────────────────────────────────────────────────────────────────── */
+    .filter-bar {
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-6);
+      background: var(--color-white);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-gray-200);
+      margin-bottom: var(--space-4);
+    }
+
+    .filter-bar .form-input,
+    .filter-bar .form-select {
+      max-width: 200px;
+    }
+
+    .filter-bar .search-input {
+      max-width: 300px;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       CALL DETAILS MODAL — DARK THEME TRANSCRIPT
+       ───────────────────────────────────────────────────────────────────── */
+    #call-detail-modal .modal {
+      max-width: 900px;
+      max-height: 95vh;
+    }
+
+    .call-detail-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+
+    .call-info-card {
+      background: var(--color-gray-50);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+    }
+
+    .call-info-card h4 {
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-3);
+    }
+
+    .call-info-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: var(--space-2) var(--space-4);
+      font-size: var(--font-size-sm);
+    }
+
+    .call-info-label {
+      color: var(--color-gray-500);
+    }
+
+    .call-info-value {
+      color: var(--color-gray-900);
+      font-weight: var(--font-weight-medium);
+    }
+
+    .call-info-value.mono {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: var(--font-size-xs);
+    }
+
+    /* LLM Usage Stats */
+    .llm-stats {
+      display: flex;
+      gap: var(--space-4);
+    }
+
+    .llm-stat {
+      text-align: center;
+    }
+
+    .llm-stat-value {
+      font-size: var(--font-size-xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-gray-900);
+    }
+
+    .llm-stat-label {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+    }
+
+    /* Problems Section */
+    .problems-section {
+      background: var(--color-error-50);
+      border: 1px solid var(--color-error-200);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+
+    .problems-section.clean {
+      background: var(--color-success-50);
+      border-color: var(--color-success-200);
+    }
+
+    .problems-section h4 {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      margin-bottom: var(--space-3);
+    }
+
+    .problems-section.clean h4 {
+      color: var(--color-success-600);
+    }
+
+    .problem-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-white);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-2);
+      font-size: var(--font-size-sm);
+    }
+
+    .problem-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .problem-text {
+      color: var(--color-error-600);
+    }
+
+    .problem-fix-link {
+      font-size: var(--font-size-xs);
+      color: var(--color-primary-600);
+      font-weight: var(--font-weight-medium);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       TRANSCRIPT — DARK THEME (Like user's mockup)
+       ───────────────────────────────────────────────────────────────────── */
+    .transcript-container {
+      background: #0f172a;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .transcript-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+    }
+
+    .transcript-title {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: #e2e8f0;
+    }
+
+    .transcript-legend {
+      display: flex;
+      gap: var(--space-4);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: var(--radius-full);
+    }
+
+    .legend-dot.ui-owned { background: #22c55e; }
+    .legend-dot.fallback { background: #f59e0b; }
+    .legend-dot.hardcoded { background: #ef4444; }
+    .legend-dot.caller { background: #3b82f6; }
+
+    .transcript-body {
+      padding: var(--space-4);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* Individual Turn */
+    .turn {
+      margin-bottom: var(--space-4);
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid #1e293b;
+    }
+
+    .turn:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .turn-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+
+    .turn-number {
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold);
+      color: #64748b;
+      min-width: 50px;
+    }
+
+    .turn-speaker {
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-sm);
+    }
+
+    .turn-speaker.caller {
+      background: #1e3a5f;
+      color: #60a5fa;
+    }
+
+    .turn-speaker.agent {
+      background: #14532d;
+      color: #86efac;
+    }
+
+    .turn-timestamp {
+      font-size: 11px;
+      color: #64748b;
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+
+    .turn-text {
+      font-size: var(--font-size-sm);
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding-left: 50px;
+      margin-bottom: var(--space-2);
+    }
+
+    /* Turn Provenance (Agent only) */
+    .turn-provenance {
+      padding-left: 50px;
+      margin-top: var(--space-2);
+    }
+
+    .provenance-details {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: var(--space-1) var(--space-3);
+      font-size: 11px;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .provenance-details.ui-owned {
+      border-left: 3px solid #22c55e;
+    }
+
+    .provenance-details.fallback {
+      border-left: 3px solid #f59e0b;
+    }
+
+    .provenance-details.hardcoded {
+      border-left: 3px solid #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .provenance-label {
+      color: #64748b;
+    }
+
+    .provenance-value {
+      color: #94a3b8;
+    }
+
+    .provenance-value.mono {
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+
+    .provenance-link {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+
+    .provenance-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Violation highlight */
+    .turn.has-violation .turn-text {
+      color: #fca5a5;
+    }
+
+    .violation-alert {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background: rgba(239, 68, 68, 0.2);
+      border-radius: var(--radius-sm);
+      margin-top: var(--space-2);
+      margin-left: 50px;
+      font-size: 11px;
+      color: #fca5a5;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       EVENTS LOG (Collapsible)
+       ───────────────────────────────────────────────────────────────────── */
+    .events-section {
+      margin-top: var(--space-6);
+    }
+
+    .events-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-gray-100);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-700);
+      cursor: pointer;
+      transition: background var(--transition-fast);
+    }
+
+    .events-toggle:hover {
+      background: var(--color-gray-200);
+    }
+
+    .events-toggle svg {
+      width: 16px;
+      height: 16px;
+      transition: transform var(--transition-fast);
+    }
+
+    .events-toggle.open svg {
+      transform: rotate(180deg);
+    }
+
+    .events-list {
+      display: none;
+      margin-top: var(--space-2);
+      padding: var(--space-3);
+      background: var(--color-gray-900);
+      border-radius: var(--radius-md);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .events-list.open {
+      display: block;
+    }
+
+    .event-item {
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: 11px;
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+
+    .event-item:last-child {
+      border-bottom: none;
+    }
+
+    .event-time {
+      color: #64748b;
+      min-width: 80px;
+    }
+
+    .event-type {
+      color: #a78bfa;
+      min-width: 120px;
+    }
+
+    .event-data {
+      color: #94a3b8;
+      word-break: break-all;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       EMPTY STATE
+       ───────────────────────────────────────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-16) var(--space-6);
+      text-align: center;
+    }
+
+    .empty-state-icon {
+      width: 64px;
+      height: 64px;
+      color: var(--color-gray-300);
+      margin-bottom: var(--space-4);
+    }
+
+    .empty-state-title {
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
+      margin-bottom: var(--space-2);
+    }
+
+    .empty-state-description {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-500);
+      max-width: 400px;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       PAGINATION
+       ───────────────────────────────────────────────────────────────────── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-4);
+      border-top: 1px solid var(--color-gray-200);
+    }
+
+    .pagination-btn {
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-700);
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      transition: all var(--transition-fast);
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: var(--color-gray-50);
+      border-color: var(--color-gray-400);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination-btn.active {
+      background: var(--color-primary-600);
+      color: var(--color-white);
+      border-color: var(--color-primary-600);
+    }
+
+    .pagination-info {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-500);
+      padding: 0 var(--space-4);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       LOADING STATE
+       ───────────────────────────────────────────────────────────────────── */
+    .loading-row td {
+      padding: var(--space-8) !important;
+      text-align: center !important;
+    }
+
+    .loading-row .loading-spinner {
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- ================================================================
+         HEADER — STICKY TOP BAR
+         ================================================================ -->
+    <header class="header">
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back-to-dashboard" title="Back to Agent Console">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <a href="#" id="header-logo-link" class="header-logo" title="Back to Dashboard">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <span class="header-logo-text">ClientVia</span>
+        </a>
+        <div class="header-divider"></div>
+        <span class="header-title">Call Console</span>
+      </div>
+      
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      
+      <div class="header-right">
+        <button class="btn btn-secondary btn-sm" id="btn-export-calls">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 9V1M7 9L4.5 6.5M7 9L9.5 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M1 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Export
+        </button>
+        <button class="btn btn-ghost btn-icon" id="btn-logout" title="Back to Company Profile">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 17H4C3.46957 17 2.96086 16.7893 2.58579 16.4142C2.21071 16.0391 2 15.5304 2 15V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13 14L17 10L13 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M17 10H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN CONTENT — CALL REVIEW INTERFACE
+         ================================================================ -->
+    <main class="main-content">
+      <div class="single-column-layout-full">
+        
+        <!-- Page Header -->
+        <div class="page-header">
+          <div class="page-header-left">
+            <button class="back-button" id="btn-back">
+              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Back to Dashboard
+            </button>
+            <div>
+              <h1 class="page-title">Call Review Console</h1>
+              <p class="page-subtitle">Diagnose calls, trace provenance, detect violations</p>
+            </div>
+          </div>
+          <div class="page-header-right">
+            <button class="btn btn-secondary" id="btn-refresh-calls">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 7C13 10.3137 10.3137 13 7 13C3.68629 13 1 10.3137 1 7C1 3.68629 3.68629 1 7 1C9.22222 1 11.1684 2.21309 12.1892 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M10 4H12.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+          <input type="text" class="form-input search-input" id="filter-search" placeholder="Search by phone, CallSid...">
+          <select class="form-select" id="filter-status">
+            <option value="">All Calls</option>
+            <option value="clean">Clean (No Violations)</option>
+            <option value="violations">Has Violations</option>
+            <option value="problems">Has Problems</option>
+          </select>
+          <select class="form-select" id="filter-date">
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="week">Last 7 Days</option>
+            <option value="month">Last 30 Days</option>
+            <option value="all">All Time</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btn-clear-filters">Clear Filters</button>
+        </div>
+
+        <!-- Call List -->
+        <div class="call-list-container">
+          <div class="call-list-header">
+            <h2 class="call-list-title">Recent Calls</h2>
+            <div class="call-list-actions">
+              <span class="text-sm text-muted" id="call-count">— calls</span>
+            </div>
+          </div>
+          
+          <table class="call-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>From</th>
+                <th>Duration</th>
+                <th>Turns</th>
+                <th>Provenance</th>
+                <th>Problems</th>
+                <th>CallSid</th>
+              </tr>
+            </thead>
+            <tbody id="call-list-body">
+              <!-- Calls rendered here -->
+              <tr class="loading-row">
+                <td colspan="7">
+                  <div class="loading-spinner"></div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          <div class="pagination" id="pagination-container">
+            <button class="pagination-btn" id="btn-prev-page" disabled>Previous</button>
+            <span class="pagination-info" id="pagination-info">Page 1 of 1</span>
+            <button class="pagination-btn" id="btn-next-page" disabled>Next</button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ================================================================
+         FOOTER
+         ================================================================ -->
+    <footer class="footer">
+      <span>Call Console v1.0.0</span>
+      <span> · </span>
+      <span id="footer-environment">Production</span>
+    </footer>
+
+    <!-- ================================================================
+         TOAST CONTAINER
+         ================================================================ -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ================================================================
+         CALL DETAIL MODAL
+         ================================================================ -->
+    <div class="modal-overlay" id="call-detail-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Call Details</h3>
+          <button class="modal-close" id="modal-close">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" id="modal-body">
+          <!-- Dynamic content rendered here -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btn-download-call">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 9V1M7 9L4.5 6.5M7 9L9.5 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M1 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Download Report
+          </button>
+          <button class="btn btn-primary" id="btn-close-modal">Close</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/callconsole.js"></script>
+</body>
+</html>
