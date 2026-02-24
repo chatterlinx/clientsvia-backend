@@ -1349,27 +1349,55 @@ router.post(
                 });
             }
             
-            logger.info(`[${MODULE_ID}] Found ${oldRules.length} rules to migrate`, { companyId });
+            logger.info(`[${MODULE_ID}] Found ${oldRules.length} rules to migrate`, { 
+                companyId,
+                oldRulesSample: oldRules[0]
+            });
             
-            // Migrate each rule to new schema
-            const migratedRules = oldRules.map(rule => ({
-                ruleId: rule.ruleId || rule.id || `migrated-${Date.now()}`,
-                enabled: rule.enabled !== false,
-                priority: rule.priority || 50,
-                matchType: rule.matchType || rule.matchMode || 'EXACT',
-                triggers: rule.triggers || [],
-                response: rule.response || rule.responseText || '',
-                audioUrl: rule.audioUrl || null,
-                audioTextHash: rule.audioTextHash || null,
-                audioGeneratedAt: rule.audioGeneratedAt || null,
-                createdAt: rule.createdAt || new Date(),
-                updatedAt: new Date()
-            }));
+            // Migrate each rule to new schema (convert to plain objects)
+            const migratedRules = oldRules.map(rule => {
+                // Convert Mongoose subdocument to plain object if needed
+                const plainRule = rule.toObject ? rule.toObject() : rule;
+                
+                return {
+                    ruleId: plainRule.ruleId || plainRule.id || `migrated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    enabled: plainRule.enabled !== false,
+                    priority: plainRule.priority || 50,
+                    matchType: plainRule.matchType || plainRule.matchMode || 'EXACT',
+                    triggers: Array.isArray(plainRule.triggers) ? plainRule.triggers : [],
+                    response: plainRule.response || plainRule.responseText || '',
+                    audioUrl: plainRule.audioUrl || null,
+                    audioTextHash: plainRule.audioTextHash || null,
+                    audioGeneratedAt: plainRule.audioGeneratedAt || null,
+                    createdAt: plainRule.createdAt || new Date(),
+                    updatedAt: new Date()
+                };
+            });
+            
+            logger.info(`[${MODULE_ID}] Migrated rules created`, { 
+                companyId,
+                migratedCount: migratedRules.length,
+                migratedSample: migratedRules[0]
+            });
+            
+            // Initialize interceptor if needed
+            if (!company.aiAgentSettings.agent2.greetings.interceptor) {
+                company.aiAgentSettings.agent2.greetings.interceptor = {
+                    enabled: true,
+                    shortOnlyGate: { maxWords: 2, blockIfIntentWords: true },
+                    intentWords: [],
+                    rules: []
+                };
+            }
             
             // Replace old rules with migrated rules
             company.aiAgentSettings.agent2.greetings.interceptor.rules = migratedRules;
             
+            company.markModified('aiAgentSettings.agent2.greetings.interceptor');
+            company.markModified('aiAgentSettings.agent2.greetings');
+            company.markModified('aiAgentSettings.agent2');
             company.markModified('aiAgentSettings');
+            
             await company.save();
             
             logger.info(`[${MODULE_ID}] Schema migration complete`, {
