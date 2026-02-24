@@ -779,10 +779,6 @@
       // Render greeting rules
       renderGreetingRules();
     }
-    
-    // Update health status after greetings render
-    renderCallStartHealth();
-    renderInterceptorHealth();
   }
   
   /**
@@ -1480,386 +1476,69 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
-     🏥 HEALTH STATUS MONITOR - GATEKEEPER HEALTH CHECK
-     ══════════════════════════════════════════════════════════════════════════
-     
-     Comprehensive call flow health monitoring:
-     1. Twilio Configuration (credentials + account status)
-     2. Spam Filter (enabled status + configuration)
-     3. Call Start Greeting (enabled + text/audio status)
-     4. Greeting Interceptor (enabled + rules count)
-     5. ElevenLabs Voice (configured + voice selected)
-     6. Trigger Cards (active group + trigger count)
-     
+     🏥 SYSTEM STATUS - Minimal health check (issues-only display)
      ══════════════════════════════════════════════════════════════════════════ */
   
   /**
-   * ───────────────────────────────────────────────────────────────────────
-   * LOAD COMPLETE HEALTH STATUS
-   * ───────────────────────────────────────────────────────────────────────
+   * Load and display system health. Only shows issues - green bar means all good.
    */
   async function loadHealthStatus() {
-    try {
-      // Fetch company profile for Twilio, Spam Filter, and ElevenLabs status
-      const profileResponse = await AgentConsoleAuth.apiFetch(`/api/company/${state.companyId}`);
-      
-      // Fetch spam filter status
-      let spamFilterStatus = null;
-      try {
-        const spamResponse = await AgentConsoleAuth.apiFetch(`/api/admin/call-filtering/${state.companyId}/settings`);
-        spamFilterStatus = spamResponse.data || {};
-      } catch (err) {
-        console.warn('[Health] Could not load spam filter status:', err);
-      }
-      
-      // Render health gates
-      renderTwilioHealth(profileResponse);
-      renderSpamFilterHealth(spamFilterStatus);
-      renderCallStartHealth();
-      renderInterceptorHealth();
-      renderElevenLabsHealth(profileResponse);
-      renderTriggersHealth();
-      renderOverallHealth(profileResponse, spamFilterStatus);
-      
-    } catch (error) {
-      console.error('[Health] Failed to load health status:', error);
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER TWILIO HEALTH
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderTwilioHealth(profile) {
-    const gate = document.getElementById('health-twilio');
-    const badge = document.getElementById('health-twilio-badge');
-    const status = gate.querySelector('.health-status');
-    
-    if (!gate || !badge || !status) return;
-    
-    const hasTwilio = profile.twilioConfig?.accountSid && profile.twilioConfig?.authToken;
-    const accountStatus = profile.twilioConfig?.accountStatus || 'unknown';
-    const phoneCount = profile.twilioConfig?.phoneNumbers?.length || 0;
-    
-    if (!hasTwilio) {
-      // ERROR: No Twilio configured
-      gate.style.borderColor = '#dc2626';
-      gate.style.background = '#fef2f2';
-      badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NOT CONFIGURED</span>';
-      status.innerHTML = 'Twilio credentials missing. Configure in Company Profile → Configuration.';
-      status.style.color = '#dc2626';
-    } else if (accountStatus === 'suspended') {
-      // WARNING: Account suspended
-      gate.style.borderColor = '#f59e0b';
-      gate.style.background = '#fffbeb';
-      badge.innerHTML = '<span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 12px;">⚠️ SUSPENDED</span>';
-      status.innerHTML = `Account suspended. All calls blocked. ${phoneCount} phone number(s) configured.`;
-      status.style.color = '#f59e0b';
-    } else if (accountStatus === 'call_forward') {
-      // INFO: Call forwarding
-      const forwardNumber = profile.twilioConfig?.callForwardNumber || 'Not set';
-      gate.style.borderColor = '#3b82f6';
-      gate.style.background = '#eff6ff';
-      badge.innerHTML = '<span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 12px;">📞 FORWARDING</span>';
-      status.innerHTML = `Forwarding to ${forwardNumber}. ${phoneCount} phone number(s) configured.`;
-      status.style.color = '#3b82f6';
-    } else {
-      // SUCCESS: Active
-      gate.style.borderColor = '#16a34a';
-      gate.style.background = '#f0fdf4';
-      badge.innerHTML = '<span style="background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px;">✅ ACTIVE</span>';
-      status.innerHTML = `Account active. ${phoneCount} phone number(s) configured and receiving calls.`;
-      status.style.color = '#16a34a';
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER SPAM FILTER HEALTH
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderSpamFilterHealth(spamFilter) {
-    const gate = document.getElementById('health-spam');
-    const badge = document.getElementById('health-spam-badge');
-    const status = gate.querySelector('.health-status');
-    
-    if (!gate || !badge || !status) return;
-    
-    if (!spamFilter) {
-      gate.style.borderColor = '#9ca3af';
-      badge.innerHTML = '<span style="background: #9ca3af; color: white; padding: 4px 12px; border-radius: 12px;">—</span>';
-      status.innerHTML = 'Could not load spam filter status.';
-      status.style.color = '#6b7280';
-      return;
-    }
-    
-    const isEnabled = spamFilter.enabled === true;
-    const blacklistCount = spamFilter.blacklist?.length || 0;
-    const whitelistCount = spamFilter.whitelist?.length || 0;
-    const settings = spamFilter.settings || {};
-    const detectorsEnabled = [
-      settings.checkGlobalSpamDB,
-      settings.enableFrequencyCheck,
-      settings.enableRobocallDetection
-    ].filter(Boolean).length;
-    
-    if (isEnabled) {
-      // SUCCESS: Enabled
-      gate.style.borderColor = '#16a34a';
-      gate.style.background = '#f0fdf4';
-      badge.innerHTML = '<span style="background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px;">✅ ACTIVE</span>';
-      status.innerHTML = `Spam filter active. ${detectorsEnabled}/3 detectors enabled. ${blacklistCount} blocked, ${whitelistCount} whitelisted.`;
-      status.style.color = '#16a34a';
-    } else {
-      // WARNING: Disabled
-      gate.style.borderColor = '#f59e0b';
-      gate.style.background = '#fffbeb';
-      badge.innerHTML = '<span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 12px;">⚠️ DISABLED</span>';
-      status.innerHTML = 'Spam filter disabled. All calls will pass through. Enable in Company Profile → Spam Filter.';
-      status.style.color = '#f59e0b';
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER CALL START GREETING HEALTH
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderCallStartHealth() {
-    const gate = document.getElementById('health-callstart');
-    const badge = document.getElementById('health-callstart-badge');
-    const status = gate.querySelector('.health-status');
-    
-    if (!gate || !badge || !status) return;
-    
-    const isEnabled = state.greetings.callStart?.enabled !== false;
-    const hasText = Boolean(state.greetings.callStart?.text);
-    const hasAudio = Boolean(state.greetings.callStart?.audioUrl);
-    
-    if (!isEnabled) {
-      // WARNING: Disabled
-      gate.style.borderColor = '#f59e0b';
-      gate.style.background = '#fffbeb';
-      badge.innerHTML = '<span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 12px;">⚠️ DISABLED</span>';
-      status.innerHTML = 'Call start greeting disabled. Calls will not have an initial greeting.';
-      status.style.color = '#f59e0b';
-    } else if (!hasText) {
-      // ERROR: No text
-      gate.style.borderColor = '#dc2626';
-      gate.style.background = '#fef2f2';
-      badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NO TEXT</span>';
-      status.innerHTML = 'Enabled but no greeting text configured. Add text below.';
-      status.style.color = '#dc2626';
-    } else if (hasAudio) {
-      // SUCCESS: Has audio
-      gate.style.borderColor = '#16a34a';
-      gate.style.background = '#f0fdf4';
-      badge.innerHTML = '<span style="background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px;">✅ AUDIO</span>';
-      status.innerHTML = 'Pre-generated audio ready. Will play audio instead of TTS.';
-      status.style.color = '#16a34a';
-    } else {
-      // SUCCESS: TTS
-      gate.style.borderColor = '#3b82f6';
-      gate.style.background = '#eff6ff';
-      badge.innerHTML = '<span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 12px;">✅ TTS</span>';
-      status.innerHTML = 'Text-to-speech ready. Will use ElevenLabs voice to generate greeting on the fly.';
-      status.style.color = '#3b82f6';
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER GREETING INTERCEPTOR HEALTH
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderInterceptorHealth() {
-    const gate = document.getElementById('health-interceptor');
-    const badge = document.getElementById('health-interceptor-badge');
-    const status = gate.querySelector('.health-status');
-    
-    if (!gate || !badge || !status) return;
-    
-    const isEnabled = state.greetings.interceptor?.enabled !== false;
-    const rulesCount = state.greetings.interceptor?.rules?.length || 0;
-    const enabledRulesCount = state.greetings.interceptor?.rules?.filter(r => r.enabled !== false).length || 0;
-    const maxWords = state.greetings.interceptor?.shortOnlyGate?.maxWords || 2;
-    
-    if (!isEnabled) {
-      // WARNING: Disabled
-      gate.style.borderColor = '#f59e0b';
-      gate.style.background = '#fffbeb';
-      badge.innerHTML = '<span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 12px;">⚠️ DISABLED</span>';
-      status.innerHTML = 'Greeting interceptor disabled. Caller greetings will not be detected.';
-      status.style.color = '#f59e0b';
-    } else if (rulesCount === 0) {
-      // ERROR: No rules
-      gate.style.borderColor = '#dc2626';
-      gate.style.background = '#fef2f2';
-      badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NO RULES</span>';
-      status.innerHTML = 'Enabled but no greeting rules configured. Click "Add Rule" to create greeting responses.';
-      status.style.color = '#dc2626';
-    } else {
-      // SUCCESS: Has rules
-      gate.style.borderColor = '#16a34a';
-      gate.style.background = '#f0fdf4';
-      badge.innerHTML = '<span style="background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px;">✅ READY</span>';
-      status.innerHTML = `${enabledRulesCount}/${rulesCount} rules active. Short-only gate: ≤${maxWords} words.`;
-      status.style.color = '#16a34a';
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER ELEVENLABS VOICE HEALTH
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderElevenLabsHealth(profile) {
-    const gate = document.getElementById('health-elevenlabs');
-    const badge = document.getElementById('health-elevenlabs-badge');
-    const status = gate.querySelector('.health-status');
-    
-    if (!gate || !badge || !status) return;
-    
-    const voiceSettings = profile.aiAgentSettings?.voiceSettings || {};
-    const voiceId = voiceSettings.voiceId;
-    const voiceName = voiceSettings.voiceName || 'Unknown';
-    const apiSource = voiceSettings.apiSource || 'clientsvia';
-    const hasApiKey = Boolean(voiceSettings.apiKey);
-    
-    if (!voiceId) {
-      // ERROR: No voice configured
-      gate.style.borderColor = '#dc2626';
-      gate.style.background = '#fef2f2';
-      badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NO VOICE</span>';
-      status.innerHTML = 'No ElevenLabs voice configured. Configure in Company Profile → Voice Settings.';
-      status.style.color = '#dc2626';
-    } else if (apiSource === 'own' && !hasApiKey) {
-      // ERROR: Own API source but no key
-      gate.style.borderColor = '#dc2626';
-      gate.style.background = '#fef2f2';
-      badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NO API KEY</span>';
-      status.innerHTML = 'Using own API but no API key configured. Add key in Company Profile → Voice Settings.';
-      status.style.color = '#dc2626';
-    } else {
-      // SUCCESS: Voice configured
-      gate.style.borderColor = '#16a34a';
-      gate.style.background = '#f0fdf4';
-      badge.innerHTML = '<span style="background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px;">✅ READY</span>';
-      
-      const apiSourceDisplay = apiSource === 'own' ? 'Own API' : 'ClientsVia API';
-      status.innerHTML = `Voice: <strong>${voiceName}</strong> (${voiceId.substring(0, 12)}...) • Source: ${apiSourceDisplay}`;
-      status.style.color = '#16a34a';
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER TRIGGERS HEALTH
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderTriggersHealth() {
-    const gate = document.getElementById('health-triggers');
-    const badge = document.getElementById('health-triggers-badge');
-    const status = gate.querySelector('.health-status');
-    
-    if (!gate || !badge || !status) return;
-    
-    const triggerCount = state.triggerStats?.totalActiveCount || 0;
-    const groupName = state.triggerStats?.activeGroupName || null;
-    const groupIcon = state.triggerStats?.activeGroupIcon || '📋';
-    
-    if (triggerCount === 0) {
-      // ERROR: No triggers
-      gate.style.borderColor = '#dc2626';
-      gate.style.background = '#fef2f2';
-      badge.innerHTML = '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 12px;">❌ NO TRIGGERS</span>';
-      status.innerHTML = groupName 
-        ? `Group selected (${groupIcon} ${groupName}) but no active triggers. Add triggers in Trigger Console.`
-        : 'No trigger group selected. Select a group in Trigger Console.';
-      status.style.color = '#dc2626';
-    } else {
-      // SUCCESS: Has triggers
-      gate.style.borderColor = '#16a34a';
-      gate.style.background = '#f0fdf4';
-      badge.innerHTML = '<span style="background: #16a34a; color: white; padding: 4px 12px; border-radius: 12px;">✅ READY</span>';
-      status.innerHTML = groupName
-        ? `${triggerCount} active triggers in group ${groupIcon} ${groupName}`
-        : `${triggerCount} active triggers configured.`;
-      status.style.color = '#16a34a';
-    }
-  }
-  
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * RENDER OVERALL HEALTH SUMMARY
-   * ───────────────────────────────────────────────────────────────────────
-   */
-  function renderOverallHealth(profile, spamFilter) {
     const summary = document.getElementById('health-summary');
+    const summaryIcon = document.getElementById('health-summary-icon');
     const summaryText = document.getElementById('health-summary-text');
     
     if (!summary || !summaryText) return;
     
-    // Count critical issues
-    const issues = [];
-    
-    // Check Twilio
-    const hasTwilio = profile.twilioConfig?.accountSid && profile.twilioConfig?.authToken;
-    const accountStatus = profile.twilioConfig?.accountStatus || 'unknown';
-    if (!hasTwilio) issues.push('Twilio credentials missing');
-    if (accountStatus === 'suspended') issues.push('Twilio account suspended');
-    
-    // Check ElevenLabs
-    const voiceId = profile.aiAgentSettings?.voiceSettings?.voiceId;
-    if (!voiceId) issues.push('ElevenLabs voice not configured');
-    
-    // Check Call Start Greeting
-    const callStartEnabled = state.greetings.callStart?.enabled !== false;
-    const hasCallStartText = Boolean(state.greetings.callStart?.text);
-    if (callStartEnabled && !hasCallStartText) issues.push('Call start greeting has no text');
-    
-    // Check Greeting Interceptor
-    const interceptorEnabled = state.greetings.interceptor?.enabled !== false;
-    const rulesCount = state.greetings.interceptor?.rules?.length || 0;
-    if (interceptorEnabled && rulesCount === 0) issues.push('Greeting interceptor has no rules');
-    
-    // Check Triggers
-    const triggerCount = state.triggerStats?.totalActiveCount || 0;
-    if (triggerCount === 0) issues.push('No trigger cards configured');
-    
-    // Render summary
-    if (issues.length === 0) {
-      summary.style.borderColor = '#16a34a';
-      summary.style.background = '#f0fdf4';
-      summaryText.innerHTML = '<strong style="color: #16a34a;">✅ ALL SYSTEMS OPERATIONAL</strong><br>Your Agent 2.0 is fully configured and ready to handle calls.';
-    } else {
-      summary.style.borderColor = '#dc2626';
+    try {
+      const profile = await AgentConsoleAuth.apiFetch(`/api/company/${state.companyId}`);
+      
+      // Collect critical issues only
+      const issues = [];
+      
+      // Twilio: Can't receive calls without this
+      const hasTwilio = profile.twilioConfig?.accountSid && profile.twilioConfig?.authToken;
+      if (!hasTwilio) issues.push('Twilio not configured');
+      if (profile.twilioConfig?.accountStatus === 'suspended') issues.push('Twilio suspended');
+      
+      // Voice: Can't speak without this
+      if (!profile.aiAgentSettings?.voiceSettings?.voiceId) issues.push('No voice configured');
+      
+      // Triggers: Can't respond intelligently without these
+      if ((state.triggerStats?.totalActiveCount || 0) === 0) issues.push('No trigger cards');
+      
+      // Render minimal status bar
+      if (issues.length === 0) {
+        summary.style.background = '#f0fdf4';
+        summary.style.borderColor = '#bbf7d0';
+        if (summaryIcon) summaryIcon.textContent = '✅';
+        summaryText.innerHTML = '<span style="color: #166534;">All systems operational</span>';
+      } else {
+        summary.style.background = '#fef2f2';
+        summary.style.borderColor = '#fecaca';
+        if (summaryIcon) summaryIcon.textContent = '⚠️';
+        summaryText.innerHTML = `<span style="color: #dc2626;">${issues.join(' • ')}</span>`;
+      }
+    } catch (error) {
+      console.error('[Health] Failed to load:', error);
       summary.style.background = '#fef2f2';
-      summaryText.innerHTML = `<strong style="color: #dc2626;">❌ ${issues.length} ISSUE${issues.length > 1 ? 'S' : ''} DETECTED</strong><br>${issues.map(i => `• ${i}`).join('<br>')}`;
+      summary.style.borderColor = '#fecaca';
+      if (summaryIcon) summaryIcon.textContent = '❌';
+      summaryText.innerHTML = '<span style="color: #dc2626;">Could not check status</span>';
     }
   }
   
-  /**
-   * ───────────────────────────────────────────────────────────────────────
-   * REFRESH HEALTH STATUS (Button Handler)
-   * ───────────────────────────────────────────────────────────────────────
-   */
+  
   async function refreshHealthStatus() {
     const btn = document.getElementById('btn-refresh-health');
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px; animation: spin 1s linear infinite;"><path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 2v6h-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Refreshing...';
+      btn.textContent = '...';
     }
-    
     await loadHealthStatus();
-    
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 2v6h-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Refresh';
+      btn.textContent = 'Refresh';
     }
-    
-    showToast('success', 'Refreshed', 'Health status updated.');
   }
 
   /* --------------------------------------------------------------------------
