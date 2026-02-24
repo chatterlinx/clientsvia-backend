@@ -254,7 +254,7 @@ function shouldCallLLMFallback({
     }
   }
   
-  const triggers = llmFallback.triggers || {};
+  const triggers = llmFallback?.triggers || {};
   
   // ════════════════════════════════════════════════════════════════════════
   // BLOCKING CONDITIONS (LLM NOT allowed if ANY of these are true)

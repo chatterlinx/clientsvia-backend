@@ -46,23 +46,23 @@ const VERSION = 'CR1.0';
 /* ============================================================================
    MODELS — Call Data Storage
    
-   Real call data is stored in two models:
-   - ConversationSession: Full session with turns, slots, discovery, booking state
-   - CallTrace: Snapshot of call context after call ends
+   Real call data is stored in:
+   - CallSummary: Hot data for fast queries (list view)
+   - CallTranscript: Full transcripts stored separately (detail view)
+   - ConversationSession: Used by newer channels (SMS, website chat)
    
-   ConversationSession is the primary source for Call Console as it has:
-   - Full transcript (turns array)
-   - Channel identifiers (twilioCallSid, callerPhone)
-   - Discovery state, booking state, conversation memory
+   For v2twilio voice calls, CallSummary is the PRIMARY source.
    ============================================================================ */
 
-const ConversationSession = require('../../models/ConversationSession');
-let CallTrace;
+const CallSummary = require('../../models/CallSummary');
+const CallTranscript = require('../../models/CallTranscript');
+
+let ConversationSession;
 try {
-  CallTrace = require('../../models/CallTrace');
+  ConversationSession = require('../../models/ConversationSession');
 } catch (err) {
-  logger.warn(`[${MODULE_ID}] CallTrace model not found`);
-  CallTrace = null;
+  logger.warn(`[${MODULE_ID}] ConversationSession model not found`);
+  ConversationSession = null;
 }
 
 /* ============================================================================
@@ -363,6 +363,36 @@ function transformSessionToCallSummary(session) {
   };
 }
 
+/**
+ * Transform a CallSummary document to the call list item format
+ * @param {Object} summary - CallSummary document from MongoDB
+ * @returns {Object} Call item for list view
+ */
+function transformCallSummaryToListItem(summary) {
+  return {
+    callSid: summary.twilioSid || summary.callId,
+    fromPhone: summary.phone || 'Unknown',
+    toPhone: '', // CallSummary doesn't store destination
+    startTime: summary.startedAt,
+    endTime: summary.endedAt,
+    durationSeconds: summary.durationSeconds || 0,
+    turnCount: summary.turnCount || 0,
+    agentTurnCount: Math.floor((summary.turnCount || 0) / 2),
+    callerTurnCount: Math.ceil((summary.turnCount || 0) / 2),
+    uiOwnedCount: 0, // Will be populated from transcript in detail view
+    fallbackCount: summary.routingTier === 3 ? 1 : 0,
+    hardcodedCount: 0,
+    hasHardcodedViolation: false,
+    hasFallback: summary.routingTier === 3,
+    problemCount: summary.flagged ? 1 : 0,
+    status: summary.outcome || 'in_progress',
+    outcome: summary.outcome,
+    callerName: summary.callerName || summary.capturedSummary?.name,
+    primaryIntent: summary.primaryIntent,
+    liveProgress: summary.liveProgress
+  };
+}
+
 /* ============================================================================
    HELPER: Calculate Call Summary Metrics (for enriched turns)
    ============================================================================ */
@@ -480,54 +510,48 @@ router.get(
     });
 
     try {
-      // Build query for ConversationSession
-      // Note: companyId in ConversationSession is ObjectId, need to handle both string and ObjectId
-      const query = { 
-        companyId: companyId,
-        channel: 'voice' // Only show voice calls in Call Console
-      };
+      // Build query for CallSummary (the actual data model for v2twilio calls)
+      const query = { companyId };
 
-      // Date filter - ConversationSession uses startedAt
+      // Date filter - CallSummary uses startedAt
       const dateFilter = buildDateFilter(dateRange);
       if (dateFilter) {
         query.startedAt = dateFilter;
       }
 
-      // Search filter
+      // Search filter - search by phone, callId, or twilioSid
       if (search) {
         query.$or = [
-          { 'channelIdentifiers.twilioCallSid': { $regex: search, $options: 'i' } },
-          { 'channelIdentifiers.callerPhone': { $regex: search, $options: 'i' } },
-          { 'channelIdentifiers.calledNumber': { $regex: search, $options: 'i' } }
+          { twilioSid: { $regex: search, $options: 'i' } },
+          { callId: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } },
+          { callerName: { $regex: search, $options: 'i' } }
         ];
       }
 
-      // Execute query on ConversationSession
-      const [sessions, total] = await Promise.all([
-        ConversationSession.find(query)
+      // Status filter (in query for efficiency)
+      if (status === 'problems') {
+        query.followUpRequired = true;
+      } else if (status === 'clean') {
+        query.outcome = 'completed';
+      }
+
+      // Execute query on CallSummary
+      const [summaries, total] = await Promise.all([
+        CallSummary.find(query)
           .sort({ startedAt: -1 })
           .skip(skip)
           .limit(limitNum)
           .lean(),
-        ConversationSession.countDocuments(query)
+        CallSummary.countDocuments(query)
       ]);
 
-      // Transform sessions to call list format
-      const calls = sessions.map(session => transformSessionToCallSummary(session));
-
-      // Status filter (post-processing)
-      let filteredCalls = calls;
-      if (status === 'clean') {
-        filteredCalls = calls.filter(c => !c.hasHardcodedViolation && c.problemCount === 0);
-      } else if (status === 'violations') {
-        filteredCalls = calls.filter(c => c.hasHardcodedViolation);
-      } else if (status === 'problems') {
-        filteredCalls = calls.filter(c => c.problemCount > 0);
-      }
+      // Transform CallSummary to call list format expected by frontend
+      const calls = summaries.map(summary => transformCallSummaryToListItem(summary));
 
       logger.info(`[${MODULE_ID}] List calls success`, {
         requestId,
-        returned: filteredCalls.length,
+        returned: calls.length,
         total
       });
 
@@ -538,7 +562,7 @@ router.get(
         limit: limitNum,
         total,
         totalPages: Math.ceil(total / limitNum),
-        calls: filteredCalls
+        calls
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] List calls failed: ${error.message}`, {
@@ -573,11 +597,8 @@ router.get(
     logger.info(`[${MODULE_ID}] Export calls request`, { companyId, requestId, dateRange });
 
     try {
-      // Build query
-      const query = { 
-        companyId,
-        channel: 'voice'
-      };
+      // Build query for CallSummary
+      const query = { companyId };
       
       const dateFilter = buildDateFilter(dateRange);
       if (dateFilter) {
@@ -585,35 +606,34 @@ router.get(
       }
       if (search) {
         query.$or = [
-          { 'channelIdentifiers.twilioCallSid': { $regex: search, $options: 'i' } },
-          { 'channelIdentifiers.callerPhone': { $regex: search, $options: 'i' } }
+          { twilioSid: { $regex: search, $options: 'i' } },
+          { callId: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } }
         ];
       }
 
-      const sessions = await ConversationSession.find(query)
+      const summaries = await CallSummary.find(query)
         .sort({ startedAt: -1 })
         .limit(1000)
         .lean();
 
-      // Process with summaries
-      const exportData = sessions.map(session => {
-        const summary = transformSessionToCallSummary(session);
-        return {
-          ...summary,
-          discovery: session.discovery || null,
-          booking: session.booking || null,
-          conversationMemory: {
-            currentStage: session.conversationMemory?.currentStage,
-            offRailsCount: session.conversationMemory?.offRailsCount || 0
-          },
-          turns: (session.turns || []).map(t => ({
-            role: t.role,
-            content: t.content,
-            timestamp: t.timestamp,
-            responseSource: t.responseSource
-          }))
-        };
-      });
+      // Process with list item format
+      const exportData = summaries.map(summary => ({
+        callSid: summary.twilioSid || summary.callId,
+        phone: summary.phone,
+        callerName: summary.callerName || summary.capturedSummary?.name,
+        startedAt: summary.startedAt,
+        endedAt: summary.endedAt,
+        durationSeconds: summary.durationSeconds,
+        turnCount: summary.turnCount,
+        outcome: summary.outcome,
+        primaryIntent: summary.primaryIntent,
+        routingTier: summary.routingTier,
+        flagged: summary.flagged,
+        flagReason: summary.flagReason,
+        liveProgress: summary.liveProgress,
+        capturedSummary: summary.capturedSummary
+      }));
 
       res.json({
         success: true,
@@ -656,25 +676,16 @@ router.get(
     logger.info(`[${MODULE_ID}] Get call detail`, { companyId, callSid, requestId });
 
     try {
-      // Find session by twilioCallSid or _id
-      let session = await ConversationSession.findOne({
+      // Find CallSummary by twilioSid or callId
+      let callSummary = await CallSummary.findOne({
         companyId,
-        'channelIdentifiers.twilioCallSid': callSid
+        $or: [
+          { twilioSid: callSid },
+          { callId: callSid }
+        ]
       }).lean();
 
-      // If not found by callSid, try by _id
-      if (!session) {
-        try {
-          session = await ConversationSession.findOne({
-            companyId,
-            _id: callSid
-          }).lean();
-        } catch (e) {
-          // Invalid ObjectId, ignore
-        }
-      }
-
-      if (!session) {
+      if (!callSummary) {
         return res.status(404).json({
           error: 'Call not found',
           callSid,
@@ -682,73 +693,50 @@ router.get(
         });
       }
 
-      // Transform turns to our format with provenance
-      const enrichedTurns = (session.turns || []).map((turn, index) => {
-        const isCaller = turn.role === 'user';
-        
-        const baseTurn = {
-          turnNumber: index + 1,
-          speaker: isCaller ? 'caller' : 'agent',
-          text: turn.content || '',
-          timestamp: turn.timestamp
-        };
+      // Try to get the transcript with detailed turn data
+      let transcript = null;
+      if (callSummary.transcriptRef) {
+        transcript = await CallTranscript.findById(callSummary.transcriptRef).lean();
+      }
+      if (!transcript) {
+        // Try by callId
+        transcript = await CallTranscript.findOne({ 
+          callId: callSummary.twilioSid || callSummary.callId 
+        }).lean();
+      }
 
-        if (isCaller) {
-          return { ...baseTurn, provenance: null };
-        }
-
-        // Agent turn - determine provenance from responseSource
-        const source = turn.responseSource?.toLowerCase() || '';
-        let provenance = {
-          type: 'UNKNOWN',
-          uiPath: null,
-          reason: null,
-          isViolation: false
-        };
-
-        if (source === 'template' || source === 'triage') {
-          provenance.type = 'UI_OWNED';
-          provenance.uiPath = 'triggers';
-          provenance.reason = 'Response from trigger card match';
-        } else if (source === 'state_machine' || source === 'booking') {
-          provenance.type = 'UI_OWNED';
-          provenance.uiPath = 'bookingPrompts';
-          provenance.reason = 'Response from booking state machine';
-        } else if (source === 'quick_answer') {
-          provenance.type = 'UI_OWNED';
-          provenance.uiPath = 'triggers';
-          provenance.reason = 'Quick answer from trigger';
-        } else if (source === 'greeting') {
-          provenance.type = 'UI_OWNED';
-          provenance.uiPath = 'greetings.callStart';
-          provenance.reason = 'Configured greeting';
-        } else if (source === 'llm' || source === 'llm_fallback') {
-          // Check if in fallback mode
-          if (session.conversationMemory?.isFallbackActive) {
-            provenance.type = 'FALLBACK';
-            provenance.reason = 'LLM fallback - conversation went off-rails';
-          } else {
-            provenance.type = 'UI_OWNED';
-            provenance.uiPath = 'discovery';
-            provenance.reason = 'LLM response with UI-configured context';
-          }
-        } else if (source === 'silence') {
-          provenance.type = 'UI_OWNED';
-          provenance.reason = 'Silence handler';
-        } else if (source) {
-          provenance.type = 'UI_OWNED';
-          provenance.reason = `Source: ${source}`;
-        } else {
-          // No source - mark as potentially hardcoded
-          provenance.type = 'HARDCODED';
-          provenance.isViolation = true;
-          provenance.violationSeverity = 'CRITICAL';
-          provenance.reason = 'No responseSource attribute found';
-          provenance.fixInstructions = 'Add responseSource to this turn in runtime code';
-        }
-
-        return { ...baseTurn, provenance };
-      });
+      // Build turns from transcript if available
+      let enrichedTurns = [];
+      if (transcript?.memorySnapshot?.turns) {
+        enrichedTurns = transcript.memorySnapshot.turns.map((turn, index) => {
+          const isCaller = turn.input !== undefined;
+          
+          return {
+            turnNumber: index + 1,
+            speaker: isCaller ? 'caller' : 'agent',
+            text: isCaller ? (turn.input || '') : (turn.response?.text || turn.output || ''),
+            timestamp: turn.timestamp,
+            provenance: isCaller ? null : {
+              type: turn.routing?.selectedHandler ? 'UI_OWNED' : 'UNKNOWN',
+              uiPath: turn.routing?.selectedHandler,
+              reason: turn.routing?.selectedHandler || 'Unknown handler'
+            }
+          };
+        });
+      } else if (transcript?.customerTranscript) {
+        // Parse customer transcript if no structured turns
+        const lines = transcript.customerTranscript.split('\n').filter(Boolean);
+        enrichedTurns = lines.map((line, index) => {
+          const isAgent = line.includes('[Agent]') || line.includes('AI:');
+          const text = line.replace(/^\[.*?\]\s*/, '').replace(/^(AI|Customer|Caller):\s*/i, '');
+          return {
+            turnNumber: index + 1,
+            speaker: isAgent ? 'agent' : 'caller',
+            text,
+            provenance: isAgent ? { type: 'UI_OWNED', reason: 'From transcript' } : null
+          };
+        });
+      }
 
       const summary = calculateCallSummary(enrichedTurns);
 
@@ -760,48 +748,49 @@ router.get(
           severity: 'CRITICAL'
         });
       }
-      if (session.conversationMemory?.offRailsCount > 2) {
+      if (callSummary.liveProgress?.offRailsCount > 2) {
         problems.push({
-          message: `Conversation went off-rails ${session.conversationMemory.offRailsCount} times`,
+          message: `Conversation went off-rails ${callSummary.liveProgress.offRailsCount} times`,
           severity: 'HIGH'
         });
       }
-      if (session.status === 'error') {
+      if (callSummary.outcome === 'error') {
         problems.push({
-          message: 'Session ended with error status',
+          message: 'Call ended with error status',
+          severity: 'MEDIUM'
+        });
+      }
+      if (callSummary.flagged) {
+        problems.push({
+          message: callSummary.flagReason || 'Call flagged for review',
           severity: 'MEDIUM'
         });
       }
 
-      // Build events from audit trail
-      const events = (session.conversationMemory?.auditTrail || []).map(entry => ({
-        timestamp: entry.timestamp,
-        type: entry.type,
-        data: {
-          stage: entry.stage,
-          step: entry.step,
-          ...entry.data
-        }
-      }));
-
-      // Calculate duration
-      let durationSeconds = session.metrics?.durationSeconds;
-      if (!durationSeconds && session.startedAt && session.endedAt) {
-        durationSeconds = Math.round((new Date(session.endedAt) - new Date(session.startedAt)) / 1000);
+      // Build events from transcript audit trail or live progress
+      const events = [];
+      if (callSummary.startedAt) {
+        events.push({ timestamp: callSummary.startedAt, type: 'call.started', data: { direction: callSummary.direction } });
+      }
+      if (callSummary.liveProgress?.triageOutcome) {
+        events.push({ timestamp: null, type: 'triage.completed', data: { outcome: callSummary.liveProgress.triageOutcome } });
+      }
+      if (callSummary.endedAt) {
+        events.push({ timestamp: callSummary.endedAt, type: 'call.ended', data: { outcome: callSummary.outcome } });
       }
 
       res.json({
         success: true,
         requestId,
-        callSid: session.channelIdentifiers?.twilioCallSid || session._id.toString(),
-        fromPhone: session.channelIdentifiers?.callerPhone || 'Unknown',
-        toPhone: session.channelIdentifiers?.calledNumber || '',
-        startTime: session.startedAt,
-        endTime: session.endedAt,
-        durationSeconds: durationSeconds || 0,
-        status: session.status,
-        outcome: session.outcome,
-        mode: session.mode,
+        callSid: callSummary.twilioSid || callSummary.callId,
+        fromPhone: callSummary.phone || 'Unknown',
+        toPhone: '',
+        startTime: callSummary.startedAt,
+        endTime: callSummary.endedAt,
+        durationSeconds: callSummary.durationSeconds || 0,
+        status: callSummary.outcome || 'in_progress',
+        outcome: callSummary.outcome,
+        callerName: callSummary.callerName || callSummary.capturedSummary?.name,
         
         // Provenance summary
         provenanceSummary: {
@@ -815,7 +804,7 @@ router.get(
         llmUsage: {
           promptTokens: 0,
           completionTokens: 0,
-          totalTokens: session.metrics?.totalTokens || 0
+          totalTokens: 0
         },
 
         // Problems detected
@@ -824,14 +813,15 @@ router.get(
         // Full transcript with provenance
         turns: enrichedTurns,
 
-        // Events from audit trail
+        // Events
         events,
 
-        // Discovery context
-        discovery: session.discovery || null,
+        // Live progress
+        liveProgress: callSummary.liveProgress,
 
-        // Booking state
-        booking: session.booking || null,
+        // Discovery/booking from live progress
+        discovery: callSummary.liveProgress?.discovery || null,
+        booking: callSummary.appointmentCreatedId ? { appointmentId: callSummary.appointmentCreatedId } : null,
 
         // Config snapshot reference
         configSnapshotId: null
@@ -891,15 +881,15 @@ router.delete(
     }
 
     try {
-      // Build query to match by twilioCallSid OR by _id
+      // Build query to match by twilioSid, callId, or _id
       const mongoObjectIds = [];
-      const twilioCallSids = [];
+      const callIdentifiers = [];
 
       for (const sid of callSids) {
         if (sid.match(/^[a-f0-9]{24}$/i)) {
           mongoObjectIds.push(sid);
         } else {
-          twilioCallSids.push(sid);
+          callIdentifiers.push(sid);
         }
       }
 
@@ -908,8 +898,9 @@ router.delete(
         $or: []
       };
 
-      if (twilioCallSids.length > 0) {
-        query.$or.push({ 'channelIdentifiers.twilioCallSid': { $in: twilioCallSids } });
+      if (callIdentifiers.length > 0) {
+        query.$or.push({ twilioSid: { $in: callIdentifiers } });
+        query.$or.push({ callId: { $in: callIdentifiers } });
       }
       if (mongoObjectIds.length > 0) {
         query.$or.push({ _id: { $in: mongoObjectIds } });
@@ -924,8 +915,16 @@ router.delete(
         });
       }
 
-      // Perform deletion
-      const result = await ConversationSession.deleteMany(query);
+      // Perform deletion on CallSummary
+      const result = await CallSummary.deleteMany(query);
+      
+      // Also delete associated transcripts
+      if (callIdentifiers.length > 0) {
+        await CallTranscript.deleteMany({
+          companyId,
+          callId: { $in: callIdentifiers }
+        });
+      }
 
       logger.info(`[${MODULE_ID}] Bulk delete completed`, {
         requestId,
