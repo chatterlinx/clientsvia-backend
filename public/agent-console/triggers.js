@@ -111,6 +111,10 @@
     inputTriggerLocal: document.getElementById('input-trigger-local'),
     scopeSection: document.getElementById('scope-section'),
     
+    btnGenerateAudio: document.getElementById('btn-generate-audio'),
+    btnPlayAudio: document.getElementById('btn-play-audio'),
+    audioStatusHint: document.getElementById('audio-status-hint'),
+    
     modalApproval: document.getElementById('modal-approval'),
     approvalTitle: document.getElementById('approval-title'),
     approvalText: document.getElementById('approval-text'),
@@ -259,6 +263,19 @@
         closeGptSettingsModal();
       }
     });
+    
+    // Audio generation and playback
+    if (DOM.btnGenerateAudio) {
+      DOM.btnGenerateAudio.addEventListener('click', generateTriggerAudio);
+    }
+    if (DOM.btnPlayAudio) {
+      DOM.btnPlayAudio.addEventListener('click', playTriggerAudio);
+    }
+    
+    // Detect text changes to show regeneration warning
+    if (DOM.inputTriggerAnswer) {
+      DOM.inputTriggerAnswer.addEventListener('input', checkAudioStatus);
+    }
     
     // ElevenLabs setup link
     document.addEventListener('click', (e) => {
@@ -1069,6 +1086,140 @@
       showToast('error', 'Failed', 'Could not change trigger scope.');
       await loadTriggers();
       throw error;
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     AUDIO GENERATION & PLAYBACK
+     -------------------------------------------------------------------------- */
+  let currentAudio = null;
+  
+  async function generateTriggerAudio() {
+    const text = DOM.inputTriggerAnswer?.value?.trim();
+    const ruleId = DOM.inputTriggerRuleId?.value?.trim();
+    
+    if (!text) {
+      showToast('error', 'Text Required', 'Enter answer text first');
+      return;
+    }
+    
+    if (!ruleId) {
+      showToast('error', 'Save First', 'Save the trigger before generating audio');
+      return;
+    }
+    
+    const btn = DOM.btnGenerateAudio;
+    const originalText = btn?.textContent || 'Generate';
+    
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+    }
+    
+    if (DOM.audioStatusHint) {
+      DOM.audioStatusHint.innerHTML = '<span style="color: #3b82f6;">Generating audio with your ElevenLabs voice...</span>';
+    }
+    
+    try {
+      const response = await apiFetch(`/api/admin/agent2/${state.companyId}/generate-trigger-audio`, {
+        method: 'POST',
+        body: { ruleId, text }
+      });
+      
+      if (response.audioUrl && DOM.inputTriggerAudio) {
+        DOM.inputTriggerAudio.value = response.audioUrl;
+      }
+      
+      if (DOM.btnPlayAudio) {
+        DOM.btnPlayAudio.style.display = 'block';
+      }
+      
+      if (btn) {
+        btn.textContent = 'Regenerate';
+        btn.disabled = false;
+      }
+      
+      if (DOM.audioStatusHint) {
+        DOM.audioStatusHint.innerHTML = '<span style="color: #16a34a;">✅ Audio generated! Click Save to keep it.</span>';
+      }
+      
+      showToast('success', 'Audio Generated', 'Audio created with your ElevenLabs voice');
+      
+    } catch (error) {
+      console.error('[Audio] Generation failed:', error);
+      
+      if (btn) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+      
+      if (DOM.audioStatusHint) {
+        const errorMsg = error.message || 'Generation failed';
+        const hint = errorMsg.includes('voice') 
+          ? 'Configure your ElevenLabs voice in Company Profile first.'
+          : 'Could not generate audio.';
+        DOM.audioStatusHint.innerHTML = `<span style="color: #dc2626;">❌ ${errorMsg}</span> ${hint}`;
+      }
+      
+      showToast('error', 'Generation Failed', error.message || 'Could not generate audio');
+    }
+  }
+  
+  function playTriggerAudio() {
+    const audioUrl = DOM.inputTriggerAudio?.value?.trim();
+    
+    if (!audioUrl) {
+      showToast('error', 'No Audio', 'Generate audio first');
+      return;
+    }
+    
+    const btn = DOM.btnPlayAudio;
+    
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+      if (btn) {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play`;
+      }
+      return;
+    }
+    
+    currentAudio = new Audio(audioUrl);
+    
+    if (btn) {
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><rect x="4" y="3" width="3" height="10" fill="currentColor"/><rect x="9" y="3" width="3" height="10" fill="currentColor"/></svg>Stop`;
+    }
+    
+    currentAudio.onended = () => {
+      currentAudio = null;
+      if (btn) {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play`;
+      }
+    };
+    
+    currentAudio.onerror = () => {
+      currentAudio = null;
+      if (btn) {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play`;
+      }
+      showToast('error', 'Playback Failed', 'Could not play audio file');
+    };
+    
+    currentAudio.play();
+  }
+  
+  function checkAudioStatus() {
+    const audioUrl = DOM.inputTriggerAudio?.value?.trim();
+    if (!audioUrl) {
+      return;
+    }
+    
+    if (DOM.audioStatusHint) {
+      DOM.audioStatusHint.innerHTML = '<span style="color: #f59e0b;">⚠️ Text changed — regenerate to update audio</span>';
+    }
+    
+    if (DOM.btnGenerateAudio) {
+      DOM.btnGenerateAudio.textContent = 'Regenerate';
     }
   }
 

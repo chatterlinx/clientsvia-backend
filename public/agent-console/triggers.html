@@ -983,8 +983,22 @@
                   Setup ElevenLabs
                 </a>
               </label>
-              <input type="text" class="form-input" id="input-trigger-audio" placeholder="https://...">
-              <p class="form-hint">Optional. If provided, plays audio instead of TTS. <a href="#" id="link-audio-help" style="color: #3b82f6;">Learn how to generate audio</a></p>
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <input type="text" class="form-input" id="input-trigger-audio" placeholder="https://..." readonly style="flex: 1;">
+                <button type="button" class="btn btn-secondary" id="btn-play-audio" style="padding: 8px 16px; display: none;">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                    <path d="M4 3L12 8L4 13V3Z" fill="currentColor"/>
+                  </svg>
+                  Play
+                </button>
+                <button type="button" class="btn" id="btn-generate-audio" style="background: #16a34a; color: white; padding: 8px 16px;">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                    <path d="M13.5 3.5L6 11L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Generate
+                </button>
+              </div>
+              <p class="form-hint" id="audio-status-hint">Optional. If provided, plays audio instead of TTS.</p>
             </div>
           </div>
           

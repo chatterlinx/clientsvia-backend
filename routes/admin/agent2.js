@@ -1606,5 +1606,121 @@ router.get('/llmFallback/usage/:companyId/calls',
   }
 );
 
+// ============================================================================
+// TRIGGER AUDIO GENERATION
+// ============================================================================
+
+const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
+const TriggerAudio = require('../../models/TriggerAudio');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+/**
+ * POST /:companyId/generate-trigger-audio
+ * Generate audio for a trigger using company's ElevenLabs voice
+ */
+router.post('/:companyId/generate-trigger-audio',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { ruleId, text } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!ruleId || !text) {
+        return res.status(400).json({
+          success: false,
+          error: 'ruleId and text are required'
+        });
+      }
+
+      const company = await v2Company.findById(companyId).lean();
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      // Get company's ElevenLabs voice settings
+      const voiceId = company.elevenLabsVoiceId || company.aiAgentSettings?.voice?.elevenLabsVoiceId;
+      if (!voiceId) {
+        return res.status(400).json({
+          success: false,
+          error: 'No ElevenLabs voice configured for this company',
+          hint: 'Configure voice in Company Profile → ElevenLabs section'
+        });
+      }
+
+      const stability = company.aiAgentSettings?.voice?.stability ?? 0.5;
+      const similarityBoost = company.aiAgentSettings?.voice?.similarityBoost ?? 0.75;
+      const styleExaggeration = company.aiAgentSettings?.voice?.styleExaggeration ?? 0;
+      const aiModel = company.aiAgentSettings?.voice?.aiModel || 'eleven_multilingual_v2';
+
+      // Generate audio using ElevenLabs
+      logger.info('[Agent2Audio] Generating audio', {
+        companyId,
+        ruleId,
+        voiceId,
+        textLength: text.length
+      });
+
+      const buffer = await synthesizeSpeech({
+        text: text.trim(),
+        voiceId,
+        stability,
+        similarity_boost: similarityBoost,
+        style: styleExaggeration,
+        model_id: aiModel,
+        company,
+        output_format: 'mp3_44100_128'
+      });
+
+      // Save to file system
+      const audioDir = path.join(__dirname, '../../public/audio/instant-lines');
+      if (!fs.existsSync(audioDir)) {
+        fs.mkdirSync(audioDir, { recursive: true });
+      }
+
+      const hash = crypto.createHash('sha256').update(`${companyId}_${ruleId}_${text.trim()}`).digest('hex').slice(0, 16);
+      const fileName = `TRIGGER_CARD_ANSWER_${companyId.slice(0, 12)}_${hash}.mp3`;
+      const filePath = path.join(audioDir, fileName);
+      const audioUrl = `/audio/instant-lines/${fileName}`;
+
+      fs.writeFileSync(filePath, buffer);
+
+      // Save to TriggerAudio collection
+      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, text, voiceId, userId);
+
+      logger.info('[Agent2Audio] Audio generated successfully', {
+        companyId,
+        ruleId,
+        fileName,
+        bytes: buffer.length
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          audioUrl,
+          fileName,
+          voiceId,
+          bytes: buffer.length
+        }
+      });
+    } catch (error) {
+      logger.error('[Agent2Audio] Generation failed', { 
+        error: error.message,
+        companyId: req.params.companyId 
+      });
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        code: error.code
+      });
+    }
+  }
+);
+
 module.exports = router;
 
