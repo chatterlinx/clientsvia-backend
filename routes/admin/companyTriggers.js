@@ -171,7 +171,7 @@ async function buildMergedTriggerList(companyId) {
                           companyAudio.textHash === TriggerAudio.hashText(effectiveAnswerText);
     const effectiveAudioUrl = hasValidAudio ? companyAudio.audioUrl : '';
     
-    triggerMap.set(gt.ruleId, {
+    const triggerData = {
       triggerId: gt.triggerId,
       ruleId: gt.ruleId,
       label: gt.label,
@@ -182,6 +182,7 @@ async function buildMergedTriggerList(companyId) {
       isOverridden: Boolean(partialOverride),
       overrideType: partialOverride ? 'PARTIAL' : null,
       priority: gt.priority,
+      responseMode: gt.responseMode || 'standard',
       match: {
         keywords: gt.keywords || [],
         phrases: gt.phrases || [],
@@ -202,7 +203,18 @@ async function buildMergedTriggerList(companyId) {
       lastEditedAt: partialOverride?.updatedAt || gt.updatedAt,
       lastEditedBy: partialOverride?.updatedBy || gt.updatedBy,
       version: gt.version
-    });
+    };
+    
+    // Include LLM fact pack if in LLM mode
+    if (gt.responseMode === 'llm' && gt.llmFactPack) {
+      triggerData.llmFactPack = {
+        includedFacts: gt.llmFactPack.includedFacts || '',
+        excludedFacts: gt.llmFactPack.excludedFacts || '',
+        backupAnswer: gt.llmFactPack.backupAnswer || ''
+      };
+    }
+    
+    triggerMap.set(gt.ruleId, triggerData);
   }
 
   for (const lt of localTriggers) {
@@ -213,7 +225,7 @@ async function buildMergedTriggerList(companyId) {
                           companyAudio.textHash === TriggerAudio.hashText(lt.answerText);
     const effectiveAudioUrl = hasValidAudio ? companyAudio.audioUrl : '';
     
-    triggerMap.set(lt.ruleId, {
+    const localTriggerData = {
       triggerId: lt.triggerId,
       ruleId: lt.ruleId,
       label: lt.label,
@@ -227,6 +239,7 @@ async function buildMergedTriggerList(companyId) {
       overrideOfGroupId: lt.overrideOfGroupId || null,
       overrideOfRuleId: lt.overrideOfRuleId || null,
       priority: lt.priority,
+      responseMode: lt.responseMode || 'standard',
       match: {
         keywords: lt.keywords || [],
         phrases: lt.phrases || [],
@@ -247,7 +260,18 @@ async function buildMergedTriggerList(companyId) {
       lastEditedAt: lt.updatedAt,
       lastEditedBy: lt.updatedBy,
       version: 1
-    });
+    };
+    
+    // Include LLM fact pack if in LLM mode
+    if (lt.responseMode === 'llm' && lt.llmFactPack) {
+      localTriggerData.llmFactPack = {
+        includedFacts: lt.llmFactPack.includedFacts || '',
+        excludedFacts: lt.llmFactPack.excludedFacts || '',
+        backupAnswer: lt.llmFactPack.backupAnswer || ''
+      };
+    }
+    
+    triggerMap.set(lt.ruleId, localTriggerData);
   }
 
   const triggers = Array.from(triggerMap.values())
@@ -542,8 +566,10 @@ router.post('/:companyId/local-triggers',
         keywords,
         phrases,
         negativeKeywords,
+        responseMode,
         answerText,
         audioUrl,
+        llmFactPack,
         followUpQuestion,
         followUpNextAction,
         isOverride,
@@ -554,10 +580,27 @@ router.post('/:companyId/local-triggers',
       // ═══════════════════════════════════════════════════════════════════════
       // VALIDATION: Required fields
       // ═══════════════════════════════════════════════════════════════════════
-      if (!rawRuleId || !label || !answerText) {
+      const isLlmMode = responseMode === 'llm';
+      
+      if (!rawRuleId || !label) {
         return res.status(400).json({
           success: false,
-          error: 'ruleId, label, and answerText are required'
+          error: 'ruleId and label are required'
+        });
+      }
+      
+      // For standard mode, answerText is required. For LLM mode, fact pack is required.
+      if (!isLlmMode && !answerText) {
+        return res.status(400).json({
+          success: false,
+          error: 'answerText is required for standard response mode'
+        });
+      }
+      
+      if (isLlmMode && (!llmFactPack || (!llmFactPack.includedFacts && !llmFactPack.excludedFacts))) {
+        return res.status(400).json({
+          success: false,
+          error: 'LLM mode requires at least one fact pack (includedFacts or excludedFacts)'
         });
       }
 
@@ -713,8 +756,14 @@ router.post('/:companyId/local-triggers',
         keywords: keywords || [],
         phrases: phrases || [],
         negativeKeywords: negativeKeywords || [],
-        answerText,
-        audioUrl: '',
+        responseMode: responseMode || 'standard',
+        answerText: answerText || (isLlmMode ? '[LLM-generated response]' : ''),
+        audioUrl: '',  // Audio is always stored separately in TriggerAudio
+        llmFactPack: isLlmMode ? {
+          includedFacts: llmFactPack?.includedFacts || '',
+          excludedFacts: llmFactPack?.excludedFacts || '',
+          backupAnswer: llmFactPack?.backupAnswer || ''
+        } : undefined,
         followUpQuestion: followUpQuestion || '',
         followUpNextAction: followUpNextAction || '',
         isOverride: Boolean(isOverride),
@@ -845,7 +894,7 @@ router.patch('/:companyId/local-triggers/:ruleId',
       const allowedFields = [
         'label', 'description', 'enabled', 'priority',
         'keywords', 'phrases', 'negativeKeywords',
-        'answerText',
+        'responseMode', 'answerText', 'llmFactPack',
         'followUpQuestion', 'followUpNextAction',
         'tags'
       ];

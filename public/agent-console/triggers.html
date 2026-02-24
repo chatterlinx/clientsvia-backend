@@ -258,6 +258,56 @@
       border: 1px solid #fca5a5;
     }
     
+    .answer-badge.llm {
+      background: #8b5cf6;
+      color: #ffffff;
+    }
+    
+    /* ════════════════════════════════════════════════════════════════════════
+       RESPONSE MODE TOGGLE
+       ════════════════════════════════════════════════════════════════════════ */
+    
+    .response-mode-toggle {
+      display: flex;
+      gap: 0;
+      background: #333;
+      border-radius: 6px;
+      padding: 4px;
+      width: fit-content;
+    }
+    
+    .mode-btn {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: #9ca3af;
+      cursor: pointer;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+    
+    .mode-btn:hover {
+      color: #e5e7eb;
+    }
+    
+    .mode-btn.active {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .mode-btn.active[data-mode="llm"] {
+      background: #8b5cf6;
+    }
+    
+    /* LLM Text Areas - Large for free typing */
+    .llm-textarea {
+      min-height: 180px !important;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    
     /* Follow-up Column */
     .trigger-followup {
       font-size: 0.75rem;
@@ -1046,38 +1096,106 @@
           <div class="form-section">
             <div class="form-section-title">Response</div>
             
+            <!-- Response Mode Toggle -->
             <div class="form-group">
-              <label class="form-label">Answer Text *</label>
-              <textarea class="form-textarea" id="input-trigger-answer" rows="3" placeholder="Our service call is $89..." required></textarea>
+              <label class="form-label">Response Mode</label>
+              <div class="response-mode-toggle" id="response-mode-toggle">
+                <button type="button" class="mode-btn active" data-mode="standard">Standard</button>
+                <button type="button" class="mode-btn" data-mode="llm">LLM Fact Pack</button>
+              </div>
+              <p class="form-hint" id="response-mode-hint">Standard: Pre-recorded audio or TTS. LLM: Dynamic AI-generated response.</p>
             </div>
             
-            <div class="form-group">
-              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>Audio URL</span>
-                <a href="#" id="link-elevenlabs-setup" class="btn btn-ghost btn-sm" style="font-size: 0.75rem; padding: 4px 8px;" title="Configure ElevenLabs in Company Profile">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
-                    <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M13.5 8a5.5 5.5 0 01-.5 2.3l1.3 1-.8 1.4-1.5-.6a5.5 5.5 0 01-2 1.1v1.6h-1.6v-1.6a5.5 5.5 0 01-2-1.1l-1.5.6-.8-1.4 1.3-1A5.5 5.5 0 014.5 8c0-.8.2-1.6.5-2.3l-1.3-1 .8-1.4 1.5.6a5.5 5.5 0 012-1.1V1.2h1.6v1.6a5.5 5.5 0 012 1.1l1.5-.6.8 1.4-1.3 1c.3.7.5 1.5.5 2.3z" stroke="currentColor" stroke-width="1.5"/>
-                  </svg>
-                  Setup ElevenLabs
-                </a>
-              </label>
-              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                <input type="text" class="form-input" id="input-trigger-audio" placeholder="https://..." readonly style="flex: 1;">
-                <button type="button" class="btn btn-secondary" id="btn-play-audio" style="padding: 8px 16px; display: none;">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
-                    <path d="M4 3L12 8L4 13V3Z" fill="currentColor"/>
-                  </svg>
-                  Play
-                </button>
-                <button type="button" class="btn" id="btn-generate-audio" style="background: #16a34a; color: white; padding: 8px 16px;">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
-                    <path d="M13.5 3.5L6 11L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Generate
-                </button>
+            <!-- Standard Mode Fields -->
+            <div id="response-fields-standard">
+              <div class="form-group">
+                <label class="form-label">Answer Text *</label>
+                <textarea class="form-textarea" id="input-trigger-answer" rows="3" placeholder="Our service call is $89..."></textarea>
               </div>
-              <p class="form-hint" id="audio-status-hint">Optional. If provided, plays audio instead of TTS.</p>
+              
+              <div class="form-group">
+                <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>Audio URL</span>
+                  <a href="#" id="link-elevenlabs-setup" class="btn btn-ghost btn-sm" style="font-size: 0.75rem; padding: 4px 8px;" title="Configure ElevenLabs in Company Profile">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                      <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.5"/>
+                      <path d="M13.5 8a5.5 5.5 0 01-.5 2.3l1.3 1-.8 1.4-1.5-.6a5.5 5.5 0 01-2 1.1v1.6h-1.6v-1.6a5.5 5.5 0 01-2-1.1l-1.5.6-.8-1.4 1.3-1A5.5 5.5 0 014.5 8c0-.8.2-1.6.5-2.3l-1.3-1 .8-1.4 1.5.6a5.5 5.5 0 012-1.1V1.2h1.6v1.6a5.5 5.5 0 012 1.1l1.5-.6.8 1.4-1.3 1c.3.7.5 1.5.5 2.3z" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    Setup ElevenLabs
+                  </a>
+                </label>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                  <input type="text" class="form-input" id="input-trigger-audio" placeholder="https://..." readonly style="flex: 1;">
+                  <button type="button" class="btn btn-secondary" id="btn-play-audio" style="padding: 8px 16px; display: none;">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                      <path d="M4 3L12 8L4 13V3Z" fill="currentColor"/>
+                    </svg>
+                    Play
+                  </button>
+                  <button type="button" class="btn" id="btn-generate-audio" style="background: #16a34a; color: white; padding: 8px 16px;">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                      <path d="M13.5 3.5L6 11L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Generate
+                  </button>
+                </div>
+                <p class="form-hint" id="audio-status-hint">Optional. If provided, plays audio instead of TTS.</p>
+              </div>
+            </div>
+            
+            <!-- LLM Mode Fields -->
+            <div id="response-fields-llm" style="display: none;">
+              <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: start; gap: 10px;">
+                  <span style="font-size: 1.25rem;">🤖</span>
+                  <div style="font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
+                    <strong style="color: #e2e8f0;">LLM Fact Pack Mode</strong><br>
+                    The AI generates 1-2 sentence responses using ONLY the facts you provide.
+                    <strong>No pre-recorded audio</strong> — always TTS via ElevenLabs.
+                    Keep fact packs tight (under 2500 characters each).
+                  </div>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label" style="color: #22c55e;">
+                  <span style="margin-right: 6px;">✓</span>What's INCLUDED
+                </label>
+                <textarea class="form-textarea llm-textarea" id="input-llm-included" rows="6" maxlength="2500"
+                  placeholder="Write what IS included (keep it tight, under 2500 chars)...
+
+Example:
+- Two visits per year (spring and fall)
+- Full system tune-up and inspection  
+- Price: $179/year
+- 15% discount on repairs"></textarea>
+                <p class="form-hint">Max 2500 characters. Keep it factual and concise.</p>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label" style="color: #ef4444;">
+                  <span style="margin-right: 6px;">✗</span>What's NOT Included
+                </label>
+                <textarea class="form-textarea llm-textarea" id="input-llm-excluded" rows="6" maxlength="2500"
+                  placeholder="Write what is NOT included (disclaimers)...
+
+Example:
+- Drain line clearing ($89 separate)
+- Duct cleaning (needs estimate)
+- Parts replacement (priced separately)"></textarea>
+                <p class="form-hint">Max 2500 characters. Used for disclaimers and "needs estimate" questions.</p>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label" style="color: #f59e0b;">
+                  <span style="margin-right: 6px;">⚡</span>Backup Answer (Required)
+                </label>
+                <textarea class="form-textarea" id="input-llm-backup" rows="2" maxlength="500"
+                  placeholder="What to say if LLM fails (e.g., OpenAI down)...
+
+Example: Our maintenance plan is $179 per year with two visits."></textarea>
+                <p class="form-hint">CRITICAL: This plays if LLM/OpenAI fails. Must be a real answer, not generic.</p>
+              </div>
             </div>
           </div>
           

@@ -38,6 +38,7 @@ const { Agent2CallReasonSanitizer } = require('./Agent2CallReasonSanitizer');
 const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
+const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
 const Agent2SpeechPreprocessor = require('./Agent2SpeechPreprocessor');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
@@ -1259,13 +1260,20 @@ class Agent2DiscoveryRunner {
       const nextAction = card.followUp?.nextAction || 'CONTINUE';
       const defaultAfter = `${fallback.afterAnswerQuestion || ''}`.trim();
       const afterQuestion = followUpQuestion || defaultAfter || null;
+      
+      // ════════════════════════════════════════════════════════════════════════
+      // LLM TRIGGER MODE CHECK
+      // If responseMode === 'llm', generate response from fact pack instead of
+      // using static answerText. Audio is NEVER used for LLM triggers.
+      // ════════════════════════════════════════════════════════════════════════
+      const isLLMTrigger = card.responseMode === 'llm' && card.llmFactPack;
 
       // V119: Build personalized ack
       const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
       nextState.agent2.discovery.usedNameThisTurn = usedName;
 
       // Update state
-      nextState.agent2.discovery.lastPath = 'TRIGGER_CARD_ANSWER';
+      nextState.agent2.discovery.lastPath = isLLMTrigger ? 'TRIGGER_CARD_LLM' : 'TRIGGER_CARD_ANSWER';
       nextState.agent2.discovery.lastTriggerId = card.id || null;
       nextState.agent2.discovery.lastTriggerLabel = card.label || null;
       nextState.agent2.discovery.lastNextAction = nextAction;
@@ -1277,6 +1285,86 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionSource = `card:${card.id}`;
       }
 
+      // ════════════════════════════════════════════════════════════════════════
+      // LLM TRIGGER PATH: Generate response from fact pack
+      // ════════════════════════════════════════════════════════════════════════
+      if (isLLMTrigger) {
+        emit('A2_PATH_SELECTED', {
+          path: 'TRIGGER_CARD_LLM',
+          reason: `Matched LLM card: ${card.label || card.id}`,
+          matchType: triggerResult.matchType,
+          matchedOn: triggerResult.matchedOn,
+          cardId: card.id,
+          cardLabel: card.label,
+          responseMode: 'llm',
+          factPackIncludedLength: (card.llmFactPack.includedFacts || '').length,
+          factPackExcludedLength: (card.llmFactPack.excludedFacts || '').length
+        });
+        
+        const llmTriggerResult = await generateLLMTriggerResponse({
+          callerInput: normalizedInput,
+          factPack: card.llmFactPack,
+          backupAnswer: card.llmFactPack?.backupAnswer || '',
+          triggerLabel: card.label,
+          triggerId: card.id,
+          companyId,
+          emit
+        });
+        
+        let response = llmTriggerResult.response;
+        
+        // LLM responses don't need ack prefix if they sound natural
+        const responseStartsWithAck = /^(ok|okay|sure|i|that|the|our|we|yes)/i.test(response);
+        if (!responseStartsWithAck) {
+          response = `${personalAck} ${response}`.trim();
+        }
+        
+        // Add follow-up question if configured
+        if (afterQuestion) {
+          response = `${response} ${afterQuestion}`.trim();
+        }
+        
+        emit('A2_RESPONSE_READY', {
+          path: 'TRIGGER_CARD_LLM',
+          responsePreview: clip(response, 120),
+          responseLength: response.length,
+          hasAudio: false,
+          audioUrl: null,
+          source: `card:${card.id}:llm`,
+          usedCallerName: usedName,
+          nextAction,
+          llmMeta: llmTriggerResult.llmMeta
+        });
+        
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          `agent2.discovery.triggerCard[${card.id}]:llm`,
+          `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}].llmFactPack`,
+          response,
+          null,
+          `LLM Trigger matched: ${card.label || card.id} - response generated from fact pack`
+        ));
+        
+        return {
+          response,
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState,
+          audioUrl: null,
+          triggerCard: {
+            id: card.id,
+            label: card.label,
+            matchType: triggerResult.matchType,
+            matchedOn: triggerResult.matchedOn,
+            nextAction,
+            responseMode: 'llm',
+            llmMeta: llmTriggerResult.llmMeta
+          }
+        };
+      }
+
+      // ════════════════════════════════════════════════════════════════════════
+      // STANDARD TRIGGER PATH: Use static answerText and/or audio
+      // ════════════════════════════════════════════════════════════════════════
+      
       // Build response - V126: No hardcoded text allowed
       let response;
       if (answerText) {

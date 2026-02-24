@@ -52,7 +52,10 @@
       tone: 'friendly',
       instructions: '',
       includeFollowup: true
-    }
+    },
+    
+    // Current response mode in modal (standard or llm)
+    currentResponseMode: 'standard'
   };
 
   /* --------------------------------------------------------------------------
@@ -114,6 +117,15 @@
     btnGenerateAudio: document.getElementById('btn-generate-audio'),
     btnPlayAudio: document.getElementById('btn-play-audio'),
     audioStatusHint: document.getElementById('audio-status-hint'),
+    
+    // Response Mode Toggle (Standard vs LLM)
+    responseModeToggle: document.getElementById('response-mode-toggle'),
+    responseModeHint: document.getElementById('response-mode-hint'),
+    responseFieldsStandard: document.getElementById('response-fields-standard'),
+    responseFieldsLlm: document.getElementById('response-fields-llm'),
+    inputLlmIncluded: document.getElementById('input-llm-included'),
+    inputLlmExcluded: document.getElementById('input-llm-excluded'),
+    inputLlmBackup: document.getElementById('input-llm-backup'),
     
     modalApproval: document.getElementById('modal-approval'),
     approvalTitle: document.getElementById('approval-title'),
@@ -288,6 +300,47 @@
         window.open(`/company-profile.html?companyId=${encodeURIComponent(state.companyId)}#elevenlabs`, '_blank');
       }
     });
+    
+    // Response Mode Toggle (Standard vs LLM Fact Pack)
+    if (DOM.responseModeToggle) {
+      DOM.responseModeToggle.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mode-btn');
+        if (!btn) return;
+        
+        const mode = btn.dataset.mode;
+        if (mode === state.currentResponseMode) return;
+        
+        setResponseMode(mode);
+      });
+    }
+  }
+  
+  /* --------------------------------------------------------------------------
+     RESPONSE MODE MANAGEMENT
+     -------------------------------------------------------------------------- */
+  function setResponseMode(mode) {
+    state.currentResponseMode = mode;
+    
+    // Update toggle button states
+    const buttons = DOM.responseModeToggle?.querySelectorAll('.mode-btn');
+    buttons?.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    
+    // Show/hide appropriate fields
+    if (mode === 'standard') {
+      if (DOM.responseFieldsStandard) DOM.responseFieldsStandard.style.display = 'block';
+      if (DOM.responseFieldsLlm) DOM.responseFieldsLlm.style.display = 'none';
+      if (DOM.responseModeHint) {
+        DOM.responseModeHint.textContent = 'Standard: Pre-recorded audio or TTS. Uses Answer Text directly.';
+      }
+    } else {
+      if (DOM.responseFieldsStandard) DOM.responseFieldsStandard.style.display = 'none';
+      if (DOM.responseFieldsLlm) DOM.responseFieldsLlm.style.display = 'block';
+      if (DOM.responseModeHint) {
+        DOM.responseModeHint.innerHTML = '<span style="color: #8b5cf6;">LLM Fact Pack: AI generates response from your facts. Always uses live TTS via ElevenLabs.</span>';
+      }
+    }
   }
 
   /* --------------------------------------------------------------------------
@@ -590,9 +643,10 @@
 
   function renderTriggerRow(trigger) {
     const keywords = (trigger.match?.keywords || []).slice(0, 4).join(', ');
-    const hasText = trigger.answer?.answerText ? true : false;
-    const hasAudio = trigger.answer?.hasAudio || trigger.answer?.audioUrl;
-    const audioNeedsRegeneration = trigger.answer?.audioNeedsRegeneration;
+    const isLlmMode = trigger.responseMode === 'llm';
+    const hasText = !isLlmMode && trigger.answer?.answerText ? true : false;
+    const hasAudio = !isLlmMode && (trigger.answer?.hasAudio || trigger.answer?.audioUrl);
+    const audioNeedsRegeneration = !isLlmMode && trigger.answer?.audioNeedsRegeneration;
     const isEnabled = trigger.isEnabled !== false;
     const isGlobalScope = trigger.scope === 'GLOBAL';
     
@@ -606,6 +660,17 @@
     const followUpDisplay = followUpAction ? formatFollowUpAction(followUpAction) : 'None';
     const followUpClass = followUpAction ? '' : 'none';
     
+    // Build answer format badges
+    let answerBadges = '';
+    if (isLlmMode) {
+      answerBadges = '<span class="answer-badge llm" title="LLM Fact Pack - AI-generated responses">LLM</span>';
+    } else {
+      if (hasText) answerBadges += '<span class="answer-badge text">TEXT</span>';
+      if (hasAudio) answerBadges += '<span class="answer-badge audio">AUDIO</span>';
+      if (audioNeedsRegeneration) answerBadges += '<span class="answer-badge stale" title="Variable value changed - regenerate audio">⚠️ STALE</span>';
+      if (!hasText && !hasAudio && !audioNeedsRegeneration) answerBadges = '<span style="color: var(--text-muted);">—</span>';
+    }
+    
     return `
       <div class="trigger-row ${isEnabled ? '' : 'disabled'}">
         <div>
@@ -614,12 +679,7 @@
         <div class="trigger-rule-id" title="${escapeHtml(ruleId)}">${escapeHtml(ruleId)}</div>
         <div class="trigger-label" title="${escapeHtml(trigger.label || 'Untitled')}">${escapeHtml(trigger.label || 'Untitled')}</div>
         <div class="trigger-keywords" title="${escapeHtml((trigger.match?.keywords || []).join(', '))}">${escapeHtml(keywords) || '—'}</div>
-        <div class="answer-format">
-          ${hasText ? '<span class="answer-badge text">TEXT</span>' : ''}
-          ${hasAudio ? '<span class="answer-badge audio">AUDIO</span>' : ''}
-          ${audioNeedsRegeneration ? '<span class="answer-badge stale" title="Variable value changed - regenerate audio">⚠️ STALE</span>' : ''}
-          ${!hasText && !hasAudio && !audioNeedsRegeneration ? '<span style="color: var(--text-muted);">—</span>' : ''}
-        </div>
+        <div class="answer-format">${answerBadges}</div>
         <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
         <div>
           ${isGlobalScope ? 
@@ -827,9 +887,26 @@
       DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
       DOM.scopeSection.style.display = 'none';
       
-      // Show audio status based on whether audio needs regeneration
+      // Set response mode (standard or llm)
+      const responseMode = trigger.responseMode || 'standard';
+      setResponseMode(responseMode);
+      
+      // Populate LLM fields if in LLM mode
+      if (DOM.inputLlmIncluded) {
+        DOM.inputLlmIncluded.value = trigger.llmFactPack?.includedFacts || '';
+      }
+      if (DOM.inputLlmExcluded) {
+        DOM.inputLlmExcluded.value = trigger.llmFactPack?.excludedFacts || '';
+      }
+      if (DOM.inputLlmBackup) {
+        DOM.inputLlmBackup.value = trigger.llmFactPack?.backupAnswer || '';
+      }
+      
+      // Show audio status based on whether audio needs regeneration (only for standard mode)
       if (DOM.audioStatusHint) {
-        if (trigger.answer?.audioNeedsRegeneration) {
+        if (responseMode === 'llm') {
+          DOM.audioStatusHint.innerHTML = '<span style="color: #8b5cf6;">LLM mode — no pre-recorded audio. Responses are always live TTS.</span>';
+        } else if (trigger.answer?.audioNeedsRegeneration) {
           DOM.audioStatusHint.innerHTML = '<span style="color: #dc2626;">⚠️ <strong>Variable value changed</strong> — audio is outdated, please regenerate!</span>';
         } else if (trigger.answer?.audioUrl) {
           DOM.audioStatusHint.innerHTML = '<span style="color: #16a34a;">✅ Audio generated! Click Save to keep it.</span>';
@@ -862,6 +939,14 @@
       DOM.inputTriggerLocal.checked = true;
       DOM.scopeSection.style.display = 'block';
       
+      // Default to standard mode for new triggers
+      setResponseMode('standard');
+      
+      // Clear LLM fields
+      if (DOM.inputLlmIncluded) DOM.inputLlmIncluded.value = '';
+      if (DOM.inputLlmExcluded) DOM.inputLlmExcluded.value = '';
+      if (DOM.inputLlmBackup) DOM.inputLlmBackup.value = '';
+      
       // Reset audio status for new triggers
       if (DOM.audioStatusHint) {
         DOM.audioStatusHint.innerHTML = '';
@@ -890,12 +975,52 @@
     const keywords = parseCommaSeparated(DOM.inputTriggerKeywords.value);
     const phrases = parseCommaSeparated(DOM.inputTriggerPhrases.value);
     const negativeKeywords = parseCommaSeparated(DOM.inputTriggerNegative.value);
-    const answerText = DOM.inputTriggerAnswer.value.trim();
-    const audioUrl = DOM.inputTriggerAudio.value.trim();
     const followUpQuestion = DOM.inputTriggerFollowup.value.trim();
     
-    if (!label || !ruleId || !answerText) {
-      showToast('error', 'Validation Error', 'Label, Rule ID, and Answer Text are required.');
+    // Get response mode and mode-specific fields
+    const responseMode = state.currentResponseMode || 'standard';
+    
+    let answerText = '';
+    let audioUrl = '';
+    let llmFactPack = null;
+    
+    if (responseMode === 'standard') {
+      answerText = DOM.inputTriggerAnswer?.value?.trim() || '';
+      audioUrl = DOM.inputTriggerAudio?.value?.trim() || '';
+      
+      if (!answerText) {
+        showToast('error', 'Validation Error', 'Answer Text is required for Standard mode.');
+        return;
+      }
+    } else {
+      // LLM mode
+      const includedFacts = DOM.inputLlmIncluded?.value?.trim() || '';
+      const excludedFacts = DOM.inputLlmExcluded?.value?.trim() || '';
+      const backupAnswer = DOM.inputLlmBackup?.value?.trim() || '';
+      
+      if (!includedFacts && !excludedFacts) {
+        showToast('error', 'Validation Error', 'LLM mode requires at least one fact pack (Included or Excluded).');
+        return;
+      }
+      
+      // Validate backup answer is provided
+      if (!backupAnswer) {
+        showToast('error', 'Validation Error', 'Backup Answer is required for LLM mode (used when OpenAI fails).');
+        return;
+      }
+      
+      llmFactPack = {
+        includedFacts,
+        excludedFacts,
+        backupAnswer
+      };
+      
+      // Set a placeholder answerText for LLM triggers (used for display purposes)
+      answerText = '[LLM-generated response based on fact pack]';
+    }
+    
+    if (!label || !ruleId) {
+      showToast('error', 'Validation Error', 'Label and Rule ID are required.');
       return;
     }
     
@@ -911,10 +1036,16 @@
       keywords,
       phrases,
       negativeKeywords,
+      responseMode,
       answerText,
       audioUrl,
       followUpQuestion
     };
+    
+    // Include LLM fact pack if in LLM mode
+    if (responseMode === 'llm' && llmFactPack) {
+      payload.llmFactPack = llmFactPack;
+    }
     
     try {
       if (state.editingTrigger) {

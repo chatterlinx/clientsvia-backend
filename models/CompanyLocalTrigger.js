@@ -125,15 +125,55 @@ const companyLocalTriggerSchema = new mongoose.Schema({
   // ─────────────────────────────────────────────────────────────────────────
   // RESPONSE
   // ─────────────────────────────────────────────────────────────────────────
+  
+  // Response mode determines how the agent answers when this trigger fires
+  // - 'standard': Use answerText directly (play audio or TTS)
+  // - 'llm': Use LLM to generate response from fact packs (always TTS, no pre-recorded audio)
+  responseMode: {
+    type: String,
+    enum: ['standard', 'llm'],
+    default: 'standard'
+  },
+  
+  // Standard mode fields
   answerText: {
     type: String,
-    required: true,
+    required: function() { return this.responseMode !== 'llm'; },
     maxlength: 2000
   },
   audioUrl: {
     type: String,
     default: '',
     maxlength: 500
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FACT PACK (used when responseMode === 'llm')
+  // ─────────────────────────────────────────────────────────────────────────
+  // The LLM generates a response constrained to ONLY these facts.
+  // This keeps responses deterministic and prevents hallucination.
+  // TIGHT LIMITS: Fact packs are capped at 2500 chars each to control cost/latency.
+  
+  llmFactPack: {
+    // What IS included in the service/product
+    includedFacts: {
+      type: String,
+      default: '',
+      maxlength: 2500
+    },
+    // What is NOT included (disclaimers, "needs estimate" items)
+    excludedFacts: {
+      type: String,
+      default: '',
+      maxlength: 2500
+    },
+    // Deterministic backup answer if LLM fails/times out
+    // CRITICAL: This is used when OpenAI is down - NOT generic fluff
+    backupAnswer: {
+      type: String,
+      default: '',
+      maxlength: 500
+    }
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -371,7 +411,7 @@ companyLocalTriggerSchema.pre('save', function(next) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 companyLocalTriggerSchema.methods.toMatcherFormat = function() {
-  return {
+  const base = {
     ruleId: this.ruleId,  // CANONICAL KEY - always use this for Map operations
     triggerId: this.triggerId,
     enabled: this.enabled,
@@ -383,8 +423,9 @@ companyLocalTriggerSchema.methods.toMatcherFormat = function() {
       negativeKeywords: this.negativeKeywords || [],
       scenarioTypeAllowlist: this.scenarioTypeAllowlist || []
     },
+    responseMode: this.responseMode || 'standard',
     answer: {
-      answerText: this.answerText,
+      answerText: this.answerText || '',
       audioUrl: this.audioUrl || ''
     },
     followUp: {
@@ -397,6 +438,17 @@ companyLocalTriggerSchema.methods.toMatcherFormat = function() {
     _overrideOfRuleId: this.overrideOfRuleId,
     _overrideOfTriggerId: this.overrideOfTriggerId
   };
+  
+  // Include LLM fact pack if in LLM mode
+  if (this.responseMode === 'llm' && this.llmFactPack) {
+    base.llmFactPack = {
+      includedFacts: this.llmFactPack.includedFacts || '',
+      excludedFacts: this.llmFactPack.excludedFacts || '',
+      backupAnswer: this.llmFactPack.backupAnswer || ''
+    };
+  }
+  
+  return base;
 };
 
 module.exports = mongoose.model('CompanyLocalTrigger', companyLocalTriggerSchema);

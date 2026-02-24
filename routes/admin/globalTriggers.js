@@ -710,8 +710,10 @@ router.post('/trigger-groups/:groupId/triggers',
         keywords,
         phrases,
         negativeKeywords,
+        responseMode,
         answerText,
         audioUrl,
+        llmFactPack,
         followUpQuestion,
         followUpNextAction,
         scenarioTypeAllowlist,
@@ -721,10 +723,27 @@ router.post('/trigger-groups/:groupId/triggers',
       // ═══════════════════════════════════════════════════════════════════════
       // VALIDATION: Required fields
       // ═══════════════════════════════════════════════════════════════════════
-      if (!rawRuleId || !label || !answerText) {
+      const isLlmMode = responseMode === 'llm';
+      
+      if (!rawRuleId || !label) {
         return res.status(400).json({
           success: false,
-          error: 'ruleId, label, and answerText are required'
+          error: 'ruleId and label are required'
+        });
+      }
+      
+      // For standard mode, answerText is required. For LLM mode, fact pack is required.
+      if (!isLlmMode && !answerText) {
+        return res.status(400).json({
+          success: false,
+          error: 'answerText is required for standard response mode'
+        });
+      }
+      
+      if (isLlmMode && (!llmFactPack || (!llmFactPack.includedFacts && !llmFactPack.excludedFacts))) {
+        return res.status(400).json({
+          success: false,
+          error: 'LLM mode requires at least one fact pack (includedFacts or excludedFacts)'
         });
       }
 
@@ -806,8 +825,16 @@ router.post('/trigger-groups/:groupId/triggers',
         deletedTrigger.keywords = keywords || [];
         deletedTrigger.phrases = phrases || [];
         deletedTrigger.negativeKeywords = negativeKeywords || [];
-        deletedTrigger.answerText = answerText;
-        deletedTrigger.audioUrl = audioUrl || '';
+        deletedTrigger.responseMode = responseMode || 'standard';
+        deletedTrigger.answerText = answerText || (isLlmMode ? '[LLM-generated response]' : '');
+        deletedTrigger.audioUrl = isLlmMode ? '' : (audioUrl || '');
+        if (isLlmMode && llmFactPack) {
+          deletedTrigger.llmFactPack = {
+            includedFacts: llmFactPack.includedFacts || '',
+            excludedFacts: llmFactPack.excludedFacts || '',
+            backupAnswer: llmFactPack.backupAnswer || ''
+          };
+        }
         deletedTrigger.followUpQuestion = followUpQuestion || '';
         deletedTrigger.followUpNextAction = followUpNextAction || '';
         deletedTrigger.scenarioTypeAllowlist = scenarioTypeAllowlist || [];
@@ -850,8 +877,14 @@ router.post('/trigger-groups/:groupId/triggers',
         keywords: keywords || [],
         phrases: phrases || [],
         negativeKeywords: negativeKeywords || [],
-        answerText,
-        audioUrl: audioUrl || '',
+        responseMode: responseMode || 'standard',
+        answerText: answerText || (isLlmMode ? '[LLM-generated response]' : ''),
+        audioUrl: isLlmMode ? '' : (audioUrl || ''),  // LLM mode doesn't use pre-recorded audio
+        llmFactPack: isLlmMode ? {
+          includedFacts: llmFactPack?.includedFacts || '',
+          excludedFacts: llmFactPack?.excludedFacts || '',
+          backupAnswer: llmFactPack?.backupAnswer || ''
+        } : undefined,
         followUpQuestion: followUpQuestion || '',
         followUpNextAction: followUpNextAction || '',
         scenarioTypeAllowlist: scenarioTypeAllowlist || [],
@@ -997,7 +1030,7 @@ router.patch('/trigger-groups/:groupId/triggers/:ruleId',
       const allowedFields = [
         'label', 'description', 'enabled', 'priority',
         'keywords', 'phrases', 'negativeKeywords',
-        'answerText', 'audioUrl',
+        'responseMode', 'answerText', 'audioUrl', 'llmFactPack',
         'followUpQuestion', 'followUpNextAction',
         'scenarioTypeAllowlist', 'tags'
       ];
