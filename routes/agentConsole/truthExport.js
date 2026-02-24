@@ -73,9 +73,12 @@ const globAsync = promisify(glob);
 // Compliance scanner
 const { scanForHardcodedSpeech } = require('../../services/compliance/HardcodedSpeechScanner');
 
+// Truth manifest (required files, modals, etc.)
+const truthManifest = require('../../config/truthManifest');
+
 // Constants
 const MODULE_ID = 'TRUTH_EXPORT';
-const TRUTH_VERSION = '1.0.0';
+const TRUTH_VERSION = '1.1.0'; // Bumped for manifest-based completeness
 const AGENT_CONSOLE_DIR = path.join(__dirname, '../../public/agent-console');
 
 /**
@@ -229,50 +232,61 @@ async function buildFileManifest(relPath, includeContents) {
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * DISCOVER PAGES
+ * DISCOVER PAGES (manifest-based)
  * ───────────────────────────────────────────────────────────────────────────
  */
 async function discoverPages(allFiles) {
-  // Find all HTML files at root level (not in subdirs)
   const htmlFiles = allFiles.filter(f => f.endsWith('.html') && !f.includes('/'));
   
-  const expectedPages = [
-    'index.html',
-    'agent2.html',
-    'triggers.html',
-    'booking.html',
-    'global-hub.html',
-    'calendar.html'
-  ];
+  // Use manifest for expected pages
+  const expectedPages = Object.keys(truthManifest.PAGE_CONTROLLER_MAP);
   
-  const pages = htmlFiles.map(file => ({
-    filename: file,
-    url: `/agent-console/${file}`,
-    jsController: file.replace('.html', '.js'),
-    jsControllerExists: allFiles.includes(file.replace('.html', '.js'))
-  }));
+  const pages = htmlFiles.map(file => {
+    const expectedController = truthManifest.PAGE_CONTROLLER_MAP[file];
+    return {
+      filename: file,
+      url: `/agent-console/${file}`,
+      jsController: expectedController || file.replace('.html', '.js'),
+      jsControllerExists: allFiles.includes(expectedController || file.replace('.html', '.js')),
+      inManifest: expectedPages.includes(file)
+    };
+  });
   
-  const newPages = pages.filter(p => !expectedPages.includes(p.filename));
+  // Missing = in manifest but not found
   const missingPages = expectedPages.filter(p => !htmlFiles.includes(p));
+  
+  // Extra = found but not in manifest (requires manifest update)
+  const extraPages = pages.filter(p => !p.inManifest);
+  
+  // Determine status
+  let status = 'COMPLETE';
+  if (missingPages.length > 0) {
+    status = 'REQUIRED_PAGES_MISSING';
+  } else if (extraPages.length > 0) {
+    status = 'MANIFEST_UPDATE_NEEDED';
+  }
   
   return {
     totalPages: pages.length,
     pages,
-    expectedPages,
-    newPagesDetected: newPages,
-    missingPages,
-    status: newPages.length > 0 ? 'NEW_PAGES_FOUND' : (missingPages.length > 0 ? 'PAGES_MISSING' : 'COMPLETE')
+    manifestExpected: expectedPages,
+    missingRequired: missingPages,
+    extraNotInManifest: extraPages.map(p => p.filename),
+    status,
+    note: extraPages.length > 0 
+      ? 'Extra pages found - update config/truthManifest.js to include them'
+      : null
   };
 }
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * DISCOVER MODALS
+ * DISCOVER MODALS (manifest-based)
  * ───────────────────────────────────────────────────────────────────────────
  */
 async function discoverModals(allFiles) {
   const htmlFiles = allFiles.filter(f => f.endsWith('.html'));
-  const modals = [];
+  const foundModals = [];
   
   for (const file of htmlFiles) {
     const fullPath = path.join(AGENT_CONSOLE_DIR, file);
@@ -280,14 +294,25 @@ async function discoverModals(allFiles) {
     try {
       const content = await fs.readFile(fullPath, 'utf-8');
       
-      // Find modal-backdrop or modal IDs
+      // Find all modal IDs
       const modalMatches = content.matchAll(/id=["'](modal-[^"']+)["']/g);
       
       for (const match of modalMatches) {
-        modals.push({
-          modalId: match[1],
+        const modalId = match[1];
+        
+        // Skip ignored IDs (close buttons, sub-elements, etc.)
+        if (truthManifest.IGNORED_MODAL_IDS.includes(modalId)) {
+          continue;
+        }
+        
+        const manifestEntry = truthManifest.REQUIRED_MODALS.find(m => m.id === modalId);
+        
+        foundModals.push({
+          modalId,
           page: file,
-          pageUrl: `/agent-console/${file}`
+          pageUrl: `/agent-console/${file}`,
+          inManifest: !!manifestEntry,
+          purpose: manifestEntry?.purpose || 'Not documented in manifest'
         });
       }
       
@@ -298,26 +323,37 @@ async function discoverModals(allFiles) {
     }
   }
   
-  const expectedModals = [
-    'modal-greeting-rule',
-    'modal-trigger-edit',
-    'modal-approval',
-    'modal-gpt-settings',
-    'modal-create-group',
-    'modal-firstnames'
-  ];
+  // Expected from manifest
+  const expectedModalIds = truthManifest.REQUIRED_MODALS.map(m => m.id);
+  const foundModalIds = foundModals.map(m => m.modalId);
   
-  const modalIds = modals.map(m => m.modalId);
-  const newModals = modals.filter(m => !expectedModals.includes(m.modalId));
-  const missingModals = expectedModals.filter(m => !modalIds.includes(m));
+  // Missing = in manifest but not found
+  const missingModals = truthManifest.REQUIRED_MODALS
+    .filter(m => !foundModalIds.includes(m.id))
+    .map(m => ({ id: m.id, expectedPage: m.page, purpose: m.purpose }));
+  
+  // Extra = found but not in manifest (requires manifest update)
+  const extraModals = foundModals.filter(m => !m.inManifest);
+  
+  // Determine status
+  let status = 'COMPLETE';
+  if (missingModals.length > 0) {
+    status = 'REQUIRED_MODALS_MISSING';
+  } else if (extraModals.length > 0) {
+    status = 'MANIFEST_UPDATE_NEEDED';
+  }
   
   return {
-    totalModals: modals.length,
-    modals,
-    expectedModals,
-    newModalsDetected: newModals,
-    missingModals,
-    status: newModals.length > 0 ? 'NEW_MODALS_FOUND' : (missingModals.length > 0 ? 'MODALS_MISSING' : 'COMPLETE')
+    totalModals: foundModals.length,
+    modals: foundModals,
+    manifestExpected: truthManifest.REQUIRED_MODALS,
+    missingRequired: missingModals,
+    extraNotInManifest: extraModals,
+    ignoredIds: truthManifest.IGNORED_MODAL_IDS,
+    status,
+    note: extraModals.length > 0 
+      ? 'Extra modals found - update config/truthManifest.js to include them'
+      : null
   };
 }
 
@@ -709,93 +745,170 @@ async function checkUiCoverage(company) {
 
 /**
  * ════════════════════════════════════════════════════════════════════════════
- * TRUTH STATUS AGGREGATOR
+ * TRUTH STATUS AGGREGATOR (Manifest-Based)
  * ════════════════════════════════════════════════════════════════════════════
  * 
  * Combines all lane statuses into overall Truth status.
- * Returns COMPLETE or INCOMPLETE with reasons.
+ * 
+ * STATUS DEFINITIONS:
+ * - COMPLETE: All manifest requirements met, no critical issues
+ * - INCOMPLETE: Missing required files/modals OR critical compliance violations
+ * - MANIFEST_UPDATE_NEEDED: Extra files/modals found (not a failure, but needs update)
+ * 
+ * Evidence-based: Every issue includes file path, line number, or specific ID.
  * ════════════════════════════════════════════════════════════════════════════
  */
 function computeTruthStatus(uiTruth, complianceTruth) {
   const issues = [];
+  const manifestGaps = [];
   
-  // Check for new pages not documented
-  if (uiTruth.pageDiscovery.newPagesDetected.length > 0) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Check 1: Required pages from manifest
+  // ─────────────────────────────────────────────────────────────────────────
+  if (uiTruth.pageDiscovery.missingRequired?.length > 0) {
     issues.push({
-      type: 'NEW_PAGES_DETECTED',
-      severity: 'WARNING',
-      message: `${uiTruth.pageDiscovery.newPagesDetected.length} new page(s) detected (not in expected list)`,
-      pages: uiTruth.pageDiscovery.newPagesDetected.map(p => p.filename),
-      action: 'Update expected pages list or verify these pages are intentional'
-    });
-  }
-  
-  // Check for missing expected pages
-  if (uiTruth.pageDiscovery.missingPages.length > 0) {
-    issues.push({
-      type: 'PAGES_MISSING',
+      type: 'REQUIRED_PAGES_MISSING',
       severity: 'CRITICAL',
-      message: `${uiTruth.pageDiscovery.missingPages.length} expected page(s) missing`,
-      pages: uiTruth.pageDiscovery.missingPages,
-      action: 'Verify these pages were not accidentally deleted'
+      message: `${uiTruth.pageDiscovery.missingRequired.length} required page(s) missing from deployment`,
+      evidence: uiTruth.pageDiscovery.missingRequired,
+      manifestFile: 'config/truthManifest.js',
+      action: 'Deploy missing pages or remove from manifest if intentionally removed'
     });
   }
   
-  // Check for broken links
+  // Extra pages = manifest needs update (not a failure)
+  if (uiTruth.pageDiscovery.extraNotInManifest?.length > 0) {
+    manifestGaps.push({
+      type: 'EXTRA_PAGES',
+      severity: 'INFO',
+      message: `${uiTruth.pageDiscovery.extraNotInManifest.length} page(s) not in manifest`,
+      evidence: uiTruth.pageDiscovery.extraNotInManifest,
+      action: 'Add to config/truthManifest.js PAGE_CONTROLLER_MAP'
+    });
+  }
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // Check 2: Required modals from manifest
+  // ─────────────────────────────────────────────────────────────────────────
+  if (uiTruth.modalDiscovery.missingRequired?.length > 0) {
+    issues.push({
+      type: 'REQUIRED_MODALS_MISSING',
+      severity: 'CRITICAL',
+      message: `${uiTruth.modalDiscovery.missingRequired.length} required modal(s) missing from HTML`,
+      evidence: uiTruth.modalDiscovery.missingRequired,
+      manifestFile: 'config/truthManifest.js',
+      action: 'Add missing modals to HTML or remove from manifest if intentionally removed'
+    });
+  }
+  
+  // Extra modals = manifest needs update (not a failure)
+  if (uiTruth.modalDiscovery.extraNotInManifest?.length > 0) {
+    manifestGaps.push({
+      type: 'EXTRA_MODALS',
+      severity: 'INFO',
+      message: `${uiTruth.modalDiscovery.extraNotInManifest.length} modal(s) not in manifest`,
+      evidence: uiTruth.modalDiscovery.extraNotInManifest.map(m => ({
+        id: m.modalId,
+        page: m.page
+      })),
+      action: 'Add to config/truthManifest.js REQUIRED_MODALS or IGNORED_MODAL_IDS'
+    });
+  }
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // Check 3: Broken internal links
+  // ─────────────────────────────────────────────────────────────────────────
   if (uiTruth.linkValidation.totalIssues > 0) {
     issues.push({
       type: 'BROKEN_LINKS',
       severity: 'WARNING',
       message: `${uiTruth.linkValidation.totalIssues} broken internal link(s) detected`,
-      count: uiTruth.linkValidation.totalIssues,
+      evidence: uiTruth.linkValidation.brokenLinks.slice(0, 10), // Cap at 10
       action: 'Fix broken links or verify they are external/dynamic'
     });
   }
   
-  // Check for new modals
-  if (uiTruth.modalDiscovery.newModalsDetected.length > 0) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Check 4: UI coverage violations (components without UI editors)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (complianceTruth.uiCoverageReport?.totalIssues > 0) {
     issues.push({
-      type: 'NEW_MODALS_DETECTED',
-      severity: 'INFO',
-      message: `${uiTruth.modalDiscovery.newModalsDetected.length} new modal(s) detected`,
-      modals: uiTruth.modalDiscovery.newModalsDetected.map(m => m.modalId),
-      action: 'Update expected modals list or document these modals'
-    });
-  }
-  
-  // Check for UI coverage violations (MOST IMPORTANT)
-  if (complianceTruth.uiCoverageReport.totalIssues > 0) {
-    issues.push({
-      type: 'UI_COVERAGE_VIOLATIONS',
+      type: 'UI_COVERAGE_GAPS',
       severity: 'CRITICAL',
-      message: `${complianceTruth.uiCoverageReport.totalIssues} component(s) not UI-driven (hardcoded in backend)`,
-      compliantPercentage: complianceTruth.uiCoverageReport.compliantPercentage,
-      issues: complianceTruth.uiCoverageReport.issues,
-      action: 'Build missing UI components to achieve 100% UI-driven compliance'
+      message: `${complianceTruth.uiCoverageReport.totalIssues} backend component(s) lack UI editors`,
+      evidence: complianceTruth.uiCoverageReport.issues,
+      complianceScore: {
+        total: complianceTruth.uiCoverageReport.totalComponents,
+        compliant: complianceTruth.uiCoverageReport.compliantComponents,
+        percentage: complianceTruth.uiCoverageReport.compliantPercentage
+      },
+      action: 'Build UI editors for each listed component'
     });
   }
   
-  // Check for hardcoded speech in code
-  if (complianceTruth.hardcodedSpeechScan?.violations?.total > 0) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Check 5: Hardcoded speech in backend code
+  // ─────────────────────────────────────────────────────────────────────────
+  const hardcodedCount = complianceTruth.hardcodedSpeechScan?.violations?.total || 0;
+  if (hardcodedCount > 0) {
     issues.push({
-      type: 'HARDCODED_SPEECH_FOUND',
+      type: 'HARDCODED_SPEECH',
       severity: 'CRITICAL',
-      message: `${complianceTruth.hardcodedSpeechScan.violations.total} hardcoded speech instance(s) found in code`,
-      count: complianceTruth.hardcodedSpeechScan.violations.total,
-      action: 'Remove hardcoded text, use UI-configured values'
+      message: `${hardcodedCount} hardcoded speech string(s) found in backend code`,
+      evidence: {
+        total: hardcodedCount,
+        critical: complianceTruth.hardcodedSpeechScan.violations.critical || 0,
+        high: complianceTruth.hardcodedSpeechScan.violations.high || 0,
+        medium: complianceTruth.hardcodedSpeechScan.violations.medium || 0,
+        sample: complianceTruth.hardcodedSpeechScan.violations.list?.slice(0, 5) || []
+      },
+      action: 'Move hardcoded text to database fields with UI editors'
     });
   }
   
-  // Determine overall status
-  const hasCriticalIssues = issues.some(i => i.severity === 'CRITICAL');
-  const status = hasCriticalIssues ? 'INCOMPLETE' : 'COMPLETE';
+  // ─────────────────────────────────────────────────────────────────────────
+  // Compute overall status
+  // ─────────────────────────────────────────────────────────────────────────
+  const criticalCount = issues.filter(i => i.severity === 'CRITICAL').length;
+  const warningCount = issues.filter(i => i.severity === 'WARNING').length;
+  
+  let status;
+  if (criticalCount > 0) {
+    status = 'INCOMPLETE';
+  } else if (manifestGaps.length > 0) {
+    status = 'MANIFEST_UPDATE_NEEDED';
+  } else {
+    status = 'COMPLETE';
+  }
+  
+  // Calculate compliance score
+  const uiCompliancePercent = complianceTruth.uiCoverageReport?.compliantPercentage || 0;
+  const speechCompliancePercent = hardcodedCount === 0 ? 100 : 0;
+  const overallCompliance = Math.round((uiCompliancePercent + speechCompliancePercent) / 2);
   
   return {
     status,
-    totalIssues: issues.length,
-    criticalIssues: issues.filter(i => i.severity === 'CRITICAL').length,
+    statusExplanation: {
+      COMPLETE: 'All manifest requirements met and no critical compliance issues',
+      INCOMPLETE: 'Missing required files/modals or critical compliance violations exist',
+      MANIFEST_UPDATE_NEEDED: 'Deployment has extra files/modals - update manifest to match'
+    }[status],
+    summary: {
+      criticalIssues: criticalCount,
+      warnings: warningCount,
+      manifestGaps: manifestGaps.length,
+      overallCompliancePercent: overallCompliance
+    },
     issues,
-    compliantPercentage: complianceTruth.uiCoverageReport.compliantPercentage
+    manifestGaps,
+    complianceScoring: {
+      method: 'Average of UI coverage (% of components with editors) and speech compliance (0% if any hardcoded, 100% if none)',
+      uiCoveragePercent: uiCompliancePercent,
+      speechCompliancePercent,
+      overallPercent: overallCompliance,
+      denominator: `${complianceTruth.uiCoverageReport?.totalComponents || 0} UI components + hardcoded speech scan`
+    },
+    manifestVersion: truthManifest.manifestVersion
   };
 }
 
@@ -959,6 +1072,200 @@ router.get(
         error: 'Truth export failed',
         message: error.message,
         truthVersion: TRUTH_VERSION
+      });
+    }
+  }
+);
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * SELFTEST ENDPOINT
+ * ════════════════════════════════════════════════════════════════════════════
+ * 
+ * GET /api/agent-console/truth/selftest
+ * 
+ * Verifies Truth system integrity without requiring companyId.
+ * Tests: manifest validity, file existence, modal extraction, scanner.
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+router.get(
+  '/selftest',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const startTime = Date.now();
+    const tests = [];
+    
+    try {
+      // ───────────────────────────────────────────────────────────────────────
+      // Test 1: Manifest loads correctly
+      // ───────────────────────────────────────────────────────────────────────
+      try {
+        const manifestTest = {
+          name: 'manifest_loads',
+          description: 'Truth manifest file loads without errors'
+        };
+        
+        if (truthManifest.REQUIRED_FILES && truthManifest.REQUIRED_MODALS) {
+          manifestTest.status = 'PASS';
+          manifestTest.details = {
+            requiredFiles: truthManifest.REQUIRED_FILES.length,
+            requiredModals: truthManifest.REQUIRED_MODALS.length,
+            manifestVersion: truthManifest.manifestVersion
+          };
+        } else {
+          manifestTest.status = 'FAIL';
+          manifestTest.error = 'Missing REQUIRED_FILES or REQUIRED_MODALS';
+        }
+        tests.push(manifestTest);
+      } catch (err) {
+        tests.push({
+          name: 'manifest_loads',
+          status: 'FAIL',
+          error: err.message
+        });
+      }
+      
+      // ───────────────────────────────────────────────────────────────────────
+      // Test 2: Agent Console directory exists
+      // ───────────────────────────────────────────────────────────────────────
+      try {
+        await fs.access(AGENT_CONSOLE_DIR);
+        tests.push({
+          name: 'agent_console_dir_exists',
+          description: 'Agent Console directory is accessible',
+          status: 'PASS',
+          details: { path: AGENT_CONSOLE_DIR }
+        });
+      } catch (err) {
+        tests.push({
+          name: 'agent_console_dir_exists',
+          status: 'FAIL',
+          error: `Directory not found: ${AGENT_CONSOLE_DIR}`
+        });
+      }
+      
+      // ───────────────────────────────────────────────────────────────────────
+      // Test 3: All required files exist
+      // ───────────────────────────────────────────────────────────────────────
+      const missingFiles = [];
+      for (const file of truthManifest.REQUIRED_FILES) {
+        const fullPath = path.join(AGENT_CONSOLE_DIR, file);
+        try {
+          await fs.access(fullPath);
+        } catch {
+          missingFiles.push(file);
+        }
+      }
+      
+      tests.push({
+        name: 'required_files_exist',
+        description: 'All manifest-required files exist on disk',
+        status: missingFiles.length === 0 ? 'PASS' : 'FAIL',
+        details: {
+          total: truthManifest.REQUIRED_FILES.length,
+          found: truthManifest.REQUIRED_FILES.length - missingFiles.length,
+          missing: missingFiles
+        }
+      });
+      
+      // ───────────────────────────────────────────────────────────────────────
+      // Test 4: Modal extraction works
+      // ───────────────────────────────────────────────────────────────────────
+      try {
+        const htmlFiles = truthManifest.REQUIRED_FILES.filter(f => f.endsWith('.html'));
+        let totalModalsFound = 0;
+        
+        for (const file of htmlFiles) {
+          const fullPath = path.join(AGENT_CONSOLE_DIR, file);
+          try {
+            const content = await fs.readFile(fullPath, 'utf-8');
+            const matches = content.matchAll(/id=["'](modal-[^"']+)["']/g);
+            for (const _ of matches) totalModalsFound++;
+          } catch { /* ignore individual file errors */ }
+        }
+        
+        tests.push({
+          name: 'modal_extraction',
+          description: 'Modal IDs can be extracted from HTML files',
+          status: totalModalsFound > 0 ? 'PASS' : 'WARN',
+          details: {
+            totalModalsFound,
+            htmlFilesScanned: htmlFiles.length
+          }
+        });
+      } catch (err) {
+        tests.push({
+          name: 'modal_extraction',
+          status: 'FAIL',
+          error: err.message
+        });
+      }
+      
+      // ───────────────────────────────────────────────────────────────────────
+      // Test 5: Hardcoded speech scanner runs
+      // ───────────────────────────────────────────────────────────────────────
+      try {
+        const scanResult = await scanForHardcodedSpeech();
+        tests.push({
+          name: 'speech_scanner',
+          description: 'Hardcoded speech scanner runs without errors',
+          status: scanResult.scanStatus === 'SUCCESS' ? 'PASS' : 'WARN',
+          details: {
+            scanStatus: scanResult.scanStatus,
+            scannedFiles: scanResult.scannedFiles,
+            violationsFound: scanResult.violations?.total || 0
+          }
+        });
+      } catch (err) {
+        tests.push({
+          name: 'speech_scanner',
+          status: 'FAIL',
+          error: err.message
+        });
+      }
+      
+      // ───────────────────────────────────────────────────────────────────────
+      // Aggregate results
+      // ───────────────────────────────────────────────────────────────────────
+      const passed = tests.filter(t => t.status === 'PASS').length;
+      const failed = tests.filter(t => t.status === 'FAIL').length;
+      const warned = tests.filter(t => t.status === 'WARN').length;
+      
+      const duration = Date.now() - startTime;
+      
+      res.json({
+        selftest: 'TRUTH_SYSTEM',
+        version: TRUTH_VERSION,
+        timestamp: new Date().toISOString(),
+        duration: `${duration}ms`,
+        summary: {
+          total: tests.length,
+          passed,
+          failed,
+          warnings: warned,
+          overallStatus: failed > 0 ? 'FAIL' : (warned > 0 ? 'WARN' : 'PASS')
+        },
+        tests,
+        manifestInfo: {
+          version: truthManifest.manifestVersion,
+          lastUpdated: truthManifest.lastUpdated,
+          requiredFilesCount: truthManifest.REQUIRED_FILES.length,
+          requiredModalsCount: truthManifest.REQUIRED_MODALS.length
+        }
+      });
+      
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Selftest failed`, {
+        error: error.message,
+        stack: error.stack
+      });
+      
+      res.status(500).json({
+        selftest: 'TRUTH_SYSTEM',
+        version: TRUTH_VERSION,
+        summary: { overallStatus: 'ERROR' },
+        error: error.message
       });
     }
   }
