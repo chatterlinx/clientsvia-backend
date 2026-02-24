@@ -927,15 +927,29 @@
           }
           
           const groupId = state.editingTrigger.originGroupId;
-          await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups/${groupId}/triggers/${ruleId}`, {
+          const result = await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups/${groupId}/triggers/${ruleId}`, {
             method: 'PATCH',
             body: payload
           });
+          
+          // Check if audio was invalidated due to text change (affects all companies)
+          if (result.audioInvalidated) {
+            const count = result.audioInvalidatedCount || 0;
+            showToast('warning', 'Audio Invalidated', 
+              count > 1 
+                ? `Text changed — audio invalidated for ${count} companies. Each needs regeneration.`
+                : 'Text changed — please regenerate audio to match new content.');
+          }
         } else {
-          await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${ruleId}`, {
+          const result = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${ruleId}`, {
             method: 'PATCH',
             body: payload
           });
+          
+          // Check if audio was invalidated due to text change
+          if (result.audioInvalidated) {
+            showToast('warning', 'Audio Invalidated', 'Text changed — please regenerate audio to match new content.');
+          }
         }
         
         showToast('success', 'Saved', 'Trigger updated successfully.');
@@ -1317,17 +1331,35 @@
   }
   
   function checkAudioStatus() {
-    const audioUrl = DOM.inputTriggerAudio?.value?.trim();
-    if (!audioUrl) {
+    const currentText = DOM.inputTriggerAnswer?.value?.trim();
+    const originalText = state.editingTrigger?.answer?.answerText?.trim() || '';
+    const hasAudio = state.editingTrigger?.answer?.audioUrl || state.editingTrigger?.answer?.audioNeedsRegeneration;
+    
+    // Only show warning if there's existing audio and text was changed
+    if (!hasAudio || !currentText) {
       return;
     }
     
-    if (DOM.audioStatusHint) {
-      DOM.audioStatusHint.innerHTML = '<span style="color: #f59e0b;">⚠️ Text changed — regenerate to update audio</span>';
-    }
+    const textChanged = currentText !== originalText;
     
-    if (DOM.btnGenerateAudio) {
-      DOM.btnGenerateAudio.textContent = 'Regenerate';
+    if (textChanged) {
+      if (DOM.audioStatusHint) {
+        DOM.audioStatusHint.innerHTML = '<span style="color: #f59e0b;">⚠️ Text changed — audio will be invalidated when you save. Regenerate after saving.</span>';
+      }
+      
+      if (DOM.btnGenerateAudio) {
+        DOM.btnGenerateAudio.textContent = 'Regenerate';
+      }
+    } else if (state.editingTrigger?.answer?.audioNeedsRegeneration) {
+      // Text matches but audio is already marked stale (variable changed)
+      if (DOM.audioStatusHint) {
+        DOM.audioStatusHint.innerHTML = '<span style="color: #dc2626;">⚠️ <strong>Variable value changed</strong> — audio is outdated, please regenerate!</span>';
+      }
+    } else if (state.editingTrigger?.answer?.audioUrl) {
+      // Text matches and audio is valid
+      if (DOM.audioStatusHint) {
+        DOM.audioStatusHint.innerHTML = '<span style="color: #16a34a;">✅ Audio generated! Click Save to keep it.</span>';
+      }
     }
   }
 

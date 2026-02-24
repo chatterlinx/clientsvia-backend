@@ -41,6 +41,7 @@ const { PERMISSIONS } = require('../../middleware/rbac');
 const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
 const GlobalTrigger = require('../../models/GlobalTrigger');
 const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+const TriggerAudio = require('../../models/TriggerAudio');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // CANONICALIZATION RULES
@@ -1008,6 +1009,9 @@ router.patch('/trigger-groups/:groupId/triggers/:ruleId',
         }
       }
 
+      // Check if answer text changed - will need to invalidate audio for all companies using this trigger
+      const textChanged = cleanUpdates.answerText && cleanUpdates.answerText !== trigger.answerText;
+
       Object.assign(trigger, cleanUpdates);
       trigger.version += 1;
       trigger.updatedAt = new Date();
@@ -1015,10 +1019,35 @@ router.patch('/trigger-groups/:groupId/triggers/:ruleId',
 
       await trigger.save();
 
+      // If text changed, invalidate audio for ALL companies that have audio for this trigger
+      let audioInvalidatedCount = 0;
+      if (textChanged) {
+        const result = await TriggerAudio.updateMany(
+          { ruleId, isValid: true },
+          {
+            $set: {
+              isValid: false,
+              invalidatedAt: new Date(),
+              invalidatedReason: 'GLOBAL_TRIGGER_TEXT_CHANGED'
+            }
+          }
+        );
+        audioInvalidatedCount = result.modifiedCount || 0;
+        
+        if (audioInvalidatedCount > 0) {
+          logger.info('[GlobalTriggers] Audio invalidated across companies due to text change', {
+            groupId: normalizedGroupId,
+            ruleId,
+            invalidatedCount: audioInvalidatedCount
+          });
+        }
+      }
+
       group.incrementVersion(userId);
       group.addAuditEntry('TRIGGER_UPDATED', userId, { 
         ruleId, 
-        updatedFields: Object.keys(cleanUpdates) 
+        updatedFields: Object.keys(cleanUpdates),
+        audioInvalidated: audioInvalidatedCount > 0
       });
       await group.save();
 
@@ -1026,12 +1055,16 @@ router.patch('/trigger-groups/:groupId/triggers/:ruleId',
         groupId: normalizedGroupId,
         ruleId,
         updatedFields: Object.keys(cleanUpdates),
+        textChanged,
+        audioInvalidatedCount,
         updatedBy: userId
       });
 
       return res.json({
         success: true,
-        data: trigger
+        data: trigger,
+        audioInvalidated: textChanged,
+        audioInvalidatedCount
       });
     } catch (error) {
       logger.error('[GlobalTriggers] Update trigger error', { error: error.message });
