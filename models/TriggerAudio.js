@@ -223,6 +223,51 @@ triggerAudioSchema.statics.invalidateAudio = function(companyId, ruleId, reason)
 };
 
 /**
+ * Invalidate all audio for a company that uses specific variables
+ * Called when variable values change so admins know to regenerate
+ * @param {string} companyId - Company ID
+ * @param {string[]} changedVarNames - Variable names that changed
+ * @returns {Promise<{invalidatedCount: number, invalidatedRuleIds: string[]}>}
+ */
+triggerAudioSchema.statics.invalidateAudioUsingVariables = async function(companyId, changedVarNames) {
+  if (!changedVarNames || changedVarNames.length === 0) {
+    return { invalidatedCount: 0, invalidatedRuleIds: [] };
+  }
+  
+  // Build regex pattern to match any of the variable placeholders
+  // e.g., changedVarNames = ['diagnosticfee', 'servicefee'] -> /\{(diagnosticfee|servicefee)\}/i
+  const varPattern = changedVarNames.map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const regex = new RegExp(`\\{(${varPattern})\\}`, 'i');
+  
+  // Find all valid audio for this company where sourceText contains any of the variables
+  const audioToInvalidate = await this.find({
+    companyId,
+    isValid: true,
+    sourceText: { $regex: regex }
+  });
+  
+  if (audioToInvalidate.length === 0) {
+    return { invalidatedCount: 0, invalidatedRuleIds: [] };
+  }
+  
+  const ruleIds = audioToInvalidate.map(a => a.ruleId);
+  
+  // Invalidate all matching audio
+  await this.updateMany(
+    { companyId, ruleId: { $in: ruleIds }, isValid: true },
+    {
+      $set: {
+        isValid: false,
+        invalidatedAt: new Date(),
+        invalidatedReason: `VARIABLE_CHANGED:${changedVarNames.join(',')}`
+      }
+    }
+  );
+  
+  return { invalidatedCount: ruleIds.length, invalidatedRuleIds: ruleIds };
+};
+
+/**
  * Delete audio for a trigger
  */
 triggerAudioSchema.statics.deleteAudio = function(companyId, ruleId) {

@@ -1368,20 +1368,51 @@ router.put('/:companyId/variables',
         settings = new CompanyTriggerSettings({ companyId });
       }
 
+      // Detect which variables actually changed value
+      const oldVariables = settings.companyVariables instanceof Map
+        ? Object.fromEntries(settings.companyVariables)
+        : (settings.companyVariables || {});
+      
+      const changedVarNames = [];
+      for (const [varName, newValue] of Object.entries(variables)) {
+        const oldValue = oldVariables[varName] || '';
+        if (oldValue !== newValue) {
+          changedVarNames.push(varName);
+        }
+      }
+
       settings.companyVariables = new Map(Object.entries(variables));
       settings.updatedAt = new Date();
       await settings.save();
 
+      // If any variables changed, invalidate audio that uses them
+      let invalidationResult = { invalidatedCount: 0, invalidatedRuleIds: [] };
+      if (changedVarNames.length > 0) {
+        invalidationResult = await TriggerAudio.invalidateAudioUsingVariables(companyId, changedVarNames);
+        
+        if (invalidationResult.invalidatedCount > 0) {
+          logger.info('[CompanyTriggers] Audio invalidated due to variable change', {
+            companyId,
+            changedVariables: changedVarNames,
+            invalidatedCount: invalidationResult.invalidatedCount,
+            invalidatedRuleIds: invalidationResult.invalidatedRuleIds
+          });
+        }
+      }
+
       logger.info('[CompanyTriggers] Company variables updated', {
         companyId,
         variableCount: settings.companyVariables.size,
+        changedVariables: changedVarNames,
         updatedBy: userId
       });
 
       return res.json({
         success: true,
         data: {
-          companyVariables: Object.fromEntries(settings.companyVariables)
+          companyVariables: Object.fromEntries(settings.companyVariables),
+          audioInvalidated: invalidationResult.invalidatedCount > 0,
+          invalidatedRuleIds: invalidationResult.invalidatedRuleIds
         }
       });
     } catch (error) {

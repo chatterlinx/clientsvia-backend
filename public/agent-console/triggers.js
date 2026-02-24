@@ -570,7 +570,17 @@
       console.log('[Variables] Save result:', result);
       
       renderVariables();
-      showToast('success', 'Variable Saved', `{${varName}} = ${value}`);
+      
+      // Check if audio was invalidated due to variable change
+      if (result.audioInvalidated && result.invalidatedRuleIds?.length > 0) {
+        showToast('warning', 'Audio Needs Regeneration', 
+          `${result.invalidatedRuleIds.length} trigger(s) use {${varName}} and need audio regenerated`);
+        
+        // Refresh triggers list to update audio status indicators
+        await loadTriggers();
+      } else {
+        showToast('success', 'Variable Saved', `{${varName}} = ${value}`);
+      }
       
     } catch (error) {
       console.error('[Variables] Save failed:', error);
@@ -582,6 +592,7 @@
     const keywords = (trigger.match?.keywords || []).slice(0, 4).join(', ');
     const hasText = trigger.answer?.answerText ? true : false;
     const hasAudio = trigger.answer?.hasAudio || trigger.answer?.audioUrl;
+    const audioNeedsRegeneration = trigger.answer?.audioNeedsRegeneration;
     const isEnabled = trigger.isEnabled !== false;
     const isGlobalScope = trigger.scope === 'GLOBAL';
     
@@ -606,7 +617,8 @@
         <div class="answer-format">
           ${hasText ? '<span class="answer-badge text">TEXT</span>' : ''}
           ${hasAudio ? '<span class="answer-badge audio">AUDIO</span>' : ''}
-          ${!hasText && !hasAudio ? '<span style="color: var(--text-muted);">—</span>' : ''}
+          ${audioNeedsRegeneration ? '<span class="answer-badge stale" title="Variable value changed - regenerate audio">⚠️ STALE</span>' : ''}
+          ${!hasText && !hasAudio && !audioNeedsRegeneration ? '<span style="color: var(--text-muted);">—</span>' : ''}
         </div>
         <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
         <div>
@@ -814,6 +826,27 @@
       DOM.inputTriggerAudio.value = trigger.answer?.audioUrl || '';
       DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
       DOM.scopeSection.style.display = 'none';
+      
+      // Show audio status based on whether audio needs regeneration
+      if (DOM.audioStatusHint) {
+        if (trigger.answer?.audioNeedsRegeneration) {
+          DOM.audioStatusHint.innerHTML = '<span style="color: #dc2626;">⚠️ <strong>Variable value changed</strong> — audio is outdated, please regenerate!</span>';
+        } else if (trigger.answer?.audioUrl) {
+          DOM.audioStatusHint.innerHTML = '<span style="color: #16a34a;">✅ Audio generated! Click Save to keep it.</span>';
+        } else {
+          DOM.audioStatusHint.innerHTML = '';
+        }
+      }
+      
+      // Update generate button text
+      if (DOM.btnGenerateAudio) {
+        DOM.btnGenerateAudio.textContent = trigger.answer?.audioUrl || trigger.answer?.audioNeedsRegeneration ? 'Regenerate' : 'Generate MP3';
+      }
+      
+      // Show/hide play button based on audio availability
+      if (DOM.btnPlayAudio) {
+        DOM.btnPlayAudio.style.display = trigger.answer?.audioUrl ? 'block' : 'none';
+      }
     } else {
       DOM.modalTriggerTitle.textContent = 'Add Trigger';
       DOM.inputTriggerLabel.value = '';
@@ -828,6 +861,17 @@
       DOM.inputTriggerFollowup.value = '';
       DOM.inputTriggerLocal.checked = true;
       DOM.scopeSection.style.display = 'block';
+      
+      // Reset audio status for new triggers
+      if (DOM.audioStatusHint) {
+        DOM.audioStatusHint.innerHTML = '';
+      }
+      if (DOM.btnGenerateAudio) {
+        DOM.btnGenerateAudio.textContent = 'Generate MP3';
+      }
+      if (DOM.btnPlayAudio) {
+        DOM.btnPlayAudio.style.display = 'none';
+      }
     }
     
     DOM.modalTriggerEdit.classList.add('active');
