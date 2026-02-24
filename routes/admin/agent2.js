@@ -1673,15 +1673,49 @@ router.post('/:companyId/generate-trigger-audio',
         // Load company variables
         const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
         const settings = await CompanyTriggerSettings.findOne({ companyId });
-        const variables = settings?.companyVariables || new Map();
         
-        // Replace placeholders with actual values
+        // Convert Mongoose Map to plain object reliably
+        let variables = {};
+        if (settings?.companyVariables) {
+          if (settings.companyVariables instanceof Map) {
+            variables = Object.fromEntries(settings.companyVariables);
+          } else if (typeof settings.companyVariables.toObject === 'function') {
+            // Mongoose Map has toObject method
+            variables = settings.companyVariables.toObject();
+          } else if (typeof settings.companyVariables === 'object') {
+            variables = { ...settings.companyVariables };
+          }
+        }
+        
+        logger.info('[Agent2Audio] Variable substitution', {
+          companyId,
+          detectedPlaceholders: placeholders,
+          storedVariables: variables,
+          variableKeys: Object.keys(variables)
+        });
+        
+        // Replace placeholders with actual values (case-insensitive key lookup)
         for (const varName of placeholders) {
-          const value = variables.get ? variables.get(varName) : variables[varName];
+          // Try exact match first, then case-insensitive
+          let value = variables[varName];
+          if (!value) {
+            // Try case-insensitive lookup
+            const lowerVarName = varName.toLowerCase();
+            const matchingKey = Object.keys(variables).find(k => k.toLowerCase() === lowerVarName);
+            if (matchingKey) {
+              value = variables[matchingKey];
+              logger.info('[Agent2Audio] Case-insensitive variable match', {
+                requested: varName,
+                matched: matchingKey,
+                value
+              });
+            }
+          }
+          
           if (!value || !value.trim()) {
             missingVariables.push(varName);
           } else {
-            finalText = finalText.replace(new RegExp(`\\{${varName}\\}`, 'g'), value);
+            finalText = finalText.replace(new RegExp(`\\{${varName}\\}`, 'gi'), value);
           }
         }
         
@@ -1707,8 +1741,8 @@ router.post('/:companyId/generate-trigger-audio',
         companyId,
         ruleId,
         voiceId,
-        originalTextLength: text.length,
-        finalTextLength: finalText.length,
+        originalText: text.substring(0, 200),
+        finalText: finalText.substring(0, 200),
         hadPlaceholders: placeholders.length > 0,
         replacedVariables: placeholders
       });
@@ -1730,15 +1764,31 @@ router.post('/:companyId/generate-trigger-audio',
         fs.mkdirSync(audioDir, { recursive: true });
       }
 
-      const hash = crypto.createHash('sha256').update(`${companyId}_${ruleId}_${text.trim()}`).digest('hex').slice(0, 16);
+      // IMPORTANT: Hash uses finalText (with substituted variables) so different
+      // variable values produce different audio files and avoid browser caching issues
+      const hash = crypto.createHash('sha256').update(`${companyId}_${ruleId}_${finalText.trim()}`).digest('hex').slice(0, 16);
       const fileName = `TRIGGER_CARD_ANSWER_${companyId.slice(0, 12)}_${hash}.mp3`;
       const filePath = path.join(audioDir, fileName);
       const audioUrl = `/audio/instant-lines/${fileName}`;
 
+      // Delete old audio file if it exists with a different name
+      const existingAudio = await TriggerAudio.findByCompanyAndRule(companyId, ruleId);
+      if (existingAudio && existingAudio.audioUrl !== audioUrl) {
+        const oldFilePath = path.join(__dirname, '../../public', existingAudio.audioUrl);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+            logger.info('[Agent2Audio] Deleted old audio file', { oldPath: existingAudio.audioUrl });
+          } catch (deleteErr) {
+            logger.warn('[Agent2Audio] Failed to delete old audio file', { error: deleteErr.message });
+          }
+        }
+      }
+
       fs.writeFileSync(filePath, buffer);
 
-      // Save to TriggerAudio collection
-      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, text, voiceId, userId);
+      // Save to TriggerAudio collection - use finalText for hash consistency
+      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, finalText, voiceId, userId);
 
       logger.info('[Agent2Audio] Audio generated successfully', {
         companyId,

@@ -1226,12 +1226,16 @@
   }
   
   function playTriggerAudio() {
-    const audioUrl = DOM.inputTriggerAudio?.value?.trim();
+    let audioUrl = DOM.inputTriggerAudio?.value?.trim();
     
     if (!audioUrl) {
       showToast('error', 'No Audio', 'Generate audio first');
       return;
     }
+    
+    // Add cache-busting parameter to avoid browser serving stale audio
+    const cacheBuster = `_cb=${Date.now()}`;
+    audioUrl = audioUrl.includes('?') ? `${audioUrl}&${cacheBuster}` : `${audioUrl}?${cacheBuster}`;
     
     const btn = DOM.btnPlayAudio;
     
