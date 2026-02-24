@@ -1172,7 +1172,8 @@ router.post(
  * ═══════════════════════════════════════════════════════════════════════════
  * POST /:companyId/greetings/seed-global
  * ═══════════════════════════════════════════════════════════════════════════
- * Load default platform greeting rules
+ * Legacy endpoint retained for compatibility.
+ * Seeding hardcoded default responses is disabled to enforce UI-driven speech.
  * 
  * RESPONSE:
  * {
@@ -1213,49 +1214,9 @@ router.post(
                 };
             }
             
-            // Default platform greeting rules
-            const defaultRules = [
-                {
-                    ruleId: 'hi-hello-hey',
-                    enabled: true,
-                    priority: 10,
-                    matchType: 'EXACT',
-                    triggers: ['hi', 'hello', 'hey'],
-                    response: 'Hi! How can I help you today?',
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                },
-                {
-                    ruleId: 'good-morning',
-                    enabled: true,
-                    priority: 11,
-                    matchType: 'EXACT',
-                    triggers: ['good morning'],
-                    response: 'Good morning! How can I help you today?',
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                },
-                {
-                    ruleId: 'good-afternoon',
-                    enabled: true,
-                    priority: 12,
-                    matchType: 'EXACT',
-                    triggers: ['good afternoon'],
-                    response: 'Good afternoon! How can I help you today?',
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                },
-                {
-                    ruleId: 'good-evening',
-                    enabled: true,
-                    priority: 13,
-                    matchType: 'EXACT',
-                    triggers: ['good evening'],
-                    response: 'Good evening! How can I help you today?',
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                }
-            ];
+            // Enterprise rule: no hardcoded greeting responses may be seeded.
+            // Keep list empty so only UI-authored rules exist.
+            const defaultRules = [];
             
             // Get existing rule IDs
             const existingRuleIds = new Set(
@@ -1269,7 +1230,7 @@ router.post(
             if (newRules.length === 0) {
                 return res.json({
                     success: true,
-                    message: 'All default rules already exist',
+                    message: 'Global default seeding disabled. Use UI-authored greeting rules only.',
                     data: {
                         rulesAdded: 0,
                         rules: []

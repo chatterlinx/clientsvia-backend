@@ -15,6 +15,8 @@
 
 This document summarizes an engineering review of the Agent Console system. The review focused on identifying gaps between the system's stated architecture rule ("all agent responses must be UI-driven") and current implementation.
 
+This package is an **enterprise-grade audit and remediation plan**. The current system is **not yet compliant** with the UI-driven speech rule; **Phase 1 remediation is required** to reach 100% UI-driven behavior.
+
 **Scope:** Agent Console frontend (6 pages) + backend routes and services  
 **Primary Output:** Truth Export system for verifiable system state  
 **Status:** Review complete, remediation plan attached

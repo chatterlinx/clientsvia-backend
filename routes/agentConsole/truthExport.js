@@ -685,8 +685,11 @@ function buildAuditProof(uiTruth, complianceTruth) {
   }));
 
   const hardcodedTotal = complianceTruth?.hardcodedSpeechScan?.violations?.total || 0;
-  const uiDrivenPercent = complianceTruth?.uiCoverageReport?.compliantPercentage || 0;
-  const hardcodedPercent = hardcodedTotal === 0 ? 100 : 0;
+  const uiDrivenSpeechPercent = complianceTruth?.uiCoverageReport?.compliantPercentage || 0;
+  const hardcodedSpeechPercent = findings.length > 0
+    ? Math.round((findings.length / Math.max(uiTruth.totalFiles || 1, 1)) * 100)
+    : 0;
+  const hardcodedFreePercent = hardcodedTotal === 0 ? 100 : 0;
 
   return {
     totalUiBytes: uiTruth.totalBytes || 0,
@@ -696,9 +699,10 @@ function buildAuditProof(uiTruth, complianceTruth) {
     pageCount: uiTruth.pageDiscovery?.totalPages || 0,
     hardcodedFindings: findings,
     complianceScore: {
-      uiDrivenPercent,
-      hardcodedPercent,
-      method: 'uiDrivenPercent from UI coverage report; hardcodedPercent is 100 only when hardcoded findings total is 0'
+      uiDrivenSpeechPercent,
+      hardcodedSpeechPercent,
+      hardcodedFreePercent,
+      method: 'uiDrivenSpeechPercent is from UI coverage; hardcodedSpeechPercent is findings/file ratio; hardcodedFreePercent is 100 only when hardcoded findings = 0'
     }
   };
 }

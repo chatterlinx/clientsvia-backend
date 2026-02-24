@@ -275,7 +275,7 @@ function defaultAgent2Config() {
       // ─────────────────────────────────────────────────────────────────────
       callStart: {
         enabled: true,
-        text: "Thank you for calling. How can I help you today?",
+        text: '',
         audioUrl: ''  // If present, play audio instead of TTS
       },
       // ─────────────────────────────────────────────────────────────────────
@@ -293,44 +293,7 @@ function defaultAgent2Config() {
           'appointment', 'price', 'cost', 'how much', 'service call',
           'diagnostic', 'emergency'
         ],
-        rules: [
-          {
-            id: 'greeting.hi',
-            enabled: true,
-            priority: 10,
-            matchMode: 'EXACT',
-            triggers: ['hi', 'hello', 'hey'],
-            responseText: "Hi! How can I help you today?",
-            audioUrl: ''
-          },
-          {
-            id: 'greeting.morning',
-            enabled: true,
-            priority: 11,
-            matchMode: 'EXACT',
-            triggers: ['good morning'],
-            responseText: "Good morning! How can I help you today?",
-            audioUrl: ''
-          },
-          {
-            id: 'greeting.afternoon',
-            enabled: true,
-            priority: 12,
-            matchMode: 'EXACT',
-            triggers: ['good afternoon'],
-            responseText: "Good afternoon! How can I help you today?",
-            audioUrl: ''
-          },
-          {
-            id: 'greeting.evening',
-            enabled: true,
-            priority: 13,
-            matchMode: 'EXACT',
-            triggers: ['good evening'],
-            responseText: "Good evening! How can I help you today?",
-            audioUrl: ''
-          }
-        ]
+        rules: []
       }
     },
     // ═══════════════════════════════════════════════════════════════════════
@@ -787,6 +750,34 @@ function mergeAgent2Config(saved) {
   return merged;
 }
 
+function validatePublishReadiness(companyDoc) {
+  const settings = companyDoc?.aiAgentSettings || {};
+  const agent2 = settings.agent2 || {};
+  const greetings = agent2.greetings || {};
+  const callStart = greetings.callStart || {};
+  const returnCaller = greetings.returnCaller || {};
+  const returnCallerText = typeof returnCaller === 'string' ? returnCaller : (returnCaller.text || '');
+  const discovery = agent2.discovery || {};
+  const bookingPrompts = agent2.bookingPrompts || {};
+  const recoveryMessages = settings.llm0Controls?.recoveryMessages || {};
+
+  const requiredChecks = [
+    { key: 'agent2.bookingPrompts.askName', ok: Boolean((bookingPrompts.askName || '').trim()) },
+    { key: 'agent2.bookingPrompts.askPhone', ok: Boolean((bookingPrompts.askPhone || '').trim()) },
+    { key: 'llm0Controls.recoveryMessages.audioUnclear', ok: Boolean((recoveryMessages.audioUnclear || '').trim()) },
+    { key: 'llm0Controls.recoveryMessages.noSpeech', ok: Boolean((recoveryMessages.noSpeech || '').trim()) },
+    { key: 'agent2.greetings.callStart.emergencyFallback', ok: Boolean((callStart.emergencyFallback || '').trim()) },
+    { key: 'agent2.greetings.returnCaller.text', ok: Boolean(returnCallerText.trim()) },
+    { key: 'agent2.discovery.holdMessage', ok: Boolean((discovery.holdMessage || '').trim()) }
+  ];
+
+  const missingKeys = requiredChecks.filter(item => !item.ok).map(item => item.key);
+  return {
+    ready: missingKeys.length === 0,
+    missingKeys
+  };
+}
+
 // ============================================================================
 // GET - Read Agent 2.0 config
 // ============================================================================
@@ -928,6 +919,34 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
 });
 
 // ============================================================================
+// GET - Publish readiness validation (blocks activation when missing)
+// ============================================================================
+router.get('/:companyId/publish-readiness', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const company = await v2Company.findById(companyId)
+      .select('aiAgentSettings')
+      .lean();
+
+    if (!company) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    const result = validatePublishReadiness(company);
+    return res.json({
+      success: true,
+      data: {
+        ready: result.ready,
+        missingKeys: result.missingKeys
+      }
+    });
+  } catch (error) {
+    logger.error('[AGENT2] publish-readiness error', { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================================================
 // PATCH - Update Agent 2.0 config (partial)
 // ============================================================================
 router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
@@ -946,6 +965,30 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     const before = mergeAgent2Config(beforeCompany.aiAgentSettings?.agent2 || null);
     const next = mergeAgent2Config({ ...before, ...updates, meta: { ...(before.meta || {}), uiBuild: UI_BUILD } });
     next.discovery.updatedAt = new Date();
+
+    // Optional enforcement gate: block activation/publish when required speech fields are missing.
+    const shouldEnforcePublishGate =
+      req.query.publish === '1' ||
+      req.query.activate === '1' ||
+      updates.publish === true ||
+      updates.activate === true;
+    if (shouldEnforcePublishGate) {
+      const syntheticCompany = {
+        aiAgentSettings: {
+          ...(beforeCompany.aiAgentSettings || {}),
+          agent2: next
+        }
+      };
+      const readiness = validatePublishReadiness(syntheticCompany);
+      if (!readiness.ready) {
+        return res.status(400).json({
+          success: false,
+          code: 'PUBLISH_BLOCKED_MISSING_SPEECH_CONFIG',
+          message: 'Cannot publish/activate: required UI-driven speech fields are missing.',
+          missingKeys: readiness.missingKeys
+        });
+      }
+    }
 
     const updateObj = {
       'aiAgentSettings.agent2': next
