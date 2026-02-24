@@ -272,17 +272,19 @@
         });
       }
       
-      // Visual feedback using existing toast system (if available)
+      // Visual feedback - log to console, don't block with alert
+      // The file download dialog is sufficient user feedback
+      console.info(`[TRUTH EXPORT] Download initiated: ${filename} (${Math.round(blob.size / 1024)}KB, status: ${truth.truthStatus})`);
+      
+      // Use toast if available (non-blocking)
       if (typeof showToast === 'function') {
         if (truth.truthStatus === 'COMPLETE') {
-          showToast('success', 'Truth Exported', `Complete system snapshot saved as ${filename}`);
+          showToast('success', 'Truth Exported', `Complete system snapshot saved`);
         } else {
-          showToast('warning', 'Truth Exported (Incomplete)', `${truth.compliance?.uiCoverageReport?.totalIssues || 0} compliance issues detected. Check console for details.`);
+          showToast('warning', 'Truth Exported', `Status: ${truth.truthStatus}. Check console for details.`);
         }
-      } else {
-        // Fallback: Native alert
-        alert(`Truth exported successfully: ${filename}\n\nTruth Status: ${truth.truthStatus}\nSize: ${Math.round(blob.size / 1024)}KB`);
       }
+      // No alert fallback - the Save As dialog is sufficient feedback
       
     } catch (error) {
       // Log detailed error info including lane failures if available
@@ -308,11 +310,18 @@
         userMessage = `Lane errors: ${failedLanes}`;
       }
       
-      // Visual feedback
+      // Visual feedback - use toast if available, otherwise show brief console-visible error
       if (typeof showToast === 'function') {
         showToast('error', 'Export Failed', userMessage);
       } else {
-        alert('Truth export failed: ' + userMessage);
+        // Use non-blocking notification - change button color briefly to indicate error
+        button.style.backgroundColor = '#dc3545';
+        button.style.color = 'white';
+        button.textContent = 'Export Failed';
+        setTimeout(() => {
+          button.style.backgroundColor = '';
+          button.style.color = '';
+        }, 3000);
       }
       
     } finally {
