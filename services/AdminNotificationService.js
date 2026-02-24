@@ -40,6 +40,7 @@
 
 const v2Company = require('../models/v2Company');
 const logger = require('../utils/logger.js');
+const mongoose = require('mongoose');
 
 const NotificationLog = require('../models/NotificationLog');
 const NotificationRegistry = require('../models/NotificationRegistry');
@@ -81,6 +82,31 @@ class AdminNotificationService {
                 });
                 details = String(details); // Fallback to toString()
             }
+        }
+
+        // ================================================================
+        // SANITIZE COMPANY ID (prevents ObjectId cast storms)
+        // ================================================================
+        // Some callers accidentally pass Twilio CallSid (CA...) as companyId.
+        // NotificationLog.companyId must be a valid Mongo ObjectId or null.
+        if (companyId !== null && companyId !== undefined && companyId !== '') {
+            const normalizedCompanyId = String(companyId).trim();
+            if (mongoose.isValidObjectId(normalizedCompanyId)) {
+                companyId = normalizedCompanyId;
+            } else {
+                logger.warn('⚠️ [ADMIN NOTIFICATION] Invalid companyId supplied - coercing to null', {
+                    requestId,
+                    code,
+                    suppliedCompanyId: normalizedCompanyId
+                });
+
+                companyId = null;
+                if (companyName === undefined || companyName === null || companyName === '') {
+                    companyName = 'Platform-Wide';
+                }
+            }
+        } else {
+            companyId = null;
         }
         
         try {

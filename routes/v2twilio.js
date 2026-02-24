@@ -3187,6 +3187,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       return res.send(twimlString);
     }
 
+    // Registration safety net: if calls reach v2-agent-respond directly,
+    // ensure CallSummary exists so Call Review can display the call.
+    if (callSid && fromNumber) {
+      const registration = await ensureCallSummaryRegistered({
+        companyId: company._id,
+        fromNumber,
+        callSid,
+        direction: 'inbound'
+      });
+
+      logger.debug('[CALL CENTER] v2-agent-respond registration guard', {
+        companyId: companyID,
+        callSid,
+        registered: registration.ok,
+        existing: registration.existing === true,
+        callId: registration.callId || null,
+        reason: registration.reason || null
+      });
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // INPUT TEXT SOURCE: SpeechResult + Cached Partial (TRUTH FINALIZATION)
     // ═══════════════════════════════════════════════════════════════════════════
