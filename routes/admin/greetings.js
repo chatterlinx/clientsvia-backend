@@ -65,7 +65,7 @@
  *       ruleId: String (unique),
  *       enabled: Boolean,
  *       priority: Number (1-1000),
- *       matchType: 'EXACT' | 'CONTAINS' | 'REGEX',
+ *       matchType: 'EXACT' | 'FUZZY' | 'CONTAINS' | 'REGEX',
  *       triggers: [String],
  *       response: String (max 300 chars),
  *       audioUrl: String,
@@ -159,7 +159,7 @@ function sanitizeRuleData(rule) {
         ruleId: String(rule.ruleId || '').trim(),
         enabled: Boolean(rule.enabled !== false),
         priority: Math.max(1, Math.min(1000, parseInt(rule.priority) || 50)),
-        matchType: ['EXACT', 'CONTAINS', 'REGEX'].includes(rule.matchType) ? rule.matchType : 'EXACT',
+        matchType: ['EXACT', 'FUZZY', 'CONTAINS', 'REGEX'].includes(rule.matchType) ? rule.matchType : 'EXACT',
         triggers: Array.isArray(rule.triggers) ? rule.triggers.map(t => String(t).trim()).filter(Boolean) : [],
         response: String(rule.response || '').trim().substring(0, 300),
         audioUrl: rule.audioUrl || null,
@@ -696,7 +696,7 @@ router.get(
  *   ruleId: string (unique, alphanumeric + hyphens/underscores),
  *   enabled: boolean (default: true),
  *   priority: number (1-1000, default: 50),
- *   matchType: 'EXACT' | 'CONTAINS' | 'REGEX' (default: 'EXACT'),
+ *   matchType: 'EXACT' | 'FUZZY' | 'CONTAINS' | 'REGEX' (default: 'EXACT'),
  *   triggers: string[] (phrases to match),
  *   response: string (max 300 chars)
  * }
@@ -858,7 +858,7 @@ router.patch(
             }
             
             const rules = company.aiAgentSettings?.agent2?.greetings?.interceptor?.rules || [];
-            const ruleIndex = rules.findIndex(r => r.ruleId === ruleId);
+            const ruleIndex = rules.findIndex(r => (r.ruleId || r.id) === ruleId);
             
             if (ruleIndex === -1) {
                 return res.status(404).json({
@@ -880,7 +880,7 @@ router.patch(
                 currentRule.priority = Math.max(1, Math.min(1000, updates.priority));
             }
             
-            if (updates.matchType && ['EXACT', 'CONTAINS', 'REGEX'].includes(updates.matchType)) {
+            if (updates.matchType && ['EXACT', 'FUZZY', 'CONTAINS', 'REGEX'].includes(updates.matchType)) {
                 currentRule.matchType = updates.matchType;
             }
             
@@ -969,7 +969,7 @@ router.delete(
             }
             
             const rules = company.aiAgentSettings?.agent2?.greetings?.interceptor?.rules || [];
-            const ruleIndex = rules.findIndex(r => r.ruleId === ruleId);
+            const ruleIndex = rules.findIndex(r => (r.ruleId || r.id) === ruleId);
             
             if (ruleIndex === -1) {
                 return res.status(404).json({

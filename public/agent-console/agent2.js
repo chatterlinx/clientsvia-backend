@@ -1135,11 +1135,15 @@
    * ───────────────────────────────────────────────────────────────────────
    */
   async function saveGreetingRule() {
+    console.log('[Greetings] Save rule clicked', { currentRule: state.currentGreetingRule });
+    
     try {
       const priority = parseInt(DOM.inputRulePriority.value) || 50;
       const matchType = DOM.inputRuleMatchType.value || 'EXACT';
       const triggersText = DOM.inputRuleTriggers.value.trim();
       const response = DOM.inputRuleResponse.value.trim();
+      
+      console.log('[Greetings] Save rule data:', { priority, matchType, triggersText, response });
       
       // Validation
       if (!triggersText) {
@@ -1162,8 +1166,9 @@
       const isEditing = Boolean(state.currentGreetingRule);
       
       if (isEditing) {
-        // Update existing rule
-        const ruleId = state.currentGreetingRule.ruleId;
+        // Update existing rule - support both ruleId and id (legacy)
+        const ruleId = state.currentGreetingRule.ruleId || state.currentGreetingRule.id;
+        console.log('[Greetings] Updating rule:', ruleId);
         
         const updateResponse = await AgentConsoleAuth.apiFetch(
           `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}`,
@@ -1174,8 +1179,8 @@
         );
         
         if (updateResponse.success) {
-          // Update local state
-          const ruleIndex = state.greetings.interceptor.rules.findIndex(r => r.ruleId === ruleId);
+          // Update local state - support both ruleId and id
+          const ruleIndex = state.greetings.interceptor.rules.findIndex(r => (r.ruleId || r.id) === ruleId);
           if (ruleIndex !== -1) {
             state.greetings.interceptor.rules[ruleIndex] = updateResponse.data;
           }
