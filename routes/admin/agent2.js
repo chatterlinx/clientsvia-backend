@@ -869,9 +869,48 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
       }
     }
 
+    // Load trigger stats
+    const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+    const GlobalTrigger = require('../../models/GlobalTrigger');
+    const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
+    
+    const triggerSettings = await CompanyTriggerSettings.findOne({ companyId });
+    const activeGroupId = triggerSettings?.activeGroupId;
+    const activeGroupName = triggerSettings?.activeGroupName;
+    
+    let triggerCount = 0;
+    let activeGroupInfo = null;
+    
+    if (activeGroupId) {
+      const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
+      const group = await GlobalTriggerGroup.findByGroupId(activeGroupId);
+      if (group) {
+        activeGroupInfo = {
+          groupId: group.groupId,
+          name: group.name,
+          icon: group.icon
+        };
+      }
+      
+      const globalTriggers = await GlobalTrigger.findByGroupId(activeGroupId);
+      const disabledSet = new Set(triggerSettings?.disabledGlobalTriggerIds || []);
+      const globalEnabledCount = globalTriggers.filter(gt => !disabledSet.has(gt.triggerId)).length;
+      triggerCount += globalEnabledCount;
+    }
+    
+    const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+    const localEnabledCount = localTriggers.filter(lt => !lt.isOverride && lt.enabled !== false && lt.isDeleted !== true).length;
+    triggerCount += localEnabledCount;
+
     return res.json({
       success: true,
       data,
+      triggerStats: {
+        activeGroupId,
+        activeGroupName: activeGroupInfo?.name || null,
+        activeGroupIcon: activeGroupInfo?.icon || null,
+        totalActiveCount: triggerCount
+      },
       meta: {
         uiBuild: UI_BUILD,
         effectiveConfigVersion: company.effectiveConfigVersion || company.updatedAt || null,

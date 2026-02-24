@@ -49,6 +49,7 @@
     companyId: null,
     companyName: null,
     config: null,
+    triggerStats: null,
     testSession: {
       mode: 'DISCOVERY',
       turn: 0,
@@ -72,6 +73,7 @@
     
     // Stats
     statTriggerCards: document.getElementById('stat-trigger-cards'),
+    statTriggerGroup: document.getElementById('stat-trigger-group'),
     statClarifiers: document.getElementById('stat-clarifiers'),
     statVocabulary: document.getElementById('stat-vocabulary'),
     badgeDiscoveryStatus: document.getElementById('badge-discovery-status'),
@@ -221,9 +223,10 @@
      -------------------------------------------------------------------------- */
   async function loadConfig() {
     try {
-      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`);
-      state.companyName = data.companyName;
-      state.config = data.agent2 || {};
+      const response = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`);
+      state.companyName = response.companyName;
+      state.config = response.agent2 || {};
+      state.triggerStats = response.triggerStats || {};
       
       DOM.headerCompanyName.textContent = state.companyName;
       renderConfig();
@@ -234,6 +237,7 @@
       
       // Use defaults
       state.config = {};
+      state.triggerStats = {};
       renderConfig();
     }
   }
@@ -242,7 +246,22 @@
     const config = state.config;
     
     // Stats
-    DOM.statTriggerCards.textContent = config.triggerCards?.length || 0;
+    const triggerCount = state.triggerStats?.totalActiveCount || 0;
+    const groupName = state.triggerStats?.activeGroupName || 'No Group Selected';
+    const groupIcon = state.triggerStats?.activeGroupIcon || '📋';
+    
+    DOM.statTriggerCards.textContent = triggerCount;
+    
+    if (DOM.statTriggerGroup) {
+      if (state.triggerStats?.activeGroupName) {
+        DOM.statTriggerGroup.textContent = `${groupIcon} ${groupName}`;
+        DOM.statTriggerGroup.style.color = '#374151';
+      } else {
+        DOM.statTriggerGroup.textContent = 'No Group Selected';
+        DOM.statTriggerGroup.style.color = '#dc2626';
+      }
+    }
+    
     DOM.statClarifiers.textContent = config.clarifiers?.length || 0;
     DOM.statVocabulary.textContent = config.discovery?.vocabulary?.length || 0;
     
