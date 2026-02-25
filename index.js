@@ -1231,6 +1231,39 @@ async function startServer() {
                     console.error('[Post-Startup] ❌ Failed to start SMS Reminder Processor:', error.message);
                     // Non-blocking: server continues even if job fails to start
                 }
+                // Bridge Audio Warmup: pre-generate missing ElevenLabs MP3 for bridge lines.
+                // Runs once at boot so production always has cached audio available.
+                try {
+                    console.log('[Post-Startup] Warming up bridge audio cache...');
+                    const V2Company = require('./models/v2Company');
+                    const BridgeAudioService = require('./services/bridgeAudio/BridgeAudioService');
+                    const companies = await V2Company.find({
+                        'aiAgentSettings.agent2.bridge.enabled': true,
+                        'aiAgentSettings.voiceSettings.voiceId': { $exists: true, $ne: null }
+                    }).select('aiAgentSettings businessName companyName').lean();
+
+                    let totalGenerated = 0;
+                    for (const co of companies) {
+                        const vs = co.aiAgentSettings?.voiceSettings || {};
+                        const lines = co.aiAgentSettings?.agent2?.bridge?.lines || [];
+                        if (!vs.voiceId || lines.length === 0) continue;
+                        try {
+                            const result = await BridgeAudioService.generateAll({
+                                companyId: co._id,
+                                lines,
+                                company: co,
+                                voiceSettings: vs,
+                                force: false
+                            });
+                            totalGenerated += result.generated;
+                        } catch (err) {
+                            console.warn(`[BridgeAudio] Warmup failed for ${co.businessName || co._id}: ${err.message}`);
+                        }
+                    }
+                    console.log(`[Post-Startup] Bridge audio warmup complete: ${companies.length} companies, ${totalGenerated} new files generated`);
+                } catch (error) {
+                    console.warn('[Post-Startup] Bridge audio warmup failed (non-blocking):', error.message);
+                }
             }, 10000); // Wait 10 seconds after server starts to begin health checks
             
             // 🤖 AUTO-OPTIMIZATION SCHEDULER - DISABLED (Missing dependency: smartThresholdOptimizer)

@@ -3091,13 +3091,11 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       const hostHeader = req.get('host');
       const twiml = new twilio.twiml.VoiceResponse();
       
-      // Play or Say the response WITHOUT Gather wrapping
       if (cached.audioUrl) {
         twiml.play(cached.audioUrl);
       } else if (cached.responseText) {
         twiml.say(escapeTwiML(cached.responseText));
       } else {
-        // Fallback: extract from cached TwiML (legacy cache entries)
         const playUrlMatch = cached.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
         const sayMatch = cached.twimlString.match(/<Say[^>]*>([^<]+)<\/Say>/);
         if (playUrlMatch) {
@@ -3105,20 +3103,64 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         } else if (sayMatch) {
           twiml.say(sayMatch[1]);
         } else {
-          // Last resort: use the full cached TwiML (may have Gather issues)
           twimlString = cached.twimlString;
           res.type('text/xml');
           return res.send(twimlString);
         }
       }
       
-      // Redirect to listen endpoint which sets up Gather for next caller input
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
       twiml.redirect({ method: 'POST' }, listenUrl);
       
       twimlString = twiml.toString();
 
-      // TWIML_SENT (final answer) - CRITICAL - MUST AWAIT
+      // ═══════════════════════════════════════════════════════════════════════════
+      // TRANSCRIPT SAFETY NET: Log agent turn from cached data.
+      // The computeTurnPromise IIFE logs internally, but if it failed partway
+      // through, this ensures the delivered response is still recorded.
+      // CallTranscriptV2 read-side dedup prevents double entries.
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (cached.agentTurn && cached.agentTurn.text && callSid) {
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          await CallTranscriptV2.appendTurns(companyID, callSid, [
+            {
+              speaker: 'agent',
+              kind: 'CONVERSATION_AGENT',
+              text: cached.agentTurn.text,
+              turnNumber: cached.agentTurn.turnNumber || turnNumber,
+              ts: new Date(),
+              sourceKey: cached.agentTurn.sourceKey || cached.matchSource || 'AGENT2_BRIDGE_CONTINUE',
+              trace: {
+                provenance: cached.agentTurn.provenance || null,
+                deliveredVia: 'bridge_continuation',
+                matchSource: cached.matchSource || null,
+                timings: cached.timings || null
+              }
+            },
+            {
+              speaker: 'system',
+              kind: cached.audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
+              text: cached.audioUrl || cached.responseText || '',
+              turnNumber: cached.agentTurn.turnNumber || turnNumber,
+              ts: new Date(),
+              sourceKey: 'twiml',
+              trace: {
+                action: cached.audioUrl ? 'PLAY' : 'SAY',
+                audioUrl: cached.audioUrl || null,
+                voiceProviderUsed: cached.voiceProviderUsed || null,
+                deliveredVia: 'bridge_continuation'
+              }
+            }
+          ]);
+        } catch (v2Err) {
+          logger.warn('[V2 BRIDGE CONTINUE] Failed to append agent turn to CallTranscriptV2', {
+            callSid: callSid?.slice(-8),
+            error: v2Err.message
+          });
+        }
+      }
+
       if (CallLogger && callSid) {
         await CallLogger.logEvent({
           callId: callSid,
@@ -3141,7 +3183,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
               token: token ? `${token}`.slice(0, 8) : null,
               attempt,
               elapsedMs,
-              v130Fix: true  // Flag to track V130 fix usage
+              hasAgentTurn: !!cached.agentTurn
             },
             timings: cached.timings || { totalMs: elapsedMs }
           }
@@ -3174,8 +3216,44 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       }
 
       const twiml = new twilio.twiml.VoiceResponse();
-      handleTransfer(twiml, company || {}, "I'm connecting you to our team.", companyID);
+      const transferText = "I'm connecting you to our team.";
+      handleTransfer(twiml, company || {}, transferText, companyID);
       twimlString = twiml.toString();
+
+      // Log the transfer fallback to CallTranscriptV2 so it appears in transcripts
+      if (callSid) {
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          await CallTranscriptV2.appendTurns(companyID, callSid, [
+            {
+              speaker: 'agent',
+              kind: 'CONVERSATION_AGENT',
+              text: transferText,
+              turnNumber,
+              ts: new Date(),
+              sourceKey: 'AGENT2_BRIDGE_TIMEOUT',
+              trace: {
+                provenance: {
+                  type: 'UI_OWNED',
+                  uiPath: 'aiAgentSettings.agent2.bridge',
+                  reason: cached?.error ? 'bridge_compute_failed' : 'bridge_timeout',
+                  voiceProviderUsed: 'twilio_say',
+                  isBridge: true
+                },
+                deliveredVia: 'bridge_timeout_transfer',
+                attempt,
+                elapsedMs,
+                error: cached?.error || null
+              }
+            }
+          ]);
+        } catch (v2Err) {
+          logger.warn('[V2 BRIDGE CONTINUE] Failed to append transfer turn to CallTranscriptV2', {
+            callSid: callSid?.slice(-8),
+            error: v2Err.message
+          });
+        }
+      }
 
       if (CallLogger && callSid) {
         await CallLogger.logEvent({
@@ -4258,7 +4336,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           eventFlushMs: timings.eventFlushMs || 0,
           ttsMs: timings.ttsMs || 0,
           totalMs: timings.totalMs || 0
-        }
+        },
+        agentTurnForCache: (responseText && responseText.trim()) ? {
+          text: responseText.trim(),
+          turnNumber,
+          sourceKey: runtimeResult?.matchSource || 'UNKNOWN',
+          provenance: {
+            type: (runtimeResult?.triggerCard?.id || runtimeResult?.matchSource === 'AGENT2_DISCOVERY') ? 'UI_OWNED' : 'HARDCODED',
+            uiPath: runtimeResult?.triggerCard?.id ? 'triggers' : null,
+            matchSource: runtimeResult?.matchSource || null,
+            voiceProviderUsed: localVoiceProviderUsed,
+            audioUrl: audioUrl || null
+          }
+        } : null
       };
     })();
 
@@ -4408,8 +4498,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     computeTurnPromise
       .then(async (result) => {
-        // V130: Extract audio URL from TwiML for bridge continuation
-        // The continuation needs raw audio/text to build non-Gather TwiML
         const playUrlMatch = result.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
         const audioUrl = playUrlMatch ? playUrlMatch[1] : null;
         
@@ -4419,11 +4507,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           responsePreview: `${result.responseText || ''}`.substring(0, 120),
           matchSource: result.matchSource,
           timings: result.timings,
-          // V130: Include raw data for bridge continuation to rebuild TwiML
           audioUrl,
-          responseText: result.responseText
+          responseText: result.responseText,
+          agentTurn: result.agentTurnForCache || null
         };
-        // Idempotency: write-once. Continuation must never see a partial write.
         await redis.set(cacheKey, JSON.stringify(payload), { EX: 90, NX: true });
         if (CallLogger && callSid) {
           CallLogger.logEvent({
@@ -4435,7 +4522,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               cacheTtlSec: 90,
               matchSource: result.matchSource || null,
               twimlLength: result.twimlString?.length || 0,
-              timings: result.timings || null
+              timings: result.timings || null,
+              hasAgentTurn: !!result.agentTurnForCache
             }
           }).catch(() => {});
         }
