@@ -139,12 +139,23 @@ const CallSummarySchema = new mongoose.Schema({
   // ─────────────────────────────────────────────────────────────────────────
   
   /**
-   * Caller phone number (E.164 format)
+   * Caller phone number (E.164 format) — the FROM number
    */
   phone: { 
     type: String, 
     required: [true, 'phone is required'],
     index: true
+  },
+
+  /**
+   * Called / destination phone number (E.164 format) — the TO number.
+   * This is the company's Twilio number that received the call.
+   * Populated from req.body.To at call start.
+   */
+  toPhone: {
+    type: String,
+    index: true,
+    sparse: true
   },
   
   /**

@@ -1424,6 +1424,7 @@ router.post('/voice', async (req, res) => {
         callContext = await CallSummaryService.startCall({
           companyId: company._id.toString(),
           phone: req.body.From,
+          toPhone: req.body.To || null,
           twilioSid: req.body.CallSid,
           direction: 'inbound'
         });
@@ -1450,6 +1451,44 @@ router.post('/voice', async (req, res) => {
           companyId: company._id.toString(),
           phone: req.body.From,
           callSid: req.body.CallSid
+        });
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 📞 REGISTER STATUS CALLBACK — Ensures endCall fires when Twilio hangs up
+    // ════════════════════════════════════════════════════════════════════════════
+    // Twilio sends a status callback (completed/failed/busy/no-answer) only if a
+    // StatusCallback URL is configured.  We register it here via the REST API so
+    // every inbound call gets duration + transcript generation — even if the Twilio
+    // phone-number settings don't have it pre-configured.
+    // Fire-and-forget: must NOT block the voice response.
+    // ════════════════════════════════════════════════════════════════════════════
+    if (company.twilioConfig?.accountSid && company.twilioConfig?.authToken && req.body.CallSid) {
+      const statusCallbackUrl = `${getSecureBaseUrl(req)}/api/twilio/status-callback/${company._id}`;
+      try {
+        const twilioClient = twilio(company.twilioConfig.accountSid, company.twilioConfig.authToken);
+        twilioClient.calls(req.body.CallSid)
+          .update({
+            statusCallback: statusCallbackUrl,
+            statusCallbackMethod: 'POST',
+            statusCallbackEvent: ['completed', 'failed', 'busy', 'no-answer']
+          })
+          .then(() => {
+            logger.debug('[CALL STATUS] Status callback registered', {
+              callSid: req.body.CallSid,
+              url: statusCallbackUrl
+            });
+          })
+          .catch(err => {
+            logger.warn('[CALL STATUS] Failed to register status callback (non-blocking)', {
+              callSid: req.body.CallSid,
+              error: err.message
+            });
+          });
+      } catch (twilioInitErr) {
+        logger.warn('[CALL STATUS] Could not init Twilio client for status callback', {
+          error: twilioInitErr.message
         });
       }
     }

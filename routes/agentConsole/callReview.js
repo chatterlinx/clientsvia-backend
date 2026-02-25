@@ -372,7 +372,7 @@ function transformCallSummaryToListItem(summary) {
   return {
     callSid: summary.twilioSid || summary.callId,
     fromPhone: summary.phone || 'Unknown',
-    toPhone: '', // CallSummary doesn't store destination
+    toPhone: summary.toPhone || '',
     startTime: summary.startedAt,
     endTime: summary.endedAt,
     durationSeconds: summary.durationSeconds || 0,
@@ -779,15 +779,24 @@ router.get(
         events.push({ timestamp: callSummary.endedAt, type: 'call.ended', data: { outcome: callSummary.outcome } });
       }
 
+      // Calculate duration: use stored value, or derive from timestamps if call
+      // ended but endCall hasn't fired yet (status callback race).
+      let durationSeconds = callSummary.durationSeconds || 0;
+      if (!durationSeconds && callSummary.endedAt && callSummary.startedAt) {
+        durationSeconds = Math.round(
+          (new Date(callSummary.endedAt) - new Date(callSummary.startedAt)) / 1000
+        );
+      }
+
       res.json({
         success: true,
         requestId,
         callSid: callSummary.twilioSid || callSummary.callId,
         fromPhone: callSummary.phone || 'Unknown',
-        toPhone: '',
+        toPhone: callSummary.toPhone || '',
         startTime: callSummary.startedAt,
         endTime: callSummary.endedAt,
-        durationSeconds: callSummary.durationSeconds || 0,
+        durationSeconds,
         status: callSummary.outcome || 'in_progress',
         outcome: callSummary.outcome,
         callerName: callSummary.callerName || callSummary.capturedSummary?.name,

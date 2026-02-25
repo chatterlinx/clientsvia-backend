@@ -83,12 +83,13 @@ class CallSummaryService {
    * @param {string} [params.callerState] - Caller's state (for consent)
    * @returns {Promise<Object>} - Call context for AI processing
    */
-  static async startCall({ companyId, phone, twilioSid, direction = 'inbound', callerState = null }) {
+  static async startCall({ companyId, phone, toPhone = null, twilioSid, direction = 'inbound', callerState = null }) {
     const startTime = Date.now();
     
     logger.info('[CALL_SERVICE] Starting call', {
       companyId,
       phone,
+      toPhone,
       twilioSid,
       direction
     });
@@ -128,6 +129,7 @@ class CallSummaryService {
             callId,
             twilioSid,
             phone: vendor.phone || phone,
+            toPhone: toPhone || null,
             customerId: null,
             callerName: vendor.businessName || null,
             isReturning: false,
@@ -215,7 +217,8 @@ class CallSummaryService {
         companyId,
         callId,
         twilioSid,
-        phone: customer.phone,  // Use normalized phone from customer
+        phone: customer.phone,  // caller (FROM) number
+        toPhone: toPhone || null, // called (TO) number — company's Twilio number
         customerId: customer._id,
         callerName: customer.fullName || null,
         isReturning: customerContext.isReturning,
