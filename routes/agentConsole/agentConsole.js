@@ -1251,15 +1251,18 @@ router.get('/:companyId/calls',
       const formattedCalls = calls.map(call => ({
         callSid: call.twilioSid || call.callId,
         callId: call.callId,
-        from: call.from,
-        to: call.to,
-        startedAt: call.startedAt,
-        endedAt: call.endedAt,
+        // Frontend expects these field names:
+        startTime: call.startedAt,
+        fromPhone: call.from,
+        toPhone: call.to,
         durationSeconds: call.durationSeconds || 0,
         turnCount: call.turnCount || 0,
         outcome: call.outcome || 'unknown',
         source: call.source || 'voice',
         hasTranscript: call.hasTranscript || false,
+        hasHardcodedViolation: false,
+        hasFallback: false,
+        problemCount: 0,
         kpi: call.kpi || {},
         customer: call.customer || {}
       }));
