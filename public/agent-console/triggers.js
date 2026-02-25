@@ -16,7 +16,8 @@
      CONFIGURATION
      -------------------------------------------------------------------------- */
   const CONFIG = {
-    API_BASE: '/api/admin/agent2',
+    API_BASE_AGENT2: '/api/agent-console',
+    API_BASE_ADMIN_AGENT2: '/api/admin/agent2',
     API_BASE_COMPANY: '/api/admin/agent2/company',
     API_BASE_GLOBAL: '/api/admin/agent2/global'
   };
@@ -405,7 +406,7 @@
 
       // Load agent2 config for Follow-up Consent Cards
       try {
-        const configData = await apiFetch(`${CONFIG.API_BASE}/${state.companyId}`);
+        const configData = await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`);
         if (configData.success && configData.data) {
           state.config = configData.data;
           loadFollowUpConsent(state.config);
@@ -1920,9 +1921,9 @@
     btnSaveFuc.addEventListener('click', async () => {
       try {
         const followUpConsent = collectFollowUpConsent();
-        const resp = await apiFetch(`${CONFIG.API_BASE}/${state.companyId}`, {
+        const resp = await apiFetch(`${CONFIG.API_BASE_ADMIN_AGENT2}/${state.companyId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ discovery: { followUpConsent } })
+          body: { discovery: { followUpConsent } }
         });
         if (resp.success) {
           state.config.discovery = state.config.discovery || {};
