@@ -2023,13 +2023,17 @@ router.post('/voice', async (req, res) => {
           const callState = existingRaw ? JSON.parse(existingRaw) : {};
           
           // Initialize turns array with greeting as first agent turn
-          callState.turns = [{
+          // Preserve any existing turns (shouldn't be any at greeting time, but be safe)
+          if (!callState.turns) {
+            callState.turns = [];
+          }
+          callState.turns.unshift({
             speaker: 'agent',
             text: greetingText.trim(),
             turn: 0,
             timestamp: new Date().toISOString(),
             source: 'GREETING'
-          }];
+          });
           
           await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 });
           logger.info('[VOICE] Saved greeting to Redis for transcript', {
