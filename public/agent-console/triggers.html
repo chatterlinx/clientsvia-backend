@@ -997,6 +997,132 @@
         </div>
       </div>
 
+      <!-- ════════════════════════════════════════════════════════════════════
+           FOLLOW-UP CONSENT CARDS
+           Only active when a trigger card has follow-up question text.
+           ════════════════════════════════════════════════════════════════════ -->
+      <div class="card" id="followup-consent-section">
+        <div class="card-header">
+          <h2 class="card-title">Follow-up Consent Cards</h2>
+        </div>
+        <div class="card-body">
+          <p class="form-hint mb-4">Configures how the agent classifies caller responses to trigger card follow-up questions. Only active when a trigger has follow-up text.</p>
+
+          <div id="consent-cards-container" style="display: flex; flex-direction: column; gap: 16px;">
+
+            <!-- YES -->
+            <div class="consent-card" data-bucket="yes" style="border: 1px solid #22c55e; border-radius: 8px; padding: 16px; background: rgba(34,197,94,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">✅</span>
+                <strong>YES</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller confirms</span>
+              </div>
+              <div class="tag-list" id="fuc-yes-phrases"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <input type="text" class="form-input" id="fuc-yes-input" placeholder="Add yes phrases (comma-separated)..." style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('yes')">Add</button>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
+                <input type="text" class="form-input" id="fuc-yes-response" placeholder="Great — let me get that scheduled for you." style="flex:1; font-size: 13px;">
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
+                <select class="form-select" id="fuc-yes-direction" style="flex:1; font-size: 13px;">
+                  <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
+                  <option value="CONTINUE">Continue Conversation</option>
+                  <option value="TRANSFER">Transfer to Human</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- NO -->
+            <div class="consent-card" data-bucket="no" style="border: 1px solid #ef4444; border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">❌</span>
+                <strong>NO</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller declines</span>
+              </div>
+              <div class="tag-list" id="fuc-no-phrases"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <input type="text" class="form-input" id="fuc-no-input" placeholder="Add no phrases (comma-separated)..." style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('no')">Add</button>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
+                <input type="text" class="form-input" id="fuc-no-response" placeholder="No problem. Is there anything else I can help you with?" style="flex:1; font-size: 13px;">
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
+                <select class="form-select" id="fuc-no-direction" style="flex:1; font-size: 13px;">
+                  <option value="CONTINUE">Continue Conversation</option>
+                  <option value="TRANSFER">Transfer to Human</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- REPROMPT -->
+            <div class="consent-card" data-bucket="reprompt" style="border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; background: rgba(245,158,11,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">🔄</span>
+                <strong>REPROMPT</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Unclear / didn't hear</span>
+              </div>
+              <div class="tag-list" id="fuc-reprompt-phrases"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <input type="text" class="form-input" id="fuc-reprompt-input" placeholder="Add reprompt phrases (comma-separated)..." style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('reprompt')">Add</button>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
+                <input type="text" class="form-input" id="fuc-reprompt-response" placeholder="Sorry, I missed that. Could you say yes or no?" style="flex:1; font-size: 13px;">
+              </div>
+              <p class="form-hint" style="margin-top: 4px;">Re-asks the original follow-up question after this response.</p>
+            </div>
+
+            <!-- HESITANT -->
+            <div class="consent-card" data-bucket="hesitant" style="border: 1px solid #8b5cf6; border-radius: 8px; padding: 16px; background: rgba(139,92,246,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">🤔</span>
+                <strong>HESITANT</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Unsure / needs reassurance</span>
+              </div>
+              <div class="tag-list" id="fuc-hesitant-phrases"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <input type="text" class="form-input" id="fuc-hesitant-input" placeholder="Add hesitant phrases (comma-separated)..." style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('hesitant')">Add</button>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
+                <input type="text" class="form-input" id="fuc-hesitant-response" placeholder="No worries — I just need to know so we send the right team." style="flex:1; font-size: 13px;">
+              </div>
+              <p class="form-hint" style="margin-top: 4px;">Gently clarifies, then re-asks the follow-up question.</p>
+            </div>
+
+            <!-- COMPLEX -->
+            <div class="consent-card" data-bucket="complex" style="border: 1px solid #64748b; border-radius: 8px; padding: 16px; background: rgba(100,116,139,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">💬</span>
+                <strong>COMPLEX</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Substantive response (catch-all)</span>
+              </div>
+              <p class="form-hint">Anything that doesn't match the above buckets. The caller said something meaningful but not a simple yes/no. Routes back to the agent to handle naturally.</p>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
+                <select class="form-select" id="fuc-complex-direction" style="flex:1; font-size: 13px;">
+                  <option value="AGENT">Back to Agent</option>
+                  <option value="CONTINUE">Continue Conversation</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; text-align: right;">
+            <button class="btn btn-primary" id="btn-save-followup-consent">Save Consent Cards</button>
+          </div>
+        </div>
+      </div>
+
     </main>
 
     <!-- Footer -->

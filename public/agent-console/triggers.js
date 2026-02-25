@@ -16,6 +16,7 @@
      CONFIGURATION
      -------------------------------------------------------------------------- */
   const CONFIG = {
+    API_BASE: '/api/admin/agent2',
     API_BASE_COMPANY: '/api/admin/agent2/company',
     API_BASE_GLOBAL: '/api/admin/agent2/global'
   };
@@ -401,6 +402,17 @@
       renderGroupSelector();
       renderStats();
       renderTriggers();
+
+      // Load agent2 config for Follow-up Consent Cards
+      try {
+        const configData = await apiFetch(`${CONFIG.API_BASE}/${state.companyId}`);
+        if (configData.success && configData.data) {
+          state.config = configData.data;
+          loadFollowUpConsent(state.config);
+        }
+      } catch (cfgErr) {
+        console.warn('[Triggers] Failed to load agent2 config for consent cards:', cfgErr.message);
+      }
       
     } catch (error) {
       console.error('[Triggers] Failed to load:', error);
@@ -1822,6 +1834,108 @@
       default:
         return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#3b82f6" stroke-width="1.5"/><path d="M10 6V10M10 14V14.5" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/></svg>`;
     }
+  }
+
+  /* --------------------------------------------------------------------------
+     FOLLOW-UP CONSENT CARDS
+     -------------------------------------------------------------------------- */
+  const FUC_BUCKETS = ['yes', 'no', 'reprompt', 'hesitant', 'complex'];
+
+  function loadFollowUpConsent(config) {
+    const fuc = config?.discovery?.followUpConsent || {};
+    for (const bucket of FUC_BUCKETS) {
+      const data = fuc[bucket] || {};
+      renderFucPhrases(bucket, data.phrases || []);
+      const respEl = document.getElementById(`fuc-${bucket}-response`);
+      if (respEl) respEl.value = data.response || '';
+      const dirEl = document.getElementById(`fuc-${bucket}-direction`);
+      if (dirEl) dirEl.value = data.direction || '';
+    }
+  }
+
+  function renderFucPhrases(bucket, phrases) {
+    const container = document.getElementById(`fuc-${bucket}-phrases`);
+    if (!container) return;
+    container.innerHTML = '';
+    (phrases || []).forEach((phrase, idx) => {
+      const tag = document.createElement('span');
+      tag.className = 'phrase-tag';
+      tag.innerHTML = `${escapeHtml(phrase)} <button type="button" class="phrase-remove" data-bucket="${bucket}" data-index="${idx}">×</button>`;
+      container.appendChild(tag);
+    });
+    container.querySelectorAll('.phrase-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const b = e.target.dataset.bucket;
+        const i = parseInt(e.target.dataset.index);
+        const arr = getFucPhrases(b);
+        arr.splice(i, 1);
+        renderFucPhrases(b, arr);
+        state.isDirty = true;
+      });
+    });
+  }
+
+  function getFucPhrases(bucket) {
+    const container = document.getElementById(`fuc-${bucket}-phrases`);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.phrase-tag')).map(tag => {
+      const clone = tag.cloneNode(true);
+      const btn = clone.querySelector('button');
+      if (btn) btn.remove();
+      return clone.textContent.trim();
+    });
+  }
+
+  function collectFollowUpConsent() {
+    const result = {};
+    for (const bucket of FUC_BUCKETS) {
+      result[bucket] = {
+        phrases: getFucPhrases(bucket),
+        response: (document.getElementById(`fuc-${bucket}-response`)?.value || '').trim(),
+        direction: (document.getElementById(`fuc-${bucket}-direction`)?.value || '').trim()
+      };
+    }
+    return result;
+  }
+
+  window._fucAddPhrases = function(bucket) {
+    const input = document.getElementById(`fuc-${bucket}-input`);
+    if (!input) return;
+    const raw = input.value;
+    const newPhrases = raw.split(/[,;\n]+/g).map(p => p.trim().toLowerCase()).filter(Boolean);
+    if (newPhrases.length === 0) return;
+    const existing = new Set(getFucPhrases(bucket));
+    let added = 0;
+    for (const p of new Set(newPhrases)) {
+      if (!existing.has(p)) { existing.add(p); added++; }
+    }
+    renderFucPhrases(bucket, Array.from(existing));
+    input.value = '';
+    state.isDirty = true;
+    if (added > 0) showToast('success', 'Added', `Added ${added} phrase${added !== 1 ? 's' : ''}.`);
+  };
+
+  const btnSaveFuc = document.getElementById('btn-save-followup-consent');
+  if (btnSaveFuc) {
+    btnSaveFuc.addEventListener('click', async () => {
+      try {
+        const followUpConsent = collectFollowUpConsent();
+        const resp = await apiFetch(`${CONFIG.API_BASE}/${state.companyId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ discovery: { followUpConsent } })
+        });
+        if (resp.success) {
+          state.config.discovery = state.config.discovery || {};
+          state.config.discovery.followUpConsent = followUpConsent;
+          showToast('success', 'Saved', 'Follow-up consent cards saved.');
+          state.isDirty = false;
+        } else {
+          showToast('error', 'Save Failed', resp.message || 'Unknown error');
+        }
+      } catch (err) {
+        showToast('error', 'Save Failed', err.message);
+      }
+    });
   }
 
   /* --------------------------------------------------------------------------

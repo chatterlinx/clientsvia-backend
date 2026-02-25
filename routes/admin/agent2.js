@@ -133,11 +133,60 @@ function defaultAgent2Config() {
         ]
       },
       // Pending Question Responses (V128)
-      // Single owner namespace for YES/NO/REPROMPT lines used by the pending-question state machine.
+      // Used by the generic pendingQuestion state machine (LLM, discovery consent, etc.)
       pendingQuestionResponses: {
         yes: 'Great! Let me help you with that.',
         no: 'No problem. Is there anything else I can help you with?',
         reprompt: 'Sorry, I missed that. Could you say yes or no?'
+      },
+      // Follow-up Consent (trigger card consent gate)
+      // Configurable keywords + directions for 5-bucket classification.
+      // Only active when a trigger card has a follow-up question with text.
+      followUpConsent: {
+        yes: {
+          phrases: [
+            'yes', 'yeah', 'yep', 'yea', 'sure', 'ok', 'okay', 'please',
+            'absolutely', 'definitely', 'certainly', 'correct', 'thats right',
+            'right', 'go ahead', 'do it', 'lets do it', 'sounds good',
+            'that works', 'works for me', 'schedule', 'book', 'book it',
+            'set it up', 'im ready', 'perfect', 'great', 'yes please',
+            'ya', 'yup', 'uh huh', 'mm hmm'
+          ],
+          response: 'Great — let me get that scheduled for you.',
+          direction: 'HANDOFF_BOOKING'
+        },
+        no: {
+          phrases: [
+            'no', 'nope', 'nah', 'negative', 'not yet', 'not now',
+            'not today', 'maybe later', 'ill call back', 'just asking',
+            'just a question', 'dont schedule', 'not right now',
+            'another time', 'later'
+          ],
+          response: 'No problem. Is there anything else I can help you with?',
+          direction: 'CONTINUE'
+        },
+        reprompt: {
+          phrases: [
+            'huh', 'what', 'sorry', 'come again', 'say that again',
+            'repeat that', 'i didnt hear', 'pardon'
+          ],
+          response: '',
+          direction: 'REASK'
+        },
+        hesitant: {
+          phrases: [
+            'i dont know', 'im not sure', 'maybe', 'i think so',
+            'do i have to', 'not certain', 'possibly', 'kind of',
+            'sort of', 'i guess', 'hard to say', 'let me think'
+          ],
+          response: 'No worries — I just need to know so we send the right team.',
+          direction: 'CLARIFY'
+        },
+        complex: {
+          phrases: [],
+          response: '',
+          direction: 'AGENT'
+        }
       },
       playbook: {
         version: 'v2',

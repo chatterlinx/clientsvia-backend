@@ -1,4 +1,4 @@
-# Consent Gate — Trigger Card YES/NO → Booking Handoff
+# Consent Gate — Trigger Card Follow-up → 5-Bucket Classification
 
 > **Last updated:** 2026-02-25
 > **Status:** Production-ready
@@ -7,118 +7,143 @@
 
 ## What It Does
 
-A consent gate is a trigger card that asks a confirmation question and waits for the caller's response before deciding what to do next.
+When a trigger card has a Follow-up Question with text, the engine enters a **consent gate** — it asks the question, waits for the caller's response, and classifies it into one of 5 buckets. Each bucket has configurable keywords, a response, and a direction.
 
 ```
 Caller: "I need a maintenance tune-up"
-Agent:  "Absolutely. I would love to schedule your next maintenance,
-         Just to confirm — this is a routine tune-up, not an active
-         problem like no cooling, a leak, or a strange noise, right?"
-         ↓
+Agent:  "Absolutely. I would love to schedule — Just to confirm,
+         this is a routine tune-up, not an active problem, right?"
+
          [Waits for caller response]
-         ↓
-Caller: "Yes"  →  Booking Logic takes over (AC1 handoff)
-Caller: "Well actually my AC isn't cooling"  →  Back to normal agent
-Caller: (unclear)  →  Re-asks the question
+
+Caller: "Yes"      → ✅ YES      → Booking Logic handoff
+Caller: "No"       → ❌ NO       → "No problem. How can I help?"
+Caller: "Huh?"     → 🔄 REPROMPT → Re-asks the question
+Caller: "Maybe"    → 🤔 HESITANT → Gentle clarification + re-ask
+Caller: "My AC..." → 💬 COMPLEX  → Back to normal agent
 ```
 
 ---
 
-## How to Configure
+## Architecture: Two Separate Systems
 
-### Trigger Card Setup
+| System | Namespace | Used By |
+|--------|-----------|---------|
+| `pendingQuestion` | `state.agent2.discovery.pendingQuestion` | LLM follow-ups, discovery consent, generic Q&A |
+| `pendingFollowUpQuestion` | `state.agent2.discovery.pendingFollowUpQuestion` | Trigger card follow-ups ONLY |
 
-| Field | Value |
-|-------|-------|
-| **Keywords** | `maintenance, tune-up, tune up, routine` |
-| **Answer Text** | `Absolutely. I would love to schedule your next maintenance, Just to confirm —` |
-| **Follow-up Question** | `this is a routine tune-up, not an active problem like no cooling, a leak, or a strange noise, right?` |
-| **On Caller Confirmation (Yes)** | `Hand off to Booking Logic` |
+These are completely independent. Modifying one does not affect the other.
 
-The Answer Text and Follow-up Question are spoken together in one turn:
-> "Ok. Absolutely. I would love to schedule your next maintenance, Just to confirm — this is a routine tune-up, not an active problem like no cooling, a leak, or a strange noise, right?"
+### Activation Rule
 
-The Follow-up Question becomes the `pendingQuestion`. The engine waits for the caller's next response.
+```
+Trigger card has followUpQuestion text  →  pendingFollowUpQuestion system
+Trigger card has NO followUpQuestion    →  nothing (normal flow)
+Default afterAnswerQuestion (no card-specific text)  →  pendingQuestion system
+```
 
----
-
-## Caller Response Classification
-
-| Classification | Examples | Result |
-|---|---|---|
-| **YES** | "yes", "yeah", "sure", "that's right", "absolutely", "go ahead" | Executes the configured action (e.g., Booking handoff) |
-| **NO** | "no", "nope", "not yet", "maybe later" | Acknowledges and continues conversation |
-| **REPROMPT** | Mumble, "huh", unclear | Re-asks the confirmation question |
-| **COMPLEX** | "Well actually my AC isn't cooling" | Clears the question, routes through normal discovery |
+The Follow-up Question text IS the toggle. No checkbox, no extra state.
 
 ---
 
-## Booking Handoff Flow
+## Configuration
 
-When the trigger has `On Confirmation = Hand off to Booking Logic`:
+### Trigger Card (per-trigger)
 
-1. **Turn N**: Trigger matches → Agent speaks answer + follow-up question
-2. **Turn N+1**: Caller says "yes" → YES classified → `sessionMode = BOOKING`
-3. **Turn N+1 response**: "Great — let me get that scheduled for you."
-4. **Turn N+2**: BookingLogicEngine takes over, checks AC1 handoff payload:
-   - Has firstName? Skip. Missing? Ask.
-   - Has lastName? Skip. Missing? Ask.
-   - Has address? Skip. Missing? Ask.
-   - Checks Google Calendar availability
-   - Confirms booking
+| Field | Purpose |
+|-------|---------|
+| **Answer Text** | What to say when the trigger matches |
+| **Follow-up Question** | The confirmation question (activates consent gate) |
+
+### Follow-up Consent Cards (company-level, triggers.html)
+
+5 cards below the Trigger Cards list, each with:
+
+| Card | Keywords | Response | Direction |
+|------|----------|----------|-----------|
+| **YES** | yes, yeah, sure, absolutely, go ahead... | "Great — let me get that scheduled." | Hand off to Booking Logic |
+| **NO** | no, nope, not yet, maybe later... | "No problem. How can I help?" | Continue Conversation |
+| **REPROMPT** | huh, what, sorry, come again... | (re-asks original question) | Re-ask |
+| **HESITANT** | I don't know, maybe, I'm not sure... | "No worries — I just need to know..." | Gentle Clarification |
+| **COMPLEX** | (catch-all, no keywords) | (none — agent handles naturally) | Back to Agent |
+
+Keywords are configurable per company via tag input (comma-separated bulk add).
 
 ---
 
-## Transcript Logging
+## 5-Bucket Classification
 
-Every step is logged to CallTranscriptV2:
+Priority: YES > NO > HESITANT > REPROMPT > COMPLEX
 
-| Turn | Speaker | Kind | What's Logged |
-|------|---------|------|---------------|
-| N | agent | CONVERSATION_AGENT | Answer text + follow-up question |
-| N | system | TWIML_PLAY | Spoken text (ElevenLabs audio) |
-| N+1 | caller | CONVERSATION_CALLER | Caller's "yes" / "no" / response |
-| N+1 | agent | CONVERSATION_AGENT | YES response ("Great — let me get that scheduled") |
-| N+1 | system | CONSENT_GATE_BOOKING | Diagnostic: "Consent gate: caller confirmed YES → handing off to Booking Logic" |
-| N+1 | system | TWIML_PLAY | Spoken text |
-| N+2+ | agent | CONVERSATION_AGENT | Booking Logic prompts (name, address, date, etc.) |
+| Bucket | Matching Logic |
+|--------|---------------|
+| YES | Any configured YES phrase found, no NO phrase found |
+| NO | Any configured NO phrase found, no YES phrase found |
+| HESITANT | Any configured HESITANT phrase found |
+| REPROMPT | Any configured REPROMPT phrase found, OR input ≤ 8 chars and not YES/NO/HESITANT |
+| COMPLEX | None of the above matched (catch-all) |
+
+Single-word phrases match on word boundaries. Multi-word phrases match as substrings.
+
+---
+
+## Direction Actions
+
+| Direction | What Happens |
+|-----------|-------------|
+| `HANDOFF_BOOKING` | Sets `sessionMode = BOOKING`. BookingLogicEngine takes over next turn via AC1 handoff. |
+| `CONTINUE` | Clears pending state, continues in discovery mode. |
+| `REASK` | Keeps `pendingFollowUpQuestion` active, re-asks the original question. |
+| `CLARIFY` | Keeps `pendingFollowUpQuestion` active, gives gentle clarification + re-asks. |
+| `AGENT` | Clears pending state, falls through to normal trigger matching / LLM. |
+| `TRANSFER` | Transfers to human (future). |
 
 ---
 
 ## State Machine
 
+### Turn N — Trigger fires
 ```
-state.agent2.discovery.pendingQuestion     = "...confirm question text..."
-state.agent2.discovery.pendingQuestionTurn = N
-state.agent2.discovery.pendingQuestionSource = "card:{cardId}"
-state.agent2.discovery.lastNextAction      = "HANDOFF_BOOKING"
+state.agent2.discovery.pendingFollowUpQuestion = "this is routine, right?"
+state.agent2.discovery.pendingFollowUpQuestionTurn = N
+state.agent2.discovery.pendingFollowUpQuestionSource = "card:maintenance_routine"
+state.agent2.discovery.pendingFollowUpQuestionNextAction = "HANDOFF_BOOKING"
+```
 
-→ Caller responds YES on turn N+1:
+### Turn N+1 — Caller responds YES
+```
+state.agent2.discovery.pendingFollowUpQuestion = null  (cleared)
+state.agent2.discovery.lastPath = "FOLLOWUP_YES_HANDOFF_BOOKING"
+state.sessionMode = "BOOKING"
+state.consent = { pending: false, given: true, turn: N+1, source: "followup_consent_gate" }
+```
 
-state.agent2.discovery.pendingQuestion     = null  (cleared)
-state.agent2.discovery.pendingQuestionResolved = true
-state.agent2.discovery.lastPath            = "PENDING_YES_HANDOFF_BOOKING"
-state.sessionMode                          = "BOOKING"
-state.consent                              = { pending: false, given: true, turn: N+1, source: "consent_gate" }
+### Turn N+1 — Caller responds HESITANT
+```
+state.agent2.discovery.pendingFollowUpQuestion = (kept active)
+state.agent2.discovery.lastPath = "FOLLOWUP_HESITANT"
+→ Gentle clarification spoken, question re-asked, waits again
 ```
 
 ---
 
-## Files Modified
+## Files
 
-| File | What Changed |
-|------|-------------|
-| `services/engine/agent2/Agent2DiscoveryRunner.js` | YES path checks `lastNextAction`; if `HANDOFF_BOOKING`, sets `sessionMode = BOOKING` |
-| `routes/v2twilio.js` | Logs `CONSENT_GATE_BOOKING` diagnostic turn to transcript |
-| `public/agent-console/triggers.html` | Added "On Caller Confirmation (Yes)" dropdown in Follow-up section |
-| `public/agent-console/triggers.js` | Saves/loads `followUpNextAction`, toggles dropdown visibility |
-| `models/CompanyLocalTrigger.js` | `followUpNextAction` field already exists in schema |
+| File | What |
+|------|------|
+| `services/engine/agent2/Agent2DiscoveryRunner.js` | 5-bucket handler (before pendingQuestion), trigger card routing to pendingFollowUpQuestion |
+| `routes/admin/agent2.js` | Default followUpConsent config with keywords + directions |
+| `public/agent-console/triggers.html` | Follow-up Consent Cards UI section |
+| `public/agent-console/triggers.js` | Tag management, save/load consent cards |
+| `models/CompanyLocalTrigger.js` | `followUpNextAction` field (already exists) |
 
 ---
 
-## Available Follow-up Actions
+## Transcript Events
 
-| Value | Behavior |
-|-------|----------|
-| `CONTINUE` | Default. YES gives generic acknowledgment, stays in discovery. |
-| `HANDOFF_BOOKING` | YES triggers AC1 handoff to Booking Logic. Next turn = BookingLogicEngine. |
+| Event | When |
+|-------|------|
+| `A2_FOLLOWUP_CONSENT_CLASSIFIED` | Caller response classified into a bucket |
+| `A2_CONSENT_GATE_BOOKING` | YES bucket triggered booking handoff |
+| `A2_FOLLOWUP_COMPLEX_FALLTHROUGH` | COMPLEX bucket, falling through to normal agent |
+| `A2_RESPONSE_READY` | Response built for any bucket |

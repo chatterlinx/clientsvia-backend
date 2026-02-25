@@ -704,6 +704,142 @@ class Agent2DiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // PENDING FOLLOW-UP QUESTION (Trigger Card Consent Gate)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Separate from pendingQuestion. Only fires when a trigger card had a
+    // follow-up question with text. Uses configurable 5-bucket classification
+    // from discovery.followUpConsent (UI: Follow-up Consent Cards).
+    // ══════════════════════════════════════════════════════════════════════════
+    const pfuq = nextState.agent2?.discovery?.pendingFollowUpQuestion || null;
+    const pfuqTurn = nextState.agent2?.discovery?.pendingFollowUpQuestionTurn;
+    const pfuqSource = nextState.agent2?.discovery?.pendingFollowUpQuestionSource || null;
+    const pfuqNextAction = nextState.agent2?.discovery?.pendingFollowUpQuestionNextAction || 'CONTINUE';
+    const hasPFUQ = pfuq && typeof pfuqTurn === 'number';
+    const isRespondingToPFUQ = hasPFUQ && pfuqTurn === (turn - 1);
+
+    if (isRespondingToPFUQ) {
+      const inputLowerCleanFUQ = inputLower.replace(/[^a-z\s]/g, '').trim();
+      const inputWordsFUQ = inputLowerCleanFUQ.split(/\s+/).filter(Boolean);
+      const inputLenFUQ = input.trim().length;
+
+      // Load configurable keywords from followUpConsent (company-level)
+      const fuc = safeObj(discoveryCfg?.followUpConsent, {});
+      const yesPhrases = safeArr(fuc.yes?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const noPhrases = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const repromptPhrases = safeArr(fuc.reprompt?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const hesitantPhrases = safeArr(fuc.hesitant?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
+      // Classify: check exact word matches and phrase containment
+      const matchesList = (list) => {
+        for (const phrase of list) {
+          if (phrase.includes(' ')) {
+            if (inputLowerCleanFUQ.includes(phrase)) return true;
+          } else {
+            if (inputWordsFUQ.includes(phrase)) return true;
+          }
+        }
+        return false;
+      };
+
+      const isYesFUQ = matchesList(yesPhrases);
+      const isNoFUQ = matchesList(noPhrases);
+      const isHesitantFUQ = matchesList(hesitantPhrases);
+      const isRepromptFUQ = matchesList(repromptPhrases) || (inputLenFUQ <= 8 && !isYesFUQ && !isNoFUQ && !isHesitantFUQ);
+
+      // Priority: YES > NO > HESITANT > REPROMPT > COMPLEX
+      let bucket;
+      if (isYesFUQ && !isNoFUQ) bucket = 'YES';
+      else if (isNoFUQ && !isYesFUQ) bucket = 'NO';
+      else if (isHesitantFUQ) bucket = 'HESITANT';
+      else if (isRepromptFUQ) bucket = 'REPROMPT';
+      else bucket = 'COMPLEX';
+
+      const direction = `${fuc[bucket.toLowerCase()]?.direction || 'CONTINUE'}`.toUpperCase();
+
+      emit('A2_FOLLOWUP_CONSENT_CLASSIFIED', {
+        bucket,
+        direction,
+        inputPreview: clip(inputLowerCleanFUQ, 60),
+        cardId: pfuqSource?.replace('card:', '') || null,
+        question: clip(pfuq, 60),
+        nextAction: pfuqNextAction,
+        markers: { isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ }
+      });
+
+      const { ack: fuqAck, usedName: fuqUsedName } = buildAck(ack, callerName, state);
+      nextState.agent2.discovery.usedNameThisTurn = fuqUsedName;
+
+      // ── REPROMPT: re-ask the question ──
+      if (bucket === 'REPROMPT') {
+        const repromptText = `${fuc.reprompt?.response || ''}`.trim() || `Sorry, I missed that. ${pfuq}`;
+        nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
+        const repromptResponse = `${fuqAck} ${repromptText}`.trim();
+
+        emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_REPROMPT', responsePreview: clip(repromptResponse, 120) });
+        return { response: repromptResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      }
+
+      // ── HESITANT: gentle clarification, keep question pending ──
+      if (bucket === 'HESITANT') {
+        const hesitantText = `${fuc.hesitant?.response || ''}`.trim()
+          || `No worries — I just need to know so we send the right team. ${pfuq}`;
+        nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
+        const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
+
+        emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_HESITANT', responsePreview: clip(hesitantResponse, 120) });
+        return { response: hesitantResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      }
+
+      // Clear the pending follow-up for YES, NO, and COMPLEX (resolved)
+      nextState.agent2.discovery.pendingFollowUpQuestion = null;
+      nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
+      nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
+      nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+
+      // ── YES: execute the configured direction ──
+      if (bucket === 'YES') {
+        const yesText = `${fuc.yes?.response || ''}`.trim() || 'Great — let me get that scheduled for you.';
+        const yesDirection = `${fuc.yes?.direction || pfuqNextAction || 'CONTINUE'}`.toUpperCase();
+
+        if (yesDirection === 'HANDOFF_BOOKING') {
+          nextState.sessionMode = 'BOOKING';
+          nextState.consent = { pending: false, given: true, turn, source: 'followup_consent_gate' };
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
+
+          emit('A2_CONSENT_GATE_BOOKING', {
+            reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
+            cardId: pfuqSource?.replace('card:', '') || null,
+            inputPreview: clip(inputLowerCleanFUQ, 60)
+          });
+        } else {
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
+        }
+
+        const yesResponse = `${fuqAck} ${yesText}`.trim();
+        emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
+        return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      }
+
+      // ── NO: acknowledge and continue ──
+      if (bucket === 'NO') {
+        const noText = `${fuc.no?.response || ''}`.trim() || 'No problem. How can I help you today?';
+        nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
+        const noResponse = `${fuqAck} ${noText}`.trim();
+
+        emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_NO', responsePreview: clip(noResponse, 120) });
+        return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      }
+
+      // ── COMPLEX: clear pending, fall through to normal agent ──
+      nextState.agent2.discovery.lastPath = 'FOLLOWUP_COMPLEX';
+      emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
+        reason: 'Caller gave substantive non-yes/no response to follow-up — routing through normal discovery',
+        inputPreview: clip(inputLowerCleanFUQ, 80)
+      });
+      // Fall through — normal trigger matching / LLM will handle this turn
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // V120: PENDING QUESTION STATE MACHINE (BULLETPROOF VERSION)
     // ══════════════════════════════════════════════════════════════════════════
     // If we asked a follow-up question last turn, the user's response MUST be
@@ -786,54 +922,24 @@ class Agent2DiscoveryRunner {
       
       if (isYes) {
         // ══════════════════════════════════════════════════════════════════════
-        // PATH: PENDING_QUESTION_YES — User confirmed
+        // PATH: PENDING_QUESTION_YES — User confirmed (generic pendingQuestion)
+        // NOTE: Trigger card follow-ups use pendingFollowUpQuestion (separate handler above).
+        // This path handles LLM follow-ups, discovery consent, and other non-trigger questions.
         // ══════════════════════════════════════════════════════════════════════
         nextState.agent2.discovery.pendingQuestion = null;
         nextState.agent2.discovery.pendingQuestionTurn = null;
         nextState.agent2.discovery.pendingQuestionResolved = true;
-
-        // ══════════════════════════════════════════════════════════════════════
-        // CONSENT GATE: Check if the trigger card that asked this question
-        // specified a booking handoff on YES (nextAction = HANDOFF_BOOKING).
-        // If so, switch to BOOKING lane — BookingLogicEngine takes over next turn.
-        // ══════════════════════════════════════════════════════════════════════
-        const lastNextAction = `${state.agent2?.discovery?.lastNextAction || 'CONTINUE'}`.toUpperCase();
-        const isBookingHandoff = lastNextAction === 'HANDOFF_BOOKING';
-
-        if (isBookingHandoff) {
-          nextState.agent2.discovery.lastPath = 'PENDING_YES_HANDOFF_BOOKING';
-          nextState.sessionMode = 'BOOKING';
-          nextState.consent = { pending: false, given: true, turn, source: 'consent_gate' };
-
-          emit('A2_CONSENT_GATE_BOOKING', {
-            reason: 'Caller confirmed YES to consent gate — handoff to Booking Logic',
-            cardId: pendingInfo?.cardId || null,
-            source: pendingInfo?.source || null,
-            inputPreview: clip(inputLowerClean, 60),
-            markers: { hasYesWord, hasYesPhrase }
-          });
-        } else {
-          nextState.agent2.discovery.lastPath = 'PENDING_YES';
-        }
+        nextState.agent2.discovery.lastPath = 'PENDING_YES';
         
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // V128: Pending question YES response (new namespace with legacy fallback)
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
         const pendingYes = `${pendingResponses.yes || fallback.pendingYesResponse || ''}`.trim();
         let response;
         let responseUiPath;
         
-        if (isBookingHandoff) {
-          const bookingYes = `${pendingResponses.yesBooking || ''}`.trim();
-          response = `${personalAck} ${bookingYes || pendingYes || 'Great — let me get that scheduled for you.'}`.trim();
-          responseUiPath = bookingYes
-            ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yesBooking'
-            : pendingResponses.yes
-              ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yes'
-              : null;
-        } else if (pendingYes) {
+        if (pendingYes) {
           response = `${personalAck} ${pendingYes}`.trim();
           responseUiPath = pendingResponses.yes
             ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yes'
@@ -844,45 +950,35 @@ class Agent2DiscoveryRunner {
         }
         
         emit('A2_PATH_SELECTED', { 
-          path: isBookingHandoff ? 'PENDING_YES_HANDOFF_BOOKING' : 'PENDING_QUESTION_YES', 
-          reason: isBookingHandoff
-            ? 'User confirmed YES → booking handoff (consent gate)'
-            : 'User confirmed: detected YES markers',
+          path: 'PENDING_QUESTION_YES', 
+          reason: `User confirmed: detected YES markers`,
           markers: { hasYesWord, hasYesPhrase, inputPreview: clip(inputLowerClean, 40) },
-          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source },
-          nextAction: lastNextAction,
-          bookingHandoff: isBookingHandoff
+          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source }
         });
         
-        // V127: Use validateSpeechSource for consistent SPEAK_PROVENANCE logging
         const yesValidation = validateSpeechSource({
           response,
-          sourceId: isBookingHandoff
-            ? 'agent2.discovery.consentGate.yesBooking'
-            : 'agent2.discovery.pendingQuestion.yesPath',
+          sourceId: 'agent2.discovery.pendingQuestion.yesPath',
           uiPath: responseUiPath,
           configPath: pendingResponses.yes
             ? 'discovery.pendingQuestionResponses.yes'
             : 'discovery.playbook.fallback.pendingYesResponse',
           uiTab: 'Configuration',
           audioUrl: null,
-          reason: isBookingHandoff
-            ? `Consent gate YES → booking handoff from card: ${pendingInfo?.cardId || 'unknown'}`
-            : `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
+          reason: `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
           emergencyFallback,
           emit
         });
         response = yesValidation.response;
         
         emit('A2_RESPONSE_READY', {
-          path: isBookingHandoff ? 'PENDING_YES_HANDOFF_BOOKING' : 'PENDING_QUESTION_YES',
+          path: 'PENDING_QUESTION_YES',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: isBookingHandoff ? 'consentGate.yesBooking' : 'pendingQuestion.yesPath',
+          source: 'pendingQuestion.yesPath',
           usedCallerName: usedName,
-          wasBlocked: yesValidation.blocked,
-          bookingHandoff: isBookingHandoff
+          wasBlocked: yesValidation.blocked
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
@@ -1316,8 +1412,15 @@ class Agent2DiscoveryRunner {
       nextState.agent2.discovery.lastTriggerLabel = card.label || null;
       nextState.agent2.discovery.lastNextAction = nextAction;
       
-      // V119: Track pending question for state machine
-      if (afterQuestion) {
+      // Track follow-up question for consent gate or generic pending question.
+      // If trigger card has its OWN follow-up → dedicated pendingFollowUpQuestion (5-bucket system).
+      // If only the company-level default afterAnswer → legacy pendingQuestion system.
+      if (followUpQuestion) {
+        nextState.agent2.discovery.pendingFollowUpQuestion = followUpQuestion;
+        nextState.agent2.discovery.pendingFollowUpQuestionTurn = typeof turn === 'number' ? turn : null;
+        nextState.agent2.discovery.pendingFollowUpQuestionSource = `card:${card.id}`;
+        nextState.agent2.discovery.pendingFollowUpQuestionNextAction = nextAction;
+      } else if (afterQuestion) {
         nextState.agent2.discovery.pendingQuestion = afterQuestion;
         nextState.agent2.discovery.pendingQuestionTurn = typeof turn === 'number' ? turn : null;
         nextState.agent2.discovery.pendingQuestionSource = `card:${card.id}`;
