@@ -347,17 +347,26 @@
         `${CONFIG.API_BASE}/${state.companyId}/calls/${callSid}`
       );
 
-      // Backend may return either:
-      // - flat shape: { callSid, fromPhone, ..., turns: [] }
-      // - nested shape: { call: { ... }, turns: [] }
-      const call = response?.call && typeof response.call === 'object' ? response.call : response;
-      const turns = response?.turns || call?.turns || [];
-      const events = response?.events || call?.events || [];
-      const problems = response?.problems || call?.problems || [];
+      // Canonical shape:
+      // - { callMeta, turns[], trace[], flags[] }
+      // Back-compat:
+      // - flat { callSid, fromPhone, ..., turns: [] }
+      // - nested { call: { ... }, turns: [] }
+      const callMeta = response?.callMeta && typeof response.callMeta === 'object' ? response.callMeta : null;
+      const legacyCall = response?.call && typeof response.call === 'object' ? response.call : response;
+
+      const turns = response?.turns || legacyCall?.turns || [];
+      const trace = response?.trace || legacyCall?.trace || [];
+      const flags = response?.flags || legacyCall?.flags || [];
+      const events = response?.events || legacyCall?.events || [];
+      const problems = response?.problems || legacyCall?.problems || [];
 
       state.selectedCall = {
-        ...(call || {}),
+        ...(legacyCall || {}),
+        ...(callMeta || {}),
         turns,
+        trace,
+        flags,
         events,
         problems
       };
@@ -591,6 +600,7 @@
     const agentTurns = turns.filter(t => t.speaker === 'agent').length;
     const callerTurns = turns.filter(t => t.speaker === 'caller').length;
     const hasIssues = violations > 0 || problems.length > 0;
+    const flags = Array.isArray(call.flags) ? call.flags : [];
 
     // ═══════════════════════════════════════════════════════════════════════════
     // INCOMPLETE CALL DETECTION
@@ -620,6 +630,26 @@
             <div><strong>Agent turns generated:</strong> 0</div>
             <div><strong>Provenance verification:</strong> Not possible (no data)</div>
           </div>
+        </div>
+      `;
+    }
+
+    // PARTIAL CALL DETECTION (transcript exists, trace missing)
+    // If the backend flags trace gaps, NEVER show "All Clear".
+    if (flags.includes('PARTIAL_MISSING_TRACE')) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            PARTIAL — Transcript Captured, Trace Missing
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            This call has conversational turns, but one or more agent turns are missing provenance/trace data.
+            Provenance verification is incomplete — do not treat this as compliant.
+          </p>
         </div>
       `;
     }
