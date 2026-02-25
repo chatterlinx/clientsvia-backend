@@ -145,7 +145,6 @@ async function loadAllRoutes() {
         // 🤖 COMPANY CONFIGURATION ROUTES - AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
         routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
         routes.triageCardsRoutes = await loadRouteWithTimeout('./routes/company/triageCards', 'triageCardsRoutes'); // 🎯 Triage Cards Management (atomic source of truth)
-        routes.blackboxRoutes = await loadRouteWithTimeout('./routes/company/blackbox', 'blackboxRoutes'); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
         // ☢️ NUKED Feb 2026: dynamicFlowsRoutes - V110 architecture replaces Dynamic Flows
         // routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes');
         // ☢️ NUKED Feb 2026: systemSnapshotRoutes - Flow Tree visualization removed
@@ -670,7 +669,6 @@ function registerRoutes(routes) {
     // 🗑️ DELETED: All AI Agent Logic route registrations (tab removed)
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
     app.use('/api/company/:companyId/triage-cards', routes.triageCardsRoutes); // V2: Triage Cards Management (atomic source of truth)
-    app.use('/api/company/:companyId/blackbox', routes.blackboxRoutes); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
     // ☢️ NUKED Feb 2026: /api/company/:companyId/dynamic-flows - V110 architecture replaces Dynamic Flows
     // app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes);
     // ☢️ NUKED Feb 2026: /api/company/:companyId/system-snapshot - Flow Tree visualization removed
