@@ -1191,4 +1191,273 @@ router.post(
   }
 );
 
+/* ============================================================================
+   CALL CONSOLE — Call List, Detail, and Management Endpoints
+   ============================================================================ */
+
+const CallSummary = require('../../models/CallSummary');
+const CallTranscript = require('../../models/CallTranscript');
+
+/**
+ * GET /:companyId/calls
+ * List calls for the Call Console
+ */
+router.get('/:companyId/calls',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { 
+        page = 1, 
+        limit = 50, 
+        source, 
+        outcome,
+        fromDate,
+        toDate,
+        search
+      } = req.query;
+
+      const query = { companyId };
+      
+      if (source && source !== 'all') query.source = source;
+      if (outcome && outcome !== 'all') query.outcome = outcome;
+      
+      if (fromDate || toDate) {
+        query.startedAt = {};
+        if (fromDate) query.startedAt.$gte = new Date(fromDate);
+        if (toDate) query.startedAt.$lte = new Date(toDate);
+      }
+      
+      if (search) {
+        query.$or = [
+          { from: { $regex: search, $options: 'i' } },
+          { to: { $regex: search, $options: 'i' } },
+          { 'customer.name': { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      const [calls, total] = await Promise.all([
+        CallSummary.find(query)
+          .sort({ startedAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean(),
+        CallSummary.countDocuments(query)
+      ]);
+
+      const formattedCalls = calls.map(call => ({
+        callSid: call.twilioSid || call.callId,
+        callId: call.callId,
+        from: call.from,
+        to: call.to,
+        startedAt: call.startedAt,
+        endedAt: call.endedAt,
+        durationSeconds: call.durationSeconds || 0,
+        turnCount: call.turnCount || 0,
+        outcome: call.outcome || 'unknown',
+        source: call.source || 'voice',
+        hasTranscript: call.hasTranscript || false,
+        kpi: call.kpi || {},
+        customer: call.customer || {}
+      }));
+
+      res.json({
+        success: true,
+        calls: formattedCalls,
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Call list failed: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /:companyId/calls/:callSid
+ * Get call detail with transcript
+ */
+router.get('/:companyId/calls/:callSid',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId, callSid } = req.params;
+
+      const callSummary = await CallSummary.findOne({
+        companyId,
+        $or: [{ twilioSid: callSid }, { callId: callSid }]
+      }).lean();
+
+      if (!callSummary) {
+        return res.status(404).json({ success: false, error: 'Call not found' });
+      }
+
+      // Load transcript
+      let transcript = null;
+      let turns = [];
+      
+      if (callSummary.transcriptRef) {
+        transcript = await CallTranscript.findById(callSummary.transcriptRef).lean();
+      }
+      if (!transcript) {
+        transcript = await CallTranscript.findOne({ 
+          callId: callSummary.twilioSid || callSummary.callId 
+        }).lean();
+      }
+
+      if (transcript?.turns && Array.isArray(transcript.turns)) {
+        turns = transcript.turns.map((turn, idx) => ({
+          turnNumber: turn.turn || idx + 1,
+          speaker: turn.speaker || 'unknown',
+          text: turn.text || '',
+          timestamp: turn.timestamp,
+          source: turn.source || null
+        }));
+      } else if (transcript?.customerTranscript) {
+        const lines = transcript.customerTranscript.split('\n').filter(Boolean);
+        turns = lines.map((line, idx) => {
+          const isAgent = line.startsWith('AI:') || line.includes('[Agent]');
+          const text = line.replace(/^(AI|Customer):\s*/i, '');
+          return {
+            turnNumber: idx + 1,
+            speaker: isAgent ? 'agent' : 'caller',
+            text,
+            timestamp: null,
+            source: null
+          };
+        });
+      }
+
+      res.json({
+        success: true,
+        call: {
+          callSid: callSummary.twilioSid || callSummary.callId,
+          callId: callSummary.callId,
+          from: callSummary.from,
+          to: callSummary.to,
+          startedAt: callSummary.startedAt,
+          endedAt: callSummary.endedAt,
+          durationSeconds: callSummary.durationSeconds || 0,
+          turnCount: callSummary.turnCount || 0,
+          outcome: callSummary.outcome || 'unknown',
+          source: callSummary.source || 'voice',
+          kpi: callSummary.kpi || {},
+          customer: callSummary.customer || {}
+        },
+        turns,
+        transcript: transcript ? {
+          id: transcript._id,
+          turnCount: transcript.turnCount || turns.length
+        } : null
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Call detail failed: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /:companyId/calls/bulk-delete
+ * Bulk delete calls
+ */
+router.delete('/:companyId/calls/bulk-delete',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.EDIT_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { callSids } = req.body;
+
+      if (!callSids || !Array.isArray(callSids) || callSids.length === 0) {
+        return res.status(400).json({ success: false, error: 'callSids array required' });
+      }
+
+      // Delete from CallSummary
+      const summaryResult = await CallSummary.deleteMany({
+        companyId,
+        $or: [
+          { twilioSid: { $in: callSids } },
+          { callId: { $in: callSids } }
+        ]
+      });
+
+      // Delete from CallTranscript
+      await CallTranscript.deleteMany({
+        companyId,
+        callId: { $in: callSids }
+      });
+
+      logger.info(`[${MODULE_ID}] Bulk deleted ${summaryResult.deletedCount} calls`, { companyId });
+
+      res.json({
+        success: true,
+        deletedCount: summaryResult.deletedCount
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Bulk delete failed: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /:companyId/calls/export
+ * Export calls as CSV
+ */
+router.get('/:companyId/calls/export',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { fromDate, toDate, format = 'csv' } = req.query;
+
+      const query = { companyId };
+      if (fromDate || toDate) {
+        query.startedAt = {};
+        if (fromDate) query.startedAt.$gte = new Date(fromDate);
+        if (toDate) query.startedAt.$lte = new Date(toDate);
+      }
+
+      const calls = await CallSummary.find(query)
+        .sort({ startedAt: -1 })
+        .limit(10000)
+        .lean();
+
+      if (format === 'csv') {
+        const headers = ['Call SID', 'From', 'To', 'Started', 'Duration (s)', 'Turns', 'Outcome', 'Source'];
+        const rows = calls.map(c => [
+          c.twilioSid || c.callId,
+          c.from,
+          c.to,
+          c.startedAt?.toISOString() || '',
+          c.durationSeconds || 0,
+          c.turnCount || 0,
+          c.outcome || '',
+          c.source || 'voice'
+        ]);
+
+        const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="calls-export-${Date.now()}.csv"`);
+        return res.send(csv);
+      }
+
+      res.json({ success: true, calls });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Export failed: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 module.exports = router;
