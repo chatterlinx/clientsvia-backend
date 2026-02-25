@@ -2007,6 +2007,43 @@ router.post('/voice', async (req, res) => {
       }).catch(() => {});
     }
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // 📝 TRANSCRIPT: Save greeting (Turn 0) to Redis for Call Review
+    // ════════════════════════════════════════════════════════════════════════════
+    // The greeting is the first agent turn. Save it to Redis so status callback
+    // can include it in the transcript when the call ends.
+    // ════════════════════════════════════════════════════════════════════════════
+    const greetingText = (typeof initResult !== 'undefined' && initResult?.greeting) ? initResult.greeting : null;
+    if (greetingText && req.body.CallSid) {
+      try {
+        const redis = await getRedis();
+        if (redis) {
+          const redisKey = `call:${req.body.CallSid}`;
+          const existingRaw = await redis.get(redisKey);
+          const callState = existingRaw ? JSON.parse(existingRaw) : {};
+          
+          // Initialize turns array with greeting as first agent turn
+          callState.turns = [{
+            speaker: 'agent',
+            text: greetingText.trim(),
+            turn: 0,
+            timestamp: new Date().toISOString(),
+            source: 'GREETING'
+          }];
+          
+          await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 });
+          logger.info('[VOICE] Saved greeting to Redis for transcript', {
+            callSid: req.body.CallSid.slice(-8),
+            textPreview: greetingText.slice(0, 50)
+          });
+        }
+      } catch (greetingRedisErr) {
+        logger.warn('[VOICE] Failed to save greeting to Redis (non-blocking)', {
+          error: greetingRedisErr.message
+        });
+      }
+    }
+    
     // 🐰 RABBIT HOLE CHECKPOINT #2: WHAT TWIML ARE WE SENDING TO TWILIO?
     console.log('═'.repeat(80));
     console.log('[🐰 GATHER CHECKPOINT #2] Sending TwiML to Twilio - CHECK THE ACTION URL!');
