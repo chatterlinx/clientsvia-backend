@@ -79,15 +79,6 @@ try {
     logger.warn('[V2TWILIO] AWConfigReader not available - BookingFlowRunner will use direct config access');
 }
 
-// 🔒 V99: Control Plane Enforcer - Platform Law enforcement
-let ControlPlaneEnforcer;
-try {
-    ControlPlaneEnforcer = require('../services/engine/ControlPlaneEnforcer');
-    logger.info('[V2TWILIO] ✅ Control Plane Enforcer loaded - Platform Law active');
-} catch (e) {
-    logger.warn('[V2TWILIO] ⚠️ Control Plane Enforcer not available', { error: e.message });
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // 📊 V111: CONVERSATION MEMORY - Runtime Truth for Call State
 // ═══════════════════════════════════════════════════════════════════════════
@@ -361,18 +352,6 @@ const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('
 // 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
 // ============================================================================
 // Records every decision point for debugging. No more Render log archaeology.
-// See: black-box.html for visualization and analysis.
-// ============================================================================
-// Agent 2.0 uses CallLogger (not legacy BlackBox name)
-let CallLogger;
-try {
-    CallLogger = require('../services/CallLogger');
-    logger.info('[V2TWILIO] ✅ Call Logger loaded successfully');
-} catch (err) {
-    logger.warn('[V2TWILIO] ⚠️ Black Box Recorder not available', { error: err.message });
-    CallLogger = null;
-}
-
 // ============================================================================
 // 🎯 LOW CONFIDENCE HANDLER - STT Quality Guard
 // ============================================================================

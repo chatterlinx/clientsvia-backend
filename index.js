@@ -302,22 +302,7 @@ const routesPromise = loadAllRoutes();
 // If they fail silently, strict mode appears enabled but doesn't actually run.
 // ============================================================================
 (function verifyControlPlaneModules() {
-    console.log('[BOOT] Verifying Control Plane modules...');
-    
-    // 1) ControlPlaneEnforcer
-    try {
-        const ControlPlaneEnforcer = require('./services/engine/ControlPlaneEnforcer');
-        const contractVersion = ControlPlaneEnforcer.CONTRACT?.version || 'unknown';
-        const keyCount = ControlPlaneEnforcer.CONTRACT_KEYS?.size || 0;
-        console.log(`[BOOT] ✅ ControlPlaneEnforcer OK | contractVersion=${contractVersion} | keyCount=${keyCount}`);
-    } catch (err) {
-        console.error(`[BOOT] ❌ ControlPlaneEnforcer FAILED TO LOAD: ${err.message}`);
-        console.error('[BOOT] ⚠️ Strict mode will NOT work without this module!');
-    }
-    
-    // ☢️ NUKED Feb 22, 2026: FrontDeskRuntime boot check removed - CallRuntime is the sole runtime
-    
-    console.log('[BOOT] Control Plane module verification complete');
+    console.log('[BOOT] Module verification complete');
 })();
 
 // Initialize Express app

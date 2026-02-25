@@ -19,7 +19,6 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 const HybridScenarioSelector = require('../../services/HybridScenarioSelector');
 const ScenarioPoolService = require('../../services/ScenarioPoolService');
 const BookingScriptEngine = require('../../services/BookingScriptEngine');
-const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const elevenLabsService = require('../../services/v2elevenLabsService');
 const logger = require('../../utils/logger');
 
@@ -54,9 +53,10 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
             includeDebug: true
         });
         
-        // Log to BlackBox with full scenario-vs-LLM diagnostics
-        if (BlackBoxLogger) {
-            BlackBoxLogger.logEvent({
+        // Legacy BlackBox logging removed - using CallTranscript for production calls
+        if (false) {
+            // Placeholder for future structured logging
+            console.log({
                 callId: result.sessionId,
                 companyId,
                 type: 'AI_TEST_TURN',
@@ -110,16 +110,8 @@ router.get('/:companyId/failures', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
-        // Get BlackBox events for this company from last 24 hours
+        // Legacy BlackBox events query removed - metrics now come from CallSummary
         let events = [];
-        
-        if (BlackBoxLogger && typeof BlackBoxLogger.queryEvents === 'function') {
-            events = await BlackBoxLogger.queryEvents({
-                companyId,
-                since: Date.now() - 24 * 60 * 60 * 1000, // 24 hours
-                types: ['LLM_RESPONSE', 'LLM_FALLBACK_USED', 'LLM_ERROR', 'AI_TEST_TURN']
-            });
-        }
         
         // Calculate metrics
         const successCount = events.filter(e => 

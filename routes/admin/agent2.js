@@ -25,10 +25,9 @@ const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const openaiClient = require('../../config/openai');
 
-// Agent 2.0 uses CallLogger/CallRecording (not legacy BlackBox names)
-const CallLogger = require('../../services/CallLogger');
-const CallRecording = require('../../models/CallRecording');
 const LLMFallbackUsage = require('../../models/LLMFallbackUsage');
+const CallSummary = require('../../models/CallSummary');
+const CallTranscript = require('../../models/CallTranscript');
 
 const UI_BUILD = 'AGENT2_UI_V1.0';
 
@@ -1126,20 +1125,6 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
       logger.warn('[AGENT2] ConfigAuditService failed (non-blocking)', { error: e.message });
     }
 
-    // BlackBox proof event (CONFIG_WRITE)
-    try {
-      await CallLogger.logEvent('CONFIG_WRITE', {
-        companyId,
-        module: 'AGENT2',
-        uiBuild: UI_BUILD,
-        path: 'aiAgentSettings.agent2',
-        keysUpdated: Object.keys(updates || {}),
-        ts: new Date().toISOString()
-      });
-    } catch (e) {
-      logger.warn('[AGENT2] CallLogger CONFIG_WRITE failed (non-blocking)', { error: e.message });
-    }
-
     return res.json({ success: true, data: next, meta: { uiBuild: UI_BUILD } });
   } catch (error) {
     logger.error('[AGENT2] PATCH error', { error: error.message });
@@ -1507,29 +1492,40 @@ router.get('/calls/:companyId',
         toDate: toDate || undefined
       };
 
-      const result = await CallRecording.getCallList(companyId, options);
+      const query = { companyId };
+      if (options.source) query.source = options.source;
+      if (options.fromDate || options.toDate) {
+        query.startedAt = {};
+        if (options.fromDate) query.startedAt.$gte = new Date(options.fromDate);
+        if (options.toDate) query.startedAt.$lte = new Date(options.toDate);
+      }
+      
+      const total = await CallSummary.countDocuments(query);
+      const callDocs = await CallSummary.find(query)
+        .sort({ startedAt: -1 })
+        .skip((options.page - 1) * options.limit)
+        .limit(options.limit)
+        .lean();
 
-      // Transform for UI
-      const calls = result.calls.map(call => ({
-        callSid: call.callId,
+      const calls = callDocs.map(call => ({
+        callSid: call.twilioSid || call.callId,
         from: call.from,
         to: call.to,
         startTime: call.startedAt,
-        duration: call.durationMs ? Math.round(call.durationMs / 1000) : null,
-        turnCount: call.performance?.totalTurns || null,
-        status: call.callOutcome?.toLowerCase() || 'completed',
+        duration: call.durationSeconds || null,
+        turnCount: call.turnCount || null,
+        status: call.outcome?.toLowerCase() || 'completed',
         source: call.source || 'voice',
-        flags: call.flags || {},
-        bookingCompleted: call.booking?.completed === true,
+        flags: {},
+        bookingCompleted: call.kpi?.bucket === 'BOOKING',
         primaryIntent: call.primaryIntent,
-        diagnosis: call.diagnosis,
-        // LLM usage stats
-        llmCalls: call.performance?.llmCalls?.count || 0,
-        llmCostUsd: call.performance?.llmCalls?.totalCostUsd || 0,
-        llmTotalMs: call.performance?.llmCalls?.totalMs || 0
+        diagnosis: null,
+        llmCalls: 0,
+        llmCostUsd: call.llmCost || 0,
+        llmTotalMs: 0
       }));
 
-      return res.json({ success: true, data: calls, total: result.total });
+      return res.json({ success: true, data: calls, total });
     } catch (error) {
       logger.error('[AGENT2] Call list error', { companyId, error: error.message });
       return res.status(500).json({ success: false, error: error.message });
@@ -1548,31 +1544,40 @@ router.get('/calls/:companyId/:callSid/events',
     const { companyId, callSid } = req.params;
 
     try {
-      const recording = await CallRecording.getCallDetail(companyId, callSid);
+      const call = await CallSummary.findOne({ 
+        companyId, 
+        $or: [{ twilioSid: callSid }, { callId: callSid }] 
+      }).lean();
 
-      if (!recording) {
+      if (!call) {
         return res.status(404).json({ success: false, error: 'Call not found' });
       }
 
-      // Return events with call metadata
+      let transcript = null;
+      if (call.transcriptRef) {
+        transcript = await CallTranscript.findById(call.transcriptRef).lean();
+      } else {
+        transcript = await CallTranscript.findOne({ callId: callSid }).lean();
+      }
+
       return res.json({
         success: true,
-        data: recording.events || [],
+        data: [],
         meta: {
-          callSid: recording.callId,
-          from: recording.from,
-          to: recording.to,
-          startedAt: recording.startedAt,
-          endedAt: recording.endedAt,
-          durationMs: recording.durationMs,
-          source: recording.source,
-          callOutcome: recording.callOutcome,
-          transcript: recording.transcript,
-          flags: recording.flags,
-          diagnosis: recording.diagnosis,
-          performance: recording.performance,
-          awHash: recording.awHash,
-          traceRunId: recording.traceRunId
+          callSid: call.twilioSid || call.callId,
+          from: call.from,
+          to: call.to,
+          startedAt: call.startedAt,
+          endedAt: call.endedAt,
+          durationMs: (call.durationSeconds || 0) * 1000,
+          source: call.source,
+          callOutcome: call.outcome,
+          transcript: transcript?.turns || transcript?.customerTranscript || null,
+          flags: {},
+          diagnosis: null,
+          performance: { totalTurns: call.turnCount },
+          awHash: null,
+          traceRunId: null
         }
       });
     } catch (error) {

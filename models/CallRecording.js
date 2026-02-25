@@ -1,24 +1,12 @@
 /**
  * ============================================================================
- * CALL RECORDING MODEL - Agent 2.0 Call Event Storage
+ * CALL RECORDING MODEL - DEPRECATED STUB (Re-exports BlackBoxRecording stub)
  * ============================================================================
+ * This model has been deprecated. This stub prevents runtime crashes.
  * 
- * This is the canonical model for storing call events in Agent 2.0.
- * 
- * ARCHITECTURE NOTE:
- * - This file re-exports BlackBoxRecording for backwards compatibility
- * - All new Agent 2.0 code should import from this file
- * - BlackBoxRecording will be deprecated and eventually removed
- * 
- * USAGE:
- *   const CallRecording = require('../models/CallRecording');
- *   const recording = await CallRecording.getCallDetail(companyId, callSid);
- * 
+ * DO NOT ADD NEW CODE THAT USES THIS MODEL.
+ * Use CallSummary and CallTranscript models for call data instead.
  * ============================================================================
  */
 
-const BlackBoxRecording = require('./BlackBoxRecording');
-
-// Re-export the model with new name
-// This allows gradual migration without breaking existing code
-module.exports = BlackBoxRecording;
+module.exports = require('./BlackBoxRecording');

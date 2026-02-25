@@ -68,8 +68,6 @@ const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
 const { classifyServiceUrgency } = require('../utils/serviceUrgency');
 const { checkCompliance, buildComplianceSummary } = require('../utils/complianceChecker');
-// PromptResolver REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
-const BlackBoxLogger = require('./BlackBoxLogger');
 const AWConfigReader = require('./wiring/AWConfigReader');
 
 // ═══════════════════════════════════════════════════════════════════════════
