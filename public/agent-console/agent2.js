@@ -388,6 +388,19 @@
   /* --------------------------------------------------------------------------
      PHRASE LIST MANAGEMENT
      -------------------------------------------------------------------------- */
+  function parseBulkPhrases(raw) {
+    const text = `${raw || ''}`.trim();
+    if (!text) return [];
+
+    // Allow bulk add via commas / new lines / semicolons.
+    // Example: "yes, yeah, sure" → ["yes","yeah","sure"]
+    return text
+      .split(/[,;\n]+/g)
+      .map(p => p.trim())
+      .filter(Boolean)
+      .map(p => p.toLowerCase());
+  }
+
   function renderPhraseList(type, phrases) {
     const container = type === 'consent' ? DOM.consentPhrasesList : DOM.escalationPhrasesList;
     container.innerHTML = '';
@@ -414,9 +427,8 @@
 
   function addPhrase(type) {
     const input = type === 'consent' ? DOM.inputConsentPhrase : DOM.inputEscalationPhrase;
-    const phrase = input.value.trim().toLowerCase();
-    
-    if (!phrase) return;
+    const phrases = parseBulkPhrases(input.value);
+    if (phrases.length === 0) return;
     
     const arrayKey = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
     const defaults = type === 'consent' ? CONFIG.DEFAULT_CONSENT_PHRASES : CONFIG.DEFAULT_ESCALATION_PHRASES;
@@ -424,17 +436,38 @@
     if (!state.config[arrayKey]) {
       state.config[arrayKey] = [...defaults];
     }
-    
-    if (state.config[arrayKey].includes(phrase)) {
-      showToast('warning', 'Duplicate', 'This phrase already exists.');
+
+    // De-dupe within the pasted set and against existing phrases.
+    const existing = new Set((state.config[arrayKey] || []).map(p => `${p}`.trim().toLowerCase()).filter(Boolean));
+    const uniqueIncoming = Array.from(new Set(phrases));
+
+    let added = 0;
+    let skipped = 0;
+    for (const phrase of uniqueIncoming) {
+      if (!phrase) continue;
+      if (existing.has(phrase)) {
+        skipped++;
+        continue;
+      }
+      state.config[arrayKey].push(phrase);
+      existing.add(phrase);
+      added++;
+    }
+
+    if (added === 0) {
+      showToast('warning', 'Duplicate', 'All phrases already exist.');
       return;
     }
-    
-    state.config[arrayKey].push(phrase);
+
     renderPhraseList(type, state.config[arrayKey]);
-    
     input.value = '';
     state.isDirty = true;
+
+    if (skipped > 0) {
+      showToast('success', 'Added', `Added ${added} phrase${added !== 1 ? 's' : ''} (skipped ${skipped} duplicate${skipped !== 1 ? 's' : ''}).`);
+    } else {
+      showToast('success', 'Added', `Added ${added} phrase${added !== 1 ? 's' : ''}.`);
+    }
   }
 
   function removePhrase(type, index) {

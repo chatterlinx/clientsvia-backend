@@ -377,15 +377,26 @@ class CallSummaryService {
       // STEP 2: Store transcript separately (if provided)
       // Uses twilioSid as the callId for transcript lookup compatibility
       // ─────────────────────────────────────────────────────────────────────────
+      const transcriptCallId = existingCall.twilioSid || callId;
       let transcriptRef = null;
+
+      // If turns were provided (from Redis/status callback), upsert the transcript deterministically.
       if (transcript && transcript.length > 0) {
         const limitedTranscript = transcript.slice(0, CONFIG.MAX_TRANSCRIPT_TURNS);
-        const transcriptDoc = await CallTranscript.createTranscript(
+        const transcriptDoc = await CallTranscript.upsertTranscriptFromTurns(
           companyId,
-          existingCall.twilioSid || callId,
-          limitedTranscript
+          transcriptCallId,
+          limitedTranscript,
+          { callEndTime: passedEndedAt ? new Date(passedEndedAt) : new Date() }
         );
-        transcriptRef = transcriptDoc._id;
+        transcriptRef = transcriptDoc?._id || null;
+      } else {
+        // Fallback: if live turn appends created a transcript during the call,
+        // link it here so Call Console can resolve it even when Redis is unavailable.
+        const existingTranscript = await CallTranscript.findOne({ callId: transcriptCallId })
+          .select('_id')
+          .lean();
+        transcriptRef = existingTranscript?._id || null;
       }
       
       // ─────────────────────────────────────────────────────────────────────────
@@ -434,7 +445,12 @@ class CallSummaryService {
         llmModel,
         llmCost: llmCost || 0,
         capturedSummary,
-        turnCount: turnCount || transcript?.length || 0,
+        // Never downgrade: live call updates may already have a higher turnCount.
+        turnCount: Math.max(
+          existingCall.turnCount || 0,
+          (typeof turnCount === 'number' ? turnCount : 0),
+          (transcript?.length || 0)
+        ),
         transcriptRef,
         hasTranscript: !!transcriptRef,
         processingStatus: 'complete'

@@ -347,7 +347,20 @@
         `${CONFIG.API_BASE}/${state.companyId}/calls/${callSid}`
       );
 
-      state.selectedCall = response;
+      // Backend may return either:
+      // - flat shape: { callSid, fromPhone, ..., turns: [] }
+      // - nested shape: { call: { ... }, turns: [] }
+      const call = response?.call && typeof response.call === 'object' ? response.call : response;
+      const turns = response?.turns || call?.turns || [];
+      const events = response?.events || call?.events || [];
+      const problems = response?.problems || call?.problems || [];
+
+      state.selectedCall = {
+        ...(call || {}),
+        turns,
+        events,
+        problems
+      };
       renderCallDetail();
       openModal();
     } catch (error) {

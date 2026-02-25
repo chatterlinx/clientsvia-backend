@@ -120,7 +120,9 @@ const CallTranscriptSchema = new mongoose.Schema({
       text: { type: String, required: true },
       turn: { type: Number },
       timestamp: { type: String },
-      source: { type: String } // For agent turns: provenance source
+      source: { type: String }, // For agent turns: provenance source
+      // Optional richer provenance payload (used by Call Console for UI traceability)
+      provenance: { type: mongoose.Schema.Types.Mixed }
     }],
     default: []
   },
@@ -320,6 +322,113 @@ CallTranscriptSchema.statics.createTranscript = async function(companyId, callId
     turns, // Store raw turns array for Call Review
     v111Enabled: false
   });
+};
+
+/**
+ * Upsert (create or replace) a transcript from a simple turns array.
+ * This is safer than create() because callId is unique and multiple pipelines may race.
+ *
+ * @param {string|ObjectId} companyId
+ * @param {string} callId
+ * @param {Array} turns
+ * @param {Object} [opts]
+ * @param {Date} [opts.callEndTime]
+ * @returns {Promise<CallTranscript>}
+ */
+CallTranscriptSchema.statics.upsertTranscriptFromTurns = async function(companyId, callId, turns, opts = {}) {
+  const now = new Date();
+  const endTimeCandidate = opts.callEndTime instanceof Date ? opts.callEndTime : now;
+  const callEndTime = Number.isNaN(endTimeCandidate.getTime()) ? now : endTimeCandidate;
+
+  const cleanedTurns = (Array.isArray(turns) ? turns : [])
+    .map(t => ({
+      speaker: t?.speaker === 'agent' ? 'agent' : 'caller',
+      text: `${t?.text || ''}`.trim(),
+      turn: typeof t?.turn === 'number' ? t.turn : undefined,
+      timestamp: t?.timestamp ? `${t.timestamp}` : undefined,
+      source: t?.source ? `${t.source}` : undefined,
+      provenance: t?.provenance || undefined
+    }))
+    .filter(t => t.text.length > 0);
+
+  const customerLines = cleanedTurns.map(turn => {
+    const speaker = turn.speaker === 'agent' ? 'AI' : 'Customer';
+    return `${speaker}: ${turn.text}`;
+  });
+
+  const startFromTimestamp = cleanedTurns[0]?.timestamp ? new Date(cleanedTurns[0].timestamp) : null;
+  const callStartTime = startFromTimestamp && !Number.isNaN(startFromTimestamp.getTime()) ? startFromTimestamp : now;
+
+  return this.findOneAndUpdate(
+    { callId },
+    {
+      $setOnInsert: {
+        callId,
+        companyId,
+        v111Enabled: false
+      },
+      $set: {
+        callStartTime,
+        callEndTime,
+        durationMs: Math.max(0, callEndTime.getTime() - callStartTime.getTime()),
+        turnCount: cleanedTurns.length,
+        customerTranscript: customerLines.join('\n'),
+        turns: cleanedTurns,
+        updatedAt: now
+      }
+    },
+    { new: true, upsert: true }
+  );
+};
+
+/**
+ * Append turns during the live call (Mongo fallback when Redis/status-callback is unreliable).
+ * Not guaranteed idempotent across webhook retries; call detail API de-dupes at read time.
+ *
+ * @param {string|ObjectId} companyId
+ * @param {string} callId
+ * @param {Array} turns
+ * @param {Object} [opts]
+ * @param {Date} [opts.callStartTime]
+ */
+CallTranscriptSchema.statics.appendTurns = async function(companyId, callId, turns, opts = {}) {
+  const now = new Date();
+  const startCandidate = opts.callStartTime instanceof Date ? opts.callStartTime : now;
+  const callStartTime = Number.isNaN(startCandidate.getTime()) ? now : startCandidate;
+
+  const cleanedTurns = (Array.isArray(turns) ? turns : [])
+    .map(t => ({
+      speaker: t?.speaker === 'agent' ? 'agent' : (t?.speaker === 'caller' ? 'caller' : 'caller'),
+      text: `${t?.text || ''}`.trim(),
+      turn: typeof t?.turn === 'number' ? t.turn : undefined,
+      timestamp: t?.timestamp ? `${t.timestamp}` : undefined,
+      source: t?.source ? `${t.source}` : undefined,
+      provenance: t?.provenance || undefined
+    }))
+    .filter(t => t.text.length > 0);
+
+  if (cleanedTurns.length === 0) return;
+
+  await this.updateOne(
+    { callId },
+    {
+      $setOnInsert: {
+        callId,
+        companyId,
+        callStartTime,
+        callEndTime: now,
+        v111Enabled: false
+      },
+      $set: {
+        callEndTime: now,
+        updatedAt: now
+      },
+      $push: {
+        turns: { $each: cleanedTurns }
+      }
+    },
+    { upsert: true }
+  );
 };
 
 /**

@@ -1197,6 +1197,16 @@ router.post(
 
 const CallSummary = require('../../models/CallSummary');
 const CallTranscript = require('../../models/CallTranscript');
+const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+
+async function getRedis() {
+  if (!isRedisConfigured()) return null;
+  try {
+    return await getSharedRedisClient();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /:companyId/calls
@@ -1255,7 +1265,9 @@ router.get('/:companyId/calls',
         startTime: call.startedAt,
         fromPhone: call.phone,      // Schema field is 'phone' (caller FROM number)
         toPhone: call.toPhone,      // Schema field is 'toPhone' (company TO number)
-        durationSeconds: call.durationSeconds || 0,
+        durationSeconds: (typeof call.durationSeconds === 'number' && call.durationSeconds >= 0)
+          ? call.durationSeconds
+          : (call.endedAt && call.startedAt ? Math.max(0, Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000)) : 0),
         turnCount: call.turnCount || 0,
         outcome: call.outcome || 'unknown',
         source: call.source || 'voice',
@@ -1361,13 +1373,43 @@ router.get('/:companyId/calls/:callSid',
       }
 
       if (transcript?.turns && Array.isArray(transcript.turns)) {
-        turns = transcript.turns.map((turn, idx) => ({
-          turnNumber: turn.turn || idx + 1,
+        // Normalize + lightly de-dupe retries (same turnNumber+speaker)
+        const normalized = transcript.turns.map((turn, idx) => ({
+          turnNumber: (typeof turn.turn === 'number' ? turn.turn : (idx + 1)),
           speaker: turn.speaker || 'unknown',
           text: turn.text || '',
           timestamp: turn.timestamp,
-          source: turn.source || null
+          source: turn.source || null,
+          provenance: turn.provenance || null
         }));
+
+        const byKey = new Map();
+        for (const t of normalized) {
+          const key = `${t.turnNumber}:${t.speaker}`;
+          // Prefer the most recent non-empty text for a given key
+          const existing = byKey.get(key);
+          if (!existing) {
+            byKey.set(key, t);
+            continue;
+          }
+          const existingHasText = `${existing.text || ''}`.trim().length > 0;
+          const nextHasText = `${t.text || ''}`.trim().length > 0;
+          if (!existingHasText && nextHasText) {
+            byKey.set(key, t);
+          } else if (existingHasText && nextHasText) {
+            // If both have text, keep the later timestamp if present
+            const a = existing.timestamp ? new Date(existing.timestamp).getTime() : 0;
+            const b = t.timestamp ? new Date(t.timestamp).getTime() : 0;
+            if (b >= a) byKey.set(key, t);
+          }
+        }
+
+        turns = Array.from(byKey.values()).sort((a, b) => {
+          if (a.turnNumber !== b.turnNumber) return a.turnNumber - b.turnNumber;
+          // Caller first, then agent, then unknown
+          const rank = (s) => (s === 'caller' ? 0 : (s === 'agent' ? 1 : 2));
+          return rank(a.speaker) - rank(b.speaker);
+        });
       } else if (transcript?.customerTranscript) {
         const lines = transcript.customerTranscript.split('\n').filter(Boolean);
         turns = lines.map((line, idx) => {
@@ -1383,23 +1425,76 @@ router.get('/:companyId/calls/:callSid',
         });
       }
 
+      // Fallback: if Mongo transcript isn't available, try live Redis state (recent calls).
+      if (turns.length === 0) {
+        try {
+          const redis = await getRedis();
+          if (redis) {
+            const redisKey = `call:${callSummary.twilioSid || callSummary.callId}`;
+            const raw = await redis.get(redisKey);
+            if (raw) {
+              const callState = JSON.parse(raw);
+              const liveTurns = Array.isArray(callState?.turns) ? callState.turns : [];
+              if (liveTurns.length > 0) {
+                turns = liveTurns.map((turn, idx) => ({
+                  turnNumber: (typeof turn.turn === 'number' ? turn.turn : (idx + 1)),
+                  speaker: turn.speaker || 'unknown',
+                  text: turn.text || '',
+                  timestamp: turn.timestamp,
+                  source: turn.source || null,
+                  provenance: turn.provenance || null
+                }));
+              }
+            }
+          }
+        } catch (redisErr) {
+          logger.warn(`[${MODULE_ID}] Call detail Redis fallback failed (non-blocking): ${redisErr.message}`, {
+            companyId,
+            callSid
+          });
+        }
+      }
+
+      // If Twilio status callback didn't populate durationSeconds, derive a best-effort duration
+      // from transcript timestamps so the UI doesn't misleadingly show 0:00.
+      let derivedDurationSeconds = callSummary.durationSeconds || 0;
+      if (!Number.isFinite(derivedDurationSeconds) || derivedDurationSeconds <= 0) {
+        const ts = (turns || [])
+          .map(t => (t?.timestamp ? new Date(t.timestamp).getTime() : NaN))
+          .filter(ms => Number.isFinite(ms) && ms > 0)
+          .sort((a, b) => a - b);
+        if (ts.length >= 2) {
+          derivedDurationSeconds = Math.max(0, Math.round((ts[ts.length - 1] - ts[0]) / 1000));
+        } else {
+          derivedDurationSeconds = 0;
+        }
+      }
+
+      const formattedCall = {
+        callSid: callSummary.twilioSid || callSummary.callId,
+        callId: callSummary.callId,
+        startTime: callSummary.startedAt,
+        endedAt: callSummary.endedAt,
+        fromPhone: callSummary.phone || callSummary.from || null,
+        toPhone: callSummary.toPhone || callSummary.to || null,
+        durationSeconds: derivedDurationSeconds,
+        turnCount: callSummary.turnCount || turns.length || 0,
+        outcome: callSummary.outcome || 'unknown',
+        source: callSummary.source || 'voice',
+        kpi: callSummary.kpi || {},
+        customer: callSummary.customer || {},
+        llmUsage: callSummary.llmUsage || null,
+        problems: callSummary.problems || [],
+        events: callSummary.events || [],
+        turns
+      };
+
       res.json({
         success: true,
-        call: {
-          callSid: callSummary.twilioSid || callSummary.callId,
-          callId: callSummary.callId,
-          from: callSummary.from,
-          to: callSummary.to,
-          startedAt: callSummary.startedAt,
-          endedAt: callSummary.endedAt,
-          durationSeconds: callSummary.durationSeconds || 0,
-          turnCount: callSummary.turnCount || 0,
-          outcome: callSummary.outcome || 'unknown',
-          source: callSummary.source || 'voice',
-          kpi: callSummary.kpi || {},
-          customer: callSummary.customer || {}
-        },
-        turns,
+        // Flat shape (what the Call Console UI expects)
+        ...formattedCall,
+        // Back-compat nested shape (keep for any other consumers)
+        call: formattedCall,
         transcript: transcript ? {
           id: transcript._id,
           turnCount: transcript.turnCount || turns.length

@@ -2046,6 +2046,22 @@ router.post('/voice', async (req, res) => {
           error: greetingRedisErr.message
         });
       }
+
+      // Mongo fallback: persist greeting turn even if Redis/status timing fails.
+      try {
+        const CallTranscript = require('../models/CallTranscript');
+        const greetingTurn = {
+          speaker: 'agent',
+          text: greetingText.trim(),
+          turn: 0,
+          timestamp: new Date().toISOString(),
+          source: 'GREETING'
+        };
+        CallTranscript.appendTurns(company._id, req.body.CallSid, [greetingTurn])
+          .catch(err => logger.warn('[VOICE] Failed to append greeting turn to Mongo (non-blocking)', { error: err.message }));
+      } catch (mongoErr) {
+        logger.warn('[VOICE] Could not load CallTranscript for greeting append (non-blocking)', { error: mongoErr.message });
+      }
     }
     
     // 🐰 RABBIT HOLE CHECKPOINT #2: WHAT TWIML ARE WE SENDING TO TWILIO?
@@ -3549,13 +3565,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     
     // Add caller turn (what they said)
+    let callerTurn = null;
     if (speechResult && speechResult.trim()) {
-      callState.turns.push({
+      callerTurn = {
         speaker: 'caller',
         text: speechResult.trim(),
         turn: turnNumber,
         timestamp: new Date().toISOString()
-      });
+      };
+      callState.turns.push(callerTurn);
     }
 
     const hostHeader = req.get('host');
@@ -3668,19 +3686,31 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       if (responseText && responseText.trim()) {
         persistedState.turns = persistedState.turns || callState.turns || [];
-        persistedState.turns.push({
+        const agentTurn = {
           speaker: 'agent',
           text: responseText.trim(),
           turn: turnNumber,
           timestamp: new Date().toISOString(),
           source: runtimeResult?.matchSource || 'UNKNOWN'
-        });
+        };
+        persistedState.turns.push(agentTurn);
         
         // Re-save to Redis with agent turn included
         if (redis && redisKey) {
           redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 }).catch(err => {
             logger.warn('[V2TWILIO] Redis re-save after agent turn failed', { callSid: callSid?.slice(-8), error: err.message });
           });
+        }
+
+        // Mongo fallback: persist turns even if Redis/status callback fails.
+        // Non-blocking: Twilio webhooks must stay fast.
+        try {
+          const CallTranscript = require('../models/CallTranscript');
+          const turnsToAppend = [callerTurn, agentTurn].filter(Boolean);
+          CallTranscript.appendTurns(companyID, callSid, turnsToAppend)
+            .catch(err => logger.warn('[V2TWILIO] Failed to append turns to Mongo (non-blocking)', { callSid: callSid?.slice(-8), error: err.message }));
+        } catch (mongoErr) {
+          logger.warn('[V2TWILIO] Could not load CallTranscript for append (non-blocking)', { error: mongoErr.message });
         }
       }
 
@@ -5414,11 +5444,14 @@ router.post('/status-callback', async (req, res) => {
             }
             
             // Update the call summary with transcript
+            const endedAtCandidate = Timestamp ? new Date(Timestamp) : new Date();
+            const endedAtSafe = Number.isNaN(endedAtCandidate.getTime()) ? new Date() : endedAtCandidate;
+
             await CallSummaryService.endCall(callSummary.callId, {
               outcome: outcomeMap[CallStatus] || 'completed',
               durationSeconds: parseInt(CallDuration) || 0,
               answeredBy: AnsweredBy,
-              endedAt: new Date(Timestamp) || new Date(),
+              endedAt: endedAtSafe,
               transcript,
               turnCount: transcript.length
             });
