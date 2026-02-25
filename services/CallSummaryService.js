@@ -354,7 +354,12 @@ class CallSummaryService {
         // Recording
         recordingUrl,
         recordingDuration,
-        recordingConsent
+        recordingConsent,
+        
+        // Duration (from Twilio status callback)
+        durationSeconds: passedDurationSeconds,
+        answeredBy,
+        endedAt: passedEndedAt
       } = data;
       
       // ─────────────────────────────────────────────────────────────────────────
@@ -385,8 +390,12 @@ class CallSummaryService {
       // ─────────────────────────────────────────────────────────────────────────
       // STEP 3: Update CallSummary
       // ─────────────────────────────────────────────────────────────────────────
-      const now = new Date();
-      const durationSeconds = Math.round((now - existingCall.startedAt) / 1000);
+      const now = passedEndedAt ? new Date(passedEndedAt) : new Date();
+      
+      // Prefer Twilio-provided duration (authoritative) over calculated duration
+      const durationSeconds = (passedDurationSeconds != null && passedDurationSeconds >= 0)
+        ? passedDurationSeconds
+        : Math.round((now - existingCall.startedAt) / 1000);
 
       // Preserve more-specific outcomes that may have been set during the live call
       // (e.g., transfer initiated). Status callbacks often report "completed" even when transferred.
