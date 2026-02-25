@@ -2072,14 +2072,13 @@ router.post('/voice', async (req, res) => {
             {
               speaker: 'system',
               kind: greetingAudioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
-              text: greetingAudioUrl ? greetingAudioUrl : greetingText.trim(),
+              text: greetingText.trim(),
               turnNumber: 0,
               ts: new Date(),
               sourceKey: 'twiml',
               trace: {
                 action: greetingAudioUrl ? 'PLAY' : 'SAY',
-                audioUrl: greetingAudioUrl,
-                sayText: greetingAudioUrl ? null : greetingText.trim(),
+                audioUrl: greetingAudioUrl || null,
                 voiceProviderUsed: greetingVoiceProviderUsed,
                 origin: greetingUiPath,
                 gather: {
@@ -3141,7 +3140,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             {
               speaker: 'system',
               kind: cached.audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
-              text: cached.audioUrl || cached.responseText || '',
+              text: cached.responseText || cached.agentTurn.text || '',
               turnNumber: cached.agentTurn.turnNumber || turnNumber,
               ts: new Date(),
               sourceKey: 'twiml',
@@ -3750,9 +3749,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       };
       callState.turns.push(callerTurn);
 
-      // Canonical transcript persistence: capture caller speech immediately on SpeechResult arrival.
       try {
         const CallTranscriptV2 = require('../models/CallTranscriptV2');
+        logger.info('[V2TWILIO] CALLER_TURN_WRITE_START', {
+          callSid: callSid?.slice(-8),
+          companyId: companyID,
+          turnNumber,
+          textLen: callerTurn.text.length,
+          textPreview: callerTurn.text.substring(0, 40)
+        });
         await CallTranscriptV2.appendTurns(companyID, callSid, [
           {
             speaker: 'caller',
@@ -3764,10 +3769,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             trace: { inputTextSource }
           }
         ], { from: fromNumber || null, to: req.body.To || null });
-      } catch (mongoV2Err) {
-        logger.warn('[V2TWILIO] Failed to append caller turn to CallTranscriptV2 (non-blocking)', {
+        logger.info('[V2TWILIO] CALLER_TURN_WRITE_OK', {
           callSid: callSid?.slice(-8),
-          error: mongoV2Err.message
+          turnNumber
+        });
+      } catch (mongoV2Err) {
+        logger.error('[V2TWILIO] CALLER_TURN_WRITE_FAILED', {
+          callSid: callSid?.slice(-8),
+          companyId: companyID,
+          turnNumber,
+          error: mongoV2Err.message,
+          stack: mongoV2Err.stack?.substring(0, 300)
         });
       }
     }
@@ -4299,14 +4311,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             {
               speaker: 'system',
               kind: audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
-              text: audioUrl ? audioUrl : responseText.trim(),
+              text: responseText.trim(),
               turnNumber,
               ts: new Date(),
               sourceKey: 'twiml',
               trace: {
                 action: audioUrl ? 'PLAY' : 'SAY',
                 audioUrl: audioUrl || null,
-                sayText: audioUrl ? null : responseText.trim(),
                 voiceProviderUsed: localVoiceProviderUsed,
                 origin: agentTurn?.provenance?.uiPath || null,
                 gather: {
