@@ -1253,8 +1253,8 @@ router.get('/:companyId/calls',
         callId: call.callId,
         // Frontend expects these field names:
         startTime: call.startedAt,
-        fromPhone: call.from,
-        toPhone: call.to,
+        fromPhone: call.phone,      // Schema field is 'phone' (caller FROM number)
+        toPhone: call.toPhone,      // Schema field is 'toPhone' (company TO number)
         durationSeconds: call.durationSeconds || 0,
         turnCount: call.turnCount || 0,
         outcome: call.outcome || 'unknown',
