@@ -4328,30 +4328,47 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }
           ]);
 
-          // Consent gate diagnostic: log the booking handoff decision
-          const runtimeLastPath = persistedState?.agent2?.discovery?.lastPath;
-          if (runtimeLastPath === 'PENDING_YES_HANDOFF_BOOKING') {
+          // Consent gate diagnostic: log every follow-up consent decision to transcript
+          const runtimeLastPath = persistedState?.agent2?.discovery?.lastPath || '';
+          const isFollowUpPath = runtimeLastPath.startsWith('FOLLOWUP_');
+          if (isFollowUpPath) {
+            const consentCardId = persistedState?.agent2?.discovery?.lastTriggerId || null;
+            const consentCardLabel = persistedState?.agent2?.discovery?.lastTriggerLabel || null;
+            const consentBucket = runtimeLastPath.replace('FOLLOWUP_', '').replace('_HANDOFF_BOOKING', '');
+            const isBookingHandoff = runtimeLastPath === 'FOLLOWUP_YES_HANDOFF_BOOKING';
+            const consentKind = isBookingHandoff ? 'CONSENT_GATE_BOOKING' : `CONSENT_GATE_${consentBucket}`;
+
+            const CONSENT_DESCRIPTIONS = {
+              'YES_HANDOFF_BOOKING': 'Caller confirmed YES → handing off to Booking Logic',
+              'YES': 'Caller confirmed YES → continuing conversation',
+              'NO': 'Caller declined → continuing conversation',
+              'REPROMPT': 'Caller unclear → re-asking the follow-up question',
+              'HESITANT': 'Caller hesitant → gentle clarification + re-asking',
+              'COMPLEX': 'Caller gave substantive response → routing to normal agent'
+            };
+
             await CallTranscriptV2.appendTurns(companyID, callSid, [
               {
                 speaker: 'system',
-                kind: 'CONSENT_GATE_BOOKING',
-                text: 'Consent gate: caller confirmed YES → handing off to Booking Logic',
+                kind: consentKind,
+                text: CONSENT_DESCRIPTIONS[consentBucket] || `Follow-up consent: ${consentBucket}`,
                 turnNumber,
                 ts: new Date(),
-                sourceKey: 'consent_gate',
+                sourceKey: 'followup_consent_gate',
                 trace: {
                   provenance: {
                     type: 'UI_OWNED',
                     uiPath: 'triggers',
-                    reason: 'consent_gate_yes_booking',
+                    reason: `followup_consent_${consentBucket.toLowerCase()}`,
                     voiceProviderUsed: localVoiceProviderUsed
                   },
                   consentGate: {
-                    decision: 'HANDOFF_BOOKING',
-                    previousMode: 'DISCOVERY',
-                    nextMode: 'BOOKING',
-                    cardId: runtimeResult?.triggerCard?.id || persistedState?.agent2?.discovery?.lastTriggerId || null,
-                    cardLabel: runtimeResult?.triggerCard?.label || persistedState?.agent2?.discovery?.lastTriggerLabel || null
+                    bucket: consentBucket,
+                    decision: isBookingHandoff ? 'HANDOFF_BOOKING' : consentBucket,
+                    previousMode: isBookingHandoff ? 'DISCOVERY' : null,
+                    nextMode: isBookingHandoff ? 'BOOKING' : null,
+                    cardId: consentCardId,
+                    cardLabel: consentCardLabel
                   }
                 }
               }
