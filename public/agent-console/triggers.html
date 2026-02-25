@@ -1199,7 +1199,17 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
             
             <div class="form-group">
               <label class="form-label">Follow-up Question</label>
-              <textarea class="form-textarea" id="input-trigger-followup" rows="2" placeholder="Would you like to schedule a visit?"></textarea>
+              <textarea class="form-textarea" id="input-trigger-followup" rows="2" placeholder="Just to confirm — this is a routine request, right?"></textarea>
+              <p class="form-hint">If set, asked after the Answer Text. Waits for caller to respond.</p>
+            </div>
+
+            <div class="form-group" id="followup-action-group" style="display: none;">
+              <label class="form-label">On Caller Confirmation (Yes)</label>
+              <select class="form-select" id="input-trigger-followup-action">
+                <option value="CONTINUE">Continue conversation</option>
+                <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
+              </select>
+              <p class="form-hint">When the caller confirms (yes), what should happen next?</p>
             </div>
           </div>
           

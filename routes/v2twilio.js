@@ -4328,6 +4328,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }
           ]);
 
+          // Consent gate diagnostic: log the booking handoff decision
+          const runtimeLastPath = persistedState?.agent2?.discovery?.lastPath;
+          if (runtimeLastPath === 'PENDING_YES_HANDOFF_BOOKING') {
+            await CallTranscriptV2.appendTurns(companyID, callSid, [
+              {
+                speaker: 'system',
+                kind: 'CONSENT_GATE_BOOKING',
+                text: 'Consent gate: caller confirmed YES → handing off to Booking Logic',
+                turnNumber,
+                ts: new Date(),
+                sourceKey: 'consent_gate',
+                trace: {
+                  provenance: {
+                    type: 'UI_OWNED',
+                    uiPath: 'triggers',
+                    reason: 'consent_gate_yes_booking',
+                    voiceProviderUsed: localVoiceProviderUsed
+                  },
+                  consentGate: {
+                    decision: 'HANDOFF_BOOKING',
+                    previousMode: 'DISCOVERY',
+                    nextMode: 'BOOKING',
+                    cardId: runtimeResult?.triggerCard?.id || persistedState?.agent2?.discovery?.lastTriggerId || null,
+                    cardLabel: runtimeResult?.triggerCard?.label || persistedState?.agent2?.discovery?.lastTriggerLabel || null
+                  }
+                }
+              }
+            ]);
+          }
+
           await CallTranscriptV2.appendTrace(companyID, callSid, [
             {
               kind: 'matcher',

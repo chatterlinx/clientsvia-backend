@@ -786,12 +786,35 @@ class Agent2DiscoveryRunner {
       
       if (isYes) {
         // ══════════════════════════════════════════════════════════════════════
-        // PATH: PENDING_QUESTION_YES — User confirmed, transition to booking
+        // PATH: PENDING_QUESTION_YES — User confirmed
         // ══════════════════════════════════════════════════════════════════════
         nextState.agent2.discovery.pendingQuestion = null;
         nextState.agent2.discovery.pendingQuestionTurn = null;
         nextState.agent2.discovery.pendingQuestionResolved = true;
-        nextState.agent2.discovery.lastPath = 'PENDING_YES';
+
+        // ══════════════════════════════════════════════════════════════════════
+        // CONSENT GATE: Check if the trigger card that asked this question
+        // specified a booking handoff on YES (nextAction = HANDOFF_BOOKING).
+        // If so, switch to BOOKING lane — BookingLogicEngine takes over next turn.
+        // ══════════════════════════════════════════════════════════════════════
+        const lastNextAction = `${state.agent2?.discovery?.lastNextAction || 'CONTINUE'}`.toUpperCase();
+        const isBookingHandoff = lastNextAction === 'HANDOFF_BOOKING';
+
+        if (isBookingHandoff) {
+          nextState.agent2.discovery.lastPath = 'PENDING_YES_HANDOFF_BOOKING';
+          nextState.sessionMode = 'BOOKING';
+          nextState.consent = { pending: false, given: true, turn, source: 'consent_gate' };
+
+          emit('A2_CONSENT_GATE_BOOKING', {
+            reason: 'Caller confirmed YES to consent gate — handoff to Booking Logic',
+            cardId: pendingInfo?.cardId || null,
+            source: pendingInfo?.source || null,
+            inputPreview: clip(inputLowerClean, 60),
+            markers: { hasYesWord, hasYesPhrase }
+          });
+        } else {
+          nextState.agent2.discovery.lastPath = 'PENDING_YES';
+        }
         
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
@@ -802,49 +825,64 @@ class Agent2DiscoveryRunner {
         let response;
         let responseUiPath;
         
-        // V127: Build response and validate through SPEAK_PROVENANCE system
-        if (pendingYes) {
+        if (isBookingHandoff) {
+          const bookingYes = `${pendingResponses.yesBooking || ''}`.trim();
+          response = `${personalAck} ${bookingYes || pendingYes || 'Great — let me get that scheduled for you.'}`.trim();
+          responseUiPath = bookingYes
+            ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yesBooking'
+            : pendingResponses.yes
+              ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yes'
+              : null;
+        } else if (pendingYes) {
           response = `${personalAck} ${pendingYes}`.trim();
           responseUiPath = pendingResponses.yes
             ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yes'
             : 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingYesResponse';
         } else {
-          // No UI-configured pendingYesResponse - validateSpeechSource will handle fallback
           response = personalAck || '';
           responseUiPath = null;
         }
         
         emit('A2_PATH_SELECTED', { 
-          path: 'PENDING_QUESTION_YES', 
-          reason: `User confirmed: detected YES markers`,
+          path: isBookingHandoff ? 'PENDING_YES_HANDOFF_BOOKING' : 'PENDING_QUESTION_YES', 
+          reason: isBookingHandoff
+            ? 'User confirmed YES → booking handoff (consent gate)'
+            : 'User confirmed: detected YES markers',
           markers: { hasYesWord, hasYesPhrase, inputPreview: clip(inputLowerClean, 40) },
-          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source }
+          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source },
+          nextAction: lastNextAction,
+          bookingHandoff: isBookingHandoff
         });
         
         // V127: Use validateSpeechSource for consistent SPEAK_PROVENANCE logging
         const yesValidation = validateSpeechSource({
           response,
-          sourceId: 'agent2.discovery.pendingQuestion.yesPath',
+          sourceId: isBookingHandoff
+            ? 'agent2.discovery.consentGate.yesBooking'
+            : 'agent2.discovery.pendingQuestion.yesPath',
           uiPath: responseUiPath,
           configPath: pendingResponses.yes
             ? 'discovery.pendingQuestionResponses.yes'
             : 'discovery.playbook.fallback.pendingYesResponse',
           uiTab: 'Configuration',
           audioUrl: null,
-          reason: `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
+          reason: isBookingHandoff
+            ? `Consent gate YES → booking handoff from card: ${pendingInfo?.cardId || 'unknown'}`
+            : `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
           emergencyFallback,
           emit
         });
         response = yesValidation.response;
         
         emit('A2_RESPONSE_READY', {
-          path: 'PENDING_QUESTION_YES',
+          path: isBookingHandoff ? 'PENDING_YES_HANDOFF_BOOKING' : 'PENDING_QUESTION_YES',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: 'pendingQuestion.yesPath',
+          source: isBookingHandoff ? 'consentGate.yesBooking' : 'pendingQuestion.yesPath',
           usedCallerName: usedName,
-          wasBlocked: yesValidation.blocked
+          wasBlocked: yesValidation.blocked,
+          bookingHandoff: isBookingHandoff
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };

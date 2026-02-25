@@ -114,6 +114,8 @@
     inputTriggerAnswer: document.getElementById('input-trigger-answer'),
     inputTriggerAudio: document.getElementById('input-trigger-audio'),
     inputTriggerFollowup: document.getElementById('input-trigger-followup'),
+    inputTriggerFollowupAction: document.getElementById('input-trigger-followup-action'),
+    followupActionGroup: document.getElementById('followup-action-group'),
     inputTriggerLocal: document.getElementById('input-trigger-local'),
     scopeSection: document.getElementById('scope-section'),
     
@@ -327,6 +329,20 @@
     }
   }
   
+  /* --------------------------------------------------------------------------
+     FOLLOW-UP ACTION VISIBILITY
+     -------------------------------------------------------------------------- */
+  function updateFollowupActionVisibility() {
+    const hasFollowup = (DOM.inputTriggerFollowup?.value || '').trim().length > 0;
+    if (DOM.followupActionGroup) {
+      DOM.followupActionGroup.style.display = hasFollowup ? 'block' : 'none';
+    }
+  }
+
+  if (DOM.inputTriggerFollowup) {
+    DOM.inputTriggerFollowup.addEventListener('input', updateFollowupActionVisibility);
+  }
+
   /* --------------------------------------------------------------------------
      RESPONSE MODE MANAGEMENT
      -------------------------------------------------------------------------- */
@@ -926,6 +942,10 @@
       DOM.inputTriggerAnswer.value = trigger.answer?.answerText || '';
       DOM.inputTriggerAudio.value = trigger.answer?.audioUrl || '';
       DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
+      if (DOM.inputTriggerFollowupAction) {
+        DOM.inputTriggerFollowupAction.value = trigger.followUp?.nextAction || 'CONTINUE';
+      }
+      updateFollowupActionVisibility();
       DOM.scopeSection.style.display = 'none';
       
       // Set response mode (standard or llm)
@@ -977,6 +997,8 @@
       DOM.inputTriggerAnswer.value = '';
       DOM.inputTriggerAudio.value = '';
       DOM.inputTriggerFollowup.value = '';
+      if (DOM.inputTriggerFollowupAction) DOM.inputTriggerFollowupAction.value = 'CONTINUE';
+      updateFollowupActionVisibility();
       DOM.inputTriggerLocal.checked = true;
       DOM.scopeSection.style.display = 'block';
       
@@ -1017,6 +1039,7 @@
     const phrases = parseCommaSeparated(DOM.inputTriggerPhrases.value);
     const negativeKeywords = parseCommaSeparated(DOM.inputTriggerNegative.value);
     const followUpQuestion = DOM.inputTriggerFollowup.value.trim();
+    const followUpNextAction = DOM.inputTriggerFollowupAction?.value || 'CONTINUE';
     
     // Get response mode and mode-specific fields
     const responseMode = state.currentResponseMode || 'standard';
@@ -1080,7 +1103,8 @@
       responseMode,
       answerText,
       audioUrl,
-      followUpQuestion
+      followUpQuestion,
+      followUpNextAction: followUpQuestion ? followUpNextAction : 'CONTINUE'
     };
     
     // Include LLM fact pack if in LLM mode
