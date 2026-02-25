@@ -1921,7 +1921,7 @@
     btnSaveFuc.addEventListener('click', async () => {
       try {
         const followUpConsent = collectFollowUpConsent();
-        const resp = await apiFetch(`${CONFIG.API_BASE_ADMIN_AGENT2}/${state.companyId}`, {
+        const resp = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`, {
           method: 'PATCH',
           body: { discovery: { followUpConsent } }
         });
