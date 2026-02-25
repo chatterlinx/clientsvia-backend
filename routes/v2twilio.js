@@ -4281,6 +4281,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
 
+          // Safety net: re-write caller turn inside the IIFE.
+          // The original write (before bridge) may fail silently.
+          // Dedup at read-time prevents double entries.
+          if (callerTurn && callerTurn.text) {
+            await CallTranscriptV2.appendTurns(companyID, callSid, [
+              {
+                speaker: 'caller',
+                kind: 'CONVERSATION_CALLER',
+                text: callerTurn.text,
+                turnNumber: callerTurn.turn,
+                ts: callerTurn.timestamp,
+                sourceKey: 'stt',
+                trace: { inputTextSource, safetyNet: true }
+              }
+            ]).catch(err => {
+              logger.warn('[V2TWILIO] Caller turn safety-net write failed', {
+                callSid: callSid?.slice(-8), error: err.message
+              });
+            });
+          }
+
           const turnsToAppendV2 = [
             {
               speaker: 'agent',
