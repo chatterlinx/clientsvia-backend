@@ -574,7 +574,61 @@
    */
   function renderProblemsSection(call, violations, fallbacks) {
     const problems = call.problems || [];
+    const turns = call.turns || [];
+    const agentTurns = turns.filter(t => t.speaker === 'agent').length;
+    const callerTurns = turns.filter(t => t.speaker === 'caller').length;
     const hasIssues = violations > 0 || problems.length > 0;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // INCOMPLETE CALL DETECTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // If there are 0 turns total, the call recording is incomplete.
+    // This happens when the call ended before any conversational data was captured
+    // (e.g., immediate hangup, webhook failure, STT never fired).
+    // NEVER show "All Clear" when there's nothing to verify.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (turns.length === 0) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            INCOMPLETE CALL — No Conversational Data Captured
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            This call has no transcript data. The call may have ended immediately, 
+            or the speech recognition/agent pipeline did not produce any turns.
+          </p>
+          <div style="margin-top: 8px; font-size: 12px; color: #92400e;">
+            <div><strong>Duration:</strong> ${formatDuration(call.durationSeconds)}</div>
+            <div><strong>STT segments received:</strong> 0</div>
+            <div><strong>Agent turns generated:</strong> 0</div>
+            <div><strong>Provenance verification:</strong> Not possible (no data)</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // If there are caller turns but no agent turns, the agent never responded
+    if (callerTurns > 0 && agentTurns === 0) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            NO RESPONSE GENERATED — Agent Pipeline Failed
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            The caller spoke (${callerTurns} turn${callerTurns !== 1 ? 's' : ''}) but no agent responses were generated.
+            The agent runtime may have failed or the call ended before a response was sent.
+          </p>
+        </div>
+      `;
+    }
 
     if (!hasIssues) {
       return `
@@ -587,7 +641,7 @@
             All Clear — No Violations Detected
           </h4>
           <p style="font-size: 13px; color: var(--color-success-600);">
-            All agent responses are properly traced to UI configurations.
+            All ${agentTurns} agent response${agentTurns !== 1 ? 's' : ''} properly traced to UI configurations.
             ${fallbacks > 0 ? `(${fallbacks} fallback${fallbacks !== 1 ? 's' : ''} used, but logged correctly)` : ''}
           </p>
         </div>
@@ -642,7 +696,18 @@
    */
   function renderTranscript(turns) {
     if (turns.length === 0) {
-      return '<p style="color: #64748b; font-style: italic;">No transcript available</p>';
+      return `
+        <div style="padding: 20px; background: #f1f5f9; border-radius: 8px; text-align: center;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 12px; opacity: 0.5;">
+            <path d="M8 12H8.01M12 12H12.01M16 12H16.01M21 12C21 16.9706 16.9706 21 12 21C10.2289 21 8.57736 20.4884 7.17677 19.6067L3 21L4.39334 16.8232C3.51156 15.4226 3 13.7711 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#64748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p style="color: #64748b; font-weight: 500; margin: 0 0 8px 0;">No transcript available</p>
+          <p style="color: #94a3b8; font-size: 13px; margin: 0;">
+            This call has no conversational data recorded.<br>
+            Possible causes: immediate hangup, webhook failure, or STT pipeline issue.
+          </p>
+        </div>
+      `;
     }
 
     return turns.map(turn => renderTurn(turn)).join('');

@@ -3509,6 +3509,29 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 📼 EVIDENCE LEDGER: LOG CALLER TRANSCRIPT (STT_SEGMENT)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This is the CALLER's turn - what they said (after STT processing).
+    // Without this, Call Review shows "No transcript available" even when calls work.
+    // This is the single source of truth for caller speech in the call record.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (CallLogger && callSid && speechResult && speechResult.trim()) {
+      CallLogger.addTranscript({
+        callId: callSid,
+        companyId: companyID,
+        speaker: 'caller',
+        turn: turnNumber,
+        text: speechResult.trim(),
+        confidence: 1.0
+      }).catch(err => {
+        logger.warn('[V2TWILIO] Failed to log caller transcript (non-blocking)', { 
+          callSid: callSid?.slice(-8), 
+          error: err.message 
+        });
+      });
+    }
+
     const hostHeader = req.get('host');
     const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
     const bridgeEnabled = bridgeCfg?.enabled === true;
@@ -3607,6 +3630,51 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
       const elevenLabsVoice = voiceSettings.voiceId;
       const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📼 EVIDENCE LEDGER: LOG AGENT TRANSCRIPT (AGENT_TURN)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // This is the AGENT's turn - what the AI said in response.
+      // matchSource provides provenance: where the response came from.
+      // Without this, Call Review shows "0 turns" even when agent responds.
+      // This is the single source of truth for agent speech in the call record.
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (CallLogger && callSid && responseText && responseText.trim()) {
+        CallLogger.addTranscript({
+          callId: callSid,
+          companyId: companyID,
+          speaker: 'agent',
+          turn: turnNumber,
+          text: responseText.trim(),
+          source: runtimeResult?.matchSource || 'UNKNOWN',
+          tokensUsed: runtimeResult?.tokensUsed || 0
+        }).catch(err => {
+          logger.warn('[V2TWILIO] Failed to log agent transcript (non-blocking)', { 
+            callSid: callSid?.slice(-8), 
+            error: err.message 
+          });
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📊 UPDATE CALL SUMMARY TURN COUNT
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Increment the turnCount in CallSummary so Call Review list shows accurate counts.
+      // This is a non-blocking atomic increment (fire-and-forget).
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (callSid && companyID) {
+        const CallSummary = require('../models/CallSummary');
+        CallSummary.findOneAndUpdate(
+          { companyId: companyID, twilioSid: callSid },
+          { $set: { turnCount: turnNumber } },
+          { upsert: false }
+        ).catch(err => {
+          logger.warn('[V2TWILIO] Failed to update CallSummary turnCount (non-blocking)', {
+            callSid: callSid?.slice(-8),
+            error: err.message
+          });
+        });
+      }
 
       let audioUrl = null;
       let ttsLatencyMs = null;
