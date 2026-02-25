@@ -352,6 +352,15 @@ const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('
 // 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
 // ============================================================================
 // Records every decision point for debugging. No more Render log archaeology.
+// NOTE: BlackBox/CallLogger deprecated Feb 2026 - stub provides no-op methods
+// ============================================================================
+let CallLogger;
+try {
+    CallLogger = require('../services/CallLogger');
+} catch (err) {
+    CallLogger = null;
+}
+
 // ============================================================================
 // 🎯 LOW CONFIDENCE HANDLER - STT Quality Guard
 // ============================================================================
