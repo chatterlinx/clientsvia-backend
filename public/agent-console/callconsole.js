@@ -257,7 +257,16 @@
     // Bulk selection
     DOM.selectAllCheckbox.addEventListener('change', handleSelectAll);
     DOM.btnClearSelection.addEventListener('click', clearSelection);
-    DOM.btnDeleteSelected.addEventListener('click', deleteSelectedCalls);
+    // Avoid long "click handler took Xms" violations by not awaiting network work
+    // inside the event callback. (The async function still runs; the UI thread is freed.)
+    DOM.btnDeleteSelected.addEventListener('click', () => {
+      setTimeout(() => {
+        deleteSelectedCalls().catch(err => {
+          console.error('[CallConsole] Failed to delete calls:', err);
+          showToast('error', 'Delete Failed', err.message || 'Could not delete selected calls.');
+        });
+      }, 0);
+    });
 
     // Modal
     DOM.modalClose.addEventListener('click', closeModal);
@@ -634,6 +643,25 @@
       `;
     }
 
+    // UNVERIFIED CALL DETECTION (provenance missing anywhere)
+    // Enterprise rule: if any agent turn lacks provenance, we cannot certify compliance.
+    if (flags.includes('UNVERIFIED_MISSING_PROVENANCE')) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            UNVERIFIED — Missing Provenance Evidence
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            One or more agent turns are missing a provenance/decision trace pack. This call cannot be certified as UI-owned.
+          </p>
+        </div>
+      `;
+    }
+
     // PARTIAL CALL DETECTION (transcript exists, trace missing)
     // If the backend flags trace gaps, NEVER show "All Clear".
     if (flags.includes('PARTIAL_MISSING_TRACE')) {
@@ -764,11 +792,14 @@
   function renderTurn(turn) {
     const isCaller = turn.speaker === 'caller';
     const isAgent = turn.speaker === 'agent';
+    const isSystem = turn.speaker === 'system';
     const hasViolation = turn.provenance?.type === 'HARDCODED';
     
     const turnClass = hasViolation ? 'turn has-violation' : 'turn';
-    const speakerClass = isCaller ? 'turn-speaker caller' : 'turn-speaker agent';
-    const speakerLabel = isCaller ? 'CALLER' : 'AGENT';
+    const speakerClass = isCaller
+      ? 'turn-speaker caller'
+      : (isSystem ? 'turn-speaker system' : 'turn-speaker agent');
+    const speakerLabel = isCaller ? 'CALLER' : (isSystem ? 'SYSTEM' : 'AGENT');
 
     let provenanceHtml = '';
     if (isAgent && turn.provenance) {
@@ -814,7 +845,11 @@
 
     let sourceInfo = '';
     if (provenance.uiPath) {
-      const uiLink = buildUILink(provenance.uiPath);
+      const focusId =
+        provenance.uiAnchor ||
+        (provenance.triggerId ? `trigger-${provenance.triggerId}` : null);
+
+      const uiLink = buildUILink(provenance.uiPath, focusId);
       sourceInfo = `
         <span class="provenance-label">UI Path:</span>
         <span class="provenance-value mono">${escapeHtml(provenance.uiPath)}</span>
@@ -1056,8 +1091,8 @@
         `${CONFIG.API_BASE}/${state.companyId}/calls/bulk-delete`,
         {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ callSids: callSidsToDelete })
+          // AgentConsoleAuth.apiFetch JSON-stringifies objects automatically.
+          body: { callSids: callSidsToDelete }
         }
       );
 
@@ -1222,7 +1257,7 @@
    * @param {string} uiPath - The UI path (e.g., "greetings.callStart")
    * @returns {Object|null} Link object with href and label, or null
    */
-  function buildUILink(uiPath) {
+  function buildUILink(uiPath, focusId = null) {
     if (!uiPath) return null;
 
     // Find the matching UI tab configuration
@@ -1230,7 +1265,10 @@
     if (!pathPrefix) return null;
 
     const tabConfig = CONFIG.UI_TAB_MAP[pathPrefix];
-    const companyParam = `?companyId=${encodeURIComponent(state.companyId)}`;
+    const params = new URLSearchParams();
+    params.set('companyId', state.companyId);
+    if (focusId) params.set('focus', focusId);
+    const companyParam = `?${params.toString()}`;
     
     return {
       href: `/agent-console/${tabConfig.page}${companyParam}#${tabConfig.tab}`,

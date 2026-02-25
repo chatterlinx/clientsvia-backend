@@ -1265,7 +1265,7 @@ router.get('/:companyId/calls',
       if (callSids.length > 0) {
         try {
           const v2Docs = await CallTranscriptV2.find({ companyId, callSid: { $in: callSids } })
-            .select({ callSid: 1, turnKeys: 1, firstTurnTs: 1, lastTurnTs: 1, 'callMeta.twilioDurationSeconds': 1 })
+            .select({ callSid: 1, humanTurnKeys: 1, turnKeys: 1, firstTurnTs: 1, lastTurnTs: 1, 'callMeta.twilioDurationSeconds': 1 })
             .lean();
           for (const d of v2Docs) transcriptIndex.set(d.callSid, d);
         } catch (e) {
@@ -1276,7 +1276,9 @@ router.get('/:companyId/calls',
       const formattedCalls = calls.map(call => {
         const callSid = call.twilioSid || call.callId;
         const v2 = callSid ? transcriptIndex.get(callSid) : null;
-        const v2TurnCount = v2 && Array.isArray(v2.turnKeys) ? v2.turnKeys.length : 0;
+        const v2TurnCount = v2 && Array.isArray(v2.humanTurnKeys)
+          ? v2.humanTurnKeys.length
+          : (v2 && Array.isArray(v2.turnKeys) ? v2.turnKeys.length : 0);
 
         // Prefer stored duration, but if it's missing/0 and we have endedAt, compute best-effort.
         let durationSeconds = (typeof call.durationSeconds === 'number' && call.durationSeconds > 0)
@@ -1455,7 +1457,7 @@ router.get('/:companyId/calls/:callSid',
         turns = Array.from(byKey.values()).sort((a, b) => {
           if (a.turnNumber !== b.turnNumber) return a.turnNumber - b.turnNumber;
           // Caller first, then agent, then unknown
-          const rank = (s) => (s === 'caller' ? 0 : (s === 'agent' ? 1 : 2));
+          const rank = (s) => (s === 'caller' ? 0 : (s === 'agent' ? 1 : (s === 'system' ? 2 : 3)));
           const speakerRank = rank(a.speaker) - rank(b.speaker);
           if (speakerRank !== 0) return speakerRank;
           return (a._tsMs || 0) - (b._tsMs || 0);
@@ -1570,13 +1572,18 @@ router.get('/:companyId/calls/:callSid',
       }
       }
 
-      // Flags: UI truth rules
+      // Flags: enterprise truth rules
       if (turns.length === 0) {
         flags = ['INCOMPLETE_NO_TURNS'];
       } else {
         const agentTurns = turns.filter(t => t.speaker === 'agent');
-        const missingTrace = agentTurns.some(t => !(t.provenance || t.source));
-        flags = missingTrace ? ['PARTIAL_MISSING_TRACE'] : [];
+        const missingProvenance = agentTurns.some(t => !t.provenance);
+        const missingTracePack = agentTurns.some(t => !t.source); // should never happen, but signals contract break
+
+        flags = [
+          ...(missingProvenance ? ['UNVERIFIED_MISSING_PROVENANCE'] : []),
+          ...(missingTracePack ? ['PARTIAL_MISSING_TRACE'] : [])
+        ];
       }
 
       // If Twilio status callback didn't populate durationSeconds, derive a best-effort duration

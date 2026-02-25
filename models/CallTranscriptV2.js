@@ -48,9 +48,12 @@ const CallTranscriptV2Schema = new mongoose.Schema(
     lastTurnTs: { type: Date, default: null, index: true },
 
     // For fast list rendering without pulling full turns.
-    // Key must allow multiple agent lines within the same turnNumber (e.g., bridge line + final response),
-    // so it includes sourceKey + a short text prefix.
-    turnKeys: { type: [String], default: [] }, // `${turnNumber}:${speaker}:${sourceKey}:${textPrefix}`
+    // Key must allow multiple lines within the same turnNumber, so it includes sourceKey + a short text prefix.
+    // We keep a human-only keyset so the Call Console list uses conversational truth (caller+agent),
+    // even when we also log system/TwiML actions.
+    turnKeys: { type: [String], default: [] }, // all speakers
+    humanTurnKeys: { type: [String], default: [] }, // speaker in ['caller','agent']
+    systemTurnKeys: { type: [String], default: [] }, // speaker === 'system'
     traceKeys: { type: [String], default: [] },
 
     turns: { type: [TurnSchema], default: [] },
@@ -106,6 +109,20 @@ CallTranscriptV2Schema.statics.appendTurns = async function appendTurns(companyI
     const textPrefix = `${t.text || ''}`.trim().toLowerCase().substring(0, 24);
     return `${t.turnNumber}:${t.speaker}:${src}:${textPrefix}`;
   });
+  const humanKeys = cleaned
+    .filter(t => t.speaker === 'caller' || t.speaker === 'agent')
+    .map((t) => {
+      const src = t.sourceKey || '';
+      const textPrefix = `${t.text || ''}`.trim().toLowerCase().substring(0, 24);
+      return `${t.turnNumber}:${t.speaker}:${src}:${textPrefix}`;
+    });
+  const systemKeys = cleaned
+    .filter(t => t.speaker === 'system')
+    .map((t) => {
+      const src = t.sourceKey || '';
+      const textPrefix = `${t.text || ''}`.trim().toLowerCase().substring(0, 24);
+      return `${t.turnNumber}:${t.speaker}:${src}:${textPrefix}`;
+    });
   const minTs = cleaned.reduce((min, t) => (!min || t.ts < min ? t.ts : min), null);
   const maxTs = cleaned.reduce((max, t) => (!max || t.ts > max ? t.ts : max), null);
 
@@ -130,7 +147,11 @@ CallTranscriptV2Schema.statics.appendTurns = async function appendTurns(companyI
     $setOnInsert: setOnInsert,
     $set,
     $push: { turns: { $each: cleaned } },
-    $addToSet: { turnKeys: { $each: keys } }
+    $addToSet: {
+      turnKeys: { $each: keys },
+      ...(humanKeys.length > 0 ? { humanTurnKeys: { $each: humanKeys } } : {}),
+      ...(systemKeys.length > 0 ? { systemTurnKeys: { $each: systemKeys } } : {})
+    }
   };
 
   if (minTs) update.$min = { ...(update.$min || {}), firstTurnTs: minTs };

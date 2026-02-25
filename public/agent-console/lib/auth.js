@@ -124,17 +124,33 @@ const AgentConsoleAuth = (function() {
       throw new Error('No auth token');
     }
 
+    const hasBody = options.body !== undefined && options.body !== null;
+    const isStringBody = typeof options.body === 'string';
+    const isFormDataBody = (typeof FormData !== 'undefined') && (options.body instanceof FormData);
+
     const config = {
       method: options.method || 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...((hasBody && !isFormDataBody && !isStringBody) ? { 'Content-Type': 'application/json' } : {}),
         ...options.headers
       }
     };
 
-    if (options.body) {
-      config.body = JSON.stringify(options.body);
+    if (hasBody) {
+      if (isFormDataBody) {
+        // Let the browser set multipart boundaries
+        config.body = options.body;
+      } else if (isStringBody) {
+        // Already serialized (avoid double-encoding)
+        config.body = options.body;
+        // If caller didn't specify, default to JSON for string payloads (most common case)
+        if (!config.headers['Content-Type']) {
+          config.headers['Content-Type'] = 'application/json';
+        }
+      } else {
+        config.body = JSON.stringify(options.body);
+      }
     }
 
     let response;

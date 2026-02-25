@@ -55,7 +55,10 @@
     },
     
     // Current response mode in modal (standard or llm)
-    currentResponseMode: 'standard'
+    currentResponseMode: 'standard',
+
+    // Deep-link focus (e.g., from Call Console provenance links)
+    focusId: null
   };
 
   /* --------------------------------------------------------------------------
@@ -182,6 +185,15 @@
   function extractCompanyId() {
     const params = new URLSearchParams(window.location.search);
     state.companyId = params.get('companyId');
+    const focus = params.get('focus');
+    if (focus) {
+      // Accept either "trigger-<id>" or "<id>"
+      state.focusId = focus.startsWith('trigger-') ? focus : `trigger-${focus}`;
+      // Ensure focus is not accidentally filtered out
+      state.searchQuery = '';
+      state.scopeFilter = 'all';
+      if (DOM.triggerSearch) DOM.triggerSearch.value = '';
+    }
     
     if (state.companyId) {
       DOM.headerCompanyId.textContent = truncateId(state.companyId);
@@ -510,6 +522,31 @@
     });
     
     extractAndRenderVariables();
+
+    // Deep-link focus (scroll + highlight) after render
+    applyFocusIfNeeded();
+  }
+
+  function applyFocusIfNeeded() {
+    if (!state.focusId) return;
+    const el = document.getElementById(state.focusId);
+    if (!el) {
+      showToast('warning', 'Focus Not Found', `Could not find ${state.focusId} on this page (it may be filtered or deleted).`);
+      state.focusId = null;
+      return;
+    }
+
+    // Scroll and highlight
+    try {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch {
+      el.scrollIntoView();
+    }
+    el.classList.add('focused-trigger');
+    setTimeout(() => el.classList.remove('focused-trigger'), 4500);
+
+    // One-shot
+    state.focusId = null;
   }
   
   function extractVariablesFromText(text) {
@@ -681,7 +718,7 @@
     }
     
     return `
-      <div class="trigger-row ${isEnabled ? '' : 'disabled'}">
+      <div class="trigger-row ${isEnabled ? '' : 'disabled'}" id="trigger-${escapeHtml(trigger.triggerId)}" data-trigger-id="${escapeHtml(trigger.triggerId)}">
         <div>
           <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>
         </div>
