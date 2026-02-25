@@ -1283,6 +1283,51 @@ router.get('/:companyId/calls',
 );
 
 /**
+ * DELETE /:companyId/calls/bulk-delete
+ * Bulk delete calls
+ * NOTE: This route MUST come before /:companyId/calls/:callSid to avoid matching "bulk-delete" as callSid
+ */
+router.delete('/:companyId/calls/bulk-delete',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.EDIT_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { callSids } = req.body;
+
+      if (!callSids || !Array.isArray(callSids) || callSids.length === 0) {
+        return res.status(400).json({ success: false, error: 'callSids array required' });
+      }
+
+      // Delete from CallSummary
+      const summaryResult = await CallSummary.deleteMany({
+        companyId,
+        $or: [
+          { twilioSid: { $in: callSids } },
+          { callId: { $in: callSids } }
+        ]
+      });
+
+      // Delete from CallTranscript
+      await CallTranscript.deleteMany({
+        companyId,
+        callId: { $in: callSids }
+      });
+
+      logger.info(`[${MODULE_ID}] Bulk deleted ${summaryResult.deletedCount} calls`, { companyId });
+
+      res.json({
+        success: true,
+        deletedCount: summaryResult.deletedCount
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Bulk delete failed: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
  * GET /:companyId/calls/:callSid
  * Get call detail with transcript
  */
@@ -1362,50 +1407,6 @@ router.get('/:companyId/calls/:callSid',
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Call detail failed: ${error.message}`);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  }
-);
-
-/**
- * DELETE /:companyId/calls/bulk-delete
- * Bulk delete calls
- */
-router.delete('/:companyId/calls/bulk-delete',
-  authenticateJWT,
-  requirePermission(PERMISSIONS.EDIT_COMPANY),
-  async (req, res) => {
-    try {
-      const { companyId } = req.params;
-      const { callSids } = req.body;
-
-      if (!callSids || !Array.isArray(callSids) || callSids.length === 0) {
-        return res.status(400).json({ success: false, error: 'callSids array required' });
-      }
-
-      // Delete from CallSummary
-      const summaryResult = await CallSummary.deleteMany({
-        companyId,
-        $or: [
-          { twilioSid: { $in: callSids } },
-          { callId: { $in: callSids } }
-        ]
-      });
-
-      // Delete from CallTranscript
-      await CallTranscript.deleteMany({
-        companyId,
-        callId: { $in: callSids }
-      });
-
-      logger.info(`[${MODULE_ID}] Bulk deleted ${summaryResult.deletedCount} calls`, { companyId });
-
-      res.json({
-        success: true,
-        deletedCount: summaryResult.deletedCount
-      });
-    } catch (error) {
-      logger.error(`[${MODULE_ID}] Bulk delete failed: ${error.message}`);
       res.status(500).json({ success: false, error: error.message });
     }
   }
