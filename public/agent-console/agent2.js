@@ -79,8 +79,38 @@
     },
     currentGreetingRule: null,
     currentAudioPlayer: null,
-    llm0Controls: {}
+    llm0Controls: {},
+
+    // Unsaved-change guards (config is saved via "Save Changes"; greetings auto-save on blur/change)
+    greetingsDirty: false,
+    greetingRuleDirty: false
   };
+
+  /* --------------------------------------------------------------------------
+     UNSAVED CHANGES PROTECTION
+     -------------------------------------------------------------------------- */
+  function hasUnsavedChanges() {
+    return state.isDirty === true || state.greetingsDirty === true || state.greetingRuleDirty === true;
+  }
+
+  function confirmDiscardUnsavedChanges() {
+    return confirm('You have unsaved changes. Leave this page without saving?');
+  }
+
+  function navigateWithUnsavedGuard(navigateFn) {
+    if (hasUnsavedChanges() && !confirmDiscardUnsavedChanges()) return;
+    navigateFn();
+  }
+
+  function setupUnsavedChangesProtection() {
+    // Browser-level guard: refresh/close/tab switch/back button.
+    window.addEventListener('beforeunload', (e) => {
+      if (!hasUnsavedChanges()) return;
+      e.preventDefault();
+      // Required for Chrome/Safari to show the prompt
+      e.returnValue = '';
+    });
+  }
 
   /* --------------------------------------------------------------------------
      DOM REFERENCES
@@ -196,6 +226,7 @@
     
     setupEventListeners();
     setupGreetingsEventListeners();
+    setupUnsavedChangesProtection();
     loadConfig();
     loadGreetings();
     loadHealthStatus();
@@ -227,12 +258,28 @@
     // Navigation
     DOM.btnBack.addEventListener('click', (e) => {
       e.preventDefault();
-      window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
+      navigateWithUnsavedGuard(() => {
+        window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
+      });
     });
+
+    // Header logo link (also navigates away)
+    const headerLogoLink = document.getElementById('header-logo-link');
+    if (headerLogoLink) {
+      headerLogoLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        const href = headerLogoLink.getAttribute('href');
+        navigateWithUnsavedGuard(() => {
+          if (href) window.location.href = href;
+        });
+      });
+    }
     
     // Back to Company Profile
     DOM.btnBackToProfile.addEventListener('click', () => {
-      window.location.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
+      navigateWithUnsavedGuard(() => {
+        window.location.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
+      });
     });
     
     // Trigger Console link
@@ -240,14 +287,18 @@
     if (linkTriggerConsole) {
       linkTriggerConsole.addEventListener('click', (e) => {
         e.preventDefault();
-        window.location.href = `/agent-console/triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+        navigateWithUnsavedGuard(() => {
+          window.location.href = `/agent-console/triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+        });
       });
     }
     
     const statBoxTriggers = document.getElementById('stat-box-triggers');
     if (statBoxTriggers) {
       statBoxTriggers.addEventListener('click', () => {
-        window.location.href = `/agent-console/triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+        navigateWithUnsavedGuard(() => {
+          window.location.href = `/agent-console/triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+        });
       });
       statBoxTriggers.style.cursor = 'pointer';
     }
@@ -982,6 +1033,7 @@
       
       if (response.success) {
         state.greetings.callStart = response.data;
+        state.greetingsDirty = false;
         
         if (response.audioInvalidated) {
           showToast('warning', 'Audio Invalidated', 'Text changed — please regenerate audio to match new content.');
@@ -1121,6 +1173,7 @@
       
       if (response.success) {
         state.greetings.interceptor = response.data;
+        state.greetingsDirty = false;
         showToast('success', 'Saved', 'Greeting interceptor settings updated successfully.');
       }
     } catch (error) {
@@ -1136,6 +1189,7 @@
    */
   function openAddGreetingRuleModal() {
     state.currentGreetingRule = null;
+    state.greetingRuleDirty = false;
     
     DOM.greetingRuleModalTitle.textContent = 'Add Greeting Rule';
     DOM.inputRuleIdEdit.value = '';
@@ -1167,6 +1221,7 @@
     }
     
     state.currentGreetingRule = rule;
+    state.greetingRuleDirty = false;
     
     DOM.greetingRuleModalTitle.textContent = 'Edit Greeting Rule';
     DOM.inputRuleIdEdit.value = rule.ruleId || rule.id || '';
@@ -1247,6 +1302,7 @@
           
           renderGreetingRules();
           closeGreetingRuleModal();
+          state.greetingsDirty = false;
         }
       } else {
         // Create new rule
@@ -1265,6 +1321,7 @@
           showToast('success', 'Created', 'Greeting rule created successfully.');
           renderGreetingRules();
           closeGreetingRuleModal();
+          state.greetingsDirty = false;
         }
       }
     } catch (error) {
@@ -1447,6 +1504,7 @@
   function closeGreetingRuleModal() {
     DOM.modalGreetingRule.classList.remove('active');
     state.currentGreetingRule = null;
+    state.greetingRuleDirty = false;
   }
   
   /**
@@ -1457,12 +1515,18 @@
   function setupGreetingsEventListeners() {
     // Call Start Greeting
     if (DOM.toggleCallStartEnabled) {
-      DOM.toggleCallStartEnabled.addEventListener('change', saveCallStartGreeting);
+      DOM.toggleCallStartEnabled.addEventListener('change', () => {
+        state.greetingsDirty = true;
+        saveCallStartGreeting();
+      });
     }
     
     if (DOM.inputCallStartText) {
+      DOM.inputCallStartText.addEventListener('input', () => {
+        state.greetingsDirty = true;
+        updateCallStartAudioStatus();
+      });
       DOM.inputCallStartText.addEventListener('blur', saveCallStartGreeting);
-      DOM.inputCallStartText.addEventListener('input', updateCallStartAudioStatus);
     }
     
     if (DOM.btnGenerateCallStartAudio) {
@@ -1482,18 +1546,26 @@
     
     // Greeting Interceptor
     if (DOM.toggleInterceptorEnabled) {
-      DOM.toggleInterceptorEnabled.addEventListener('change', saveGreetingInterceptor);
+      DOM.toggleInterceptorEnabled.addEventListener('change', () => {
+        state.greetingsDirty = true;
+        saveGreetingInterceptor();
+      });
     }
     
     if (DOM.inputMaxWords) {
+      DOM.inputMaxWords.addEventListener('input', () => { state.greetingsDirty = true; });
       DOM.inputMaxWords.addEventListener('blur', saveGreetingInterceptor);
     }
     
     if (DOM.toggleBlockIntentWords) {
-      DOM.toggleBlockIntentWords.addEventListener('change', saveGreetingInterceptor);
+      DOM.toggleBlockIntentWords.addEventListener('change', () => {
+        state.greetingsDirty = true;
+        saveGreetingInterceptor();
+      });
     }
     
     if (DOM.inputIntentWords) {
+      DOM.inputIntentWords.addEventListener('input', () => { state.greetingsDirty = true; });
       DOM.inputIntentWords.addEventListener('blur', saveGreetingInterceptor);
     }
     
@@ -1514,6 +1586,18 @@
     if (DOM.btnSaveGreetingRule) {
       DOM.btnSaveGreetingRule.addEventListener('click', saveGreetingRule);
     }
+
+    // Track unsaved edits inside greeting rule modal (warn if leaving mid-edit)
+    const modalInputs = [
+      DOM.inputRulePriority,
+      DOM.inputRuleMatchType,
+      DOM.inputRuleTriggers,
+      DOM.inputRuleResponse
+    ].filter(Boolean);
+    modalInputs.forEach(el => {
+      el.addEventListener('input', () => { state.greetingRuleDirty = true; });
+      el.addEventListener('change', () => { state.greetingRuleDirty = true; });
+    });
     
     if (DOM.btnGenerateRuleAudio) {
       DOM.btnGenerateRuleAudio.addEventListener('click', generateRuleAudio);

@@ -3944,6 +3944,11 @@ const companySchema = new mongoose.Schema({
             enabled: { type: Boolean, default: false },
             // V4: Global Negative Keywords - applies to ALL trigger cards
             globalNegativeKeywords: { type: [String], default: [] },
+            // AC1: Consent/Escalation phrase lists (Agent Console editable)
+            // Required for Agent2DiscoveryEngine.loadCompanyConfig() — without schema paths,
+            // Mongoose drops the arrays on save and UI changes appear to "not persist".
+            consentPhrases: [{ type: String, trim: true, lowercase: true }],
+            escalationPhrases: [{ type: String, trim: true, lowercase: true }],
             // V129: Real bridge (latency filler) settings
             // Two-phase TwiML: play a short bridge line, then Redirect to continue.
             bridge: {
