@@ -3296,9 +3296,31 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       companyID,
       error: error.message
     });
+    const crashText = "I'm connecting you to our team.";
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say("I'm connecting you to our team.");
+    twiml.say(crashText);
     twimlString = twiml.toString();
+
+    if (callSid) {
+      try {
+        const CallTranscriptV2 = require('../models/CallTranscriptV2');
+        await CallTranscriptV2.appendTurns(companyID, callSid, [
+          {
+            speaker: 'agent',
+            kind: 'CONVERSATION_AGENT',
+            text: crashText,
+            turnNumber,
+            ts: new Date(),
+            sourceKey: 'BRIDGE_CONTINUE_CRASH',
+            trace: {
+              provenance: { type: 'HARDCODED', reason: 'route_crash', voiceProviderUsed: 'twilio_say' },
+              error: error.message
+            }
+          }
+        ]);
+      } catch (_) { /* best-effort */ }
+    }
+
     res.type('text/xml');
     return res.send(twimlString);
   }
@@ -4747,12 +4769,32 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }).catch(() => {});
     }
     
-    // Build fallback TwiML
+    const crashText = "I'm connecting you to our team.";
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say("I'm connecting you to our team.");
+    twiml.say(crashText);
     twimlString = twiml.toString();
-    
-    // Log fallback TWIML_SENT
+
+    // Log to CallTranscriptV2 so crash fallbacks appear in transcripts
+    if (callSid) {
+      try {
+        const CallTranscriptV2 = require('../models/CallTranscriptV2');
+        await CallTranscriptV2.appendTurns(companyID, callSid, [
+          {
+            speaker: 'agent',
+            kind: 'CONVERSATION_AGENT',
+            text: crashText,
+            turnNumber,
+            ts: new Date(),
+            sourceKey: 'ROUTE_CRASH',
+            trace: {
+              provenance: { type: 'HARDCODED', reason: 'route_crash', voiceProviderUsed: 'twilio_say' },
+              error: error.message
+            }
+          }
+        ]);
+      } catch (_) { /* best-effort */ }
+    }
+
     if (CallLogger && callSid) {
       await CallLogger.logEvent({
         callId: callSid,
