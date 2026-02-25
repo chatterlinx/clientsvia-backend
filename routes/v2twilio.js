@@ -3646,6 +3646,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           timestamp: new Date().toISOString(),
           source: runtimeResult?.matchSource || 'UNKNOWN'
         });
+        
+        // Re-save to Redis with agent turn included
+        if (redis && redisKey) {
+          redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 }).catch(err => {
+            logger.warn('[V2TWILIO] Redis re-save after agent turn failed', { callSid: callSid?.slice(-8), error: err.message });
+          });
+        }
       }
 
       // ═══════════════════════════════════════════════════════════════════════════

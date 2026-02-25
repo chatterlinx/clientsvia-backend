@@ -375,13 +375,14 @@ class CallSummaryService {
       
       // ─────────────────────────────────────────────────────────────────────────
       // STEP 2: Store transcript separately (if provided)
+      // Uses twilioSid as the callId for transcript lookup compatibility
       // ─────────────────────────────────────────────────────────────────────────
       let transcriptRef = null;
       if (transcript && transcript.length > 0) {
         const limitedTranscript = transcript.slice(0, CONFIG.MAX_TRANSCRIPT_TURNS);
         const transcriptDoc = await CallTranscript.createTranscript(
           companyId,
-          callId,
+          existingCall.twilioSid || callId,
           limitedTranscript
         );
         transcriptRef = transcriptDoc._id;
