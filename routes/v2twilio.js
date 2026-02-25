@@ -3510,25 +3510,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 📼 EVIDENCE LEDGER: LOG CALLER TRANSCRIPT (STT_SEGMENT)
+    // 📝 TRANSCRIPT: Initialize turns array in call state
     // ═══════════════════════════════════════════════════════════════════════════
-    // This is the CALLER's turn - what they said (after STT processing).
-    // Without this, Call Review shows "No transcript available" even when calls work.
-    // This is the single source of truth for caller speech in the call record.
+    // Turns are stored in Redis call state and persisted to CallTranscript at call end.
+    // This is the clean Mongoose+Redis path - no legacy BlackBox.
     // ═══════════════════════════════════════════════════════════════════════════
-    if (CallLogger && callSid && speechResult && speechResult.trim()) {
-      CallLogger.addTranscript({
-        callId: callSid,
-        companyId: companyID,
+    if (!callState.turns) {
+      callState.turns = [];
+    }
+    
+    // Add caller turn (what they said)
+    if (speechResult && speechResult.trim()) {
+      callState.turns.push({
         speaker: 'caller',
-        turn: turnNumber,
         text: speechResult.trim(),
-        confidence: 1.0
-      }).catch(err => {
-        logger.warn('[V2TWILIO] Failed to log caller transcript (non-blocking)', { 
-          callSid: callSid?.slice(-8), 
-          error: err.message 
-        });
+        turn: turnNumber,
+        timestamp: new Date().toISOString()
       });
     }
 
@@ -3632,27 +3629,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
 
       // ═══════════════════════════════════════════════════════════════════════════
-      // 📼 EVIDENCE LEDGER: LOG AGENT TRANSCRIPT (AGENT_TURN)
+      // 📝 TRANSCRIPT: Add agent turn to call state
       // ═══════════════════════════════════════════════════════════════════════════
-      // This is the AGENT's turn - what the AI said in response.
-      // matchSource provides provenance: where the response came from.
-      // Without this, Call Review shows "0 turns" even when agent responds.
-      // This is the single source of truth for agent speech in the call record.
+      // Stored in Redis and persisted to CallTranscript at call end via status callback.
+      // matchSource provides provenance for Call Review.
       // ═══════════════════════════════════════════════════════════════════════════
-      if (CallLogger && callSid && responseText && responseText.trim()) {
-        CallLogger.addTranscript({
-          callId: callSid,
-          companyId: companyID,
+      if (responseText && responseText.trim()) {
+        persistedState.turns = persistedState.turns || callState.turns || [];
+        persistedState.turns.push({
           speaker: 'agent',
-          turn: turnNumber,
           text: responseText.trim(),
-          source: runtimeResult?.matchSource || 'UNKNOWN',
-          tokensUsed: runtimeResult?.tokensUsed || 0
-        }).catch(err => {
-          logger.warn('[V2TWILIO] Failed to log agent transcript (non-blocking)', { 
-            callSid: callSid?.slice(-8), 
-            error: err.message 
-          });
+          turn: turnNumber,
+          timestamp: new Date().toISOString(),
+          source: runtimeResult?.matchSource || 'UNKNOWN'
         });
       }
 
@@ -5360,18 +5349,46 @@ router.post('/status-callback', async (req, res) => {
               'failed': 'error'
             };
             
-            // Update the call summary
+            // ════════════════════════════════════════════════════════════════
+            // Load transcript from Redis call state
+            // ════════════════════════════════════════════════════════════════
+            let transcript = [];
+            try {
+              const redis = await getRedis();
+              if (redis) {
+                const redisKey = `call:${CallSid}`;
+                const raw = await redis.get(redisKey);
+                if (raw) {
+                  const callState = JSON.parse(raw);
+                  transcript = callState.turns || [];
+                  logger.info('[CALL STATUS] Loaded transcript from Redis', {
+                    callSid: CallSid,
+                    turnCount: transcript.length
+                  });
+                }
+              }
+            } catch (redisErr) {
+              logger.warn('[CALL STATUS] Failed to load transcript from Redis (non-blocking)', {
+                callSid: CallSid,
+                error: redisErr.message
+              });
+            }
+            
+            // Update the call summary with transcript
             await CallSummaryService.endCall(callSummary.callId, {
               outcome: outcomeMap[CallStatus] || 'completed',
               durationSeconds: parseInt(CallDuration) || 0,
               answeredBy: AnsweredBy,
-              endedAt: new Date(Timestamp) || new Date()
+              endedAt: new Date(Timestamp) || new Date(),
+              transcript,
+              turnCount: transcript.length
             });
             
             logger.info('[CALL STATUS] CallSummary updated', {
               callId: callSummary.callId,
               outcome: outcomeMap[CallStatus],
-              duration: CallDuration
+              duration: CallDuration,
+              transcriptTurns: transcript.length
             });
           } else {
             logger.debug('[CALL STATUS] No CallSummary found for this call (may be test/spam)', {

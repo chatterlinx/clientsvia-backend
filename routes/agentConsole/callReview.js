@@ -693,21 +693,28 @@ router.get(
         });
       }
 
-      // Try to get the transcript with detailed turn data
+      // ═══════════════════════════════════════════════════════════════════════════
+      // TRANSCRIPT DATA SOURCE: CallTranscript (Mongoose)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CallTranscript is created at call end via CallSummaryService.endCall()
+      // with turns accumulated in Redis during the call.
+      // ═══════════════════════════════════════════════════════════════════════════
+      
+      let enrichedTurns = [];
       let transcript = null;
+      
+      // Try by transcriptRef first, then by callId
       if (callSummary.transcriptRef) {
         transcript = await CallTranscript.findById(callSummary.transcriptRef).lean();
       }
       if (!transcript) {
-        // Try by callId
         transcript = await CallTranscript.findOne({ 
           callId: callSummary.twilioSid || callSummary.callId 
         }).lean();
       }
 
-      // Build turns from transcript if available
-      let enrichedTurns = [];
       if (transcript?.memorySnapshot?.turns) {
+        // V111 ConversationMemory format
         enrichedTurns = transcript.memorySnapshot.turns.map((turn, index) => {
           const isCaller = turn.input !== undefined;
           
@@ -723,8 +730,21 @@ router.get(
             }
           };
         });
+      } else if (transcript?.turns && Array.isArray(transcript.turns)) {
+        // Simple turns array format (from Redis call state)
+        enrichedTurns = transcript.turns.map((turn, index) => ({
+          turnNumber: turn.turn || index + 1,
+          speaker: turn.speaker || 'unknown',
+          text: turn.text || '',
+          timestamp: turn.timestamp,
+          provenance: turn.speaker === 'agent' ? {
+            type: turn.source ? 'UI_OWNED' : 'UNKNOWN',
+            uiPath: turn.source,
+            reason: turn.source || 'Unknown handler'
+          } : null
+        }));
       } else if (transcript?.customerTranscript) {
-        // Parse customer transcript if no structured turns
+        // Formatted string transcript (legacy)
         const lines = transcript.customerTranscript.split('\n').filter(Boolean);
         enrichedTurns = lines.map((line, index) => {
           const isAgent = line.includes('[Agent]') || line.includes('AI:');

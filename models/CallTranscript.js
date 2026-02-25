@@ -110,6 +110,22 @@ const CallTranscriptSchema = new mongoose.Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────────
+  // TURNS ARRAY (simple format from Redis call state)
+  // ─────────────────────────────────────────────────────────────────────────────
+  
+  /** Array of conversation turns: { speaker, text, turn, timestamp, source } */
+  turns: {
+    type: [{
+      speaker: { type: String, enum: ['caller', 'agent'], required: true },
+      text: { type: String, required: true },
+      turn: { type: Number },
+      timestamp: { type: String },
+      source: { type: String } // For agent turns: provenance source
+    }],
+    default: []
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────────
   // CONVERSATION MEMORY SNAPSHOT
   // ─────────────────────────────────────────────────────────────────────────────
   
@@ -273,6 +289,36 @@ CallTranscriptSchema.statics.createFromMemory = async function(memory, transcrip
     handlerDistribution,
     v111Enabled: memory.config?.enabled || false,
     v111Version: memory.version || null
+  });
+};
+
+/**
+ * Create a transcript from a simple turns array (from Redis call state)
+ * @param {string} companyId - Company ID
+ * @param {string} callId - Call SID
+ * @param {Array} turns - Array of { speaker, text, turn, timestamp, source }
+ * @returns {Promise<CallTranscript>}
+ */
+CallTranscriptSchema.statics.createTranscript = async function(companyId, callId, turns) {
+  // Build customer-facing transcript string
+  const customerLines = turns.map(turn => {
+    const speaker = turn.speaker === 'agent' ? 'AI' : 'Customer';
+    return `${speaker}: ${turn.text}`;
+  });
+  
+  // Calculate stats
+  const agentTurns = turns.filter(t => t.speaker === 'agent');
+  const callerTurns = turns.filter(t => t.speaker === 'caller');
+  
+  return this.create({
+    callId,
+    companyId,
+    callStartTime: turns[0]?.timestamp ? new Date(turns[0].timestamp) : new Date(),
+    callEndTime: new Date(),
+    turnCount: turns.length,
+    customerTranscript: customerLines.join('\n'),
+    turns, // Store raw turns array for Call Review
+    v111Enabled: false
   });
 };
 
