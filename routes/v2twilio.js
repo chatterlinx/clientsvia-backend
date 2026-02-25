@@ -3583,6 +3583,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
       persistedState._lastUpdatedTs = new Date().toISOString();
       persistedState._stateKey = redisKey;
+      
+      // Ensure turns array is preserved in persisted state
+      persistedState.turns = callState.turns || [];
 
       let stateSaveError = null;
       if (redis && redisKey) {
