@@ -643,6 +643,42 @@
       `;
     }
 
+    // Incomplete: no agent responses at all (telephony actions may exist)
+    if (flags.includes('INCOMPLETE_NO_AGENT_TURNS')) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            INCOMPLETE — No Agent Responses Captured
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            This call contains telephony/system actions, but no agent conversation turns were recorded.
+          </p>
+        </div>
+      `;
+    }
+
+    // Diagnostics: STT empty (explains missing caller lines)
+    if (flags.includes('DIAG_STT_EMPTY')) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            DIAGNOSTIC — STT Returned Empty (No Caller Transcript)
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            Speech-to-text returned an empty SpeechResult for at least one turn. This explains missing caller lines.
+          </p>
+        </div>
+      `;
+    }
+
     // UNVERIFIED CALL DETECTION (provenance missing anywhere)
     // Enterprise rule: if any agent turn lacks provenance, we cannot certify compliance.
     if (flags.includes('UNVERIFIED_MISSING_PROVENANCE')) {
@@ -802,7 +838,7 @@
     const speakerLabel = isCaller ? 'CALLER' : (isSystem ? 'SYSTEM' : 'AGENT');
 
     let provenanceHtml = '';
-    if (isAgent && turn.provenance) {
+    if ((isAgent || isSystem) && turn.provenance) {
       provenanceHtml = renderTurnProvenance(turn.provenance);
     }
 
@@ -824,6 +860,7 @@
         <div class="turn-header">
           <span class="turn-number">Turn ${turn.turnNumber}</span>
           <span class="${speakerClass}">${speakerLabel}</span>
+          ${turn.kind ? `<span class="turn-timestamp" style="margin-left: 8px; opacity: 0.75;">${escapeHtml(turn.kind)}</span>` : ''}
           <span class="turn-timestamp">${formatTimestamp(turn.timestamp)}</span>
         </div>
         <div class="turn-text">${escapeHtml(turn.text)}</div>
@@ -1193,12 +1230,7 @@
           turns: call.turns,
           events: call.events
         },
-        provenanceSummary: {
-          totalAgentTurns: (call.turns || []).filter(t => t.speaker === 'agent').length,
-          uiOwned: (call.turns || []).filter(t => t.provenance?.type === 'UI_OWNED').length,
-          fallbacks: countFallbacks(call.turns || []),
-          violations: countViolations(call.turns || [])
-        }
+        provenanceSummary: buildProvenanceSummary(call.turns || [])
       };
 
       const jsonString = JSON.stringify(report, null, 2);
@@ -1330,6 +1362,29 @@
    */
   function countFallbacks(turns) {
     return turns.filter(t => t.provenance?.type === 'FALLBACK').length;
+  }
+
+  /**
+   * Build provenance summary with bridge/real agent separation.
+   * Bridge filler turns must never inflate "agent response compliance".
+   * @param {Array} turns
+   * @returns {Object}
+   */
+  function buildProvenanceSummary(turns) {
+    const isBridge = (t) => t.provenance?.isBridge === true || t.source === 'AGENT2_BRIDGE';
+    const agentTurns = turns.filter(t => t.speaker === 'agent');
+    const realAgentTurns = agentTurns.filter(t => !isBridge(t));
+    const bridgeTurns = turns.filter(t => isBridge(t));
+
+    return {
+      totalAgentTurns: agentTurns.length,
+      agentTurnsReal: realAgentTurns.length,
+      bridgeTurns: bridgeTurns.length,
+      agentTurnsTraced: realAgentTurns.filter(t => t.provenance?.type === 'UI_OWNED').length,
+      uiOwned: turns.filter(t => t.provenance?.type === 'UI_OWNED' && !isBridge(t)).length,
+      fallbacks: countFallbacks(turns),
+      violations: countViolations(turns)
+    };
   }
 
   /* ==========================================================================

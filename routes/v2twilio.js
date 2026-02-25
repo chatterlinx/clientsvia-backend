@@ -2040,6 +2040,7 @@ router.post('/voice', async (req, res) => {
           [
             {
               speaker: 'agent',
+              kind: 'CONVERSATION_AGENT',
               text: greetingText.trim(),
               turnNumber: 0,
               ts: new Date(),
@@ -2063,14 +2064,15 @@ router.post('/voice', async (req, res) => {
           { from: req.body.From || null, to: req.body.To || null, startedAt: new Date() }
         );
 
-        // System/TwiML layer (what Twilio actually played)
+        // Telephony action (what Twilio actually played)
         await CallTranscriptV2.appendTurns(
           company._id,
           req.body.CallSid,
           [
             {
               speaker: 'system',
-              text: greetingAudioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
+              kind: greetingAudioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
+              text: greetingAudioUrl ? greetingAudioUrl : greetingText.trim(),
               turnNumber: 0,
               ts: new Date(),
               sourceKey: 'twiml',
@@ -2079,6 +2081,7 @@ router.post('/voice', async (req, res) => {
                 audioUrl: greetingAudioUrl,
                 sayText: greetingAudioUrl ? null : greetingText.trim(),
                 voiceProviderUsed: greetingVoiceProviderUsed,
+                origin: greetingUiPath,
                 gather: {
                   actionUrl: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
                   partialUrl: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`
@@ -3653,6 +3656,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         await CallTranscriptV2.appendTurns(companyID, callSid, [
           {
             speaker: 'caller',
+            kind: 'CONVERSATION_CALLER',
             text: callerTurn.text,
             turnNumber: callerTurn.turn,
             ts: callerTurn.timestamp,
@@ -3662,6 +3666,47 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         ], { from: fromNumber || null, to: req.body.To || null });
       } catch (mongoV2Err) {
         logger.warn('[V2TWILIO] Failed to append caller turn to CallTranscriptV2 (non-blocking)', {
+          callSid: callSid?.slice(-8),
+          error: mongoV2Err.message
+        });
+      }
+    }
+    // Diagnostics: STT_EMPTY (no caller transcript captured this turn)
+    else if (callSid) {
+      const sttDiag = {
+        speaker: 'system',
+        kind: 'STT_EMPTY',
+        text: 'STT_EMPTY',
+        turn: turnNumber,
+        timestamp: new Date().toISOString(),
+        source: 'stt',
+        provenance: {
+          type: 'UI_OWNED',
+          uiPath: 'voice.stt',
+          reason: 'speech_result_empty'
+        }
+      };
+      callState.turns.push(sttDiag);
+      try {
+        const CallTranscriptV2 = require('../models/CallTranscriptV2');
+        await CallTranscriptV2.appendTurns(companyID, callSid, [
+          {
+            speaker: 'system',
+            kind: 'STT_EMPTY',
+            text: 'SpeechResult empty (no caller text captured)',
+            turnNumber,
+            ts: sttDiag.timestamp,
+            sourceKey: 'stt',
+            trace: {
+              inputTextSource,
+              speechResultLen: (req.body?.SpeechResult || '').length,
+              callSid: callSid,
+              actionOnEmptyResult: true
+            }
+          }
+        ], { from: fromNumber || null, to: req.body.To || null });
+      } catch (mongoV2Err) {
+        logger.warn('[V2TWILIO] Failed to append STT_EMPTY diagnostic to CallTranscriptV2 (non-blocking)', {
           callSid: callSid?.slice(-8),
           error: mongoV2Err.message
         });
@@ -4127,6 +4172,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           const turnsToAppendV2 = [
             {
               speaker: 'agent',
+              kind: 'CONVERSATION_AGENT',
               text: agentTurn.text,
               turnNumber: agentTurn.turn,
               ts: agentTurn.timestamp,
@@ -4148,11 +4194,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             to: req.body.To || null
           });
 
-          // System/TwiML layer for this turn (what was actually played to the caller)
+          // Telephony action for this turn (what was actually played to the caller)
           await CallTranscriptV2.appendTurns(companyID, callSid, [
             {
               speaker: 'system',
-              text: audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
+              kind: audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
+              text: audioUrl ? audioUrl : responseText.trim(),
               turnNumber,
               ts: new Date(),
               sourceKey: 'twiml',
@@ -4161,6 +4208,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 audioUrl: audioUrl || null,
                 sayText: audioUrl ? null : responseText.trim(),
                 voiceProviderUsed: localVoiceProviderUsed,
+                origin: agentTurn?.provenance?.uiPath || null,
                 gather: {
                   action: `/api/twilio/v2-agent-respond/${companyID}`,
                   partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`
@@ -4400,6 +4448,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const bridgeLine = usableLines[idx];
     const continueUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=0`;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BRIDGE AUDIO: Use cached ElevenLabs MP3 via <Play>, never Twilio <Say>.
+    // If no cached audio exists, use <Pause> (silence > wrong voice).
+    // ═══════════════════════════════════════════════════════════════════════════
+    const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
+    const bridgeVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+    const bridgeAudioUrl = BridgeAudioService.getAudioUrl({
+      companyId: companyID,
+      text: bridgeLine,
+      voiceSettings: bridgeVoiceSettings,
+      hostHeader
+    });
+    const bridgeOutputMode = bridgeAudioUrl ? 'play' : 'pause';
+    const bridgeVoiceProvider = bridgeAudioUrl ? 'elevenlabs_cached' : 'silence';
+
     if (CallLogger && callSid) {
       await CallLogger.logEvent({
         callId: callSid,
@@ -4415,16 +4478,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           bridgesUsedAfter: newCount,
           lineIdx: idx,
           linePreview: bridgeLine.substring(0, 80),
-          reason: 'threshold_exceeded'
+          reason: 'threshold_exceeded',
+          voiceProvider: bridgeVoiceProvider,
+          outputMode: bridgeOutputMode,
+          audioUrl: bridgeAudioUrl || null
         }
       }).catch(() => {});
     }
 
-    // 📝 TRANSCRIPT: Persist the bridge line (the "Got it, give me a second..." voice).
-    // This is spoken by Twilio <Say> and must be visible in Call Review for diagnosis.
     try {
+      const bridgeTurnKind = bridgeAudioUrl ? 'TWIML_PLAY' : 'TWIML_PAUSE';
       const bridgeTurn = {
-        speaker: 'agent',
+        speaker: 'system',
+        kind: bridgeTurnKind,
         text: `${bridgeLine || ''}`.trim(),
         turn: turnNumber,
         timestamp: new Date().toISOString(),
@@ -4433,8 +4499,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           type: 'UI_OWNED',
           uiPath: 'aiAgentSettings.agent2.bridge.lines',
           reason: 'threshold_exceeded',
-          voiceProviderUsed: 'twilio_say',
-          audioUrl: null,
+          voiceProviderUsed: bridgeVoiceProvider,
+          audioUrl: bridgeAudioUrl || null,
           isBridge: true,
           bridge: {
             elapsedMs,
@@ -4447,14 +4513,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (!callState.turns) callState.turns = [];
       if (bridgeTurn.text) callState.turns.push(bridgeTurn);
 
-      // Canonical transcript persistence (V2): log the bridge filler and the TwiML layer.
       if (bridgeTurn.text) {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
           await CallTranscriptV2.appendTurns(companyID, callSid, [
             {
-              speaker: 'agent',
-              text: bridgeTurn.text,
+              speaker: 'system',
+              kind: bridgeTurnKind,
+              text: bridgeAudioUrl ? bridgeTurn.text : `[BRIDGE_PAUSE] ${bridgeTurn.text}`,
               turnNumber,
               ts: bridgeTurn.timestamp,
               sourceKey: 'AGENT2_BRIDGE',
@@ -4462,30 +4528,30 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 provenance: {
                   ...bridgeTurn.provenance,
                   tracePack: {
-                    resolver: 'fallback',
+                    resolver: 'bridge',
                     uiPath: 'aiAgentSettings.agent2.bridge.lines',
                     configVersionHash: req.session?.awHash || null,
                     effectiveConfigVersion: req.session?.effectiveConfigVersion || null,
                     match: { engine: 'rules', score: null, matchedId: null, matchSource: 'AGENT2_BRIDGE' },
                     toolRefs: [],
-                    tts: { provider: 'twilio', voiceId: null },
-                    twiml: { outputMode: 'say', actions: [{ type: 'SAY', text: bridgeTurn.text }] }
+                    tts: {
+                      provider: bridgeAudioUrl ? 'elevenlabs' : 'none',
+                      voiceId: bridgeAudioUrl ? (bridgeVoiceSettings.voiceId || null) : null,
+                      cached: !!bridgeAudioUrl
+                    },
+                    twiml: {
+                      outputMode: bridgeOutputMode,
+                      actions: bridgeAudioUrl
+                        ? [{ type: 'PLAY', url: bridgeAudioUrl }]
+                        : [{ type: 'PAUSE', length: 1 }]
+                    },
+                    latency: {
+                      bridgeElapsedMs: elapsedMs,
+                      thresholdMs: bridgeThresholdMs,
+                      hardCapMs: bridgeHardCapMs
+                    }
                   }
                 }
-              }
-            },
-            {
-              speaker: 'system',
-              text: 'TWIML_SAY',
-              turnNumber,
-              ts: bridgeTurn.timestamp,
-              sourceKey: 'twiml',
-              trace: {
-                action: 'SAY',
-                sayText: bridgeTurn.text,
-                voiceProviderUsed: 'twilio_say',
-                reason: 'bridge_processing_filler',
-                continueUrl
               }
             }
           ]);
@@ -4525,18 +4591,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           logger.warn('[V2TWILIO] Failed to persist bridge turn to Redis (non-blocking)', { callSid: callSid?.slice(-8), error: err.message });
         }
       }
-
-      // Legacy Mongo (CallTranscript) is not required for enterprise diagnostics; V2 is canonical.
     } catch (bridgePersistErr) {
       logger.warn('[V2TWILIO] Bridge turn persist failed (non-blocking)', { error: bridgePersistErr.message });
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILD BRIDGE TWIML: <Play> cached audio or <Pause> — NEVER <Say>
+    // ═══════════════════════════════════════════════════════════════════════════
     const bridgeTwiml = new twilio.twiml.VoiceResponse();
-    bridgeTwiml.say(escapeTwiML(bridgeLine));
-    // CRITICAL: method=POST so continuation receives CallSid in body
+    if (bridgeAudioUrl) {
+      bridgeTwiml.play(bridgeAudioUrl);
+    } else {
+      logger.warn('[V2TWILIO] No cached bridge audio — using silence instead of Twilio <Say>', {
+        callSid: callSid?.slice(-8),
+        companyId: companyID,
+        bridgeLine: bridgeLine.substring(0, 60)
+      });
+      bridgeTwiml.pause({ length: 1 });
+    }
     bridgeTwiml.redirect({ method: 'POST' }, continueUrl);
     twimlString = bridgeTwiml.toString();
-    voiceProviderUsed = 'twilio_say';
+    voiceProviderUsed = bridgeVoiceProvider;
 
     await logTwimlSent({
       route: '/v2-agent-respond',
@@ -4545,7 +4620,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       responsePreview: bridgeLine,
       matchSource: 'AGENT2_BRIDGE',
       isBridge: true,
-      bridgeMeta: { token: token.slice(0, 8), elapsedMs, thresholdMs: bridgeThresholdMs }
+      bridgeMeta: {
+        token: token.slice(0, 8),
+        elapsedMs,
+        thresholdMs: bridgeThresholdMs,
+        outputMode: bridgeOutputMode,
+        audioUrl: bridgeAudioUrl || null
+      }
     });
 
     res.type('text/xml');

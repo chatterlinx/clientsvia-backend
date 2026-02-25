@@ -1125,12 +1125,120 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
       logger.warn('[AGENT2] ConfigAuditService failed (non-blocking)', { error: e.message });
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // PRE-GENERATE BRIDGE AUDIO: cached ElevenLabs MP3 for <Play> in runtime.
+    // Runs async (non-blocking) — UI does not wait for TTS generation.
+    // ═══════════════════════════════════════════════════════════════════════
+    const bridgeLines = next?.bridge?.lines || [];
+    const voiceSettings = afterCompany?.aiAgentSettings?.voiceSettings || {};
+    if (bridgeLines.length > 0 && voiceSettings.voiceId) {
+      const BridgeAudioService = require('../../services/bridgeAudio/BridgeAudioService');
+      BridgeAudioService.generateAll({
+        companyId,
+        lines: bridgeLines,
+        company: afterCompany,
+        voiceSettings,
+        force: false
+      })
+        .then((result) => {
+          logger.info('[AGENT2] Bridge audio pre-generation complete', {
+            companyId,
+            total: result.total,
+            generated: result.generated,
+            skipped: result.skipped,
+            failed: result.failed
+          });
+        })
+        .catch((err) => {
+          logger.warn('[AGENT2] Bridge audio pre-generation failed (non-blocking)', {
+            companyId,
+            error: err.message
+          });
+        });
+    }
+
     return res.json({ success: true, data: next, meta: { uiBuild: UI_BUILD } });
   } catch (error) {
     logger.error('[AGENT2] PATCH error', { error: error.message });
     return res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// ============================================================================
+// POST - Regenerate bridge audio (explicit, force=true)
+// ============================================================================
+router.post('/:companyId/regenerate-bridge-audio',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const company = await v2Company.findById(companyId)
+        .select('aiAgentSettings')
+        .lean();
+
+      if (!company) {
+        return res.status(404).json({ success: false, message: 'Company not found' });
+      }
+
+      const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+      if (!voiceSettings.voiceId) {
+        return res.status(400).json({
+          success: false,
+          code: 'VOICE_NOT_CONFIGURED',
+          message: 'No ElevenLabs voice configured. Set a voiceId in Voice Settings first.'
+        });
+      }
+
+      const bridgeLines = company.aiAgentSettings?.agent2?.bridge?.lines || [];
+      if (bridgeLines.length === 0) {
+        return res.status(400).json({
+          success: false,
+          code: 'NO_BRIDGE_LINES',
+          message: 'No bridge lines configured.'
+        });
+      }
+
+      const BridgeAudioService = require('../../services/bridgeAudio/BridgeAudioService');
+
+      BridgeAudioService.purgeCompany(companyId);
+
+      const result = await BridgeAudioService.generateAll({
+        companyId,
+        lines: bridgeLines,
+        company,
+        voiceSettings,
+        force: true
+      });
+
+      logger.info('[AGENT2] Bridge audio regenerated (explicit)', {
+        companyId,
+        total: result.total,
+        generated: result.generated,
+        failed: result.failed
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          total: result.total,
+          generated: result.generated,
+          skipped: result.skipped,
+          failed: result.failed,
+          results: result.results.map(r => ({
+            line: r.line,
+            generated: r.generated,
+            url: r.url || null,
+            error: r.error || null
+          }))
+        }
+      });
+    } catch (error) {
+      logger.error('[AGENT2] regenerate-bridge-audio error', { error: error.message });
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
 
 // ============================================================================
 // GPT-4 PREFILL - Auto-generate trigger card fields from keywords

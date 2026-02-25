@@ -1429,10 +1429,11 @@ router.get('/:companyId/calls/:callSid',
           const text = t.text || '';
           if (!Number.isFinite(turnNumber)) continue;
 
-          const key = `${turnNumber}:${speaker}:${t.sourceKey || ''}:${(text || '').substring(0, 24)}`;
+          const key = `${turnNumber}:${speaker}:${t.kind || ''}:${t.sourceKey || ''}:${(text || '').substring(0, 24)}`;
           const next = {
             turnNumber,
             speaker,
+            kind: t.kind || null,
             text,
             timestamp: t.ts ? new Date(t.ts).toISOString() : null,
             source: t.sourceKey || null,
@@ -1577,13 +1578,17 @@ router.get('/:companyId/calls/:callSid',
         flags = ['INCOMPLETE_NO_TURNS'];
       } else {
         const agentTurns = turns.filter(t => t.speaker === 'agent');
+        const callerTurns = turns.filter(t => t.speaker === 'caller');
+        const hasSttEmptyDiag = turns.some(t => t.speaker === 'system' && t.kind === 'STT_EMPTY');
+
+        if (agentTurns.length === 0) flags.push('INCOMPLETE_NO_AGENT_TURNS');
+        if (callerTurns.length === 0) flags.push(hasSttEmptyDiag ? 'DIAG_STT_EMPTY' : 'INCOMPLETE_NO_CALLER_INPUT');
+
         const missingProvenance = agentTurns.some(t => !t.provenance);
         const missingTracePack = agentTurns.some(t => !t.source); // should never happen, but signals contract break
 
-        flags = [
-          ...(missingProvenance ? ['UNVERIFIED_MISSING_PROVENANCE'] : []),
-          ...(missingTracePack ? ['PARTIAL_MISSING_TRACE'] : [])
-        ];
+        if (missingProvenance) flags.push('UNVERIFIED_MISSING_PROVENANCE');
+        if (missingTracePack) flags.push('PARTIAL_MISSING_TRACE');
       }
 
       // If Twilio status callback didn't populate durationSeconds, derive a best-effort duration

@@ -12,6 +12,11 @@ const TurnSchema = new mongoose.Schema(
   {
     turnNumber: { type: Number, required: true },
     speaker: { type: String, enum: ['caller', 'agent', 'system'], required: true },
+    // Classifies the turn within the 3-stream model:
+    // - conversation: caller/agent dialog
+    // - telephony: TwiML actions (SAY/PLAY/GATHER/REDIRECT/etc.)
+    // - diagnostics: internal events (STT_EMPTY/provider switches/latency/etc.)
+    kind: { type: String, default: null },
     text: { type: String, required: true },
     ts: { type: Date, required: true },
     sourceKey: { type: String, default: null }, // greetings, agent2, booking, kb, etc.
@@ -91,6 +96,7 @@ CallTranscriptV2Schema.statics.appendTurns = async function appendTurns(companyI
   const cleaned = (Array.isArray(turns) ? turns : [])
     .map((t) => {
       const speaker = normalizeSpeaker(t?.speaker);
+      const kind = t?.kind ? `${t.kind}` : null;
       const text = `${t?.text || ''}`.trim();
       const turnNumber = Number.isFinite(t?.turnNumber) ? t.turnNumber : (Number.isFinite(t?.turn) ? t.turn : null);
       const ts = toDate(t?.ts || t?.timestamp, now);
@@ -98,7 +104,7 @@ CallTranscriptV2Schema.statics.appendTurns = async function appendTurns(companyI
       const trace = t?.trace ?? null;
 
       if (!Number.isFinite(turnNumber) || text.length === 0) return null;
-      return { turnNumber, speaker, text, ts, sourceKey, trace };
+      return { turnNumber, speaker, kind, text, ts, sourceKey, trace };
     })
     .filter(Boolean);
 
@@ -106,22 +112,25 @@ CallTranscriptV2Schema.statics.appendTurns = async function appendTurns(companyI
 
   const keys = cleaned.map((t) => {
     const src = t.sourceKey || '';
+    const kind = t.kind || '';
     const textPrefix = `${t.text || ''}`.trim().toLowerCase().substring(0, 24);
-    return `${t.turnNumber}:${t.speaker}:${src}:${textPrefix}`;
+    return `${t.turnNumber}:${t.speaker}:${kind}:${src}:${textPrefix}`;
   });
   const humanKeys = cleaned
     .filter(t => t.speaker === 'caller' || t.speaker === 'agent')
     .map((t) => {
       const src = t.sourceKey || '';
+      const kind = t.kind || '';
       const textPrefix = `${t.text || ''}`.trim().toLowerCase().substring(0, 24);
-      return `${t.turnNumber}:${t.speaker}:${src}:${textPrefix}`;
+      return `${t.turnNumber}:${t.speaker}:${kind}:${src}:${textPrefix}`;
     });
   const systemKeys = cleaned
     .filter(t => t.speaker === 'system')
     .map((t) => {
       const src = t.sourceKey || '';
+      const kind = t.kind || '';
       const textPrefix = `${t.text || ''}`.trim().toLowerCase().substring(0, 24);
-      return `${t.turnNumber}:${t.speaker}:${src}:${textPrefix}`;
+      return `${t.turnNumber}:${t.speaker}:${kind}:${src}:${textPrefix}`;
     });
   const minTs = cleaned.reduce((min, t) => (!min || t.ts < min ? t.ts : min), null);
   const maxTs = cleaned.reduce((max, t) => (!max || t.ts > max ? t.ts : max), null);
