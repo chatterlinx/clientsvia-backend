@@ -2008,13 +2008,66 @@ router.post('/voice', async (req, res) => {
     }
     
     // ════════════════════════════════════════════════════════════════════════════
-    // 📝 TRANSCRIPT: Save greeting (Turn 0) to Redis for Call Review
+    // 📝 TRANSCRIPT V2: Persist greeting (Turn 0) DURING the call (Mongo)
     // ════════════════════════════════════════════════════════════════════════════
-    // The greeting is the first agent turn. Save it to Redis so status callback
-    // can include it in the transcript when the call ends.
+    // Canonical persistence: append immediately to CallTranscriptV2 keyed by (companyId, callSid).
+    // Redis/status-callback are not required for transcript safety (kept for other state/diagnostics).
     // ════════════════════════════════════════════════════════════════════════════
     const greetingText = (typeof initResult !== 'undefined' && initResult?.greeting) ? initResult.greeting : null;
     if (greetingText && req.body.CallSid) {
+      // Derive how the greeting was delivered (Play vs Say) from the actual TwiML we just sent.
+      // This is critical for diagnosis (e.g., Twilio default voice vs ElevenLabs audio).
+      const greetingPlayMatch = twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/i);
+      const greetingAudioUrl = greetingPlayMatch?.[1]?.trim?.() || null;
+      const greetingVoiceProviderUsed = greetingAudioUrl ? 'twilio_play' : 'twilio_say';
+      const greetingConfigSource = (typeof initResult !== 'undefined' && initResult?.greetingConfig?.source)
+        ? `${initResult.greetingConfig.source}`
+        : null;
+      const greetingMode = (typeof initResult !== 'undefined' && initResult?.greetingConfig?.mode)
+        ? `${initResult.greetingConfig.mode}`
+        : null;
+      const greetingUiPath = greetingConfigSource === 'agent2'
+        ? (greetingAudioUrl
+          ? 'aiAgentSettings.agent2.greetings.callStart.audioUrl'
+          : 'aiAgentSettings.agent2.greetings.callStart.text')
+        : 'aiAgentSettings.connectionMessages.greeting';
+
+      try {
+        const CallTranscriptV2 = require('../models/CallTranscriptV2');
+        await CallTranscriptV2.appendTurns(
+          company._id,
+          req.body.CallSid,
+          [
+            {
+              speaker: 'agent',
+              text: greetingText.trim(),
+              turnNumber: 0,
+              ts: new Date(),
+              sourceKey: greetingConfigSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
+              trace: {
+                kind: 'greeting',
+                provenance: {
+                  type: 'UI_OWNED',
+                  uiPath: greetingUiPath,
+                  greeting: { mode: greetingMode, source: greetingConfigSource },
+                  voiceProviderUsed: greetingVoiceProviderUsed,
+                  audioUrl: greetingAudioUrl
+                },
+                uiPath: greetingUiPath,
+                greeting: { mode: greetingMode, source: greetingConfigSource },
+                voiceProviderUsed: greetingVoiceProviderUsed,
+                audioUrl: greetingAudioUrl
+              }
+            }
+          ],
+          { from: req.body.From || null, to: req.body.To || null, startedAt: new Date() }
+        );
+      } catch (mongoV2Err) {
+        logger.warn('[VOICE] Failed to append greeting turn to CallTranscriptV2 (non-blocking)', {
+          error: mongoV2Err.message
+        });
+      }
+
       try {
         const redis = await getRedis();
         if (redis) {
@@ -2032,7 +2085,17 @@ router.post('/voice', async (req, res) => {
             text: greetingText.trim(),
             turn: 0,
             timestamp: new Date().toISOString(),
-            source: 'GREETING'
+            source: 'GREETING',
+            provenance: {
+              type: 'UI_OWNED',
+              uiPath: greetingUiPath,
+              greeting: {
+                mode: greetingMode,
+                source: greetingConfigSource
+              },
+              voiceProviderUsed: greetingVoiceProviderUsed,
+              audioUrl: greetingAudioUrl
+            }
           });
           
           await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 });
@@ -2045,22 +2108,6 @@ router.post('/voice', async (req, res) => {
         logger.warn('[VOICE] Failed to save greeting to Redis (non-blocking)', {
           error: greetingRedisErr.message
         });
-      }
-
-      // Mongo fallback: persist greeting turn even if Redis/status timing fails.
-      try {
-        const CallTranscript = require('../models/CallTranscript');
-        const greetingTurn = {
-          speaker: 'agent',
-          text: greetingText.trim(),
-          turn: 0,
-          timestamp: new Date().toISOString(),
-          source: 'GREETING'
-        };
-        CallTranscript.appendTurns(company._id, req.body.CallSid, [greetingTurn])
-          .catch(err => logger.warn('[VOICE] Failed to append greeting turn to Mongo (non-blocking)', { error: err.message }));
-      } catch (mongoErr) {
-        logger.warn('[VOICE] Could not load CallTranscript for greeting append (non-blocking)', { error: mongoErr.message });
       }
     }
     
@@ -3601,6 +3648,31 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     const computeTurnPromise = (async () => {
       let localVoiceProviderUsed = 'twilio_say';
+      const buildTurnKey = (t) => {
+        const turn = typeof t?.turn === 'number' ? t.turn : 'na';
+        const speaker = t?.speaker || 'unknown';
+        const source = t?.source || '';
+        const textPrefix = `${t?.text || ''}`.trim().substring(0, 48);
+        return `${turn}:${speaker}:${source}:${textPrefix}`;
+      };
+
+      const mergeTurns = (existingTurns, nextTurns) => {
+        const out = [];
+        const seen = new Set();
+        for (const t of (Array.isArray(existingTurns) ? existingTurns : [])) {
+          const key = buildTurnKey(t);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(t);
+        }
+        for (const t of (Array.isArray(nextTurns) ? nextTurns : [])) {
+          const key = buildTurnKey(t);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(t);
+        }
+        return out;
+      };
 
       // ═══════════════════════════════════════════════════════════════════════════
       // CORE RUNTIME - Process turn and collect events in buffer
@@ -3637,6 +3709,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       let stateSaveError = null;
       if (redis && redisKey) {
         try {
+          // Merge against any existing Redis state to avoid race overwrites (e.g., bridge line vs runtime save).
+          try {
+            const existingRaw = await redis.get(redisKey);
+            const existingState = existingRaw ? JSON.parse(existingRaw) : null;
+            if (existingState && Array.isArray(existingState.turns)) {
+              persistedState.turns = mergeTurns(existingState.turns, persistedState.turns);
+            }
+          } catch (mergeErr) {
+            // Non-blocking: merge is best-effort.
+          }
           await redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 });
         } catch (err) {
           stateSaveError = err.message;
@@ -3677,42 +3759,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
       const elevenLabsVoice = voiceSettings.voiceId;
       const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
-
-      // ═══════════════════════════════════════════════════════════════════════════
-      // 📝 TRANSCRIPT: Add agent turn to call state
-      // ═══════════════════════════════════════════════════════════════════════════
-      // Stored in Redis and persisted to CallTranscript at call end via status callback.
-      // matchSource provides provenance for Call Review.
-      // ═══════════════════════════════════════════════════════════════════════════
-      if (responseText && responseText.trim()) {
-        persistedState.turns = persistedState.turns || callState.turns || [];
-        const agentTurn = {
-          speaker: 'agent',
-          text: responseText.trim(),
-          turn: turnNumber,
-          timestamp: new Date().toISOString(),
-          source: runtimeResult?.matchSource || 'UNKNOWN'
-        };
-        persistedState.turns.push(agentTurn);
-        
-        // Re-save to Redis with agent turn included
-        if (redis && redisKey) {
-          redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 }).catch(err => {
-            logger.warn('[V2TWILIO] Redis re-save after agent turn failed', { callSid: callSid?.slice(-8), error: err.message });
-          });
-        }
-
-        // Mongo fallback: persist turns even if Redis/status callback fails.
-        // Non-blocking: Twilio webhooks must stay fast.
-        try {
-          const CallTranscript = require('../models/CallTranscript');
-          const turnsToAppend = [callerTurn, agentTurn].filter(Boolean);
-          CallTranscript.appendTurns(companyID, callSid, turnsToAppend)
-            .catch(err => logger.warn('[V2TWILIO] Failed to append turns to Mongo (non-blocking)', { callSid: callSid?.slice(-8), error: err.message }));
-        } catch (mongoErr) {
-          logger.warn('[V2TWILIO] Could not load CallTranscript for append (non-blocking)', { error: mongoErr.message });
-        }
-      }
 
       // ═══════════════════════════════════════════════════════════════════════════
       // 📊 UPDATE CALL SUMMARY TURN COUNT
@@ -3933,6 +3979,115 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
       if (audioUrl) gather.play(audioUrl);
       else gather.say(escapeTwiML(responseText));
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📝 TRANSCRIPT: Persist agent turn with provenance + voice provider
+      // ═══════════════════════════════════════════════════════════════════════════
+      // This must happen AFTER audio selection so we can explain what the caller actually heard
+      // (<Play> vs <Say>, ElevenLabs vs Twilio voice).
+      if (responseText && responseText.trim()) {
+        const turnEvents = Array.isArray(runtimeResult?.turnEventBuffer) ? runtimeResult.turnEventBuffer : [];
+        const provEvent = [...turnEvents].reverse().find(e => e?.type === 'SPEAK_PROVENANCE' || e?.type === 'SPEECH_SOURCE_SELECTED');
+        const provData = provEvent?.data && typeof provEvent.data === 'object' ? provEvent.data : {};
+        const inferredUiPath = (runtimeResult?.matchSource === 'AGENT2_DISCOVERY' && runtimeResult?.triggerCard?.id)
+          ? `aiAgentSettings.agent2.triggerCards.${runtimeResult.triggerCard.id}`
+          : null;
+        const isUiOwned = provData?.isFromUiConfig === true || !!inferredUiPath;
+        const provType = isUiOwned ? 'UI_OWNED' : 'HARDCODED';
+        const agentTurn = {
+          speaker: 'agent',
+          text: responseText.trim(),
+          turn: turnNumber,
+          timestamp: new Date().toISOString(),
+          source: runtimeResult?.matchSource || 'UNKNOWN',
+          provenance: {
+            type: provType,
+            uiPath: provData?.uiPath || provData?.configPath || inferredUiPath,
+            reason: provData?.reason || null,
+            voiceProviderUsed: localVoiceProviderUsed,
+            audioUrl: audioUrl || null,
+            matchSource: runtimeResult?.matchSource || null,
+            triggerCardId: runtimeResult?.triggerCard?.id || null,
+            triggerCardLabel: runtimeResult?.triggerCard?.label || null
+          }
+        };
+
+        persistedState.turns = persistedState.turns || callState.turns || [];
+        persistedState.turns.push(agentTurn);
+
+        if (redis && redisKey) {
+          try {
+            const existingRaw = await redis.get(redisKey);
+            const existingState = existingRaw ? JSON.parse(existingRaw) : null;
+            if (existingState && Array.isArray(existingState.turns)) {
+              persistedState.turns = mergeTurns(existingState.turns, persistedState.turns);
+            }
+            await redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 });
+          } catch (err) {
+            logger.warn('[V2TWILIO] Redis re-save after agent turn failed', { callSid: callSid?.slice(-8), error: err.message });
+          }
+        }
+
+        // Canonical Mongo: persist turns DURING the call (CallTranscriptV2).
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+
+          const turnsToAppendV2 = [
+            callerTurn ? {
+              speaker: 'caller',
+              text: callerTurn.text,
+              turnNumber: callerTurn.turn,
+              ts: callerTurn.timestamp,
+              sourceKey: 'stt',
+              trace: { inputTextSource }
+            } : null,
+            {
+              speaker: 'agent',
+              text: agentTurn.text,
+              turnNumber: agentTurn.turn,
+              ts: agentTurn.timestamp,
+              sourceKey: agentTurn.source || runtimeResult?.matchSource || 'UNKNOWN',
+              trace: {
+                provenance: agentTurn.provenance || null,
+                matchSource: runtimeResult?.matchSource || null,
+                triggerCard: runtimeResult?.triggerCard || null,
+                lane: runtimeResult?.lane || persistedState?.sessionMode || null,
+                awHash: req.session?.awHash || null,
+                effectiveConfigVersion: req.session?.effectiveConfigVersion || null,
+                traceRunId: req.session?.traceRunId || null
+              }
+            }
+          ].filter(Boolean);
+
+          await CallTranscriptV2.appendTurns(companyID, callSid, turnsToAppendV2, {
+            from: fromNumber || null,
+            to: req.body.To || null
+          });
+
+          await CallTranscriptV2.appendTrace(companyID, callSid, [
+            {
+              kind: 'matcher',
+              turnNumber,
+              ts: new Date(),
+              payload: {
+                provenance: agentTurn.provenance || null,
+                matchSource: runtimeResult?.matchSource || null,
+                triggerCard: runtimeResult?.triggerCard || null,
+                lane: runtimeResult?.lane || persistedState?.sessionMode || null,
+                inputTextSource,
+                awHash: req.session?.awHash || null,
+                effectiveConfigVersion: req.session?.effectiveConfigVersion || null,
+                traceRunId: req.session?.traceRunId || null
+              }
+            }
+          ]);
+        } catch (mongoV2Err) {
+          logger.warn('[V2TWILIO] Failed to append turns/trace to CallTranscriptV2 (non-blocking)', {
+            callSid: callSid?.slice(-8),
+            error: mongoV2Err.message
+          });
+        }
+      }
 
       const outTwimlString = twiml.toString();
 
@@ -4158,6 +4313,76 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           reason: 'threshold_exceeded'
         }
       }).catch(() => {});
+    }
+
+    // 📝 TRANSCRIPT: Persist the bridge line (the "Got it, give me a second..." voice).
+    // This is spoken by Twilio <Say> and must be visible in Call Review for diagnosis.
+    try {
+      const bridgeTurn = {
+        speaker: 'agent',
+        text: `${bridgeLine || ''}`.trim(),
+        turn: turnNumber,
+        timestamp: new Date().toISOString(),
+        source: 'AGENT2_BRIDGE',
+        provenance: {
+          type: 'UI_OWNED',
+          uiPath: 'aiAgentSettings.agent2.bridge.lines',
+          reason: 'threshold_exceeded',
+          voiceProviderUsed: 'twilio_say',
+          audioUrl: null,
+          isBridge: true,
+          bridge: {
+            elapsedMs,
+            thresholdMs: bridgeThresholdMs,
+            hardCapMs: bridgeHardCapMs
+          }
+        }
+      };
+
+      if (!callState.turns) callState.turns = [];
+      if (bridgeTurn.text) callState.turns.push(bridgeTurn);
+
+      if (redis && redisKey && bridgeTurn.text) {
+        try {
+          const buildKey = (t) => {
+            const turn = typeof t?.turn === 'number' ? t.turn : 'na';
+            const speaker = t?.speaker || 'unknown';
+            const source = t?.source || '';
+            const textPrefix = `${t?.text || ''}`.trim().substring(0, 48);
+            return `${turn}:${speaker}:${source}:${textPrefix}`;
+          };
+          const existingRaw = await redis.get(redisKey);
+          const existingState = existingRaw ? JSON.parse(existingRaw) : {};
+          const existingTurns = Array.isArray(existingState?.turns) ? existingState.turns : [];
+          const merged = [];
+          const seen = new Set();
+          for (const t of existingTurns) {
+            const k = buildKey(t);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            merged.push(t);
+          }
+          const k2 = buildKey(bridgeTurn);
+          if (!seen.has(k2)) merged.push(bridgeTurn);
+          existingState.turns = merged;
+          await redis.set(redisKey, JSON.stringify(existingState), { EX: 60 * 60 * 4 });
+        } catch (err) {
+          logger.warn('[V2TWILIO] Failed to persist bridge turn to Redis (non-blocking)', { callSid: callSid?.slice(-8), error: err.message });
+        }
+      }
+
+      // Mongo fallback: persist bridge line even if Redis/status timing fails.
+      try {
+        const CallTranscript = require('../models/CallTranscript');
+        if (bridgeTurn.text) {
+          CallTranscript.appendTurns(companyID, callSid, [bridgeTurn])
+            .catch(err => logger.warn('[V2TWILIO] Failed to append bridge turn to Mongo (non-blocking)', { callSid: callSid?.slice(-8), error: err.message }));
+        }
+      } catch (mongoErr) {
+        logger.warn('[V2TWILIO] Could not load CallTranscript for bridge append (non-blocking)', { error: mongoErr.message });
+      }
+    } catch (bridgePersistErr) {
+      logger.warn('[V2TWILIO] Bridge turn persist failed (non-blocking)', { error: bridgePersistErr.message });
     }
 
     const bridgeTwiml = new twilio.twiml.VoiceResponse();
@@ -5409,6 +5634,24 @@ router.post('/status-callback', async (req, res) => {
           const callSummary = await CallSummary.findOne({ twilioSid: CallSid });
           
           if (callSummary) {
+            // Safe endedAt for both CallSummary + transcript finalization
+            const endedAtCandidate = Timestamp ? new Date(Timestamp) : new Date();
+            const endedAtSafe = Number.isNaN(endedAtCandidate.getTime()) ? new Date() : endedAtCandidate;
+
+            // Finalize CallTranscriptV2 metadata (endedAt, Twilio duration) — transcript turns were already persisted during the call.
+            try {
+              const CallTranscriptV2 = require('../models/CallTranscriptV2');
+              await CallTranscriptV2.finalizeCall(callSummary.companyId, CallSid, {
+                endedAt: endedAtSafe,
+                twilioDurationSeconds: parseInt(CallDuration) || 0
+              });
+            } catch (v2FinalizeErr) {
+              logger.warn('[CALL STATUS] Failed to finalize CallTranscriptV2 (non-blocking)', {
+                callSid: CallSid,
+                error: v2FinalizeErr.message
+              });
+            }
+
             // Map Twilio status to our outcome
             const outcomeMap = {
               'completed': 'completed',
@@ -5444,8 +5687,6 @@ router.post('/status-callback', async (req, res) => {
             }
             
             // Update the call summary with transcript
-            const endedAtCandidate = Timestamp ? new Date(Timestamp) : new Date();
-            const endedAtSafe = Number.isNaN(endedAtCandidate.getTime()) ? new Date() : endedAtCandidate;
 
             await CallSummaryService.endCall(callSummary.callId, {
               outcome: outcomeMap[CallStatus] || 'completed',
@@ -5571,6 +5812,20 @@ router.post('/status-callback/:companyId', async (req, res) => {
       const callSummary = await CallSummary.findOne({ twilioSid: CallSid, companyId });
       
       if (callSummary) {
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          await CallTranscriptV2.finalizeCall(companyId, CallSid, {
+            endedAt: new Date(),
+            twilioDurationSeconds: parseInt(CallDuration) || 0
+          });
+        } catch (v2FinalizeErr) {
+          logger.warn('[CALL STATUS] Failed to finalize CallTranscriptV2 (company callback, non-blocking)', {
+            companyId,
+            callSid: CallSid,
+            error: v2FinalizeErr.message
+          });
+        }
+
         const outcomeMap = {
           'completed': 'completed',
           'busy': 'abandoned',

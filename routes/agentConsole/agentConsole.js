@@ -1197,6 +1197,7 @@ router.post(
 
 const CallSummary = require('../../models/CallSummary');
 const CallTranscript = require('../../models/CallTranscript');
+const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
 
 async function getRedis() {
@@ -1258,26 +1259,66 @@ router.get('/:companyId/calls',
         CallSummary.countDocuments(query)
       ]);
 
-      const formattedCalls = calls.map(call => ({
-        callSid: call.twilioSid || call.callId,
+      // Canonical transcript index (V2) for list-level truth: turnCount + best-effort duration.
+      const callSids = calls.map(c => c.twilioSid || c.callId).filter(Boolean);
+      const transcriptIndex = new Map();
+      if (callSids.length > 0) {
+        try {
+          const v2Docs = await CallTranscriptV2.find({ companyId, callSid: { $in: callSids } })
+            .select({ callSid: 1, turnKeys: 1, firstTurnTs: 1, lastTurnTs: 1, 'callMeta.twilioDurationSeconds': 1 })
+            .lean();
+          for (const d of v2Docs) transcriptIndex.set(d.callSid, d);
+        } catch (e) {
+          logger.warn(`[${MODULE_ID}] CallTranscriptV2 list lookup failed (non-blocking): ${e.message}`, { companyId });
+        }
+      }
+
+      const formattedCalls = calls.map(call => {
+        const callSid = call.twilioSid || call.callId;
+        const v2 = callSid ? transcriptIndex.get(callSid) : null;
+        const v2TurnCount = v2 && Array.isArray(v2.turnKeys) ? v2.turnKeys.length : 0;
+
+        // Prefer stored duration, but if it's missing/0 and we have endedAt, compute best-effort.
+        let durationSeconds = (typeof call.durationSeconds === 'number' && call.durationSeconds > 0)
+          ? call.durationSeconds
+          : 0;
+        if (durationSeconds === 0 && typeof v2?.callMeta?.twilioDurationSeconds === 'number' && v2.callMeta.twilioDurationSeconds > 0) {
+          durationSeconds = v2.callMeta.twilioDurationSeconds;
+        }
+        if (durationSeconds === 0 && v2?.firstTurnTs && v2?.lastTurnTs) {
+          const a = new Date(v2.firstTurnTs).getTime();
+          const b = new Date(v2.lastTurnTs).getTime();
+          if (Number.isFinite(a) && Number.isFinite(b) && b >= a) {
+            durationSeconds = Math.max(0, Math.round((b - a) / 1000));
+          }
+        }
+        if (durationSeconds === 0 && call.endedAt && call.startedAt) {
+          const startedAtMs = new Date(call.startedAt).getTime();
+          const endedAtMs = new Date(call.endedAt).getTime();
+          if (Number.isFinite(startedAtMs) && Number.isFinite(endedAtMs) && endedAtMs >= startedAtMs) {
+            durationSeconds = Math.max(0, Math.round((endedAtMs - startedAtMs) / 1000));
+          }
+        }
+
+        return ({
+        callSid,
         callId: call.callId,
         // Frontend expects these field names:
         startTime: call.startedAt,
         fromPhone: call.phone,      // Schema field is 'phone' (caller FROM number)
         toPhone: call.toPhone,      // Schema field is 'toPhone' (company TO number)
-        durationSeconds: (typeof call.durationSeconds === 'number' && call.durationSeconds >= 0)
-          ? call.durationSeconds
-          : (call.endedAt && call.startedAt ? Math.max(0, Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000)) : 0),
-        turnCount: call.turnCount || 0,
+        durationSeconds,
+        turnCount: v2TurnCount,
         outcome: call.outcome || 'unknown',
         source: call.source || 'voice',
-        hasTranscript: call.hasTranscript || false,
+        hasTranscript: v2TurnCount > 0,
         hasHardcodedViolation: false,
         hasFallback: false,
         problemCount: 0,
         kpi: call.kpi || {},
         customer: call.customer || {}
-      }));
+        });
+      });
 
       res.json({
         success: true,
@@ -1326,6 +1367,12 @@ router.delete('/:companyId/calls/bulk-delete',
         callId: { $in: callSids }
       });
 
+      // Delete from CallTranscriptV2 (canonical)
+      await CallTranscriptV2.deleteMany({
+        companyId,
+        callSid: { $in: callSids }
+      });
+
       logger.info(`[${MODULE_ID}] Bulk deleted ${summaryResult.deletedCount} calls`, { companyId });
 
       res.json({
@@ -1359,21 +1406,84 @@ router.get('/:companyId/calls/:callSid',
         return res.status(404).json({ success: false, error: 'Call not found' });
       }
 
-      // Load transcript
-      let transcript = null;
+      const canonicalSid = callSummary.twilioSid || callSummary.callId;
+
+      // Canonical transcript (V2) — deterministic append-per-turn during the call.
+      let transcript = null; // legacy only
       let turns = [];
+      let trace = [];
+      let flags = [];
+      let transcriptSource = 'v2';
+
+      const v2 = await CallTranscriptV2.findOne({ companyId, callSid: canonicalSid }).lean();
+      if (v2?.turns && Array.isArray(v2.turns) && v2.turns.length > 0) {
+        // Normalize + lightly de-dupe retries.
+        // IMPORTANT: allow multiple agent lines in the SAME turn (e.g., bridge line + final response),
+        // so the key must include more than (turnNumber,speaker).
+        const byKey = new Map();
+        for (const t of v2.turns) {
+          const turnNumber = typeof t.turnNumber === 'number' ? t.turnNumber : null;
+          const speaker = t.speaker || 'unknown';
+          const text = t.text || '';
+          if (!Number.isFinite(turnNumber)) continue;
+
+          const key = `${turnNumber}:${speaker}:${t.sourceKey || ''}:${(text || '').substring(0, 24)}`;
+          const next = {
+            turnNumber,
+            speaker,
+            text,
+            timestamp: t.ts ? new Date(t.ts).toISOString() : null,
+            source: t.sourceKey || null,
+            provenance: t.trace?.provenance || null,
+            _tsMs: t.ts ? new Date(t.ts).getTime() : 0
+          };
+
+          const existing = byKey.get(key);
+          if (!existing) {
+            byKey.set(key, next);
+            continue;
+          }
+          const existingHasText = `${existing.text || ''}`.trim().length > 0;
+          const nextHasText = `${next.text || ''}`.trim().length > 0;
+          if (!existingHasText && nextHasText) {
+            byKey.set(key, next);
+          } else if (existingHasText && nextHasText) {
+            if ((next._tsMs || 0) >= (existing._tsMs || 0)) byKey.set(key, next);
+          }
+        }
+
+        turns = Array.from(byKey.values()).sort((a, b) => {
+          if (a.turnNumber !== b.turnNumber) return a.turnNumber - b.turnNumber;
+          // Caller first, then agent, then unknown
+          const rank = (s) => (s === 'caller' ? 0 : (s === 'agent' ? 1 : 2));
+          const speakerRank = rank(a.speaker) - rank(b.speaker);
+          if (speakerRank !== 0) return speakerRank;
+          return (a._tsMs || 0) - (b._tsMs || 0);
+        }).map(({ _tsMs, ...rest }) => rest);
+
+        trace = Array.isArray(v2.trace)
+          ? v2.trace.map(e => ({
+            traceKey: e.traceKey,
+            kind: e.kind,
+            turnNumber: e.turnNumber ?? null,
+            timestamp: e.ts ? new Date(e.ts).toISOString() : null,
+            payload: e.payload || {}
+          }))
+          : [];
+      } else {
+        transcriptSource = 'legacy';
       
       if (callSummary.transcriptRef) {
         transcript = await CallTranscript.findById(callSummary.transcriptRef).lean();
       }
       if (!transcript) {
-        transcript = await CallTranscript.findOne({ 
-          callId: callSummary.twilioSid || callSummary.callId 
-        }).lean();
+        transcript = await CallTranscript.findOne({ callId: canonicalSid }).lean();
       }
 
       if (transcript?.turns && Array.isArray(transcript.turns)) {
-        // Normalize + lightly de-dupe retries (same turnNumber+speaker)
+        // Normalize + lightly de-dupe retries.
+        // IMPORTANT: allow multiple agent lines in the SAME turn (e.g., bridge line + final response),
+        // so the key must include more than (turnNumber,speaker).
         const normalized = transcript.turns.map((turn, idx) => ({
           turnNumber: (typeof turn.turn === 'number' ? turn.turn : (idx + 1)),
           speaker: turn.speaker || 'unknown',
@@ -1385,7 +1495,7 @@ router.get('/:companyId/calls/:callSid',
 
         const byKey = new Map();
         for (const t of normalized) {
-          const key = `${t.turnNumber}:${t.speaker}`;
+          const key = `${t.turnNumber}:${t.speaker}:${t.source || ''}:${(t.text || '').substring(0, 24)}`;
           // Prefer the most recent non-empty text for a given key
           const existing = byKey.get(key);
           if (!existing) {
@@ -1408,7 +1518,11 @@ router.get('/:companyId/calls/:callSid',
           if (a.turnNumber !== b.turnNumber) return a.turnNumber - b.turnNumber;
           // Caller first, then agent, then unknown
           const rank = (s) => (s === 'caller' ? 0 : (s === 'agent' ? 1 : 2));
-          return rank(a.speaker) - rank(b.speaker);
+          const speakerRank = rank(a.speaker) - rank(b.speaker);
+          if (speakerRank !== 0) return speakerRank;
+          const aTs = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const bTs = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return aTs - bTs;
         });
       } else if (transcript?.customerTranscript) {
         const lines = transcript.customerTranscript.split('\n').filter(Boolean);
@@ -1430,7 +1544,7 @@ router.get('/:companyId/calls/:callSid',
         try {
           const redis = await getRedis();
           if (redis) {
-            const redisKey = `call:${callSummary.twilioSid || callSummary.callId}`;
+            const redisKey = `call:${canonicalSid}`;
             const raw = await redis.get(redisKey);
             if (raw) {
               const callState = JSON.parse(raw);
@@ -1454,11 +1568,25 @@ router.get('/:companyId/calls/:callSid',
           });
         }
       }
+      }
+
+      // Flags: UI truth rules
+      if (turns.length === 0) {
+        flags = ['INCOMPLETE_NO_TURNS'];
+      } else {
+        const agentTurns = turns.filter(t => t.speaker === 'agent');
+        const missingTrace = agentTurns.some(t => !(t.provenance || t.source));
+        flags = missingTrace ? ['PARTIAL_MISSING_TRACE'] : [];
+      }
 
       // If Twilio status callback didn't populate durationSeconds, derive a best-effort duration
       // from transcript timestamps so the UI doesn't misleadingly show 0:00.
       let derivedDurationSeconds = callSummary.durationSeconds || 0;
       if (!Number.isFinite(derivedDurationSeconds) || derivedDurationSeconds <= 0) {
+        const v2TwilioDuration = v2?.callMeta?.twilioDurationSeconds;
+        if (typeof v2TwilioDuration === 'number' && v2TwilioDuration > 0) {
+          derivedDurationSeconds = v2TwilioDuration;
+        }
         const ts = (turns || [])
           .map(t => (t?.timestamp ? new Date(t.timestamp).getTime() : NaN))
           .filter(ms => Number.isFinite(ms) && ms > 0)
@@ -1471,14 +1599,14 @@ router.get('/:companyId/calls/:callSid',
       }
 
       const formattedCall = {
-        callSid: callSummary.twilioSid || callSummary.callId,
+        callSid: canonicalSid,
         callId: callSummary.callId,
         startTime: callSummary.startedAt,
         endedAt: callSummary.endedAt,
         fromPhone: callSummary.phone || callSummary.from || null,
         toPhone: callSummary.toPhone || callSummary.to || null,
         durationSeconds: derivedDurationSeconds,
-        turnCount: callSummary.turnCount || turns.length || 0,
+        turnCount: turns.length || 0,
         outcome: callSummary.outcome || 'unknown',
         source: callSummary.source || 'voice',
         kpi: callSummary.kpi || {},
@@ -1486,14 +1614,32 @@ router.get('/:companyId/calls/:callSid',
         llmUsage: callSummary.llmUsage || null,
         problems: callSummary.problems || [],
         events: callSummary.events || [],
-        turns
+        turns,
+        trace,
+        flags,
+        transcriptSource
       };
 
       res.json({
         success: true,
-        // Flat shape (what the Call Console UI expects)
+        // Canonical shape (what the Call Console should read)
+        callMeta: {
+          callSid: formattedCall.callSid,
+          callId: formattedCall.callId,
+          startTime: formattedCall.startTime,
+          endedAt: formattedCall.endedAt,
+          fromPhone: formattedCall.fromPhone,
+          toPhone: formattedCall.toPhone,
+          durationSeconds: formattedCall.durationSeconds,
+          outcome: formattedCall.outcome,
+          source: formattedCall.source,
+          transcriptSource: formattedCall.transcriptSource
+        },
+        turns: formattedCall.turns,
+        trace: formattedCall.trace,
+        flags: formattedCall.flags,
+        // Back-compat flat + nested shapes
         ...formattedCall,
-        // Back-compat nested shape (keep for any other consumers)
         call: formattedCall,
         transcript: transcript ? {
           id: transcript._id,
