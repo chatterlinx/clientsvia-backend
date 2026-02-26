@@ -788,6 +788,25 @@ router.patch(
             }
 
             company.aiAgentSettings.agent2.greetings = nextGreetings;
+          } else if (key === 'discovery' && value && typeof value === 'object') {
+            const currentDiscovery = company.aiAgentSettings.agent2.discovery || {};
+            company.aiAgentSettings.agent2.discovery = {
+              ...currentDiscovery,
+              ...value,
+              // Preserve nested objects that the partial update shouldn't overwrite
+              style: value.style !== undefined ? { ...(currentDiscovery.style || {}), ...value.style } : currentDiscovery.style,
+              vocabulary: value.vocabulary !== undefined ? value.vocabulary : currentDiscovery.vocabulary,
+              clarifiers: value.clarifiers !== undefined ? value.clarifiers : currentDiscovery.clarifiers,
+              playbook: value.playbook !== undefined ? { ...(currentDiscovery.playbook || {}), ...value.playbook } : currentDiscovery.playbook,
+              pendingQuestionResponses: value.pendingQuestionResponses !== undefined ? value.pendingQuestionResponses : currentDiscovery.pendingQuestionResponses,
+              followUpConsent: value.followUpConsent !== undefined ? value.followUpConsent : currentDiscovery.followUpConsent,
+              discoveryHandoff: value.discoveryHandoff !== undefined ? value.discoveryHandoff : currentDiscovery.discoveryHandoff
+            };
+            logger.info(`[${MODULE_ID}] Discovery deep merge applied`, {
+              companyId,
+              updatedKeys: Object.keys(value),
+              preservedKeys: Object.keys(company.aiAgentSettings.agent2.discovery)
+            });
           } else if (key === 'llm0Controls' && value && typeof value === 'object') {
             company.aiAgentSettings.llm0Controls = {
               ...(company.aiAgentSettings.llm0Controls || {}),

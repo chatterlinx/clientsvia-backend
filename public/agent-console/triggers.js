@@ -1923,10 +1923,21 @@
     btnSaveFuc.addEventListener('click', async () => {
       try {
         const followUpConsent = collectFollowUpConsent();
+        console.log('[Consent Cards] SAVE_START', {
+          buckets: Object.keys(followUpConsent),
+          yesPhraseCount: (followUpConsent.yes?.phrases || []).length,
+          noPhraseCount: (followUpConsent.no?.phrases || []).length,
+          yesDirection: followUpConsent.yes?.direction,
+          noDirection: followUpConsent.no?.direction
+        });
+
         const resp = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`, {
           method: 'PATCH',
           body: { discovery: { followUpConsent } }
         });
+
+        console.log('[Consent Cards] SAVE_RESPONSE', resp);
+
         if (resp.success) {
           if (!state.config) state.config = {};
           if (!state.config.discovery) state.config.discovery = {};
@@ -1934,9 +1945,11 @@
           showToast('success', 'Saved', 'Follow-up consent cards saved.');
           state.isDirty = false;
         } else {
+          console.error('[Consent Cards] SAVE_REJECTED', resp);
           showToast('error', 'Save Failed', resp.message || resp.error || 'Server returned failure');
         }
       } catch (err) {
+        console.error('[Consent Cards] SAVE_ERROR', err);
         showToast('error', 'Save Failed', err.message);
       }
     });
