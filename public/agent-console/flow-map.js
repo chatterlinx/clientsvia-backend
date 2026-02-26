@@ -10,25 +10,31 @@
     drag: null
   };
 
-  const DOM = {
-    headerCompanyName: document.getElementById('header-company-name'),
-    headerCompanyId: document.getElementById('header-company-id'),
-    btnBackToDashboard: document.getElementById('btn-back-to-dashboard'),
-    btnNewNote: document.getElementById('btn-new-note'),
-    btnClearMap: document.getElementById('btn-clear-map'),
-    btnExportMap: document.getElementById('btn-export-map'),
-    btnImportMap: document.getElementById('btn-import-map'),
-    inputImportMap: document.getElementById('input-import-map'),
-    board: document.getElementById('map-board'),
-    stepList: document.getElementById('step-list'),
-    modalBackdrop: document.getElementById('map-modal-backdrop'),
-    noteTitle: document.getElementById('map-note-title'),
-    noteBody: document.getElementById('map-note-body'),
-    btnCancelNote: document.getElementById('btn-cancel-note'),
-    btnSaveNote: document.getElementById('btn-save-note')
-  };
+  let DOM = {};
+
+  function initDOM() {
+    DOM = {
+      headerCompanyName: document.getElementById('header-company-name'),
+      headerCompanyId: document.getElementById('header-company-id'),
+      btnBackToDashboard: document.getElementById('btn-back-to-dashboard'),
+      btnNewNote: document.getElementById('btn-new-note'),
+      btnClearMap: document.getElementById('btn-clear-map'),
+      btnExportMap: document.getElementById('btn-export-map'),
+      btnImportMap: document.getElementById('btn-import-map'),
+      inputImportMap: document.getElementById('input-import-map'),
+      board: document.getElementById('map-board'),
+      stepList: document.getElementById('step-list'),
+      modalBackdrop: document.getElementById('map-modal-backdrop'),
+      noteTitle: document.getElementById('map-note-title'),
+      noteBody: document.getElementById('map-note-body'),
+      btnCancelNote: document.getElementById('btn-cancel-note'),
+      btnSaveNote: document.getElementById('btn-save-note')
+    };
+  }
 
   function init() {
+    initDOM();
+
     const params = new URLSearchParams(window.location.search);
     state.companyId = params.get('companyId');
 
@@ -444,5 +450,10 @@
       .replace(/'/g, '&#039;');
   }
 
-  init();
+  // Wait for DOM to be ready before initializing
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
