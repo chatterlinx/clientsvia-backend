@@ -299,6 +299,9 @@
       case 'calendar':
         window.location.href = `${baseUrl}/calendar.html${companyParam}`;
         break;
+      case 'flow-map':
+        window.location.href = `${baseUrl}/flow-map.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }

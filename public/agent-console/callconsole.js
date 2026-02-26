@@ -92,12 +92,16 @@
     UI_TAB_MAP: {
       'aiAgentSettings.agent2.greetings.callStart': { page: 'agent2.html', tab: 'greetings', section: 'Call Start' },
       'aiAgentSettings.agent2.greetings.callStart.emergencyFallback': { page: 'agent2.html', tab: 'greetings', section: 'Call Start (Emergency Fallback)' },
+      'agent2.greetings.callStart': { page: 'agent2.html', tab: 'greetings', section: 'Call Start' },
+      'agent2.greetings.callStart.emergencyFallback': { page: 'agent2.html', tab: 'greetings', section: 'Call Start (Emergency Fallback)' },
       'greetings.callStart': { page: 'agent2.html', tab: 'greetings', section: 'Call Start' },
       'greetings.interceptor': { page: 'agent2.html', tab: 'greetings', section: 'Interceptor' },
       'discovery.recoveryMessages': { page: 'agent2.html', tab: 'recovery', section: 'Recovery Messages' },
       'discovery.fallbackMessages': { page: 'agent2.html', tab: 'fallback', section: 'Fallback Messages' },
       'aiAgentSettings.agent2.bridge': { page: 'agent2.html', tab: 'bridge', section: 'Bridge (Latency Filler)' },
       'aiAgentSettings.agent2.discovery': { page: 'agent2.html', tab: 'discovery', section: 'Discovery' },
+      'agent2.bridge': { page: 'agent2.html', tab: 'bridge', section: 'Bridge (Latency Filler)' },
+      'agent2.discovery': { page: 'agent2.html', tab: 'discovery', section: 'Discovery' },
       'aiAgentSettings.connectionMessages': { page: 'agent2.html', tab: 'greetings', section: 'Connection Messages' },
       'triggers': { page: 'triggers.html', tab: 'triggers', section: 'Trigger Cards' },
       'bookingPrompts': { page: 'booking.html', tab: 'prompts', section: 'Booking Prompts' },
@@ -138,6 +142,10 @@
     isLoading: false,
     isModalOpen: false
   };
+
+  const pathNamespace = (typeof window !== 'undefined' && window.Agent2PathNamespace)
+    ? window.Agent2PathNamespace
+    : null;
 
   /* ==========================================================================
      SECTION 3: DOM REFERENCES
@@ -902,6 +910,7 @@
     const typeConfig = CONFIG.PROVENANCE_TYPES[provenance.type] || CONFIG.PROVENANCE_TYPES.UNKNOWN;
     const provenanceClass = provenance.type === 'HARDCODED' ? 'hardcoded' : 
                             provenance.type === 'FALLBACK' ? 'fallback' : 'ui-owned';
+    const displayUiPath = normalizeUiPathForDisplay(provenance.uiPath);
 
     let sourceInfo = '';
     if (provenance.uiPath) {
@@ -912,7 +921,7 @@
       const uiLink = buildUILink(provenance.uiPath, focusId);
       sourceInfo = `
         <span class="provenance-label">UI Path:</span>
-        <span class="provenance-value mono">${escapeHtml(provenance.uiPath)}</span>
+        <span class="provenance-value mono">${escapeHtml(displayUiPath)}</span>
         
         <span class="provenance-label">UI Tab:</span>
         <span class="provenance-value">
@@ -1327,8 +1336,11 @@
   function buildUILink(uiPath, focusId = null) {
     if (!uiPath) return null;
 
-    // Find the matching UI tab configuration
-    const pathPrefix = Object.keys(CONFIG.UI_TAB_MAP).find(key => uiPath.startsWith(key));
+    // Find matching tab config from canonical and normalized path candidates.
+    const pathCandidates = normalizeUiPathForLookup(uiPath);
+    const pathPrefix = pathCandidates
+      .map(candidate => Object.keys(CONFIG.UI_TAB_MAP).find(key => candidate.startsWith(key)))
+      .find(Boolean);
     if (!pathPrefix) return null;
 
     const tabConfig = CONFIG.UI_TAB_MAP[pathPrefix];
@@ -1341,6 +1353,23 @@
       href: `/agent-console/${tabConfig.page}${companyParam}#${tabConfig.tab}`,
       label: `${tabConfig.section} (${tabConfig.page.replace('.html', '')})`
     };
+  }
+
+  function normalizeUiPathForDisplay(uiPath) {
+    if (!uiPath) return uiPath;
+    if (pathNamespace && typeof pathNamespace.toDisplayConfigPath === 'function') {
+      return pathNamespace.toDisplayConfigPath(uiPath);
+    }
+    return uiPath;
+  }
+
+  function normalizeUiPathForLookup(uiPath) {
+    if (!uiPath) return [];
+    if (pathNamespace && typeof pathNamespace.toLookupCandidates === 'function') {
+      const candidates = pathNamespace.toLookupCandidates(uiPath);
+      return Array.isArray(candidates) && candidates.length > 0 ? candidates : [uiPath];
+    }
+    return [uiPath];
   }
 
   /* ==========================================================================

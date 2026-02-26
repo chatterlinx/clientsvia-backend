@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow Map — Agent Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  <style>
+    .map-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 140px); }
+    .map-panel { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+    .map-panel-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; }
+    .map-panel-body { padding: 12px; overflow: auto; }
+    .map-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .step-list { display: flex; flex-direction: column; gap: 10px; }
+    .step-item { border: 1px solid #dbeafe; background: #eff6ff; border-radius: 10px; padding: 10px; cursor: pointer; }
+    .step-item.active { border-color: #1d4ed8; box-shadow: 0 0 0 2px rgba(29,78,216,0.15); }
+    .step-item-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .step-item-title { font-size: 13px; font-weight: 600; color: #1e3a8a; margin: 0; }
+    .step-item-meta { font-size: 12px; color: #334155; margin-top: 6px; }
+    .step-item-controls { display: inline-flex; gap: 4px; }
+    .tiny-btn { border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; padding: 2px 8px; font-size: 12px; cursor: pointer; }
+    .tiny-btn:hover { background: #f8fafc; }
+    .map-board-wrap { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; min-height: 0; }
+    .map-board {
+      position: relative;
+      flex: 1;
+      min-height: 560px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(148,163,184,0.12) 1px, transparent 1px),
+        #f8fafc;
+      background-size: 24px 24px, 24px 24px, auto;
+    }
+    .map-note {
+      position: absolute;
+      width: 260px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #ffffff;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+      user-select: none;
+    }
+    .map-note.active { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2), 0 8px 18px rgba(15, 23, 42, 0.16); }
+    .map-note-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #eff6ff; border-bottom: 1px solid #dbeafe; border-radius: 12px 12px 0 0; padding: 8px 10px; cursor: move; }
+    .map-note-title { margin: 0; font-size: 13px; font-weight: 700; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .map-note-body { padding: 10px; font-size: 13px; color: #334155; white-space: pre-wrap; max-height: 180px; overflow: auto; }
+    .map-note-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px 10px; }
+    .map-note-controls { display: inline-flex; gap: 6px; }
+    .tag-seq { font-size: 11px; background: #dbeafe; color: #1e3a8a; border-radius: 999px; padding: 3px 8px; font-weight: 600; }
+    .map-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: none; align-items: center; justify-content: center; z-index: 2000; }
+    .map-modal-backdrop.open { display: flex; }
+    .map-modal { width: min(560px, calc(100vw - 30px)); background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 30px 90px rgba(2, 6, 23, 0.35); }
+    .map-modal-head { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #0f172a; }
+    .map-modal-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .map-modal-actions { padding: 12px 16px 16px; display: flex; justify-content: flex-end; gap: 8px; }
+    .map-input, .map-textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 14px; }
+    .map-textarea { min-height: 120px; resize: vertical; }
+    .map-hint { font-size: 12px; color: #64748b; }
+    @media (max-width: 1100px) { .map-layout { grid-template-columns: 1fr; height: auto; } .map-board { min-height: 460px; } }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back-to-dashboard" title="Back to Agent Console Dashboard">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="header-title">Platform Flow Map (Local Workspace)</span>
+      </div>
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary" id="btn-clear-map">Clear All</button>
+        <button class="btn btn-primary" id="btn-new-note">+ New Bubble</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="map-layout">
+        <section class="map-panel">
+          <div class="map-panel-header">
+            <h3 class="card-title">Sequence Notes</h3>
+            <p class="card-subtitle">Drag bubbles on the board and use up/down to reorder your designed flow.</p>
+          </div>
+          <div class="map-panel-body">
+            <div class="map-actions" style="margin-bottom: 10px;">
+              <button class="btn btn-sm" id="btn-export-map">Export JSON</button>
+              <button class="btn btn-sm" id="btn-import-map">Import JSON</button>
+              <input type="file" id="input-import-map" accept="application/json" style="display:none;">
+            </div>
+            <div id="step-list" class="step-list"></div>
+            <p class="map-hint" style="margin-top: 10px;">Saved automatically in your browser for this company only.</p>
+          </div>
+        </section>
+
+        <section class="map-board-wrap">
+          <div id="map-board" class="map-board"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Flow Map v1.0</span>
+      <span> · </span>
+      <span>Not wired to runtime</span>
+    </footer>
+  </div>
+
+  <div id="map-modal-backdrop" class="map-modal-backdrop">
+    <div class="map-modal">
+      <div class="map-modal-head">Create / Edit Bubble</div>
+      <div class="map-modal-body">
+        <label>
+          <div class="map-hint">Step Title</div>
+          <input id="map-note-title" class="map-input" type="text" maxlength="120" placeholder="e.g., Twilio Gather -> v2-agent-respond">
+        </label>
+        <label>
+          <div class="map-hint">Notes</div>
+          <textarea id="map-note-body" class="map-textarea" placeholder="Describe purpose, entry point, risks, and debugging clues."></textarea>
+        </label>
+      </div>
+      <div class="map-modal-actions">
+        <button class="btn btn-secondary" id="btn-cancel-note">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-note">Save Bubble</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/flow-map.js"></script>
+</body>
+</html>
