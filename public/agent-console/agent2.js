@@ -1542,6 +1542,13 @@
       DOM.inputCallStartText.addEventListener('blur', saveCallStartGreeting);
     }
     
+    if (DOM.inputCallStartEmergencyFallback) {
+      DOM.inputCallStartEmergencyFallback.addEventListener('input', () => {
+        state.greetingsDirty = true;
+      });
+      DOM.inputCallStartEmergencyFallback.addEventListener('blur', saveCallStartGreeting);
+    }
+    
     if (DOM.btnGenerateCallStartAudio) {
       DOM.btnGenerateCallStartAudio.addEventListener('click', generateCallStartAudio);
     }
