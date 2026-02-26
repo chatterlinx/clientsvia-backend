@@ -871,6 +871,8 @@
   function renderGreetings() {
     // Call Start Greeting
     if (DOM.toggleCallStartEnabled && state.greetings.callStart) {
+      console.log('[Greetings] LOAD — callStart:', JSON.stringify(state.greetings.callStart, null, 2));
+      console.log('[Greetings] LOAD — emergencyFallback:', state.greetings.callStart.emergencyFallback || '(empty)');
       DOM.toggleCallStartEnabled.checked = state.greetings.callStart.enabled !== false;
       DOM.inputCallStartText.value = state.greetings.callStart.text || '';
       if (DOM.inputCallStartEmergencyFallback) {
@@ -1036,6 +1038,8 @@
       const text = DOM.inputCallStartText.value.trim();
       const emergencyFallback = DOM.inputCallStartEmergencyFallback?.value?.trim() || '';
       
+      console.log('[Greetings] SAVE_START — enabled:', enabled, '| text:', text.substring(0, 50), '| emergencyFallback:', emergencyFallback.substring(0, 50));
+      
       const response = await AgentConsoleAuth.apiFetch(
         `/api/admin/agent2/${state.companyId}/greetings/call-start`,
         {
@@ -1043,6 +1047,8 @@
           body: { enabled, text, emergencyFallback }
         }
       );
+      
+      console.log('[Greetings] SAVE_RESPONSE — success:', response.success, '| data.emergencyFallback:', response.data?.emergencyFallback);
       
       if (response.success) {
         state.greetings.callStart = response.data;
