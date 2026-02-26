@@ -6,13 +6,14 @@
   const state = {
     companyId: null,
     notes: [],
-    connections: [], // Array of {from: noteId, to: noteId}
+    connections: [], // Array of {from: noteId, to: noteId, offsetX: number, offsetY: number}
     selectedId: null,
     editingId: null,
     zCounter: 1,
     drag: null,
     connectMode: false,
-    connectFrom: null
+    connectFrom: null,
+    arrowDrag: null // {connIndex: number, startX: number, startY: number}
   };
 
   let DOM = {};
@@ -475,7 +476,7 @@
     DOM.arrowSvg.appendChild(defs);
     
     // Draw each connection
-    state.connections.forEach((conn) => {
+    state.connections.forEach((conn, connIndex) => {
       const fromNote = state.notes.find(n => n.id === conn.from);
       const toNote = state.notes.find(n => n.id === conn.to);
       
@@ -487,13 +488,15 @@
       const toX = toNote.x + 130;
       const toY = toNote.y + 75;
       
+      // Calculate control point with custom offset
+      const defaultMidX = (fromX + toX) / 2;
+      const defaultMidY = (fromY + toY) / 2;
+      const controlX = defaultMidX + (conn.offsetX || 0);
+      const controlY = defaultMidY + (conn.offsetY || 0);
+      
       // Create path
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      const midX = (fromX + toX) / 2;
-      const midY = (fromY + toY) / 2;
-      
-      // Curved path
-      const d = `M ${fromX} ${fromY} Q ${midX} ${midY} ${toX} ${toY}`;
+      const d = `M ${fromX} ${fromY} Q ${controlX} ${controlY} ${toX} ${toY}`;
       path.setAttribute('d', d);
       path.setAttribute('stroke', '#3b82f6');
       path.setAttribute('stroke-width', '2');
@@ -502,8 +505,9 @@
       path.style.cursor = 'pointer';
       path.style.pointerEvents = 'stroke';
       
-      // Add click to delete
-      path.addEventListener('click', () => {
+      // Add right-click to delete
+      path.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
         if (window.confirm('Delete this arrow connection?')) {
           state.connections = state.connections.filter(c => c !== conn);
           saveNotes();
@@ -512,6 +516,34 @@
       });
       
       DOM.arrowSvg.appendChild(path);
+      
+      // Create draggable control point
+      const controlPoint = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      controlPoint.setAttribute('cx', controlX);
+      controlPoint.setAttribute('cy', controlY);
+      controlPoint.setAttribute('r', '8');
+      controlPoint.setAttribute('fill', '#3b82f6');
+      controlPoint.setAttribute('stroke', '#ffffff');
+      controlPoint.setAttribute('stroke-width', '2');
+      controlPoint.style.cursor = 'move';
+      controlPoint.style.pointerEvents = 'all';
+      
+      // Make control point draggable
+      controlPoint.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[FlowMap] ✓ Starting arrow drag');
+        const boardRect = DOM.board.getBoundingClientRect();
+        state.arrowDrag = {
+          connIndex,
+          startX: e.clientX - boardRect.left,
+          startY: e.clientY - boardRect.top,
+          initialOffsetX: conn.offsetX || 0,
+          initialOffsetY: conn.offsetY || 0
+        };
+      });
+      
+      DOM.arrowSvg.appendChild(controlPoint);
     });
   }
   
@@ -560,6 +592,25 @@
   }
 
   function handlePointerMove(event) {
+    // Handle arrow control point dragging
+    if (state.arrowDrag) {
+      const boardRect = DOM.board.getBoundingClientRect();
+      const currentX = event.clientX - boardRect.left;
+      const currentY = event.clientY - boardRect.top;
+      
+      const deltaX = currentX - state.arrowDrag.startX;
+      const deltaY = currentY - state.arrowDrag.startY;
+      
+      const conn = state.connections[state.arrowDrag.connIndex];
+      if (conn) {
+        conn.offsetX = state.arrowDrag.initialOffsetX + deltaX;
+        conn.offsetY = state.arrowDrag.initialOffsetY + deltaY;
+        renderArrows();
+      }
+      return;
+    }
+    
+    // Handle note dragging
     if (!state.drag) return;
     const note = state.notes.find((n) => n.id === state.drag.noteId);
     if (!note) return;
@@ -576,6 +627,15 @@
   }
 
   function handlePointerUp() {
+    // Handle arrow drag end
+    if (state.arrowDrag) {
+      console.log('[FlowMap] ✓ Arrow drag ended');
+      state.arrowDrag = null;
+      saveNotes();
+      return;
+    }
+    
+    // Handle note drag end
     if (!state.drag) return;
     state.drag = null;
     saveNotes();
