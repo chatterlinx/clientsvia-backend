@@ -149,6 +149,14 @@
     callStartAudioStatus: document.getElementById('call-start-audio-status'),
     linkElevenLabsSetupCallStart: document.getElementById('link-elevenlabs-setup-callstart'),
     
+    // Bridge (Latency Filler)
+    inputBridgeEnabled: document.getElementById('input-bridge-enabled'),
+    inputBridgeThreshold: document.getElementById('input-bridge-threshold'),
+    inputBridgeHardcap: document.getElementById('input-bridge-hardcap'),
+    inputBridgeMaxPerCall: document.getElementById('input-bridge-max-per-call'),
+    inputBridgeMaxRedirects: document.getElementById('input-bridge-max-redirects'),
+    inputBridgeLines: document.getElementById('input-bridge-lines'),
+    
     // Greeting Interceptor
     toggleInterceptorEnabled: document.getElementById('toggle-interceptor-enabled'),
     inputMaxWords: document.getElementById('input-max-words'),
@@ -349,7 +357,12 @@
       DOM.inputDiscoveryConsentQuestion,
       DOM.inputFallbackNoMatchAnswer,
       DOM.inputFallbackNoMatchWhenReasonCaptured,
-      DOM.inputFallbackNoMatchClarifierQuestion
+      DOM.inputFallbackNoMatchClarifierQuestion,
+      DOM.inputBridgeThreshold,
+      DOM.inputBridgeHardcap,
+      DOM.inputBridgeMaxPerCall,
+      DOM.inputBridgeMaxRedirects,
+      DOM.inputBridgeLines
     ].filter(Boolean);
     
     inputs.forEach(input => {
@@ -358,6 +371,9 @@
     
     if (DOM.inputRobotChallengeEnabled) {
       DOM.inputRobotChallengeEnabled.addEventListener('change', () => { state.isDirty = true; });
+    }
+    if (DOM.inputBridgeEnabled) {
+      DOM.inputBridgeEnabled.addEventListener('change', () => { state.isDirty = true; });
     }
   }
 
@@ -428,6 +444,15 @@
     if (DOM.inputFallbackNoMatchAnswer) DOM.inputFallbackNoMatchAnswer.value = config.discovery?.playbook?.fallback?.noMatchAnswer || '';
     if (DOM.inputFallbackNoMatchWhenReasonCaptured) DOM.inputFallbackNoMatchWhenReasonCaptured.value = config.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured || '';
     if (DOM.inputFallbackNoMatchClarifierQuestion) DOM.inputFallbackNoMatchClarifierQuestion.value = config.discovery?.playbook?.fallback?.noMatchClarifierQuestion || '';
+    // Bridge (Latency Filler)
+    const bridge = config.bridge || {};
+    if (DOM.inputBridgeEnabled) DOM.inputBridgeEnabled.checked = bridge.enabled === true;
+    if (DOM.inputBridgeThreshold) DOM.inputBridgeThreshold.value = bridge.thresholdMs || 1100;
+    if (DOM.inputBridgeHardcap) DOM.inputBridgeHardcap.value = bridge.hardCapMs || 6000;
+    if (DOM.inputBridgeMaxPerCall) DOM.inputBridgeMaxPerCall.value = bridge.maxBridgesPerCall || 2;
+    if (DOM.inputBridgeMaxRedirects) DOM.inputBridgeMaxRedirects.value = bridge.maxRedirectAttempts || 2;
+    if (DOM.inputBridgeLines) DOM.inputBridgeLines.value = (bridge.lines || []).join('\n');
+    
     const rm = state.llm0Controls?.recoveryMessages || {};
     if (DOM.inputRecoveryAudioUnclear) DOM.inputRecoveryAudioUnclear.value = rm.audioUnclear || '';
     if (DOM.inputRecoverySilence) DOM.inputRecoverySilence.value = rm.silenceRecovery || rm.noSpeech || '';
@@ -573,6 +598,14 @@
             noMatchClarifierQuestion: DOM.inputFallbackNoMatchClarifierQuestion?.value?.trim() || ''
           }
         }
+      },
+      bridge: {
+        enabled: DOM.inputBridgeEnabled?.checked || false,
+        thresholdMs: parseInt(DOM.inputBridgeThreshold?.value, 10) || 1100,
+        hardCapMs: parseInt(DOM.inputBridgeHardcap?.value, 10) || 6000,
+        maxBridgesPerCall: parseInt(DOM.inputBridgeMaxPerCall?.value, 10) || 2,
+        maxRedirectAttempts: parseInt(DOM.inputBridgeMaxRedirects?.value, 10) || 2,
+        lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean)
       },
       consentPhrases: state.config.consentPhrases,
       escalationPhrases: state.config.escalationPhrases,

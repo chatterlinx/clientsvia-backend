@@ -96,6 +96,7 @@
       'greetings.interceptor': { page: 'agent2.html', tab: 'greetings', section: 'Interceptor' },
       'discovery.recoveryMessages': { page: 'agent2.html', tab: 'recovery', section: 'Recovery Messages' },
       'discovery.fallbackMessages': { page: 'agent2.html', tab: 'fallback', section: 'Fallback Messages' },
+      'aiAgentSettings.agent2.bridge': { page: 'agent2.html', tab: 'bridge', section: 'Bridge (Latency Filler)' },
       'aiAgentSettings.agent2.discovery': { page: 'agent2.html', tab: 'discovery', section: 'Discovery' },
       'aiAgentSettings.connectionMessages': { page: 'agent2.html', tab: 'greetings', section: 'Connection Messages' },
       'triggers': { page: 'triggers.html', tab: 'triggers', section: 'Trigger Cards' },

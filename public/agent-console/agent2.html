@@ -335,6 +335,50 @@
           </div>
         </div>
 
+        <!-- Bridge (Latency Filler) -->
+        <div class="card" id="card-bridge">
+          <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h2 class="card-title">Bridge (Latency Filler)</h2>
+              <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">
+                When the agent's response takes too long, a short bridge line fills the silence so the caller doesn't hang up.
+              </p>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+              <input type="checkbox" id="input-bridge-enabled"> Enabled
+            </label>
+          </div>
+          <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div class="form-group mb-0">
+                <label class="form-label">Threshold (ms)</label>
+                <input type="number" class="form-input" id="input-bridge-threshold" min="500" max="5000" step="100" placeholder="1100">
+                <p class="form-hint">Trigger bridge after this delay</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Hard Cap (ms)</label>
+                <input type="number" class="form-input" id="input-bridge-hardcap" min="2000" max="15000" step="500" placeholder="6000">
+                <p class="form-hint">Stop redirecting after this</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Max Bridges / Call</label>
+                <input type="number" class="form-input" id="input-bridge-max-per-call" min="1" max="10" placeholder="2">
+                <p class="form-hint">Prevents bridge spam</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Max Redirects</label>
+                <input type="number" class="form-input" id="input-bridge-max-redirects" min="1" max="10" placeholder="2">
+                <p class="form-hint">Max redirect attempts</p>
+              </div>
+            </div>
+            <div class="form-group mb-0">
+              <label class="form-label">Bridge Lines (1 per line, keep tight)</label>
+              <textarea class="form-textarea" id="input-bridge-lines" rows="4" placeholder="Ok — one moment.&#10;Got it — give me just a second.&#10;One sec — I'm pulling that up now."></textarea>
+              <p class="form-hint">One line per row. Runtime picks randomly. Keep lines short (under ~1.2s spoken time). Empty = bridge disabled.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Discovery Fallback Messages -->
         <div class="card" id="discovery-fallback-messages">
           <div class="card-header">
