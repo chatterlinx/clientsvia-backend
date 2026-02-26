@@ -302,15 +302,35 @@
         <div class="card" id="recovery-messages">
           <div class="card-header">
             <h2 class="card-title">Recovery Messages (Required)</h2>
+            <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">
+              What the agent says when it can't understand the caller. Each type handles a different scenario.
+            </p>
           </div>
           <div class="card-body">
             <div class="form-group">
               <label class="form-label">Audio Unclear</label>
-              <textarea class="form-textarea" id="input-recovery-audio-unclear" rows="2" placeholder="I'm sorry, the audio was unclear. Could you repeat that?"></textarea>
+              <textarea class="form-textarea" id="input-recovery-audio-unclear" rows="2" placeholder="I can hear you, just not clearly. Mind saying that again?"></textarea>
+              <p class="form-hint">STT returned garbled or low-confidence text. Ask the caller to repeat.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Silence / No Speech</label>
+              <textarea class="form-textarea" id="input-recovery-silence" rows="2" placeholder="I'm here — go ahead, I'm listening."></textarea>
+              <p class="form-hint">Caller went silent. Gently prompt them to continue.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Connection Cut Out</label>
+              <textarea class="form-textarea" id="input-recovery-connection-cutout" rows="2" placeholder="Sorry, the connection cut out for a second. What can I help you with?"></textarea>
+              <p class="form-hint">Audio dropped briefly then returned. Re-engage the caller.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">General Error</label>
+              <textarea class="form-textarea" id="input-recovery-general-error" rows="2" placeholder="I missed that. Could you say that again?"></textarea>
+              <p class="form-hint">Catch-all when something unexpected happens. Keep it simple and natural.</p>
             </div>
             <div class="form-group mb-0">
-              <label class="form-label">No Speech</label>
-              <textarea class="form-textarea" id="input-recovery-no-speech" rows="2" placeholder="I didn't hear anything. Could you please say that again?"></textarea>
+              <label class="form-label">Technical Transfer</label>
+              <textarea class="form-textarea" id="input-recovery-technical-transfer" rows="2" placeholder="I'm having some technical difficulties. Let me connect you to our team."></textarea>
+              <p class="form-hint">Spoken before transferring to a human due to repeated technical failures.</p>
             </div>
           </div>
         </div>

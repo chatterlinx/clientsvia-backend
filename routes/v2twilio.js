@@ -281,69 +281,48 @@ function computeAwProof(company) {
 }
 
 // ============================================================================
-// V69: RECOVERY MESSAGE HELPER - Human-like random variant selection
+// RECOVERY MESSAGE HELPER — UI-controlled, per-company
 // ============================================================================
-// Instead of robotic "connection is choppy", use natural phrases like:
-// - "I can hear you, just not clearly. Mind saying that again?"
-// - "Say that again for me?"
-// - "One more time?"
+// Multi-tenant rule: NO hardcoded English. Every word the agent speaks must be
+// configured in the UI (Agent Console → Recovery Messages).
+// If a company hasn't configured a message, we return null and the caller
+// sees silence rather than unapproved speech. The caller-facing handler
+// should check for null and decide whether to skip or transfer.
 // ============================================================================
 function getRecoveryMessage(company, type = 'audioUnclear') {
   const recoveryConfig = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
   
-  // V69: Default human-like variants (no "choppy" language)
-  const defaults = {
-    audioUnclear: [
-      "I can hear you, just not clearly. Mind saying that again?",
-      "Sounds like the line cut out for a second. Can you repeat that for me?",
-      "I'm here — the audio broke up a bit. Say that one more time?",
-      "I caught part of that, but not all. Can you repeat it for me?",
-      "Say that again for me?",
-      "One more time?",
-      "Sorry, didn't catch that — repeat it?"
-    ],
-    connectionCutOut: [
-      "Sorry, the connection cut out for a second. What can I help you with?",
-      "The line dropped for a moment there. What were you saying?",
-      "I lost you for a second. Go ahead?"
-    ],
-    silenceRecovery: [
-      "I'm here — go ahead, I'm listening.",
-      "Still here! What can I help you with?",
-      "I'm listening — go ahead."
-    ],
-    generalError: [
-      "I missed that. Could you say that again?",
-      "Say that one more time for me?",
-      "One more time?",
-      "Didn't quite catch that — repeat it?"
-    ],
-    technicalTransfer: [
-      "I'm having some technical difficulties. Let me connect you to our team.",
-      "Let me get someone on the line who can help you better."
-    ]
-  };
+  // Handle legacy key aliases
+  if (type === 'choppyConnection') type = 'audioUnclear';
+  if (type === 'noSpeech') type = 'silenceRecovery';
   
-  // Get variants - prefer UI config, fall back to defaults
   let variants = recoveryConfig[type];
   
-  // Handle legacy choppyConnection → audioUnclear mapping
-  if (type === 'choppyConnection' || type === 'audioUnclear') {
-    variants = recoveryConfig.audioUnclear || recoveryConfig.choppyConnection || defaults.audioUnclear;
+  // Legacy compat: choppyConnection alias
+  if (!variants && type === 'audioUnclear') {
+    variants = recoveryConfig.choppyConnection;
   }
   
-  // If variants is a string (legacy), wrap in array
+  // Legacy compat: noSpeech alias
+  if (!variants && type === 'silenceRecovery') {
+    variants = recoveryConfig.noSpeech;
+  }
+  
+  // String → array (legacy single-value format)
   if (typeof variants === 'string') {
-    variants = [variants];
+    variants = variants.trim() ? [variants.trim()] : [];
   }
   
-  // If still no variants, use defaults
+  // No configured message — log warning, return null (not unapproved speech)
   if (!Array.isArray(variants) || variants.length === 0) {
-    variants = defaults[type] || defaults.generalError;
+    const companyId = company?._id || company?.companyId || 'unknown';
+    logger.warn(`[RecoveryMsg] No UI-configured message for type="${type}" companyId=${companyId}. Configure in Agent Console → Recovery Messages.`);
+    return null;
   }
   
   // Random selection for natural sound
-  return variants[Math.floor(Math.random() * variants.length)];
+  const message = variants[Math.floor(Math.random() * variants.length)];
+  return message || null;
 }
 const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
@@ -2282,17 +2261,6 @@ router.post('/handle-speech', async (req, res) => {
       ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
     };
     
-    // V69: Recovery messages now use getRecoveryMessage() for random variants
-    // This object is kept for backward compat but uses the helper internally
-    const recoveryMessages = {
-      get audioUnclear() { return getRecoveryMessage(company, 'audioUnclear'); },
-      get choppyConnection() { return getRecoveryMessage(company, 'audioUnclear'); }, // Legacy alias
-      get connectionCutOut() { return getRecoveryMessage(company, 'connectionCutOut'); },
-      get silenceRecovery() { return getRecoveryMessage(company, 'silenceRecovery'); },
-      get generalError() { return getRecoveryMessage(company, 'generalError'); },
-      get technicalTransfer() { return getRecoveryMessage(company, 'technicalTransfer'); }
-    };
-    
     // Convert 0-1 confidence to 0-100 for comparison
     const confidencePercent = confidence * 100;
     
@@ -2527,17 +2495,23 @@ router.post('/handle-speech', async (req, res) => {
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
-      // Select appropriate repeat phrase
+      // Select appropriate repeat phrase — UI-configured, no hardcoded English
       let retryMsg;
+      let retrySource;
       if (isLikelyUnclear) {
-        // Speech was garbled - be extra helpful
-        retryMsg = "I didn't quite catch that. Could you please speak a little louder and clearer?";
+        retryMsg = getRecoveryMessage(company, 'audioUnclear');
+        retrySource = retryMsg ? 'recovery:audioUnclear' : null;
       } else {
-        // Use configured repeat phrase from LLM-0 controls
+        retryMsg = getRecoveryMessage(company, 'generalError');
+        retrySource = retryMsg ? 'recovery:generalError' : null;
+      }
+      // Fallback to lcSettings.repeatPhrase if recovery messages not yet configured
+      if (!retryMsg) {
         retryMsg = lcSettings.repeatPhrase;
+        retrySource = 'lcSettings:repeatPhrase';
       }
       
-      logger.info(`[LOW CONFIDENCE] 🔄 Asking to repeat (attempt ${repeats}/${lcSettings.maxRepeatsBeforeEscalation}): "${retryMsg}"`);
+      logger.info(`[LOW CONFIDENCE] 🔄 Asking to repeat (attempt ${repeats}/${lcSettings.maxRepeatsBeforeEscalation}) [source: ${retrySource}]: "${retryMsg}"`);
       
       // Use ElevenLabs TTS if configured
       const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;

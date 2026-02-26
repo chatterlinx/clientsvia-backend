@@ -188,7 +188,10 @@
     inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
     inputRobotChallengeLine: document.getElementById('input-robot-challenge-line'),
     inputRecoveryAudioUnclear: document.getElementById('input-recovery-audio-unclear'),
-    inputRecoveryNoSpeech: document.getElementById('input-recovery-no-speech'),
+    inputRecoverySilence: document.getElementById('input-recovery-silence'),
+    inputRecoveryConnectionCutout: document.getElementById('input-recovery-connection-cutout'),
+    inputRecoveryGeneralError: document.getElementById('input-recovery-general-error'),
+    inputRecoveryTechnicalTransfer: document.getElementById('input-recovery-technical-transfer'),
     inputDiscoveryConsentQuestion: document.getElementById('input-discovery-consent-question'),
     inputFallbackNoMatchAnswer: document.getElementById('input-fallback-no-match-answer'),
     inputFallbackNoMatchWhenReasonCaptured: document.getElementById('input-fallback-no-match-when-reason-captured'),
@@ -339,7 +342,10 @@
       DOM.inputAckWord,
       DOM.inputRobotChallengeLine,
       DOM.inputRecoveryAudioUnclear,
-      DOM.inputRecoveryNoSpeech,
+      DOM.inputRecoverySilence,
+      DOM.inputRecoveryConnectionCutout,
+      DOM.inputRecoveryGeneralError,
+      DOM.inputRecoveryTechnicalTransfer,
       DOM.inputDiscoveryConsentQuestion,
       DOM.inputFallbackNoMatchAnswer,
       DOM.inputFallbackNoMatchWhenReasonCaptured,
@@ -422,8 +428,12 @@
     if (DOM.inputFallbackNoMatchAnswer) DOM.inputFallbackNoMatchAnswer.value = config.discovery?.playbook?.fallback?.noMatchAnswer || '';
     if (DOM.inputFallbackNoMatchWhenReasonCaptured) DOM.inputFallbackNoMatchWhenReasonCaptured.value = config.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured || '';
     if (DOM.inputFallbackNoMatchClarifierQuestion) DOM.inputFallbackNoMatchClarifierQuestion.value = config.discovery?.playbook?.fallback?.noMatchClarifierQuestion || '';
-    if (DOM.inputRecoveryAudioUnclear) DOM.inputRecoveryAudioUnclear.value = state.llm0Controls?.recoveryMessages?.audioUnclear || '';
-    if (DOM.inputRecoveryNoSpeech) DOM.inputRecoveryNoSpeech.value = state.llm0Controls?.recoveryMessages?.noSpeech || '';
+    const rm = state.llm0Controls?.recoveryMessages || {};
+    if (DOM.inputRecoveryAudioUnclear) DOM.inputRecoveryAudioUnclear.value = rm.audioUnclear || '';
+    if (DOM.inputRecoverySilence) DOM.inputRecoverySilence.value = rm.silenceRecovery || rm.noSpeech || '';
+    if (DOM.inputRecoveryConnectionCutout) DOM.inputRecoveryConnectionCutout.value = rm.connectionCutOut || '';
+    if (DOM.inputRecoveryGeneralError) DOM.inputRecoveryGeneralError.value = rm.generalError || '';
+    if (DOM.inputRecoveryTechnicalTransfer) DOM.inputRecoveryTechnicalTransfer.value = rm.technicalTransfer || '';
     
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
@@ -571,7 +581,10 @@
         recoveryMessages: {
           ...(state.llm0Controls?.recoveryMessages || {}),
           audioUnclear: DOM.inputRecoveryAudioUnclear?.value?.trim() || '',
-          noSpeech: DOM.inputRecoveryNoSpeech?.value?.trim() || ''
+          silenceRecovery: DOM.inputRecoverySilence?.value?.trim() || '',
+          connectionCutOut: DOM.inputRecoveryConnectionCutout?.value?.trim() || '',
+          generalError: DOM.inputRecoveryGeneralError?.value?.trim() || '',
+          technicalTransfer: DOM.inputRecoveryTechnicalTransfer?.value?.trim() || ''
         }
       }
     };
