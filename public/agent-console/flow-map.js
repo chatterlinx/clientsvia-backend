@@ -533,8 +533,27 @@
       path.setAttribute('fill', 'none');
       path.setAttribute('marker-end', 'url(#arrowhead-end)');
       path.setAttribute('marker-mid', 'url(#arrowhead-mid)');
-      path.style.cursor = 'pointer';
+      path.style.cursor = 'grab';
       path.style.pointerEvents = 'stroke';
+      
+      // Make the path itself draggable
+      path.addEventListener('mousedown', (e) => {
+        // Right-click is for delete
+        if (e.button === 2) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[FlowMap] ✓ Starting arrow drag from path');
+        const boardRect = DOM.board.getBoundingClientRect();
+        state.arrowDrag = {
+          connIndex,
+          startX: e.clientX - boardRect.left,
+          startY: e.clientY - boardRect.top,
+          initialOffsetX: conn.offsetX || 0,
+          initialOffsetY: conn.offsetY || 0
+        };
+        path.style.cursor = 'grabbing';
+      });
       
       // Add right-click to delete
       path.addEventListener('contextmenu', (e) => {
@@ -566,36 +585,6 @@
       dirArrow.setAttribute('transform', `translate(${midPointX}, ${midPointY}) rotate(${angle}) translate(-16, -12)`);
       dirArrow.style.pointerEvents = 'none';
       DOM.arrowSvg.appendChild(dirArrow);
-      
-      // Create draggable control point (smaller)
-      console.log('[FlowMap] Creating control point at:', controlX, controlY);
-      const controlPoint = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      controlPoint.setAttribute('cx', controlX);
-      controlPoint.setAttribute('cy', controlY);
-      controlPoint.setAttribute('r', '5');
-      controlPoint.setAttribute('fill', '#3b82f6');
-      controlPoint.setAttribute('stroke', '#ffffff');
-      controlPoint.setAttribute('stroke-width', '2');
-      controlPoint.style.cursor = 'move';
-      controlPoint.style.pointerEvents = 'all';
-      
-      // Make control point draggable
-      controlPoint.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[FlowMap] ✓ Starting arrow drag');
-        const boardRect = DOM.board.getBoundingClientRect();
-        state.arrowDrag = {
-          connIndex,
-          startX: e.clientX - boardRect.left,
-          startY: e.clientY - boardRect.top,
-          initialOffsetX: conn.offsetX || 0,
-          initialOffsetY: conn.offsetY || 0
-        };
-      });
-      
-      DOM.arrowSvg.appendChild(controlPoint);
-      console.log('[FlowMap] Control point appended to SVG');
     });
   }
   
@@ -684,6 +673,7 @@
       console.log('[FlowMap] ✓ Arrow drag ended');
       state.arrowDrag = null;
       saveNotes();
+      render(); // Re-render to reset cursor
       return;
     }
     
