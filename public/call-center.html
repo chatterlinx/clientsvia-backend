@@ -4328,7 +4328,7 @@
             document.getElementById('intel-calls-count').textContent = `${calls.length} calls`;
             if (calls.length > 0) {
                 document.getElementById('intel-calls-list').innerHTML = calls.map(call => `
-                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer;" onclick="${call.blackBoxId ? `window.open('/black-box-detail.html?recordingId=${call.blackBoxId}', '_blank')` : ''}">
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div style="font-weight: 500; color: var(--text-primary);">
                                 📞 ${call.date ? new Date(call.date).toLocaleString() : 'Unknown'}

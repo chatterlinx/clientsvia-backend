@@ -13472,7 +13472,7 @@
                 
                 // Render calls list
                 content.innerHTML = data.calls.map(call => `
-                    <div class="call-preview-item" onclick="window.open('/black-box-detail.html?recordingId=${call.id}', '_blank')">
+                    <div class="call-preview-item">
                         <div class="call-preview-header">
                             <span class="call-date">${new Date(call.date).toLocaleDateString()} ${new Date(call.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                             <span class="call-phone">${escapeHtml(call.phone)}</span>
