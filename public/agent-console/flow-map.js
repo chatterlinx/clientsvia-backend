@@ -572,7 +572,7 @@
       path.style.cursor = 'grab';
       path.style.pointerEvents = 'stroke';
       
-      // Make the path itself draggable
+      // Make the path draggable (left-click and drag)
       path.addEventListener('mousedown', (e) => {
         // Right-click is for delete
         if (e.button === 2) return;
@@ -589,18 +589,6 @@
           initialOffsetY: conn.offsetY || 0
         };
         path.style.cursor = 'grabbing';
-      });
-      
-      // Add double-click to delete
-      path.addEventListener('dblclick', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[FlowMap] ✓ Arrow double-clicked');
-        if (window.confirm('Delete this arrow connection?')) {
-          state.connections = state.connections.filter(c => c !== conn);
-          saveNotes();
-          render();
-        }
       });
       
       // Add right-click to delete (keep as backup)
