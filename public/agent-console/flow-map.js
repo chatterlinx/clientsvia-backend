@@ -29,8 +29,6 @@
   };
 
   function init() {
-    if (!window.AgentConsoleAuth || !AgentConsoleAuth.requireAuth()) return;
-
     const params = new URLSearchParams(window.location.search);
     state.companyId = params.get('companyId');
 
@@ -39,20 +37,45 @@
       return;
     }
 
+    // Set default company name immediately to remove "Loading..." state
+    DOM.headerCompanyName.textContent = 'Company';
     DOM.headerCompanyId.textContent = truncateId(state.companyId);
     DOM.headerCompanyId.title = state.companyId;
-    loadCompanyName();
-    loadNotes();
+    
     bindEvents();
+    loadNotes();
     render();
+
+    // Try to load company name asynchronously (optional enhancement)
+    const authReady = canUseAgentConsoleAuth();
+    if (authReady) {
+      loadCompanyName();
+    }
   }
 
   async function loadCompanyName() {
     try {
+      if (!window.AgentConsoleAuth || typeof AgentConsoleAuth.apiFetch !== 'function') {
+        DOM.headerCompanyName.textContent = 'Company';
+        return;
+      }
       const data = await AgentConsoleAuth.apiFetch(`/api/agent-console/${state.companyId}/truth`);
       DOM.headerCompanyName.textContent = data?.companyProfile?.businessName || data?.companyProfile?.companyName || 'Company';
     } catch (err) {
       DOM.headerCompanyName.textContent = 'Company';
+    }
+  }
+
+  function canUseAgentConsoleAuth() {
+    try {
+      if (!window.AgentConsoleAuth || typeof AgentConsoleAuth.requireAuth !== 'function') return false;
+      // Don't call requireAuth() as it may redirect - just check if auth is available
+      if (typeof AgentConsoleAuth.getToken !== 'function') return false;
+      return !!AgentConsoleAuth.getToken();
+    } catch (err) {
+      // Keep Flow Map usable even if auth bootstrap fails in browser.
+      console.warn('[FlowMap] Auth check failed:', err);
+      return false;
     }
   }
 
@@ -106,21 +129,32 @@
   }
 
   function bindEvents() {
-    DOM.btnBackToDashboard.addEventListener('click', () => {
-      window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
-    });
+    if (DOM.btnBackToDashboard) {
+      DOM.btnBackToDashboard.addEventListener('click', () => {
+        window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
+      });
+    }
 
-    DOM.btnNewNote.addEventListener('click', () => openModal(null));
-    DOM.btnClearMap.addEventListener('click', clearMap);
-    DOM.btnExportMap.addEventListener('click', exportMap);
-    DOM.btnImportMap.addEventListener('click', () => DOM.inputImportMap.click());
-    DOM.inputImportMap.addEventListener('change', importMap);
+    if (DOM.btnNewNote) {
+      DOM.btnNewNote.addEventListener('click', () => openModal(null));
+    }
+    // Emergency global hook so the button can still work if another listener path fails.
+    window.__flowMapOpenNewNote = () => openModal(null);
 
-    DOM.btnCancelNote.addEventListener('click', closeModal);
-    DOM.btnSaveNote.addEventListener('click', saveModalNote);
-    DOM.modalBackdrop.addEventListener('click', (event) => {
-      if (event.target === DOM.modalBackdrop) closeModal();
-    });
+    if (DOM.btnClearMap) DOM.btnClearMap.addEventListener('click', clearMap);
+    if (DOM.btnExportMap) DOM.btnExportMap.addEventListener('click', exportMap);
+    if (DOM.btnImportMap && DOM.inputImportMap) {
+      DOM.btnImportMap.addEventListener('click', () => DOM.inputImportMap.click());
+      DOM.inputImportMap.addEventListener('change', importMap);
+    }
+
+    if (DOM.btnCancelNote) DOM.btnCancelNote.addEventListener('click', closeModal);
+    if (DOM.btnSaveNote) DOM.btnSaveNote.addEventListener('click', saveModalNote);
+    if (DOM.modalBackdrop) {
+      DOM.modalBackdrop.addEventListener('click', (event) => {
+        if (event.target === DOM.modalBackdrop) closeModal();
+      });
+    }
 
     window.addEventListener('mousemove', handlePointerMove);
     window.addEventListener('mouseup', handlePointerUp);
