@@ -407,9 +407,16 @@
       // Load agent2 config for Follow-up Consent Cards
       try {
         const configData = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`);
-        if (configData.success && configData.data) {
-          state.config = configData.data;
+        console.log('[Consent Cards] CONFIG_LOAD — raw response keys:', Object.keys(configData || {}));
+        console.log('[Consent Cards] CONFIG_LOAD — has agent2:', !!configData?.agent2);
+        console.log('[Consent Cards] CONFIG_LOAD — has discovery:', !!configData?.agent2?.discovery);
+        console.log('[Consent Cards] CONFIG_LOAD — has followUpConsent:', !!configData?.agent2?.discovery?.followUpConsent);
+
+        if (configData?.agent2) {
+          state.config = configData.agent2;
           loadFollowUpConsent(state.config);
+        } else {
+          console.warn('[Consent Cards] CONFIG_LOAD — No agent2 object in response, consent cards will be empty');
         }
       } catch (cfgErr) {
         console.warn('[Triggers] Failed to load agent2 config for consent cards:', cfgErr.message);
@@ -1846,14 +1853,19 @@
 
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};
+    console.log('[Consent Cards] LOAD — raw followUpConsent from config:', JSON.stringify(fuc, null, 2));
     for (const bucket of FUC_BUCKETS) {
       const data = fuc[bucket] || {};
+      console.log(`[Consent Cards] LOAD.${bucket} — phrases: ${(data.phrases || []).length}, response: "${data.response || ''}", direction: "${data.direction || ''}"`);
       renderFucPhrases(bucket, data.phrases || []);
       const respEl = document.getElementById(`fuc-${bucket}-response`);
       if (respEl) respEl.value = data.response || '';
+      else console.warn(`[Consent Cards] LOAD — fuc-${bucket}-response element NOT found`);
       const dirEl = document.getElementById(`fuc-${bucket}-direction`);
       if (dirEl) dirEl.value = data.direction || '';
+      else console.log(`[Consent Cards] LOAD — fuc-${bucket}-direction element not found (may be expected)`);
     }
+    console.log('[Consent Cards] LOAD — complete');
   }
 
   function renderFucPhrases(bucket, phrases) {
@@ -1880,8 +1892,13 @@
 
   function getFucPhrases(bucket) {
     const container = document.getElementById(`fuc-${bucket}-phrases`);
-    if (!container) return [];
-    return Array.from(container.querySelectorAll('.phrase-tag')).map(tag => {
+    if (!container) {
+      console.warn(`[Consent Cards] getFucPhrases — container fuc-${bucket}-phrases NOT found`);
+      return [];
+    }
+    const tags = container.querySelectorAll('.phrase-tag');
+    console.log(`[Consent Cards] getFucPhrases(${bucket}) — found ${tags.length} phrase-tag elements`);
+    return Array.from(tags).map(tag => {
       const clone = tag.cloneNode(true);
       const btn = clone.querySelector('button');
       if (btn) btn.remove();
@@ -1919,40 +1936,61 @@
   };
 
   const btnSaveFuc = document.getElementById('btn-save-followup-consent');
+  console.log('[Consent Cards] INIT — btn-save-followup-consent found:', !!btnSaveFuc);
+
   if (btnSaveFuc) {
     btnSaveFuc.addEventListener('click', async () => {
+      console.log('[Consent Cards] ── SAVE CLICKED ──');
+      console.log('[Consent Cards] CP1 — companyId:', state.companyId);
+
+      if (!state.companyId) {
+        console.error('[Consent Cards] CP1-FAIL — No companyId in state, aborting save');
+        showToast('error', 'Save Failed', 'No company ID available');
+        return;
+      }
+
       try {
         const followUpConsent = collectFollowUpConsent();
-        console.log('[Consent Cards] SAVE_START', {
-          buckets: Object.keys(followUpConsent),
-          yesPhraseCount: (followUpConsent.yes?.phrases || []).length,
-          noPhraseCount: (followUpConsent.no?.phrases || []).length,
-          yesDirection: followUpConsent.yes?.direction,
-          noDirection: followUpConsent.no?.direction
-        });
+        console.log('[Consent Cards] CP2 — collectFollowUpConsent() result:', JSON.stringify(followUpConsent, null, 2));
 
-        const resp = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`, {
+        for (const bucket of FUC_BUCKETS) {
+          const data = followUpConsent[bucket] || {};
+          console.log(`[Consent Cards] CP2.${bucket} — phrases: [${(data.phrases || []).join(', ')}] | response: "${data.response || ''}" | direction: "${data.direction || ''}"`);
+        }
+
+        const saveUrl = `${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`;
+        const payload = { discovery: { followUpConsent } };
+        console.log('[Consent Cards] CP3 — API URL:', saveUrl);
+        console.log('[Consent Cards] CP3 — method: PATCH');
+        console.log('[Consent Cards] CP3 — payload:', JSON.stringify(payload, null, 2));
+
+        const resp = await AgentConsoleAuth.apiFetch(saveUrl, {
           method: 'PATCH',
-          body: { discovery: { followUpConsent } }
+          body: payload
         });
 
-        console.log('[Consent Cards] SAVE_RESPONSE', resp);
+        console.log('[Consent Cards] CP4 — Raw API response:', JSON.stringify(resp, null, 2));
 
         if (resp.success) {
+          console.log('[Consent Cards] CP5 — SUCCESS — updating local state');
           if (!state.config) state.config = {};
           if (!state.config.discovery) state.config.discovery = {};
           state.config.discovery.followUpConsent = followUpConsent;
           showToast('success', 'Saved', 'Follow-up consent cards saved.');
           state.isDirty = false;
         } else {
-          console.error('[Consent Cards] SAVE_REJECTED', resp);
+          console.error('[Consent Cards] CP5-FAIL — Server returned success:false', resp);
           showToast('error', 'Save Failed', resp.message || resp.error || 'Server returned failure');
         }
       } catch (err) {
-        console.error('[Consent Cards] SAVE_ERROR', err);
+        console.error('[Consent Cards] CP-ERROR — Exception during save:', err);
+        console.error('[Consent Cards] CP-ERROR — err.message:', err.message);
+        console.error('[Consent Cards] CP-ERROR — err.data:', err.data);
         showToast('error', 'Save Failed', err.message);
       }
     });
+  } else {
+    console.error('[Consent Cards] INIT-FAIL — btn-save-followup-consent NOT found in DOM');
   }
 
   /* --------------------------------------------------------------------------
