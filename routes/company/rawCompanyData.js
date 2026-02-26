@@ -182,72 +182,12 @@ router.get('/', async (req, res) => {
     }
 });
 
-/**
- * POST /api/company/:companyId/raw/save-greeting
- * 
- * Saves a greeting string to frontDeskBehavior.greeting
- * This is the canonical greeting path.
- */
+// ☢️ NUKED Feb 2026: save-greeting — Agent 2.0 owns greetings via /api/admin/agent2/:companyId/greetings/call-start
 router.post('/save-greeting', async (req, res) => {
-    const { companyId } = req.params;
-    const { greeting } = req.body;
-    
-    if (!greeting || typeof greeting !== 'string') {
-        return res.status(400).json({
-            success: false,
-            error: 'greeting (string) is required in body'
-        });
-    }
-    
-    logger.info('[SAVE GREETING] Initiated', { companyId, greetingLength: greeting.length });
-    
-    try {
-        // Write to the canonical path
-        const result = await Company.findByIdAndUpdate(
-            companyId,
-            {
-                $set: {
-                    'aiAgentSettings.frontDeskBehavior.greeting': greeting
-                }
-            },
-            { new: true }
-        );
-        
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                error: 'Company not found'
-            });
-        }
-        
-        // Verify it saved
-        const savedGreeting = result.aiAgentSettings?.frontDeskBehavior?.greeting;
-        const saveSuccess = savedGreeting === greeting;
-        
-        logger.info('[SAVE GREETING] Result', {
-            companyId,
-            saveSuccess,
-            savedLength: savedGreeting?.length
-        });
-        
-        res.json({
-            success: saveSuccess,
-            savedTo: 'aiAgentSettings.frontDeskBehavior.greeting',
-            savedValue: savedGreeting,
-            message: saveSuccess ? 'Greeting saved successfully' : 'Save completed but verification failed'
-        });
-        
-    } catch (error) {
-        logger.error('[SAVE GREETING] Error', {
-            companyId,
-            error: error.message
-        });
-        
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+    res.status(410).json({
+        success: false,
+        error: 'NUKED: Legacy frontDeskBehavior.greeting removed. Use Agent Console greetings.'
+    });
 });
 
 // ☢️ NUKED Feb 2026: save-flow-json endpoint removed - V110 architecture replaces Dynamic Flows
@@ -258,73 +198,12 @@ router.post('/save-flow-json', async (req, res) => {
     });
 });
 
-/**
- * POST /api/company/:companyId/raw/write-test-greeting
- * 
- * Writes a test greeting to verify the save pipeline works.
- * This is a UI-driven test, not hardcoding.
- */
+// ☢️ NUKED Feb 2026: write-test-greeting — Legacy debug endpoint removed
 router.post('/write-test-greeting', async (req, res) => {
-    const { companyId } = req.params;
-    
-    logger.info('[WRITE TEST] Greeting test initiated', { companyId });
-    
-    try {
-        // Generate test greeting
-        const testGreeting = `DEBUG_GREETING__${Date.now()}__${Math.random().toString(36).substring(7)}`;
-        
-        // Write to DB
-        const result = await Company.findByIdAndUpdate(
-            companyId,
-            {
-                $set: {
-                    'aiAgentSettings.frontDeskBehavior.greeting': testGreeting
-                }
-            },
-            { new: true }
-        );
-        
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                error: 'Company not found'
-            });
-        }
-        
-        // Verify the write
-        const verify = await Company.findById(companyId).lean();
-        const savedValue = verify?.aiAgentSettings?.frontDeskBehavior?.greeting;
-        
-        const writeSuccess = savedValue === testGreeting;
-        
-        logger.info('[WRITE TEST] Greeting result', {
-            companyId,
-            testGreeting,
-            savedValue,
-            writeSuccess
-        });
-        
-        res.json({
-            success: writeSuccess,
-            testGreeting,
-            savedValue,
-            match: writeSuccess,
-            message: writeSuccess 
-                ? 'Write test PASSED - greeting saved and verified in DB' 
-                : 'Write test FAILED - saved value does not match'
-        });
-        
-    } catch (error) {
-        logger.error('[WRITE TEST] Error', {
-            companyId,
-            error: error.message
-        });
-        
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+    res.status(410).json({
+        success: false,
+        error: 'NUKED: Legacy greeting test endpoint removed.'
+    });
 });
 
 // ☢️ NUKED Feb 2026: write-test-dynamic-flow endpoint removed - V110 architecture replaces Dynamic Flows

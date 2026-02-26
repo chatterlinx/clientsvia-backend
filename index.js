@@ -243,7 +243,7 @@ async function loadAllRoutes() {
         routes.callArchivesRoutes = await loadRouteWithTimeout('./routes/admin/callArchives', 'callArchivesRoutes');
         routes.callFilteringRoutes = await loadRouteWithTimeout('./routes/admin/callFiltering', 'callFilteringRoutes');
         routes.learningLoopRoutes = await loadRouteWithTimeout('./routes/admin/learningLoop', 'learningLoopRoutes'); // 🎓 Learning Loop (Black Box → Edge Cases/Blacklist quick-add)
-        routes.llm0ControlsRoutes = await loadRouteWithTimeout('./routes/admin/llm0Controls', 'llm0ControlsRoutes'); // 🧠 LLM-0 Controls (Brain behavior settings)
+        // llm0Controls NUKED Feb 2026 — Agent Console owns recovery messages via PATCH /agent2/config
         routes.callFlowEngineRoutes = await loadRouteWithTimeout('./routes/admin/callFlowEngine', 'callFlowEngineRoutes'); // 🎯 Call Flow Engine (Universal flow routing)
         // serviceTypeClarificationRoutes REMOVED Dec 2025 - redundant with Triage
         // ☢️ NUKED Feb 22, 2026: frontDeskBehaviorRoutes REMOVED - Agent 2.0 is the only discovery system
@@ -712,7 +712,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.callArchivesRoutes); // ADMIN: Call Archives (search transcripts, export call history)
     app.use('/api', routes.callFilteringRoutes); // ADMIN: Call Filtering (spam detection, blacklist/whitelist management)
     app.use('/api/admin/learning-loop', routes.learningLoopRoutes); // 🎓 Learning Loop (Black Box → Edge Cases/Blacklist/Synonyms quick-add)
-    app.use('/api/admin/llm0-controls', routes.llm0ControlsRoutes); // 🧠 LLM-0 Controls (Brain-1 behavior settings per company)
+    // llm0-controls route NUKED Feb 2026 — Agent Console manages via /agent2/config
     app.use('/api/admin/call-flow-engine', routes.callFlowEngineRoutes); // 🎯 Call Flow Engine (Universal flow routing)
     // serviceTypeClarificationRoutes REMOVED Dec 2025 - nuked
     // ☢️ NUKED Feb 22, 2026: /api/admin/front-desk-behavior routes removed - Agent 2.0 is the only discovery system

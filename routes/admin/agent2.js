@@ -892,9 +892,13 @@ function getInvalidRequiredFieldUpdates(updates) {
 }
 
 // ============================================================================
-// GET - Read Agent 2.0 config
+// GET /:companyId — NUKED Feb 2026 (was control-plane-v2's main read endpoint)
+// Agent Console uses /api/agent-console/:companyId/agent2/config instead.
 // ============================================================================
 router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
+  return res.status(410).json({ success: false, error: 'NUKED: Use Agent Console /api/agent-console/:companyId/agent2/config' });
+  // Original handler below disabled — keeping route registered to return clear error instead of falling through
+  /* NUKED:
   try {
     const { companyId } = req.params;
     const company = await v2Company.findById(companyId)
@@ -1029,6 +1033,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
     logger.error('[AGENT2] GET error', { error: error.message });
     return res.status(500).json({ success: false, message: error.message });
   }
+  NUKED */
 });
 
 // ============================================================================
@@ -1063,9 +1068,12 @@ router.get('/:companyId/publish-readiness', authenticateJWT, requirePermission(P
 });
 
 // ============================================================================
-// PATCH - Update Agent 2.0 config (partial)
+// PATCH /:companyId — NUKED Feb 2026 (was control-plane-v2's main write endpoint)
+// Agent Console uses /api/agent-console/:companyId/agent2/config instead.
 // ============================================================================
 router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
+  return res.status(410).json({ success: false, error: 'NUKED: Use Agent Console /api/agent-console/:companyId/agent2/config' });
+  /* NUKED:
   try {
     const { companyId } = req.params;
     const updates = safeObject(req.body, {});
@@ -1211,6 +1219,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     logger.error('[AGENT2] PATCH error', { error: error.message });
     return res.status(500).json({ success: false, message: error.message });
   }
+  NUKED */
 });
 
 // ============================================================================
