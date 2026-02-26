@@ -125,11 +125,48 @@
 
 **What Happens:**
 
-#### 6A. **STT Preprocessing**
-- Clean up transcription
-- Remove filler words ("um", "uh")
-- Apply corrections
-- **Service:** `STTPreprocessor`
+#### 6A. **STT Preprocessing (First Pass)**
+**Service:** `STTPreprocessor`
+**Code:** `services/STTPreprocessor.js`
+
+**What it does:**
+1. Remove filler words: "um", "uh", "like", "you know"
+2. Apply mishear corrections: "acee" → "ac"
+3. Detect impossible words
+4. Clean up transcript quality
+
+**Example:**
+- Input: "um I need uh to schedule a service you know"
+- Output: "I need to schedule a service"
+
+#### 6Aa. **Vocabulary Normalization (CRITICAL!)**
+**Service:** `Agent2VocabularyEngine`
+**Code:** `services/engine/agent2/Agent2VocabularyEngine.js`
+
+**This happens INSIDE Agent2DiscoveryRunner BEFORE triggers!**
+
+**Two modes:**
+
+##### **1. HARD_NORMALIZE** - Replace mishears/slang
+```
+"tstat" → "thermostat"
+"acee unit" → "ac unit"
+"furniss" → "furnace"
+```
+
+##### **2. SOFT_HINT** - Add context hints
+```
+"the thingy on the wall" → hint: "maybe_thermostat"
+"the box outside" → hint: "maybe_outdoor_unit"
+```
+
+**Why this matters:**
+- Customer says: "My acee isn't working"
+- STT transcribes: "my acee isn't working"
+- Vocabulary normalizes: "my **ac** isn't working"
+- NOW triggers can match "ac" keywords!
+
+**Config Location:** Agent Console → Agent 2.0 → Discovery → Vocabulary
 
 #### 6B. **Load Call State**
 - Retrieve conversation history
@@ -268,6 +305,82 @@ Options:
 │  [Back to Top - Customer Speaks]    │
 └─────────────────────────────────────┘
 ```
+
+---
+
+## 🔍 **THE PREPROCESSING FUNNEL (After Gather, Before Triggers)**
+
+**YES! This is a critical funnel that happens between Gather and Trigger evaluation.**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  RAW SPEECH RESULT FROM TWILIO                              │
+│  "um I need uh to schedule my acee you know"                │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 1: STTPreprocessor (Template-level)                   │
+│  ─────────────────────────────────────────────────────────  │
+│  ✓ Remove fillers: "um", "uh", "you know"                   │
+│  ✓ Apply mishear corrections from STT Profile               │
+│  ✓ Detect impossible words                                  │
+│  ─────────────────────────────────────────────────────────  │
+│  Result: "I need to schedule my acee"                        │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 2: Agent2VocabularyEngine (Agent 2.0 Discovery)       │
+│  ─────────────────────────────────────────────────────────  │
+│  ✓ HARD_NORMALIZE: Replace slang/mishears                   │
+│     "acee" → "ac"                                            │
+│     "tstat" → "thermostat"                                   │
+│  ✓ SOFT_HINT: Add context hints                             │
+│     "thingy on wall" → hint: "maybe_thermostat"             │
+│  ─────────────────────────────────────────────────────────  │
+│  Result: "I need to schedule my ac"                          │
+│  Hints: []                                                   │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 3: TriggerCardMatcher.match()                         │
+│  ─────────────────────────────────────────────────────────  │
+│  ✓ Check keywords: ["schedule", "ac"]                       │
+│  ✓ Check phrases: "schedule service"                        │
+│  ✓ Check negative keywords: ["cancel"]                      │
+│  ✓ Apply greeting protection                                │
+│  ✓ Use hints for priority boost                             │
+│  ─────────────────────────────────────────────────────────  │
+│  Match Found: "AC Service Scheduling" trigger card          │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│  RESPONSE: Use trigger card response                         │
+│  "I'd be happy to help with your AC! When did it stop        │
+│  working?"                                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### **Processing Order (Critical!)**
+
+```
+1. Raw STT → "um I need uh to schedule my acee you know"
+   ↓
+2. STTPreprocessor → "I need to schedule my acee"
+   ↓
+3. Agent2VocabularyEngine → "I need to schedule my ac"
+   ↓
+4. TriggerCardMatcher → MATCH! "AC Service" trigger
+   ↓
+5. Return trigger response (fast path!)
+```
+
+### **Where These Services Live**
+
+| Service | Location | Config UI |
+|---------|----------|-----------|
+| STTPreprocessor | `services/STTPreprocessor.js` | STT Profile page |
+| Agent2VocabularyEngine | `services/engine/agent2/Agent2VocabularyEngine.js` | Agent 2.0 → Vocabulary |
+| TriggerCardMatcher | `services/engine/agent2/TriggerCardMatcher.js` | Agent 2.0 → Triggers |
 
 ---
 
