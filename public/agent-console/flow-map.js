@@ -313,6 +313,7 @@
   }
 
   function render() {
+    console.log('[FlowMap] ✓ render() called from:', new Error().stack.split('\n')[2]);
     renderStepList();
     renderBoard();
   }
@@ -408,8 +409,14 @@
         `;
 
         el.addEventListener('mousedown', (event) => {
+          // Ignore mousedown on buttons - let their click events handle it
+          if (event.target.closest('button')) {
+            console.log('[FlowMap] ✓ Mousedown on button, ignoring');
+            return;
+          }
+          
           // Handle connect mode
-          if (state.connectMode && !event.target.closest('button')) {
+          if (state.connectMode) {
             event.preventDefault();
             handleConnectClick(note.id);
             return;
