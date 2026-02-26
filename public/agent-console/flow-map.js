@@ -37,29 +37,38 @@
   }
 
   function init() {
-    initDOM();
+    try {
+      console.log('[FlowMap] Initializing...');
+      initDOM();
 
-    const params = new URLSearchParams(window.location.search);
-    state.companyId = params.get('companyId');
+      const params = new URLSearchParams(window.location.search);
+      state.companyId = params.get('companyId');
 
-    if (!state.companyId) {
-      window.location.href = '/agent-console/index.html';
-      return;
-    }
+      if (!state.companyId) {
+        window.location.href = '/agent-console/index.html';
+        return;
+      }
 
-    // Set default company name immediately to remove "Loading..." state
-    DOM.headerCompanyName.textContent = 'Company';
-    DOM.headerCompanyId.textContent = truncateId(state.companyId);
-    DOM.headerCompanyId.title = state.companyId;
-    
-    bindEvents();
-    loadNotes();
-    render();
+      // Set default company name immediately to remove "Loading..." state
+      DOM.headerCompanyName.textContent = 'Company';
+      DOM.headerCompanyId.textContent = truncateId(state.companyId);
+      DOM.headerCompanyId.title = state.companyId;
+      
+      console.log('[FlowMap] Binding events...');
+      bindEvents();
+      console.log('[FlowMap] Loading notes...');
+      loadNotes();
+      console.log('[FlowMap] Rendering...');
+      render();
+      console.log('[FlowMap] Initialization complete');
 
-    // Try to load company name asynchronously (optional enhancement)
-    const authReady = canUseAgentConsoleAuth();
-    if (authReady) {
-      loadCompanyName();
+      // Try to load company name asynchronously (optional enhancement)
+      const authReady = canUseAgentConsoleAuth();
+      if (authReady) {
+        loadCompanyName();
+      }
+    } catch (err) {
+      console.error('[FlowMap] Initialization error:', err);
     }
   }
 
@@ -314,23 +323,25 @@
   }
 
   function renderBoard() {
-    DOM.board.innerHTML = '';
-    
-    // Create SVG for arrows
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'arrow-layer');
-    svg.style.position = 'absolute';
-    svg.style.top = '0';
-    svg.style.left = '0';
-    svg.style.width = '100%';
-    svg.style.height = '100%';
-    svg.style.pointerEvents = 'none';
-    svg.style.zIndex = '0';
-    DOM.board.appendChild(svg);
-    DOM.arrowSvg = svg;
-    
-    // Render arrows
-    renderArrows();
+    try {
+      console.log('[FlowMap] Rendering board...');
+      DOM.board.innerHTML = '';
+      
+      // Create SVG for arrows
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'arrow-layer');
+      svg.style.position = 'absolute';
+      svg.style.top = '0';
+      svg.style.left = '0';
+      svg.style.width = '100%';
+      svg.style.height = '100%';
+      svg.style.pointerEvents = 'none';
+      svg.style.zIndex = '0';
+      DOM.board.appendChild(svg);
+      DOM.arrowSvg = svg;
+      
+      // Render arrows
+      renderArrows();
     
     // Render notes
     state.notes
@@ -383,6 +394,7 @@
           button.addEventListener('click', (event) => {
             event.stopPropagation();
             const action = button.dataset.noteAction;
+            console.log('[FlowMap] Button clicked:', action, 'for note:', note.id);
             if (action === 'edit') openModal(note.id);
             if (action === 'delete') deleteNote(note.id);
             if (action === 'connect') startConnect(note.id);
@@ -393,6 +405,10 @@
 
         DOM.board.appendChild(el);
       });
+      console.log('[FlowMap] Board rendered successfully');
+    } catch (err) {
+      console.error('[FlowMap] Error rendering board:', err);
+    }
   }
   
   function renderArrows() {
