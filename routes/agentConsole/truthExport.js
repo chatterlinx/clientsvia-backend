@@ -475,6 +475,13 @@ async function buildRuntimeTruth(companyId) {
         localTriggersCount: (company.aiAgentSettings?.agent2?.triggers || []).length
       },
       discovery: company.aiAgentSettings?.agent2?.discovery || {},
+      followUpConsentGate: {
+        yes: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.yes || {},
+        no: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.no || {},
+        reprompt: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.reprompt || {},
+        hesitant: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.hesitant || {},
+        complex: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.complex || {}
+      },
       consentPhrases: company.aiAgentSettings?.agent2?.consentPhrases || [],
       escalationPhrases: company.aiAgentSettings?.agent2?.escalationPhrases || [],
       bookingPrompts: company.aiAgentSettings?.agent2?.bookingPrompts || {}
@@ -854,6 +861,21 @@ async function checkUiCoverage(company) {
       expectedUiLocation: 'agent2.html → Discovery handoff consent question field',
       backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
       impact: 'Booking consent prompt may fallback to non-UI speech'
+    });
+  }
+
+  // Check 6b: Follow-up Consent Gate (HIGH)
+  const fuc = company.aiAgentSettings?.agent2?.discovery?.followUpConsent;
+  const fucYesPhrases = fuc?.yes?.phrases || [];
+  if (fucYesPhrases.length === 0) {
+    issues.push({
+      component: 'followUpConsentGate',
+      severity: 'HIGH',
+      issue: 'Follow-up Consent Gate has no YES phrases configured',
+      uiPath: 'triggers.html → Follow-up Consent Cards → YES',
+      expectedUiLocation: 'triggers.html → Follow-up Consent Cards section',
+      backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+      impact: 'Trigger follow-up questions will not detect YES responses for booking handoff'
     });
   }
 
