@@ -11706,9 +11706,9 @@
             const urlParams = new URLSearchParams(window.location.search);
             const id = urlParams.get('companyId') || companyId;
             if (id) {
-                window.location.href = `/control-plane-v2.html?companyId=${encodeURIComponent(id)}`;
+                window.location.href = `/agent-console/agent2.html?companyId=${encodeURIComponent(id)}`;
             } else {
-                window.location.href = '/control-plane-v2.html';
+                window.location.href = '/agent-console/agent2.html';
             }
         }
         

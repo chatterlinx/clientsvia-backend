@@ -175,10 +175,9 @@ function getCodebaseStats() {
   
   const rootDir = path.resolve(__dirname, '..');
   
-  // Count specific areas
-  const controlPlaneHtml = countLines(path.join(rootDir, 'public/control-plane-v2.html'));
-  const aiAgentSettingsDir = path.join(rootDir, 'public/js/ai-agent-settings');
-  const controlPlaneJs = countLinesInDir(aiAgentSettingsDir, ['.js']);
+  // Control Plane V2 NUKED Feb 2026 — counts zeroed
+  const controlPlaneHtml = 0;
+  const controlPlaneJs = 0;
   
   // Count backend
   const servicesDir = path.join(rootDir, 'services');

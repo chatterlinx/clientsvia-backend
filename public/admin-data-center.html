@@ -963,7 +963,7 @@
         function manageSpamFilter(companyId) {
             console.log('[DATA CENTER] 🛡️ Opening Spam Filter for:', companyId);
             // Legacy UI nuked (Jan 2026) — use Control Plane V2 as the single truth UI.
-            window.location.href = `/control-plane-v2.html?companyId=${companyId}&tab=call-protection`;
+            window.location.href = `/agent-console/agent2.html?companyId=${companyId}`;
         }
 
         function updateCounts(total) {
@@ -1419,7 +1419,7 @@
         function viewCompanyProfile() {
             if (!currentCompany) return;
             // Legacy UI nuked (Jan 2026) — open Truth UI only.
-            window.open(`/control-plane-v2.html?companyId=${currentCompany.companyId}`, '_blank');
+            window.open(`/agent-console/agent2.html?companyId=${currentCompany.companyId}`, '_blank');
         }
 
         async function downloadCompanyData() {

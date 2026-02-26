@@ -188,9 +188,6 @@ async function loadAllRoutes() {
         routes.v2NotesRoutes = await loadRouteWithTimeout('./routes/v2notes', 'v2NotesRoutes');
         // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
         routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
-        routes.controlPlaneRegistryRoutes = await loadRouteWithTimeout('./routes/controlPlane/registry', 'controlPlaneRegistryRoutes'); // 📋 Control Plane Schema Registry (Self-describing)
-        routes.controlPlaneEffectiveRoutes = await loadRouteWithTimeout('./routes/controlPlane/effective', 'controlPlaneEffectiveRoutes'); // ⚡ Control Plane Effective Config (Runtime values)
-        routes.bookingLogicRoutes = await loadRouteWithTimeout('./routes/controlPlane/bookingLogic', 'bookingLogicRoutes'); // 🎯 Booking Logic (Standalone handoff engine)
         routes.agentConsoleRoutes = await loadRouteWithTimeout('./routes/agentConsole/agentConsole', 'agentConsoleRoutes'); // 🎛️ Agent Console (standalone admin platform)
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.templateDebugExportRoutes = await loadRouteWithTimeout('./routes/admin/templateDebugExport', 'templateDebugExportRoutes'); // 🔍 Template Debug Export (Read-Only)
@@ -617,8 +614,6 @@ function registerRoutes(routes) {
     app.use('/api/auth', routes.v2AuthRoutes); // V2: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/debug', require('./routes/debug')); // 🐛 Debug endpoints (force reload, diagnostics)
-    app.use('/api/control-plane', routes.controlPlaneRegistryRoutes); // 📋 Control Plane Schema Registry (Self-describing)
-    app.use('/api/control-plane/booking-logic', routes.bookingLogicRoutes); // 🎯 Booking Logic (Standalone handoff engine)
     app.use('/api/agent-console', routes.agentConsoleRoutes); // 🎛️ Agent Console (Clean enterprise dashboard + Truth API)
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/trade-knowledge/templates', routes.templateDebugExportRoutes); // 🔍 Template Debug Export (Read-Only)
@@ -680,7 +675,6 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId', routes.scenariosBrowserRoutes); // 📂 Scenario Browser (RAW/AUDIT separated)
     app.use('/api/company/:companyId/scenarios/import', routes.scenarioImportRoutes); // 📥 Scenario Import (Bulk import to company override layer)
     app.use('/api/company/:companyId/scenarios/validate', routes.scenarioValidateRoutes); // 🔍 Scenario Validate (Red/Yellow/Green quality report)
-    app.use('/api/company/:companyId/control-plane', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane: /effective, /raw, /migrate, /save
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
     // ☢️ NUKED: booking-contract-v2 endpoint - Beta feature never wired to runtime (Jan 2026)

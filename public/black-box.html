@@ -731,16 +731,16 @@
 
         function updateNavLinks() {
             // Legacy UI nuked (Jan 2026) — Back goes to Control Plane V2 (truth UI).
-            document.getElementById('navBack').href = `control-plane-v2.html?companyId=${companyId}`;
+            document.getElementById('navBack').href = `/agent-console/agent2.html?companyId=${companyId}`;
             
             // Control Plane V2 - main control plane
-            document.getElementById('navControlPlane').href = `control-plane-v2.html?companyId=${companyId}`;
+            document.getElementById('navControlPlane').href = `/agent-console/agent2.html?companyId=${companyId}`;
             
             // AiCore Control Center - it's a tab within Control Plane V2
-            document.getElementById('navAiCore').href = `control-plane-v2.html?companyId=${companyId}&tab=aicore`;
+            document.getElementById('navAiCore').href = `/agent-console/agent2.html?companyId=${companyId}`;
             
             // CompanyOps Console - it's a tab within Control Plane V2
-            document.getElementById('navCompanyOps').href = `control-plane-v2.html?companyId=${companyId}&tab=companyops`;
+            document.getElementById('navCompanyOps').href = `/agent-console/agent2.html?companyId=${companyId}`;
             
             // Black Box Recorder - current page
             document.getElementById('navBlackBox').href = `black-box.html?companyId=${companyId}`;

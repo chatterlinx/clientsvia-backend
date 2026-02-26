@@ -433,9 +433,9 @@ class LogManager {
                         </button>
                     ` : ''}
                     ${log.companyId ? `
-                        <a href="/control-plane-v2.html?companyId=${log.companyId}" target="_blank"
+                        <a href="/agent-console/agent2.html?companyId=${log.companyId}" target="_blank"
                            class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 inline-block">
-                            🏢 Control Plane
+                            🎛️ Agent Console
                         </a>
                     ` : ''}
                 </div>
