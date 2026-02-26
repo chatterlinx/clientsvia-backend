@@ -736,6 +736,7 @@
     const followUpClass = followUpAction ? '' : 'none';
     
     // Build answer format badges
+    const hasFollowUp = !!(trigger.followUp?.question || '').trim();
     let answerBadges = '';
     if (isLlmMode) {
       answerBadges = '<span class="answer-badge llm" title="LLM Fact Pack - AI-generated responses">LLM</span>';
@@ -745,6 +746,7 @@
       if (audioNeedsRegeneration) answerBadges += '<span class="answer-badge stale" title="Variable value changed - regenerate audio">⚠️ STALE</span>';
       if (!hasText && !hasAudio && !audioNeedsRegeneration) answerBadges = '<span style="color: var(--text-muted);">—</span>';
     }
+    if (hasFollowUp) answerBadges += '<span class="answer-badge follow" title="Has follow-up question (consent gate active)">FOLLOW</span>';
     
     return `
       <div class="trigger-row ${isEnabled ? '' : 'disabled'}" id="trigger-${escapeHtml(trigger.triggerId)}" data-trigger-id="${escapeHtml(trigger.triggerId)}">
