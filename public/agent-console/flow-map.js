@@ -558,6 +558,7 @@
       // Add right-click to delete
       path.addEventListener('contextmenu', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (window.confirm('Delete this arrow connection?')) {
           state.connections = state.connections.filter(c => c !== conn);
           saveNotes();
@@ -585,6 +586,45 @@
       dirArrow.setAttribute('transform', `translate(${midPointX}, ${midPointY}) rotate(${angle}) translate(-16, -12)`);
       dirArrow.style.pointerEvents = 'none';
       DOM.arrowSvg.appendChild(dirArrow);
+      
+      // Create delete button near the arrow
+      const deleteBtn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      deleteBtn.setAttribute('transform', `translate(${controlX}, ${controlY})`);
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.style.pointerEvents = 'all';
+      
+      const deleteBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      deleteBg.setAttribute('r', '12');
+      deleteBg.setAttribute('fill', '#ef4444');
+      deleteBg.setAttribute('stroke', '#ffffff');
+      deleteBg.setAttribute('stroke-width', '2');
+      
+      const deleteX = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      deleteX.setAttribute('x', '0');
+      deleteX.setAttribute('y', '0');
+      deleteX.setAttribute('text-anchor', 'middle');
+      deleteX.setAttribute('dominant-baseline', 'central');
+      deleteX.setAttribute('fill', '#ffffff');
+      deleteX.setAttribute('font-size', '16');
+      deleteX.setAttribute('font-weight', 'bold');
+      deleteX.textContent = '×';
+      deleteX.style.pointerEvents = 'none';
+      
+      deleteBtn.appendChild(deleteBg);
+      deleteBtn.appendChild(deleteX);
+      
+      deleteBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[FlowMap] Delete button clicked');
+        if (window.confirm('Delete this arrow connection?')) {
+          state.connections = state.connections.filter(c => c !== conn);
+          saveNotes();
+          render();
+        }
+      });
+      
+      DOM.arrowSvg.appendChild(deleteBtn);
     });
   }
   
