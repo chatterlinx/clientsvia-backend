@@ -371,7 +371,7 @@
       svg.style.left = '0';
       svg.style.width = '100%';
       svg.style.height = '100%';
-      svg.style.pointerEvents = 'none';
+      svg.style.pointerEvents = 'none'; // Default to none, but children can override
       svg.style.zIndex = '0';
       DOM.board.appendChild(svg);
       DOM.arrowSvg = svg;
@@ -456,6 +456,8 @@
   function renderArrows() {
     if (!DOM.arrowSvg) return;
     
+    console.log('[FlowMap] renderArrows() - connections:', state.connections.length);
+    
     // Clear existing arrows
     DOM.arrowSvg.innerHTML = '';
     
@@ -518,6 +520,7 @@
       DOM.arrowSvg.appendChild(path);
       
       // Create draggable control point
+      console.log('[FlowMap] Creating control point at:', controlX, controlY);
       const controlPoint = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       controlPoint.setAttribute('cx', controlX);
       controlPoint.setAttribute('cy', controlY);
@@ -544,6 +547,7 @@
       });
       
       DOM.arrowSvg.appendChild(controlPoint);
+      console.log('[FlowMap] Control point appended to SVG');
     });
   }
   
