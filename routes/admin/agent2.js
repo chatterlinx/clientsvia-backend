@@ -968,7 +968,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
             beforeCompanyDoc,
             afterCompanyDoc
           });
-        } catch (e) { /* non-blocking */ }
+        } catch (e) { // non-blocking }
       } catch (migrationErr) {
         logger.warn('[AGENT2] Lazy migration failed (non-blocking)', { 
           companyId, 
