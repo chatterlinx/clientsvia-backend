@@ -4115,6 +4115,39 @@ const companySchema = new mongoose.Schema({
                     maxRepeatWordRun: { type: Number, default: 2 }
                 },
                 
+                // ═══════════════════════════════════════════════════════════
+                // V4: FOLLOW-UP CONSENT GATE - Caller yes/no classification
+                // ═══════════════════════════════════════════════════════════
+                // Configures how the agent classifies caller responses to
+                // trigger card follow-up questions (yes/no/reprompt/hesitant/complex).
+                // Each bucket has: phrases, response text, and routing direction.
+                // UI-owned — configured in Triggers Console consent card section.
+                followUpConsent: {
+                    yes: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true },
+                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true }
+                    },
+                    no: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true },
+                        direction: { type: String, default: 'CONTINUE', trim: true }
+                    },
+                    reprompt: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true }
+                    },
+                    hesitant: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true }
+                    },
+                    complex: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true },
+                        direction: { type: String, default: 'AGENT', trim: true }
+                    }
+                },
+                
                 updatedAt: { type: Date, default: null }
             },
             // ═══════════════════════════════════════════════════════════════
