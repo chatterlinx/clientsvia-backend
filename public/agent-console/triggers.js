@@ -406,7 +406,7 @@
 
       // Load agent2 config for Follow-up Consent Cards
       try {
-        const configData = await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`);
+        const configData = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`);
         if (configData.success && configData.data) {
           state.config = configData.data;
           loadFollowUpConsent(state.config);
@@ -1926,12 +1926,13 @@
           body: { discovery: { followUpConsent } }
         });
         if (resp.success) {
-          state.config.discovery = state.config.discovery || {};
+          if (!state.config) state.config = {};
+          if (!state.config.discovery) state.config.discovery = {};
           state.config.discovery.followUpConsent = followUpConsent;
           showToast('success', 'Saved', 'Follow-up consent cards saved.');
           state.isDirty = false;
         } else {
-          showToast('error', 'Save Failed', resp.message || 'Unknown error');
+          showToast('error', 'Save Failed', resp.message || resp.error || 'Server returned failure');
         }
       } catch (err) {
         showToast('error', 'Save Failed', err.message);
