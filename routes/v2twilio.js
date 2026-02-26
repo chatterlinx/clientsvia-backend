@@ -1712,9 +1712,11 @@ router.post('/voice', async (req, res) => {
           // 🛡️ FALLBACK: Audio file missing, use TTS instead
           logger.warn(`[GREETING] 🔄 Prerecorded audio missing, falling back to TTS`);
           
-          // Determine what text will be spoken
-          const fallbackText = initResult.greeting || 'Thank you for calling. How may I help you today?';
+          // Determine what text will be spoken — prefer greeting text, then emergency fallback
+          const emergencyFb = initResult.greetingConfig?.emergencyFallback;
+          const fallbackText = initResult.greeting || emergencyFb || '';
           const hasUiConfiguredText = Boolean(initResult.greeting);
+          const usedEmergencyFallback = !initResult.greeting && Boolean(emergencyFb);
           
           if (CallLogger) {
             // Log the audio missing event
@@ -1741,15 +1743,18 @@ router.post('/voice', async (req, res) => {
               data: {
                 sourceId: hasUiConfiguredText 
                   ? 'agent2.greetings.callStart.text' 
-                  : 'HARDCODED_FALLBACK',
+                  : (usedEmergencyFallback ? 'agent2.greetings.callStart.emergencyFallback' : 'NO_CONFIG'),
                 uiPath: hasUiConfiguredText 
                   ? 'aiAgentSettings.agent2.greetings.callStart.text' 
-                  : 'UNMAPPED - HARDCODED_FALLBACK',
+                  : (usedEmergencyFallback ? 'aiAgentSettings.agent2.greetings.callStart.emergencyFallback' : 'UNMAPPED - NO_GREETING_CONFIGURED'),
                 uiTab: 'Greetings',
-                configPath: 'agent2.greetings.callStart.text',
+                configPath: hasUiConfiguredText ? 'agent2.greetings.callStart.text' : 'agent2.greetings.callStart.emergencyFallback',
                 spokenTextPreview: fallbackText.substring(0, 100),
-                note: `Audio file missing (${rawAudioPath}), using TTS fallback from text field`,
-                isFromUiConfig: hasUiConfiguredText,
+                note: usedEmergencyFallback
+                  ? `Audio file missing (${rawAudioPath}), using EMERGENCY FALLBACK`
+                  : `Audio file missing (${rawAudioPath}), using TTS fallback from text field`,
+                isFromUiConfig: hasUiConfiguredText || usedEmergencyFallback,
+                usedEmergencyFallback,
                 audioMissing: true,
                 originalAudioPath: rawAudioPath
               }
@@ -1786,10 +1791,11 @@ router.post('/voice', async (req, res) => {
               logger.error(`[GREETING] ❌ TTS fallback failed: ${ttsErr.message}`);
               gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
             }
-          } else if (initResult.greeting) {
-            gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
+          } else if (fallbackText) {
+            gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackText))));
           } else {
-            gather.say('Thank you for calling. How may I help you today?');
+            // No greeting text AND no emergency fallback configured — silent start
+            logger.warn(`[GREETING] ⚠️ No greeting text or emergency fallback configured for company ${company._id}. Caller hears silence.`);
           }
         }
       }
@@ -1867,7 +1873,8 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {}); // Fire and forget
             
             // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
-            const usedFallback = initResult.greetingConfig?.usedHardcodedFallback === true;
+            const usedEmergencyFb = initResult.greetingConfig?.usedEmergencyFallback === true;
+            const usedHardcodedFb = initResult.greetingConfig?.usedHardcodedFallback === true;
             const fallbackReason = initResult.greetingConfig?.fallbackReason || null;
             CallLogger.logEvent({
               callId: req.body.CallSid,
@@ -1875,20 +1882,25 @@ router.post('/voice', async (req, res) => {
               type: 'SPEECH_SOURCE_SELECTED',
               turn: 0,
               data: {
-                sourceId: greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
-                uiPath: usedFallback 
-                  ? 'UNMAPPED - HARDCODED_FALLBACK' 
-                  : (greetingSource === 'agent2' 
-                    ? 'aiAgentSettings.agent2.greetings.callStart.text' 
-                    : 'aiAgentSettings.connectionMessages.greeting'),
+                sourceId: usedEmergencyFb
+                  ? 'agent2.greetings.callStart.emergencyFallback'
+                  : (greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting'),
+                uiPath: usedHardcodedFb 
+                  ? 'UNMAPPED - NO_EMERGENCY_FALLBACK_CONFIGURED' 
+                  : (usedEmergencyFb
+                    ? 'aiAgentSettings.agent2.greetings.callStart.emergencyFallback'
+                    : (greetingSource === 'agent2' 
+                      ? 'aiAgentSettings.agent2.greetings.callStart.text' 
+                      : 'aiAgentSettings.connectionMessages.greeting')),
                 uiTab: greetingSource === 'agent2' ? 'Greetings' : 'Connection Messages',
-                configPath: greetingSource === 'agent2' ? 'agent2.greetings.callStart.text' : 'connectionMessages.greeting',
+                configPath: usedEmergencyFb ? 'agent2.greetings.callStart.emergencyFallback' : (greetingSource === 'agent2' ? 'agent2.greetings.callStart.text' : 'connectionMessages.greeting'),
                 spokenTextPreview: greetingText.substring(0, 120),
-                note: usedFallback 
-                  ? `FALLBACK: ${fallbackReason}` 
-                  : 'Call start greeting',
-                isFromUiConfig: !usedFallback,
-                usedHardcodedFallback: usedFallback
+                note: usedEmergencyFb 
+                  ? `EMERGENCY FALLBACK: ${fallbackReason}`
+                  : (usedHardcodedFb ? `NO FALLBACK CONFIGURED: ${fallbackReason}` : 'Call start greeting'),
+                isFromUiConfig: !usedHardcodedFb,
+                usedEmergencyFallback: usedEmergencyFb,
+                usedHardcodedFallback: usedHardcodedFb
               }
             }).catch(() => {});
           }

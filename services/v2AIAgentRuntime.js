@@ -243,18 +243,22 @@ class V2AIAgentRuntime {
                 };
             }
             
+            // Emergency fallback — UI-configured last resort if greeting fails
+            const emergencyFallback = (callStart.emergencyFallback && typeof callStart.emergencyFallback === 'string')
+                ? callStart.emergencyFallback.trim()
+                : null;
+            
             // Check if audio URL is configured (takes priority over TTS)
             if (callStart.audioUrl && callStart.audioUrl.trim()) {
                 logger.info(`[V2 GREETING] ✅ Agent 2.0 using pre-recorded audio: ${callStart.audioUrl}`);
-                // V126 FIX: Include TTS text as fallback in case audio file is missing (ephemeral storage)
-                // Without this, when audio fails we fall through to hardcoded "Thank you for calling..."
                 const fallbackText = callStart.text && typeof callStart.text === 'string' && callStart.text.trim()
                     ? callStart.text.trim()
                     : null;
                 return {
                     mode: 'prerecorded',
                     audioUrl: callStart.audioUrl.trim(),
-                    text: fallbackText,  // CRITICAL: TTS fallback when audio file missing
+                    text: fallbackText,
+                    emergencyFallback,
                     source: 'agent2'
                 };
             }
@@ -272,12 +276,12 @@ class V2AIAgentRuntime {
                 });
                 usedHardcodedFallback = true;
                 fallbackReason = 'callStart.text is not a string';
-                greetingText = "Thank you for calling. How can I help you today?";
+                greetingText = emergencyFallback || '';
             }
             if (!usedHardcodedFallback && !greetingText.trim()) {
                 usedHardcodedFallback = true;
                 fallbackReason = 'callStart.text is empty';
-                greetingText = "Thank you for calling. How can I help you today?";
+                greetingText = emergencyFallback || '';
             }
             // Detect if greetingText looks like JSON/code (common data corruption symptom)
             if (!usedHardcodedFallback && (greetingText.startsWith('{') || greetingText.startsWith('[') || greetingText.includes('function') || greetingText.includes('const ') || greetingText.includes('module.exports'))) {
@@ -287,7 +291,7 @@ class V2AIAgentRuntime {
                 });
                 usedHardcodedFallback = true;
                 fallbackReason = 'callStart.text appears to be code/JSON';
-                greetingText = "Thank you for calling. How can I help you today?";
+                greetingText = emergencyFallback || '';
             }
             // 🆕 DETECT BUSINESS/FILE IDENTIFIERS (prevents "connection greeting code" being read aloud)
             if (!usedHardcodedFallback && (
@@ -310,7 +314,7 @@ class V2AIAgentRuntime {
                 });
                 usedHardcodedFallback = true;
                 fallbackReason = 'callStart.text contains file path or identifier';
-                greetingText = "Thank you for calling. How can I help you today?";
+                greetingText = emergencyFallback || '';
             }
             
             // V126: Log warning if hardcoded fallback was used - this is a Prime Directive violation
@@ -320,13 +324,14 @@ class V2AIAgentRuntime {
                     reason: fallbackReason,
                     originalText: callStart.text?.substring?.(0, 100) || '[not a string]'
                 });
-                // Return with a flag so SPEAK_PROVENANCE can show this violation
                 return {
                     mode: 'realtime',
                     text: greetingText,
                     voiceId: company.aiAgentSettings?.voiceSettings?.voiceId,
                     source: 'agent2',
-                    usedHardcodedFallback: true,
+                    emergencyFallback,
+                    usedEmergencyFallback: true,
+                    usedHardcodedFallback: !emergencyFallback,
                     fallbackReason
                 };
             }
@@ -334,6 +339,7 @@ class V2AIAgentRuntime {
             logger.info(`[V2 GREETING] ✅ Agent 2.0 using TTS: "${processedText}"`);
             return {
                 mode: 'realtime',
+                emergencyFallback,
                 text: processedText,
                 voiceId: company.aiAgentSettings?.voiceSettings?.voiceId,
                 source: 'agent2'
