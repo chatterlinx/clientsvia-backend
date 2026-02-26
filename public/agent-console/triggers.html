@@ -1331,16 +1331,12 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
             <div class="form-group">
               <label class="form-label">Follow-up Question</label>
               <textarea class="form-textarea" id="input-trigger-followup" rows="2" placeholder="Just to confirm — this is a routine request, right?"></textarea>
-              <p class="form-hint">If set, asked after the Answer Text. Waits for caller to respond.</p>
-            </div>
-
-            <div class="form-group" id="followup-action-group" style="display: none;">
-              <label class="form-label">On Caller Confirmation (Yes)</label>
-              <select class="form-select" id="input-trigger-followup-action">
-                <option value="CONTINUE">Continue conversation</option>
-                <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
-              </select>
-              <p class="form-hint">When the caller confirms (yes), what should happen next?</p>
+              <p class="form-hint" id="followup-hint">If set, asked after the Answer Text. Waits for caller to respond.</p>
+              <div id="followup-consent-hint" style="display: none; margin-top: 8px; padding: 10px 14px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; font-size: 0.8rem; line-height: 1.5; color: #94a3b8;">
+                <strong style="color: #e2e8f0;">Consent Card Flow Active</strong><br>
+                The caller's response to this question is classified by the <strong style="color: #3b82f6;">Follow-up Consent Cards</strong> below the trigger list. 
+                YES/NO routing, phrases, and responses are all configured there.
+              </div>
             </div>
           </div>
           

@@ -116,8 +116,6 @@
     inputTriggerAnswer: document.getElementById('input-trigger-answer'),
     inputTriggerAudio: document.getElementById('input-trigger-audio'),
     inputTriggerFollowup: document.getElementById('input-trigger-followup'),
-    inputTriggerFollowupAction: document.getElementById('input-trigger-followup-action'),
-    followupActionGroup: document.getElementById('followup-action-group'),
     inputTriggerLocal: document.getElementById('input-trigger-local'),
     scopeSection: document.getElementById('scope-section'),
     
@@ -336,8 +334,9 @@
      -------------------------------------------------------------------------- */
   function updateFollowupActionVisibility() {
     const hasFollowup = (DOM.inputTriggerFollowup?.value || '').trim().length > 0;
-    if (DOM.followupActionGroup) {
-      DOM.followupActionGroup.style.display = hasFollowup ? 'block' : 'none';
+    const consentHint = document.getElementById('followup-consent-hint');
+    if (consentHint) {
+      consentHint.style.display = hasFollowup ? 'block' : 'none';
     }
   }
 
@@ -964,9 +963,6 @@
       DOM.inputTriggerAnswer.value = trigger.answer?.answerText || '';
       DOM.inputTriggerAudio.value = trigger.answer?.audioUrl || '';
       DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
-      if (DOM.inputTriggerFollowupAction) {
-        DOM.inputTriggerFollowupAction.value = trigger.followUp?.nextAction || 'CONTINUE';
-      }
       updateFollowupActionVisibility();
       DOM.scopeSection.style.display = 'none';
       
@@ -1019,7 +1015,6 @@
       DOM.inputTriggerAnswer.value = '';
       DOM.inputTriggerAudio.value = '';
       DOM.inputTriggerFollowup.value = '';
-      if (DOM.inputTriggerFollowupAction) DOM.inputTriggerFollowupAction.value = 'CONTINUE';
       updateFollowupActionVisibility();
       DOM.inputTriggerLocal.checked = true;
       DOM.scopeSection.style.display = 'block';
@@ -1061,7 +1056,6 @@
     const phrases = parseCommaSeparated(DOM.inputTriggerPhrases.value);
     const negativeKeywords = parseCommaSeparated(DOM.inputTriggerNegative.value);
     const followUpQuestion = DOM.inputTriggerFollowup.value.trim();
-    const followUpNextAction = DOM.inputTriggerFollowupAction?.value || 'CONTINUE';
     
     // Get response mode and mode-specific fields
     const responseMode = state.currentResponseMode || 'standard';
@@ -1125,8 +1119,7 @@
       responseMode,
       answerText,
       audioUrl,
-      followUpQuestion,
-      followUpNextAction: followUpQuestion ? followUpNextAction : 'CONTINUE'
+      followUpQuestion
     };
     
     // Include LLM fact pack if in LLM mode
