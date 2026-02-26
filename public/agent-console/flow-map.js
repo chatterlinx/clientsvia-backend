@@ -472,20 +472,37 @@
     // Clear existing arrows
     DOM.arrowSvg.innerHTML = '';
     
-    // Define arrowhead marker
+    // Define arrowhead markers
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    marker.setAttribute('id', 'arrowhead');
-    marker.setAttribute('markerWidth', '10');
-    marker.setAttribute('markerHeight', '10');
-    marker.setAttribute('refX', '9');
-    marker.setAttribute('refY', '3');
-    marker.setAttribute('orient', 'auto');
-    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    polygon.setAttribute('points', '0 0, 10 3, 0 6');
-    polygon.setAttribute('fill', '#3b82f6');
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
+    
+    // End arrowhead (larger)
+    const markerEnd = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    markerEnd.setAttribute('id', 'arrowhead-end');
+    markerEnd.setAttribute('markerWidth', '10');
+    markerEnd.setAttribute('markerHeight', '10');
+    markerEnd.setAttribute('refX', '9');
+    markerEnd.setAttribute('refY', '3');
+    markerEnd.setAttribute('orient', 'auto');
+    const polygonEnd = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygonEnd.setAttribute('points', '0 0, 10 3, 0 6');
+    polygonEnd.setAttribute('fill', '#3b82f6');
+    markerEnd.appendChild(polygonEnd);
+    defs.appendChild(markerEnd);
+    
+    // Mid arrowhead (smaller, for direction indicator)
+    const markerMid = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    markerMid.setAttribute('id', 'arrowhead-mid');
+    markerMid.setAttribute('markerWidth', '6');
+    markerMid.setAttribute('markerHeight', '6');
+    markerMid.setAttribute('refX', '5');
+    markerMid.setAttribute('refY', '2');
+    markerMid.setAttribute('orient', 'auto');
+    const polygonMid = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygonMid.setAttribute('points', '0 0, 6 2, 0 4');
+    polygonMid.setAttribute('fill', '#3b82f6');
+    markerMid.appendChild(polygonMid);
+    defs.appendChild(markerMid);
+    
     DOM.arrowSvg.appendChild(defs);
     
     // Draw each connection
@@ -507,14 +524,15 @@
       const controlX = defaultMidX + (conn.offsetX || 0);
       const controlY = defaultMidY + (conn.offsetY || 0);
       
-      // Create path
+      // Create main path
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       const d = `M ${fromX} ${fromY} Q ${controlX} ${controlY} ${toX} ${toY}`;
       path.setAttribute('d', d);
       path.setAttribute('stroke', '#3b82f6');
       path.setAttribute('stroke-width', '2');
       path.setAttribute('fill', 'none');
-      path.setAttribute('marker-end', 'url(#arrowhead)');
+      path.setAttribute('marker-end', 'url(#arrowhead-end)');
+      path.setAttribute('marker-mid', 'url(#arrowhead-mid)');
       path.style.cursor = 'pointer';
       path.style.pointerEvents = 'stroke';
       
@@ -530,12 +548,31 @@
       
       DOM.arrowSvg.appendChild(path);
       
-      // Create draggable control point
+      // Add middle direction arrow (small arrowhead at midpoint)
+      // Calculate point at t=0.5 on quadratic bezier curve
+      const t = 0.5;
+      const midPointX = (1-t)*(1-t)*fromX + 2*(1-t)*t*controlX + t*t*toX;
+      const midPointY = (1-t)*(1-t)*fromY + 2*(1-t)*t*controlY + t*t*toY;
+      
+      // Calculate tangent angle at midpoint
+      const tangentX = 2*(1-t)*(controlX - fromX) + 2*t*(toX - controlX);
+      const tangentY = 2*(1-t)*(controlY - fromY) + 2*t*(toY - controlY);
+      const angle = Math.atan2(tangentY, tangentX) * 180 / Math.PI;
+      
+      // Create small direction arrow
+      const dirArrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      dirArrow.setAttribute('points', '0,0 8,3 0,6');
+      dirArrow.setAttribute('fill', '#3b82f6');
+      dirArrow.setAttribute('transform', `translate(${midPointX}, ${midPointY}) rotate(${angle}) translate(-4, -3)`);
+      dirArrow.style.pointerEvents = 'none';
+      DOM.arrowSvg.appendChild(dirArrow);
+      
+      // Create draggable control point (smaller)
       console.log('[FlowMap] Creating control point at:', controlX, controlY);
       const controlPoint = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       controlPoint.setAttribute('cx', controlX);
       controlPoint.setAttribute('cy', controlY);
-      controlPoint.setAttribute('r', '8');
+      controlPoint.setAttribute('r', '5');
       controlPoint.setAttribute('fill', '#3b82f6');
       controlPoint.setAttribute('stroke', '#ffffff');
       controlPoint.setAttribute('stroke-width', '2');
