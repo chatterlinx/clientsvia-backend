@@ -1566,19 +1566,11 @@ const companySchema = new mongoose.Schema({
                 // Only accept Deepgram result if confidence is above this (0-100%)
                 deepgramAcceptThreshold: { type: Number, default: 80, min: 50, max: 100 }
             },
-            // RECOVERY MESSAGES - Spoken when STT returns unclear/empty input
-            recoveryMessages: {
-                audioUnclear: {
-                    type: String,
-                    default: "I'm sorry, the audio was unclear. Could you repeat that?",
-                    trim: true
-                },
-                noSpeech: {
-                    type: String,
-                    default: "I didn't hear anything. Could you please say that again?",
-                    trim: true
-                }
-            },
+            // RECOVERY MESSAGES - UI-configurable overrides for STT recovery phrases.
+            // Runtime (getRecoveryMessage in v2twilio.js) uses randomized default
+            // arrays when these are empty. Values can be strings (legacy) or arrays.
+            // Keys: audioUnclear, noSpeech, connectionCutOut, silenceRecovery, etc.
+            recoveryMessages: { type: mongoose.Schema.Types.Mixed, default: {} },
             // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
             // Prevents loops when caller is clearly frustrated
             frustrationDetection: {
