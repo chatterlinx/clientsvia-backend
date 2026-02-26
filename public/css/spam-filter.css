@@ -396,6 +396,17 @@
     color: white;
 }
 
+.badge-global {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.badge-local {
+    background: #e5e7eb;
+    color: #6b7280;
+}
+
 .section-actions {
     display: flex;
     gap: 0.75rem;
@@ -638,8 +649,24 @@
     background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
 }
 
+.number-item.item-global {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-color: #93c5fd;
+    border-left: 4px solid #3b82f6;
+}
+
+.number-item.item-global:hover {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+}
+
 .number-info {
     flex: 1;
+}
+
+.number-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .number-phone {
@@ -1055,6 +1082,42 @@
     border-color: #cbd5e0;
 }
 
+.btn-global {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-global::before {
+    content: '🌍';
+    position: absolute;
+    left: -20px;
+    opacity: 0;
+    transition: all 0.3s;
+}
+
+.btn-global:hover:not(:disabled)::before {
+    left: 8px;
+    opacity: 1;
+}
+
+.btn-global:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    padding-left: 2rem;
+}
+
+.btn-global i {
+    transition: transform 0.3s;
+}
+
+.btn-global:hover:not(:disabled) i {
+    transform: rotate(360deg);
+}
+
 .btn-sm {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
@@ -1069,6 +1132,35 @@
 
 .btn i {
     font-size: 0.875rem;
+}
+
+.global-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 2px solid #3b82f6;
+    border-radius: 8px;
+    color: #1e40af;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.global-indicator i {
+    color: #3b82f6;
+    animation: pulse-global 2s infinite;
+}
+
+@keyframes pulse-global {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
 }
 
 /* ────────────────────────────────────────────────────────────────────────

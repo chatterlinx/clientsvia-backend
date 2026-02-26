@@ -540,14 +540,18 @@ class SpamFilterManager {
         const timesBlocked = entry.timesBlocked || 0;
         const addedAt = entry.addedAt ? new Date(entry.addedAt).toLocaleDateString() : 'Unknown';
         const isAuto = source === 'auto';
+        const isGlobal = entry.isGlobal || false;
+        const globalReportCount = entry.globalReportCount || 0;
         
         return `
-            <div class="number-item ${isAuto ? 'item-auto' : ''}">
+            <div class="number-item ${isAuto ? 'item-auto' : ''} ${isGlobal ? 'item-global' : ''}">
                 <div class="number-info">
                     <div class="number-phone">
                         <i class="fas fa-phone"></i>
                         <strong>${phone}</strong>
                         ${isAuto ? '<span class="badge badge-purple">Auto</span>' : ''}
+                        ${isGlobal ? '<span class="badge badge-global"><i class="fas fa-globe"></i> Global</span>' : '<span class="badge badge-local"><i class="fas fa-building"></i> Local</span>'}
+                        ${isGlobal && globalReportCount > 1 ? `<span class="badge badge-info">${globalReportCount} reports</span>` : ''}
                     </div>
                     <div class="number-meta">
                         <span><i class="fas fa-calendar"></i> ${addedAt}</span>
@@ -555,9 +559,22 @@ class SpamFilterManager {
                     </div>
                     <div class="number-reason">${reason}</div>
                 </div>
-                <button class="btn btn-danger btn-icon" onclick="spamFilterManager.removeFromBlacklist('${phone}')" title="Remove from blacklist">
-                    <i class="fas fa-trash"></i>
-                </button>
+                <div class="number-actions">
+                    ${!isGlobal ? `
+                        <button class="btn btn-global btn-sm" onclick="spamFilterManager.makeGlobal('${phone}')" title="Report to global spam database - blocks for ALL companies">
+                            <i class="fas fa-globe"></i>
+                            Make Global
+                        </button>
+                    ` : `
+                        <span class="global-indicator" title="Reported to global database by ${globalReportCount} ${globalReportCount === 1 ? 'company' : 'companies'}">
+                            <i class="fas fa-shield-alt"></i>
+                            Protected Globally
+                        </span>
+                    `}
+                    <button class="btn btn-danger btn-icon" onclick="spamFilterManager.removeFromBlacklist('${phone}')" title="Remove from blacklist">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -1247,6 +1264,46 @@ class SpamFilterManager {
         } catch (error) {
             console.error('❌ [SPAM FILTER] Bulk rejection error:', error);
             this.showNotification('Failed to reject all pending numbers', 'error');
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // GLOBAL SPAM DATABASE MANAGEMENT
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Make a number global (report to global spam database)
+     */
+    async makeGlobal(phoneNumber) {
+        if (!confirm(`Report ${phoneNumber} to global spam database?\n\n🌍 This will:\n• Block this number for ALL companies\n• Add to global spam registry\n• Help protect the entire network`)) {
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            
+            // Report to global spam database
+            const response = await fetch(`/api/admin/call-filtering/report-spam`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    phoneNumber,
+                    companyId: this.companyId,
+                    spamType: 'reported_by_admin'
+                })
+            });
+            
+            if (!response.ok) throw new Error('Failed to report to global database');
+            
+            this.showNotification(`🌍 ${phoneNumber} reported globally - now blocking for all companies`, 'success');
+            await this.load();
+            
+        } catch (error) {
+            console.error('❌ [SPAM FILTER] Make global error:', error);
+            this.showNotification('Failed to report to global database', 'error');
         }
     }
 

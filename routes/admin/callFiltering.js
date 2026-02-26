@@ -492,6 +492,41 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             stats: {}
         };
 
+        // ✅ ENHANCEMENT: Check which numbers are in global database
+        const blacklistNumbers = Array.isArray(callFiltering.blacklist)
+            ? callFiltering.blacklist
+                .filter(entry => typeof entry === 'object' ? entry.status === 'active' : true)
+                .map(entry => typeof entry === 'object' ? entry.phoneNumber : entry)
+            : [];
+
+        // Check global database for each blacklist number
+        const globalChecks = await Promise.all(
+            blacklistNumbers.map(async (phoneNumber) => {
+                try {
+                    const globalEntry = await GlobalSpamDatabase.findOne({ 
+                        phoneNumber,
+                        status: 'active'
+                    }).lean();
+                    return {
+                        phoneNumber,
+                        isGlobal: !!globalEntry,
+                        globalReportCount: globalEntry?.reports?.count || 0
+                    };
+                } catch (err) {
+                    return { phoneNumber, isGlobal: false, globalReportCount: 0 };
+                }
+            })
+        );
+
+        // Create a map for quick lookup
+        const globalStatusMap = {};
+        globalChecks.forEach(check => {
+            globalStatusMap[check.phoneNumber] = {
+                isGlobal: check.isGlobal,
+                globalReportCount: check.globalReportCount
+            };
+        });
+
         // ========================================================================
         // 🔧 SCHEMA MIGRATION LAYER - OLD → NEW
         // ========================================================================
@@ -539,7 +574,20 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             blacklist: Array.isArray(callFiltering.blacklist)
                 ? callFiltering.blacklist
                     .filter(entry => typeof entry === 'object' ? entry.status === 'active' : true)
-                    .map(entry => typeof entry === 'object' ? entry.phoneNumber : entry)
+                    .map(entry => {
+                        const phoneNumber = typeof entry === 'object' ? entry.phoneNumber : entry;
+                        const globalStatus = globalStatusMap[phoneNumber] || { isGlobal: false, globalReportCount: 0 };
+                        
+                        // Return enhanced entry with global status
+                        return typeof entry === 'object' 
+                            ? { ...entry, ...globalStatus }
+                            : { 
+                                phoneNumber, 
+                                ...globalStatus,
+                                addedAt: new Date(),
+                                source: 'manual'
+                            };
+                    })
                 : [],
             whitelist: Array.isArray(callFiltering.whitelist)
                 ? callFiltering.whitelist
