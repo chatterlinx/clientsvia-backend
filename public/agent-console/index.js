@@ -284,6 +284,9 @@
       case 'callconsole':
         window.location.href = `${baseUrl}/callconsole.html${companyParam}`;
         break;
+      case 'callcenter':
+        window.location.href = `/call-center.html${companyParam}`;
+        break;
       case 'agent2':
         window.location.href = `${baseUrl}/agent2.html${companyParam}`;
         break;
