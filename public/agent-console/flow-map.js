@@ -13,7 +13,8 @@
     drag: null,
     connectMode: false,
     connectFrom: null,
-    arrowDrag: null // {connIndex: number, startX: number, startY: number}
+    arrowDrag: null, // {connIndex: number, startX: number, startY: number}
+    zoom: 1.0 // Zoom level (0.25 to 2.0)
   };
 
   let DOM = {};
@@ -29,6 +30,9 @@
       btnExportMap: document.getElementById('btn-export-map'),
       btnImportMap: document.getElementById('btn-import-map'),
       inputImportMap: document.getElementById('input-import-map'),
+      btnZoomIn: document.getElementById('btn-zoom-in'),
+      btnZoomOut: document.getElementById('btn-zoom-out'),
+      btnZoomReset: document.getElementById('btn-zoom-reset'),
       board: document.getElementById('map-board'),
       stepList: document.getElementById('step-list'),
       modalBackdrop: document.getElementById('map-modal-backdrop'),
@@ -190,6 +194,22 @@
       DOM.inputImportMap.addEventListener('change', importMap);
     }
 
+    // Zoom controls
+    if (DOM.btnZoomIn) DOM.btnZoomIn.addEventListener('click', () => setZoom(state.zoom + 0.1));
+    if (DOM.btnZoomOut) DOM.btnZoomOut.addEventListener('click', () => setZoom(state.zoom - 0.1));
+    if (DOM.btnZoomReset) DOM.btnZoomReset.addEventListener('click', () => setZoom(1.0));
+    
+    // Ctrl+Scroll to zoom
+    if (DOM.board && DOM.board.parentElement) {
+      DOM.board.parentElement.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? -0.1 : 0.1;
+          setZoom(state.zoom + delta);
+        }
+      }, { passive: false });
+    }
+
     if (DOM.btnCancelNote) {
       console.log('[FlowMap] ✓ Binding Cancel button');
       DOM.btnCancelNote.addEventListener('click', closeModal);
@@ -208,6 +228,22 @@
     window.addEventListener('mousemove', handlePointerMove);
     window.addEventListener('mouseup', handlePointerUp);
     console.log('[FlowMap] ✓ All header events bound');
+  }
+  
+  function setZoom(newZoom) {
+    // Clamp zoom between 25% and 200%
+    state.zoom = clamp(newZoom, 0.25, 2.0);
+    
+    if (DOM.board) {
+      DOM.board.style.transform = `scale(${state.zoom})`;
+      DOM.board.style.transformOrigin = '0 0';
+    }
+    
+    if (DOM.btnZoomReset) {
+      DOM.btnZoomReset.textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+    
+    console.log('[FlowMap] Zoom set to:', state.zoom);
   }
 
   function openModal(noteId) {
