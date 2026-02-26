@@ -23,14 +23,14 @@
     .step-item-controls { display: inline-flex; gap: 4px; }
     .tiny-btn { border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; padding: 2px 8px; font-size: 12px; cursor: pointer; }
     .tiny-btn:hover { background: #f8fafc; }
-    .map-board-wrap { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; min-height: 0; }
+    .map-board-wrap { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
     .map-board {
       position: relative;
-      flex: 1;
-      min-height: 560px;
+      width: 4000px;
+      height: 3000px;
+      min-height: 3000px;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
-      overflow: hidden;
       background:
         linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px),
         linear-gradient(0deg, rgba(148,163,184,0.12) 1px, transparent 1px),

@@ -665,10 +665,12 @@
     const note = state.notes.find((n) => n.id === noteId);
     if (!note) return;
     const boardRect = DOM.board.getBoundingClientRect();
+    const scrollLeft = DOM.board.parentElement.scrollLeft || 0;
+    const scrollTop = DOM.board.parentElement.scrollTop || 0;
     state.drag = {
       noteId,
-      offsetX: event.clientX - boardRect.left - note.x,
-      offsetY: event.clientY - boardRect.top - note.y
+      offsetX: event.clientX - boardRect.left + scrollLeft - note.x,
+      offsetY: event.clientY - boardRect.top + scrollTop - note.y
     };
   }
 
@@ -676,8 +678,10 @@
     // Handle arrow control point dragging
     if (state.arrowDrag) {
       const boardRect = DOM.board.getBoundingClientRect();
-      const currentX = event.clientX - boardRect.left;
-      const currentY = event.clientY - boardRect.top;
+      const scrollLeft = DOM.board.parentElement.scrollLeft || 0;
+      const scrollTop = DOM.board.parentElement.scrollTop || 0;
+      const currentX = event.clientX - boardRect.left + scrollLeft;
+      const currentY = event.clientY - boardRect.top + scrollTop;
       
       const deltaX = currentX - state.arrowDrag.startX;
       const deltaY = currentY - state.arrowDrag.startY;
@@ -697,13 +701,17 @@
     if (!note) return;
 
     const boardRect = DOM.board.getBoundingClientRect();
+    const scrollLeft = DOM.board.parentElement.scrollLeft || 0;
+    const scrollTop = DOM.board.parentElement.scrollTop || 0;
     const noteWidth = 260;
     const noteHeight = 150;
-    const maxX = Math.max(0, boardRect.width - noteWidth);
-    const maxY = Math.max(0, boardRect.height - noteHeight);
+    const boardWidth = 4000;
+    const boardHeight = 3000;
+    const maxX = Math.max(0, boardWidth - noteWidth);
+    const maxY = Math.max(0, boardHeight - noteHeight);
 
-    note.x = clamp(event.clientX - boardRect.left - state.drag.offsetX, 0, maxX);
-    note.y = clamp(event.clientY - boardRect.top - state.drag.offsetY, 0, maxY);
+    note.x = clamp(event.clientX - boardRect.left + scrollLeft - state.drag.offsetX, 0, maxX);
+    note.y = clamp(event.clientY - boardRect.top + scrollTop - state.drag.offsetY, 0, maxY);
     renderBoard();
   }
 
