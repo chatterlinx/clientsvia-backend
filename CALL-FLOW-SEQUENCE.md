@@ -137,23 +137,66 @@
 - Check if returning customer
 - **Service:** `CallRuntime` + `StateStore`
 
-#### 6C. **AI Brain Decides**
-- Parse customer intent
-- Determine next action
-- Generate response
-- **Service:** `HybridReceptionistLLM` → OpenAI GPT-4
+#### 6C. **Call Runtime Orchestration**
+**Service:** `CallRuntime.processTurn()`
+**Code:** `services/engine/CallRuntime.js`
 
-**Brain Flow:**
+The runtime routes to **one of two modes**:
+
+##### **MODE 1: DISCOVERY (Default)**
+This is where **TRIGGERS are evaluated!**
+
+**Service:** `Agent2DiscoveryRunner`
+**Code:** `services/engine/agent2/Agent2DiscoveryRunner.js`
+
+**Flow:**
 ```
-Customer Input → LLM → Intent Analysis → Response Generation
+User Input: "I need to schedule a service"
+   ↓
+1. Normalize text (vocabulary corrections)
+   ↓
+2. TRIGGER CARD MATCHING ← THIS IS WHERE TRIGGERS ARE CHECKED!
+   Service: TriggerCardMatcher.match()
+   ↓
+3. Check ALL trigger cards (keywords, phrases, negatives)
+   - Keywords: word-based matching (all words must be present)
+   - Phrases: exact substring matching
+   - Negatives: exclude if negative keywords found
+   ↓
+4. First matching card wins (by priority)
+   ↓
+5. Return trigger card response (text + optional audio)
 ```
 
-#### 6D. **Route to Action**
+**Trigger Matching Logic:**
+- **Keyword Match:** "schedule service" 
+  - Input: "I need to schedule a service" → ✅ MATCH
+- **Negative Keywords:** "cancel", "reschedule"
+  - If found → ❌ SKIP this card
+- **Greeting Protection:** "hi" only matches short utterances
+  - "hi" → ✅ MATCH
+  - "hi my AC is broken" → ❌ NO MATCH (real intent)
+
+##### **MODE 2: BOOKING**
+If already in booking flow, uses `BookingLogicEngine` instead.
+
+#### 6D. **Trigger Card Response**
+
+If trigger matched:
+- Return pre-configured response text
+- Return optional pre-recorded audio URL
+- **Source:** Agent Console → Triggers page
+
+If no trigger matched:
+- Fall back to LLM (HybridReceptionistLLM)
+- Generate dynamic response via GPT-4
+
+#### 6E. **Route to Action**
 Options:
-1. **Ask Question** - Need more info
-2. **Run Scenario** - Execute booking flow
-3. **Transfer Call** - Route to human
-4. **Answer Question** - Provide information
+1. **Trigger Card Match** - Use pre-configured response (FAST!)
+2. **LLM Fallback** - Generate dynamic response (FLEXIBLE!)
+3. **Booking Flow** - Execute multi-step booking
+4. **Transfer Call** - Route to human
 
 ---
 
@@ -228,6 +271,101 @@ Options:
 
 ---
 
+## 🎯 **TRIGGERS: When & How They're Evaluated**
+
+### **Trigger Evaluation Point**
+
+**When:** Inside `/v2-agent-respond` endpoint, BEFORE LLM  
+**Where:** `Agent2DiscoveryRunner.run()` → `TriggerCardMatcher.match()`  
+**Code:** `services/engine/agent2/TriggerCardMatcher.js`
+
+### **The Trigger Matching Process**
+
+```
+Customer Speech: "I need to schedule a service"
+        ↓
+STT Result: "I need to schedule a service"
+        ↓
+POST /v2-agent-respond
+        ↓
+CallRuntime.processTurn()
+        ↓
+Agent2DiscoveryRunner.run()
+        ↓
+[🎯 TRIGGER EVALUATION HAPPENS HERE]
+TriggerCardMatcher.match()
+        ↓
+Loop through ALL trigger cards (sorted by priority):
+  For each card:
+    1. Check if enabled ✓
+    2. Check negative keywords (skip if found) ✗
+    3. Check keywords (word-based matching) ✓
+    4. Check phrases (substring matching) ✓
+    5. First match wins! 🎉
+        ↓
+If matched:
+  → Return trigger card response
+  → Use pre-recorded audio (if exists)
+  → SKIP LLM (faster response!)
+        ↓
+If no match:
+  → Fall back to LLM (HybridReceptionistLLM)
+  → GPT-4 generates dynamic response
+```
+
+### **Trigger Card Structure**
+
+From Agent Console → Triggers page:
+
+```javascript
+{
+  id: "card_123",
+  label: "Schedule Service",
+  enabled: true,
+  priority: 100,
+  
+  // Matching Rules
+  keywords: ["schedule", "appointment", "service"],
+  phrases: ["book appointment", "set up service"],
+  negativeKeywords: ["cancel", "reschedule"],
+  
+  // Response
+  responseText: "I'd be happy to help schedule a service! What day works best?",
+  audioUrl: "/trigger-audio/schedule-123.mp3" // Optional
+}
+```
+
+### **Matching Examples**
+
+| Customer Says | Trigger Keywords | Match? |
+|---------------|------------------|--------|
+| "I need to schedule a service" | ["schedule", "service"] | ✅ YES |
+| "Can I book an appointment?" | ["book", "appointment"] | ✅ YES |
+| "I want to cancel my appointment" | ["cancel"] (negative) | ❌ NO (blocked by negative) |
+| "hi my AC is broken" | ["hi"] (greeting) | ❌ NO (greeting protection) |
+| "hi" | ["hi"] (greeting) | ✅ YES (short utterance) |
+
+### **Why Triggers Matter**
+
+✅ **Ultra-fast responses** - No LLM call needed (saved ~1-2 seconds)  
+✅ **Consistent messaging** - Same response every time  
+✅ **Pre-recorded audio** - Skip TTS entirely (instant playback)  
+✅ **Deterministic** - No AI hallucinations or variations  
+✅ **Cost savings** - No OpenAI API calls for common requests  
+
+### **Trigger Priority**
+
+Triggers evaluated in **priority order** (highest first):
+1. Priority 100 (highest)
+2. Priority 90
+3. Priority 80
+...
+n. Priority 1 (lowest)
+
+**First match wins** - Once a trigger matches, evaluation stops.
+
+---
+
 ## Complete Flow Diagram
 
 ```
@@ -277,12 +415,28 @@ Options:
 │                         ↓                                     │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │  AI BRAIN PROCESSES                                     │  │
-│  │  → Clean STT result                                     │  │
-│  │  → Load call state                                      │  │
-│  │  → HybridReceptionistLLM → OpenAI                       │  │
-│  │  → Parse intent                                         │  │
-│  │  → Generate response text                               │  │
-│  │  → Service: CallRuntime + LLM                           │  │
+│  │  → Clean STT result (STTPreprocessor)                   │  │
+│  │  → Load call state (StateStore)                         │  │
+│  │  → CallRuntime.processTurn()                            │  │
+│  │    ├─→ Agent2DiscoveryRunner.run()                      │  │
+│  │    │   ├─→ [🎯 TRIGGER EVALUATION]                      │  │
+│  │    │   │   TriggerCardMatcher.match()                   │  │
+│  │    │   │   - Check keywords/phrases                     │  │
+│  │    │   │   - Check negative keywords                    │  │
+│  │    │   │   - Priority-based matching                    │  │
+│  │    │   │                                                 │  │
+│  │    │   ├─→ IF MATCHED:                                  │  │
+│  │    │   │   → Use trigger response text                  │  │
+│  │    │   │   → Use pre-recorded audio (if exists)         │  │
+│  │    │   │   → SKIP LLM (instant response!)               │  │
+│  │    │   │                                                 │  │
+│  │    │   └─→ IF NO MATCH:                                 │  │
+│  │    │       → HybridReceptionistLLM → OpenAI GPT-4       │  │
+│  │    │       → Generate dynamic response                  │  │
+│  │    │                                                     │  │
+│  │    └─→ OR BookingLogicEngine (if in booking mode)       │  │
+│  │                                                           │  │
+│  │  → Response text ready                                   │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                         ↓                                     │
 │  ┌────────────────────────────────────────────────────────┐  │
