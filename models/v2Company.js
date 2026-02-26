@@ -4175,6 +4175,12 @@ const companySchema = new mongoose.Schema({
                         default: '',
                         maxlength: 500
                     },
+                    emergencyFallback: {
+                        type: String,
+                        trim: true,
+                        default: '',
+                        maxlength: 500
+                    },
                     audioUrl: { 
                         type: String, 
                         trim: true, 
