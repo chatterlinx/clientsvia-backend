@@ -70,12 +70,34 @@
       }
     },
 
+    /** Human-readable labels for internal turn.kind codes */
+    KIND_LABELS: {
+      'GREETING': 'Greeting',
+      'CONVERSATION_AGENT': 'Response',
+      'TRIGGER_CARD': 'Trigger Card',
+      'TRIGGER_FOLLOWUP': 'Follow-up Question',
+      'CONSENT_GATE': 'Consent Gate',
+      'BRIDGE_FILLER': 'Bridge (Filler)',
+      'RECOVERY': 'Recovery',
+      'LLM_FALLBACK': 'LLM Fallback',
+      'BOOKING_PROMPT': 'Booking',
+      'TRANSFER': 'Transfer',
+      'TWIML_PLAY': 'Audio Played',
+      'TWIML_SAY': 'TTS Spoken',
+      'STT_EMPTY': 'No Speech Detected',
+      'ESCALATION': 'Escalation'
+    },
+
     /** UI Tab mapping for provenance links */
     UI_TAB_MAP: {
+      'aiAgentSettings.agent2.greetings.callStart': { page: 'agent2.html', tab: 'greetings', section: 'Call Start' },
+      'aiAgentSettings.agent2.greetings.callStart.emergencyFallback': { page: 'agent2.html', tab: 'greetings', section: 'Call Start (Emergency Fallback)' },
       'greetings.callStart': { page: 'agent2.html', tab: 'greetings', section: 'Call Start' },
       'greetings.interceptor': { page: 'agent2.html', tab: 'greetings', section: 'Interceptor' },
-      'discovery.recoveryMessages': { page: 'agent2.html', tab: 'recovery', section: 'Recovery' },
-      'discovery.fallbackMessages': { page: 'agent2.html', tab: 'fallback', section: 'Fallback' },
+      'discovery.recoveryMessages': { page: 'agent2.html', tab: 'recovery', section: 'Recovery Messages' },
+      'discovery.fallbackMessages': { page: 'agent2.html', tab: 'fallback', section: 'Fallback Messages' },
+      'aiAgentSettings.agent2.discovery': { page: 'agent2.html', tab: 'discovery', section: 'Discovery' },
+      'aiAgentSettings.connectionMessages': { page: 'agent2.html', tab: 'greetings', section: 'Connection Messages' },
       'triggers': { page: 'triggers.html', tab: 'triggers', section: 'Trigger Cards' },
       'bookingPrompts': { page: 'booking.html', tab: 'prompts', section: 'Booking Prompts' },
       'bookingLogic': { page: 'booking.html', tab: 'logic', section: 'Booking Logic' },
@@ -860,7 +882,7 @@
         <div class="turn-header">
           <span class="turn-number">Turn ${turn.turnNumber}</span>
           <span class="${speakerClass}">${speakerLabel}</span>
-          ${turn.kind ? `<span class="turn-timestamp" style="margin-left: 8px; opacity: 0.75;">${escapeHtml(turn.kind)}</span>` : ''}
+          ${turn.kind ? `<span class="turn-timestamp" style="margin-left: 8px; opacity: 0.75;">${escapeHtml(CONFIG.KIND_LABELS[turn.kind] || turn.kind)}</span>` : ''}
           <span class="turn-timestamp">${formatTimestamp(turn.timestamp)}</span>
         </div>
         <div class="turn-text">${escapeHtml(turn.text)}</div>
@@ -902,6 +924,18 @@
       sourceInfo += `
         <span class="provenance-label">Trigger:</span>
         <span class="provenance-value mono">${escapeHtml(provenance.triggerId)}</span>
+      `;
+    }
+
+    if (provenance.greeting?.deliveredVia) {
+      const deliveryLabels = {
+        'prerecorded_audio': '🎵 Pre-recorded Audio',
+        'elevenlabs_tts': '🎙️ ElevenLabs TTS',
+        'twilio_tts': '📢 Twilio TTS'
+      };
+      sourceInfo += `
+        <span class="provenance-label">Delivered Via:</span>
+        <span class="provenance-value">${escapeHtml(deliveryLabels[provenance.greeting.deliveredVia] || provenance.greeting.deliveredVia)}</span>
       `;
     }
 

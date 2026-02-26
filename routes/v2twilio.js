@@ -2006,8 +2006,6 @@ router.post('/voice', async (req, res) => {
     // ════════════════════════════════════════════════════════════════════════════
     const greetingText = (typeof initResult !== 'undefined' && initResult?.greeting) ? initResult.greeting : null;
     if (greetingText && req.body.CallSid) {
-      // Derive how the greeting was delivered (Play vs Say) from the actual TwiML we just sent.
-      // This is critical for diagnosis (e.g., Twilio default voice vs ElevenLabs audio).
       const greetingPlayMatch = twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/i);
       const greetingAudioUrl = greetingPlayMatch?.[1]?.trim?.() || null;
       const greetingVoiceProviderUsed = greetingAudioUrl ? 'twilio_play' : 'twilio_say';
@@ -2017,11 +2015,31 @@ router.post('/voice', async (req, res) => {
       const greetingMode = (typeof initResult !== 'undefined' && initResult?.greetingConfig?.mode)
         ? `${initResult.greetingConfig.mode}`
         : null;
-      const greetingUiPath = greetingConfigSource === 'agent2'
-        ? (greetingAudioUrl
+      
+      // Determine provenance: UI_OWNED (normal), FALLBACK (emergency), HARDCODED (no config)
+      const greetingUsedEmergency = initResult?.greetingConfig?.usedEmergencyFallback === true;
+      const greetingUsedHardcoded = initResult?.greetingConfig?.usedHardcodedFallback === true;
+      const greetingFallbackReason = initResult?.greetingConfig?.fallbackReason || null;
+      
+      let greetingProvenanceType = 'UI_OWNED';
+      let greetingUiPath;
+      let greetingReason = null;
+      
+      if (greetingUsedHardcoded) {
+        greetingProvenanceType = 'HARDCODED';
+        greetingUiPath = 'UNMAPPED - NO_GREETING_CONFIGURED';
+        greetingReason = `No greeting or emergency fallback configured: ${greetingFallbackReason}`;
+      } else if (greetingUsedEmergency) {
+        greetingProvenanceType = 'FALLBACK';
+        greetingUiPath = 'aiAgentSettings.agent2.greetings.callStart.emergencyFallback';
+        greetingReason = `Emergency fallback used: ${greetingFallbackReason}`;
+      } else if (greetingConfigSource === 'agent2') {
+        greetingUiPath = greetingAudioUrl
           ? 'aiAgentSettings.agent2.greetings.callStart.audioUrl'
-          : 'aiAgentSettings.agent2.greetings.callStart.text')
-        : 'aiAgentSettings.connectionMessages.greeting';
+          : 'aiAgentSettings.agent2.greetings.callStart.text';
+      } else {
+        greetingUiPath = 'aiAgentSettings.connectionMessages.greeting';
+      }
 
       try {
         const CallTranscriptV2 = require('../models/CallTranscriptV2');
@@ -2031,17 +2049,26 @@ router.post('/voice', async (req, res) => {
           [
             {
               speaker: 'agent',
-              kind: 'CONVERSATION_AGENT',
+              kind: 'GREETING',
               text: greetingText.trim(),
               turnNumber: 0,
               ts: new Date(),
-              sourceKey: greetingConfigSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
+              sourceKey: greetingUsedEmergency
+                ? 'agent2.greetings.callStart.emergencyFallback'
+                : (greetingConfigSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting'),
               trace: {
                 kind: 'greeting',
                 provenance: {
-                  type: 'UI_OWNED',
+                  type: greetingProvenanceType,
                   uiPath: greetingUiPath,
-                  greeting: { mode: greetingMode, source: greetingConfigSource },
+                  reason: greetingReason,
+                  greeting: {
+                    mode: greetingMode,
+                    source: greetingConfigSource,
+                    deliveredVia: greetingAudioUrl ? 'prerecorded_audio' : (greetingVoiceProviderUsed === 'twilio_say' ? 'twilio_tts' : 'elevenlabs_tts'),
+                    usedEmergencyFallback: greetingUsedEmergency,
+                    usedHardcodedFallback: greetingUsedHardcoded
+                  },
                   voiceProviderUsed: greetingVoiceProviderUsed,
                   audioUrl: greetingAudioUrl
                 },
