@@ -815,6 +815,9 @@ router.patch(
           }
         }
       }
+      // Mixed-type fields (style, playbook, vocabulary, clarifiers, followUpConsent)
+      // require explicit markModified or Mongoose silently skips them on save.
+      company.markModified('aiAgentSettings');
       await company.save();
       
       // Invalidate truth cache for this company
