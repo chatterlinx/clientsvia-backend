@@ -1,5 +1,7 @@
 (function() {
   'use strict';
+  
+  console.log('[FlowMap] ✓ Script loaded');
 
   const state = {
     companyId: null,
@@ -16,6 +18,7 @@
   let DOM = {};
 
   function initDOM() {
+    console.log('[FlowMap] ✓ initDOM() called');
     DOM = {
       headerCompanyName: document.getElementById('header-company-name'),
       headerCompanyId: document.getElementById('header-company-id'),
@@ -34,6 +37,11 @@
       btnSaveNote: document.getElementById('btn-save-note'),
       arrowSvg: null // Will be created dynamically
     };
+    console.log('[FlowMap] ✓ DOM elements:', {
+      board: DOM.board ? '✓' : '✗',
+      modalBackdrop: DOM.modalBackdrop ? '✓' : '✗',
+      noteTitle: DOM.noteTitle ? '✓' : '✗'
+    });
   }
 
   function init() {
@@ -152,28 +160,45 @@
   }
 
   function bindEvents() {
+    console.log('[FlowMap] ✓ bindEvents() called');
+    
     if (DOM.btnBackToDashboard) {
       DOM.btnBackToDashboard.addEventListener('click', () => {
+        console.log('[FlowMap] ✓ Back button clicked');
         window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
       });
     }
 
     if (DOM.btnNewNote) {
-      DOM.btnNewNote.addEventListener('click', () => openModal(null));
+      console.log('[FlowMap] ✓ Binding New Bubble button');
+      DOM.btnNewNote.addEventListener('click', () => {
+        console.log('[FlowMap] ✓ New Bubble button clicked');
+        openModal(null);
+      });
     }
     // Emergency global hook so the button can still work if another listener path fails.
     window.__flowMapOpenNewNote = () => openModal(null);
 
-    if (DOM.btnClearMap) DOM.btnClearMap.addEventListener('click', clearMap);
+    if (DOM.btnClearMap) {
+      console.log('[FlowMap] ✓ Binding Clear Map button');
+      DOM.btnClearMap.addEventListener('click', clearMap);
+    }
     if (DOM.btnExportMap) DOM.btnExportMap.addEventListener('click', exportMap);
     if (DOM.btnImportMap && DOM.inputImportMap) {
       DOM.btnImportMap.addEventListener('click', () => DOM.inputImportMap.click());
       DOM.inputImportMap.addEventListener('change', importMap);
     }
 
-    if (DOM.btnCancelNote) DOM.btnCancelNote.addEventListener('click', closeModal);
-    if (DOM.btnSaveNote) DOM.btnSaveNote.addEventListener('click', saveModalNote);
+    if (DOM.btnCancelNote) {
+      console.log('[FlowMap] ✓ Binding Cancel button');
+      DOM.btnCancelNote.addEventListener('click', closeModal);
+    }
+    if (DOM.btnSaveNote) {
+      console.log('[FlowMap] ✓ Binding Save button');
+      DOM.btnSaveNote.addEventListener('click', saveModalNote);
+    }
     if (DOM.modalBackdrop) {
+      console.log('[FlowMap] ✓ Binding modal backdrop');
       DOM.modalBackdrop.addEventListener('click', (event) => {
         if (event.target === DOM.modalBackdrop) closeModal();
       });
@@ -181,20 +206,29 @@
 
     window.addEventListener('mousemove', handlePointerMove);
     window.addEventListener('mouseup', handlePointerUp);
+    console.log('[FlowMap] ✓ All header events bound');
   }
 
   function openModal(noteId) {
+    console.log('[FlowMap] ✓ openModal() called, noteId:', noteId);
+    console.log('[FlowMap] ✓ DOM.modalBackdrop:', DOM.modalBackdrop);
+    console.log('[FlowMap] ✓ DOM.noteTitle:', DOM.noteTitle);
+    console.log('[FlowMap] ✓ DOM.noteBody:', DOM.noteBody);
+    
     state.editingId = noteId;
     const note = noteId ? state.notes.find((n) => n.id === noteId) : null;
     DOM.noteTitle.value = note?.title || '';
     DOM.noteBody.value = note?.body || '';
     DOM.modalBackdrop.classList.add('open');
     DOM.noteTitle.focus();
+    console.log('[FlowMap] ✓ Modal opened successfully');
   }
 
   function closeModal() {
+    console.log('[FlowMap] ✓ closeModal() called');
     state.editingId = null;
     DOM.modalBackdrop.classList.remove('open');
+    console.log('[FlowMap] ✓ Modal closed');
   }
 
   function saveModalNote() {
@@ -604,9 +638,13 @@
   }
 
   // Wait for DOM to be ready before initializing
+  console.log('[FlowMap] ✓ Setting up initialization, readyState:', document.readyState);
   if (document.readyState === 'loading') {
+    console.log('[FlowMap] ✓ Waiting for DOMContentLoaded...');
     document.addEventListener('DOMContentLoaded', init);
   } else {
+    console.log('[FlowMap] ✓ DOM already ready, calling init()');
     init();
   }
+  console.log('[FlowMap] ✓ IIFE complete');
 })();
