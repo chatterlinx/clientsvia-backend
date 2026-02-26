@@ -559,11 +559,11 @@
       const tangentY = 2*(1-t)*(controlY - fromY) + 2*t*(toY - controlY);
       const angle = Math.atan2(tangentY, tangentX) * 180 / Math.PI;
       
-      // Create small direction arrow
+      // Create direction arrow (4x larger)
       const dirArrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      dirArrow.setAttribute('points', '0,0 8,3 0,6');
+      dirArrow.setAttribute('points', '0,0 32,12 0,24');
       dirArrow.setAttribute('fill', '#3b82f6');
-      dirArrow.setAttribute('transform', `translate(${midPointX}, ${midPointY}) rotate(${angle}) translate(-4, -3)`);
+      dirArrow.setAttribute('transform', `translate(${midPointX}, ${midPointY}) rotate(${angle}) translate(-16, -12)`);
       dirArrow.style.pointerEvents = 'none';
       DOM.arrowSvg.appendChild(dirArrow);
       
