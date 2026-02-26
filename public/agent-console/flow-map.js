@@ -4,10 +4,13 @@
   const state = {
     companyId: null,
     notes: [],
+    connections: [], // Array of {from: noteId, to: noteId}
     selectedId: null,
     editingId: null,
     zCounter: 1,
-    drag: null
+    drag: null,
+    connectMode: false,
+    connectFrom: null
   };
 
   let DOM = {};
@@ -28,7 +31,8 @@
       noteTitle: document.getElementById('map-note-title'),
       noteBody: document.getElementById('map-note-body'),
       btnCancelNote: document.getElementById('btn-cancel-note'),
-      btnSaveNote: document.getElementById('btn-save-note')
+      btnSaveNote: document.getElementById('btn-save-note'),
+      arrowSvg: null // Will be created dynamically
     };
   }
 
@@ -99,15 +103,18 @@
       const raw = localStorage.getItem(getStorageKey());
       if (!raw) {
         state.notes = [];
+        state.connections = [];
         return;
       }
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.notes)) {
         state.notes = parsed.notes.map(normalizeNote).filter(Boolean);
         state.zCounter = Number(parsed.zCounter || 1);
+        state.connections = Array.isArray(parsed.connections) ? parsed.connections : [];
       }
     } catch (err) {
       state.notes = [];
+      state.connections = [];
     }
   }
 
@@ -116,6 +123,7 @@
       getStorageKey(),
       JSON.stringify({
         notes: state.notes,
+        connections: state.connections,
         zCounter: state.zCounter
       })
     );
@@ -212,8 +220,9 @@
   }
 
   function clearMap() {
-    if (!window.confirm('Delete all map bubbles for this company?')) return;
+    if (!window.confirm('Delete all map bubbles and connections for this company?')) return;
     state.notes = [];
+    state.connections = [];
     state.selectedId = null;
     saveNotes();
     render();
@@ -223,7 +232,8 @@
     const payload = {
       companyId: state.companyId,
       exportedAt: new Date().toISOString(),
-      notes: state.notes
+      notes: state.notes,
+      connections: state.connections
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -244,6 +254,7 @@
       const parsed = JSON.parse(text);
       if (!Array.isArray(parsed.notes)) throw new Error('Invalid map file.');
       state.notes = parsed.notes.map(normalizeNote).filter(Boolean);
+      state.connections = Array.isArray(parsed.connections) ? parsed.connections : [];
       state.zCounter = state.notes.reduce((max, n) => Math.max(max, n.z || 1), 1);
       saveNotes();
       render();
@@ -304,15 +315,36 @@
 
   function renderBoard() {
     DOM.board.innerHTML = '';
+    
+    // Create SVG for arrows
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'arrow-layer');
+    svg.style.position = 'absolute';
+    svg.style.top = '0';
+    svg.style.left = '0';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.pointerEvents = 'none';
+    svg.style.zIndex = '0';
+    DOM.board.appendChild(svg);
+    DOM.arrowSvg = svg;
+    
+    // Render arrows
+    renderArrows();
+    
+    // Render notes
     state.notes
       .sort((a, b) => a.z - b.z)
       .forEach((note) => {
         const el = document.createElement('div');
-        el.className = `map-note ${state.selectedId === note.id ? 'active' : ''}`;
+        el.className = `map-note ${state.selectedId === note.id ? 'active' : ''} ${state.connectFrom === note.id ? 'connect-source' : ''}`;
         el.style.left = `${note.x}px`;
         el.style.top = `${note.y}px`;
         el.style.zIndex = String(note.z || 1);
         el.dataset.noteId = note.id;
+        
+        const connectionCount = state.connections.filter(c => c.from === note.id || c.to === note.id).length;
+        
         el.innerHTML = `
           <div class="map-note-header" data-drag-handle="true">
             <h4 class="map-note-title">${escapeHtml(note.title)}</h4>
@@ -322,6 +354,7 @@
           <div class="map-note-footer">
             <div class="map-note-controls">
               <button class="tiny-btn" data-note-action="edit">Edit</button>
+              <button class="tiny-btn" data-note-action="connect" title="Draw arrow to another bubble">→</button>
               <button class="tiny-btn" data-note-action="up">Up</button>
               <button class="tiny-btn" data-note-action="down">Down</button>
             </div>
@@ -330,6 +363,13 @@
         `;
 
         el.addEventListener('mousedown', (event) => {
+          // Handle connect mode
+          if (state.connectMode && !event.target.closest('button')) {
+            event.preventDefault();
+            handleConnectClick(note.id);
+            return;
+          }
+          
           state.selectedId = note.id;
           bringToFront(note.id);
           if (event.target.closest('[data-drag-handle="true"]')) {
@@ -345,6 +385,7 @@
             const action = button.dataset.noteAction;
             if (action === 'edit') openModal(note.id);
             if (action === 'delete') deleteNote(note.id);
+            if (action === 'connect') startConnect(note.id);
             if (action === 'up') moveSequence(note.id, -1);
             if (action === 'down') moveSequence(note.id, 1);
           });
@@ -352,6 +393,102 @@
 
         DOM.board.appendChild(el);
       });
+  }
+  
+  function renderArrows() {
+    if (!DOM.arrowSvg) return;
+    
+    // Clear existing arrows
+    DOM.arrowSvg.innerHTML = '';
+    
+    // Define arrowhead marker
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', 'arrowhead');
+    marker.setAttribute('markerWidth', '10');
+    marker.setAttribute('markerHeight', '10');
+    marker.setAttribute('refX', '9');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 10 3, 0 6');
+    polygon.setAttribute('fill', '#3b82f6');
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+    DOM.arrowSvg.appendChild(defs);
+    
+    // Draw each connection
+    state.connections.forEach((conn) => {
+      const fromNote = state.notes.find(n => n.id === conn.from);
+      const toNote = state.notes.find(n => n.id === conn.to);
+      
+      if (!fromNote || !toNote) return;
+      
+      // Calculate center points of notes (260px wide, ~150px tall)
+      const fromX = fromNote.x + 130;
+      const fromY = fromNote.y + 75;
+      const toX = toNote.x + 130;
+      const toY = toNote.y + 75;
+      
+      // Create path
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const midX = (fromX + toX) / 2;
+      const midY = (fromY + toY) / 2;
+      
+      // Curved path
+      const d = `M ${fromX} ${fromY} Q ${midX} ${midY} ${toX} ${toY}`;
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', '#3b82f6');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('marker-end', 'url(#arrowhead)');
+      path.style.cursor = 'pointer';
+      path.style.pointerEvents = 'stroke';
+      
+      // Add click to delete
+      path.addEventListener('click', () => {
+        if (window.confirm('Delete this arrow connection?')) {
+          state.connections = state.connections.filter(c => c !== conn);
+          saveNotes();
+          render();
+        }
+      });
+      
+      DOM.arrowSvg.appendChild(path);
+    });
+  }
+  
+  function startConnect(noteId) {
+    state.connectMode = true;
+    state.connectFrom = noteId;
+    render();
+  }
+  
+  function handleConnectClick(toNoteId) {
+    if (!state.connectFrom || state.connectFrom === toNoteId) {
+      // Cancel connect mode
+      state.connectMode = false;
+      state.connectFrom = null;
+      render();
+      return;
+    }
+    
+    // Check if connection already exists
+    const exists = state.connections.some(c => 
+      c.from === state.connectFrom && c.to === toNoteId
+    );
+    
+    if (!exists) {
+      state.connections.push({
+        from: state.connectFrom,
+        to: toNoteId
+      });
+      saveNotes();
+    }
+    
+    state.connectMode = false;
+    state.connectFrom = null;
+    render();
   }
 
   function startDrag(event, noteId) {
