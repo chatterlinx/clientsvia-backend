@@ -264,7 +264,18 @@
   }
 
   function clearMap() {
-    if (!window.confirm('Delete all map bubbles and connections for this company?')) return;
+    const userInput = window.prompt(
+      `⚠️ WARNING: This will permanently delete ALL ${state.notes.length} bubble(s) and ${state.connections.length} connection(s) for this company.\n\n` +
+      'This action CANNOT be undone!\n\n' +
+      'Type "YES" (all caps) to confirm deletion:'
+    );
+    
+    if (userInput !== 'YES') {
+      console.log('[FlowMap] Clear cancelled - user typed:', userInput);
+      return;
+    }
+    
+    console.log('[FlowMap] Clearing all notes and connections');
     state.notes = [];
     state.connections = [];
     state.selectedId = null;
