@@ -591,7 +591,19 @@
         path.style.cursor = 'grabbing';
       });
       
-      // Add right-click to delete
+      // Add double-click to delete
+      path.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[FlowMap] ✓ Arrow double-clicked');
+        if (window.confirm('Delete this arrow connection?')) {
+          state.connections = state.connections.filter(c => c !== conn);
+          saveNotes();
+          render();
+        }
+      });
+      
+      // Add right-click to delete (keep as backup)
       path.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
