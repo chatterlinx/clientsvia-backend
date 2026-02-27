@@ -72,8 +72,16 @@
     btnBack: document.getElementById('btn-back'),
     btnBackToAgent2: document.getElementById('btn-back-to-agent2'),
     btnAddTrigger: document.getElementById('btn-add-trigger'),
+    btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
     btnCreateGroup: document.getElementById('btn-create-group'),
+    
+    modalBulkImport: document.getElementById('modal-bulk-import'),
+    modalBulkImportClose: document.getElementById('modal-bulk-import-close'),
+    bulkImportJson: document.getElementById('bulk-import-json'),
+    bulkImportStatus: document.getElementById('bulk-import-status'),
+    btnCancelBulkImport: document.getElementById('btn-cancel-bulk-import'),
+    btnExecuteBulkImport: document.getElementById('btn-execute-bulk-import'),
     
     groupSelector: document.getElementById('group-selector'),
     groupIcon: document.getElementById('group-icon'),
@@ -230,6 +238,9 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+    if (DOM.btnBulkImportTriggers) {
+      DOM.btnBulkImportTriggers.addEventListener('click', openBulkImportModal);
+    }
     DOM.btnCheckDuplicates.addEventListener('click', checkDuplicates);
     if (DOM.btnFixDuplicates) {
       DOM.btnFixDuplicates.addEventListener('click', checkDuplicates);
@@ -268,6 +279,13 @@
     DOM.btnGroupCancel.addEventListener('click', closeCreateGroupModal);
     DOM.btnGroupCreate.addEventListener('click', createGroup);
     
+    if (DOM.modalBulkImportClose) DOM.modalBulkImportClose.addEventListener('click', closeBulkImportModal);
+    if (DOM.btnCancelBulkImport) DOM.btnCancelBulkImport.addEventListener('click', closeBulkImportModal);
+    if (DOM.btnExecuteBulkImport) DOM.btnExecuteBulkImport.addEventListener('click', executeBulkImport);
+    if (DOM.modalBulkImport) {
+      DOM.modalBulkImport.addEventListener('click', (e) => { if (e.target === DOM.modalBulkImport) closeBulkImportModal(); });
+    }
+    
     // GPT Settings & Prefill
     if (DOM.btnGptSettings) {
       DOM.btnGptSettings.addEventListener('click', openGptSettingsModal);
@@ -291,6 +309,7 @@
         closeApprovalModal();
         closeCreateGroupModal();
         closeGptSettingsModal();
+        closeBulkImportModal();
       }
     });
     
@@ -1761,6 +1780,110 @@
     } catch (error) {
       console.error('[Triggers] Health check failed:', error);
       showToast('error', 'Check Failed', 'Could not check for duplicates.');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     BULK IMPORT TRIGGERS
+     -------------------------------------------------------------------------- */
+  function openBulkImportModal() {
+    if (DOM.bulkImportJson) DOM.bulkImportJson.value = '';
+    if (DOM.bulkImportStatus) DOM.bulkImportStatus.style.display = 'none';
+    if (DOM.modalBulkImport) DOM.modalBulkImport.classList.add('active');
+  }
+
+  function closeBulkImportModal() {
+    if (DOM.modalBulkImport) DOM.modalBulkImport.classList.remove('active');
+  }
+
+  async function executeBulkImport() {
+    const raw = (DOM.bulkImportJson?.value || '').trim();
+    if (!raw) { alert('Please paste a JSON array of triggers'); return; }
+
+    let triggers;
+    try {
+      triggers = JSON.parse(raw);
+    } catch (err) {
+      alert('Invalid JSON: ' + err.message);
+      return;
+    }
+
+    if (!Array.isArray(triggers) || triggers.length === 0) {
+      alert('JSON must be a non-empty array of trigger objects');
+      return;
+    }
+
+    const errors = [];
+    const valid = [];
+    triggers.forEach((t, i) => {
+      if (!t.ruleId || !t.label || !t.answerText) {
+        errors.push(`[${i}] Missing ruleId, label, or answerText`);
+        return;
+      }
+      if (!/^[a-z0-9_.]+$/.test(t.ruleId)) {
+        errors.push(`[${i}] Invalid ruleId "${t.ruleId}" — use lowercase, dots, underscores`);
+        return;
+      }
+      valid.push({
+        ruleId: t.ruleId,
+        label: t.label,
+        priority: t.priority || 50,
+        keywords: Array.isArray(t.keywords) ? t.keywords : [],
+        phrases: Array.isArray(t.phrases) ? t.phrases : [],
+        negativeKeywords: Array.isArray(t.negativeKeywords) ? t.negativeKeywords : [],
+        responseMode: 'standard',
+        answerText: t.answerText,
+        audioUrl: '',
+        followUpQuestion: t.followUpQuestion || ''
+      });
+    });
+
+    if (errors.length > 0 && valid.length === 0) {
+      alert('All triggers failed validation:\n\n' + errors.slice(0, 10).join('\n'));
+      return;
+    }
+
+    const confirmMsg = `Import ${valid.length} trigger(s)?` +
+      (errors.length > 0 ? `\n\n${errors.length} skipped due to errors.` : '') +
+      `\n\nThey will be created as LOCAL triggers for this company.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const statusEl = DOM.bulkImportStatus;
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = `<strong>Importing... 0/${valid.length}</strong>`;
+    DOM.btnExecuteBulkImport.disabled = true;
+
+    let created = 0;
+    let failed = 0;
+    const failDetails = [];
+
+    for (let i = 0; i < valid.length; i++) {
+      try {
+        await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers`, {
+          method: 'POST',
+          body: valid[i]
+        });
+        created++;
+      } catch (err) {
+        failed++;
+        failDetails.push(`${valid[i].ruleId}: ${err.message}`);
+      }
+      statusEl.innerHTML = `<strong>Importing... ${i + 1}/${valid.length}</strong> (${created} created, ${failed} failed)`;
+    }
+
+    DOM.btnExecuteBulkImport.disabled = false;
+
+    const summary = `Import complete!\n\n` +
+      `Created: ${created}\nFailed: ${failed}` +
+      (failDetails.length > 0 ? `\n\nFailures:\n${failDetails.slice(0, 10).join('\n')}` : '');
+
+    alert(summary);
+
+    if (created > 0) {
+      closeBulkImportModal();
+      await loadTriggers();
+      showToast('success', 'Bulk Import', `${created} trigger(s) imported successfully.`);
     }
   }
 

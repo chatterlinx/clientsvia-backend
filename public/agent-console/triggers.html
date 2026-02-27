@@ -842,6 +842,9 @@
           </svg>
           Health Check
         </button>
+        <button class="btn btn-secondary" id="btn-bulk-import-triggers">
+          Bulk Import
+        </button>
         <button class="btn btn-primary" id="btn-add-trigger">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -1525,6 +1528,40 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
   </div>
 
   <!-- JavaScript -->
+  <!-- MODAL: Bulk Import Triggers -->
+  <div id="modal-bulk-import" class="modal-backdrop">
+    <div class="modal" style="max-width: 780px; max-height: 90vh;">
+      <div class="modal-header">
+        <h3 class="modal-title">Bulk Import Triggers</h3>
+        <button class="modal-close" id="modal-bulk-import-close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: #64748b; margin: 0 0 12px 0;">
+          Paste a JSON array of trigger objects. Each trigger needs: <code>ruleId</code>, <code>label</code>, <code>priority</code>, <code>keywords</code>, <code>phrases</code>, <code>answerText</code>. Optional: <code>negativeKeywords</code>, <code>followUpQuestion</code>.
+        </p>
+        <textarea id="bulk-import-json" style="width: 100%; min-height: 340px; padding: 12px; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5; border: 1px solid #cbd5e1; border-radius: 8px; resize: vertical;" placeholder='[
+  {
+    "ruleId": "hvac.cooling.not_cooling",
+    "label": "AC not cooling",
+    "priority": 20,
+    "keywords": ["not cooling", "warm air"],
+    "phrases": ["ac not cooling", "air not cold"],
+    "negativeKeywords": ["cancel", "refund"],
+    "answerText": "Got it{name}. I can help with that.",
+    "followUpQuestion": "Do you want me to schedule?"
+  }
+]'></textarea>
+        <div id="bulk-import-status" style="margin-top: 12px; font-size: 13px; display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-bulk-import">Cancel</button>
+        <button class="btn btn-primary" id="btn-execute-bulk-import">Import Triggers</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/agent-console/lib/auth.js"></script>
   <script src="/agent-console/shared/truthButton.js"></script>
   <script src="/agent-console/triggers.js"></script>
