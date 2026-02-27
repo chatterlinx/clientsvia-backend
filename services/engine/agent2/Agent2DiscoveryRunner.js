@@ -1028,9 +1028,9 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_YES';
         
-        const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
+        const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
-      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+        if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
         
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
         const pendingYes = `${pendingResponses.yes || fallback.pendingYesResponse || ''}`.trim();
@@ -1091,9 +1091,9 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_NO';
         
-        const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
+        const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
-      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+        if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
         
         // V128: Pending question NO response (new namespace with legacy fallback)
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
@@ -1553,10 +1553,10 @@ class Agent2DiscoveryRunner {
       // ════════════════════════════════════════════════════════════════════════
       const isLLMTrigger = card.responseMode === 'llm' && card.llmFactPack;
 
-      // V119: Build personalized ack
-      const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
+      // Build ack (with one-time name greeting if configured)
+      const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
       nextState.agent2.discovery.usedNameThisTurn = usedName;
-      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+      if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
 
       // Update state
       nextState.agent2.discovery.lastPath = isLLMTrigger ? 'TRIGGER_CARD_LLM' : 'TRIGGER_CARD_ANSWER';
@@ -1820,10 +1820,9 @@ class Agent2DiscoveryRunner {
           const clarifierQuestion = `${clarifier.question || ''}`.trim();
           
           if (clarifierQuestion) {
-            // Build personalized ack
-            const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
+            const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
             nextState.agent2.discovery.usedNameThisTurn = usedName;
-      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+            if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
             
             // Store clarifier state
             nextState.agent2.discovery.pendingClarifier = {
@@ -2012,9 +2011,9 @@ class Agent2DiscoveryRunner {
     let pathSelected = null;
     let pathReason = null;
 
-    // V119: Build personalized ack
-    const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
+    const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
     nextState.agent2.discovery.usedNameThisTurn = usedName;
+    if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
 
     if (answerText && scenarioUsed) {
       // Path 3a: Scenario engine provided an answer (only if enabled and matched)
