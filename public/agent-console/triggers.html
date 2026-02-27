@@ -835,6 +835,9 @@
       </div>
       
       <div class="header-right">
+        <button class="btn btn-secondary" id="btn-name-greeting" title="Configure one-time name greeting" style="background: #eff6ff; border-color: #93c5fd; color: #1e40af;">
+          Name Greeting
+        </button>
         <button class="btn btn-secondary" id="btn-patience-settings" title="Configure caller hold/wait behavior" style="background: #f0fdf4; border-color: #86efac; color: #166534;">
           ⏸ Patience
         </button>
@@ -1534,6 +1537,77 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
   </div>
 
   <!-- JavaScript -->
+  <!-- ════════════════════════════════════════════════════════════════════════
+       MODAL: Name Greeting
+       One-time opening line when caller's name is captured.
+       Fires once at the start of the call, never repeats.
+       ════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-name-greeting" class="modal-backdrop">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-bottom: 2px solid #93c5fd;">
+        <div>
+          <h3 class="modal-title" style="color: #1e40af;">Name Greeting</h3>
+          <p style="font-size: 13px; color: #1e3a8a; margin: 4px 0 0 0;">One-time opening line — fires once at the start of the call</p>
+        </div>
+        <button class="modal-close" id="modal-name-greeting-close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+
+        <!-- TOGGLE: Always greet -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 10px; margin-bottom: 20px;">
+          <div>
+            <div style="font-size: 14px; font-weight: 700; color: #1e40af;">Always Greet</div>
+            <div style="font-size: 12px; color: #1e3a8a;">
+              <strong>ON</strong> = greet every caller (with or without name)<br>
+              <strong>OFF</strong> = only greet when caller's name is captured
+            </div>
+          </div>
+          <input type="checkbox" id="name-greeting-always" style="width: 20px; height: 20px; cursor: pointer;">
+        </div>
+
+        <!-- GREETING LINE -->
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+            Greeting Line
+          </label>
+          <p style="font-size: 12px; color: #64748b; margin: 0 0 8px 0;">
+            Use <code>{name}</code> where the caller's name should appear. If name isn't captured and "Always Greet" is ON, <code>{name}</code> is removed and it still reads naturally.
+          </p>
+          <textarea id="name-greeting-text" class="form-input" rows="2" style="font-size: 15px; line-height: 1.5;"
+            placeholder="Hello {name}, thank you for calling.">Hello {name}, thank you for calling.</textarea>
+        </div>
+
+        <!-- PREVIEW -->
+        <div style="padding: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px;">
+          <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Preview</div>
+          <div style="font-size: 13px; color: #1e293b; margin-bottom: 6px;">
+            <strong>With name:</strong> <span style="color: #166534;">"Hello Marc, thank you for calling."</span>
+          </div>
+          <div style="font-size: 13px; color: #1e293b;">
+            <strong>Without name:</strong> <span style="color: #64748b;">"Hello, thank you for calling."</span>
+          </div>
+        </div>
+
+        <!-- HOW IT WORKS -->
+        <div style="padding: 12px; background: #fefce8; border: 1px solid #fde047; border-radius: 8px;">
+          <div style="font-size: 12px; font-weight: 600; color: #854d0e; margin-bottom: 4px;">How it works</div>
+          <div style="font-size: 11px; color: #92400e; line-height: 1.6;">
+            This line prepends to the first trigger/LLM response only.<br>
+            Example: <em>"Hello Marc, thank you for calling. Got it — I can help with that."</em><br>
+            It never fires again during the same call.
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-name-greeting-cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-name-greeting-save" style="background: #1e40af;">Save Greeting</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ════════════════════════════════════════════════════════════════════════
        MODAL: Patience Settings
        Configures how the AI handles "hold on", "wait", "let me think" requests.

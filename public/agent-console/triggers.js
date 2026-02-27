@@ -77,6 +77,14 @@
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
     btnCreateGroup: document.getElementById('btn-create-group'),
     
+    btnNameGreeting: document.getElementById('btn-name-greeting'),
+    modalNameGreeting: document.getElementById('modal-name-greeting'),
+    modalNameGreetingClose: document.getElementById('modal-name-greeting-close'),
+    btnNameGreetingCancel: document.getElementById('btn-name-greeting-cancel'),
+    btnNameGreetingSave: document.getElementById('btn-name-greeting-save'),
+    nameGreetingAlways: document.getElementById('name-greeting-always'),
+    nameGreetingText: document.getElementById('name-greeting-text'),
+    
     btnPatienceSettings: document.getElementById('btn-patience-settings'),
     modalPatience: document.getElementById('modal-patience'),
     modalPatienceClose: document.getElementById('modal-patience-close'),
@@ -253,6 +261,13 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+    if (DOM.btnNameGreeting) DOM.btnNameGreeting.addEventListener('click', openNameGreetingModal);
+    if (DOM.modalNameGreetingClose) DOM.modalNameGreetingClose.addEventListener('click', closeNameGreetingModal);
+    if (DOM.btnNameGreetingCancel) DOM.btnNameGreetingCancel.addEventListener('click', closeNameGreetingModal);
+    if (DOM.btnNameGreetingSave) DOM.btnNameGreetingSave.addEventListener('click', saveNameGreeting);
+    if (DOM.modalNameGreeting) {
+      DOM.modalNameGreeting.addEventListener('click', (e) => { if (e.target === DOM.modalNameGreeting) closeNameGreetingModal(); });
+    }
     if (DOM.btnPatienceSettings) {
       DOM.btnPatienceSettings.addEventListener('click', openPatienceModal);
     }
@@ -338,6 +353,7 @@
         closeGptSettingsModal();
         closeBulkImportModal();
         closePatienceModal();
+        closeNameGreetingModal();
       }
     });
     
@@ -1936,6 +1952,60 @@
     } catch (error) {
       console.error('[Triggers] Health check failed:', error);
       showToast('error', 'Check Failed', 'Could not check for duplicates.');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     NAME GREETING — One-time opening line when caller name is captured
+     Stored at: aiAgentSettings.agent2.discovery.nameGreeting
+     -------------------------------------------------------------------------- */
+
+  function openNameGreetingModal() {
+    loadNameGreeting();
+    if (DOM.modalNameGreeting) DOM.modalNameGreeting.classList.add('active');
+  }
+
+  function closeNameGreetingModal() {
+    if (DOM.modalNameGreeting) DOM.modalNameGreeting.classList.remove('active');
+  }
+
+  async function loadNameGreeting() {
+    try {
+      const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`);
+      const s = data.settings || {};
+      if (DOM.nameGreetingAlways) DOM.nameGreetingAlways.checked = s.alwaysGreet === true;
+      if (DOM.nameGreetingText) DOM.nameGreetingText.value = s.greetingLine || '';
+    } catch (err) {
+      console.warn('[NameGreeting] Failed to load, using defaults:', err.message);
+    }
+  }
+
+  async function saveNameGreeting() {
+    const btn = DOM.btnNameGreetingSave;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const settings = {
+        alwaysGreet: DOM.nameGreetingAlways?.checked === true,
+        greetingLine: (DOM.nameGreetingText?.value || '').trim()
+          || 'Hello {name}, thank you for calling.'
+      };
+
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`, {
+        method: 'PUT',
+        body: { settings }
+      });
+
+      showToast('success', 'Name Greeting Saved', settings.alwaysGreet ? 'Always greet (with or without name)' : 'Greet only when name captured');
+      closeNameGreetingModal();
+    } catch (err) {
+      console.error('[NameGreeting] Save failed:', err);
+      showToast('error', 'Save Failed', err.message || 'Could not save greeting');
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
     }
   }
 

@@ -1472,6 +1472,74 @@ router.put('/:companyId/variables',
 );
 
 // ════════════════════════════════════════════════════════════════════════════════
+// NAME GREETING — One-time opening line when caller name is captured
+// Stored at: aiAgentSettings.agent2.discovery.nameGreeting
+// ════════════════════════════════════════════════════════════════════════════════
+
+router.get('/:companyId/name-greeting',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const company = await v2Company.findById(companyId)
+        .select('aiAgentSettings.agent2.discovery.nameGreeting')
+        .lean();
+
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      const settings = company.aiAgentSettings?.agent2?.discovery?.nameGreeting || {
+        alwaysGreet: false,
+        greetingLine: 'Hello {name}, thank you for calling.'
+      };
+
+      return res.json({ success: true, settings });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Load name greeting error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+router.put('/:companyId/name-greeting',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { settings } = req.body;
+
+      if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ success: false, error: 'settings object is required' });
+      }
+
+      const safeSettings = {
+        alwaysGreet: settings.alwaysGreet === true,
+        greetingLine: String(settings.greetingLine || '').trim().substring(0, 500) || 'Hello {name}, thank you for calling.',
+        updatedAt: new Date()
+      };
+
+      await v2Company.findByIdAndUpdate(companyId, {
+        $set: { 'aiAgentSettings.agent2.discovery.nameGreeting': safeSettings }
+      }, { runValidators: false });
+
+      logger.info('[CompanyTriggers] Name greeting saved', {
+        companyId,
+        alwaysGreet: safeSettings.alwaysGreet,
+        lineLength: safeSettings.greetingLine.length
+      });
+
+      return res.json({ success: true, settings: safeSettings });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Save name greeting error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
 // PATIENCE SETTINGS — "Hold on" / "wait" behavior config
 // Stored at: aiAgentSettings.agent2.discovery.patienceSettings
 // ════════════════════════════════════════════════════════════════════════════════

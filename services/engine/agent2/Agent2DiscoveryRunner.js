@@ -115,15 +115,10 @@ async function substituteTriggerVariables(text, companyId, runtimeVars = {}) {
       result = result.replace(regex, value);
     }
     
-    // RUNTIME VARIABLES (per-call) — only if not already resolved by static override
-    // {name} → ", CallerName" from ScrabEngine extraction, or "" if unknown
-    if (result.includes('{name}') || result.includes('{Name}')) {
-      if (runtimeVars.name) {
-        result = result.replace(/\{name\}/gi, `, ${runtimeVars.name}`);
-      } else {
-        result = result.replace(/\{name\}/gi, '');
-      }
-    }
+    // RUNTIME VARIABLE: {name}
+    // Always stripped from trigger text — name personalization is handled
+    // separately by buildAck() once per call, not in every trigger response.
+    result = result.replace(/\{name\}/gi, '');
     
     return result;
   } catch (err) {
@@ -327,20 +322,37 @@ function computeConfigHash(agent2Config) {
 }
 
 /**
- * V119: Build personalized ack with caller name (max once, high confidence only)
+ * Build personalized ack, optionally prepending a one-time name greeting.
+ * 
+ * Name Greeting (configured in UI):
+ *   - Fires ONCE per call (first response only), never repeats
+ *   - alwaysGreet=true: fires with or without name
+ *   - alwaysGreet=false: only fires if name was captured
+ *   - {name} in the greeting resolves to caller name or "" (stripped)
+ * 
+ * After the greeting has fired, subsequent turns just use the ack word.
  */
-function buildAck(baseAck, callerName, state) {
+function buildAck(baseAck, callerName, state, nameGreetingConfig) {
   const ack = `${baseAck || 'Ok.'}`.trim();
-  // Only use name if high confidence (explicit extraction, not guessed)
-  const nameMeta = state?.slotMeta?.name || {};
-  const confidence = nameMeta.confidence || 0;
-  const usedNameThisTurn = state?.agent2?.discovery?.usedNameThisTurn === true;
+  const usedGreetingThisCall = state?.agent2?.discovery?.usedNameGreetingThisCall === true;
   
-  // Use name if: confidence >= 0.85, not already used this turn, and name exists
-  if (callerName && confidence >= 0.85 && !usedNameThisTurn) {
-    return { ack: `${ack.replace(/\.$/, '')}, ${callerName}.`, usedName: true };
+  if (!usedGreetingThisCall && nameGreetingConfig) {
+    const cfg = nameGreetingConfig;
+    const greetingLine = `${cfg.greetingLine || ''}`.trim();
+    const alwaysGreet = cfg.alwaysGreet === true;
+    
+    if (greetingLine && (callerName || alwaysGreet)) {
+      let resolved = greetingLine;
+      if (callerName) {
+        resolved = resolved.replace(/\{name\}/gi, callerName);
+      } else {
+        resolved = resolved.replace(/\s*\{name\}\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+      }
+      return { ack: resolved, usedName: true, usedGreeting: true };
+    }
   }
-  return { ack, usedName: false };
+  
+  return { ack, usedName: false, usedGreeting: false };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -498,6 +510,7 @@ class Agent2DiscoveryRunner {
     }
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
+    const nameGreetingConfig = safeObj(discoveryCfg.nameGreeting, null);
 
     // ══════════════════════════════════════════════════════════════════════════
     // GREETING INTERCEPTOR (V122/V124 - RUNS BEFORE TRIGGER CARDS)
@@ -849,8 +862,9 @@ class Agent2DiscoveryRunner {
         markers: { isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ }
       });
 
-      const { ack: fuqAck, usedName: fuqUsedName } = buildAck(ack, callerName, state);
+      const { ack: fuqAck, usedName: fuqUsedName, usedGreeting: fuqUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
       nextState.agent2.discovery.usedNameThisTurn = fuqUsedName;
+      if (fuqUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
 
       // ── REPROMPT: re-ask the question ──
       if (bucket === 'REPROMPT') {
@@ -1014,8 +1028,9 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_YES';
         
-        const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+        const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
+      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
         
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
         const pendingYes = `${pendingResponses.yes || fallback.pendingYesResponse || ''}`.trim();
@@ -1076,8 +1091,9 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_NO';
         
-        const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+        const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
+      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
         
         // V128: Pending question NO response (new namespace with legacy fallback)
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
@@ -1538,8 +1554,9 @@ class Agent2DiscoveryRunner {
       const isLLMTrigger = card.responseMode === 'llm' && card.llmFactPack;
 
       // V119: Build personalized ack
-      const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+      const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
       nextState.agent2.discovery.usedNameThisTurn = usedName;
+      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
 
       // Update state
       nextState.agent2.discovery.lastPath = isLLMTrigger ? 'TRIGGER_CARD_LLM' : 'TRIGGER_CARD_ANSWER';
@@ -1804,8 +1821,9 @@ class Agent2DiscoveryRunner {
           
           if (clarifierQuestion) {
             // Build personalized ack
-            const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+            const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
             nextState.agent2.discovery.usedNameThisTurn = usedName;
+      if (usedName) nextState.agent2.discovery.usedNameGreetingThisCall = true;
             
             // Store clarifier state
             nextState.agent2.discovery.pendingClarifier = {
@@ -1995,7 +2013,7 @@ class Agent2DiscoveryRunner {
     let pathReason = null;
 
     // V119: Build personalized ack
-    const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+    const { ack: personalAck, usedName } = buildAck(ack, callerName, state, nameGreetingConfig);
     nextState.agent2.discovery.usedNameThisTurn = usedName;
 
     if (answerText && scenarioUsed) {
@@ -2141,8 +2159,9 @@ class Agent2DiscoveryRunner {
         }
         
         // Use personalized ack if appropriate  
-        const { ack: llmAck, usedName: llmUsedName } = buildAck(ack, callerName, state);
+        const { ack: llmAck, usedName: llmUsedName, usedGreeting: llmUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
         nextState.agent2.discovery.usedNameThisTurn = llmUsedName;
+        if (llmUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
         
         // Don't double-ack if LLM response already sounds complete
         const llmStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds|give me)/i.test(llmResult.response);
