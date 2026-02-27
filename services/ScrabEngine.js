@@ -551,11 +551,13 @@ class EntityExtractionEngine {
    * 
    * @param {string} text - Normalized text (after vocabulary/synonyms)
    * @param {Object} context - Extraction context
-   * @returns {Object} { entities, extractions, processingTimeMs }
+   * @param {Object} context.GlobalHubService - GlobalShare service for name validation
+   * @returns {Promise<Object>} { entities, extractions, validations, processingTimeMs }
    */
-  static process(text, context = {}) {
+  static async process(text, context = {}) {
     const startTime = Date.now();
     const extractions = [];
+    const validations = [];
     
     const entities = {
       firstName: null,
@@ -574,12 +576,32 @@ class EntityExtractionEngine {
     const myNamePattern = /my name is (\w+)/i;
     const myNameMatch = text.match(myNamePattern);
     if (myNameMatch && myNameMatch[1]) {
-      entities.firstName = this.capitalizeFirst(myNameMatch[1]);
+      const candidate = this.capitalizeFirst(myNameMatch[1]);
+      
+      // 🌐 GLOBALSHARE VALIDATION - Check against 9,530 first names
+      let isValidName = false;
+      if (context.GlobalHubService) {
+        try {
+          isValidName = await context.GlobalHubService.isFirstName(candidate);
+          validations.push({
+            entity: 'firstName',
+            value: candidate,
+            isValid: isValidName,
+            source: 'GlobalShare',
+            dictionarySize: 9530
+          });
+        } catch (err) {
+          // Non-blocking - proceed even if validation fails
+        }
+      }
+      
+      entities.firstName = candidate;
       extractions.push({
         type: 'firstName',
         value: entities.firstName,
         pattern: 'my_name_is',
-        confidence: 0.95
+        confidence: isValidName ? 0.98 : 0.85, // Higher confidence if validated
+        validated: isValidName
       });
     }
     
@@ -721,6 +743,7 @@ class EntityExtractionEngine {
     return {
       entities,
       extractions,
+      validations,
       processingTimeMs: Date.now() - startTime
     };
   }
@@ -883,9 +906,15 @@ class ScrabEngine {
     logger.debug('[ScrabEngine] Stage 4: Entity Extraction');
     const T4 = Date.now();
     
-    result.stage4_extraction = EntityExtractionEngine.process(
+    // Pass GlobalHubService for name validation
+    const GlobalHubService = context.GlobalHubService || require('../services/GlobalHubService');
+    
+    result.stage4_extraction = await EntityExtractionEngine.process(
       result.stage2_vocabulary.normalized,
-      context
+      {
+        ...context,
+        GlobalHubService
+      }
     );
     
     result.performance.stage4Ms = Date.now() - T4;
@@ -895,6 +924,7 @@ class ScrabEngine {
       lastName: result.stage4_extraction.entities.lastName,
       phone: result.stage4_extraction.entities.phone,
       extractions: result.stage4_extraction.extractions.length,
+      validations: result.stage4_extraction.validations.length,
       timeMs: result.performance.stage4Ms
     });
     
@@ -1126,11 +1156,20 @@ class ScrabEngine {
     // Stage 4: Entity Extraction
     if (scrabResult.stage4_extraction) {
       const extractions = scrabResult.stage4_extraction.extractions || [];
+      const validations = scrabResult.stage4_extraction.validations || [];
       const entities = scrabResult.stage4_extraction.entities || {};
       
       const entitiesSummary = [];
-      if (entities.firstName) entitiesSummary.push(`First: "${entities.firstName}"`);
-      if (entities.lastName) entitiesSummary.push(`Last: "${entities.lastName}"`);
+      if (entities.firstName) {
+        const validation = validations.find(v => v.entity === 'firstName');
+        const validBadge = validation?.isValid ? ' ✅' : validation ? ' ⚠️' : '';
+        entitiesSummary.push(`First: "${entities.firstName}"${validBadge}`);
+      }
+      if (entities.lastName) {
+        const validation = validations.find(v => v.entity === 'lastName');
+        const validBadge = validation?.isValid ? ' ✅' : validation ? ' ⚠️' : '';
+        entitiesSummary.push(`Last: "${entities.lastName}"${validBadge}`);
+      }
       if (entities.phone) entitiesSummary.push(`Phone: ${entities.phone}`);
       if (entities.address) entitiesSummary.push(`Address: ${entities.address}`);
       if (entities.email) entitiesSummary.push(`Email: ${entities.email}`);
@@ -1144,9 +1183,13 @@ class ScrabEngine {
         processingTimeMs: scrabResult.stage4_extraction.processingTimeMs,
         entities: entities,
         extractions: extractions,
+        validations: validations,
         summary: extractions.length > 0
-          ? `Extracted ${extractions.length} entit${extractions.length === 1 ? 'y' : 'ies'}: ${extractions.map(e => `${e.type}="${e.value}"`).join(', ')}`
-          : 'No entities found'
+          ? `Extracted ${extractions.length} entit${extractions.length === 1 ? 'y' : 'ies'}: ${extractions.map(e => `${e.type}="${e.value}"${e.validated ? ' (validated ✅)' : ''}`).join(', ')}`
+          : 'No entities found',
+        globalShareCheck: validations.length > 0 
+          ? validations.map(v => `${v.value} checked against ${v.dictionarySize.toLocaleString()} ${v.entity}s → ${v.isValid ? 'VALID ✅' : 'NOT FOUND ⚠️'}`).join('; ')
+          : null
       });
     }
     
