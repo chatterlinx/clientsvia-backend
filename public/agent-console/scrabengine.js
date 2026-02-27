@@ -40,8 +40,8 @@
 (function() {
   'use strict';
 
-  const DEBUG = false;
-  function log(...args) { if (DEBUG) console.log('[ScrabEngine]', ...args); }
+  const DEBUG = true;
+  function log(...args) { console.log('[ScrabEngine]', ...args); }
 
   // ════════════════════════════════════════════════════════════════════════════
   // STATE
@@ -236,26 +236,45 @@
   // ════════════════════════════════════════════════════════════════════════════
 
   function init() {
+    log('CHECKPOINT 1: init() START');
     try {
-      log('Initializing...');
       initDOM();
+      log('CHECKPOINT 2: initDOM() done');
+
+      // Verify critical DOM elements exist
+      const domReport = {};
+      for (const [key, val] of Object.entries(DOM)) {
+        domReport[key] = val ? 'OK' : 'MISSING';
+      }
+      log('CHECKPOINT 3: DOM audit', domReport);
 
       const params = new URLSearchParams(window.location.search);
       state.companyId = params.get('companyId');
+      log('CHECKPOINT 4: companyId =', state.companyId);
+
       if (!state.companyId) {
+        log('CHECKPOINT 4b: No companyId, redirecting');
         window.location.href = '/agent-console/index.html';
         return;
       }
 
-      DOM.headerCompanyId.textContent = truncateId(state.companyId);
-      DOM.headerCompanyId.title = state.companyId;
+      if (DOM.headerCompanyId) {
+        DOM.headerCompanyId.textContent = truncateId(state.companyId);
+        DOM.headerCompanyId.title = state.companyId;
+      }
 
+      log('CHECKPOINT 5: About to call bindEvents()');
       bindEvents();
+      log('CHECKPOINT 6: bindEvents() done');
+
       loadConfig();
+      log('CHECKPOINT 7: loadConfig() called');
+
       loadCompanyName();
-      log('Initialization complete');
+      log('CHECKPOINT 8: init() COMPLETE — all wiring done');
     } catch (err) {
-      console.error('[ScrabEngine] Initialization error:', err);
+      console.error('[ScrabEngine] FATAL: Initialization error:', err);
+      console.error('[ScrabEngine] Stack:', err.stack);
     }
   }
 
@@ -264,21 +283,24 @@
   // ════════════════════════════════════════════════════════════════════════════
 
   function bindEvents() {
-    // WIRING: A — Navigation & page-level actions
+    log('BIND-A: Navigation & page-level actions');
     safeListen(DOM.btnBack, 'click', () => {
+      log('CLICK: btnBack');
       if (state.hasChanges && !confirm('You have unsaved changes. Leave anyway?')) return;
       window.location.href = `/agent-console/index.html?companyId=${state.companyId}`;
     });
-    safeListen(DOM.btnSaveAll, 'click', saveConfig);
+    safeListen(DOM.btnSaveAll, 'click', () => { log('CLICK: btnSaveAll'); saveConfig(); });
     safeListen(DOM.btnTestPanel, 'click', () => {
+      log('CLICK: btnTestPanel');
       DOM.testPanel.style.display = DOM.testPanel.style.display === 'none' ? 'block' : 'none';
     });
     safeListen(DOM.btnViewLogs, 'click', () => {
+      log('CLICK: btnViewLogs');
       window.location.href = `/agent-console/callconsole.html?companyId=${state.companyId}`;
     });
-    safeListen(DOM.btnRunTest, 'click', runTest);
+    safeListen(DOM.btnRunTest, 'click', () => { log('CLICK: btnRunTest'); runTest(); });
 
-    // WIRING: B — Pipeline stage toggles
+    log('BIND-B: Pipeline stage toggles');
     bindToggle(DOM.toggleFillers,    (v) => { state.config.fillers.enabled = v; });
     bindToggle(DOM.toggleVocabulary, (v) => { state.config.vocabulary.enabled = v; });
     bindToggle(DOM.toggleSynonyms,   (v) => { state.config.synonyms.enabled = v; });
@@ -287,19 +309,23 @@
       state.config.extraction.enabled = v;
     });
 
-    // WIRING: C — Stage-specific options
+    log('BIND-C: Stage-specific options');
     bindToggle(DOM.stripGreetings,   (v) => { state.config.fillers.stripGreetings = v; }, false);
     bindToggle(DOM.stripCompanyName, (v) => { state.config.fillers.stripCompanyName = v; }, false);
 
-    // WIRING: D — Create/Edit actions (add buttons → openModal)
-    safeListen(DOM.btnAddFiller,         'click', () => openModal('filler'));
-    safeListen(DOM.btnAddVocab,          'click', () => openModal('vocabulary'));
-    safeListen(DOM.btnAddWordSynonym,    'click', () => openModal('wordSynonym'));
-    safeListen(DOM.btnAddContextPattern, 'click', () => openModal('contextPattern'));
-    safeListen(DOM.btnAddExtraction,     'click', () => openModal('extraction'));
+    log('BIND-D: Add buttons → openModal');
+    safeListen(DOM.btnAddFiller,         'click', () => { log('CLICK: btnAddFiller'); openModal('filler'); });
+    safeListen(DOM.btnAddVocab,          'click', () => { log('CLICK: btnAddVocab'); openModal('vocabulary'); });
+    safeListen(DOM.btnAddWordSynonym,    'click', () => { log('CLICK: btnAddWordSynonym'); openModal('wordSynonym'); });
+    safeListen(DOM.btnAddContextPattern, 'click', () => { log('CLICK: btnAddContextPattern'); openModal('contextPattern'); });
+    safeListen(DOM.btnAddExtraction,     'click', () => { log('CLICK: btnAddExtraction'); openModal('extraction'); });
 
-    // WIRING: E — Modal lifecycle (cancel, save, backdrop, escape)
-    Object.keys(MODAL_REGISTRY).forEach(setupModalHandlers);
+    log('BIND-E: Modal lifecycle (cancel, save, backdrop, escape)');
+    Object.keys(MODAL_REGISTRY).forEach((type) => {
+      log(`  BIND-E: Setting up modal handlers for "${type}"`);
+      setupModalHandlers(type);
+    });
+
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       const openType = Object.keys(MODAL_REGISTRY).find((type) => {
@@ -308,10 +334,16 @@
       });
       if (openType) closeModal(openType);
     });
+
+    log('BIND COMPLETE: All event listeners attached');
   }
 
   function safeListen(el, event, handler) {
-    if (el) el.addEventListener(event, handler);
+    if (el) {
+      el.addEventListener(event, handler);
+    } else {
+      console.warn('[ScrabEngine] safeListen SKIPPED: element is null for event', event);
+    }
   }
 
   function bindToggle(el, setter, updateIndicators = true) {
@@ -400,7 +432,7 @@
   // ════════════════════════════════════════════════════════════════════════════
 
   function render() {
-    log('Rendering...');
+    log('RENDER: Starting full render cycle');
 
     if (DOM.toggleFillers)    DOM.toggleFillers.checked    = state.config.fillers.enabled !== false;
     if (DOM.toggleVocabulary) DOM.toggleVocabulary.checked = state.config.vocabulary.enabled !== false;
@@ -593,15 +625,22 @@
    * Open a modal for add (editIdx omitted) or edit (editIdx = array index).
    */
   function openModal(type, editIdx) {
+    log(`MODAL OPEN: type="${type}", editIdx=${editIdx}`);
     const modal = getModal(type);
-    if (!modal) return;
+    if (!modal) {
+      console.error(`[ScrabEngine] MODAL OPEN FAILED: getModal("${type}") returned null. DOM key: "${MODAL_REGISTRY[type]?.key}", DOM value:`, DOM[MODAL_REGISTRY[type]?.key]);
+      return;
+    }
 
     state.editingType = type;
     state.editingIndex = typeof editIdx === 'number' ? editIdx : -1;
 
     const isEdit = state.editingIndex >= 0;
     const fields = MODAL_FIELDS[type];
-    if (!fields) return;
+    if (!fields) {
+      console.error(`[ScrabEngine] MODAL OPEN FAILED: No MODAL_FIELDS for type "${type}"`);
+      return;
+    }
 
     if (isEdit) {
       const saveConfig = MODAL_SAVE_CONFIG[type];
@@ -624,9 +663,12 @@
     }
 
     modal.classList.add('open');
+    log(`MODAL OPEN SUCCESS: "${type}" is now visible, classList:`, modal.className);
   }
 
   function closeModal(type) {
+    log(`MODAL CLOSE: type="${type}"`);
+
     const modal = getModal(type);
     if (modal) modal.classList.remove('open');
     state.editingType = null;
@@ -688,8 +730,9 @@
    * Universal save handler — config-driven, no if/else branching.
    */
   function saveModalItem(type) {
+    log(`SAVE MODAL: type="${type}"`);
     const saveConf = MODAL_SAVE_CONFIG[type];
-    if (!saveConf) return;
+    if (!saveConf) { console.error(`[ScrabEngine] SAVE FAILED: No MODAL_SAVE_CONFIG for "${type}"`); return; }
 
     const fieldValues = readModalFields(type);
     const error = saveConf.validate(fieldValues);
@@ -869,9 +912,14 @@
   // BOOT
   // ════════════════════════════════════════════════════════════════════════════
 
+  log('BOOT: readyState =', document.readyState);
   if (document.readyState === 'loading') {
+    log('BOOT: Waiting for DOMContentLoaded...');
     document.addEventListener('DOMContentLoaded', init);
   } else {
+    log('BOOT: DOM ready, calling init() immediately');
     init();
   }
+
+  log('BOOT: IIFE complete');
 })();
