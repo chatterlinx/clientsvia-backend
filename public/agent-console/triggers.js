@@ -77,6 +77,20 @@
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
     btnCreateGroup: document.getElementById('btn-create-group'),
     
+    btnPatienceSettings: document.getElementById('btn-patience-settings'),
+    modalPatience: document.getElementById('modal-patience'),
+    modalPatienceClose: document.getElementById('modal-patience-close'),
+    btnPatienceCancel: document.getElementById('btn-patience-cancel'),
+    btnPatienceSave: document.getElementById('btn-patience-save'),
+    patienceEnabled: document.getElementById('patience-enabled'),
+    patiencePhrases: document.getElementById('patience-phrases'),
+    patienceInitialResponse: document.getElementById('patience-initial-response'),
+    patienceTimeoutEnabled: document.getElementById('patience-timeout-enabled'),
+    patienceTimeoutSeconds: document.getElementById('patience-timeout-seconds'),
+    patienceCheckinResponse: document.getElementById('patience-checkin-response'),
+    patienceMaxCheckins: document.getElementById('patience-max-checkins'),
+    patienceFinalResponse: document.getElementById('patience-final-response'),
+    
     modalBulkImport: document.getElementById('modal-bulk-import'),
     modalBulkImportClose: document.getElementById('modal-bulk-import-close'),
     bulkImportJson: document.getElementById('bulk-import-json'),
@@ -239,6 +253,15 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+    if (DOM.btnPatienceSettings) {
+      DOM.btnPatienceSettings.addEventListener('click', openPatienceModal);
+    }
+    if (DOM.modalPatienceClose) DOM.modalPatienceClose.addEventListener('click', closePatienceModal);
+    if (DOM.btnPatienceCancel) DOM.btnPatienceCancel.addEventListener('click', closePatienceModal);
+    if (DOM.btnPatienceSave) DOM.btnPatienceSave.addEventListener('click', savePatienceSettings);
+    if (DOM.modalPatience) {
+      DOM.modalPatience.addEventListener('click', (e) => { if (e.target === DOM.modalPatience) closePatienceModal(); });
+    }
     if (DOM.btnBulkGenerateAudio) {
       DOM.btnBulkGenerateAudio.addEventListener('click', bulkGenerateAudio);
     }
@@ -314,6 +337,7 @@
         closeCreateGroupModal();
         closeGptSettingsModal();
         closeBulkImportModal();
+        closePatienceModal();
       }
     });
     
@@ -1912,6 +1936,82 @@
     } catch (error) {
       console.error('[Triggers] Health check failed:', error);
       showToast('error', 'Check Failed', 'Could not check for duplicates.');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     PATIENCE SETTINGS — System behavior for "hold on" / "wait" requests
+     Stored at: aiAgentSettings.agent2.discovery.patienceSettings
+     -------------------------------------------------------------------------- */
+
+  function openPatienceModal() {
+    loadPatienceSettings();
+    if (DOM.modalPatience) DOM.modalPatience.classList.add('active');
+  }
+
+  function closePatienceModal() {
+    if (DOM.modalPatience) DOM.modalPatience.classList.remove('active');
+  }
+
+  async function loadPatienceSettings() {
+    try {
+      const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/patience-settings`);
+      const s = data.settings || {};
+
+      if (DOM.patienceEnabled) DOM.patienceEnabled.checked = s.enabled !== false;
+      if (DOM.patiencePhrases) DOM.patiencePhrases.value = (s.phrases || []).join(', ');
+      if (DOM.patienceInitialResponse) DOM.patienceInitialResponse.value = s.initialResponse || '';
+      if (DOM.patienceTimeoutEnabled) DOM.patienceTimeoutEnabled.checked = s.timeoutEnabled !== false;
+      if (DOM.patienceTimeoutSeconds) {
+        DOM.patienceTimeoutSeconds.value = s.timeoutSeconds || 45;
+        const display = document.getElementById('patience-timeout-display');
+        if (display) display.textContent = (s.timeoutSeconds || 45) + 's';
+      }
+      if (DOM.patienceCheckinResponse) DOM.patienceCheckinResponse.value = s.checkinResponse || '';
+      if (DOM.patienceMaxCheckins) DOM.patienceMaxCheckins.value = s.maxCheckins || 2;
+      if (DOM.patienceFinalResponse) DOM.patienceFinalResponse.value = s.finalResponse || '';
+    } catch (err) {
+      console.warn('[Patience] Failed to load settings, using defaults:', err.message);
+    }
+  }
+
+  async function savePatienceSettings() {
+    const btn = DOM.btnPatienceSave;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const phrases = (DOM.patiencePhrases?.value || '')
+        .split(',').map(p => p.trim().toLowerCase()).filter(Boolean);
+
+      const settings = {
+        enabled: DOM.patienceEnabled?.checked !== false,
+        phrases,
+        initialResponse: (DOM.patienceInitialResponse?.value || '').trim()
+          || 'Take your time — I\'m right here whenever you\'re ready.',
+        timeoutEnabled: DOM.patienceTimeoutEnabled?.checked !== false,
+        timeoutSeconds: parseInt(DOM.patienceTimeoutSeconds?.value) || 45,
+        checkinResponse: (DOM.patienceCheckinResponse?.value || '').trim()
+          || 'Are you still there? No rush — take your time.',
+        maxCheckins: parseInt(DOM.patienceMaxCheckins?.value) || 2,
+        finalResponse: (DOM.patienceFinalResponse?.value || '').trim()
+          || 'I\'m still here whenever you\'re ready. Just let me know how I can help.'
+      };
+
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/patience-settings`, {
+        method: 'PUT',
+        body: { settings }
+      });
+
+      showToast('success', 'Patience Settings Saved', `${phrases.length} trigger phrases, ${settings.timeoutSeconds}s timeout`);
+      closePatienceModal();
+    } catch (err) {
+      console.error('[Patience] Save failed:', err);
+      showToast('error', 'Save Failed', err.message || 'Could not save patience settings');
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
     }
   }
 

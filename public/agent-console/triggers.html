@@ -835,6 +835,9 @@
       </div>
       
       <div class="header-right">
+        <button class="btn btn-secondary" id="btn-patience-settings" title="Configure caller hold/wait behavior" style="background: #f0fdf4; border-color: #86efac; color: #166534;">
+          ⏸ Patience
+        </button>
         <button class="btn btn-secondary" id="btn-check-duplicates" title="Check for duplicates">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="1.5"/>
@@ -1531,6 +1534,144 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
   </div>
 
   <!-- JavaScript -->
+  <!-- ════════════════════════════════════════════════════════════════════════
+       MODAL: Patience Settings
+       Configures how the AI handles "hold on", "wait", "let me think" requests.
+       Separate from trigger cards — this is a system behavior.
+       ════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-patience" class="modal-backdrop">
+    <div class="modal" style="max-width: 720px; max-height: 92vh;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-bottom: 2px solid #86efac;">
+        <div>
+          <h3 class="modal-title" style="color: #166534;">Patience Mode Settings</h3>
+          <p style="font-size: 13px; color: #15803d; margin: 4px 0 0 0;">Configure how the AI handles "hold on", "wait", and "let me think" requests</p>
+        </div>
+        <button class="modal-close" id="modal-patience-close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="overflow-y: auto;">
+
+        <!-- MASTER TOGGLE -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px; margin-bottom: 20px;">
+          <div>
+            <div style="font-size: 14px; font-weight: 700; color: #166534;">Enable Patience Mode</div>
+            <div style="font-size: 12px; color: #15803d;">When enabled, the AI detects hold/wait requests and gives the caller time</div>
+          </div>
+          <label style="position: relative; display: inline-flex; cursor: pointer;">
+            <input type="checkbox" id="patience-enabled" checked style="width: 44px; height: 24px; cursor: pointer;">
+          </label>
+        </div>
+
+        <!-- SECTION 1: TRIGGER PHRASES -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+            Trigger Phrases
+          </label>
+          <p style="font-size: 12px; color: #64748b; margin: 0 0 8px 0;">
+            Comma-separated phrases that activate patience mode. When the caller says any of these, the AI pauses and waits.
+          </p>
+          <textarea id="patience-phrases" class="form-input" rows="4" style="font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5;"
+            placeholder="hold on, wait, one second, let me think...">hold on, wait, one second, just a second, hang on, let me think, think about it, give me a moment, bear with me, please hold, standby, hold on a second, let me check, one moment, give me a sec, let me see, let me look, I'm checking, hold on I'm checking, let me ask my wife, let me ask my husband, let me talk to, checking with my partner</textarea>
+        </div>
+
+        <!-- SECTION 2: INITIAL RESPONSE -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+            Initial Response
+          </label>
+          <p style="font-size: 12px; color: #64748b; margin: 0 0 8px 0;">
+            What the AI says when patience mode activates. Keep it warm and brief.
+          </p>
+          <textarea id="patience-initial-response" class="form-input" rows="2" style="font-size: 14px;"
+            placeholder="Take your time — I'm right here whenever you're ready.">Take your time — I'm right here whenever you're ready.</textarea>
+        </div>
+
+        <!-- SECTION 3: WAIT TIMEOUT -->
+        <div style="margin-bottom: 24px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div>
+              <div style="font-size: 13px; font-weight: 700; color: #334155;">Wait Timeout</div>
+              <div style="font-size: 12px; color: #64748b;">How long to wait in silence before checking in with the caller</div>
+            </div>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="patience-timeout-enabled" checked>
+              <span style="font-size: 12px; font-weight: 600; color: #334155;">Enable check-in</span>
+            </label>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input type="range" id="patience-timeout-seconds" min="15" max="120" value="45" step="5"
+              style="flex: 1; height: 6px; cursor: pointer;"
+              oninput="document.getElementById('patience-timeout-display').textContent = this.value + 's'">
+            <span id="patience-timeout-display" style="font-size: 18px; font-weight: 700; color: #0f172a; min-width: 40px; text-align: right;">45s</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-top: 4px;">
+            <span>15s (quick)</span>
+            <span>60s (standard)</span>
+            <span>120s (patient)</span>
+          </div>
+        </div>
+
+        <!-- SECTION 4: CHECK-IN / REPROMPT -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+            Check-in Response (reprompt)
+          </label>
+          <p style="font-size: 12px; color: #64748b; margin: 0 0 8px 0;">
+            What the AI says after the timeout expires. Gentle, not pushy.
+          </p>
+          <textarea id="patience-checkin-response" class="form-input" rows="2" style="font-size: 14px;"
+            placeholder="Are you still there? No rush — take your time.">Are you still there? No rush — take your time.</textarea>
+        </div>
+
+        <!-- SECTION 5: MAX CHECK-INS -->
+        <div style="margin-bottom: 24px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <div style="font-size: 13px; font-weight: 700; color: #334155;">Max Check-ins Per Hold</div>
+              <div style="font-size: 12px; color: #64748b;">After this many check-ins with no response, resume normal flow</div>
+            </div>
+            <select id="patience-max-checkins" class="form-select" style="width: 80px;">
+              <option value="1">1</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- SECTION 6: SECOND CHECK-IN (FINAL) -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+            Final Check-in Response
+          </label>
+          <p style="font-size: 12px; color: #64748b; margin: 0 0 8px 0;">
+            Last attempt before returning to normal flow. Slightly more direct.
+          </p>
+          <textarea id="patience-final-response" class="form-input" rows="2" style="font-size: 14px;"
+            placeholder="I'm still here whenever you're ready. Just let me know how I can help.">I'm still here whenever you're ready. Just let me know how I can help.</textarea>
+        </div>
+
+        <!-- INFO BANNER -->
+        <div style="padding: 14px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #93c5fd; border-radius: 10px;">
+          <div style="font-size: 12px; font-weight: 700; color: #1e40af; margin-bottom: 6px;">How Patience Mode Works</div>
+          <div style="font-size: 11px; color: #1e3a8a; line-height: 1.6;">
+            1. Caller says a trigger phrase → AI responds with your initial response<br>
+            2. Listener stays ON — caller can speak at any time and the AI picks up instantly<br>
+            3. If silence exceeds your timeout → AI gently checks in with the reprompt<br>
+            4. After max check-ins → normal conversation flow resumes<br>
+            5. This is separate from trigger cards — patience phrases won't conflict with HVAC triggers
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-patience-cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-patience-save" style="background: #166534;">Save Patience Settings</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Bulk Import Triggers -->
   <div id="modal-bulk-import" class="modal-backdrop">
     <div class="modal" style="max-width: 780px; max-height: 90vh;">

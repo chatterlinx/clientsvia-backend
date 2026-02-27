@@ -4023,34 +4023,45 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       const wasPatienceMode = callState?.agent2?.discovery?.patienceMode === true;
       const speechIsEmpty = !speechResult || !speechResult.trim();
+      const psCfg = company?.aiAgentSettings?.agent2?.discovery?.patienceSettings || {};
+      const psTimeoutEnabled = psCfg.timeoutEnabled !== false;
+      const psTimeout = Math.max(10, Math.min(180, parseInt(psCfg.timeoutSeconds) || 45));
+      const psMaxCheckins = Math.max(1, Math.min(10, parseInt(psCfg.maxCheckins) || 2));
       
-      if (wasPatienceMode && speechIsEmpty) {
-        callState.agent2.discovery.patienceMode = false;
+      if (wasPatienceMode && speechIsEmpty && psTimeoutEnabled) {
+        const checkinCount = (callState?.agent2?.discovery?.patienceCheckinCount || 0) + 1;
+        callState.agent2.discovery.patienceCheckinCount = checkinCount;
+        
+        const isLastCheckin = checkinCount >= psMaxCheckins;
+        const checkinText = isLastCheckin
+          ? (`${psCfg.finalResponse || ''}`.trim() || "I'm still here whenever you're ready. Just let me know how I can help.")
+          : (`${psCfg.checkinResponse || ''}`.trim() || "Are you still there? No rush — take your time.");
+        
+        if (isLastCheckin) {
+          callState.agent2.discovery.patienceMode = false;
+        }
         
         if (CallLogger && callSid) {
           CallLogger.logEvent({
             callId: callSid, companyId: companyID,
             type: 'PATIENCE_TIMEOUT_CHECK_IN',
             turn: turnNumber,
-            data: { timeoutSeconds: 45, action: 'still_there_prompt' }
+            data: { timeoutSeconds: psTimeout, checkinNumber: checkinCount, maxCheckins: psMaxCheckins, isLastCheckin }
           }).catch(() => {});
         }
         
-        const stillThereText = 'Are you still there? No rush — take your time.';
-        
         if (redis && redisKey) {
-          try {
-            await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 });
-          } catch (_) {}
+          try { await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 }); } catch (_) {}
         }
         
         const twiml = new twilio.twiml.VoiceResponse();
+        const nextTimeout = isLastCheckin ? 7 : psTimeout;
         const gather = twiml.gather({
           input: 'speech',
           action: `/api/twilio/v2-agent-respond/${companyID}`,
           method: 'POST',
           actionOnEmptyResult: true,
-          timeout: 30,
+          timeout: nextTimeout,
           speechTimeout: 'auto',
           speechModel: 'phone_call',
           partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
@@ -4063,13 +4074,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         if (elevenLabsVoice) {
           try {
             const buffer = await synthesizeSpeech({
-              text: stillThereText,
-              voiceId: elevenLabsVoice,
-              stability: voiceSettings.stability,
-              similarity_boost: voiceSettings.similarityBoost,
-              style: voiceSettings.styleExaggeration,
-              model_id: voiceSettings.aiModel,
-              company
+              text: checkinText, voiceId: elevenLabsVoice,
+              stability: voiceSettings.stability, similarity_boost: voiceSettings.similarityBoost,
+              style: voiceSettings.styleExaggeration, model_id: voiceSettings.aiModel, company
             });
             const fileName = `patience_checkin_${callSid}_${Date.now()}.mp3`;
             const audioDir = path.join(__dirname, '../public/audio');
@@ -4077,24 +4084,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             fs.writeFileSync(path.join(audioDir, fileName), buffer);
             gather.play(`https://${hostHeader}/audio/${fileName}`);
           } catch (_) {
-            gather.say(escapeTwiML(stillThereText));
+            gather.say(escapeTwiML(checkinText));
           }
         } else {
-          gather.say(escapeTwiML(stillThereText));
+          gather.say(escapeTwiML(checkinText));
         }
         
         return {
           twimlString: twiml.toString(),
           voiceProviderUsed: 'patience_check_in',
-          responseText: stillThereText,
+          responseText: checkinText,
           matchSource: 'PATIENCE_CHECK_IN',
           timings: { totalMs: Date.now() - T0 }
         };
       }
       
-      // Clear patience mode when caller speaks (they're back)
       if (wasPatienceMode && !speechIsEmpty) {
         callState.agent2.discovery.patienceMode = false;
+        callState.agent2.discovery.patienceCheckinCount = 0;
       }
 
       // ═══════════════════════════════════════════════════════════════════════════
@@ -4390,11 +4397,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const twiml = new twilio.twiml.VoiceResponse();
       
       // PATIENCE MODE: When caller asked to hold/wait, extend the silence
-      // timeout so we don't interrupt them. They're thinking, checking, or
-      // consulting someone. Listener stays on — Twilio <Gather> is live.
+      // timeout so we don't interrupt them. Uses UI-configured timeout.
+      const patienceCfg = company?.aiAgentSettings?.agent2?.discovery?.patienceSettings || {};
       const isPatienceMode = runtimeResult?.patienceMode === true
         || persistedState?.agent2?.discovery?.patienceMode === true;
-      const gatherTimeout = isPatienceMode ? 45 : 7;
+      const patienceTimeout = Math.max(10, Math.min(180, parseInt(patienceCfg.timeoutSeconds) || 45));
+      const gatherTimeout = isPatienceMode ? patienceTimeout : 7;
       
       if (isPatienceMode && CallLogger) {
         CallLogger.logEvent({

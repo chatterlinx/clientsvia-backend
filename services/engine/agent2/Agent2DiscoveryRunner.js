@@ -1380,6 +1380,52 @@ class Agent2DiscoveryRunner {
       nextState.agent2.discovery.llmHandoffPending = null;
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // PATIENCE MODE — "Hold on" / "wait" detection (BEFORE trigger matching)
+    // Uses UI-configured phrases from patienceSettings. Separate from triggers.
+    // ══════════════════════════════════════════════════════════════════════════
+    const patienceConfig = safeObj(discoveryCfg?.patienceSettings, {});
+    const patienceEnabled = patienceConfig.enabled !== false;
+    const patiencePhrases = safeArr(patienceConfig.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
+    if (patienceEnabled && patiencePhrases.length > 0 && inputLower.length <= 80) {
+      const isPatienceMatch = patiencePhrases.some(phrase => {
+        if (phrase.includes(' ')) return inputLower.includes(phrase);
+        return inputLower.split(/\s+/).includes(phrase);
+      });
+
+      if (isPatienceMatch) {
+        const patienceResponse = `${patienceConfig.initialResponse || ''}`.trim()
+          || "Take your time — I'm right here whenever you're ready.";
+
+        nextState.agent2.discovery.patienceMode = true;
+        nextState.agent2.discovery.patienceModeTurn = typeof turn === 'number' ? turn : null;
+        nextState.agent2.discovery.patienceCheckinCount = 0;
+        nextState.agent2.discovery.lastPath = 'PATIENCE_MODE';
+
+        emit('A2_PATH_SELECTED', {
+          path: 'PATIENCE_MODE',
+          reason: `Caller requested hold/wait`,
+          matchedPhrase: patiencePhrases.find(p => inputLower.includes(p)),
+          inputPreview: clip(input, 60)
+        });
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          'agent2.discovery.patienceSettings',
+          'aiAgentSettings.agent2.discovery.patienceSettings.initialResponse',
+          patienceResponse,
+          null,
+          'Patience mode activated: caller asked to hold/wait'
+        ));
+
+        return {
+          response: patienceResponse,
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState,
+          patienceMode: true
+        };
+      }
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // PATH 2: TRIGGER CARD MATCHING (PRIMARY — DETERMINISTIC)
     // ──────────────────────────────────────────────────────────────────────
@@ -1704,18 +1750,11 @@ class Agent2DiscoveryRunner {
         });
       }
 
-      const isPatienceTrigger = (card.ruleId || '').startsWith('conversation.patience');
-      if (isPatienceTrigger) {
-        nextState.agent2.discovery.patienceMode = true;
-        nextState.agent2.discovery.patienceModeTurn = typeof turn === 'number' ? turn : null;
-      }
-
       return {
         response: finalResponse,
         matchSource: 'AGENT2_DISCOVERY',
         state: nextState,
         audioUrl: audioUrl || null,
-        patienceMode: isPatienceTrigger,
         triggerCard: {
           id: card.id,
           label: card.label,

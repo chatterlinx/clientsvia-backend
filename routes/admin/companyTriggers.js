@@ -1472,6 +1472,87 @@ router.put('/:companyId/variables',
 );
 
 // ════════════════════════════════════════════════════════════════════════════════
+// PATIENCE SETTINGS — "Hold on" / "wait" behavior config
+// Stored at: aiAgentSettings.agent2.discovery.patienceSettings
+// ════════════════════════════════════════════════════════════════════════════════
+
+router.get('/:companyId/patience-settings',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const company = await v2Company.findById(companyId)
+        .select('aiAgentSettings.agent2.discovery.patienceSettings')
+        .lean();
+
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      const settings = company.aiAgentSettings?.agent2?.discovery?.patienceSettings || {
+        enabled: true,
+        phrases: ['hold on', 'wait', 'one second', 'just a second', 'hang on', 'let me think', 'think about it', 'give me a moment', 'bear with me', 'please hold', 'standby', 'let me check', 'one moment', 'give me a sec'],
+        initialResponse: "Take your time — I'm right here whenever you're ready.",
+        timeoutEnabled: true,
+        timeoutSeconds: 45,
+        checkinResponse: "Are you still there? No rush — take your time.",
+        maxCheckins: 2,
+        finalResponse: "I'm still here whenever you're ready. Just let me know how I can help."
+      };
+
+      return res.json({ success: true, settings });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Load patience settings error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+router.put('/:companyId/patience-settings',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { settings } = req.body;
+
+      if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ success: false, error: 'settings object is required' });
+      }
+
+      const safeSettings = {
+        enabled: settings.enabled !== false,
+        phrases: Array.isArray(settings.phrases) ? settings.phrases.map(p => String(p).trim().toLowerCase()).filter(Boolean) : [],
+        initialResponse: String(settings.initialResponse || '').trim().substring(0, 500),
+        timeoutEnabled: settings.timeoutEnabled !== false,
+        timeoutSeconds: Math.max(10, Math.min(180, parseInt(settings.timeoutSeconds) || 45)),
+        checkinResponse: String(settings.checkinResponse || '').trim().substring(0, 500),
+        maxCheckins: Math.max(1, Math.min(10, parseInt(settings.maxCheckins) || 2)),
+        finalResponse: String(settings.finalResponse || '').trim().substring(0, 500),
+        updatedAt: new Date()
+      };
+
+      await v2Company.findByIdAndUpdate(companyId, {
+        $set: { 'aiAgentSettings.agent2.discovery.patienceSettings': safeSettings }
+      }, { runValidators: false });
+
+      logger.info('[CompanyTriggers] Patience settings saved', {
+        companyId,
+        enabled: safeSettings.enabled,
+        phraseCount: safeSettings.phrases.length,
+        timeoutSeconds: safeSettings.timeoutSeconds
+      });
+
+      return res.json({ success: true, settings: safeSettings });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Save patience settings error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
 // HEALTH & DUPLICATES
 // ════════════════════════════════════════════════════════════════════════════════
 
