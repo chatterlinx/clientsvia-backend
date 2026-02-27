@@ -661,8 +661,34 @@ class Agent2DiscoveryRunner {
       rawText: scrabResult.rawText,
       normalizedText: scrabResult.normalizedText,
       expandedTokens: scrabResult.expandedTokens,
-      transformations: scrabResult.transformations
+      transformations: scrabResult.transformations,
+      entities: scrabResult.entities
     };
+    
+    // ══════════════════════════════════════════════════════════════════════════
+    // ENTITY EXTRACTION - Use ScrabEngine extracted entities
+    // ══════════════════════════════════════════════════════════════════════════
+    // ScrabEngine Stage 4 has already extracted names, phone, address, email
+    // Use these instead of running separate extraction logic
+    
+    if (scrabResult.entities?.firstName && !nextState.callerName) {
+      nextState.callerName = scrabResult.entities.firstName;
+      
+      emit('CALLER_NAME_EXTRACTED', {
+        firstName: scrabResult.entities.firstName,
+        lastName: scrabResult.entities.lastName || null,
+        source: 'scrabengine_stage4',
+        pattern: scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName')?.pattern || 'unknown',
+        confidence: scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName')?.confidence || 0.9
+      });
+      
+      logger.info('[ScrabEngine] ✅ Caller name extracted and stored', {
+        firstName: scrabResult.entities.firstName,
+        lastName: scrabResult.entities.lastName,
+        callSid,
+        turn
+      });
+    }
     
     // ══════════════════════════════════════════════════════════════════════════
     // CLARIFIER RESOLUTION CHECK

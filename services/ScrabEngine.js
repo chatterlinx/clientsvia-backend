@@ -541,6 +541,197 @@ class QualityGate {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// STAGE 4: ENTITY EXTRACTION
+// ════════════════════════════════════════════════════════════════════════════
+
+class EntityExtractionEngine {
+  /**
+   * Extract structured entities from normalized text
+   * MOVED FROM: Agent2DiscoveryEngine.extractCallerName, utils/nameExtraction.js
+   * 
+   * @param {string} text - Normalized text (after vocabulary/synonyms)
+   * @param {Object} context - Extraction context
+   * @returns {Object} { entities, extractions, processingTimeMs }
+   */
+  static process(text, context = {}) {
+    const startTime = Date.now();
+    const extractions = [];
+    
+    const entities = {
+      firstName: null,
+      lastName: null,
+      fullName: null,
+      phone: null,
+      address: null,
+      email: null
+    };
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // NAMES EXTRACTION
+    // ────────────────────────────────────────────────────────────────────────
+    
+    // Pattern 1: "my name is [Name]" - First name only
+    const myNamePattern = /my name is (\w+)/i;
+    const myNameMatch = text.match(myNamePattern);
+    if (myNameMatch && myNameMatch[1]) {
+      entities.firstName = this.capitalizeFirst(myNameMatch[1]);
+      extractions.push({
+        type: 'firstName',
+        value: entities.firstName,
+        pattern: 'my_name_is',
+        confidence: 0.95
+      });
+    }
+    
+    // Pattern 2: "this is [First] [Last]" - Full name
+    const thisIsFullPattern = /this is (\w+)\s+(\w+)/i;
+    const thisIsFullMatch = text.match(thisIsFullPattern);
+    if (thisIsFullMatch && thisIsFullMatch[1] && thisIsFullMatch[2]) {
+      entities.firstName = this.capitalizeFirst(thisIsFullMatch[1]);
+      entities.lastName = this.capitalizeFirst(thisIsFullMatch[2]);
+      entities.fullName = `${entities.firstName} ${entities.lastName}`;
+      extractions.push({
+        type: 'fullName',
+        firstName: entities.firstName,
+        lastName: entities.lastName,
+        pattern: 'this_is_full',
+        confidence: 0.98
+      });
+    }
+    
+    // Pattern 3: "I'm [Name]" - First name
+    const imNamePattern = /i'?m\s+(\w+)/i;
+    const imNameMatch = text.match(imNamePattern);
+    if (imNameMatch && imNameMatch[1] && !entities.firstName) {
+      const candidate = this.capitalizeFirst(imNameMatch[1]);
+      // Avoid common false positives
+      if (!['calling', 'looking', 'trying', 'having', 'getting'].includes(candidate.toLowerCase())) {
+        entities.firstName = candidate;
+        extractions.push({
+          type: 'firstName',
+          value: entities.firstName,
+          pattern: 'im_name',
+          confidence: 0.85
+        });
+      }
+    }
+    
+    // Pattern 4: "call me [Name]"
+    const callMePattern = /call me (\w+)/i;
+    const callMeMatch = text.match(callMePattern);
+    if (callMeMatch && callMeMatch[1] && !entities.firstName) {
+      entities.firstName = this.capitalizeFirst(callMeMatch[1]);
+      extractions.push({
+        type: 'firstName',
+        value: entities.firstName,
+        pattern: 'call_me',
+        confidence: 0.90
+      });
+    }
+    
+    // Pattern 5: "first name is [Name]"
+    const firstNamePattern = /(?:my\s+)?first\s+name\s+(?:is\s+)?(\w+)/i;
+    const firstNameMatch = text.match(firstNamePattern);
+    if (firstNameMatch && firstNameMatch[1] && !entities.firstName) {
+      entities.firstName = this.capitalizeFirst(firstNameMatch[1]);
+      extractions.push({
+        type: 'firstName',
+        value: entities.firstName,
+        pattern: 'first_name_is',
+        confidence: 0.95
+      });
+    }
+    
+    // Pattern 6: "last name is [Name]"
+    const lastNamePattern = /(?:my\s+)?last\s+name\s+(?:is\s+)?(\w+)/i;
+    const lastNameMatch = text.match(lastNamePattern);
+    if (lastNameMatch && lastNameMatch[1]) {
+      entities.lastName = this.capitalizeFirst(lastNameMatch[1]);
+      extractions.push({
+        type: 'lastName',
+        value: entities.lastName,
+        pattern: 'last_name_is',
+        confidence: 0.95
+      });
+    }
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // PHONE NUMBER EXTRACTION
+    // ────────────────────────────────────────────────────────────────────────
+    
+    // Pattern: Various phone formats
+    const phonePatterns = [
+      /(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/,  // 239-565-2202 or 2395652202
+      /\((\d{3})\)\s*(\d{3})[-.\s]?(\d{4})/, // (239) 565-2202
+      /(\d{10})/                          // 2395652202
+    ];
+    
+    for (const pattern of phonePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        // Extract just digits
+        const digits = match[0].replace(/\D/g, '');
+        if (digits.length === 10) {
+          entities.phone = digits;
+          extractions.push({
+            type: 'phone',
+            value: digits,
+            formatted: `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`,
+            pattern: 'phone_format',
+            confidence: 0.92
+          });
+          break;
+        }
+      }
+    }
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // EMAIL EXTRACTION
+    // ────────────────────────────────────────────────────────────────────────
+    
+    const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+    const emailMatch = text.match(emailPattern);
+    if (emailMatch) {
+      entities.email = emailMatch[0].toLowerCase();
+      extractions.push({
+        type: 'email',
+        value: entities.email,
+        pattern: 'email_format',
+        confidence: 0.98
+      });
+    }
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // ADDRESS EXTRACTION (Basic - can be enhanced)
+    // ────────────────────────────────────────────────────────────────────────
+    
+    // Pattern: Street number + street name
+    const addressPattern = /\b(\d+)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|way|place|pl)\b/i;
+    const addressMatch = text.match(addressPattern);
+    if (addressMatch) {
+      entities.address = addressMatch[0];
+      extractions.push({
+        type: 'address',
+        value: entities.address,
+        pattern: 'street_address',
+        confidence: 0.85
+      });
+    }
+    
+    return {
+      entities,
+      extractions,
+      processingTimeMs: Date.now() - startTime
+    };
+  }
+  
+  static capitalizeFirst(str) {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // SCRABENGINE - Main Orchestrator
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -587,13 +778,15 @@ class ScrabEngine {
       stage1_fillers: null,
       stage2_vocabulary: null,
       stage3_expansion: null,
-      stage4_quality: null,
+      stage4_extraction: null,
+      stage5_quality: null,
       
       // Final outputs
       normalizedText: null,
       originalTokens: null,
       expandedTokens: null,
       expansionMap: null,
+      entities: null,
       
       // Metadata
       transformations: [],
@@ -603,7 +796,8 @@ class ScrabEngine {
         stage1Ms: 0,
         stage2Ms: 0,
         stage3Ms: 0,
-        stage4Ms: 0
+        stage4Ms: 0,
+        stage5Ms: 0
       },
       meta: {
         scrabEngineVersion: '1.0.0',
@@ -683,24 +877,46 @@ class ScrabEngine {
     });
     
     // ════════════════════════════════════════════════════════════════════════
-    // STAGE 4: QUALITY ASSESSMENT
+    // STAGE 4: ENTITY EXTRACTION
     // ════════════════════════════════════════════════════════════════════════
     
-    logger.debug('[ScrabEngine] Stage 4: Quality Assessment');
+    logger.debug('[ScrabEngine] Stage 4: Entity Extraction');
     const T4 = Date.now();
     
-    result.stage4_quality = QualityGate.assess(
+    result.stage4_extraction = EntityExtractionEngine.process(
       result.stage2_vocabulary.normalized,
-      config.qualityGates || {}
+      context
     );
     
     result.performance.stage4Ms = Date.now() - T4;
     
     logger.debug('[ScrabEngine] Stage 4 Complete', {
-      passed: result.stage4_quality.passed,
-      confidence: result.stage4_quality.confidence,
-      reason: result.stage4_quality.reason,
+      firstName: result.stage4_extraction.entities.firstName,
+      lastName: result.stage4_extraction.entities.lastName,
+      phone: result.stage4_extraction.entities.phone,
+      extractions: result.stage4_extraction.extractions.length,
       timeMs: result.performance.stage4Ms
+    });
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // STAGE 5: QUALITY ASSESSMENT
+    // ════════════════════════════════════════════════════════════════════════
+    
+    logger.debug('[ScrabEngine] Stage 5: Quality Assessment');
+    const T5 = Date.now();
+    
+    result.stage5_quality = QualityGate.assess(
+      result.stage2_vocabulary.normalized,
+      config.qualityGates || {}
+    );
+    
+    result.performance.stage5Ms = Date.now() - T5;
+    
+    logger.debug('[ScrabEngine] Stage 5 Complete', {
+      passed: result.stage5_quality.passed,
+      confidence: result.stage5_quality.confidence,
+      reason: result.stage5_quality.reason,
+      timeMs: result.performance.stage5Ms
     });
     
     // ════════════════════════════════════════════════════════════════════════
@@ -711,7 +927,8 @@ class ScrabEngine {
     result.originalTokens = result.stage3_expansion.originalTokens;
     result.expandedTokens = result.stage3_expansion.expandedTokens;
     result.expansionMap = result.stage3_expansion.expansionMap;
-    result.quality = result.stage4_quality;
+    result.entities = result.stage4_extraction.entities;
+    result.quality = result.stage5_quality;
     result.performance.totalTimeMs = Date.now() - T0;
     
     // ════════════════════════════════════════════════════════════════════════
@@ -732,7 +949,14 @@ class ScrabEngine {
         fillersMs: result.performance.stage1Ms,
         vocabMs: result.performance.stage2Ms,
         expansionMs: result.performance.stage3Ms,
-        qualityMs: result.performance.stage4Ms
+        extractionMs: result.performance.stage4Ms,
+        qualityMs: result.performance.stage5Ms
+      },
+      entitiesExtracted: {
+        firstName: result.entities?.firstName || null,
+        lastName: result.entities?.lastName || null,
+        phone: result.entities?.phone || null,
+        address: result.entities?.address || null
       }
     });
     
@@ -759,9 +983,10 @@ class ScrabEngine {
       originalTokens: tokens,
       expandedTokens: tokens,
       expansionMap: {},
+      entities: { firstName: null, lastName: null, phone: null, address: null, email: null },
       transformations: [],
       quality: { passed: true, reason: 'SCRABENGINE_DISABLED', confidence: 0.5 },
-      performance: { totalTimeMs: 0, stage1Ms: 0, stage2Ms: 0, stage3Ms: 0, stage4Ms: 0 },
+      performance: { totalTimeMs: 0, stage1Ms: 0, stage2Ms: 0, stage3Ms: 0, stage4Ms: 0, stage5Ms: 0 },
       meta: {
         scrabEngineVersion: '1.0.0',
         timestamp: new Date().toISOString(),
@@ -942,5 +1167,6 @@ module.exports = {
   FillerRemovalEngine,
   VocabularyNormalizationEngine,
   TokenExpansionEngine,
+  EntityExtractionEngine,
   QualityGate
 };

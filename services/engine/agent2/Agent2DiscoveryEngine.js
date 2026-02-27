@@ -311,28 +311,9 @@ function detectQuestionIntent(text) {
   return questionIndicators.some(indicator => text.includes(indicator));
 }
 
-function extractCallerName(text) {
-  const patterns = [
-    /my name is (\w+)/i,
-    /this is (\w+)/i,
-    /i'm (\w+)/i,
-    /im (\w+)/i,
-    /call me (\w+)/i
-  ];
-  
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      return capitalizeFirst(match[1]);
-    }
-  }
-  
-  return null;
-}
-
-function capitalizeFirst(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-}
+// ☢️ DELETED - Name extraction moved to ScrabEngine Stage 4
+// Names now extracted in ScrabEngine.EntityExtractionEngine
+// Agent2DiscoveryRunner uses scrabResult.entities.firstName directly
 
 /* ============================================================================
    DISCOVERY STATE PROCESSING
@@ -342,10 +323,8 @@ async function processDiscoveryState(session, text, config, companyId, events) {
   const sessionUpdates = { ...session };
   sessionUpdates.turn = (session.turn || 0) + 1;
   
-  const detectedName = extractCallerName(text);
-  if (detectedName && !sessionUpdates.callerName) {
-    sessionUpdates.callerName = detectedName;
-  }
+  // ☢️ DELETED - Name extraction now handled by ScrabEngine Stage 4
+  // Names come from Agent2DiscoveryRunner via scrabResult.entities
   
   // Detect booking intent → set awaitingBookingConsent flag
   if (detectBookingIntent(text)) {
