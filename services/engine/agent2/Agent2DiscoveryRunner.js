@@ -93,14 +93,8 @@ async function substituteTriggerVariables(text, companyId, runtimeVars = {}) {
   let result = text;
   
   try {
-    // RUNTIME VARIABLES (per-call, e.g., {name} from ScrabEngine extraction)
-    if (runtimeVars.name) {
-      result = result.replace(/\{name\}/gi, `, ${runtimeVars.name}`);
-    } else {
-      result = result.replace(/\{name\}/gi, '');
-    }
-    
     // STATIC VARIABLES (company-level, e.g., {diagnosticfee})
+    // Loaded first so static overrides for runtime vars take precedence
     let variables = triggerVariablesCache.get(companyId);
     
     if (!variables) {
@@ -119,6 +113,16 @@ async function substituteTriggerVariables(text, companyId, runtimeVars = {}) {
       if (!value) continue;
       const regex = new RegExp(`\\{${varName}\\}`, 'gi');
       result = result.replace(regex, value);
+    }
+    
+    // RUNTIME VARIABLES (per-call) — only if not already resolved by static override
+    // {name} → ", CallerName" from ScrabEngine extraction, or "" if unknown
+    if (result.includes('{name}') || result.includes('{Name}')) {
+      if (runtimeVars.name) {
+        result = result.replace(/\{name\}/gi, `, ${runtimeVars.name}`);
+      } else {
+        result = result.replace(/\{name\}/gi, '');
+      }
     }
     
     return result;

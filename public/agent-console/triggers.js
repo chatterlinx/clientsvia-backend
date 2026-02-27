@@ -618,8 +618,10 @@
     return matches;
   }
   
-  // Variables resolved at call time by the runtime (not company-level static)
   const RUNTIME_VARIABLES = new Set(['name']);
+  const RUNTIME_VARIABLE_INFO = {
+    name: 'Auto-filled from ScrabEngine caller name extraction. Leave empty for auto, or type a static override.'
+  };
   
   function extractAndRenderVariables() {
     state.detectedVariables.clear();
@@ -640,7 +642,6 @@
       const backupVars = extractVariablesFromText(backupAnswer);
       
       [...answerVars, ...followUpVars, ...includedVars, ...excludedVars, ...backupVars]
-        .filter(v => !RUNTIME_VARIABLES.has(v))
         .forEach(v => state.detectedVariables.add(v));
     }
     
@@ -659,8 +660,35 @@
     const sortedVars = Array.from(state.detectedVariables).sort();
     
     DOM.variablesTableBody.innerHTML = sortedVars.map(varName => {
+      const isRuntime = RUNTIME_VARIABLES.has(varName);
       const value = state.companyVariables.get(varName) || '';
       const hasValue = value.trim().length > 0;
+      
+      if (isRuntime) {
+        const runtimeSource = RUNTIME_VARIABLE_INFO[varName] || 'Resolved at call time';
+        return `
+          <tr style="border-bottom: 1px solid #e5e7eb; background: #f0fdf4;">
+            <td style="padding: 12px 16px;">
+              <code style="background: #dcfce7; padding: 4px 8px; border-radius: 4px; color: #166534; font-weight: 600; font-size: 0.875rem;">{${escapeHtml(varName)}}</code>
+            </td>
+            <td style="padding: 12px 16px;">
+              <input 
+                type="text" 
+                class="form-input variable-input" 
+                data-variable="${escapeHtml(varName)}"
+                value="${escapeHtml(value)}"
+                placeholder="Leave empty for auto, or type override..."
+                style="margin: 0; border-color: #86efac; background: #f0fdf4;"
+              />
+              <div style="font-size: 11px; color: #15803d; margin-top: 4px;">${escapeHtml(runtimeSource)}</div>
+            </td>
+            <td style="padding: 12px 16px;">
+              <span style="color: #166534; font-weight: 600; font-size: 0.875rem;">${hasValue ? '✅ Override' : '⚡ Auto'}</span>
+            </td>
+          </tr>
+        `;
+      }
+      
       const statusColor = hasValue ? '#16a34a' : '#dc2626';
       const statusText = hasValue ? '✅ Set' : '🔴 Required';
       const varColor = hasValue ? '#111827' : '#dc2626';
