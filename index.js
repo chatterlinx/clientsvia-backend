@@ -468,20 +468,30 @@ app.get('/audio/*', async (req, res) => {
     }
 
     if (!audioData) {
-      const triggerDoc = await TriggerAudio.findOne({ audioUrl }).select('isValid audioUrl textHash').lean();
+      const triggerDoc = await TriggerAudio.findOne({ audioUrl }).select('isValid audioUrl textHash audioData').lean();
       const greetingDoc = await GreetingAudio.findOne({ audioUrl }).select('isValid audioUrl').lean();
-      logger.warn('[AudioFallback] 404 — Audio not found in MongoDB', {
+      
+      let diagnosis;
+      if (triggerDoc) {
+        const hasBuffer = triggerDoc.audioData && triggerDoc.audioData.length > 0;
+        diagnosis = hasBuffer
+          ? `Found in DB, isValid=${triggerDoc.isValid}, buffer=${triggerDoc.audioData.length} bytes — isValid must be false`
+          : `Found in DB, isValid=${triggerDoc.isValid}, BUT audioData is EMPTY (${triggerDoc.audioData ? triggerDoc.audioData.length + ' bytes' : 'null'}) — MP3 binary was never stored. Regenerate audio.`;
+      } else if (greetingDoc) {
+        diagnosis = `Found in GreetingAudio, isValid=${greetingDoc.isValid}`;
+      } else {
+        diagnosis = 'Not in database at all — regenerate audio';
+      }
+      
+      logger.warn('[AudioFallback] 404 — Audio not served', {
         requestedUrl: audioUrl,
         triggerDocFound: !!triggerDoc,
         triggerIsValid: triggerDoc?.isValid,
+        triggerHasBuffer: !!(triggerDoc?.audioData?.length),
         greetingDocFound: !!greetingDoc,
-        greetingIsValid: greetingDoc?.isValid
+        diagnosis
       });
-      return res.status(404).json({
-        error: 'Audio not found',
-        url: audioUrl,
-        diagnosis: triggerDoc ? `Found in DB but isValid=${triggerDoc.isValid} (invalidated audio not served)` : 'Not in database at all — regenerate audio'
-      });
+      return res.status(404).json({ error: 'Audio not found', url: audioUrl, diagnosis });
     }
 
     logger.info(`[AudioFallback] Serving audio from ${source}`, { audioUrl, bytes: audioData.length });

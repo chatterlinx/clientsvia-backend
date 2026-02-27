@@ -2080,12 +2080,19 @@ router.post('/:companyId/generate-trigger-audio',
         }
       }
 
-      fs.writeFileSync(filePath, buffer);
+      // Ensure buffer is a proper Node.js Buffer (ElevenLabs may return ArrayBuffer/Uint8Array)
+      const safeBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+      
+      fs.writeFileSync(filePath, safeBuffer);
 
       // Persist audio binary to MongoDB (survives Render deploys)
-      // IMPORTANT: Use original text (with placeholders) for hash so validation works
-      // The audio content uses finalText (substituted), but the hash tracks the source text
-      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, text, voiceId, userId, buffer);
+      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, text, voiceId, userId, safeBuffer);
+      
+      logger.info('[Agent2Audio] MongoDB save verified', {
+        companyId, ruleId, audioUrl,
+        bufferType: typeof buffer, isBuffer: Buffer.isBuffer(buffer),
+        safeBufferBytes: safeBuffer.length
+      });
 
       logger.info('[Agent2Audio] Audio generated successfully', {
         companyId,

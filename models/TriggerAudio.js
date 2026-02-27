@@ -169,11 +169,16 @@ triggerAudioSchema.statics.findByCompanyId = function(companyId) {
 triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUrl, answerText, voiceId, userId, audioBuffer) {
   const textHash = this.hashText(answerText);
   
+  // Ensure audioBuffer is a proper Node.js Buffer
+  const safeBuf = audioBuffer
+    ? (Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer))
+    : null;
+  
   const existing = await this.findOne({ companyId, ruleId });
   
   if (existing) {
     existing.audioUrl = audioUrl;
-    existing.audioData = audioBuffer || existing.audioData;
+    existing.audioData = safeBuf || existing.audioData;
     existing.textHash = textHash;
     existing.sourceText = answerText;
     existing.voiceId = voiceId || existing.voiceId;
@@ -188,7 +193,7 @@ triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUr
       companyId,
       ruleId,
       audioUrl,
-      audioData: audioBuffer || null,
+      audioData: safeBuf || null,
       textHash,
       sourceText: answerText,
       voiceId,
