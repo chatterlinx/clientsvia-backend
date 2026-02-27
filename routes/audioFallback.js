@@ -148,10 +148,28 @@ router.get('/greetings/:filename', async (req, res) => {
   const audioPath = path.join(PUBLIC_AUDIO_DIR, 'greetings', filename);
   
   await serveAudioWithFallback(req, res, audioPath, async () => {
-    // MongoDB fallback - match by filename pattern
-    const audioDoc = await GreetingAudio.findOne({
-      audioUrl: { $regex: filename }
+    // MongoDB fallback - try exact audioUrl match first
+    const fullUrl = `/audio-safe/greetings/${filename}`;
+    let audioDoc = await GreetingAudio.findOne({
+      audioUrl: fullUrl
     }).select('audioData').lean();
+    
+    // If not found, try regex match (for old URLs)
+    if (!audioDoc) {
+      audioDoc = await GreetingAudio.findOne({
+        audioUrl: { $regex: filename.replace('.mp3', '') }
+      }).select('audioData').lean();
+    }
+    
+    // If still not found, try finding by text hash from filename
+    if (!audioDoc) {
+      const hashMatch = filename.match(/([a-f0-9]{16})\.mp3$/);
+      if (hashMatch) {
+        audioDoc = await GreetingAudio.findOne({
+          textHash: hashMatch[1]
+        }).select('audioData').lean();
+      }
+    }
     
     return audioDoc?.audioData || null;
   });
