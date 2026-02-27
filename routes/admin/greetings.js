@@ -230,6 +230,33 @@ router.get(
                     rules: []
                 }
             };
+
+            // Verify audio files exist on disk (they're ephemeral on Render deploys)
+            if (greetings.callStart?.audioUrl) {
+                const filePath = path.join(__dirname, '../../public', greetings.callStart.audioUrl);
+                if (!fs.existsSync(filePath)) {
+                    logger.warn(`[${MODULE_ID}] Call start audio file missing from disk`, { audioUrl: greetings.callStart.audioUrl, companyId });
+                    greetings.callStart = { ...greetings.callStart, audioUrl: null, audioTextHash: null, audioGeneratedAt: null };
+                    v2Company.findByIdAndUpdate(companyId, {
+                        'aiAgentSettings.agent2.greetings.callStart.audioUrl': null,
+                        'aiAgentSettings.agent2.greetings.callStart.audioTextHash': null,
+                        'aiAgentSettings.agent2.greetings.callStart.audioGeneratedAt': null
+                    }).catch(err => logger.error(`[${MODULE_ID}] Failed to clear stale callStart audio`, { error: err.message }));
+                }
+            }
+            if (greetings.interceptor?.rules?.length) {
+                for (const rule of greetings.interceptor.rules) {
+                    if (rule.audioUrl) {
+                        const filePath = path.join(__dirname, '../../public', rule.audioUrl);
+                        if (!fs.existsSync(filePath)) {
+                            logger.warn(`[${MODULE_ID}] Rule audio file missing from disk`, { audioUrl: rule.audioUrl, ruleId: rule.ruleId, companyId });
+                            rule.audioUrl = null;
+                            rule.audioTextHash = null;
+                            rule.audioGeneratedAt = null;
+                        }
+                    }
+                }
+            }
             
             res.json({
                 success: true,

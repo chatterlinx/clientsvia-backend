@@ -392,6 +392,7 @@ module.exports = {
   invalidateAllCache,
   
   checkDuplicates,
+  resolveAudioUrl,
   
   buildCacheKey,
   

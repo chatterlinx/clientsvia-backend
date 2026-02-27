@@ -38,6 +38,8 @@
 
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const logger = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
@@ -48,6 +50,7 @@ const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
 const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
+const { resolveAudioUrl } = require('../../services/engine/agent2/TriggerService');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // PERMISSION HELPERS
@@ -166,10 +169,9 @@ async function buildMergedTriggerList(companyId) {
     const effectiveAnswerText = partialOverride?.answerText || gt.answerText;
     
     // Audio is ALWAYS company-specific - never from global trigger
-    // Check if company has audio AND if it's still valid for current text
-    const hasValidAudio = companyAudio && companyAudio.isValid && 
-                          companyAudio.textHash === TriggerAudio.hashText(effectiveAnswerText);
-    const effectiveAudioUrl = hasValidAudio ? companyAudio.audioUrl : '';
+    // Validates DB record AND verifies file exists on disk
+    const effectiveAudioUrl = resolveAudioUrl(companyAudio, effectiveAnswerText);
+    const hasValidAudio = Boolean(effectiveAudioUrl);
     
     const triggerData = {
       triggerId: gt.triggerId,
@@ -220,10 +222,9 @@ async function buildMergedTriggerList(companyId) {
   for (const lt of localTriggers) {
     const companyAudio = audioMap.get(lt.ruleId);
     
-    // Check if company has audio AND if it's still valid for current text
-    const hasValidAudio = companyAudio && companyAudio.isValid && 
-                          companyAudio.textHash === TriggerAudio.hashText(lt.answerText);
-    const effectiveAudioUrl = hasValidAudio ? companyAudio.audioUrl : '';
+    // Validates DB record AND verifies file exists on disk
+    const effectiveAudioUrl = resolveAudioUrl(companyAudio, lt.answerText);
+    const hasValidAudio = Boolean(effectiveAudioUrl);
     
     const localTriggerData = {
       triggerId: lt.triggerId,
