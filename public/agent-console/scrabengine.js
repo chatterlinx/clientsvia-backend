@@ -769,6 +769,28 @@
       document.getElementById('test-stage3-expanded').innerHTML = 
         expansions.map(key => `<span class="test-badge">${key}: +${result.stage3_expansion.expansionMap[key].length}</span>`).join('');
     }
+    
+    // Show entity extraction
+    const entities = result.entities || {};
+    const stage4Div = document.getElementById('test-stage4');
+    const entitiesDiv = document.getElementById('test-stage4-entities');
+    
+    const entitiesFound = [];
+    if (entities.firstName) entitiesFound.push(`First: "${entities.firstName}"`);
+    if (entities.lastName) entitiesFound.push(`Last: "${entities.lastName}"`);
+    if (entities.phone) entitiesFound.push(`Phone: ${entities.phone}`);
+    if (entities.address) entitiesFound.push(`Address: ${entities.address}`);
+    if (entities.email) entitiesFound.push(`Email: ${entities.email}`);
+    
+    stage4Div.textContent = entitiesFound.length > 0 ? entitiesFound.join(' | ') : 'No entities extracted';
+    
+    // Show extraction details
+    const extractions = result.stage4_extraction?.extractions || [];
+    if (extractions.length > 0) {
+      entitiesDiv.innerHTML = extractions.map(e => 
+        `<span class="test-badge">${e.type}="${e.value}" (${e.pattern}, ${Math.round(e.confidence * 100)}%${e.validated ? ' ✅' : ''})</span>`
+      ).join('');
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════

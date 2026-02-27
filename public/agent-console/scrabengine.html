@@ -141,6 +141,12 @@
               <div class="stage-name">Synonyms</div>
               <span class="stage-status active" id="stage3-status">Active</span>
             </div>
+            
+            <div class="stage-indicator">
+              <div class="stage-number">4</div>
+              <div class="stage-name">Extraction</div>
+              <span class="stage-status active" id="stage4-status">Active</span>
+            </div>
           </div>
           
           <div class="scrab-card">
@@ -188,6 +194,11 @@
             </div>
             <div class="pipeline-arrow">→</div>
             <div class="pipeline-step" data-stage="4">
+              <div class="pipeline-step-num">4</div>
+              <div class="pipeline-step-name">Extraction</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-step" data-stage="5">
               <div class="pipeline-step-num">✓</div>
               <div class="pipeline-step-name">Delivery</div>
             </div>
@@ -300,6 +311,50 @@
             </div>
           </div>
           
+          <!-- STAGE 4: ENTITY EXTRACTION -->
+          <div class="scrab-card" id="stage-extraction">
+            <div class="scrab-card-header">
+              <div>
+                <h2 class="scrab-card-title">🏷️ Stage 4: Entity Extraction</h2>
+                <p class="scrab-card-subtitle">Extract names, phone, address, email from cleaned text</p>
+              </div>
+            </div>
+            
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 16px; border-radius: 10px; margin-bottom: 16px;">
+              <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">✨ Automatic Extraction (Always Active)</div>
+              <div style="font-size: 12px; opacity: 0.95; line-height: 1.5;">
+                ScrabEngine automatically extracts entities from caller speech:
+                <ul style="margin: 8px 0 0 20px; padding: 0;">
+                  <li><strong>Names:</strong> "my name is Marc" → firstName="Marc"</li>
+                  <li><strong>Phone:</strong> "239-565-2202" → phone="2395652202"</li>
+                  <li><strong>Address:</strong> "123 Main Street" → address extracted</li>
+                  <li><strong>Email:</strong> "john@example.com" → email extracted</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px;">
+              <div style="font-size: 13px; font-weight: 600; color: #1e40af; margin-bottom: 8px;">
+                🌐 GlobalShare Integration
+              </div>
+              <div style="font-size: 12px; color: #1e3a8a; line-height: 1.5;">
+                Extracted names are validated against GlobalShare dictionaries:
+                <ul style="margin: 8px 0 0 20px; padding: 0;">
+                  <li>First names: Checked against 9,530+ names</li>
+                  <li>Last names: Checked against 161,427+ surnames</li>
+                  <li>Validation: &lt;1ms via Redis</li>
+                  <li>Confidence boost: +13% for validated names</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 6px;">
+              <div style="font-size: 12px; color: #475569;">
+                <strong>Used in Call Console:</strong> Entity extraction results appear in transcript trace showing what was extracted, validation status, and confidence scores.
+              </div>
+            </div>
+          </div>
+          
           <!-- TESTING PANEL -->
           <div class="test-panel" id="test-panel" style="display: none;">
             <h2 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700;">🧪 Live Pipeline Testing</h2>
@@ -333,7 +388,13 @@
               </div>
               
               <div class="test-stage">
-                <div class="test-stage-title">✅ Final Delivery to Triggers</div>
+                <div class="test-stage-title">🏷️ Stage 4: Entity Extraction</div>
+                <div class="test-stage-text" id="test-stage4"></div>
+                <div id="test-stage4-entities"></div>
+              </div>
+              
+              <div class="test-stage">
+                <div class="test-stage-title">✅ Stage 5: Final Delivery to Triggers</div>
                 <div class="test-stage-text" id="test-final"></div>
                 <div style="margin-top: 8px; font-size: 12px;">
                   <strong>Processing Time:</strong> <span id="test-time">0</span>ms
