@@ -330,7 +330,7 @@
       if (e.key !== 'Escape') return;
       const openType = Object.keys(MODAL_REGISTRY).find((type) => {
         const modal = getModal(type);
-        return modal && modal.classList.contains('open');
+        return modal && modal.classList.contains('active');
       });
       if (openType) closeModal(openType);
     });
@@ -662,7 +662,7 @@
       saveBtn.textContent = `${isEdit ? 'Update' : 'Add'} ${label}`;
     }
 
-    modal.classList.add('open');
+    modal.classList.add('active');
     log(`MODAL OPEN SUCCESS: "${type}" is now visible, classList:`, modal.className);
   }
 
@@ -670,7 +670,7 @@
     log(`MODAL CLOSE: type="${type}"`);
 
     const modal = getModal(type);
-    if (modal) modal.classList.remove('open');
+    if (modal) modal.classList.remove('active');
     state.editingType = null;
     state.editingIndex = -1;
   }
