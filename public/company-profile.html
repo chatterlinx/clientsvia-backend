@@ -4627,6 +4627,233 @@
         
         // Initialize SMS UI after DOM is ready and companyId is set
         setTimeout(initSMSNotificationsUI, 500);
+
+        // ════════════════════════════════════════════════════════════════════
+        // VOICE SETTINGS BUTTON WIRING
+        // Handles: save-voice-settings, test-voice-btn, stream-test-btn
+        // Backend: POST /api/company/:companyId/v2-voice-settings
+        //          POST /api/company/:companyId/v2-tts/generate
+        // ════════════════════════════════════════════════════════════════════
+        function getVoiceCompanyId() {
+            return window.currentCompanyId || window.companyId || 
+                   new URLSearchParams(window.location.search).get('companyId') ||
+                   new URLSearchParams(window.location.search).get('id') ||
+                   localStorage.getItem('currentCompanyId');
+        }
+
+        function collectVoiceSettings() {
+            const el = (id) => document.getElementById(id);
+            return {
+                voiceId: el('voice-selector')?.value || null,
+                apiSource: el('use-own-api')?.checked ? 'own' : 'clientsvia',
+                apiKey: el('elevenlabsApiKey')?.value || null,
+                stability: parseFloat(el('voice-stability')?.value) || 0.5,
+                similarity_boost: parseFloat(el('voice-similarity')?.value) || 0.7,
+                style: parseFloat(el('voice-style')?.value) || 0.0,
+                use_speaker_boost: el('voice-speaker-boost')?.checked !== false,
+                aiModel: el('voice-model')?.value || 'eleven_turbo_v2_5',
+                outputFormat: el('voice-format')?.value || 'mp3_44100_128',
+                optimizeStreamingLatency: parseInt(el('voice-latency')?.value) || 0,
+                speechTimeout: parseFloat(el('speech-timeout')?.value) || 3,
+                initialTimeout: parseInt(el('initial-timeout')?.value) || 5,
+                bargeIn: el('barge-in-toggle')?.checked || false
+            };
+        }
+
+        document.getElementById('save-voice-settings')?.addEventListener('click', async () => {
+            const companyId = getVoiceCompanyId();
+            if (!companyId) { alert('No company ID found'); return; }
+            
+            const btn = document.getElementById('save-voice-settings');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            btn.disabled = true;
+            
+            try {
+                const settings = collectVoiceSettings();
+                if (!settings.voiceId) {
+                    alert('Please select a voice before saving.');
+                    return;
+                }
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/company/${companyId}/v2-voice-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Saved!';
+                    btn.style.backgroundColor = '#16a34a';
+                    const indicator = document.getElementById('voice-save-indicator');
+                    if (indicator) indicator.classList.remove('hidden');
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.style.backgroundColor = '';
+                    }, 2500);
+                } else {
+                    throw new Error(data.error || data.message || 'Save failed');
+                }
+            } catch (err) {
+                console.error('[Voice] Save failed:', err);
+                alert('Failed to save voice settings: ' + err.message);
+                btn.innerHTML = originalHTML;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('test-voice-btn')?.addEventListener('click', async () => {
+            const companyId = getVoiceCompanyId();
+            if (!companyId) { alert('No company ID found'); return; }
+            
+            const text = document.getElementById('test-text')?.value?.trim();
+            if (!text) { alert('Please enter test text'); return; }
+            
+            const settings = collectVoiceSettings();
+            if (!settings.voiceId) { alert('Please select a voice first'); return; }
+            
+            const btn = document.getElementById('test-voice-btn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+            btn.disabled = true;
+            
+            const resultsDiv = document.getElementById('test-results');
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/company/${companyId}/v2-tts/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        text,
+                        voiceId: settings.voiceId,
+                        stability: settings.stability,
+                        similarity_boost: settings.similarity_boost,
+                        style: settings.style,
+                        model_id: settings.aiModel
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `HTTP ${response.status}`);
+                }
+                
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                resultsDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                        <div>
+                            <p class="font-medium text-gray-800">Audio generated successfully</p>
+                            <p class="text-sm text-gray-500">${(audioBlob.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                    </div>
+                    <audio controls autoplay class="w-full mt-3" src="${audioUrl}"></audio>
+                `;
+            } catch (err) {
+                console.error('[Voice] Test failed:', err);
+                resultsDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-exclamation-circle text-red-500 text-xl"></i>
+                        <div>
+                            <p class="font-medium text-red-700">Test failed</p>
+                            <p class="text-sm text-red-500">${err.message}</p>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('stream-test-btn')?.addEventListener('click', async () => {
+            const companyId = getVoiceCompanyId();
+            if (!companyId) { alert('No company ID found'); return; }
+            
+            const text = document.getElementById('test-text')?.value?.trim();
+            if (!text) { alert('Please enter test text'); return; }
+            
+            const settings = collectVoiceSettings();
+            if (!settings.voiceId) { alert('Please select a voice first'); return; }
+            
+            const btn = document.getElementById('stream-test-btn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Streaming...';
+            btn.disabled = true;
+            
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-broadcast-tower text-blue-500 text-xl animate-pulse"></i>
+                    <p class="font-medium text-gray-700">Streaming audio...</p>
+                </div>
+            `;
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/company/${companyId}/v2-tts/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        text,
+                        voiceId: settings.voiceId,
+                        stability: settings.stability,
+                        similarity_boost: settings.similarity_boost,
+                        style: settings.style,
+                        model_id: settings.aiModel
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `HTTP ${response.status}`);
+                }
+                
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                resultsDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                        <div>
+                            <p class="font-medium text-gray-800">Stream complete</p>
+                            <p class="text-sm text-gray-500">${(audioBlob.size / 1024).toFixed(1)} KB streamed</p>
+                        </div>
+                    </div>
+                    <audio controls autoplay class="w-full mt-3" src="${audioUrl}"></audio>
+                `;
+            } catch (err) {
+                console.error('[Voice] Stream test failed:', err);
+                resultsDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-exclamation-circle text-red-500 text-xl"></i>
+                        <div>
+                            <p class="font-medium text-red-700">Stream failed</p>
+                            <p class="text-sm text-red-500">${err.message}</p>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        });
     </script>
     
     <!-- =========================================================

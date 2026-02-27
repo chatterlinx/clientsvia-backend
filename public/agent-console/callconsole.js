@@ -611,7 +611,7 @@
           </div>
         </div>
         <div class="transcript-body">
-          ${renderTranscript(call.turns || [])}
+          ${renderTranscript(call.turns || [], buildScrabByTurnMap(call))}
         </div>
       </div>
 
@@ -831,11 +831,28 @@
   }
 
   /**
-   * Render the transcript with provenance tracking
+   * Build a map of ScrabEngine events grouped by turn number.
+   * @param {Object} call - Full call payload
+   * @returns {Map<number, Object[]>} turnNumber → sorted ScrabEngine events
+   */
+  function buildScrabByTurnMap(call) {
+    const timeline = buildScrabTimeline(call);
+    const byTurn = new Map();
+    for (const entry of timeline) {
+      const t = entry.turnNumber;
+      if (!byTurn.has(t)) byTurn.set(t, []);
+      byTurn.get(t).push(entry);
+    }
+    return byTurn;
+  }
+
+  /**
+   * Render the transcript with provenance tracking and inline ScrabEngine data.
    * @param {Array} turns - Array of turn objects
+   * @param {Map<number, Object[]>} scrabByTurn - ScrabEngine events grouped by turn
    * @returns {string} HTML string
    */
-  function renderTranscript(turns) {
+  function renderTranscript(turns, scrabByTurn) {
     if (turns.length === 0) {
       return `
         <div style="padding: 20px; background: #f1f5f9; border-radius: 8px; text-align: center;">
@@ -851,7 +868,7 @@
       `;
     }
 
-    return turns.map(turn => renderTurn(turn)).join('');
+    return turns.map(turn => renderTurn(turn, scrabByTurn)).join('');
   }
 
   /**
@@ -989,11 +1006,13 @@
   }
 
   /**
-   * Render a single turn in the transcript
+   * Render a single turn in the transcript.
+   * For caller turns, injects inline ScrabEngine pipeline visualization.
    * @param {Object} turn - Turn data
+   * @param {Map<number, Object[]>} scrabByTurn - ScrabEngine events by turn
    * @returns {string} HTML string
    */
-  function renderTurn(turn) {
+  function renderTurn(turn, scrabByTurn) {
     const isCaller = turn.speaker === 'caller';
     const isAgent = turn.speaker === 'agent';
     const isSystem = turn.speaker === 'system';
@@ -1023,6 +1042,11 @@
       `;
     }
 
+    let scrabInlineHtml = '';
+    if (isCaller && scrabByTurn) {
+      scrabInlineHtml = renderInlineScrabPipeline(turn.turnNumber, scrabByTurn);
+    }
+
     return `
       <div class="${turnClass}">
         <div class="turn-header">
@@ -1032,8 +1056,121 @@
           <span class="turn-timestamp">${formatTimestamp(turn.timestamp)}</span>
         </div>
         <div class="turn-text">${escapeHtml(turn.text)}</div>
+        ${scrabInlineHtml}
         ${provenanceHtml}
         ${violationAlert}
+      </div>
+    `;
+  }
+
+  /**
+   * Render inline ScrabEngine processing pipeline for a caller turn.
+   * Shows: Deepgram raw -> each processing stage -> final understood text -> extractions
+   * @param {number} turnNumber
+   * @param {Map<number, Object[]>} scrabByTurn
+   * @returns {string} HTML or empty string
+   */
+  function renderInlineScrabPipeline(turnNumber, scrabByTurn) {
+    const events = scrabByTurn.get(turnNumber);
+    if (!events || events.length === 0) return '';
+
+    const entryEv = events.find(e => e.type === 'INPUT_TEXT_FINALIZED' || e.type === 'SCRABENGINE_ENTRY');
+    const stage1 = events.find(e => e.type === 'SCRABENGINE_STAGE1');
+    const stage2 = events.find(e => e.type === 'SCRABENGINE_STAGE2');
+    const stage3 = events.find(e => e.type === 'SCRABENGINE_STAGE3');
+    const stage4 = events.find(e => e.type === 'SCRABENGINE_STAGE4');
+    const stage5 = events.find(e => e.type === 'SCRABENGINE_STAGE5');
+    const delivery = events.find(e => e.type === 'SCRABENGINE_DELIVERY');
+    const summaryEv = events.find(e => e.type === 'SCRABENGINE_PROCESSED');
+
+    const rawText = entryEv?.payload?.raw || entryEv?.payload?.rawText || null;
+    const normalizedText = summaryEv?.payload?.normalizedPreview || delivery?.payload?.text || null;
+    const wasChanged = summaryEv?.payload?.wasChanged || (rawText && normalizedText && rawText !== normalizedText);
+    const totalMs = summaryEv?.payload?.performance?.totalTimeMs || delivery?.payload?.metadata?.totalProcessingTimeMs || null;
+    const entities = stage4?.payload?.entities || summaryEv?.payload?.entities || null;
+    const handoffEntities = stage4?.payload?.handoffEntities || null;
+
+    const hasData = rawText || normalizedText || entities;
+    if (!hasData) return '';
+
+    const stages = [];
+
+    if (stage1?.payload?.summary || stage1?.payload?.text) {
+      const s = stage1.payload;
+      const status = s.status || (s.changes?.length > 0 ? 'modified' : 'unchanged');
+      stages.push(renderScrabStageChip('1', 'Fillers', s.summary || s.text, status));
+    }
+    if (stage2?.payload?.summary || stage2?.payload?.text) {
+      const s = stage2.payload;
+      const status = s.status || (s.changes?.length > 0 ? 'modified' : 'unchanged');
+      stages.push(renderScrabStageChip('2', 'Vocab', s.summary || s.text, status));
+    }
+    if (stage3?.payload?.summary || stage3?.payload?.text) {
+      const s = stage3.payload;
+      const status = s.status || 'unchanged';
+      stages.push(renderScrabStageChip('3', 'Expand', s.summary || s.text, status));
+    }
+    if (stage4?.payload?.summary || stage4?.payload?.text) {
+      const s = stage4.payload;
+      const status = s.status || (s.extractions?.length > 0 ? 'extracted' : 'none');
+      stages.push(renderScrabStageChip('4', 'Extract', s.summary || s.text, status));
+    }
+    if (stage5?.payload) {
+      const s = stage5.payload;
+      const status = s.status || (s.passed ? 'passed' : 'failed');
+      stages.push(renderScrabStageChip('5', 'Quality', s.summary || `${s.reason || ''} ${s.confidence ? Math.round(s.confidence * 100) + '%' : ''}`, status));
+    }
+
+    const stagesHtml = stages.length > 0 ? stages.join('') : '';
+
+    let entitiesHtml = '';
+    if (entities && typeof entities === 'object') {
+      const filled = Object.entries(entities).filter(([, v]) => v);
+      if (filled.length > 0) {
+        const handoff = handoffEntities || {};
+        entitiesHtml = `
+          <div class="scrab-inline-entities">
+            <span class="scrab-inline-entities-label">Extracted:</span>
+            ${filled.map(([k, v]) => {
+              const isHandoff = handoff[k] !== undefined;
+              return `<span class="scrab-entity-chip ${isHandoff ? 'handoff' : ''}">${escapeHtml(k)}="${escapeHtml(v)}"${isHandoff ? ' <span class="scrab-handoff-badge">handoff</span>' : ''}</span>`;
+            }).join(' ')}
+          </div>
+        `;
+      }
+    }
+
+    const understoodHtml = (wasChanged && normalizedText)
+      ? `<div class="scrab-inline-understood"><span class="scrab-inline-label">Understood:</span> ${escapeHtml(normalizedText)}</div>`
+      : '';
+
+    const perfHtml = totalMs != null
+      ? `<span class="scrab-inline-perf">${totalMs}ms</span>`
+      : '';
+
+    return `
+      <div class="scrab-inline-card">
+        <div class="scrab-inline-header">
+          <span class="scrab-inline-title">ScrabEngine</span>
+          ${perfHtml}
+        </div>
+        ${rawText ? `<div class="scrab-inline-raw"><span class="scrab-inline-label">Deepgram STT:</span> ${escapeHtml(rawText)}</div>` : ''}
+        ${stagesHtml ? `<div class="scrab-inline-stages">${stagesHtml}</div>` : ''}
+        ${understoodHtml}
+        ${entitiesHtml}
+      </div>
+    `;
+  }
+
+  function renderScrabStageChip(num, label, detail, status) {
+    const statusClass = status === 'modified' || status === 'expanded' || status === 'extracted'
+      ? 'scrab-stage-active'
+      : status === 'failed' ? 'scrab-stage-failed' : 'scrab-stage-noop';
+    return `
+      <div class="scrab-stage-chip ${statusClass}">
+        <span class="scrab-stage-num">${num}</span>
+        <span class="scrab-stage-label">${escapeHtml(label)}</span>
+        ${detail ? `<span class="scrab-stage-detail">${escapeHtml(detail)}</span>` : ''}
       </div>
     `;
   }

@@ -92,6 +92,7 @@
     triggerSearch: document.getElementById('trigger-search'),
     duplicateWarning: document.getElementById('duplicate-warning'),
     duplicateWarningText: document.getElementById('duplicate-warning-text'),
+    btnFixDuplicates: document.getElementById('btn-fix-duplicates'),
     
     filterAll: document.getElementById('filter-all'),
     filterGlobal: document.getElementById('filter-global'),
@@ -230,6 +231,9 @@
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
     DOM.btnCheckDuplicates.addEventListener('click', checkDuplicates);
+    if (DOM.btnFixDuplicates) {
+      DOM.btnFixDuplicates.addEventListener('click', checkDuplicates);
+    }
     
     DOM.triggerSearch.addEventListener('input', (e) => {
       state.searchQuery = e.target.value.toLowerCase();

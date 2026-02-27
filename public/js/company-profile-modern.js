@@ -494,8 +494,19 @@ class CompanyProfileManager {
         // Edit button (legacy - now hidden since form is always editable)
         if (this.domElements.editButton) {
             this.domElements.editButton.addEventListener('click', () => {
-                // No longer needed - form is always editable
                 logger.info('Edit button clicked - form is already editable');
+            });
+        }
+        
+        // Legacy notes button fallback — fires addV2Note if V2 interface hasn't loaded
+        const legacyNoteBtn = document.getElementById('add-new-note-button');
+        if (legacyNoteBtn) {
+            legacyNoteBtn.addEventListener('click', () => {
+                if (typeof this.addV2Note === 'function') {
+                    this.addV2Note();
+                } else {
+                    logger.error('addV2Note not available — V2 notes system not initialized');
+                }
             });
         }
     }
