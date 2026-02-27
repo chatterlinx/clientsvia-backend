@@ -476,12 +476,15 @@ router.post(
                 output_format: 'mp3_44100_128'
             });
             
+            // Ensure proper Node.js Buffer (ElevenLabs may return ArrayBuffer/Uint8Array)
+            const safeBuf = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+            
             // Save to disk (cache) AND MongoDB (permanent)
-            fs.writeFileSync(audioPath, audioBuffer);
-            await GreetingAudio.saveAudio(companyId, 'CALL_START', 'call-start', audioUrl, audioBuffer, textHash, text.trim(), voiceId);
+            fs.writeFileSync(audioPath, safeBuf);
+            await GreetingAudio.saveAudio(companyId, 'CALL_START', 'call-start', audioUrl, safeBuf, textHash, text.trim(), voiceId);
             
             logger.info(`[${MODULE_ID}] Call start audio generated and persisted to MongoDB`, {
-                companyId, filename, size: audioBuffer.length
+                companyId, filename, size: safeBuf.length
             });
             
             await v2Company.findByIdAndUpdate(companyId, {
@@ -1121,12 +1124,15 @@ router.post(
                 output_format: 'mp3_44100_128'
             });
             
+            // Ensure proper Node.js Buffer (ElevenLabs may return ArrayBuffer/Uint8Array)
+            const safeBuf = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+            
             // Save to disk (cache) AND MongoDB (permanent)
-            fs.writeFileSync(audioPath, audioBuffer);
-            await GreetingAudio.saveAudio(companyId, 'RULE', ruleId, audioUrl, audioBuffer, textHash, text.trim(), voiceId);
+            fs.writeFileSync(audioPath, safeBuf);
+            await GreetingAudio.saveAudio(companyId, 'RULE', ruleId, audioUrl, safeBuf, textHash, text.trim(), voiceId);
             
             logger.info(`[${MODULE_ID}] Rule audio generated and persisted to MongoDB`, {
-                companyId, ruleId, filename, size: audioBuffer.length
+                companyId, ruleId, filename, size: safeBuf.length
             });
             
             rule.audioUrl = audioUrl;

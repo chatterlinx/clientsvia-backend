@@ -93,13 +93,16 @@ greetingAudioSchema.index({ audioUrl: 1 });
  * Save or update greeting audio
  */
 greetingAudioSchema.statics.saveAudio = async function(companyId, type, ruleId, audioUrl, audioBuffer, textHash, sourceText, voiceId) {
+  const safeBuf = audioBuffer
+    ? (Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer))
+    : null;
   const query = { companyId, type, ruleId };
   return this.findOneAndUpdate(
     query,
     {
       $set: {
         audioUrl,
-        audioData: audioBuffer,
+        audioData: safeBuf,
         textHash,
         sourceText,
         voiceId,
