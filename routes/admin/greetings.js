@@ -1153,11 +1153,22 @@ router.post(
             res.json({ success: true, audioUrl, textHash, cached: false });
             
         } catch (error) {
-            logger.error(`[${MODULE_ID}] Error generating rule audio:`, error);
+            logger.error(`[${MODULE_ID}] Error generating rule audio:`, {
+                error: error.message,
+                stack: error.stack,
+                companyId,
+                ruleId,
+                text: text?.substring(0, 100),
+                voiceId,
+                statusCode: error.statusCode,
+                response: error.response?.data || error.body
+            });
             res.status(500).json({
                 success: false,
                 error: 'Failed to generate audio',
-                message: error.message
+                message: error.message,
+                details: error.statusCode ? `ElevenLabs error: ${error.statusCode}` : 'Unknown error',
+                hint: !voiceId ? 'No voice configured - check Voice Settings' : undefined
             });
         }
     }
