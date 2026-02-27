@@ -73,9 +73,6 @@ const globAsync = promisify(glob);
 // Compliance scanner
 const { scanForHardcodedSpeech } = require('../../services/compliance/HardcodedSpeechScanner');
 
-// Global Hub Service (for first/last names stats)
-const GlobalHubService = require('../../services/GlobalHubService');
-
 // Truth manifest (required files, modals, etc.)
 const truthManifest = require('../../config/truthManifest');
 
@@ -91,53 +88,6 @@ const BACKEND_SOURCE_FILES = [
   'routes/agentConsole/agentConsole.js',
   'routes/agentConsole/truthExport.js'
 ];
-
-// ════════════════════════════════════════════════════════════════════════════
-// GLOBAL HUB TRUTH - Platform-wide shared resources
-// ════════════════════════════════════════════════════════════════════════════
-async function buildGlobalHubTruth() {
-  try {
-    const firstNamesCount = await GlobalHubService.getFirstNamesCount();
-    const lastNamesCount = await GlobalHubService.getLastNamesCount();
-    
-    return {
-      firstNames: {
-        count: firstNamesCount,
-        status: firstNamesCount > 0 ? 'loaded' : 'empty',
-        expectedCount: 50000,
-        actualVsExpected: firstNamesCount >= 40000 ? 'OK' : 'LOW'
-      },
-      lastNames: {
-        count: lastNamesCount,
-        status: lastNamesCount > 0 ? 'loaded' : 'empty',
-        expectedCount: 180000,
-        actualVsExpected: lastNamesCount >= 150000 ? 'OK' : 'LOW'
-      },
-      platformDefaults: {
-        loaded: true,
-        note: 'Platform-wide default triggers available'
-      }
-    };
-  } catch (error) {
-    logger.error('[TRUTH EXPORT] Failed to build global hub truth', { error: error.message });
-    return {
-      firstNames: {
-        count: 0,
-        status: 'error',
-        error: error.message
-      },
-      lastNames: {
-        count: 0,
-        status: 'error',
-        error: error.message
-      },
-      platformDefaults: {
-        loaded: false,
-        error: error.message
-      }
-    };
-  }
-}
 
 /**
  * ════════════════════════════════════════════════════════════════════════════
@@ -1278,9 +1228,6 @@ router.get(
 
         // Optional backend source lane
         backendSource: backendTruth,
-        
-        // Global Hub: Platform-wide shared resources
-        globalHub: await buildGlobalHubTruth(),
 
         // Reproducibility proof block
         auditProof,
