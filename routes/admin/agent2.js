@@ -2064,7 +2064,8 @@ router.post('/:companyId/generate-trigger-audio',
       const hash = crypto.createHash('sha256').update(`${companyId}_${ruleId}_${finalText.trim()}`).digest('hex').slice(0, 16);
       const fileName = `TRIGGER_CARD_ANSWER_${companyId.slice(0, 12)}_${hash}.mp3`;
       const filePath = path.join(audioDir, fileName);
-      const audioUrl = `/audio/instant-lines/${fileName}`;
+      // ✅ BULLETPROOF: Use /audio-safe for MongoDB fallback
+      const audioUrl = `/audio-safe/instant-lines/${fileName}`;
 
       // Delete old audio file if it exists with a different name
       const existingAudio = await TriggerAudio.findByCompanyAndRule(companyId, ruleId);

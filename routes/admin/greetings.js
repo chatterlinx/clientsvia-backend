@@ -105,7 +105,8 @@ const VERSION = 'v1.0.0';
 
 // Audio configuration
 const AUDIO_DIR = path.join(__dirname, '../../public/audio/greetings');
-const AUDIO_URL_PREFIX = '/audio/greetings';
+// ✅ BULLETPROOF: Use /audio-safe for MongoDB fallback
+const AUDIO_URL_PREFIX = '/audio-safe/greetings';
 
 // Text hash algorithm (consistent with trigger audio)
 const HASH_ALGORITHM = 'sha256';
