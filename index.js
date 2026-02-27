@@ -458,17 +458,33 @@ const TriggerAudio = require('./models/TriggerAudio');
 const GreetingAudio = require('./models/GreetingAudio');
 
 app.get('/audio/*', async (req, res) => {
-  const audioUrl = req.path; // e.g. /audio/instant-lines/TRIGGER_CARD_ANSWER_xxx.mp3
+  const audioUrl = req.path;
   try {
-    // Try TriggerAudio first, then GreetingAudio
     let audioData = await TriggerAudio.findAudioDataByUrl(audioUrl);
+    let source = 'TriggerAudio';
     if (!audioData) {
       audioData = await GreetingAudio.findAudioDataByUrl(audioUrl);
+      source = 'GreetingAudio';
     }
 
     if (!audioData) {
-      return res.status(404).send('Audio not found');
+      const triggerDoc = await TriggerAudio.findOne({ audioUrl }).select('isValid audioUrl textHash').lean();
+      const greetingDoc = await GreetingAudio.findOne({ audioUrl }).select('isValid audioUrl').lean();
+      logger.warn('[AudioFallback] 404 — Audio not found in MongoDB', {
+        requestedUrl: audioUrl,
+        triggerDocFound: !!triggerDoc,
+        triggerIsValid: triggerDoc?.isValid,
+        greetingDocFound: !!greetingDoc,
+        greetingIsValid: greetingDoc?.isValid
+      });
+      return res.status(404).json({
+        error: 'Audio not found',
+        url: audioUrl,
+        diagnosis: triggerDoc ? `Found in DB but isValid=${triggerDoc.isValid} (invalidated audio not served)` : 'Not in database at all — regenerate audio'
+      });
     }
+
+    logger.info(`[AudioFallback] Serving audio from ${source}`, { audioUrl, bytes: audioData.length });
 
     // Self-heal: write back to disk so the static middleware serves it next time
     const diskPath = path.join(__dirname, 'public', audioUrl);
