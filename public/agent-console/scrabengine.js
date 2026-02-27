@@ -1,104 +1,228 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * SCRABENGINE — TEXT PROCESSING PIPELINE CONTROLLER
+ * ClientVia Platform · Agent Console · Enterprise Grade
+ * ════════════════════════════════════════════════════════════════════════════════
+ *
+ * ARCHITECTURE:
+ *   IIFE + strict mode for scope isolation. Zero global leakage.
+ *   Config-driven modals eliminate if/else branching.
+ *   Generic list renderer eliminates rendering duplication.
+ *
+ * PIPELINE STAGES (sequential, each feeds the next):
+ *   Stage 1 — Filler Removal      : Strip "um", "uh", greetings, company name
+ *   Stage 2 — Vocabulary Normalization : Fix STT mishears ("acee" → "ac")
+ *   Stage 3 — Smart Synonyms      : Expand tokens for flexible trigger matching
+ *   Stage 4 — Entity Extraction    : Extract names, phone, email → handoff
+ *   Stage 5 — Quality Gate         : Confidence check before delivery
+ *
+ * WIRING POINTS (search "WIRING:" to find all connection sites):
+ *   A — Navigation & page-level actions (back, save, test, logs)
+ *   B — Pipeline stage toggles (enable/disable each stage)
+ *   C — Stage-specific options (strip greetings, strip company name)
+ *   D — Create/Edit actions (add buttons → openModal)
+ *   E — Modal lifecycle (cancel, save, backdrop-close, escape)
+ *   F — Entry-level actions (toggle enabled, edit, delete per item)
+ *
+ * DATA FLOW:
+ *   loadConfig() → API GET → normalizeConfig() → state.config → render()
+ *   User edits → markDirty() → Save button turns red
+ *   saveConfig() → API POST → state.config persisted to MongoDB
+ *
+ * BACKEND API:
+ *   GET  /api/agent-console/:companyId/scrabengine       — Load config
+ *   POST /api/agent-console/:companyId/scrabengine       — Save config
+ *   POST /api/agent-console/:companyId/scrabengine/test  — Test pipeline
+ *
+ * ════════════════════════════════════════════════════════════════════════════════
+ */
+
 (function() {
   'use strict';
-  
-  console.log('[ScrabEngine] ✓ Script loaded');
+
+  const DEBUG = false;
+  function log(...args) { if (DEBUG) console.log('[ScrabEngine]', ...args); }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STATE
+  // ════════════════════════════════════════════════════════════════════════════
 
   const state = {
     companyId: null,
     config: {
       enabled: true,
-      fillers: {
-        enabled: true,
-        stripGreetings: true,
-        stripCompanyName: true,
-        customFillers: []
-      },
-      vocabulary: {
-        enabled: true,
-        entries: []
-      },
-      synonyms: {
-        enabled: true,
-        wordSynonyms: [],
-        contextPatterns: []
-      },
-      extraction: {
-        enabled: true,
-        customPatterns: []
-      }
+      fillers: { enabled: true, stripGreetings: true, stripCompanyName: true, customFillers: [] },
+      vocabulary: { enabled: true, entries: [] },
+      synonyms: { enabled: true, wordSynonyms: [], contextPatterns: [] },
+      extraction: { enabled: true, customPatterns: [] }
     },
-    editingItem: null,
+    editingIndex: -1,
     editingType: null,
     hasChanges: false
   };
 
-  let DOM = {};
+  // ════════════════════════════════════════════════════════════════════════════
+  // MODAL REGISTRY — Config-driven modal wiring (eliminates if/else chains)
+  // ════════════════════════════════════════════════════════════════════════════
+
   const MODAL_REGISTRY = {
-    filler: { key: 'modalFiller', cancel: 'btn-cancel-filler', save: 'btn-save-filler' },
-    vocabulary: { key: 'modalVocabulary', cancel: 'btn-cancel-vocab', save: 'btn-save-vocab' },
-    wordSynonym: { key: 'modalWordSynonym', cancel: 'btn-cancel-word-syn', save: 'btn-save-word-syn' },
-    contextPattern: { key: 'modalContextPattern', cancel: 'btn-cancel-pattern', save: 'btn-save-pattern' },
-    extraction: { key: 'modalExtraction', cancel: 'btn-cancel-extraction', save: 'btn-save-extraction' }
+    filler:         { key: 'modalFiller',         cancel: 'btn-cancel-filler',     save: 'btn-save-filler' },
+    vocabulary:     { key: 'modalVocabulary',      cancel: 'btn-cancel-vocab',      save: 'btn-save-vocab' },
+    wordSynonym:    { key: 'modalWordSynonym',     cancel: 'btn-cancel-word-syn',   save: 'btn-save-word-syn' },
+    contextPattern: { key: 'modalContextPattern',  cancel: 'btn-cancel-pattern',    save: 'btn-save-pattern' },
+    extraction:     { key: 'modalExtraction',      cancel: 'btn-cancel-extraction', save: 'btn-save-extraction' }
   };
+
   const STAGE_STATUS_IDS = ['stage1Status', 'stage2Status', 'stage3Status', 'stage4Status'];
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // INITIALIZATION
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
+  // MODAL FIELD DEFINITIONS — Drives clearModal / populateModal / readModal
+  // Each field: { id, prop, type, default }
+  // ════════════════════════════════════════════════════════════════════════════
+
+  const MODAL_FIELDS = {
+    filler: [
+      { id: 'filler-phrase',    prop: 'phrase',   type: 'text',   defaultVal: '' },
+      { id: 'filler-priority',  prop: 'priority', type: 'number', defaultVal: '100' }
+    ],
+    vocabulary: [
+      { id: 'vocab-from',     prop: 'from',      type: 'text',   defaultVal: '' },
+      { id: 'vocab-to',       prop: 'to',        type: 'text',   defaultVal: '' },
+      { id: 'vocab-mode',     prop: 'matchMode', type: 'select', defaultVal: 'EXACT' },
+      { id: 'vocab-priority', prop: 'priority',  type: 'number', defaultVal: '100' }
+    ],
+    wordSynonym: [
+      { id: 'word-syn-word',     prop: 'word',     type: 'text',   defaultVal: '' },
+      { id: 'word-syn-synonyms', prop: 'synonyms', type: 'csv',    defaultVal: '' },
+      { id: 'word-syn-priority', prop: 'priority', type: 'number', defaultVal: '50' }
+    ],
+    contextPattern: [
+      { id: 'pattern-words',      prop: 'pattern',       type: 'csv',    defaultVal: '' },
+      { id: 'pattern-component',  prop: 'component',     type: 'text',   defaultVal: '' },
+      { id: 'pattern-tokens',     prop: 'contextTokens', type: 'csv',    defaultVal: '' },
+      { id: 'pattern-confidence', prop: 'confidence',    type: 'float',  defaultVal: '0.9' },
+      { id: 'pattern-priority',   prop: 'priority',      type: 'number', defaultVal: '100' }
+    ],
+    extraction: [
+      { id: 'extraction-entity-name',  prop: 'entityName',         type: 'text',     defaultVal: '' },
+      { id: 'extraction-label',        prop: 'label',              type: 'text',     defaultVal: '' },
+      { id: 'extraction-pattern',      prop: 'pattern',            type: 'text',     defaultVal: '' },
+      { id: 'extraction-examples',     prop: 'examples',           type: 'lines',    defaultVal: '' },
+      { id: 'extraction-confidence',   prop: 'confidence',         type: 'float',    defaultVal: '0.85' },
+      { id: 'extraction-handoff',      prop: 'autoHandoff',        type: 'checkbox', defaultVal: true },
+      { id: 'extraction-globalshare',  prop: 'validateGlobalShare', type: 'checkbox', defaultVal: false }
+    ]
+  };
+
+  // Maps modal type → { arrayPath, buildItem(fields), validate(fields) }
+  const MODAL_SAVE_CONFIG = {
+    filler: {
+      getArray: () => state.config.fillers.customFillers,
+      validate(f) {
+        if (!f.phrase) return 'Please enter a filler phrase';
+        if (this.getArray().some((x, i) => i !== state.editingIndex && norm(x.phrase) === norm(f.phrase)))
+          return 'This filler phrase already exists';
+        return null;
+      },
+      buildItem: (f) => ({ id: makeId(), phrase: f.phrase, enabled: true, priority: clampPriority(f.priority, 100) })
+    },
+    vocabulary: {
+      getArray: () => state.config.vocabulary.entries,
+      validate(f) {
+        if (!f.from || !f.to) return 'Please fill in both From and To fields';
+        if (this.getArray().some((x, i) => i !== state.editingIndex && norm(x.from) === norm(f.from) && norm(x.to) === norm(f.to)))
+          return 'This vocabulary normalization already exists';
+        return null;
+      },
+      buildItem: (f) => ({ id: makeId(), from: f.from, to: f.to, matchMode: f.matchMode || 'EXACT', enabled: true, priority: clampPriority(f.priority, 100) })
+    },
+    wordSynonym: {
+      getArray: () => state.config.synonyms.wordSynonyms,
+      validate(f) {
+        if (!f.word || !f.synonyms || f.synonyms.length === 0) return 'Please fill in both Word and Synonyms fields';
+        return null;
+      },
+      buildItem: (f) => ({ id: makeId(), word: f.word, synonyms: f.synonyms, enabled: true, priority: clampPriority(f.priority, 50) })
+    },
+    contextPattern: {
+      getArray: () => state.config.synonyms.contextPatterns,
+      validate(f) {
+        if (!f.pattern || f.pattern.length === 0 || !f.component) return 'Please fill in Pattern Words and Component fields';
+        return null;
+      },
+      buildItem: (f) => ({ id: makeId(), pattern: f.pattern, component: f.component, contextTokens: f.contextTokens || [], confidence: clampConfidence(f.confidence, 0.9), enabled: true, priority: clampPriority(f.priority, 100) })
+    },
+    extraction: {
+      getArray() {
+        if (!state.config.extraction) state.config.extraction = { enabled: true, customPatterns: [] };
+        if (!state.config.extraction.customPatterns) state.config.extraction.customPatterns = [];
+        return state.config.extraction.customPatterns;
+      },
+      validate(f) {
+        if (!f.entityName || !f.label || !f.pattern) return 'Please fill in Entity Name, Label, and Pattern fields';
+        if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(f.entityName)) return 'Entity Name must be camelCase with no spaces (e.g., companyName)';
+        if (this.getArray().some((x, i) => i !== state.editingIndex && norm(x.entityName) === norm(f.entityName)))
+          return 'An extraction with this Entity Name already exists';
+        try { new RegExp(f.pattern, 'i'); } catch (err) { return `Invalid regex pattern: ${err.message}`; }
+        return null;
+      },
+      buildItem: (f) => ({
+        id: makeId(), entityName: f.entityName, label: f.label, pattern: f.pattern,
+        examples: f.examples || [], confidence: clampConfidence(f.confidence, 0.85),
+        autoHandoff: f.autoHandoff, validateGlobalShare: f.validateGlobalShare, enabled: true
+      })
+    }
+  };
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // DOM CACHE
+  // ════════════════════════════════════════════════════════════════════════════
+
+  let DOM = {};
 
   function initDOM() {
-    console.log('[ScrabEngine] ✓ initDOM() called');
+    log('initDOM()');
     DOM = {
       headerCompanyName: document.getElementById('header-company-name'),
-      headerCompanyId: document.getElementById('header-company-id'),
-      btnBack: document.getElementById('btn-back'),
-      btnSaveAll: document.getElementById('btn-save-all'),
-      btnTestPanel: document.getElementById('btn-test-panel'),
-      btnViewLogs: document.getElementById('btn-view-logs'),
-      
-      // Stage toggles
-      toggleFillers: document.getElementById('toggle-fillers'),
+      headerCompanyId:   document.getElementById('header-company-id'),
+      btnBack:           document.getElementById('btn-back'),
+      btnSaveAll:        document.getElementById('btn-save-all'),
+      btnTestPanel:      document.getElementById('btn-test-panel'),
+      btnViewLogs:       document.getElementById('btn-view-logs'),
+
+      toggleFillers:    document.getElementById('toggle-fillers'),
       toggleVocabulary: document.getElementById('toggle-vocabulary'),
-      toggleSynonyms: document.getElementById('toggle-synonyms'),
-      
-      // Filler options
-      stripGreetings: document.getElementById('strip-greetings'),
-      stripCompanyName: document.getElementById('strip-company-name'),
-      
-      // Lists
-      customFillersList: document.getElementById('custom-fillers-list'),
-      vocabularyList: document.getElementById('vocabulary-list'),
-      wordSynonymsList: document.getElementById('word-synonyms-list'),
-      contextPatternsList: document.getElementById('context-patterns-list'),
-      
-      // Add buttons
-      btnAddFiller: document.getElementById('btn-add-filler'),
-      btnAddVocab: document.getElementById('btn-add-vocab'),
-      btnAddWordSynonym: document.getElementById('btn-add-word-synonym'),
-      btnAddContextPattern: document.getElementById('btn-add-context-pattern'),
-      btnAddExtraction: document.getElementById('btn-add-extraction'),
-      
-      // Extraction
+      toggleSynonyms:   document.getElementById('toggle-synonyms'),
       toggleExtraction: document.getElementById('toggle-extraction'),
+
+      stripGreetings:   document.getElementById('strip-greetings'),
+      stripCompanyName: document.getElementById('strip-company-name'),
+
+      customFillersList:     document.getElementById('custom-fillers-list'),
+      vocabularyList:        document.getElementById('vocabulary-list'),
+      wordSynonymsList:      document.getElementById('word-synonyms-list'),
+      contextPatternsList:   document.getElementById('context-patterns-list'),
       extractionPatternsList: document.getElementById('extraction-patterns-list'),
-      
-      // Modals
-      modalFiller: document.getElementById('modal-filler'),
-      modalVocabulary: document.getElementById('modal-vocabulary'),
-      modalWordSynonym: document.getElementById('modal-word-synonym'),
+
+      btnAddFiller:         document.getElementById('btn-add-filler'),
+      btnAddVocab:          document.getElementById('btn-add-vocab'),
+      btnAddWordSynonym:    document.getElementById('btn-add-word-synonym'),
+      btnAddContextPattern: document.getElementById('btn-add-context-pattern'),
+      btnAddExtraction:     document.getElementById('btn-add-extraction'),
+
+      modalFiller:         document.getElementById('modal-filler'),
+      modalVocabulary:     document.getElementById('modal-vocabulary'),
+      modalWordSynonym:    document.getElementById('modal-word-synonym'),
       modalContextPattern: document.getElementById('modal-context-pattern'),
-      modalExtraction: document.getElementById('modal-extraction'),
-      
-      // Test panel
-      testPanel: document.getElementById('test-panel'),
-      testInput: document.getElementById('test-input'),
-      btnRunTest: document.getElementById('btn-run-test'),
+      modalExtraction:     document.getElementById('modal-extraction'),
+
+      testPanel:   document.getElementById('test-panel'),
+      testInput:   document.getElementById('test-input'),
+      btnRunTest:  document.getElementById('btn-run-test'),
       testResults: document.getElementById('test-results'),
-      
-      // Stats
+
       totalRules: document.getElementById('total-rules'),
 
-      // Stage status pills + pipeline steps
       stage1Status: document.getElementById('stage1-status'),
       stage2Status: document.getElementById('stage2-status'),
       stage3Status: document.getElementById('stage3-status'),
@@ -107,14 +231,17 @@
     };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // INITIALIZATION
+  // ════════════════════════════════════════════════════════════════════════════
+
   function init() {
     try {
-      console.log('[ScrabEngine] Initializing...');
+      log('Initializing...');
       initDOM();
 
       const params = new URLSearchParams(window.location.search);
       state.companyId = params.get('companyId');
-
       if (!state.companyId) {
         window.location.href = '/agent-console/index.html';
         return;
@@ -122,116 +249,57 @@
 
       DOM.headerCompanyId.textContent = truncateId(state.companyId);
       DOM.headerCompanyId.title = state.companyId;
-      
+
       bindEvents();
       loadConfig();
       loadCompanyName();
-      
-      console.log('[ScrabEngine] Initialization complete');
+      log('Initialization complete');
     } catch (err) {
       console.error('[ScrabEngine] Initialization error:', err);
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // EVENT BINDING
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
 
   function bindEvents() {
-    // WIRING POINT A: Navigation and page actions
-    if (DOM.btnBack) {
-      DOM.btnBack.addEventListener('click', () => {
-        if (state.hasChanges && !confirm('You have unsaved changes. Leave anyway?')) {
-          return;
-        }
-        window.location.href = `/agent-console/index.html?companyId=${state.companyId}`;
-      });
-    }
+    // WIRING: A — Navigation & page-level actions
+    safeListen(DOM.btnBack, 'click', () => {
+      if (state.hasChanges && !confirm('You have unsaved changes. Leave anyway?')) return;
+      window.location.href = `/agent-console/index.html?companyId=${state.companyId}`;
+    });
+    safeListen(DOM.btnSaveAll, 'click', saveConfig);
+    safeListen(DOM.btnTestPanel, 'click', () => {
+      DOM.testPanel.style.display = DOM.testPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    safeListen(DOM.btnViewLogs, 'click', () => {
+      window.location.href = `/agent-console/callconsole.html?companyId=${state.companyId}`;
+    });
+    safeListen(DOM.btnRunTest, 'click', runTest);
 
-    if (DOM.btnSaveAll) {
-      DOM.btnSaveAll.addEventListener('click', saveConfig);
-    }
+    // WIRING: B — Pipeline stage toggles
+    bindToggle(DOM.toggleFillers,    (v) => { state.config.fillers.enabled = v; });
+    bindToggle(DOM.toggleVocabulary, (v) => { state.config.vocabulary.enabled = v; });
+    bindToggle(DOM.toggleSynonyms,   (v) => { state.config.synonyms.enabled = v; });
+    bindToggle(DOM.toggleExtraction, (v) => {
+      if (!state.config.extraction) state.config.extraction = {};
+      state.config.extraction.enabled = v;
+    });
 
-    if (DOM.btnTestPanel) {
-      DOM.btnTestPanel.addEventListener('click', () => {
-        DOM.testPanel.style.display = DOM.testPanel.style.display === 'none' ? 'block' : 'none';
-      });
-    }
+    // WIRING: C — Stage-specific options
+    bindToggle(DOM.stripGreetings,   (v) => { state.config.fillers.stripGreetings = v; }, false);
+    bindToggle(DOM.stripCompanyName, (v) => { state.config.fillers.stripCompanyName = v; }, false);
 
-    if (DOM.btnViewLogs) {
-      DOM.btnViewLogs.addEventListener('click', () => {
-        window.location.href = `/agent-console/callconsole.html?companyId=${state.companyId}`;
-      });
-    }
+    // WIRING: D — Create/Edit actions (add buttons → openModal)
+    safeListen(DOM.btnAddFiller,         'click', () => openModal('filler'));
+    safeListen(DOM.btnAddVocab,          'click', () => openModal('vocabulary'));
+    safeListen(DOM.btnAddWordSynonym,    'click', () => openModal('wordSynonym'));
+    safeListen(DOM.btnAddContextPattern, 'click', () => openModal('contextPattern'));
+    safeListen(DOM.btnAddExtraction,     'click', () => openModal('extraction'));
 
-    if (DOM.btnRunTest) {
-      DOM.btnRunTest.addEventListener('click', runTest);
-    }
-
-    // WIRING POINT B: Pipeline stage toggles
-    // Toggle handlers
-    if (DOM.toggleFillers) {
-      DOM.toggleFillers.addEventListener('change', (e) => {
-        state.config.fillers.enabled = e.target.checked;
-        markDirty();
-        updateStageIndicators();
-      });
-    }
-
-    if (DOM.toggleVocabulary) {
-      DOM.toggleVocabulary.addEventListener('change', (e) => {
-        state.config.vocabulary.enabled = e.target.checked;
-        markDirty();
-        updateStageIndicators();
-      });
-    }
-
-    if (DOM.toggleSynonyms) {
-      DOM.toggleSynonyms.addEventListener('change', (e) => {
-        state.config.synonyms.enabled = e.target.checked;
-        markDirty();
-        updateStageIndicators();
-      });
-    }
-
-    // WIRING POINT C: Stage options
-    // Option toggles
-    if (DOM.stripGreetings) {
-      DOM.stripGreetings.addEventListener('change', (e) => {
-        state.config.fillers.stripGreetings = e.target.checked;
-        markDirty();
-      });
-    }
-
-    if (DOM.stripCompanyName) {
-      DOM.stripCompanyName.addEventListener('change', (e) => {
-        state.config.fillers.stripCompanyName = e.target.checked;
-        markDirty();
-      });
-    }
-
-    // WIRING POINT D: Create-rule actions
-    // Add buttons
-    if (DOM.btnAddFiller) DOM.btnAddFiller.addEventListener('click', () => openModal('filler'));
-    if (DOM.btnAddVocab) DOM.btnAddVocab.addEventListener('click', () => openModal('vocabulary'));
-    if (DOM.btnAddWordSynonym) DOM.btnAddWordSynonym.addEventListener('click', () => openModal('wordSynonym'));
-    if (DOM.btnAddContextPattern) DOM.btnAddContextPattern.addEventListener('click', () => openModal('contextPattern'));
-    if (DOM.btnAddExtraction) DOM.btnAddExtraction.addEventListener('click', () => openModal('extraction'));
-
-    // Extraction toggle
-    if (DOM.toggleExtraction) {
-      DOM.toggleExtraction.addEventListener('change', (e) => {
-        if (!state.config.extraction) state.config.extraction = {};
-        state.config.extraction.enabled = e.target.checked;
-        markDirty();
-        updateStageIndicators();
-      });
-    }
-
-    // WIRING POINT E: Modal close/save handlers
-    Object.keys(MODAL_REGISTRY).forEach(setupModal);
-
-    // Keyboard escape should close whichever modal is open
+    // WIRING: E — Modal lifecycle (cancel, save, backdrop, escape)
+    Object.keys(MODAL_REGISTRY).forEach(setupModalHandlers);
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       const openType = Object.keys(MODAL_REGISTRY).find((type) => {
@@ -242,80 +310,74 @@
     });
   }
 
-  function setupModal(type) {
+  function safeListen(el, event, handler) {
+    if (el) el.addEventListener(event, handler);
+  }
+
+  function bindToggle(el, setter, updateIndicators = true) {
+    if (!el) return;
+    el.addEventListener('change', (e) => {
+      setter(e.target.checked);
+      markDirty();
+      if (updateIndicators) updateStageIndicators();
+    });
+  }
+
+  function setupModalHandlers(type) {
     const config = MODAL_REGISTRY[type];
     if (!config) return;
-
     const modal = getModal(type);
     const cancelBtn = document.getElementById(config.cancel);
     const saveBtn = document.getElementById(config.save);
-
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => closeModal(type));
-    }
-
-    if (saveBtn) {
-      saveBtn.addEventListener('click', () => saveModalItem(type));
-    }
-
+    safeListen(cancelBtn, 'click', () => closeModal(type));
+    safeListen(saveBtn, 'click', () => saveModalItem(type));
     if (modal) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal(type);
-      });
+      modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(type); });
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // DATA LOADING
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
 
   async function loadConfig() {
     try {
-      console.log('[ScrabEngine] Loading configuration...');
+      log('Loading configuration...');
       const data = await AgentConsoleAuth.apiFetch(
         `/api/agent-console/${state.companyId}/scrabengine`
       );
-      
       if (data && data.config) {
         state.config = normalizeConfig(data.config);
         render();
-        console.log('[ScrabEngine] Configuration loaded');
+        log('Configuration loaded');
       }
     } catch (err) {
       console.error('[ScrabEngine] Failed to load config:', err);
-      // Use default config
       render();
     }
   }
 
   async function saveConfig() {
     try {
-      console.log('[ScrabEngine] Saving configuration...');
       DOM.btnSaveAll.disabled = true;
       DOM.btnSaveAll.textContent = 'Saving...';
-      
+
       await AgentConsoleAuth.apiFetch(
         `/api/agent-console/${state.companyId}/scrabengine`,
-        {
-          method: 'POST',
-          body: { config: state.config }
-        }
+        { method: 'POST', body: { config: state.config } }
       );
-      
+
       state.hasChanges = false;
       updateSaveButton();
-      
-      DOM.btnSaveAll.textContent = '✓ Saved!';
+      DOM.btnSaveAll.textContent = '\u2713 Saved!';
       setTimeout(() => {
-        DOM.btnSaveAll.textContent = '💾 Save All Changes';
+        DOM.btnSaveAll.textContent = 'Save All Changes';
         DOM.btnSaveAll.disabled = false;
       }, 2000);
-      
-      console.log('[ScrabEngine] Configuration saved successfully');
     } catch (err) {
       console.error('[ScrabEngine] Save failed:', err);
       alert('Failed to save configuration: ' + err.message);
-      DOM.btnSaveAll.textContent = '💾 Save All Changes';
+      DOM.btnSaveAll.textContent = 'Save All Changes';
       DOM.btnSaveAll.disabled = false;
     }
   }
@@ -328,136 +390,94 @@
       }
       const data = await AgentConsoleAuth.apiFetch(`/api/agent-console/${state.companyId}/truth`);
       DOM.headerCompanyName.textContent = data?.companyProfile?.businessName || data?.companyProfile?.companyName || 'Company';
-    } catch (err) {
+    } catch (_) {
       DOM.headerCompanyName.textContent = 'Company';
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDERING
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
+  // RENDERING — Master render + generic list renderer
+  // ════════════════════════════════════════════════════════════════════════════
 
   function render() {
-    console.log('[ScrabEngine] Rendering...');
-    
-    // Update toggles
-    if (DOM.toggleFillers) DOM.toggleFillers.checked = state.config.fillers.enabled !== false;
+    log('Rendering...');
+
+    if (DOM.toggleFillers)    DOM.toggleFillers.checked    = state.config.fillers.enabled !== false;
     if (DOM.toggleVocabulary) DOM.toggleVocabulary.checked = state.config.vocabulary.enabled !== false;
-    if (DOM.toggleSynonyms) DOM.toggleSynonyms.checked = state.config.synonyms.enabled !== false;
-    if (DOM.toggleExtraction) DOM.toggleExtraction.checked = state.config.extraction.enabled !== false;
-    
-    // Update options
-    if (DOM.stripGreetings) DOM.stripGreetings.checked = state.config.fillers.stripGreetings !== false;
+    if (DOM.toggleSynonyms)   DOM.toggleSynonyms.checked   = state.config.synonyms.enabled !== false;
+    if (DOM.toggleExtraction) DOM.toggleExtraction.checked = (state.config.extraction || {}).enabled !== false;
+
+    if (DOM.stripGreetings)   DOM.stripGreetings.checked   = state.config.fillers.stripGreetings !== false;
     if (DOM.stripCompanyName) DOM.stripCompanyName.checked = state.config.fillers.stripCompanyName !== false;
-    
-    // Render lists
-    renderCustomFillers();
-    renderVocabulary();
-    renderWordSynonyms();
-    renderContextPatterns();
-    renderExtractionPatterns();
-    
+
+    renderFillerList();
+    renderVocabList();
+    renderWordSynonymList();
+    renderContextPatternList();
+    renderExtractionList();
+
     updateStats();
     updateStageIndicators();
   }
-  
-  function renderExtractionPatterns() {
-    const patterns = (state.config.extraction && state.config.extraction.customPatterns) || [];
-    
-    if (patterns.length === 0) {
-      if (DOM.extractionPatternsList) {
-        DOM.extractionPatternsList.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🏷️</div>
-            <div class="empty-state-text">No custom patterns yet. Click "+ Add Extraction Pattern" to create one.</div>
-          </div>
-        `;
-      }
-      return;
-    }
-    
-    if (DOM.extractionPatternsList) {
-      DOM.extractionPatternsList.innerHTML = patterns.map((pattern, idx) => `
-        <div class="entry-item ${pattern.enabled === false ? 'disabled' : ''}">
-          <input type="checkbox" class="entry-checkbox" data-type="extraction" data-idx="${idx}" ${pattern.enabled !== false ? 'checked' : ''}>
-          <div class="entry-content">
-            <span class="entry-from"><strong>${escapeHtml(pattern.label || pattern.entityName)}</strong></span>
-            <span class="entry-arrow">→</span>
-            <span class="entry-to">${escapeHtml(pattern.pattern)}</span>
-            ${pattern.autoHandoff ? '<span class="entry-badge">Auto-handoff</span>' : ''}
-            ${pattern.validateGlobalShare ? '<span class="entry-badge">GlobalShare ✓</span>' : ''}
-            <span class="entry-badge">${Math.round((pattern.confidence || 0.85) * 100)}%</span>
-          </div>
-          <div class="entry-actions">
-            <button class="entry-btn" data-action="delete" data-type="extraction" data-idx="${idx}">Delete</button>
-          </div>
-        </div>
-      `).join('');
-      
-      // Bind events
-      DOM.extractionPatternsList.querySelectorAll('.entry-checkbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-          const idx = parseInt(e.target.dataset.idx);
-          state.config.extraction.customPatterns[idx].enabled = e.target.checked;
-          markDirty();
-          render();
-        });
-      });
-      
-      DOM.extractionPatternsList.querySelectorAll('[data-action="delete"]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const idx = parseInt(e.target.dataset.idx);
-          if (confirm('Delete this extraction pattern?')) {
-            state.config.extraction.customPatterns.splice(idx, 1);
-            markDirty();
-            render();
-          }
-        });
-      });
-    }
-  }
 
-  function renderCustomFillers() {
-    const fillers = state.config.fillers.customFillers || [];
-    
-    if (fillers.length === 0) {
-      DOM.customFillersList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🔍</div>
-          <div class="empty-state-text">No custom fillers yet. Click "+ Add Filler" to create one.</div>
-        </div>
-      `;
+  /**
+   * Generic entry list renderer.
+   * Renders items into a container with toggle, content columns, edit, and delete.
+   * WIRING: F — Entry-level actions (toggle enabled, edit, delete per item)
+   *
+   * @param {HTMLElement} container - DOM list container
+   * @param {Array} items - Data array for this list
+   * @param {string} type - Modal type key (for edit/delete routing)
+   * @param {Function} renderContent - (item, idx) → inner HTML for .entry-content
+   * @param {string} emptyIcon - Emoji for empty state
+   * @param {string} emptyText - Text for empty state
+   */
+  function renderEntryList(container, items, type, renderContent, emptyIcon, emptyText) {
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${emptyIcon}</div><div class="empty-state-text">${escapeHtml(emptyText)}</div></div>`;
       return;
     }
-    
-    DOM.customFillersList.innerHTML = fillers.map((filler, idx) => `
-      <div class="entry-item ${filler.enabled === false ? 'disabled' : ''}">
-        <input type="checkbox" class="entry-checkbox" data-type="filler" data-idx="${idx}" ${filler.enabled !== false ? 'checked' : ''}>
-        <div class="entry-content">
-          <span class="entry-from">"${escapeHtml(filler.phrase)}"</span>
-          <span class="entry-badge">P${filler.priority || 100}</span>
-        </div>
+
+    container.innerHTML = items.map((item, idx) => `
+      <div class="entry-item ${item.enabled === false ? 'disabled' : ''}" data-type="${type}" data-idx="${idx}">
+        <input type="checkbox" class="entry-checkbox" data-idx="${idx}" ${item.enabled !== false ? 'checked' : ''}>
+        <div class="entry-content entry-clickable" data-idx="${idx}">${renderContent(item, idx)}</div>
         <div class="entry-actions">
-          <button class="entry-btn" data-action="delete" data-type="filler" data-idx="${idx}">Delete</button>
+          <button class="entry-btn entry-edit-btn" data-idx="${idx}">Edit</button>
+          <button class="entry-btn entry-delete-btn" data-idx="${idx}">Delete</button>
         </div>
       </div>
     `).join('');
-    
-    // Bind events
-    DOM.customFillersList.querySelectorAll('.entry-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        state.config.fillers.customFillers[idx].enabled = e.target.checked;
+
+    container.querySelectorAll('.entry-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.idx);
+        items[idx].enabled = cb.checked;
         markDirty();
         render();
       });
     });
-    
-    DOM.customFillersList.querySelectorAll('[data-action="delete"]').forEach(btn => {
+
+    container.querySelectorAll('.entry-edit-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        if (confirm('Delete this filler?')) {
-          state.config.fillers.customFillers.splice(idx, 1);
+        e.stopPropagation();
+        openModal(type, parseInt(btn.dataset.idx));
+      });
+    });
+
+    container.querySelectorAll('.entry-clickable').forEach(el => {
+      el.addEventListener('click', () => {
+        openModal(type, parseInt(el.dataset.idx));
+      });
+    });
+
+    container.querySelectorAll('.entry-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        if (confirm('Delete this item?')) {
+          items.splice(idx, 1);
           markDirty();
           render();
         }
@@ -465,177 +485,79 @@
     });
   }
 
-  function renderVocabulary() {
-    const entries = state.config.vocabulary.entries || [];
-    
-    if (entries.length === 0) {
-      DOM.vocabularyList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📖</div>
-          <div class="empty-state-text">No vocabulary rules yet. Click "+ Add Normalization" to create one.</div>
-        </div>
-      `;
-      return;
-    }
-    
-    DOM.vocabularyList.innerHTML = entries.map((entry, idx) => `
-      <div class="entry-item ${entry.enabled === false ? 'disabled' : ''}">
-        <input type="checkbox" class="entry-checkbox" data-type="vocab" data-idx="${idx}" ${entry.enabled !== false ? 'checked' : ''}>
-        <div class="entry-content">
-          <span class="entry-from">"${escapeHtml(entry.from)}"</span>
-          <span class="entry-arrow">→</span>
-          <span class="entry-to">"${escapeHtml(entry.to)}"</span>
-          <span class="entry-badge">${entry.matchMode || 'EXACT'}</span>
-          <span class="entry-badge">P${entry.priority || 100}</span>
-        </div>
-        <div class="entry-actions">
-          <button class="entry-btn" data-action="delete" data-type="vocab" data-idx="${idx}">Delete</button>
-        </div>
-      </div>
-    `).join('');
-    
-    // Bind events
-    DOM.vocabularyList.querySelectorAll('.entry-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        state.config.vocabulary.entries[idx].enabled = e.target.checked;
-        markDirty();
-        render();
-      });
-    });
-    
-    DOM.vocabularyList.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        if (confirm('Delete this vocabulary rule?')) {
-          state.config.vocabulary.entries.splice(idx, 1);
-          markDirty();
-          render();
-        }
-      });
-    });
+  // ── Per-stage renderers (thin wrappers calling generic renderEntryList) ──
+
+  function renderFillerList() {
+    renderEntryList(
+      DOM.customFillersList,
+      state.config.fillers.customFillers || [],
+      'filler',
+      (f) => `<span class="entry-from">"${escapeHtml(f.phrase)}"</span><span class="entry-badge">P${f.priority || 100}</span>`,
+      '\uD83D\uDD0D', 'No custom fillers yet. Click "+ Add Filler" to create one.'
+    );
   }
 
-  function renderWordSynonyms() {
-    const syns = state.config.synonyms.wordSynonyms || [];
-    
-    if (syns.length === 0) {
-      DOM.wordSynonymsList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">💬</div>
-          <div class="empty-state-text">No word synonyms yet. Click "+ Word Synonym" to create one.</div>
-        </div>
-      `;
-      return;
-    }
-    
-    DOM.wordSynonymsList.innerHTML = syns.map((syn, idx) => `
-      <div class="entry-item ${syn.enabled === false ? 'disabled' : ''}">
-        <input type="checkbox" class="entry-checkbox" data-type="wordsyn" data-idx="${idx}" ${syn.enabled !== false ? 'checked' : ''}>
-        <div class="entry-content">
-          <span class="entry-from">"${escapeHtml(syn.word)}"</span>
-          <span class="entry-arrow">→</span>
-          <span class="entry-to">[${syn.synonyms?.length || 0} synonyms]</span>
-          <span class="entry-badge">P${syn.priority || 50}</span>
-        </div>
-        <div class="entry-actions">
-          <button class="entry-btn" data-action="delete" data-type="wordsyn" data-idx="${idx}">Delete</button>
-        </div>
-      </div>
-    `).join('');
-    
-    // Bind events
-    DOM.wordSynonymsList.querySelectorAll('.entry-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        state.config.synonyms.wordSynonyms[idx].enabled = e.target.checked;
-        markDirty();
-        render();
-      });
-    });
-    
-    DOM.wordSynonymsList.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        if (confirm('Delete this word synonym?')) {
-          state.config.synonyms.wordSynonyms.splice(idx, 1);
-          markDirty();
-          render();
-        }
-      });
-    });
+  function renderVocabList() {
+    renderEntryList(
+      DOM.vocabularyList,
+      state.config.vocabulary.entries || [],
+      'vocabulary',
+      (e) => `<span class="entry-from">"${escapeHtml(e.from)}"</span><span class="entry-arrow">\u2192</span><span class="entry-to">"${escapeHtml(e.to)}"</span><span class="entry-badge">${e.matchMode || 'EXACT'}</span><span class="entry-badge">P${e.priority || 100}</span>`,
+      '\uD83D\uDCD6', 'No vocabulary rules yet. Click "+ Add Normalization" to create one.'
+    );
   }
 
-  function renderContextPatterns() {
-    const patterns = state.config.synonyms.contextPatterns || [];
-    
-    if (patterns.length === 0) {
-      DOM.contextPatternsList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🧠</div>
-          <div class="empty-state-text">No context patterns yet. Click "+ Context Pattern" to create one.</div>
-        </div>
-      `;
-      return;
-    }
-    
-    DOM.contextPatternsList.innerHTML = patterns.map((pattern, idx) => `
-      <div class="entry-item ${pattern.enabled === false ? 'disabled' : ''}">
-        <input type="checkbox" class="entry-checkbox" data-type="pattern" data-idx="${idx}" ${pattern.enabled !== false ? 'checked' : ''}>
-        <div class="entry-content">
-          <span class="entry-from">[${pattern.pattern?.join(', ') || ''}]</span>
-          <span class="entry-arrow">→</span>
-          <span class="entry-to">"${escapeHtml(pattern.component)}"</span>
-          <span class="entry-badge">${Math.round((pattern.confidence || 0.9) * 100)}%</span>
-          <span class="entry-badge">P${pattern.priority || 100}</span>
-        </div>
-        <div class="entry-actions">
-          <button class="entry-btn" data-action="delete" data-type="pattern" data-idx="${idx}">Delete</button>
-        </div>
-      </div>
-    `).join('');
-    
-    // Bind events
-    DOM.contextPatternsList.querySelectorAll('.entry-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        state.config.synonyms.contextPatterns[idx].enabled = e.target.checked;
-        markDirty();
-        render();
-      });
-    });
-    
-    DOM.contextPatternsList.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        if (confirm('Delete this context pattern?')) {
-          state.config.synonyms.contextPatterns.splice(idx, 1);
-          markDirty();
-          render();
-        }
-      });
-    });
+  function renderWordSynonymList() {
+    renderEntryList(
+      DOM.wordSynonymsList,
+      state.config.synonyms.wordSynonyms || [],
+      'wordSynonym',
+      (s) => `<span class="entry-from">"${escapeHtml(s.word)}"</span><span class="entry-arrow">\u2192</span><span class="entry-to">[${s.synonyms?.length || 0} synonyms]</span><span class="entry-badge">P${s.priority || 50}</span>`,
+      '\uD83D\uDCAC', 'No word synonyms yet. Click "+ Word Synonym" to create one.'
+    );
   }
+
+  function renderContextPatternList() {
+    renderEntryList(
+      DOM.contextPatternsList,
+      state.config.synonyms.contextPatterns || [],
+      'contextPattern',
+      (p) => `<span class="entry-from">[${(p.pattern || []).join(', ')}]</span><span class="entry-arrow">\u2192</span><span class="entry-to">"${escapeHtml(p.component)}"</span><span class="entry-badge">${Math.round((p.confidence || 0.9) * 100)}%</span><span class="entry-badge">P${p.priority || 100}</span>`,
+      '\uD83E\uDDE0', 'No context patterns yet. Click "+ Context Pattern" to create one.'
+    );
+  }
+
+  function renderExtractionList() {
+    renderEntryList(
+      DOM.extractionPatternsList,
+      (state.config.extraction || {}).customPatterns || [],
+      'extraction',
+      (p) => {
+        const handoffBadge = p.autoHandoff !== false ? '<span class="entry-badge" style="background:#dcfce7;color:#166534;">Auto-handoff</span>' : '';
+        const globalBadge = p.validateGlobalShare ? '<span class="entry-badge" style="background:#dbeafe;color:#1e40af;">GlobalShare \u2713</span>' : '';
+        return `<span class="entry-from"><strong>${escapeHtml(p.label || p.entityName)}</strong></span><span class="entry-arrow">\u2192</span><span class="entry-to">${escapeHtml(p.pattern)}</span>${handoffBadge}${globalBadge}<span class="entry-badge">${Math.round((p.confidence || 0.85) * 100)}%</span>`;
+      },
+      '\uD83C\uDFF7\uFE0F', 'No custom patterns yet. Click "+ Add Extraction Pattern" to create one.'
+    );
+  }
+
+  // ── Stats & Indicators ──
 
   function updateStats() {
-    const totalRules = 
+    const total =
       (state.config.fillers.customFillers || []).filter(f => f.enabled !== false).length +
       (state.config.vocabulary.entries || []).filter(e => e.enabled !== false).length +
       (state.config.synonyms.wordSynonyms || []).filter(s => s.enabled !== false).length +
       (state.config.synonyms.contextPatterns || []).filter(p => p.enabled !== false).length +
-      (state.config.extraction?.customPatterns || []).filter(p => p.enabled !== false).length;
-    
-    if (DOM.totalRules) {
-      DOM.totalRules.textContent = totalRules;
-    }
+      ((state.config.extraction || {}).customPatterns || []).filter(p => p.enabled !== false).length;
+    if (DOM.totalRules) DOM.totalRules.textContent = total;
   }
 
   function updateSaveButton() {
-    if (DOM.btnSaveAll) {
-      DOM.btnSaveAll.textContent = state.hasChanges ? '💾 Save All Changes *' : '💾 Save All Changes';
-      DOM.btnSaveAll.style.background = state.hasChanges ? '#dc2626' : '';
-      DOM.btnSaveAll.style.color = state.hasChanges ? '#fff' : '';
-    }
+    if (!DOM.btnSaveAll) return;
+    DOM.btnSaveAll.textContent = state.hasChanges ? 'Save All Changes *' : 'Save All Changes';
+    DOM.btnSaveAll.style.background = state.hasChanges ? '#dc2626' : '';
+    DOM.btnSaveAll.style.color = state.hasChanges ? '#fff' : '';
   }
 
   function updateStageIndicators() {
@@ -643,16 +565,15 @@
       state.config.fillers.enabled !== false,
       state.config.vocabulary.enabled !== false,
       state.config.synonyms.enabled !== false,
-      state.config.extraction.enabled !== false
+      (state.config.extraction || {}).enabled !== false
     ];
 
     STAGE_STATUS_IDS.forEach((id, idx) => {
       const el = DOM[id];
       if (!el) return;
-      const isActive = stages[idx];
-      el.textContent = isActive ? 'Active' : 'Disabled';
-      el.classList.toggle('active', isActive);
-      el.classList.toggle('disabled', !isActive);
+      el.textContent = stages[idx] ? 'Active' : 'Disabled';
+      el.classList.toggle('active', stages[idx]);
+      el.classList.toggle('disabled', !stages[idx]);
     });
 
     if (Array.isArray(DOM.pipelineSteps)) {
@@ -664,331 +585,225 @@
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODALS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
+  // MODALS — Open / Close / Populate / Read / Save
+  // ════════════════════════════════════════════════════════════════════════════
 
-  function openModal(type) {
+  /**
+   * Open a modal for add (editIdx omitted) or edit (editIdx = array index).
+   */
+  function openModal(type, editIdx) {
     const modal = getModal(type);
-    if (modal) {
-      state.editingType = type;
-      clearModalInputs(type);
-      modal.classList.add('open');
+    if (!modal) return;
+
+    state.editingType = type;
+    state.editingIndex = typeof editIdx === 'number' ? editIdx : -1;
+
+    const isEdit = state.editingIndex >= 0;
+    const fields = MODAL_FIELDS[type];
+    if (!fields) return;
+
+    if (isEdit) {
+      const saveConfig = MODAL_SAVE_CONFIG[type];
+      const item = saveConfig.getArray()[state.editingIndex];
+      populateModalFields(type, item);
+    } else {
+      clearModalFields(type);
     }
+
+    const titleEl = modal.querySelector('.modal-title');
+    if (titleEl) {
+      const base = titleEl.textContent.replace(/^(Add|Edit)\s+/, '');
+      titleEl.textContent = `${isEdit ? 'Edit' : 'Add'} ${base}`;
+    }
+
+    const saveBtn = document.getElementById(MODAL_REGISTRY[type].save);
+    if (saveBtn) {
+      const label = saveBtn.textContent.replace(/^(Add|Update)\s+/, '');
+      saveBtn.textContent = `${isEdit ? 'Update' : 'Add'} ${label}`;
+    }
+
+    modal.classList.add('open');
   }
 
   function closeModal(type) {
     const modal = getModal(type);
-    if (modal) {
-      modal.classList.remove('open');
-      state.editingType = null;
-      state.editingItem = null;
-    }
+    if (modal) modal.classList.remove('open');
+    state.editingType = null;
+    state.editingIndex = -1;
   }
 
-  function clearModalInputs(type) {
-    if (type === 'filler') {
-      document.getElementById('filler-phrase').value = '';
-      document.getElementById('filler-priority').value = '100';
-    } else if (type === 'vocabulary') {
-      document.getElementById('vocab-from').value = '';
-      document.getElementById('vocab-to').value = '';
-      document.getElementById('vocab-mode').value = 'EXACT';
-      document.getElementById('vocab-priority').value = '100';
-    } else if (type === 'wordSynonym') {
-      document.getElementById('word-syn-word').value = '';
-      document.getElementById('word-syn-synonyms').value = '';
-      document.getElementById('word-syn-priority').value = '50';
-    } else if (type === 'contextPattern') {
-      document.getElementById('pattern-words').value = '';
-      document.getElementById('pattern-component').value = '';
-      document.getElementById('pattern-tokens').value = '';
-      document.getElementById('pattern-confidence').value = '0.9';
-      document.getElementById('pattern-priority').value = '100';
-    } else if (type === 'extraction') {
-      document.getElementById('extraction-entity-name').value = '';
-      document.getElementById('extraction-label').value = '';
-      document.getElementById('extraction-pattern').value = '';
-      document.getElementById('extraction-examples').value = '';
-      document.getElementById('extraction-confidence').value = '0.85';
-      document.getElementById('extraction-handoff').checked = true;
-      document.getElementById('extraction-globalshare').checked = false;
-    }
+  function clearModalFields(type) {
+    const fields = MODAL_FIELDS[type] || [];
+    fields.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el) return;
+      if (f.type === 'checkbox') { el.checked = f.defaultVal; }
+      else { el.value = f.defaultVal; }
+    });
   }
 
+  function populateModalFields(type, item) {
+    const fields = MODAL_FIELDS[type] || [];
+    fields.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el) return;
+      const val = item[f.prop];
+      if (f.type === 'checkbox') {
+        el.checked = val !== false && val !== undefined ? val : f.defaultVal;
+      } else if (f.type === 'csv') {
+        el.value = Array.isArray(val) ? val.join(', ') : (val || '');
+      } else if (f.type === 'lines') {
+        el.value = Array.isArray(val) ? val.join('\n') : (val || '');
+      } else {
+        el.value = val !== undefined && val !== null ? val : f.defaultVal;
+      }
+    });
+  }
+
+  function readModalFields(type) {
+    const fields = MODAL_FIELDS[type] || [];
+    const result = {};
+    fields.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el) return;
+      if (f.type === 'checkbox') {
+        result[f.prop] = el.checked;
+      } else if (f.type === 'csv') {
+        result[f.prop] = el.value.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (f.type === 'lines') {
+        result[f.prop] = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+      } else if (f.type === 'number') {
+        result[f.prop] = el.value;
+      } else if (f.type === 'float') {
+        result[f.prop] = el.value;
+      } else {
+        result[f.prop] = el.value.trim();
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Universal save handler — config-driven, no if/else branching.
+   */
   function saveModalItem(type) {
-    if (type === 'filler') {
-      const phrase = document.getElementById('filler-phrase').value.trim();
-      const priority = clampPriority(document.getElementById('filler-priority').value, 100);
-      
-      if (!phrase) {
-        alert('Please enter a filler phrase');
-        return;
-      }
-      if ((state.config.fillers.customFillers || []).some(f => normalizeSimple(f.phrase) === normalizeSimple(phrase))) {
-        alert('This filler phrase already exists');
-        return;
-      }
-      
-      state.config.fillers.customFillers.push({
-        id: makeId(),
-        phrase,
-        enabled: true,
-        priority
-      });
-      
-      markDirty();
-      closeModal(type);
-      render();
-      
-    } else if (type === 'vocabulary') {
-      const from = document.getElementById('vocab-from').value.trim();
-      const to = document.getElementById('vocab-to').value.trim();
-      const mode = document.getElementById('vocab-mode').value;
-      const priority = clampPriority(document.getElementById('vocab-priority').value, 100);
-      
-      if (!from || !to) {
-        alert('Please fill in both From and To fields');
-        return;
-      }
-      if ((state.config.vocabulary.entries || []).some(e => normalizeSimple(e.from) === normalizeSimple(from) && normalizeSimple(e.to) === normalizeSimple(to))) {
-        alert('This vocabulary normalization already exists');
-        return;
-      }
-      
-      state.config.vocabulary.entries.push({
-        id: makeId(),
-        from,
-        to,
-        matchMode: mode,
-        enabled: true,
-        priority
-      });
-      
-      markDirty();
-      closeModal(type);
-      render();
-      
-    } else if (type === 'wordSynonym') {
-      const word = document.getElementById('word-syn-word').value.trim();
-      const synonymsStr = document.getElementById('word-syn-synonyms').value.trim();
-      const priority = clampPriority(document.getElementById('word-syn-priority').value, 50);
-      
-      if (!word || !synonymsStr) {
-        alert('Please fill in both Word and Synonyms fields');
-        return;
-      }
-      
-      const synonyms = synonymsStr.split(',').map(s => s.trim()).filter(Boolean);
-      
-      state.config.synonyms.wordSynonyms.push({
-        id: makeId(),
-        word,
-        synonyms,
-        enabled: true,
-        priority
-      });
-      
-      markDirty();
-      closeModal(type);
-      render();
-      
-    } else if (type === 'contextPattern') {
-      const wordsStr = document.getElementById('pattern-words').value.trim();
-      const component = document.getElementById('pattern-component').value.trim();
-      const tokensStr = document.getElementById('pattern-tokens').value.trim();
-      const confidence = clampConfidence(document.getElementById('pattern-confidence').value, 0.9);
-      const priority = clampPriority(document.getElementById('pattern-priority').value, 100);
-      
-      if (!wordsStr || !component) {
-        alert('Please fill in Pattern Words and Component fields');
-        return;
-      }
-      
-      const pattern = wordsStr.split(',').map(w => w.trim()).filter(Boolean);
-      const contextTokens = tokensStr.split(',').map(t => t.trim()).filter(Boolean);
-      
-      state.config.synonyms.contextPatterns.push({
-        id: makeId(),
-        pattern,
-        component,
-        contextTokens,
-        confidence,
-        enabled: true,
-        priority
-      });
-      
-      markDirty();
-      closeModal(type);
-      render();
-      
-    } else if (type === 'extraction') {
-      const entityName = document.getElementById('extraction-entity-name').value.trim();
-      const label = document.getElementById('extraction-label').value.trim();
-      const pattern = document.getElementById('extraction-pattern').value.trim();
-      const examples = document.getElementById('extraction-examples').value.trim();
-      const confidence = clampConfidence(document.getElementById('extraction-confidence').value, 0.85);
-      const autoHandoff = document.getElementById('extraction-handoff').checked;
-      const validateGlobalShare = document.getElementById('extraction-globalshare').checked;
-      
-      if (!entityName || !label || !pattern) {
-        alert('Please fill in Entity Name, Label, and Pattern fields');
-        return;
-      }
-      
-      // Validate entity name format (camelCase, no spaces)
-      if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(entityName)) {
-        alert('Entity Name must be camelCase with no spaces (e.g., companyName, urgencyLevel)');
-        return;
-      }
-      if ((state.config.extraction?.customPatterns || []).some(p => normalizeSimple(p.entityName) === normalizeSimple(entityName))) {
-        alert('An extraction with this Entity Name already exists');
-        return;
-      }
-      try {
-        // Validate regex syntax early to prevent runtime extractor failures.
-        new RegExp(pattern, 'i');
-      } catch (err) {
-        alert(`Invalid regex pattern: ${err.message}`);
-        return;
-      }
-      
-      if (!state.config.extraction) {
-        state.config.extraction = { enabled: true, customPatterns: [] };
-      }
-      if (!state.config.extraction.customPatterns) {
-        state.config.extraction.customPatterns = [];
-      }
-      
-      const exampleLines = examples.split('\n').map(e => e.trim()).filter(Boolean);
-      
-      state.config.extraction.customPatterns.push({
-        id: makeId(),
-        entityName,
-        label,
-        pattern,
-        examples: exampleLines,
-        confidence,
-        autoHandoff,
-        validateGlobalShare,
-        enabled: true
-      });
-      
-      markDirty();
-      closeModal(type);
-      render();
+    const saveConf = MODAL_SAVE_CONFIG[type];
+    if (!saveConf) return;
+
+    const fieldValues = readModalFields(type);
+    const error = saveConf.validate(fieldValues);
+    if (error) { alert(error); return; }
+
+    const arr = saveConf.getArray();
+    const isEdit = state.editingIndex >= 0;
+
+    if (isEdit) {
+      const existing = arr[state.editingIndex];
+      const updated = saveConf.buildItem(fieldValues);
+      updated.id = existing.id;
+      updated.enabled = existing.enabled;
+      arr[state.editingIndex] = updated;
+    } else {
+      arr.push(saveConf.buildItem(fieldValues));
     }
+
+    markDirty();
+    closeModal(type);
+    render();
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // LIVE TESTING
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
 
   async function runTest() {
-    const testText = DOM.testInput.value;
-    if (!testText || !testText.trim()) {
-      alert('Please enter test text');
-      return;
-    }
-    
+    const testText = (DOM.testInput.value || '').trim();
+    if (!testText) { alert('Please enter test text'); return; }
+
     try {
       DOM.btnRunTest.disabled = true;
       DOM.btnRunTest.textContent = 'Processing...';
-      
+
       const result = await AgentConsoleAuth.apiFetch(
         `/api/agent-console/${state.companyId}/scrabengine/test`,
-        {
-          method: 'POST',
-          body: { 
-            text: testText,
-            config: state.config
-          }
-        }
+        { method: 'POST', body: { text: testText, config: state.config } }
       );
-      
       displayTestResults(result);
-      
     } catch (err) {
       console.error('[ScrabEngine] Test failed:', err);
       alert('Test failed: ' + err.message);
     } finally {
       DOM.btnRunTest.disabled = false;
-      DOM.btnRunTest.textContent = '▶ Process Text';
+      DOM.btnRunTest.textContent = '\u25B6 Process Text';
     }
   }
 
   function displayTestResults(result) {
     DOM.testResults.style.display = 'block';
-    
-    document.getElementById('test-raw').textContent = result.rawText;
-    document.getElementById('test-stage1').textContent = result.stage1_fillers?.cleaned || '';
-    document.getElementById('test-stage2').textContent = result.stage2_vocabulary?.normalized || '';
-    document.getElementById('test-stage3').textContent = result.stage3_expansion?.expandedTokens?.join(', ') || '';
-    document.getElementById('test-final').textContent = result.normalizedText;
-    document.getElementById('test-time').textContent = result.performance?.totalTimeMs || 0;
-    
-    // Show removed fillers
+
+    setTestText('test-raw', result.rawText);
+    setTestText('test-stage1', result.stage1_fillers?.cleaned || '');
+    setTestText('test-stage2', result.stage2_vocabulary?.normalized || '');
+    setTestText('test-stage3', result.stage3_expansion?.expandedTokens?.join(', ') || '');
+    setTestText('test-final', result.normalizedText);
+    setTestText('test-time', result.performance?.totalTimeMs || 0);
+
     const removed = result.stage1_fillers?.removed || [];
-    if (removed.length > 0) {
-      document.getElementById('test-stage1-removed').innerHTML = 
-        removed.map(r => `<span class="test-badge">Removed: ${r.value}</span>`).join('');
-    } else {
-      document.getElementById('test-stage1-removed').innerHTML = '';
-    }
-    
-    // Show vocabulary normalizations
+    setTestBadges('test-stage1-removed', removed.map(r => `Removed: ${escapeHtml(r.value)}`));
+
     const applied = result.stage2_vocabulary?.applied || [];
-    if (applied.length > 0) {
-      document.getElementById('test-stage2-applied').innerHTML = 
-        applied.map(a => `<span class="test-badge">${a.from} → ${a.to}</span>`).join('');
-    } else {
-      document.getElementById('test-stage2-applied').innerHTML = '';
-    }
-    
-    // Show token expansion
-    const expansions = Object.keys(result.stage3_expansion?.expansionMap || {});
-    if (expansions.length > 0) {
-      document.getElementById('test-stage3-expanded').innerHTML = 
-        expansions.map(key => `<span class="test-badge">${key}: +${result.stage3_expansion.expansionMap[key].length}</span>`).join('');
-    } else {
-      document.getElementById('test-stage3-expanded').innerHTML = '';
-    }
-    
-    // Show entity extraction
+    setTestBadges('test-stage2-applied', applied.map(a => `${escapeHtml(a.from)} \u2192 ${escapeHtml(a.to)}`));
+
+    const expansionMap = result.stage3_expansion?.expansionMap || {};
+    setTestBadges('test-stage3-expanded', Object.keys(expansionMap).map(key =>
+      `${escapeHtml(key)}: +${expansionMap[key].length}`
+    ));
+
     const entities = result.entities || {};
-    const stage4Div = document.getElementById('test-stage4');
-    const entitiesDiv = document.getElementById('test-stage4-entities');
-    
-    const entitiesFound = [];
-    if (entities.firstName) entitiesFound.push(`First: "${entities.firstName}"`);
-    if (entities.lastName) entitiesFound.push(`Last: "${entities.lastName}"`);
-    if (entities.phone) entitiesFound.push(`Phone: ${entities.phone}`);
-    if (entities.address) entitiesFound.push(`Address: ${entities.address}`);
-    if (entities.email) entitiesFound.push(`Email: ${entities.email}`);
-    
-    stage4Div.textContent = entitiesFound.length > 0 ? entitiesFound.join(' | ') : 'No entities extracted';
-    
-    // Show extraction details
     const extractions = result.stage4_extraction?.extractions || [];
-    if (extractions.length > 0) {
-      entitiesDiv.innerHTML = extractions.map(e => 
-        `<span class="test-badge">${e.type}="${e.value}" (${e.pattern}, ${Math.round(e.confidence * 100)}%${e.validated ? ' ✅' : ''})</span>`
-      ).join('');
-    } else {
-      entitiesDiv.innerHTML = '';
-    }
+    const entitiesFound = [];
+    if (entities.firstName) entitiesFound.push(`First: "${escapeHtml(entities.firstName)}"`);
+    if (entities.lastName)  entitiesFound.push(`Last: "${escapeHtml(entities.lastName)}"`);
+    if (entities.phone)     entitiesFound.push(`Phone: ${escapeHtml(entities.phone)}`);
+    if (entities.address)   entitiesFound.push(`Address: ${escapeHtml(entities.address)}`);
+    if (entities.email)     entitiesFound.push(`Email: ${escapeHtml(entities.email)}`);
+
+    Object.entries(entities).forEach(([key, val]) => {
+      if (val && !['firstName', 'lastName', 'phone', 'address', 'email', 'fullName'].includes(key)) {
+        entitiesFound.push(`${escapeHtml(key)}: "${escapeHtml(val)}"`);
+      }
+    });
+
+    setTestText('test-stage4', entitiesFound.length > 0 ? entitiesFound.join(' | ') : 'No entities extracted');
+    setTestBadges('test-stage4-entities', extractions.map(e =>
+      `${escapeHtml(e.type)}="${escapeHtml(e.value)}" (${escapeHtml(e.pattern)}, ${Math.round(e.confidence * 100)}%${e.validated ? ' \u2705' : ''})`
+    ));
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  function setTestText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function setTestBadges(id, badgeTexts) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = badgeTexts.length > 0
+      ? badgeTexts.map(t => `<span class="test-badge">${t}</span>`).join('')
+      : '';
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // UTILITIES
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
 
   function makeId() {
     return `scrab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
   function truncateId(id) {
-    if (!id || id.length <= 12) return id || '—';
+    if (!id || id.length <= 12) return id || '\u2014';
     return `${id.slice(0, 6)}...${id.slice(-4)}`;
   }
 
@@ -1011,59 +826,52 @@
     updateSaveButton();
   }
 
+  function norm(value) { return String(value || '').trim().toLowerCase(); }
+
   function clampPriority(raw, fallback) {
     const parsed = parseInt(raw, 10);
-    if (!Number.isFinite(parsed)) return fallback;
-    return Math.max(1, Math.min(999, parsed));
+    return Number.isFinite(parsed) ? Math.max(1, Math.min(999, parsed)) : fallback;
   }
 
   function clampConfidence(raw, fallback) {
     const parsed = parseFloat(raw);
-    if (!Number.isFinite(parsed)) return fallback;
-    return Math.max(0, Math.min(1, parsed));
-  }
-
-  function normalizeSimple(value) {
-    return String(value || '').trim().toLowerCase();
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : fallback;
   }
 
   function normalizeConfig(inputConfig) {
-    const config = inputConfig && typeof inputConfig === 'object' ? inputConfig : {};
-
+    const c = inputConfig && typeof inputConfig === 'object' ? inputConfig : {};
     return {
-      ...config,
-      enabled: config.enabled !== false,
+      ...c,
+      enabled: c.enabled !== false,
       fillers: {
-        enabled: config.fillers?.enabled !== false,
-        stripGreetings: config.fillers?.stripGreetings !== false,
-        stripCompanyName: config.fillers?.stripCompanyName !== false,
-        customFillers: Array.isArray(config.fillers?.customFillers) ? config.fillers.customFillers : []
+        enabled: c.fillers?.enabled !== false,
+        stripGreetings: c.fillers?.stripGreetings !== false,
+        stripCompanyName: c.fillers?.stripCompanyName !== false,
+        customFillers: Array.isArray(c.fillers?.customFillers) ? c.fillers.customFillers : []
       },
       vocabulary: {
-        enabled: config.vocabulary?.enabled !== false,
-        entries: Array.isArray(config.vocabulary?.entries) ? config.vocabulary.entries : []
+        enabled: c.vocabulary?.enabled !== false,
+        entries: Array.isArray(c.vocabulary?.entries) ? c.vocabulary.entries : []
       },
       synonyms: {
-        enabled: config.synonyms?.enabled !== false,
-        wordSynonyms: Array.isArray(config.synonyms?.wordSynonyms) ? config.synonyms.wordSynonyms : [],
-        contextPatterns: Array.isArray(config.synonyms?.contextPatterns) ? config.synonyms.contextPatterns : []
+        enabled: c.synonyms?.enabled !== false,
+        wordSynonyms: Array.isArray(c.synonyms?.wordSynonyms) ? c.synonyms.wordSynonyms : [],
+        contextPatterns: Array.isArray(c.synonyms?.contextPatterns) ? c.synonyms.contextPatterns : []
       },
       extraction: {
-        enabled: config.extraction?.enabled !== false,
-        customPatterns: Array.isArray(config.extraction?.customPatterns) ? config.extraction.customPatterns : []
+        enabled: c.extraction?.enabled !== false,
+        customPatterns: Array.isArray(c.extraction?.customPatterns) ? c.extraction.customPatterns : []
       }
     };
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // BOOT
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
-
-  console.log('[ScrabEngine] ✓ IIFE complete');
 })();

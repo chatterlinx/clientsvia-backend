@@ -17,6 +17,7 @@
     .scrab-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
     .scrab-card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; }
     .scrab-card-subtitle { font-size: 13px; color: #64748b; margin: 4px 0 0 0; }
+    .scrab-card-actions { display: flex; gap: 8px; }
     
     .scrab-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
     .scrab-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
@@ -43,6 +44,12 @@
     .entry-actions { display: flex; gap: 4px; }
     .entry-btn { padding: 4px 8px; font-size: 11px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; cursor: pointer; }
     .entry-btn:hover { background: #f1f5f9; }
+    .entry-clickable { cursor: pointer; border-radius: 6px; transition: background 0.15s; }
+    .entry-clickable:hover { background: #eff6ff; }
+    .entry-edit-btn { color: #3b82f6; border-color: #bfdbfe; }
+    .entry-edit-btn:hover { background: #dbeafe; }
+    .entry-delete-btn { color: #dc2626; border-color: #fecaca; }
+    .entry-delete-btn:hover { background: #fee2e2; }
     
     .test-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; color: #fff; }
     .test-input { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 14px; resize: vertical; min-height: 80px; font-family: inherit; }
@@ -58,6 +65,37 @@
     .test-badge { display: inline-block; padding: 2px 8px; background: rgba(255,255,255,0.2); border-radius: 999px; font-size: 10px; margin: 2px; }
     
     .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
+    
+    .builtin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+    .builtin-card { padding: 12px; border-radius: 8px; border: 1px solid; }
+    .builtin-card-title { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+    .builtin-card-body { font-size: 12px; line-height: 1.6; }
+    .builtin-card.first-name { background: #dcfce7; border-color: #86efac; }
+    .builtin-card.first-name .builtin-card-title { color: #166534; }
+    .builtin-card.first-name .builtin-card-body { color: #15803d; }
+    .builtin-card.last-name { background: #fce7f3; border-color: #f9a8d4; }
+    .builtin-card.last-name .builtin-card-title { color: #9f1239; }
+    .builtin-card.last-name .builtin-card-body { color: #be123c; }
+    .builtin-card.phone { background: #dbeafe; border-color: #93c5fd; }
+    .builtin-card.phone .builtin-card-title, .builtin-card.phone .builtin-card-body { color: #1e40af; }
+    .builtin-card.email { background: #fef3c7; border-color: #fde047; }
+    .builtin-card.email .builtin-card-title, .builtin-card.email .builtin-card-body { color: #92400e; }
+    
+    .section-label { font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569; }
+    .info-banner { padding: 12px; border-radius: 8px; margin-top: 16px; }
+    .info-banner-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+    .info-banner-body { font-size: 11px; line-height: 1.6; }
+    .info-banner.handoff { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+    .info-banner.handoff .info-banner-body { opacity: 0.95; }
+    .info-banner.builtin-ref { background: #dcfce7; border: 1px solid #86efac; }
+    .info-banner.builtin-ref .info-banner-title { color: #166534; }
+    .info-banner.builtin-ref .info-banner-body { color: #15803d; }
+    .info-banner.use-cases { background: #fef3c7; border: 1px solid #fde047; }
+    .info-banner.use-cases .info-banner-title { color: #92400e; }
+    .info-banner.use-cases .info-banner-body { color: #92400e; }
+    .info-banner.example { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .info-banner.example .info-banner-title { color: #1e40af; }
+    .info-banner.example .info-banner-body { color: #1e3a8a; }
     .empty-state-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
     .empty-state-text { font-size: 14px; }
     
@@ -75,6 +113,8 @@
     .form-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
     .form-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
     .form-help { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .form-options-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .form-option-label { font-size: 13px; cursor: pointer; }
     
     .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; font-size: 12px; color: #1e40af; }
@@ -222,17 +262,17 @@
             
             <div class="form-group">
               <label class="form-label">Options</label>
-              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-                <label style="font-size: 13px;">
+              <div class="form-options-list">
+                <label class="form-option-label">
                   <input type="checkbox" id="strip-greetings" checked> Strip greetings at start (hi, hello)
                 </label>
-                <label style="font-size: 13px;">
+                <label class="form-option-label">
                   <input type="checkbox" id="strip-company-name" checked> Strip company name mentions
                 </label>
               </div>
             </div>
             
-            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Built-in Fillers (always active)</h3>
+            <h3 class="section-label">Built-in Fillers (always active)</h3>
             <div class="tag-list" id="builtin-fillers">
               <span class="tag">um</span>
               <span class="tag">uh</span>
@@ -242,7 +282,7 @@
               <span class="tag">actually</span>
             </div>
             
-            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Custom Fillers</h3>
+            <h3 class="section-label">Custom Fillers</h3>
             <div class="entry-list" id="custom-fillers-list">
               <div class="empty-state">
                 <div class="empty-state-icon">🔍</div>
@@ -282,7 +322,7 @@
                 <h2 class="scrab-card-title">🎯 Stage 3: Smart Synonyms</h2>
                 <p class="scrab-card-subtitle">Expand tokens for flexible matching (adds tokens, never replaces)</p>
               </div>
-              <div style="display: flex; gap: 8px;">
+              <div class="scrab-card-actions">
                 <button class="btn btn-secondary btn-sm" id="btn-add-word-synonym">+ Word Synonym</button>
                 <button class="btn btn-primary btn-sm" id="btn-add-context-pattern">+ Context Pattern</button>
               </div>
@@ -294,7 +334,7 @@
               </label>
             </div>
             
-            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Word Synonyms</h3>
+            <h3 class="section-label">Word Synonyms</h3>
             <div class="entry-list" id="word-synonyms-list">
               <div class="empty-state">
                 <div class="empty-state-icon">💬</div>
@@ -302,7 +342,7 @@
               </div>
             </div>
             
-            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Context-Aware Patterns</h3>
+            <h3 class="section-label">Context-Aware Patterns</h3>
             <div class="entry-list" id="context-patterns-list">
               <div class="empty-state">
                 <div class="empty-state-icon">🧠</div>
@@ -327,48 +367,45 @@
               </label>
             </div>
             
-            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Built-in Patterns (Always Active)</h3>
+            <h3 class="section-label">Built-in Patterns (Always Active)</h3>
             
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
-              <div style="background: #dcfce7; border: 1px solid #86efac; padding: 12px; border-radius: 8px;">
-                <div style="font-size: 11px; font-weight: 600; color: #166534; margin-bottom: 4px;">FIRST NAME</div>
-                <div style="font-size: 12px; color: #15803d;">
+            <div class="builtin-grid">
+              <div class="builtin-card first-name">
+                <div class="builtin-card-title">FIRST NAME</div>
+                <div class="builtin-card-body">
                   ✓ "my name is [Name]"<br>
                   ✓ "I'm [Name]" (with validation)<br>
                   ✓ "call me [Name]"<br>
                   ✓ Validated: 9,530+ names
                 </div>
               </div>
-              
-              <div style="background: #fce7f3; border: 1px solid #f9a8d4; padding: 12px; border-radius: 8px;">
-                <div style="font-size: 11px; font-weight: 600; color: #9f1239; margin-bottom: 4px;">LAST NAME</div>
-                <div style="font-size: 12px; color: #be123c;">
+              <div class="builtin-card last-name">
+                <div class="builtin-card-title">LAST NAME</div>
+                <div class="builtin-card-body">
                   ✓ "last name is [Name]"<br>
                   ✓ "I'm Mr./Dr. [Name]"<br>
                   ✓ Honorifics stripped<br>
                   ✓ Validated: 161,427+ surnames
                 </div>
               </div>
-              
-              <div style="background: #dbeafe; border: 1px solid #93c5fd; padding: 12px; border-radius: 8px;">
-                <div style="font-size: 11px; font-weight: 600; color: #1e40af; margin-bottom: 4px;">PHONE</div>
-                <div style="font-size: 12px; color: #1e40af;">
+              <div class="builtin-card phone">
+                <div class="builtin-card-title">PHONE</div>
+                <div class="builtin-card-body">
                   ✓ (239) 565-2202<br>
                   ✓ 239-565-2202<br>
                   ✓ 2395652202
                 </div>
               </div>
-              
-              <div style="background: #fef3c7; border: 1px solid #fde047; padding: 12px; border-radius: 8px;">
-                <div style="font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 4px;">EMAIL</div>
-                <div style="font-size: 12px; color: #92400e;">
+              <div class="builtin-card email">
+                <div class="builtin-card-title">EMAIL</div>
+                <div class="builtin-card-body">
                   ✓ john@example.com<br>
                   ✓ Auto-validated format
                 </div>
               </div>
             </div>
             
-            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Custom Extraction Patterns</h3>
+            <h3 class="section-label">Custom Extraction Patterns</h3>
             <div class="entry-list" id="extraction-patterns-list">
               <div class="empty-state">
                 <div class="empty-state-icon">🏷️</div>
@@ -376,9 +413,9 @@
               </div>
             </div>
             
-            <div style="margin-top: 16px; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-radius: 8px;">
-              <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;">🔄 Auto-Wired to Booking Handoff</div>
-              <div style="font-size: 11px; opacity: 0.95;">
+            <div class="info-banner handoff">
+              <div class="info-banner-title">Auto-Wired to Booking Handoff</div>
+              <div class="info-banner-body">
                 All extracted entities automatically passed to booking. Add a new extraction pattern here, it's immediately available in BookingLogicEngine!
               </div>
             </div>
@@ -579,9 +616,9 @@
           <input type="number" class="form-input" id="pattern-priority" value="100" min="1" max="999">
         </div>
         
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-top: 16px;">
-          <div style="font-size: 12px; font-weight: 600; color: #1e40af; margin-bottom: 4px;">Example:</div>
-          <div style="font-size: 12px; color: #1e3a8a;">
+        <div class="info-banner example" style="margin-top: 16px;">
+          <div class="info-banner-title">Example:</div>
+          <div class="info-banner-body">
             Customer: "the thing in the garage isn't working"<br>
             Pattern: ["thing", "garage"] → Component: "air handler"<br>
             Tokens Added: ["air", "handler", "ahu", "indoor", "unit"]
@@ -647,9 +684,9 @@
           <div class="form-help">If checked, validates extracted value against name dictionaries (for name entities only)</div>
         </div>
         
-        <div style="background: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 14px; margin-top: 16px;">
-          <div style="font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 6px;">💡 Built-in Patterns Already Active:</div>
-          <div style="font-size: 11px; color: #15803d; line-height: 1.6;">
+        <div class="info-banner builtin-ref" style="margin-top: 16px;">
+          <div class="info-banner-title">Built-in Patterns Already Active:</div>
+          <div class="info-banner-body">
             ✓ <strong>firstName</strong> - "my name is [Name]", "I'm [Name]", "call me [Name]"<br>
             ✓ <strong>lastName</strong> - "I'm Mr./Dr. [Name]", "last name is [Name]"<br>
             ✓ <strong>phone</strong> - Various phone number formats<br>
@@ -657,9 +694,9 @@
           </div>
         </div>
         
-        <div style="background: #fef3c7; border: 1px solid #fde047; border-radius: 8px; padding: 14px; margin-top: 12px;">
-          <div style="font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 6px;">⚡ Use Cases for Custom Patterns:</div>
-          <div style="font-size: 11px; color: #92400e; line-height: 1.6;">
+        <div class="info-banner use-cases" style="margin-top: 12px;">
+          <div class="info-banner-title">Use Cases for Custom Patterns:</div>
+          <div class="info-banner-body">
             • <strong>Company Name:</strong> "I'm calling from [Company]"<br>
             • <strong>Urgency:</strong> "emergency", "today", "asap"<br>
             • <strong>Job Title:</strong> "I'm the manager", "I'm the owner"<br>
