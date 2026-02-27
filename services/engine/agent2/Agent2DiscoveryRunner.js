@@ -1704,11 +1704,18 @@ class Agent2DiscoveryRunner {
         });
       }
 
+      const isPatienceTrigger = (card.ruleId || '').startsWith('conversation.patience');
+      if (isPatienceTrigger) {
+        nextState.agent2.discovery.patienceMode = true;
+        nextState.agent2.discovery.patienceModeTurn = typeof turn === 'number' ? turn : null;
+      }
+
       return {
         response: finalResponse,
         matchSource: 'AGENT2_DISCOVERY',
         state: nextState,
         audioUrl: audioUrl || null,
+        patienceMode: isPatienceTrigger,
         triggerCard: {
           id: card.id,
           label: card.label,

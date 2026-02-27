@@ -4016,6 +4016,88 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       };
 
       // ═══════════════════════════════════════════════════════════════════════════
+      // PATIENCE MODE CHECK — "Still there?" when timeout expires with no speech
+      // If caller asked to hold and then the 45s gather timed out without any
+      // speech, give a gentle check-in instead of running the full pipeline.
+      // The listener stays on — caller can speak at any time.
+      // ═══════════════════════════════════════════════════════════════════════════
+      const wasPatienceMode = callState?.agent2?.discovery?.patienceMode === true;
+      const speechIsEmpty = !speechResult || !speechResult.trim();
+      
+      if (wasPatienceMode && speechIsEmpty) {
+        callState.agent2.discovery.patienceMode = false;
+        
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid, companyId: companyID,
+            type: 'PATIENCE_TIMEOUT_CHECK_IN',
+            turn: turnNumber,
+            data: { timeoutSeconds: 45, action: 'still_there_prompt' }
+          }).catch(() => {});
+        }
+        
+        const stillThereText = 'Are you still there? No rush — take your time.';
+        
+        if (redis && redisKey) {
+          try {
+            await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 });
+          } catch (_) {}
+        }
+        
+        const twiml = new twilio.twiml.VoiceResponse();
+        const gather = twiml.gather({
+          input: 'speech',
+          action: `/api/twilio/v2-agent-respond/${companyID}`,
+          method: 'POST',
+          actionOnEmptyResult: true,
+          timeout: 30,
+          speechTimeout: 'auto',
+          speechModel: 'phone_call',
+          partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+          partialResultCallbackMethod: 'POST'
+        });
+        
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+        const elevenLabsVoice = voiceSettings.voiceId;
+        
+        if (elevenLabsVoice) {
+          try {
+            const buffer = await synthesizeSpeech({
+              text: stillThereText,
+              voiceId: elevenLabsVoice,
+              stability: voiceSettings.stability,
+              similarity_boost: voiceSettings.similarityBoost,
+              style: voiceSettings.styleExaggeration,
+              model_id: voiceSettings.aiModel,
+              company
+            });
+            const fileName = `patience_checkin_${callSid}_${Date.now()}.mp3`;
+            const audioDir = path.join(__dirname, '../public/audio');
+            if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+            fs.writeFileSync(path.join(audioDir, fileName), buffer);
+            gather.play(`https://${hostHeader}/audio/${fileName}`);
+          } catch (_) {
+            gather.say(escapeTwiML(stillThereText));
+          }
+        } else {
+          gather.say(escapeTwiML(stillThereText));
+        }
+        
+        return {
+          twimlString: twiml.toString(),
+          voiceProviderUsed: 'patience_check_in',
+          responseText: stillThereText,
+          matchSource: 'PATIENCE_CHECK_IN',
+          timings: { totalMs: Date.now() - T0 }
+        };
+      }
+      
+      // Clear patience mode when caller speaks (they're back)
+      if (wasPatienceMode && !speechIsEmpty) {
+        callState.agent2.discovery.patienceMode = false;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
       // CORE RUNTIME - Process turn and collect events in buffer
       // ═══════════════════════════════════════════════════════════════════════════
       const T2_start = Date.now();
@@ -4306,12 +4388,29 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
 
       const twiml = new twilio.twiml.VoiceResponse();
+      
+      // PATIENCE MODE: When caller asked to hold/wait, extend the silence
+      // timeout so we don't interrupt them. They're thinking, checking, or
+      // consulting someone. Listener stays on — Twilio <Gather> is live.
+      const isPatienceMode = runtimeResult?.patienceMode === true
+        || persistedState?.agent2?.discovery?.patienceMode === true;
+      const gatherTimeout = isPatienceMode ? 45 : 7;
+      
+      if (isPatienceMode && CallLogger) {
+        CallLogger.logEvent({
+          callId: callSid, companyId: companyID,
+          type: 'PATIENCE_MODE_ACTIVE',
+          turn: turnNumber,
+          data: { timeout: gatherTimeout, reason: 'Caller requested hold/wait' }
+        }).catch(() => {});
+      }
+      
       const gather = twiml.gather({
         input: 'speech',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
         actionOnEmptyResult: true,
-        timeout: 7,
+        timeout: gatherTimeout,
         speechTimeout: 'auto',
         speechModel: 'phone_call',
         partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
