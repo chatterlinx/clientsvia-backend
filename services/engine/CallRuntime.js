@@ -166,10 +166,21 @@ async function runBookingLogicLane({
         reason: 'session.mode is BOOKING - all turns route to BookingLogicEngine only'
     });
     
+    // 🔍 SCRABENGINE AUTO-WIRE: Include all extracted entities from ScrabEngine
+    const scrabEngineEntities = state?.agent2?.scrabEngine?.entities || {};
+    
     const handoffPayload = {
         assumptions: {
-            firstName: state?.plainSlots?.name || null,
-            lastName: state?.plainSlots?.lastName || null,
+            firstName: scrabEngineEntities.firstName || state?.plainSlots?.name || null,
+            lastName: scrabEngineEntities.lastName || state?.plainSlots?.lastName || null,
+            phone: scrabEngineEntities.phone || null,
+            email: scrabEngineEntities.email || null,
+            // All ScrabEngine custom extractions auto-wired
+            ...Object.fromEntries(
+                Object.entries(scrabEngineEntities).filter(([key]) => 
+                    !['firstName', 'lastName', 'fullName', 'phone', 'email', 'address'].includes(key)
+                )
+            ),
             callerPhone: state?.plainSlots?.phone || callState?.callerPhone || null,
             callReason: state?.plainSlots?.call_reason_detail || null,
             address: state?.plainSlots?.address || null

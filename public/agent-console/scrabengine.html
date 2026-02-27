@@ -316,41 +316,70 @@
             <div class="scrab-card-header">
               <div>
                 <h2 class="scrab-card-title">🏷️ Stage 4: Entity Extraction</h2>
-                <p class="scrab-card-subtitle">Extract names, phone, address, email from cleaned text</p>
+                <p class="scrab-card-subtitle">Extract names, phone, address, email - auto-wired to booking handoff</p>
+              </div>
+              <button class="btn btn-primary btn-sm" id="btn-add-extraction">+ Add Extraction Pattern</button>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">
+                <input type="checkbox" id="toggle-extraction" checked> Enable Entity Extraction
+              </label>
+            </div>
+            
+            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Built-in Patterns (Always Active)</h3>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
+              <div style="background: #dcfce7; border: 1px solid #86efac; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; font-weight: 600; color: #166534; margin-bottom: 4px;">FIRST NAME</div>
+                <div style="font-size: 12px; color: #15803d;">
+                  ✓ "my name is [Name]"<br>
+                  ✓ "I'm [Name]" (with validation)<br>
+                  ✓ "call me [Name]"<br>
+                  ✓ Validated: 9,530+ names
+                </div>
+              </div>
+              
+              <div style="background: #fce7f3; border: 1px solid #f9a8d4; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; font-weight: 600; color: #9f1239; margin-bottom: 4px;">LAST NAME</div>
+                <div style="font-size: 12px; color: #be123c;">
+                  ✓ "last name is [Name]"<br>
+                  ✓ "I'm Mr./Dr. [Name]"<br>
+                  ✓ Honorifics stripped<br>
+                  ✓ Validated: 161,427+ surnames
+                </div>
+              </div>
+              
+              <div style="background: #dbeafe; border: 1px solid #93c5fd; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; font-weight: 600; color: #1e40af; margin-bottom: 4px;">PHONE</div>
+                <div style="font-size: 12px; color: #1e40af;">
+                  ✓ (239) 565-2202<br>
+                  ✓ 239-565-2202<br>
+                  ✓ 2395652202
+                </div>
+              </div>
+              
+              <div style="background: #fef3c7; border: 1px solid #fde047; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 4px;">EMAIL</div>
+                <div style="font-size: 12px; color: #92400e;">
+                  ✓ john@example.com<br>
+                  ✓ Auto-validated format
+                </div>
               </div>
             </div>
             
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 16px; border-radius: 10px; margin-bottom: 16px;">
-              <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">✨ Automatic Extraction (Always Active)</div>
-              <div style="font-size: 12px; opacity: 0.95; line-height: 1.5;">
-                ScrabEngine automatically extracts entities from caller speech:
-                <ul style="margin: 8px 0 0 20px; padding: 0;">
-                  <li><strong>Names:</strong> "my name is Marc" → firstName="Marc"</li>
-                  <li><strong>Phone:</strong> "239-565-2202" → phone="2395652202"</li>
-                  <li><strong>Address:</strong> "123 Main Street" → address extracted</li>
-                  <li><strong>Email:</strong> "john@example.com" → email extracted</li>
-                </ul>
+            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Custom Extraction Patterns</h3>
+            <div class="entry-list" id="extraction-patterns-list">
+              <div class="empty-state">
+                <div class="empty-state-icon">🏷️</div>
+                <div class="empty-state-text">No custom patterns yet. Click "+ Add Extraction Pattern" to create one.</div>
               </div>
             </div>
             
-            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px;">
-              <div style="font-size: 13px; font-weight: 600; color: #1e40af; margin-bottom: 8px;">
-                🌐 GlobalShare Integration
-              </div>
-              <div style="font-size: 12px; color: #1e3a8a; line-height: 1.5;">
-                Extracted names are validated against GlobalShare dictionaries:
-                <ul style="margin: 8px 0 0 20px; padding: 0;">
-                  <li>First names: Checked against 9,530+ names</li>
-                  <li>Last names: Checked against 161,427+ surnames</li>
-                  <li>Validation: &lt;1ms via Redis</li>
-                  <li>Confidence boost: +13% for validated names</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 6px;">
-              <div style="font-size: 12px; color: #475569;">
-                <strong>Used in Call Console:</strong> Entity extraction results appear in transcript trace showing what was extracted, validation status, and confidence scores.
+            <div style="margin-top: 16px; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-radius: 8px;">
+              <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;">🔄 Auto-Wired to Booking Handoff</div>
+              <div style="font-size: 11px; opacity: 0.95;">
+                All extracted entities automatically passed to booking. Add a new extraction pattern here, it's immediately available in BookingLogicEngine!
               </div>
             </div>
           </div>
@@ -562,6 +591,85 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-cancel-pattern">Cancel</button>
         <button class="btn btn-primary" id="btn-save-pattern">Add Pattern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add/Edit Extraction Pattern -->
+  <div id="modal-extraction" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Custom Extraction Pattern</h3>
+        <p class="modal-subtitle">Define new entity to extract and auto-wire to booking handoff</p>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Entity Name</label>
+          <input type="text" class="form-input" id="extraction-entity-name" placeholder="e.g., companyName, urgency, jobTitle">
+          <div class="form-help">Unique identifier for this entity (camelCase, no spaces)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Display Label</label>
+          <input type="text" class="form-input" id="extraction-label" placeholder="e.g., Company Name">
+          <div class="form-help">Human-readable name for UI display</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Extraction Pattern (Regex)</label>
+          <input type="text" class="form-input" id="extraction-pattern" placeholder="e.g., calling from (\w+)">
+          <div class="form-help">Regular expression with capture group. Use (\w+) to capture words.</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Pattern Examples (one per line)</label>
+          <textarea class="form-input" id="extraction-examples" rows="3" placeholder="I'm calling from ABC Company&#10;calling from XYZ Corp&#10;representing 123 Services"></textarea>
+          <div class="form-help">Test cases that should match this pattern</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Confidence Score</label>
+          <input type="number" class="form-input" id="extraction-confidence" value="0.85" min="0" max="1" step="0.05">
+          <div class="form-help">How confident is this extraction? (0.0-1.0)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" id="extraction-handoff" checked> Auto-wire to Booking Handoff
+          </label>
+          <div class="form-help">If checked, this entity automatically passed to BookingLogicEngine</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" id="extraction-globalshare"> Validate against GlobalShare
+          </label>
+          <div class="form-help">If checked, validates extracted value against name dictionaries (for name entities only)</div>
+        </div>
+        
+        <div style="background: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 14px; margin-top: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 6px;">💡 Built-in Patterns Already Active:</div>
+          <div style="font-size: 11px; color: #15803d; line-height: 1.6;">
+            ✓ <strong>firstName</strong> - "my name is [Name]", "I'm [Name]", "call me [Name]"<br>
+            ✓ <strong>lastName</strong> - "I'm Mr./Dr. [Name]", "last name is [Name]"<br>
+            ✓ <strong>phone</strong> - Various phone number formats<br>
+            ✓ <strong>email</strong> - email@domain.com format
+          </div>
+        </div>
+        
+        <div style="background: #fef3c7; border: 1px solid #fde047; border-radius: 8px; padding: 14px; margin-top: 12px;">
+          <div style="font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 6px;">⚡ Use Cases for Custom Patterns:</div>
+          <div style="font-size: 11px; color: #92400e; line-height: 1.6;">
+            • <strong>Company Name:</strong> "I'm calling from [Company]"<br>
+            • <strong>Urgency:</strong> "emergency", "today", "asap"<br>
+            • <strong>Job Title:</strong> "I'm the manager", "I'm the owner"<br>
+            • <strong>Account Number:</strong> "account #12345"
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-extraction">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-extraction">Add Pattern</button>
       </div>
     </div>
   </div>

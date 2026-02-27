@@ -4057,7 +4057,23 @@ const companySchema = new mongoose.Schema({
                         }]
                     },
                     
-                    // STAGE 4: Quality Gates
+                    // STAGE 4: Entity Extraction
+                    extraction: {
+                        enabled: { type: Boolean, default: true },
+                        customPatterns: [{
+                            id: { type: String, trim: true },
+                            enabled: { type: Boolean, default: true },
+                            entityName: { type: String, trim: true },  // "companyName", "urgency"
+                            label: { type: String, trim: true },  // "Company Name"
+                            pattern: { type: String, trim: true },  // Regex pattern
+                            examples: { type: [String] },  // Test cases
+                            confidence: { type: Number, default: 0.85, min: 0, max: 1 },
+                            autoHandoff: { type: Boolean, default: true },  // Pass to booking
+                            validateGlobalShare: { type: Boolean, default: false }  // Validate against names
+                        }]
+                    },
+                    
+                    // STAGE 5: Quality Gates
                     qualityGates: {
                         minWordCount: { type: Number, default: 2 },
                         minConfidence: { type: Number, default: 0.5 },

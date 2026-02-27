@@ -63,12 +63,18 @@
       btnAddVocab: document.getElementById('btn-add-vocab'),
       btnAddWordSynonym: document.getElementById('btn-add-word-synonym'),
       btnAddContextPattern: document.getElementById('btn-add-context-pattern'),
+      btnAddExtraction: document.getElementById('btn-add-extraction'),
+      
+      // Extraction
+      toggleExtraction: document.getElementById('toggle-extraction'),
+      extractionPatternsList: document.getElementById('extraction-patterns-list'),
       
       // Modals
       modalFiller: document.getElementById('modal-filler'),
       modalVocabulary: document.getElementById('modal-vocabulary'),
       modalWordSynonym: document.getElementById('modal-word-synonym'),
       modalContextPattern: document.getElementById('modal-context-pattern'),
+      modalExtraction: document.getElementById('modal-extraction'),
       
       // Test panel
       testPanel: document.getElementById('test-panel'),
@@ -182,12 +188,24 @@
     if (DOM.btnAddVocab) DOM.btnAddVocab.addEventListener('click', () => openModal('vocabulary'));
     if (DOM.btnAddWordSynonym) DOM.btnAddWordSynonym.addEventListener('click', () => openModal('wordSynonym'));
     if (DOM.btnAddContextPattern) DOM.btnAddContextPattern.addEventListener('click', () => openModal('contextPattern'));
+    if (DOM.btnAddExtraction) DOM.btnAddExtraction.addEventListener('click', () => openModal('extraction'));
+
+    // Extraction toggle
+    if (DOM.toggleExtraction) {
+      DOM.toggleExtraction.addEventListener('change', (e) => {
+        if (!state.config.extraction) state.config.extraction = {};
+        state.config.extraction.enabled = e.target.checked;
+        state.hasChanges = true;
+        updateSaveButton();
+      });
+    }
 
     // Modal close buttons
     setupModal('filler');
     setupModal('vocabulary');
     setupModal('wordSynonym');
     setupModal('contextPattern');
+    setupModal('extraction');
   }
 
   function setupModal(type) {
@@ -195,7 +213,8 @@
       filler: { modal: DOM.modalFiller, cancel: 'btn-cancel-filler', save: 'btn-save-filler' },
       vocabulary: { modal: DOM.modalVocabulary, cancel: 'btn-cancel-vocab', save: 'btn-save-vocab' },
       wordSynonym: { modal: DOM.modalWordSynonym, cancel: 'btn-cancel-word-syn', save: 'btn-save-word-syn' },
-      contextPattern: { modal: DOM.modalContextPattern, cancel: 'btn-cancel-pattern', save: 'btn-save-pattern' }
+      contextPattern: { modal: DOM.modalContextPattern, cancel: 'btn-cancel-pattern', save: 'btn-save-pattern' },
+      extraction: { modal: DOM.modalExtraction, cancel: 'btn-cancel-extraction', save: 'btn-save-extraction' }
     };
 
     const config = modalMap[type];
@@ -308,8 +327,67 @@
     renderVocabulary();
     renderWordSynonyms();
     renderContextPatterns();
+    renderExtractionPatterns();
     
     updateStats();
+  }
+  
+  function renderExtractionPatterns() {
+    const patterns = (state.config.extraction && state.config.extraction.customPatterns) || [];
+    
+    if (patterns.length === 0) {
+      if (DOM.extractionPatternsList) {
+        DOM.extractionPatternsList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🏷️</div>
+            <div class="empty-state-text">No custom patterns yet. Click "+ Add Extraction Pattern" to create one.</div>
+          </div>
+        `;
+      }
+      return;
+    }
+    
+    if (DOM.extractionPatternsList) {
+      DOM.extractionPatternsList.innerHTML = patterns.map((pattern, idx) => `
+        <div class="entry-item ${pattern.enabled === false ? 'disabled' : ''}">
+          <input type="checkbox" class="entry-checkbox" data-type="extraction" data-idx="${idx}" ${pattern.enabled !== false ? 'checked' : ''}>
+          <div class="entry-content">
+            <span class="entry-from"><strong>${escapeHtml(pattern.label || pattern.entityName)}</strong></span>
+            <span class="entry-arrow">→</span>
+            <span class="entry-to">${escapeHtml(pattern.pattern)}</span>
+            ${pattern.autoHandoff ? '<span class="entry-badge">Auto-handoff</span>' : ''}
+            ${pattern.validateGlobalShare ? '<span class="entry-badge">GlobalShare ✓</span>' : ''}
+            <span class="entry-badge">${Math.round((pattern.confidence || 0.85) * 100)}%</span>
+          </div>
+          <div class="entry-actions">
+            <button class="entry-btn" data-action="delete" data-type="extraction" data-idx="${idx}">Delete</button>
+          </div>
+        </div>
+      `).join('');
+      
+      // Bind events
+      DOM.extractionPatternsList.querySelectorAll('.entry-checkbox').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const idx = parseInt(e.target.dataset.idx);
+          state.config.extraction.customPatterns[idx].enabled = e.target.checked;
+          state.hasChanges = true;
+          updateSaveButton();
+          render();
+        });
+      });
+      
+      DOM.extractionPatternsList.querySelectorAll('[data-action="delete"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.idx);
+          if (confirm('Delete this extraction pattern?')) {
+            state.config.extraction.customPatterns.splice(idx, 1);
+            state.hasChanges = true;
+            updateSaveButton();
+            render();
+          }
+        });
+      });
+    }
   }
 
   function renderCustomFillers() {
@@ -595,6 +673,14 @@
       document.getElementById('pattern-tokens').value = '';
       document.getElementById('pattern-confidence').value = '0.9';
       document.getElementById('pattern-priority').value = '100';
+    } else if (type === 'extraction') {
+      document.getElementById('extraction-entity-name').value = '';
+      document.getElementById('extraction-label').value = '';
+      document.getElementById('extraction-pattern').value = '';
+      document.getElementById('extraction-examples').value = '';
+      document.getElementById('extraction-confidence').value = '0.85';
+      document.getElementById('extraction-handoff').checked = true;
+      document.getElementById('extraction-globalshare').checked = false;
     }
   }
 
@@ -693,6 +779,52 @@
         confidence,
         enabled: true,
         priority
+      });
+      
+      state.hasChanges = true;
+      updateSaveButton();
+      closeModal(type);
+      render();
+      
+    } else if (type === 'extraction') {
+      const entityName = document.getElementById('extraction-entity-name').value.trim();
+      const label = document.getElementById('extraction-label').value.trim();
+      const pattern = document.getElementById('extraction-pattern').value.trim();
+      const examples = document.getElementById('extraction-examples').value.trim();
+      const confidence = parseFloat(document.getElementById('extraction-confidence').value) || 0.85;
+      const autoHandoff = document.getElementById('extraction-handoff').checked;
+      const validateGlobalShare = document.getElementById('extraction-globalshare').checked;
+      
+      if (!entityName || !label || !pattern) {
+        alert('Please fill in Entity Name, Label, and Pattern fields');
+        return;
+      }
+      
+      // Validate entity name format (camelCase, no spaces)
+      if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(entityName)) {
+        alert('Entity Name must be camelCase with no spaces (e.g., companyName, urgencyLevel)');
+        return;
+      }
+      
+      if (!state.config.extraction) {
+        state.config.extraction = { enabled: true, customPatterns: [] };
+      }
+      if (!state.config.extraction.customPatterns) {
+        state.config.extraction.customPatterns = [];
+      }
+      
+      const exampleLines = examples.split('\n').map(e => e.trim()).filter(Boolean);
+      
+      state.config.extraction.customPatterns.push({
+        id: makeId(),
+        entityName,
+        label,
+        pattern,
+        examples: exampleLines,
+        confidence,
+        autoHandoff,
+        validateGlobalShare,
+        enabled: true
       });
       
       state.hasChanges = true;
