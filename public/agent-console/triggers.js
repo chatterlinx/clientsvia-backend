@@ -1733,7 +1733,13 @@
       showToast('error', 'Playback Failed', 'Could not play audio file');
     };
     
-    currentAudio.play();
+    currentAudio.play().catch(() => {
+      currentAudio = null;
+      if (btn) {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play`;
+      }
+      showToast('error', 'Audio Not Found', 'Audio file is missing — please regenerate.');
+    });
   }
   
   function checkAudioStatus() {

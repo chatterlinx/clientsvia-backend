@@ -24,6 +24,9 @@
  * ============================================================================
  */
 
+const fs = require('fs');
+const path = require('path');
+
 const logger = require('../../../utils/logger');
 
 const GlobalTriggerGroup = require('../../../models/GlobalTriggerGroup');
@@ -31,6 +34,8 @@ const GlobalTrigger = require('../../../models/GlobalTrigger');
 const CompanyLocalTrigger = require('../../../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const TriggerAudio = require('../../../models/TriggerAudio');
+
+const AUDIO_BASE_DIR = path.join(__dirname, '../../../public');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // CACHE CONFIGURATION
@@ -110,6 +115,38 @@ function invalidateAllCache() {
   triggerCache.clear();
   
   logger.info('[TriggerService] All cache cleared', { entriesCleared: size });
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// AUDIO FILE VALIDATION
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Checks database validity AND verifies the MP3 file exists on disk.
+ * Returns the audioUrl if valid, empty string otherwise.
+ * Auto-invalidates stale database records when the file is missing.
+ */
+function resolveAudioUrl(companyAudio, effectiveAnswerText) {
+  if (!companyAudio || !companyAudio.isValid) return '';
+  if (companyAudio.textHash !== TriggerAudio.hashText(effectiveAnswerText)) return '';
+
+  const audioUrl = companyAudio.audioUrl;
+  if (!audioUrl) return '';
+
+  const filePath = path.join(AUDIO_BASE_DIR, audioUrl);
+  if (!fs.existsSync(filePath)) {
+    logger.warn('[TriggerService] Audio file missing from disk — clearing stale reference', {
+      audioUrl,
+      companyId: companyAudio.companyId,
+      ruleId: companyAudio.ruleId
+    });
+    TriggerAudio.invalidateAudio(companyAudio.companyId, companyAudio.ruleId, 'FILE_MISSING_ON_DISK').catch(err => {
+      logger.error('[TriggerService] Failed to invalidate stale audio record', { error: err.message });
+    });
+    return '';
+  }
+
+  return audioUrl;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -258,16 +295,10 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
       }
     }
     
-    // Apply company-specific audio (if valid for current text)
+    // Apply company-specific audio (if valid for current text AND file exists on disk)
     const effectiveAnswerText = partialOverride?.answerText || gt.answerText;
-    const hasValidAudio = companyAudio && companyAudio.isValid && 
-                          companyAudio.textHash === TriggerAudio.hashText(effectiveAnswerText);
-    
-    if (hasValidAudio) {
-      trigger.answer = { ...trigger.answer, audioUrl: companyAudio.audioUrl };
-    } else {
-      trigger.answer = { ...trigger.answer, audioUrl: '' };
-    }
+    const audioUrl = resolveAudioUrl(companyAudio, effectiveAnswerText);
+    trigger.answer = { ...trigger.answer, audioUrl };
 
     // CANONICAL KEY: Always use ruleId for Map operations
     triggerMap.set(gt.ruleId, trigger);
@@ -276,21 +307,15 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
   for (const lt of localTriggers) {
     const companyAudio = audioMap.get(lt.ruleId);
     
-    // Check if company has valid audio for this trigger's current text
-    const hasValidAudio = companyAudio && companyAudio.isValid && 
-                          companyAudio.textHash === TriggerAudio.hashText(lt.answerText);
-    
+    // Check if company has valid audio for this trigger's current text AND file exists
+    const audioUrl = resolveAudioUrl(companyAudio, lt.answerText);
+
     const trigger = {
       ...lt,
       _scope: 'LOCAL'
     };
     
-    // Override audio with company-specific audio
-    if (hasValidAudio) {
-      trigger.answer = { ...trigger.answer, audioUrl: companyAudio.audioUrl };
-    } else {
-      trigger.answer = { ...trigger.answer, audioUrl: '' };
-    }
+    trigger.answer = { ...trigger.answer, audioUrl };
 
     // CANONICAL KEY: Always use ruleId - this overwrites any global with same ruleId
     triggerMap.set(lt.ruleId, trigger);
