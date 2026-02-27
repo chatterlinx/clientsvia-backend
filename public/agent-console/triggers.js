@@ -509,16 +509,24 @@
         return false;
       }
       
-      // Apply search filter
+      // Apply search filter — searches all trigger fields
       if (!state.searchQuery) {
         return true;
       }
+      const q = state.searchQuery;
       const label = (t.label || '').toLowerCase();
       const ruleId = (t.ruleId || '').toLowerCase();
       const keywords = (t.match?.keywords || []).join(' ').toLowerCase();
-      return label.includes(state.searchQuery) || 
-             ruleId.includes(state.searchQuery) || 
-             keywords.includes(state.searchQuery);
+      const phrases = (t.match?.phrases || []).join(' ').toLowerCase();
+      const negatives = (t.match?.negativeKeywords || []).join(' ').toLowerCase();
+      const answerText = (t.answer?.answerText || '').toLowerCase();
+      const followUp = (t.followUp?.question || '').toLowerCase();
+      const includedFacts = (t.llmFactPack?.includedFacts || '').toLowerCase();
+      const priority = String(t.priority || '');
+      
+      return label.includes(q) || ruleId.includes(q) || keywords.includes(q) ||
+             phrases.includes(q) || negatives.includes(q) || answerText.includes(q) ||
+             followUp.includes(q) || includedFacts.includes(q) || priority.includes(q);
     });
     
     if (filtered.length === 0) {
