@@ -800,6 +800,138 @@ class ScrabEngine {
       }
     };
   }
+  
+  /**
+   * Generate Call Console visual trace events
+   * 
+   * Creates a comprehensive transformation story for Call Console transcript display
+   * Shows the complete journey from raw STT → cleaned delivery to triggers
+   * 
+   * @param {Object} scrabResult - Complete ScrabEngine result
+   * @returns {Array} Array of trace events for Call Console
+   */
+  static generateCallConsoleTrace(scrabResult) {
+    const events = [];
+    
+    // Entry event - Raw STT received
+    events.push({
+      stage: 'SCRABENGINE_ENTRY',
+      icon: '🎤',
+      title: 'Raw STT from Deepgram',
+      text: scrabResult.rawText,
+      status: 'received',
+      timestamp: scrabResult.meta.timestamp,
+      metadata: {
+        length: scrabResult.rawText?.length || 0,
+        wordCount: scrabResult.originalTokens?.length || 0
+      }
+    });
+    
+    // Stage 1: Fillers
+    if (scrabResult.stage1_fillers) {
+      const removed = scrabResult.stage1_fillers.removed || [];
+      events.push({
+        stage: 'SCRABENGINE_STAGE1',
+        icon: '🧹',
+        title: 'Stage 1: Filler Removal',
+        text: scrabResult.stage1_fillers.cleaned,
+        status: removed.length > 0 ? 'modified' : 'unchanged',
+        processingTimeMs: scrabResult.stage1_fillers.processingTimeMs,
+        changes: removed.map(r => ({
+          type: r.type,
+          action: 'removed',
+          value: r.value,
+          count: r.count || 1
+        })),
+        summary: removed.length > 0 
+          ? `Removed ${removed.length} filler(s): ${removed.slice(0, 3).map(r => `"${r.value}"`).join(', ')}${removed.length > 3 ? '...' : ''}`
+          : 'No fillers found'
+      });
+    }
+    
+    // Stage 2: Vocabulary
+    if (scrabResult.stage2_vocabulary) {
+      const applied = scrabResult.stage2_vocabulary.applied || [];
+      events.push({
+        stage: 'SCRABENGINE_STAGE2',
+        icon: '📝',
+        title: 'Stage 2: Vocabulary Normalization',
+        text: scrabResult.stage2_vocabulary.normalized,
+        status: applied.length > 0 ? 'modified' : 'unchanged',
+        processingTimeMs: scrabResult.stage2_vocabulary.processingTimeMs,
+        changes: applied.map(a => ({
+          type: 'normalized',
+          from: a.from,
+          to: a.to,
+          matchMode: a.matchMode,
+          count: a.count
+        })),
+        summary: applied.length > 0
+          ? `Applied ${applied.length} normalization(s): ${applied.slice(0, 3).map(a => `"${a.from}" → "${a.to}"`).join(', ')}${applied.length > 3 ? '...' : ''}`
+          : 'No normalizations applied'
+      });
+    }
+    
+    // Stage 3: Token Expansion
+    if (scrabResult.stage3_expansion) {
+      const originalCount = scrabResult.stage3_expansion.originalTokens?.length || 0;
+      const expandedCount = scrabResult.stage3_expansion.expandedTokens?.length || 0;
+      const addedCount = expandedCount - originalCount;
+      const expansionMap = scrabResult.stage3_expansion.expansionMap || {};
+      
+      events.push({
+        stage: 'SCRABENGINE_STAGE3',
+        icon: '🎯',
+        title: 'Stage 3: Token Expansion',
+        text: `Original: [${scrabResult.stage3_expansion.originalTokens?.join(', ')}]\nExpanded: [${scrabResult.stage3_expansion.expandedTokens?.join(', ')}]`,
+        status: addedCount > 0 ? 'expanded' : 'unchanged',
+        processingTimeMs: scrabResult.stage3_expansion.processingTimeMs,
+        changes: Object.keys(expansionMap).map(key => ({
+          type: 'expansion',
+          source: key,
+          addedTokens: expansionMap[key],
+          count: expansionMap[key]?.length || 0
+        })),
+        summary: addedCount > 0
+          ? `Expanded ${originalCount} tokens → ${expandedCount} tokens (+${addedCount} synonyms)`
+          : 'No token expansion'
+      });
+    }
+    
+    // Quality Gate
+    if (scrabResult.stage4_quality) {
+      events.push({
+        stage: 'SCRABENGINE_QUALITY',
+        icon: scrabResult.stage4_quality.passed ? '✅' : '⚠️',
+        title: 'Stage 4: Quality Assessment',
+        status: scrabResult.stage4_quality.passed ? 'passed' : 'failed',
+        reason: scrabResult.stage4_quality.reason,
+        confidence: scrabResult.stage4_quality.confidence,
+        details: scrabResult.stage4_quality.details,
+        summary: scrabResult.stage4_quality.passed
+          ? `Quality OK (${Math.round(scrabResult.stage4_quality.confidence * 100)}% confidence)`
+          : `Quality ${scrabResult.stage4_quality.reason} - ${scrabResult.stage4_quality.shouldReprompt ? 'reprompt suggested' : 'proceeding'}`
+      });
+    }
+    
+    // Final delivery event
+    events.push({
+      stage: 'SCRABENGINE_DELIVERY',
+      icon: '🚀',
+      title: 'Delivery to Triggers',
+      text: scrabResult.normalizedText,
+      status: 'delivered',
+      metadata: {
+        totalTransformations: scrabResult.transformations?.length || 0,
+        totalProcessingTimeMs: scrabResult.performance?.totalTimeMs || 0,
+        tokensDelivered: scrabResult.expandedTokens?.length || 0
+      },
+      summary: `Processed in ${scrabResult.performance?.totalTimeMs || 0}ms. ${scrabResult.transformations?.length || 0} transformation(s) applied. Ready for trigger matching.`
+    });
+    
+    return events;
+  }
+}
 }
 
 // ════════════════════════════════════════════════════════════════════════════

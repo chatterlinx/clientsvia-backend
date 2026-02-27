@@ -611,7 +611,19 @@ class Agent2DiscoveryRunner {
       timestamp: new Date().toISOString()
     });
     
-    // ScrabEngine processing summary
+    // ──────────────────────────────────────────────────────────────────────────
+    // SCRABENGINE VISUAL TRACE - Generate Call Console events
+    // ──────────────────────────────────────────────────────────────────────────
+    // Create detailed trace events showing the complete text processing journey
+    // These appear in Call Console transcript for debugging and transparency
+    const scrabTraceEvents = ScrabEngine.generateCallConsoleTrace(scrabResult);
+    
+    // Emit each stage as a separate event for Call Console rendering
+    for (const traceEvent of scrabTraceEvents) {
+      emit(traceEvent.stage, traceEvent);
+    }
+    
+    // ScrabEngine processing summary (overview event)
     emit('SCRABENGINE_PROCESSED', {
       rawPreview: clip(input, 60),
       normalizedPreview: clip(normalizedInput, 60),
@@ -622,7 +634,9 @@ class Agent2DiscoveryRunner {
       expansionMap: Object.keys(expansionMap).length > 0 ? expansionMap : null,
       quality: scrabResult.quality,
       performance: scrabResult.performance,
-      note: 'ScrabEngine: Fillers → Vocabulary → Synonyms → Quality Gate'
+      note: 'ScrabEngine: Fillers → Vocabulary → Synonyms → Quality Gate',
+      // Visual trace events for Call Console
+      visualTrace: scrabTraceEvents
     });
     
     // Quality gate check

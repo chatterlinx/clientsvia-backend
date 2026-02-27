@@ -1069,6 +1069,37 @@ router.post('/voice', async (req, res) => {
       callSid: req.body.CallSid,
       timestamp: new Date().toISOString()
     });
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // 📼 CALL CONSOLE VISUAL TRACE - Spam Filter Check
+    // ════════════════════════════════════════════════════════════════════════
+    if (CallLogger) {
+      try {
+        await CallLogger.logEvent({
+          callId: req.body.CallSid,
+          companyId: company._id,
+          type: 'SPAM_FILTER_CHECK',
+          turn: 0,
+          data: {
+            decision: filterResult.shouldBlock ? 'BLOCKED' : 'ALLOWED',
+            spamScore: filterResult.spamScore || 0,
+            reason: filterResult.reason || 'passed_all_checks',
+            flags: filterResult.flags || [],
+            fromNumber: callerNumber,
+            visualTrace: {
+              icon: filterResult.shouldBlock ? '🚫' : '✅',
+              stage: 'Spam Filter',
+              status: filterResult.shouldBlock ? 'blocked' : 'passed',
+              details: filterResult.shouldBlock 
+                ? `Call blocked: ${filterResult.reason}`
+                : `Passed security checks (score: ${filterResult.spamScore || 0})`
+            }
+          }
+        });
+      } catch (logErr) {
+        logger.warn('[SPAM FILTER] Failed to log event (non-blocking)', { error: logErr.message });
+      }
+    }
 
     if (filterResult.shouldBlock) {
       logger.security(`🚫 [SPAM BLOCKED] Call from ${callerNumber} blocked. Reason: ${filterResult.reason}`);
@@ -1290,6 +1321,39 @@ router.post('/voice', async (req, res) => {
     }
     
     logger.info(`[GO LIVE CHECK] ✅ AI Agent is LIVE - proceeding to handle call`);
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // 📼 CALL CONSOLE VISUAL TRACE - Gatekeeper Configuration Check
+    // ════════════════════════════════════════════════════════════════════════
+    const gatekeeperStatus = company.accountStatus?.status || 'active';
+    if (CallLogger) {
+      try {
+        await CallLogger.logEvent({
+          callId: req.body.CallSid,
+          companyId: company._id,
+          type: 'GATEKEEPER_CHECK',
+          turn: 0,
+          data: {
+            configuration: gatekeeperStatus,
+            decision: gatekeeperStatus === 'active' ? 'PROCEED' : gatekeeperStatus.toUpperCase(),
+            visualTrace: {
+              icon: gatekeeperStatus === 'active' ? '✅' : gatekeeperStatus === 'suspended' ? '🚫' : '📞',
+              stage: 'Gatekeeper',
+              status: gatekeeperStatus,
+              details: gatekeeperStatus === 'active' 
+                ? 'Configuration: Active - Call proceeding to AI Agent'
+                : gatekeeperStatus === 'suspended'
+                ? 'Configuration: Suspended - Blocked with message'
+                : gatekeeperStatus === 'call_forward'
+                ? `Configuration: Call Forward - Transferring to ${company.accountStatus?.callForwardNumber || 'N/A'}`
+                : 'Unknown status'
+            }
+          }
+        });
+      } catch (logErr) {
+        logger.warn('[GATEKEEPER] Failed to log event (non-blocking)', { error: logErr.message });
+      }
+    }
     
     // 🚨 CHECK ACCOUNT STATUS - Handle suspended/forwarded accounts
     if (company.accountStatus && company.accountStatus.status) {
@@ -1675,7 +1739,7 @@ router.post('/voice', async (req, res) => {
           logger.info(`[GREETING] 🎵 Playing pre-recorded audio (source: ${greetingSource}): ${audioUrl}`);
           gather.play(audioUrl);
           
-          // 📼 BLACK BOX: Log prerecorded greeting played
+          // 📼 BLACK BOX + CALL CONSOLE VISUAL TRACE: Log prerecorded greeting
           if (CallLogger) {
             CallLogger.logEvent({
               callId: req.body.CallSid,
@@ -1683,6 +1747,14 @@ router.post('/voice', async (req, res) => {
               type: 'GREETING_PRERECORDED',
               turn: 0,
               data: {
+                visualTrace: {
+                  icon: '🎵',
+                  stage: 'Greeting',
+                  status: 'prerecorded_audio',
+                  details: `Playing pre-recorded audio (Agent 2.0)`,
+                  audioUrl: audioUrl,
+                  source: greetingSource
+                },
                 audioUrl,
                 source: greetingSource
               }
@@ -1844,6 +1916,31 @@ router.post('/voice', async (req, res) => {
           
           const ttsTime = Date.now() - ttsStartTime;
           logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms (source: ${greetingSource})`);
+          
+          // 📼 CALL CONSOLE VISUAL TRACE: Log TTS greeting generation
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'GREETING_TTS_GENERATED',
+              turn: 0,
+              data: {
+                visualTrace: {
+                  icon: '🎙️',
+                  stage: 'Greeting',
+                  status: 'tts_generated',
+                  details: `Generated via ElevenLabs TTS (${ttsTime}ms)`,
+                  voiceId: elevenLabsVoice,
+                  textPreview: greetingText.substring(0, 80),
+                  processingTimeMs: ttsTime,
+                  source: greetingSource
+                },
+                ttsTimeMs: ttsTime,
+                voiceId: elevenLabsVoice,
+                textLength: greetingText.length
+              }
+            }).catch(() => {});
+          }
           
           // 📼 BLACK BOX: Log TTS completed
           if (CallLogger) {
@@ -3432,7 +3529,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const callSid = req.body.CallSid;
   const fromNumber = normalizePhoneNumber(req.body.From || req.body.Caller || '');
   let speechResult = req.body.SpeechResult || '';
+  const sttConfidence = parseFloat(req.body.Confidence) || null;
   const turnCountFromBody = parseInt(req.body.turnCount || 0, 10) || 0;
+  
+  // ════════════════════════════════════════════════════════════════════════
+  // 📼 CALL CONSOLE VISUAL TRACE - Deepgram STT Result Received
+  // ════════════════════════════════════════════════════════════════════════
+  if (CallLogger && speechResult) {
+    try {
+      CallLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'DEEPGRAM_STT_RESULT',
+        turn: turnCountFromBody + 1,
+        data: {
+          rawTranscript: speechResult,
+          confidence: sttConfidence,
+          visualTrace: {
+            icon: '🎧',
+            stage: 'Deepgram STT',
+            status: 'transcribed',
+            details: `Speech-to-Text: "${speechResult.substring(0, 80)}${speechResult.length > 80 ? '...' : ''}"`,
+            confidence: sttConfidence,
+            note: 'Raw transcript from Deepgram (via Twilio) - sent to ScrabEngine for processing'
+          }
+        }
+      }).catch(() => {});
+    } catch (logErr) {
+      // Non-blocking
+    }
+  }
   
   // Track for guaranteed TWIML_SENT logging
   let turnNumber = 0;
