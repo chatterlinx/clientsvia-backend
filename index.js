@@ -252,6 +252,7 @@ async function loadAllRoutes() {
         routes.companyTriggersRoutes = await loadRouteWithTimeout('./routes/admin/companyTriggers', 'companyTriggersRoutes'); // 🏢 Company Triggers (company-scoped trigger management)
         routes.greetingsRoutes = await loadRouteWithTimeout('./routes/admin/greetings', 'greetingsRoutes'); // 🎙️ Greetings (Call Start + Greeting Interceptor)
         routes.globalHubRoutes = await loadRouteWithTimeout('./routes/admin/globalHub', 'globalHubRoutes'); // 🌐 Global Hub (cross-tenant shared resources)
+        routes.globalShareRoutes = await loadRouteWithTimeout('./routes/admin/globalshare', 'globalShareRoutes'); // 🌐 GlobalShare (secure name dictionaries gateway)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
         routes.v111HealthRoutes = await loadRouteWithTimeout('./routes/admin/v111Health', 'v111HealthRoutes'); // 🩺 V111 Health Check API
@@ -721,6 +722,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/agent2/company', routes.companyTriggersRoutes); // 🏢 Company Triggers (company-scoped)
     app.use('/api/admin/agent2', routes.greetingsRoutes); // 🎙️ Greetings (Call Start + Greeting Interceptor)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
+    app.use('/api/admin/globalshare', routes.globalShareRoutes); // 🌐 GlobalShare (secure name dictionaries gateway)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
     app.use('/api/admin/v111', routes.v111HealthRoutes); // 🩺 V111 Health Check API

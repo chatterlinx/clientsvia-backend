@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GlobalShare - Shared Resource Gateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  <style>
+    .globalshare-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
+    .globalshare-sidebar { display: flex; flex-direction: column; gap: 16px; }
+    .globalshare-main { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 24px; }
+    
+    .resource-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px; transition: all 0.2s; }
+    .resource-card:hover { box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08); border-color: #cbd5e1; }
+    
+    .resource-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+    .resource-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+    .resource-icon.names { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+    .resource-icon.surnames { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #fff; }
+    
+    .resource-info { flex: 1; }
+    .resource-title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 4px 0; }
+    .resource-subtitle { font-size: 13px; color: #64748b; margin: 0; }
+    
+    .resource-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 20px 0; }
+    .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center; }
+    .stat-value { font-size: 28px; font-weight: 700; color: #0f172a; line-height: 1; }
+    .stat-label { font-size: 11px; color: #64748b; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    
+    .resource-description { font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 20px; padding: 12px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 6px; }
+    
+    .resource-actions { display: flex; gap: 10px; }
+    
+    .sidebar-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; }
+    .sidebar-title { font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0; }
+    .sidebar-stat { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+    .sidebar-stat:last-child { border-bottom: none; }
+    .sidebar-stat-label { font-size: 12px; color: #64748b; }
+    .sidebar-stat-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+    
+    .security-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #dcfce7; border: 1px solid #86efac; border-radius: 999px; font-size: 11px; font-weight: 600; color: #166534; }
+    
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.7); display: none; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: #fff; border-radius: 16px; box-shadow: 0 25px 50px rgba(0,0,0,0.3); max-width: 900px; width: 92%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 24px 28px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+    .modal-title-group { flex: 1; }
+    .modal-title { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 4px 0; }
+    .modal-subtitle { font-size: 14px; color: #64748b; margin: 0; }
+    .modal-close { width: 36px; height: 36px; border: none; background: #f1f5f9; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .modal-close:hover { background: #e2e8f0; }
+    .modal-body { padding: 28px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 20px 28px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    
+    .search-box { display: flex; gap: 10px; margin-bottom: 24px; }
+    .search-input { flex: 1; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 15px; transition: all 0.2s; }
+    .search-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    
+    .search-results { max-height: 400px; overflow-y: auto; }
+    .search-result-item { padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+    .search-result-name { font-size: 15px; font-weight: 600; color: #0f172a; }
+    .search-result-match { font-size: 12px; color: #64748b; }
+    .match-badge { display: inline-block; padding: 3px 8px; background: #dcfce7; border-radius: 999px; font-size: 11px; font-weight: 600; color: #166534; margin-left: 8px; }
+    .match-badge.fuzzy { background: #fef3c7; color: #92400e; }
+    
+    .bulk-upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 32px; text-align: center; background: #f8fafc; transition: all 0.2s; }
+    .bulk-upload-zone:hover { border-color: #3b82f6; background: #eff6ff; }
+    .bulk-upload-zone.dragover { border-color: #3b82f6; background: #dbeafe; }
+    
+    .upload-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
+    .upload-title { font-size: 16px; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
+    .upload-subtitle { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+    
+    .name-list { max-height: 500px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .name-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; font-size: 13px; color: #334155; margin: 4px; }
+    .name-item-remove { cursor: pointer; color: #dc2626; font-weight: 700; margin-left: 4px; }
+    .name-item-remove:hover { color: #991b1b; }
+    
+    .performance-note { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 16px; border-radius: 10px; font-size: 12px; margin-top: 20px; }
+    .performance-note strong { font-weight: 700; }
+    
+    @media (max-width: 1200px) {
+      .globalshare-layout { grid-template-columns: 1fr; }
+      .globalshare-main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back" title="Back to Agent Console">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="header-title">🌐 GlobalShare</span>
+      </div>
+      <div class="header-center">
+        <span class="security-badge">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1L10 3V6C10 8.5 8 10.5 6 11C4 10.5 2 8.5 2 6V3L6 1Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+          </svg>
+          Secure Gateway
+        </span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary" id="btn-save-all">💾 Save All Changes</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="globalshare-layout">
+        <!-- SIDEBAR: Stats & Performance -->
+        <aside class="globalshare-sidebar">
+          <div class="sidebar-card">
+            <h3 class="sidebar-title">📊 Gateway Stats</h3>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">First Names</span>
+              <span class="sidebar-stat-value" id="stat-first-names">0</span>
+            </div>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">Last Names</span>
+              <span class="sidebar-stat-value" id="stat-last-names">0</span>
+            </div>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">Total Entries</span>
+              <span class="sidebar-stat-value" id="stat-total">0</span>
+            </div>
+          </div>
+          
+          <div class="sidebar-card">
+            <h3 class="sidebar-title">⚡ Performance</h3>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">Lookup Speed</span>
+              <span class="sidebar-stat-value">&lt;1ms</span>
+            </div>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">Storage</span>
+              <span class="sidebar-stat-value">Redis</span>
+            </div>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">Concurrency</span>
+              <span class="sidebar-stat-value">1000+</span>
+            </div>
+          </div>
+          
+          <div class="sidebar-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none;">
+            <h3 class="sidebar-title" style="color: #fff;">🔒 Security</h3>
+            <p style="font-size: 12px; opacity: 0.95; margin: 0;">
+              Isolated gateway with guardrails. No cross-contamination between companies.
+              Names shared globally, but access is controlled.
+            </p>
+          </div>
+        </aside>
+
+        <!-- MAIN: Resource Cards -->
+        <div class="globalshare-main">
+          <!-- FIRST NAMES -->
+          <div class="resource-card">
+            <div class="resource-header">
+              <div class="resource-icon names">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="10" r="5" stroke="currentColor" stroke-width="2.5"/>
+                  <path d="M6 28C6 21.5 10.5 17 16 17C21.5 17 26 21.5 26 28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="resource-info">
+                <h2 class="resource-title">First Names Dictionary</h2>
+                <p class="resource-subtitle">~50,000 validated first names for caller recognition</p>
+              </div>
+            </div>
+            
+            <div class="resource-stats">
+              <div class="stat-box">
+                <div class="stat-value" id="first-names-count">0</div>
+                <div class="stat-label">Total Names</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" id="first-names-status">—</div>
+                <div class="stat-label">Status</div>
+              </div>
+            </div>
+            
+            <div class="resource-description">
+              <strong>Purpose:</strong> Used at call start to validate and recognize caller first names.
+              Enables Agent 2.0 to distinguish "John" (first name) from "Johnson" (likely last name).
+              <strong>Performance:</strong> O(1) Redis lookup, &lt;1ms response time.
+            </div>
+            
+            <div class="resource-actions">
+              <button class="btn btn-primary" id="btn-manage-first-names">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Manage Names
+              </button>
+              <button class="btn btn-secondary" id="btn-search-first-names">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Search
+              </button>
+            </div>
+          </div>
+
+          <!-- LAST NAMES -->
+          <div class="resource-card">
+            <div class="resource-header">
+              <div class="resource-icon surnames">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <path d="M16 16L8 24H24L16 16Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+                  <path d="M8 8H24V16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="16" cy="8" r="2.5" stroke="currentColor" stroke-width="2.5"/>
+                </svg>
+              </div>
+              <div class="resource-info">
+                <h2 class="resource-title">Last Names Dictionary</h2>
+                <p class="resource-subtitle">~180,000 validated surnames (US Census + international)</p>
+              </div>
+            </div>
+            
+            <div class="resource-stats">
+              <div class="stat-box">
+                <div class="stat-value" id="last-names-count">0</div>
+                <div class="stat-label">Total Surnames</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" id="last-names-status">—</div>
+                <div class="stat-label">Status</div>
+              </div>
+            </div>
+            
+            <div class="resource-description">
+              <strong>Purpose:</strong> Validates caller last names during booking flow.
+              Helps distinguish family names from company names or misspellings.
+              <strong>Coverage:</strong> 83% of US population + international variants.
+            </div>
+            
+            <div class="resource-actions">
+              <button class="btn btn-primary" id="btn-manage-last-names">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Manage Surnames
+              </button>
+              <button class="btn btn-secondary" id="btn-search-last-names">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Search
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="performance-note">
+        <strong>⚡ Performance-Critical Resource:</strong> GlobalShare dictionaries are accessed on EVERY inbound call at call start for name recognition.
+        Optimized for &lt;1ms lookups with Redis caching. Designed to handle 1000+ concurrent calls without performance degradation.
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>GlobalShare v1.0</span>
+      <span> · </span>
+      <span>Secure Resource Gateway</span>
+    </footer>
+  </div>
+
+  <!-- MODAL: Manage First Names -->
+  <div id="modal-first-names" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 class="modal-title">First Names Dictionary</h2>
+          <p class="modal-subtitle">Manage ~50,000 validated first names for caller recognition</p>
+        </div>
+        <button class="modal-close" id="btn-close-first-modal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M14 6L6 14M6 6L14 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Search Section -->
+        <div style="margin-bottom: 32px;">
+          <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #334155;">🔍 Search Names</h3>
+          <div class="search-box">
+            <input type="text" class="search-input" id="search-first-input" placeholder="Search for a first name... (supports fuzzy matching)">
+            <button class="btn btn-primary" id="btn-search-first">Search</button>
+          </div>
+          <div class="search-results" id="search-first-results"></div>
+        </div>
+        
+        <!-- Bulk Upload Section -->
+        <div style="margin-bottom: 32px;">
+          <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #334155;">📤 Bulk Upload</h3>
+          <div class="bulk-upload-zone" id="upload-first-zone">
+            <div class="upload-icon">📋</div>
+            <div class="upload-title">Drag & Drop or Click to Upload</div>
+            <div class="upload-subtitle">Paste comma-separated names or upload a text file</div>
+            <textarea id="bulk-first-input" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 12px; min-height: 120px; font-size: 13px;" placeholder="John, Mary, Michael, Sarah, David..."></textarea>
+            <button class="btn btn-secondary" id="btn-bulk-add-first" style="margin-top: 12px;">Add Names</button>
+            <div style="font-size: 11px; color: #64748b; margin-top: 8px;">Auto-deduplicates · Title-cased · Sorted alphabetically</div>
+          </div>
+        </div>
+        
+        <!-- Current Names Preview -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: #334155;">📋 Current Names (<span id="preview-first-count">0</span>)</h3>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-first-preview">Refresh</button>
+          </div>
+          <div class="name-list" id="first-names-preview">
+            <p style="text-align: center; color: #94a3b8; font-size: 13px;">Loading names...</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div style="font-size: 12px; color: #64748b;">
+          <strong>Note:</strong> Changes save automatically to Redis (instant) and MongoDB (persistent)
+        </div>
+        <button class="btn btn-secondary" id="btn-done-first">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Manage Last Names -->
+  <div id="modal-last-names" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 class="modal-title">Last Names Dictionary</h2>
+          <p class="modal-subtitle">Manage ~180,000 validated surnames for booking validation</p>
+        </div>
+        <button class="modal-close" id="btn-close-last-modal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M14 6L6 14M6 6L14 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Search Section -->
+        <div style="margin-bottom: 32px;">
+          <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #334155;">🔍 Search Surnames</h3>
+          <div class="search-box">
+            <input type="text" class="search-input" id="search-last-input" placeholder="Search for a last name... (supports fuzzy matching)">
+            <button class="btn btn-primary" id="btn-search-last">Search</button>
+          </div>
+          <div class="search-results" id="search-last-results"></div>
+        </div>
+        
+        <!-- Bulk Upload Section -->
+        <div style="margin-bottom: 32px;">
+          <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #334155;">📤 Bulk Upload</h3>
+          <div class="bulk-upload-zone" id="upload-last-zone">
+            <div class="upload-icon">📋</div>
+            <div class="upload-title">Drag & Drop or Click to Upload</div>
+            <div class="upload-subtitle">Paste comma-separated surnames or upload a text file</div>
+            <textarea id="bulk-last-input" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 12px; min-height: 120px; font-size: 13px;" placeholder="Smith, Johnson, Williams, Brown, Jones..."></textarea>
+            <button class="btn btn-secondary" id="btn-bulk-add-last" style="margin-top: 12px;">Add Surnames</button>
+            <div style="font-size: 11px; color: #64748b; margin-top: 8px;">Auto-deduplicates · Title-cased · Sorted alphabetically</div>
+          </div>
+        </div>
+        
+        <!-- Current Names Preview -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: #334155;">📋 Current Surnames (<span id="preview-last-count">0</span>)</h3>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-last-preview">Refresh</button>
+          </div>
+          <div class="name-list" id="last-names-preview">
+            <p style="text-align: center; color: #94a3b8; font-size: 13px;">Loading surnames...</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div style="font-size: 12px; color: #64748b;">
+          <strong>Note:</strong> Changes save automatically to Redis (instant) and MongoDB (persistent)
+        </div>
+        <button class="btn btn-secondary" id="btn-done-last">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/globalshare.js"></script>
+</body>
+</html>

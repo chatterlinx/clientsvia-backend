@@ -293,6 +293,9 @@
       case 'agent2':
         window.location.href = `${baseUrl}/agent2.html${companyParam}`;
         break;
+      case 'globalshare':
+        window.location.href = `${baseUrl}/globalshare.html${companyParam}`;
+        break;
       case 'booking':
         window.location.href = `${baseUrl}/booking.html${companyParam}`;
         break;
