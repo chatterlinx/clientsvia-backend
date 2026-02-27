@@ -834,25 +834,33 @@
         <span class="company-id-pill" id="header-company-id">—</span>
       </div>
       
-      <div class="header-right" style="flex-wrap: wrap; gap: 6px;">
-        <button class="btn btn-sm btn-secondary" id="btn-name-greeting" title="Configure one-time name greeting" style="background: #eff6ff; border-color: #93c5fd; color: #1e40af; font-size: 12px; padding: 5px 10px;">
-          Name Greeting
-        </button>
-        <button class="btn btn-sm btn-secondary" id="btn-patience-settings" title="Configure caller hold/wait behavior" style="background: #f0fdf4; border-color: #86efac; color: #166534; font-size: 12px; padding: 5px 10px;">
-          Patience
-        </button>
-        <button class="btn btn-sm btn-secondary" id="btn-check-duplicates" title="Check for duplicates" style="font-size: 12px; padding: 5px 10px;">
-          Health Check
-        </button>
-        <button class="btn btn-sm btn-secondary" id="btn-bulk-generate-audio" title="Generate ElevenLabs audio for all eligible triggers" style="font-size: 12px; padding: 5px 10px;">
-          Bulk Audio
-        </button>
-        <button class="btn btn-sm btn-secondary" id="btn-bulk-import-triggers" style="font-size: 12px; padding: 5px 10px;">
-          Bulk Import
-        </button>
-        <button class="btn btn-sm btn-primary" id="btn-add-trigger" style="font-size: 12px; padding: 5px 10px;">
-          + Add Trigger
-        </button>
+      <div class="header-right" style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+        <!-- Row 1: Behavior Settings -->
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; margin-right: 2px;">Settings</span>
+          <button class="btn btn-sm btn-secondary" id="btn-name-greeting" title="Configure one-time name greeting" style="background: #eff6ff; border-color: #93c5fd; color: #1e40af; font-size: 12px; padding: 4px 10px;">
+            Name Greeting
+          </button>
+          <button class="btn btn-sm btn-secondary" id="btn-patience-settings" title="Configure caller hold/wait behavior" style="background: #f0fdf4; border-color: #86efac; color: #166534; font-size: 12px; padding: 4px 10px;">
+            Patience
+          </button>
+          <button class="btn btn-sm btn-secondary" id="btn-check-duplicates" title="Check for duplicates" style="font-size: 12px; padding: 4px 10px;">
+            Health Check
+          </button>
+        </div>
+        <!-- Row 2: Actions -->
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; margin-right: 2px;">Actions</span>
+          <button class="btn btn-sm btn-secondary" id="btn-bulk-generate-audio" title="Generate ElevenLabs audio for all eligible triggers" style="font-size: 12px; padding: 4px 10px;">
+            Bulk Audio
+          </button>
+          <button class="btn btn-sm btn-secondary" id="btn-bulk-import-triggers" style="font-size: 12px; padding: 4px 10px;">
+            Bulk Import
+          </button>
+          <button class="btn btn-sm btn-primary" id="btn-add-trigger" style="font-size: 12px; padding: 4px 10px;">
+            + Add Trigger
+          </button>
+        </div>
       </div>
     </header>
 
