@@ -42,7 +42,7 @@ router.use('/truth', truthExportRouter);
 
 // ScrabEngine routes (Text Processing Pipeline)
 const scrabEngineRouter = require('./scrabEngine');
-router.use('/:companyId', scrabEngineRouter);
+router.use('/', scrabEngineRouter);
 
 /* ============================================================================
    TRUTH CACHE — Short TTL to prevent Mongo hammering
