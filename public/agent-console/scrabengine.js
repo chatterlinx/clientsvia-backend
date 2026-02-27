@@ -21,6 +21,10 @@
         enabled: true,
         wordSynonyms: [],
         contextPatterns: []
+      },
+      extraction: {
+        enabled: true,
+        customPatterns: []
       }
     },
     editingItem: null,
@@ -42,6 +46,7 @@
       btnBack: document.getElementById('btn-back'),
       btnSaveAll: document.getElementById('btn-save-all'),
       btnTestPanel: document.getElementById('btn-test-panel'),
+      btnViewLogs: document.getElementById('btn-view-logs'),
       
       // Stage toggles
       toggleFillers: document.getElementById('toggle-fillers'),
@@ -134,6 +139,12 @@
     if (DOM.btnTestPanel) {
       DOM.btnTestPanel.addEventListener('click', () => {
         DOM.testPanel.style.display = DOM.testPanel.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
+    if (DOM.btnViewLogs) {
+      DOM.btnViewLogs.addEventListener('click', () => {
+        window.location.href = `/agent-console/callconsole.html?companyId=${state.companyId}`;
       });
     }
 
@@ -250,7 +261,7 @@
       );
       
       if (data && data.config) {
-        state.config = data.config;
+        state.config = normalizeConfig(data.config);
         render();
         console.log('[ScrabEngine] Configuration loaded');
       }
@@ -317,6 +328,7 @@
     if (DOM.toggleFillers) DOM.toggleFillers.checked = state.config.fillers.enabled !== false;
     if (DOM.toggleVocabulary) DOM.toggleVocabulary.checked = state.config.vocabulary.enabled !== false;
     if (DOM.toggleSynonyms) DOM.toggleSynonyms.checked = state.config.synonyms.enabled !== false;
+    if (DOM.toggleExtraction) DOM.toggleExtraction.checked = state.config.extraction.enabled !== false;
     
     // Update options
     if (DOM.stripGreetings) DOM.stripGreetings.checked = state.config.fillers.stripGreetings !== false;
@@ -603,7 +615,8 @@
       (state.config.fillers.customFillers || []).filter(f => f.enabled !== false).length +
       (state.config.vocabulary.entries || []).filter(e => e.enabled !== false).length +
       (state.config.synonyms.wordSynonyms || []).filter(s => s.enabled !== false).length +
-      (state.config.synonyms.contextPatterns || []).filter(p => p.enabled !== false).length;
+      (state.config.synonyms.contextPatterns || []).filter(p => p.enabled !== false).length +
+      (state.config.extraction?.customPatterns || []).filter(p => p.enabled !== false).length;
     
     if (DOM.totalRules) {
       DOM.totalRules.textContent = totalRules;
@@ -627,7 +640,8 @@
       filler: DOM.modalFiller,
       vocabulary: DOM.modalVocabulary,
       wordSynonym: DOM.modalWordSynonym,
-      contextPattern: DOM.modalContextPattern
+      contextPattern: DOM.modalContextPattern,
+      extraction: DOM.modalExtraction
     };
     
     const modal = modalMap[type];
@@ -643,7 +657,8 @@
       filler: DOM.modalFiller,
       vocabulary: DOM.modalVocabulary,
       wordSynonym: DOM.modalWordSynonym,
-      contextPattern: DOM.modalContextPattern
+      contextPattern: DOM.modalContextPattern,
+      extraction: DOM.modalExtraction
     };
     
     const modal = modalMap[type];
@@ -945,6 +960,34 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function normalizeConfig(inputConfig) {
+    const config = inputConfig && typeof inputConfig === 'object' ? inputConfig : {};
+
+    return {
+      ...config,
+      enabled: config.enabled !== false,
+      fillers: {
+        enabled: config.fillers?.enabled !== false,
+        stripGreetings: config.fillers?.stripGreetings !== false,
+        stripCompanyName: config.fillers?.stripCompanyName !== false,
+        customFillers: Array.isArray(config.fillers?.customFillers) ? config.fillers.customFillers : []
+      },
+      vocabulary: {
+        enabled: config.vocabulary?.enabled !== false,
+        entries: Array.isArray(config.vocabulary?.entries) ? config.vocabulary.entries : []
+      },
+      synonyms: {
+        enabled: config.synonyms?.enabled !== false,
+        wordSynonyms: Array.isArray(config.synonyms?.wordSynonyms) ? config.synonyms.wordSynonyms : [],
+        contextPatterns: Array.isArray(config.synonyms?.contextPatterns) ? config.synonyms.contextPatterns : []
+      },
+      extraction: {
+        enabled: config.extraction?.enabled !== false,
+        customPatterns: Array.isArray(config.extraction?.customPatterns) ? config.extraction.customPatterns : []
+      }
+    };
   }
 
   // ══════════════════════════════════════════════════════════════════════════

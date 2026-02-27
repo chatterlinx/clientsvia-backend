@@ -662,7 +662,8 @@ class Agent2DiscoveryRunner {
       normalizedText: scrabResult.normalizedText,
       expandedTokens: scrabResult.expandedTokens,
       transformations: scrabResult.transformations,
-      entities: scrabResult.entities
+      entities: scrabResult.entities,
+      handoffEntities: scrabResult.handoffEntities || scrabResult.entities
     };
     
     // ══════════════════════════════════════════════════════════════════════════

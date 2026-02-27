@@ -166,8 +166,8 @@ async function runBookingLogicLane({
         reason: 'session.mode is BOOKING - all turns route to BookingLogicEngine only'
     });
     
-    // 🔍 SCRABENGINE AUTO-WIRE: Include all extracted entities from ScrabEngine
-    const scrabEngineEntities = state?.agent2?.scrabEngine?.entities || {};
+    // 🔍 SCRABENGINE AUTO-WIRE: Include handoff-eligible extracted entities
+    const scrabEngineEntities = state?.agent2?.scrabEngine?.handoffEntities || state?.agent2?.scrabEngine?.entities || {};
     
     const handoffPayload = {
         assumptions: {

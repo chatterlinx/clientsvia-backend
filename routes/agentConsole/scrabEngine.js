@@ -50,6 +50,7 @@ router.get('/:companyId/scrabengine', async (req, res) => {
       fillers: { enabled: true, customFillers: [], stripGreetings: true, stripCompanyName: true },
       vocabulary: { enabled: true, entries: [] },
       synonyms: { enabled: true, wordSynonyms: [], contextPatterns: [] },
+      extraction: { enabled: true, customPatterns: [] },
       qualityGates: { minWordCount: 2, minConfidence: 0.5, repromptOnLowQuality: true }
     };
     

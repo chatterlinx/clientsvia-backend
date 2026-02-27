@@ -551,6 +551,7 @@ function matchTimeFromInput(input, timeOptions) {
    ============================================================================ */
 
 module.exports = {
+  computeStep: processStep,
   processStep,
   STEPS,
   VERSION,

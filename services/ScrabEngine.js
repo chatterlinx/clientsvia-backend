@@ -554,7 +554,7 @@ class EntityExtractionEngine {
    * @param {Object} context.GlobalHubService - GlobalShare service for name validation
    * @returns {Promise<Object>} { entities, extractions, validations, processingTimeMs }
    */
-  static async process(text, context = {}) {
+  static async process(text, config = {}, context = {}) {
     const startTime = Date.now();
     const extractions = [];
     const validations = [];
@@ -567,6 +567,7 @@ class EntityExtractionEngine {
       address: null,
       email: null
     };
+    const handoffEntities = {};
     
     // ────────────────────────────────────────────────────────────────────────
     // HONORIFICS - Strip titles before name extraction
@@ -984,9 +985,84 @@ class EntityExtractionEngine {
         confidence: 0.85
       });
     }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // CUSTOM EXTRACTION PATTERNS (Config-Driven)
+    // ────────────────────────────────────────────────────────────────────────
+    const customPatterns = safeArr(config.customPatterns).filter(p => p && p.enabled !== false);
+    for (const customPattern of customPatterns) {
+      const entityName = `${customPattern.entityName || ''}`.trim();
+      const regexSource = `${customPattern.pattern || ''}`.trim();
+      if (!entityName || !regexSource) continue;
+
+      let regex;
+      try {
+        regex = new RegExp(regexSource, 'i');
+      } catch (err) {
+        logger.warn('[ScrabEngine] Invalid custom extraction regex skipped', {
+          entityName,
+          pattern: regexSource,
+          error: err.message
+        });
+        continue;
+      }
+
+      const match = text.match(regex);
+      if (!match) continue;
+
+      const extractedValue = `${match[1] || match[0] || ''}`.trim();
+      if (!extractedValue) continue;
+
+      let validated = false;
+      if (customPattern.validateGlobalShare && context.GlobalHubService) {
+        try {
+          const lowerEntity = entityName.toLowerCase();
+          if (lowerEntity.includes('firstname')) {
+            validated = await context.GlobalHubService.isFirstName(extractedValue);
+          } else if (lowerEntity.includes('lastname')) {
+            validated = await context.GlobalHubService.isLastName(extractedValue);
+          }
+          validations.push({
+            entity: entityName,
+            value: extractedValue,
+            isValid: validated,
+            source: 'GlobalShare',
+            type: 'custom_pattern'
+          });
+        } catch (err) {
+          logger.debug('[ScrabEngine] GlobalShare validation skipped for custom extraction', {
+            entityName,
+            error: err.message
+          });
+        }
+      }
+
+      entities[entityName] = extractedValue;
+      if (customPattern.autoHandoff !== false) {
+        handoffEntities[entityName] = extractedValue;
+      }
+
+      extractions.push({
+        type: entityName,
+        label: customPattern.label || entityName,
+        value: extractedValue,
+        pattern: 'custom_regex',
+        regex: regexSource,
+        confidence: customPattern.confidence || 0.85,
+        validated
+      });
+    }
+
+    // Default built-ins are always wired to handoff when present
+    ['firstName', 'lastName', 'fullName', 'phone', 'email', 'address'].forEach((key) => {
+      if (entities[key]) {
+        handoffEntities[key] = entities[key];
+      }
+    });
     
     return {
       entities,
+      handoffEntities,
       extractions,
       validations,
       processingTimeMs: Date.now() - startTime
@@ -1055,6 +1131,7 @@ class ScrabEngine {
       expandedTokens: null,
       expansionMap: null,
       entities: null,
+      handoffEntities: null,
       
       // Metadata
       transformations: [],
@@ -1156,6 +1233,7 @@ class ScrabEngine {
     
     result.stage4_extraction = await EntityExtractionEngine.process(
       result.stage2_vocabulary.normalized,
+      config.extraction || {},
       {
         ...context,
         GlobalHubService
@@ -1203,6 +1281,7 @@ class ScrabEngine {
     result.expandedTokens = result.stage3_expansion.expandedTokens;
     result.expansionMap = result.stage3_expansion.expansionMap;
     result.entities = result.stage4_extraction.entities;
+    result.handoffEntities = result.stage4_extraction.handoffEntities || result.stage4_extraction.entities;
     result.quality = result.stage5_quality;
     result.performance.totalTimeMs = Date.now() - T0;
     
@@ -1259,6 +1338,7 @@ class ScrabEngine {
       expandedTokens: tokens,
       expansionMap: {},
       entities: { firstName: null, lastName: null, phone: null, address: null, email: null },
+      handoffEntities: {},
       transformations: [],
       quality: { passed: true, reason: 'SCRABENGINE_DISABLED', confidence: 0.5 },
       performance: { totalTimeMs: 0, stage1Ms: 0, stage2Ms: 0, stage3Ms: 0, stage4Ms: 0, stage5Ms: 0 },
@@ -1277,6 +1357,7 @@ class ScrabEngine {
     const fillerConfig = safeObj(config.fillers, {});
     const vocabConfig = safeObj(config.vocabulary, {});
     const synonymConfig = safeObj(config.synonyms, {});
+    const extractionConfig = safeObj(config.extraction, {});
     
     return {
       enabled: config.enabled !== false,
@@ -1296,6 +1377,12 @@ class ScrabEngine {
           contextPatternCount: safeArr(synonymConfig.contextPatterns).filter(p => p.enabled !== false).length,
           totalExpansions: safeArr(synonymConfig.wordSynonyms).filter(s => s.enabled !== false)
             .reduce((sum, s) => sum + safeArr(s.synonyms).length, 0)
+        },
+        extraction: {
+          enabled: extractionConfig.enabled !== false,
+          customPatternCount: safeArr(extractionConfig.customPatterns).filter(p => p.enabled !== false).length,
+          handoffPatternCount: safeArr(extractionConfig.customPatterns)
+            .filter(p => p.enabled !== false && p.autoHandoff !== false).length
         }
       }
     };

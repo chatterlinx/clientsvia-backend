@@ -584,6 +584,9 @@
       <!-- Problems Section -->
       ${renderProblemsSection(call, violations, fallbacks)}
 
+      <!-- ScrabEngine Timeline -->
+      ${renderScrabEngineSection(call)}
+
       <!-- Transcript -->
       <div class="transcript-container">
         <div class="transcript-header">
@@ -849,6 +852,140 @@
     }
 
     return turns.map(turn => renderTurn(turn)).join('');
+  }
+
+  /**
+   * Render ScrabEngine processing timeline.
+   * Merges truth events + transcript context per turn.
+   * @param {Object} call - Selected call payload
+   * @returns {string}
+   */
+  function renderScrabEngineSection(call) {
+    const timeline = buildScrabTimeline(call);
+    if (timeline.length === 0) {
+      return `
+        <div class="scrab-timeline-container">
+          <div class="scrab-timeline-header">
+            <span class="scrab-timeline-title">ScrabEngine Processing Timeline</span>
+            <span class="scrab-timeline-subtitle">No ScrabEngine trace events captured for this call</span>
+          </div>
+        </div>
+      `;
+    }
+
+    const rows = timeline.map((entry) => {
+      const rawText = entry.payload?.raw || entry.payload?.rawText || null;
+      const summary = entry.payload?.summary || entry.payload?.text || null;
+      const entities = entry.payload?.entities || null;
+      const quality = entry.payload?.quality || null;
+      const normalizedPreview = entry.payload?.normalizedPreview || null;
+
+      const rawBlock = rawText
+        ? `<div class="scrab-line"><span class="scrab-label">Deepgram Raw:</span> ${escapeHtml(rawText)}</div>`
+        : '';
+      const summaryBlock = summary
+        ? `<div class="scrab-line"><span class="scrab-label">${escapeHtml(entry.label)}:</span> ${escapeHtml(summary)}</div>`
+        : '';
+      const normalizedBlock = normalizedPreview
+        ? `<div class="scrab-line"><span class="scrab-label">Understood:</span> ${escapeHtml(normalizedPreview)}</div>`
+        : '';
+      const entitiesBlock = entities && Object.keys(entities).length > 0
+        ? `<div class="scrab-line"><span class="scrab-label">Extractions:</span> ${escapeHtml(JSON.stringify(entities))}</div>`
+        : '';
+      const qualityBlock = quality
+        ? `<div class="scrab-line"><span class="scrab-label">Quality:</span> ${escapeHtml(JSON.stringify(quality))}</div>`
+        : '';
+
+      return `
+        <div class="scrab-event-row">
+          <div class="scrab-event-meta">
+            <span class="scrab-event-turn">Turn ${entry.turnNumber}</span>
+            <span class="scrab-event-time">${formatTimestamp(entry.timestamp)}</span>
+            <span class="scrab-event-type">${escapeHtml(entry.type)}</span>
+          </div>
+          <div class="scrab-event-content">
+            ${rawBlock}
+            ${summaryBlock}
+            ${normalizedBlock}
+            ${entitiesBlock}
+            ${qualityBlock}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="scrab-timeline-container">
+        <div class="scrab-timeline-header">
+          <span class="scrab-timeline-title">ScrabEngine Processing Timeline</span>
+          <span class="scrab-timeline-subtitle">Deepgram input → ScrabEngine stages → extracted entities</span>
+        </div>
+        <div class="scrab-timeline-body">
+          ${rows}
+        </div>
+      </div>
+    `;
+  }
+
+  function buildScrabTimeline(call) {
+    const rawEvents = Array.isArray(call?.events) ? call.events : [];
+    const rawTrace = Array.isArray(call?.trace) ? call.trace : [];
+
+    const normalizedEvents = [
+      ...rawEvents.map(ev => ({
+        type: `${ev?.type || ''}`,
+        turnNumber: Number.isFinite(ev?.turn) ? ev.turn : (Number.isFinite(ev?.data?.turn) ? ev.data.turn : null),
+        timestamp: ev?.timestamp || ev?.ts || null,
+        payload: ev?.data || {}
+      })),
+      ...rawTrace.map(ev => ({
+        type: `${ev?.kind || ''}`,
+        turnNumber: Number.isFinite(ev?.turnNumber) ? ev.turnNumber : null,
+        timestamp: ev?.timestamp || ev?.ts || null,
+        payload: ev?.payload || {}
+      }))
+    ];
+
+    const interesting = normalizedEvents.filter(ev => {
+      if (!ev.type) return false;
+      return ev.type === 'INPUT_TEXT_FINALIZED'
+        || ev.type === 'CALLER_NAME_EXTRACTED'
+        || ev.type.startsWith('SCRABENGINE_');
+    });
+
+    interesting.sort((a, b) => {
+      const aTs = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const bTs = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      if (a.turnNumber !== b.turnNumber) {
+        const aTurn = Number.isFinite(a.turnNumber) ? a.turnNumber : Number.MAX_SAFE_INTEGER;
+        const bTurn = Number.isFinite(b.turnNumber) ? b.turnNumber : Number.MAX_SAFE_INTEGER;
+        if (aTurn !== bTurn) return aTurn - bTurn;
+      }
+      return aTs - bTs;
+    });
+
+    return interesting.map((ev) => ({
+      ...ev,
+      turnNumber: Number.isFinite(ev.turnNumber) ? ev.turnNumber : 0,
+      label: toScrabLabel(ev.type)
+    }));
+  }
+
+  function toScrabLabel(type) {
+    const map = {
+      INPUT_TEXT_FINALIZED: 'Raw Input',
+      SCRABENGINE_ENTRY: 'ScrabEngine Entry',
+      SCRABENGINE_STAGE1: 'Stage 1 Fillers',
+      SCRABENGINE_STAGE2: 'Stage 2 Vocabulary',
+      SCRABENGINE_STAGE3: 'Stage 3 Expansion',
+      SCRABENGINE_STAGE4: 'Stage 4 Extraction',
+      SCRABENGINE_STAGE5: 'Stage 5 Quality',
+      SCRABENGINE_DELIVERY: 'Final Delivery',
+      SCRABENGINE_PROCESSED: 'Processing Summary',
+      SCRABENGINE_QUALITY_FAILED: 'Quality Failure',
+      CALLER_NAME_EXTRACTED: 'Caller Name Extracted'
+    };
+    return map[type] || type;
   }
 
   /**
