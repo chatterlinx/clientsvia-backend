@@ -834,36 +834,46 @@
         <span class="company-id-pill" id="header-company-id">—</span>
       </div>
       
-      <div class="header-right" style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
-        <!-- Row 1: Behavior Settings -->
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; margin-right: 2px;">Settings</span>
-          <button class="btn btn-sm btn-secondary" id="btn-name-greeting" title="Configure one-time name greeting" style="background: #eff6ff; border-color: #93c5fd; color: #1e40af; font-size: 12px; padding: 4px 10px;">
-            Name Greeting
+      <div class="header-right" style="display: flex; align-items: center; gap: 10px;">
+        <!-- Settings Dropdown -->
+        <div class="dropdown" style="position: relative;">
+          <button class="btn btn-secondary" id="btn-settings-menu" title="Settings" style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M13.5 8a5.5 5.5 0 01-.5 2.3l1.3 1-.8 1.4-1.5-.6a5.5 5.5 0 01-2 1.1v1.6h-1.6v-1.6a5.5 5.5 0 01-2-1.1l-1.5.6-.8-1.4 1.3-1A5.5 5.5 0 014.5 8c0-.8.2-1.6.5-2.3l-1.3-1 .8-1.4 1.5.6a5.5 5.5 0 012-1.1V1.2h1.6v1.6a5.5 5.5 0 012 1.1l1.5-.6.8 1.4-1.3 1c.3.7.5 1.5.5 2.3z" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            Settings
           </button>
-          <button class="btn btn-sm btn-secondary" id="btn-patience-settings" title="Configure caller hold/wait behavior" style="background: #f0fdf4; border-color: #86efac; color: #166534; font-size: 12px; padding: 4px 10px;">
-            Patience
-          </button>
-          <button class="btn btn-sm btn-secondary" id="btn-check-duplicates" title="Check for duplicates" style="font-size: 12px; padding: 4px 10px;">
-            Health Check
-          </button>
+          <div id="settings-dropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); min-width: 200px; z-index: 1000;">
+            <button class="dropdown-item" id="btn-name-greeting" style="width: 100%; text-align: left; padding: 10px 16px; border: none; background: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #334155;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='none'">
+              <span style="color: #3b82f6;">👤</span> Name Greeting
+            </button>
+            <button class="dropdown-item" id="btn-patience-settings" style="width: 100%; text-align: left; padding: 10px 16px; border: none; background: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #334155;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='none'">
+              <span style="color: #10b981;">⏱️</span> Patience
+            </button>
+            <button class="dropdown-item" id="btn-check-duplicates" style="width: 100%; text-align: left; padding: 10px 16px; border: none; background: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #334155;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='none'">
+              <span style="color: #f59e0b;">🏥</span> Health Check
+            </button>
+          </div>
         </div>
-        <!-- Row 2: Actions -->
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; margin-right: 2px;">Actions</span>
-          <button class="btn btn-sm btn-ghost" id="btn-clear-all-audio" title="Clear all audio cache - force regeneration" style="font-size: 12px; padding: 4px 10px; color: #dc2626;">
-            🗑️ Clear Audio
-          </button>
-          <button class="btn btn-sm btn-secondary" id="btn-bulk-generate-audio" title="Generate ElevenLabs audio for all eligible triggers" style="font-size: 12px; padding: 4px 10px;">
-            🎙️ Bulk Audio
-          </button>
-          <button class="btn btn-sm btn-secondary" id="btn-bulk-import-triggers" style="font-size: 12px; padding: 4px 10px;">
-            Bulk Import
-          </button>
-          <button class="btn btn-sm btn-primary" id="btn-add-trigger" style="font-size: 12px; padding: 4px 10px;">
-            + Add Trigger
-          </button>
-        </div>
+        
+        <!-- Audio Management -->
+        <button class="btn btn-ghost" id="btn-clear-all-audio" title="Clear all audio cache" style="color: #dc2626;">
+          🗑️
+        </button>
+        <button class="btn btn-secondary" id="btn-bulk-generate-audio" title="Generate audio for all triggers">
+          🎙️ Bulk Audio
+        </button>
+        
+        <!-- Import/Export -->
+        <button class="btn btn-secondary" id="btn-bulk-import-triggers" title="Import triggers from JSON">
+          Import
+        </button>
+        
+        <!-- Primary Action -->
+        <button class="btn btn-primary" id="btn-add-trigger">
+          + Add Trigger
+        </button>
       </div>
     </header>
 

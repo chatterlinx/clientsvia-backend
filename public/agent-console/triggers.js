@@ -77,6 +77,8 @@
     btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
     btnCreateGroup: document.getElementById('btn-create-group'),
+    btnSettingsMenu: document.getElementById('btn-settings-menu'),
+    settingsDropdown: document.getElementById('settings-dropdown'),
     
     btnNameGreeting: document.getElementById('btn-name-greeting'),
     modalNameGreeting: document.getElementById('modal-name-greeting'),
@@ -278,6 +280,22 @@
     if (DOM.modalPatience) {
       DOM.modalPatience.addEventListener('click', (e) => { if (e.target === DOM.modalPatience) closePatienceModal(); });
     }
+    // Settings dropdown toggle
+    if (DOM.btnSettingsMenu) {
+      DOM.btnSettingsMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = DOM.settingsDropdown.style.display === 'block';
+        DOM.settingsDropdown.style.display = isOpen ? 'none' : 'block';
+      });
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (DOM.settingsDropdown && !e.target.closest('.dropdown')) {
+        DOM.settingsDropdown.style.display = 'none';
+      }
+    });
+    
     if (DOM.btnClearAllAudio) {
       DOM.btnClearAllAudio.addEventListener('click', clearAllAudio);
     }
