@@ -4050,6 +4050,49 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           }).catch(() => {});
         }
         
+        // Persist patience check-in to transcript (this early return skips normal persistence)
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          
+          // Record the STT_EMPTY (caller was silent during patience wait)
+          await CallTranscriptV2.appendTurns(companyID, callSid, [
+            {
+              speaker: 'system',
+              kind: 'PATIENCE_WAIT',
+              text: `Patience mode: caller silent for ${psTimeout}s (check-in ${checkinCount}/${psMaxCheckins})`,
+              turnNumber,
+              ts: new Date(),
+              sourceKey: 'patience',
+              trace: { patienceCheckin: checkinCount, maxCheckins: psMaxCheckins, timeoutSeconds: psTimeout }
+            }
+          ], { from: fromNumber || null, to: req.body.To || null });
+          
+          // Record the agent check-in response
+          await CallTranscriptV2.appendTurns(companyID, callSid, [
+            {
+              speaker: 'agent',
+              kind: isLastCheckin ? 'PATIENCE_FINAL_CHECKIN' : 'PATIENCE_CHECKIN',
+              text: checkinText,
+              turnNumber,
+              ts: new Date(),
+              sourceKey: 'patience_check_in',
+              trace: {
+                provenance: {
+                  type: 'UI_OWNED',
+                  uiPath: 'aiAgentSettings.agent2.discovery.patienceSettings',
+                  reason: `patience_checkin_${checkinCount}`
+                },
+                checkinNumber: checkinCount,
+                isLastCheckin
+              }
+            }
+          ], { from: fromNumber || null, to: req.body.To || null });
+        } catch (mongoErr) {
+          logger.warn('[V2TWILIO] Failed to persist patience check-in to transcript', {
+            callSid: callSid?.slice(-8), error: mongoErr.message
+          });
+        }
+        
         if (redis && redisKey) {
           try { await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 }); } catch (_) {}
         }

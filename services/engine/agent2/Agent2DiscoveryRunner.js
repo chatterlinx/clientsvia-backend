@@ -348,7 +348,7 @@ function buildAck(baseAck, callerName, state, nameGreetingConfig) {
       } else {
         resolved = resolved.replace(/\s*\{name\}\s*/gi, ' ').replace(/\s+/g, ' ').trim();
       }
-      return { ack: resolved, usedName: true, usedGreeting: true };
+      return { ack: resolved, usedName: true, usedGreeting: true, greetingFired: true, greetingText: resolved };
     }
   }
   
@@ -1554,9 +1554,17 @@ class Agent2DiscoveryRunner {
       const isLLMTrigger = card.responseMode === 'llm' && card.llmFactPack;
 
       // Build ack (with one-time name greeting if configured)
-      const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
+      const { ack: personalAck, usedName, usedGreeting, greetingText } = buildAck(ack, callerName, state, nameGreetingConfig);
       nextState.agent2.discovery.usedNameThisTurn = usedName;
-      if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+      if (usedGreeting) {
+        nextState.agent2.discovery.usedNameGreetingThisCall = true;
+        emit('NAME_GREETING_FIRED', {
+          greetingText,
+          callerName: callerName || null,
+          alwaysGreet: nameGreetingConfig?.alwaysGreet === true,
+          turn
+        });
+      }
 
       // Update state
       nextState.agent2.discovery.lastPath = isLLMTrigger ? 'TRIGGER_CARD_LLM' : 'TRIGGER_CARD_ANSWER';

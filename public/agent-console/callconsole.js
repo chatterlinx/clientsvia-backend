@@ -85,7 +85,10 @@
       'TWIML_PLAY': 'Audio Played',
       'TWIML_SAY': 'TTS Spoken',
       'STT_EMPTY': 'No Speech Detected',
-      'ESCALATION': 'Escalation'
+      'ESCALATION': 'Escalation',
+      'PATIENCE_WAIT': 'Patience (Waiting)',
+      'PATIENCE_CHECKIN': 'Patience Check-in',
+      'PATIENCE_FINAL_CHECKIN': 'Patience Final Check-in'
     },
 
     /** UI Tab mapping for provenance links */
@@ -967,6 +970,9 @@
       if (!ev.type) return false;
       return ev.type === 'INPUT_TEXT_FINALIZED'
         || ev.type === 'CALLER_NAME_EXTRACTED'
+        || ev.type === 'NAME_GREETING_FIRED'
+        || ev.type === 'PATIENCE_MODE_ACTIVE'
+        || ev.type === 'PATIENCE_TIMEOUT_CHECK_IN'
         || ev.type.startsWith('SCRABENGINE_');
     });
 
@@ -1000,7 +1006,10 @@
       SCRABENGINE_DELIVERY: 'Final Delivery',
       SCRABENGINE_PROCESSED: 'Processing Summary',
       SCRABENGINE_QUALITY_FAILED: 'Quality Failure',
-      CALLER_NAME_EXTRACTED: 'Caller Name Extracted'
+      CALLER_NAME_EXTRACTED: 'Caller Name Extracted',
+      NAME_GREETING_FIRED: 'Name Greeting',
+      PATIENCE_MODE_ACTIVE: 'Patience Mode',
+      PATIENCE_TIMEOUT_CHECK_IN: 'Patience Check-in'
     };
     return map[type] || type;
   }
