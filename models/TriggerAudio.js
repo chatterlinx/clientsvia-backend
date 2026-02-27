@@ -48,6 +48,12 @@ const triggerAudioSchema = new mongoose.Schema({
     required: true,
     maxlength: 500
   },
+
+  // MP3 binary stored in MongoDB — survives deploys, no filesystem dependency
+  audioData: {
+    type: Buffer,
+    default: null
+  },
   
   // Hash of the answer text this audio was generated from
   // If text changes, hash changes, audio becomes stale
@@ -143,30 +149,31 @@ triggerAudioSchema.statics.hashText = function(text) {
 };
 
 /**
- * Find audio for a specific company + trigger
+ * Find audio metadata for a specific company + trigger (excludes binary data)
  */
 triggerAudioSchema.statics.findByCompanyAndRule = function(companyId, ruleId) {
-  return this.findOne({ companyId, ruleId, isValid: true }).lean();
+  return this.findOne({ companyId, ruleId, isValid: true }).select('-audioData').lean();
 };
 
 /**
- * Find all audio for a company
+ * Find all audio metadata for a company (excludes binary data)
  */
 triggerAudioSchema.statics.findByCompanyId = function(companyId) {
-  return this.find({ companyId, isValid: true }).sort({ createdAt: -1 }).lean();
+  return this.find({ companyId, isValid: true }).select('-audioData').sort({ createdAt: -1 }).lean();
 };
 
 /**
  * Save or update audio for a trigger
+ * @param {Buffer} [audioBuffer] - MP3 binary data for MongoDB persistence
  */
-triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUrl, answerText, voiceId, userId) {
+triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUrl, answerText, voiceId, userId, audioBuffer) {
   const textHash = this.hashText(answerText);
   
   const existing = await this.findOne({ companyId, ruleId });
   
   if (existing) {
-    // Update existing
     existing.audioUrl = audioUrl;
+    existing.audioData = audioBuffer || existing.audioData;
     existing.textHash = textHash;
     existing.sourceText = answerText;
     existing.voiceId = voiceId || existing.voiceId;
@@ -177,11 +184,11 @@ triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUr
     existing.updatedBy = userId;
     return existing.save();
   } else {
-    // Create new
     return this.create({
       companyId,
       ruleId,
       audioUrl,
+      audioData: audioBuffer || null,
       textHash,
       sourceText: answerText,
       voiceId,
@@ -191,6 +198,14 @@ triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUr
       updatedBy: userId
     });
   }
+};
+
+/**
+ * Find audio binary by URL path (used by the MongoDB fallback serving route)
+ */
+triggerAudioSchema.statics.findAudioDataByUrl = async function(audioUrl) {
+  const doc = await this.findOne({ audioUrl, isValid: true }).select('audioData').lean();
+  return doc?.audioData || null;
 };
 
 /**

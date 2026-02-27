@@ -24,9 +24,6 @@
  * ============================================================================
  */
 
-const fs = require('fs');
-const path = require('path');
-
 const logger = require('../../../utils/logger');
 
 const GlobalTriggerGroup = require('../../../models/GlobalTriggerGroup');
@@ -34,8 +31,6 @@ const GlobalTrigger = require('../../../models/GlobalTrigger');
 const CompanyLocalTrigger = require('../../../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const TriggerAudio = require('../../../models/TriggerAudio');
-
-const AUDIO_BASE_DIR = path.join(__dirname, '../../../public');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // CACHE CONFIGURATION
@@ -118,35 +113,18 @@ function invalidateAllCache() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// AUDIO FILE VALIDATION
+// AUDIO VALIDATION
 // ════════════════════════════════════════════════════════════════════════════════
 
 /**
- * Checks database validity AND verifies the MP3 file exists on disk.
- * Returns the audioUrl if valid, empty string otherwise.
- * Auto-invalidates stale database records when the file is missing.
+ * Checks database validity (isValid flag + text hash match).
+ * Audio binary is stored in MongoDB and served via a self-healing fallback
+ * route, so filesystem existence is no longer a gating factor.
  */
 function resolveAudioUrl(companyAudio, effectiveAnswerText) {
   if (!companyAudio || !companyAudio.isValid) return '';
   if (companyAudio.textHash !== TriggerAudio.hashText(effectiveAnswerText)) return '';
-
-  const audioUrl = companyAudio.audioUrl;
-  if (!audioUrl) return '';
-
-  const filePath = path.join(AUDIO_BASE_DIR, audioUrl);
-  if (!fs.existsSync(filePath)) {
-    logger.warn('[TriggerService] Audio file missing from disk — clearing stale reference', {
-      audioUrl,
-      companyId: companyAudio.companyId,
-      ruleId: companyAudio.ruleId
-    });
-    TriggerAudio.invalidateAudio(companyAudio.companyId, companyAudio.ruleId, 'FILE_MISSING_ON_DISK').catch(err => {
-      logger.error('[TriggerService] Failed to invalidate stale audio record', { error: err.message });
-    });
-    return '';
-  }
-
-  return audioUrl;
+  return companyAudio.audioUrl || '';
 }
 
 // ════════════════════════════════════════════════════════════════════════════════

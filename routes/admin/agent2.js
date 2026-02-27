@@ -2082,11 +2082,10 @@ router.post('/:companyId/generate-trigger-audio',
 
       fs.writeFileSync(filePath, buffer);
 
-      // Save to TriggerAudio collection
+      // Persist audio binary to MongoDB (survives Render deploys)
       // IMPORTANT: Use original text (with placeholders) for hash so validation works
       // The audio content uses finalText (substituted), but the hash tracks the source text
-      // When text or variables change, audio is invalidated via separate mechanisms
-      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, text, voiceId, userId);
+      await TriggerAudio.saveAudio(companyId, ruleId, audioUrl, text, voiceId, userId, buffer);
 
       logger.info('[Agent2Audio] Audio generated successfully', {
         companyId,

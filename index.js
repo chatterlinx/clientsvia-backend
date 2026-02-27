@@ -89,6 +89,7 @@ console.log('[INIT] ✅ Global error handlers installed');
 console.log('[INIT] Loading Express...');
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 console.log('[INIT] ✅ Express loaded');
 
 // Initialize shared clients (Redis, Pinecone)
@@ -440,11 +441,54 @@ app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
 // Optimized static file serving with aggressive caching for audio files
 app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
-  maxAge: '1d', // Cache audio files for 1 day
+  maxAge: '1d',
   etag: true,
   lastModified: true,
-  immutable: true // Audio files are immutable
+  immutable: true
 }));
+
+// ════════════════════════════════════════════════════════════════════════════════
+// MONGODB AUDIO FALLBACK — Self-healing cache for ephemeral filesystems
+// ════════════════════════════════════════════════════════════════════════════════
+// If the static middleware didn't find the file on disk (e.g. after a Render
+// deploy), look it up in MongoDB. If found, serve the audio AND write it back
+// to disk so subsequent requests are fast again.
+// ════════════════════════════════════════════════════════════════════════════════
+const TriggerAudio = require('./models/TriggerAudio');
+const GreetingAudio = require('./models/GreetingAudio');
+
+app.get('/audio/*', async (req, res) => {
+  const audioUrl = req.path; // e.g. /audio/instant-lines/TRIGGER_CARD_ANSWER_xxx.mp3
+  try {
+    // Try TriggerAudio first, then GreetingAudio
+    let audioData = await TriggerAudio.findAudioDataByUrl(audioUrl);
+    if (!audioData) {
+      audioData = await GreetingAudio.findAudioDataByUrl(audioUrl);
+    }
+
+    if (!audioData) {
+      return res.status(404).send('Audio not found');
+    }
+
+    // Self-heal: write back to disk so the static middleware serves it next time
+    const diskPath = path.join(__dirname, 'public', audioUrl);
+    const diskDir = path.dirname(diskPath);
+    if (!fs.existsSync(diskDir)) {
+      fs.mkdirSync(diskDir, { recursive: true });
+    }
+    fs.writeFile(diskPath, audioData, (err) => {
+      if (err) logger.warn('[AudioFallback] Failed to restore file to disk', { audioUrl, error: err.message });
+      else logger.info('[AudioFallback] Restored audio file to disk from MongoDB', { audioUrl });
+    });
+
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'public, max-age=86400, immutable');
+    return res.send(audioData);
+  } catch (err) {
+    logger.error('[AudioFallback] Error serving audio from MongoDB', { audioUrl, error: err.message });
+    return res.status(500).send('Audio lookup failed');
+  }
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 

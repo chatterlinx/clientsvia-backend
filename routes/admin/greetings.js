@@ -94,6 +94,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
+const GreetingAudio = require('../../models/GreetingAudio');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE CONSTANTS
@@ -231,32 +232,8 @@ router.get(
                 }
             };
 
-            // Verify audio files exist on disk (they're ephemeral on Render deploys)
-            if (greetings.callStart?.audioUrl) {
-                const filePath = path.join(__dirname, '../../public', greetings.callStart.audioUrl);
-                if (!fs.existsSync(filePath)) {
-                    logger.warn(`[${MODULE_ID}] Call start audio file missing from disk`, { audioUrl: greetings.callStart.audioUrl, companyId });
-                    greetings.callStart = { ...greetings.callStart, audioUrl: null, audioTextHash: null, audioGeneratedAt: null };
-                    v2Company.findByIdAndUpdate(companyId, {
-                        'aiAgentSettings.agent2.greetings.callStart.audioUrl': null,
-                        'aiAgentSettings.agent2.greetings.callStart.audioTextHash': null,
-                        'aiAgentSettings.agent2.greetings.callStart.audioGeneratedAt': null
-                    }).catch(err => logger.error(`[${MODULE_ID}] Failed to clear stale callStart audio`, { error: err.message }));
-                }
-            }
-            if (greetings.interceptor?.rules?.length) {
-                for (const rule of greetings.interceptor.rules) {
-                    if (rule.audioUrl) {
-                        const filePath = path.join(__dirname, '../../public', rule.audioUrl);
-                        if (!fs.existsSync(filePath)) {
-                            logger.warn(`[${MODULE_ID}] Rule audio file missing from disk`, { audioUrl: rule.audioUrl, ruleId: rule.ruleId, companyId });
-                            rule.audioUrl = null;
-                            rule.audioTextHash = null;
-                            rule.audioGeneratedAt = null;
-                        }
-                    }
-                }
-            }
+            // Audio binary is persisted in MongoDB and served via self-healing
+            // fallback route — no filesystem existence checks needed here.
             
             res.json({
                 success: true,
@@ -461,38 +438,31 @@ router.post(
             
             ensureAudioDirectory();
             
-            // Check if audio already exists for this text
-            if (fs.existsSync(audioPath)) {
-                logger.info(`[${MODULE_ID}] Audio already exists, returning cached URL`, {
-                    companyId,
-                    filename
-                });
+            // Check if audio already exists in MongoDB for this text
+            const existingDbAudio = await GreetingAudio.findOne({
+                companyId, type: 'CALL_START', ruleId: 'call-start', textHash
+            }).select('audioData audioUrl').lean();
+
+            if (existingDbAudio?.audioData) {
+                logger.info(`[${MODULE_ID}] Audio already exists in MongoDB, returning cached URL`, { companyId, filename });
+
+                // Restore disk cache if missing
+                if (!fs.existsSync(audioPath)) {
+                    fs.writeFileSync(audioPath, existingDbAudio.audioData);
+                }
+
+                await v2Company.findByIdAndUpdate(companyId, {
+                    'aiAgentSettings.agent2.greetings.callStart.audioUrl': audioUrl,
+                    'aiAgentSettings.agent2.greetings.callStart.audioTextHash': textHash,
+                    'aiAgentSettings.agent2.greetings.callStart.audioGeneratedAt': new Date()
+                }, { new: true });
                 
-                // Update company record with audio URL
-                await v2Company.findByIdAndUpdate(
-                    companyId,
-                    {
-                        'aiAgentSettings.agent2.greetings.callStart.audioUrl': audioUrl,
-                        'aiAgentSettings.agent2.greetings.callStart.audioTextHash': textHash,
-                        'aiAgentSettings.agent2.greetings.callStart.audioGeneratedAt': new Date()
-                    },
-                    { new: true }
-                );
-                
-                return res.json({
-                    success: true,
-                    audioUrl,
-                    textHash,
-                    cached: true
-                });
+                return res.json({ success: true, audioUrl, textHash, cached: true });
             }
             
             // Generate new audio via ElevenLabs
             logger.info(`[${MODULE_ID}] Generating call start audio`, {
-                companyId,
-                voiceId,
-                textPreview: text.substring(0, 100),
-                model: aiModel
+                companyId, voiceId, textPreview: text.substring(0, 100), model: aiModel
             });
             
             const audioBuffer = await synthesizeSpeech({
@@ -506,32 +476,21 @@ router.post(
                 output_format: 'mp3_44100_128'
             });
             
-            // Save audio file
+            // Save to disk (cache) AND MongoDB (permanent)
             fs.writeFileSync(audioPath, audioBuffer);
+            await GreetingAudio.saveAudio(companyId, 'CALL_START', 'call-start', audioUrl, audioBuffer, textHash, text.trim(), voiceId);
             
-            logger.info(`[${MODULE_ID}] Call start audio generated successfully`, {
-                companyId,
-                filename,
-                size: audioBuffer.length
+            logger.info(`[${MODULE_ID}] Call start audio generated and persisted to MongoDB`, {
+                companyId, filename, size: audioBuffer.length
             });
             
-            // Update company record with audio URL
-            await v2Company.findByIdAndUpdate(
-                companyId,
-                {
-                    'aiAgentSettings.agent2.greetings.callStart.audioUrl': audioUrl,
-                    'aiAgentSettings.agent2.greetings.callStart.audioTextHash': textHash,
-                    'aiAgentSettings.agent2.greetings.callStart.audioGeneratedAt': new Date()
-                },
-                { new: true }
-            );
+            await v2Company.findByIdAndUpdate(companyId, {
+                'aiAgentSettings.agent2.greetings.callStart.audioUrl': audioUrl,
+                'aiAgentSettings.agent2.greetings.callStart.audioTextHash': textHash,
+                'aiAgentSettings.agent2.greetings.callStart.audioGeneratedAt': new Date()
+            }, { new: true });
             
-            res.json({
-                success: true,
-                audioUrl,
-                textHash,
-                cached: false
-            });
+            res.json({ success: true, audioUrl, textHash, cached: false });
             
         } catch (error) {
             logger.error(`[${MODULE_ID}] Error generating call start audio:`, error);
@@ -1125,37 +1084,30 @@ router.post(
             
             ensureAudioDirectory();
             
-            // Check if audio already exists for this text
-            if (fs.existsSync(audioPath)) {
-                logger.info(`[${MODULE_ID}] Audio already exists, returning cached URL`, {
-                    companyId,
-                    ruleId,
-                    filename
-                });
-                
-                // Update rule with audio URL
+            // Check if audio already exists in MongoDB
+            const existingDbAudio = await GreetingAudio.findOne({
+                companyId, type: 'RULE', ruleId, textHash
+            }).select('audioData audioUrl').lean();
+
+            if (existingDbAudio?.audioData) {
+                logger.info(`[${MODULE_ID}] Rule audio already exists in MongoDB, returning cached`, { companyId, ruleId, filename });
+
+                if (!fs.existsSync(audioPath)) {
+                    fs.writeFileSync(audioPath, existingDbAudio.audioData);
+                }
+
                 rule.audioUrl = audioUrl;
                 rule.audioTextHash = textHash;
                 rule.audioGeneratedAt = new Date();
-                
                 company.markModified('aiAgentSettings');
                 await company.save();
                 
-                return res.json({
-                    success: true,
-                    audioUrl,
-                    textHash,
-                    cached: true
-                });
+                return res.json({ success: true, audioUrl, textHash, cached: true });
             }
             
             // Generate new audio via ElevenLabs
             logger.info(`[${MODULE_ID}] Generating rule audio`, {
-                companyId,
-                ruleId,
-                voiceId,
-                textPreview: text.substring(0, 100),
-                model: aiModel
+                companyId, ruleId, voiceId, textPreview: text.substring(0, 100), model: aiModel
             });
             
             const audioBuffer = await synthesizeSpeech({
@@ -1169,30 +1121,21 @@ router.post(
                 output_format: 'mp3_44100_128'
             });
             
-            // Save audio file
+            // Save to disk (cache) AND MongoDB (permanent)
             fs.writeFileSync(audioPath, audioBuffer);
+            await GreetingAudio.saveAudio(companyId, 'RULE', ruleId, audioUrl, audioBuffer, textHash, text.trim(), voiceId);
             
-            logger.info(`[${MODULE_ID}] Rule audio generated successfully`, {
-                companyId,
-                ruleId,
-                filename,
-                size: audioBuffer.length
+            logger.info(`[${MODULE_ID}] Rule audio generated and persisted to MongoDB`, {
+                companyId, ruleId, filename, size: audioBuffer.length
             });
             
-            // Update rule with audio URL
             rule.audioUrl = audioUrl;
             rule.audioTextHash = textHash;
             rule.audioGeneratedAt = new Date();
-            
             company.markModified('aiAgentSettings');
             await company.save();
             
-            res.json({
-                success: true,
-                audioUrl,
-                textHash,
-                cached: false
-            });
+            res.json({ success: true, audioUrl, textHash, cached: false });
             
         } catch (error) {
             logger.error(`[${MODULE_ID}] Error generating rule audio:`, error);
