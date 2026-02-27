@@ -103,10 +103,18 @@ const GreetingAudio = require('../../models/GreetingAudio');
 const MODULE_ID = 'GREETINGS_API';
 const VERSION = 'v1.0.0';
 
-// Audio configuration
+// ════════════════════════════════════════════════════════════════════════════
+// AUDIO CONFIGURATION - BULLETPROOF ARCHITECTURE
+// ════════════════════════════════════════════════════════════════════════════
+// ⚠️ CRITICAL FOR 100+ CLIENTS:
+// - Audio saved to BOTH disk (cache) AND MongoDB (permanent)
+// - Use /audio-safe routes (NOT /audio) for automatic MongoDB fallback
+// - Render uses ephemeral storage - disk wiped on every deploy
+// - MongoDB ensures 100% availability across deploys
+// - See: routes/audioFallback.js for serving logic
+// ════════════════════════════════════════════════════════════════════════════
 const AUDIO_DIR = path.join(__dirname, '../../public/audio/greetings');
-// ✅ BULLETPROOF: Use /audio-safe for MongoDB fallback
-const AUDIO_URL_PREFIX = '/audio-safe/greetings';
+const AUDIO_URL_PREFIX = '/audio-safe/greetings'; // ✅ MongoDB fallback route
 
 // Text hash algorithm (consistent with trigger audio)
 const HASH_ALGORITHM = 'sha256';

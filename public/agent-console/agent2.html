@@ -177,6 +177,18 @@
                   Setup ElevenLabs
                 </a>
               </label>
+              <div style="background: #dcfce7; border: 1px solid #86efac; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                <div style="font-size: 11px; font-weight: 600; color: #166534; margin-bottom: 4px;">🔒 BULLETPROOF AUDIO ARCHITECTURE</div>
+                <div style="font-size: 10px; color: #15803d; line-height: 1.5;">
+                  <strong>How Audio Works (Production-Grade for 100+ Clients):</strong><br>
+                  ✓ Click "Generate" → Saves to <strong>MongoDB</strong> (permanent)<br>
+                  ✓ Also caches to disk for fast serving<br>
+                  ✓ Uses <strong>/audio-safe</strong> route with automatic fallback<br>
+                  ✓ If disk missing after deploy → Auto-serves from MongoDB<br>
+                  ✓ Disk cache auto-restores from MongoDB<br>
+                  <strong style="color: #166534;">⚠️ DEVELOPER NOTE:</strong> Always use /audio-safe URLs. Never /audio (ephemeral).
+                </div>
+              </div>
               <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                 <input type="text" class="form-input" id="input-call-start-audio" placeholder="https://..." readonly style="flex: 1;">
                 <button type="button" class="btn btn-secondary" id="btn-play-call-start-audio" style="padding: 8px 16px; display: none;">

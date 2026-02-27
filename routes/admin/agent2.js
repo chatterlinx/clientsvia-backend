@@ -2060,12 +2060,22 @@ router.post('/:companyId/generate-trigger-audio',
       }
 
       // IMPORTANT: Hash uses finalText (with substituted variables) so different
-      // variable values produce different audio files and avoid browser caching issues
+      // ════════════════════════════════════════════════════════════════════════
+      // AUDIO STORAGE - BULLETPROOF ARCHITECTURE
+      // ════════════════════════════════════════════════════════════════════════
+      // ⚠️ CRITICAL FOR 100+ CLIENTS:
+      // 1. Save to disk (fast cache)
+      // 2. Save to MongoDB via TriggerAudio.saveAudio() (permanent)
+      // 3. Use /audio-safe URLs (MongoDB fallback when disk missing)
+      // 
+      // This ensures audio survives Render redeployments (ephemeral storage).
+      // See: routes/audioFallback.js for 3-tier serving logic.
+      // ════════════════════════════════════════════════════════════════════════
+      
       const hash = crypto.createHash('sha256').update(`${companyId}_${ruleId}_${finalText.trim()}`).digest('hex').slice(0, 16);
       const fileName = `TRIGGER_CARD_ANSWER_${companyId.slice(0, 12)}_${hash}.mp3`;
       const filePath = path.join(audioDir, fileName);
-      // ✅ BULLETPROOF: Use /audio-safe for MongoDB fallback
-      const audioUrl = `/audio-safe/instant-lines/${fileName}`;
+      const audioUrl = `/audio-safe/instant-lines/${fileName}`; // ✅ MongoDB fallback route
 
       // Delete old audio file if it exists with a different name
       const existingAudio = await TriggerAudio.findByCompanyAndRule(companyId, ruleId);
