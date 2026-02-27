@@ -287,6 +287,9 @@
       case 'callcenter':
         window.location.href = `/call-center.html${companyParam}`;
         break;
+      case 'scrabengine':
+        window.location.href = `${baseUrl}/scrabengine.html${companyParam}`;
+        break;
       case 'agent2':
         window.location.href = `${baseUrl}/agent2.html${companyParam}`;
         break;

@@ -3986,23 +3986,102 @@ const companySchema = new mongoose.Schema({
                 clarifiers: { type: mongoose.Schema.Types.Mixed, default: {} },
                 
                 // ═══════════════════════════════════════════════════════════
+                // 🔍 SCRABENGINE - Unified Text Processing Pipeline
+                // ═══════════════════════════════════════════════════════════
+                // Enterprise-grade text normalization & token expansion.
+                // Replaces scattered preprocessing with single, traceable pipeline.
+                // 
+                // ARCHITECTURE: Fillers → Vocabulary → Synonyms → Quality Gate
+                // GUARANTEE: Raw text always preserved, expansion never replaces
+                // PERFORMANCE: < 30ms for 99% of inputs
+                // 
+                // UI: /agent-console/scrabengine.html
+                // Service: services/ScrabEngine.js
+                // ═══════════════════════════════════════════════════════════
+                scrabEngine: {
+                    enabled: { type: Boolean, default: true },
+                    version: { type: String, default: '1.0.0' },
+                    
+                    // STAGE 1: Filler Removal
+                    fillers: {
+                        enabled: { type: Boolean, default: true },
+                        stripGreetings: { type: Boolean, default: true },
+                        stripCompanyName: { type: Boolean, default: true },
+                        customFillers: [{
+                            id: { type: String, trim: true },
+                            phrase: { type: String, trim: true },
+                            enabled: { type: Boolean, default: true },
+                            priority: { type: Number, default: 100 }
+                        }]
+                    },
+                    
+                    // STAGE 2: Vocabulary Normalization
+                    vocabulary: {
+                        enabled: { type: Boolean, default: true },
+                        entries: [{
+                            id: { type: String, trim: true },
+                            enabled: { type: Boolean, default: true },
+                            priority: { type: Number, default: 100 },
+                            from: { type: String, trim: true },
+                            to: { type: String, trim: true },
+                            matchMode: { 
+                                type: String, 
+                                enum: ['EXACT', 'CONTAINS'], 
+                                default: 'EXACT' 
+                            }
+                        }]
+                    },
+                    
+                    // STAGE 3: Token Expansion (Synonyms)
+                    synonyms: {
+                        enabled: { type: Boolean, default: true },
+                        
+                        // Simple word-to-words expansion
+                        wordSynonyms: [{
+                            id: { type: String, trim: true },
+                            enabled: { type: Boolean, default: true },
+                            word: { type: String, trim: true },
+                            synonyms: { type: [String] },
+                            priority: { type: Number, default: 50 }
+                        }],
+                        
+                        // Context-aware pattern matching
+                        contextPatterns: [{
+                            id: { type: String, trim: true },
+                            enabled: { type: Boolean, default: true },
+                            pattern: { type: [String] },  // ["thing", "garage"]
+                            component: { type: String, trim: true },  // "air handler"
+                            contextTokens: { type: [String] },  // ["ahu", "indoor", "unit"]
+                            confidence: { type: Number, default: 0.9, min: 0, max: 1 },
+                            priority: { type: Number, default: 100 }
+                        }]
+                    },
+                    
+                    // STAGE 4: Quality Gates
+                    qualityGates: {
+                        minWordCount: { type: Number, default: 2 },
+                        minConfidence: { type: Number, default: 0.5 },
+                        repromptOnLowQuality: { type: Boolean, default: true }
+                    },
+                    
+                    // Metadata
+                    meta: {
+                        uiBuild: { type: String, default: null },
+                        lastModified: { type: Date, default: Date.now }
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
                 // V4: SPEECH PREPROCESSING - Clean input BEFORE matching
                 // ═══════════════════════════════════════════════════════════
-                // Runs before trigger-card matching, call-reason capture, and LLM.
-                // Cleaned text is for INTERNAL USE ONLY - never spoken to caller.
-                // This stops "repeat after me" garbage from dirty transcripts.
+                // ⚠️ DEPRECATED: Use scrabEngine instead (above)
+                // Kept for backward compatibility only
+                // ═══════════════════════════════════════════════════════════
                 preprocessing: {
-                    enabled: { type: Boolean, default: true },
-                    // Phrases to completely delete (if found as whole phrase)
-                    // Example: "hi", "hello", "penguin", "my name is", "long time customer"
+                    enabled: { type: Boolean, default: false },  // Disabled by default
                     ignorePhrases: { type: [String], default: [] },
-                    // Filler words to strip as tokens
-                    // Example: "uh", "um", "like", "basically", "you know", "I mean"
                     fillerWords: { type: [String], default: [] },
-                    // Simple rewrites (map misspellings/variations to canonical form)
-                    // Example: [{ from: "air condition", to: "ac" }, { from: "not cooling", to: "ac not cooling" }]
                     canonicalRewrites: { type: mongoose.Schema.Types.Mixed, default: [] },
-                    // Additional patterns to strip (regex-compatible strings)
                     stripPatterns: { type: [String], default: [] }
                 },
                 

@@ -40,6 +40,14 @@ const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
 const Agent2SpeechPreprocessor = require('./Agent2SpeechPreprocessor');
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔍 SCRABENGINE - Enterprise Text Processing Pipeline
+// ════════════════════════════════════════════════════════════════════════════
+// Unified text normalization replacing scattered preprocessing.
+// Entry point for ALL text cleaning before trigger matching.
+// ════════════════════════════════════════════════════════════════════════════
+const { ScrabEngine } = require('../../ScrabEngine');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 
@@ -539,21 +547,61 @@ class Agent2DiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SPEECH PREPROCESSING (V4 - BEFORE vocabulary and matching)
+    // 🔍 SCRABENGINE - UNIFIED TEXT PROCESSING PIPELINE
     // ══════════════════════════════════════════════════════════════════════════
-    // Cleans raw caller input BEFORE trigger-card matching and call-reason capture.
-    // Strips greetings, filler words, company name, applies canonical rewrites.
-    // CRITICAL: Cleaned text is for INTERNAL USE ONLY - never spoken to caller.
+    // Enterprise-grade normalization & token expansion.
+    // Replaces: Agent2SpeechPreprocessor + Agent2VocabularyEngine (scattered logic)
+    // 
+    // PIPELINE: Fillers → Vocabulary → Synonyms → Quality Gate
+    // GUARANTEE: Raw text preserved, expansion adds tokens (never replaces)
+    // PERFORMANCE TARGET: < 30ms
+    // 
+    // WIRING: This is the ENTRY POINT for all text cleaning
     // ══════════════════════════════════════════════════════════════════════════
-    const preprocessingConfig = safeObj(discoveryCfg.preprocessing, { enabled: true });
-    const companyName = company?.name || company?.businessName || '';
     
-    const preprocessResult = Agent2SpeechPreprocessor.preprocess(input, preprocessingConfig, {
-      companyName
+    logger.info('[ScrabEngine] 🚀 WIRING ENTRY - Agent2DiscoveryRunner calling ScrabEngine', {
+      companyId,
+      callSid,
+      turn,
+      inputPreview: clip(input, 60)
     });
     
-    // Use preprocessed input for downstream processing
-    const preprocessedInput = preprocessResult.cleaned;
+    const scrabResult = await ScrabEngine.process({
+      rawText: input,
+      company: company,
+      context: {
+        companyName: company?.name || company?.businessName || '',
+        callSid,
+        turn
+      }
+    });
+    
+    // ──────────────────────────────────────────────────────────────────────────
+    // EXTRACT SCRABENGINE OUTPUTS
+    // ──────────────────────────────────────────────────────────────────────────
+    const normalizedInput = scrabResult.normalizedText;
+    const normalizedInputLower = normalizedInput.toLowerCase();
+    const originalTokens = scrabResult.originalTokens;
+    const expandedTokens = scrabResult.expandedTokens;
+    const expansionMap = scrabResult.expansionMap;
+    
+    logger.info('[ScrabEngine] ✅ WIRING EXIT - ScrabEngine processing complete', {
+      companyId,
+      callSid,
+      turn,
+      rawPreview: clip(input, 40),
+      normalizedPreview: clip(normalizedInput, 40),
+      tokensOriginal: originalTokens.length,
+      tokensExpanded: expandedTokens.length,
+      expansionRatio: (expandedTokens.length / (originalTokens.length || 1)).toFixed(2),
+      transformations: scrabResult.transformations.length,
+      qualityPassed: scrabResult.quality.passed,
+      processingTimeMs: scrabResult.performance.totalTimeMs
+    });
+    
+    // ──────────────────────────────────────────────────────────────────────────
+    // EMIT SCRABENGINE EVENTS (for Call Review debugging)
+    // ──────────────────────────────────────────────────────────────────────────
     
     // V4: INPUT_TEXT_FINALIZED - Raw input captured (for audit trail)
     emit('INPUT_TEXT_FINALIZED', {
@@ -563,73 +611,44 @@ class Agent2DiscoveryRunner {
       timestamp: new Date().toISOString()
     });
     
-    // Emit preprocessing proof for Call Review debugging
-    if (preprocessResult.changed || preprocessResult.appliedRules?.length > 0) {
-      emit('A2_PREPROCESSING_APPLIED', Agent2SpeechPreprocessor.buildPreprocessingEvent(preprocessResult));
+    // ScrabEngine processing summary
+    emit('SCRABENGINE_PROCESSED', {
+      rawPreview: clip(input, 60),
+      normalizedPreview: clip(normalizedInput, 60),
+      wasChanged: normalizedInput !== input,
+      transformations: scrabResult.transformations,
+      tokensOriginal: originalTokens.length,
+      tokensExpanded: expandedTokens.length,
+      expansionMap: Object.keys(expansionMap).length > 0 ? expansionMap : null,
+      quality: scrabResult.quality,
+      performance: scrabResult.performance,
+      note: 'ScrabEngine: Fillers → Vocabulary → Synonyms → Quality Gate'
+    });
+    
+    // Quality gate check
+    if (!scrabResult.quality.passed && scrabResult.quality.shouldReprompt) {
+      emit('SCRABENGINE_QUALITY_FAILED', {
+        reason: scrabResult.quality.reason,
+        confidence: scrabResult.quality.confidence,
+        details: scrabResult.quality.details,
+        shouldReprompt: true
+      });
       
-      // V4: A2_INPUT_NORMALIZED - Shows exact normalization for debugging
-      emit('A2_INPUT_NORMALIZED', {
-        rawPreview: clip(input, 60),
-        normalizedPreview: clip(preprocessedInput, 60),
-        removedTokens: preprocessResult.removedTokens || [],
-        appliedRules: (preprocessResult.appliedRules || []).slice(0, 10),
-        wasChanged: preprocessResult.changed,
-        note: 'Preprocessing applied BEFORE trigger matching. Cleaned text never spoken.'
+      logger.warn('[ScrabEngine] ⚠️ Quality gate failed - input too low quality', {
+        reason: scrabResult.quality.reason,
+        inputPreview: clip(input, 60)
       });
+      
+      // Could add reprompt logic here if needed
     }
     
-    // ══════════════════════════════════════════════════════════════════════════
-    // VOCABULARY PROCESSING (BEFORE trigger matching)
-    // ══════════════════════════════════════════════════════════════════════════
-    // 1. HARD_NORMALIZE: Replace mishears (e.g., "acee" → "ac")
-    // 2. SOFT_HINT: Add hints for ambiguous phrases (e.g., "thingy on wall" → maybe_thermostat)
-    // ══════════════════════════════════════════════════════════════════════════
-    const vocabularyConfig = safeObj(discoveryCfg.vocabulary, {});
-    
-    // V124: Get vocab stats for visibility — shows exactly what was loaded
-    const vocabStats = Agent2VocabularyEngine.getStats(vocabularyConfig);
-    
-    const vocabularyResult = Agent2VocabularyEngine.process({
-      userInput: preprocessedInput,  // V4: Use preprocessed input (stripped greetings/fillers)
-      state: nextState,
-      config: vocabularyConfig
-    });
-    
-    // Use normalized text for downstream processing
-    const normalizedInput = vocabularyResult.normalizedText;
-    const normalizedInputLower = normalizedInput.toLowerCase();
-    
-    // Store hints in state for downstream use (TriggerCardMatcher boosts, clarifier logic)
-    nextState.agent2.hints = vocabularyResult.hints;
-    nextState.agent2.discovery.lastVocabApplied = vocabularyResult.applied;
-    
-    // V124: Emit vocabulary evaluation proof with FULL config visibility
-    // This shows exactly what was loaded so you can diagnose "vocab not running" issues
-    emit('A2_VOCAB_EVAL', {
-      inputPreview: clip(input, 60),
-      normalizedPreview: normalizedInput !== input ? clip(normalizedInput, 60) : null,
-      wasNormalized: normalizedInput !== input,
-      appliedCount: vocabularyResult.applied.length,
-      applied: vocabularyResult.applied.slice(0, 10),
-      hintsAdded: vocabularyResult.hints,
-      stats: vocabularyResult.stats,
-      // V124: Config load proof — if these are 0 when you expect entries, check config path
-      configLoaded: {
-        vocabEnabled: vocabStats.enabled,
-        totalEntriesLoaded: vocabStats.totalEntries,
-        enabledEntries: vocabStats.enabledEntries,
-        hardNormalizeCount: vocabStats.hardNormalizeCount,
-        softHintCount: vocabStats.softHintCount
-      }
-    });
-    
-    // Emit active hints if any
-    if (vocabularyResult.hints.length > 0) {
-      emit('A2_HINTS_ACTIVE', {
-        hints: vocabularyResult.hints,
-        locks: nextState.agent2.locks || {}
-      });
-    }
+    // Store ScrabEngine result in state for downstream access
+    nextState.agent2.scrabEngine = {
+      rawText: scrabResult.rawText,
+      normalizedText: scrabResult.normalizedText,
+      expandedTokens: scrabResult.expandedTokens,
+      transformations: scrabResult.transformations
+    };
     
     // ══════════════════════════════════════════════════════════════════════════
     // CLARIFIER RESOLUTION CHECK
@@ -1311,12 +1330,18 @@ class Agent2DiscoveryRunner {
     const intentGateConfig = discoveryCfg.intentGate || {};
     const globalNegativeKeywords = agent2.globalNegativeKeywords || [];
     
-    // Use normalized input for matching (vocabulary engine may have corrected mishears)
+    // ──────────────────────────────────────────────────────────────────────────
+    // TRIGGER MATCHING with ScrabEngine enhanced tokens
+    // ──────────────────────────────────────────────────────────────────────────
     const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, {
       hints: activeHints,
       locks: activeLocks,
       intentGateConfig,
-      globalNegativeKeywords
+      globalNegativeKeywords,
+      // 🔍 SCRABENGINE: Pass expanded tokens for flexible matching
+      expandedTokens: expandedTokens,
+      originalTokens: originalTokens,
+      expansionMap: expansionMap
     });
     
     // Store intent gate result for empathy layer (V4)

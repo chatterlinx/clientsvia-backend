@@ -214,6 +214,20 @@ class TriggerCardMatcher {
     const globalNegativeKeywords = safeArr(options.globalNegativeKeywords || [])
       .map(normalizeText)
       .filter(Boolean);
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // 🔍 SCRABENGINE INTEGRATION - Use expanded tokens for flexible matching
+    // ════════════════════════════════════════════════════════════════════════
+    const expandedTokens = safeArr(options.expandedTokens || []);
+    const originalTokens = safeArr(options.originalTokens || []);
+    const expansionMap = options.expansionMap || {};
+    const useExpandedTokens = expandedTokens.length > 0;
+    
+    // Create enhanced input text that includes expanded tokens
+    // This allows matching against synonyms WITHOUT replacing original words
+    const enhancedInput = useExpandedTokens 
+      ? `${input} ${expandedTokens.join(' ')}`  // Original + expanded tokens
+      : input;
 
     const result = {
       matched: false,
@@ -231,7 +245,12 @@ class TriggerCardMatcher {
       globalNegativeHit: null,
       hintBoostApplied: false,
       lockBoostApplied: false,
-      intentGateResult: null
+      intentGateResult: null,
+      // ScrabEngine integration metadata
+      scrabEngineUsed: useExpandedTokens,
+      originalTokenCount: originalTokens.length,
+      expandedTokenCount: expandedTokens.length,
+      expansionsApplied: Object.keys(expansionMap).length
     };
 
     if (!input) {
@@ -428,9 +447,16 @@ class TriggerCardMatcher {
       let blockedKeyword = null;
       
       for (const kw of keywords) {
-        const result_kw = matchesAllWords(input, kw);
+        // 🔍 SCRABENGINE: Check against BOTH original input AND expanded tokens
+        const inputToCheck = useExpandedTokens ? enhancedInput : input;
+        const result_kw = matchesAllWords(inputToCheck, kw);
         if (result_kw.matches) {
           keywordHit = kw;
+          // Log if match came from expanded tokens (ScrabEngine synonym)
+          if (useExpandedTokens && !matchesAllWords(input, kw).matches) {
+            cardEval.matchedViaExpansion = true;
+            cardEval.expansionUsed = 'synonym_token';
+          }
           break;
         } else if (result_kw.blocked === 'GREETING_PROTECTION') {
           // Track that we blocked a greeting — log but don't match
@@ -478,7 +504,9 @@ class TriggerCardMatcher {
         .map(normalizeText)
         .filter(Boolean);
 
-      const phraseHit = phrases.find((ph) => matchesSubstring(input, ph));
+      // 🔍 SCRABENGINE: Check phrases against BOTH original input AND expanded tokens
+      const inputToCheckPhrases = useExpandedTokens ? enhancedInput : input;
+      const phraseHit = phrases.find((ph) => matchesSubstring(inputToCheckPhrases, ph));
       if (phraseHit) {
         cardEval.phraseHit = phraseHit;
         cardEval.matched = true;
@@ -489,11 +517,18 @@ class TriggerCardMatcher {
         result.cardId = card.id || null;
         result.cardLabel = card.label || null;
         result.evaluated.push(cardEval);
+        
+        // Log if match came from expanded tokens
+        if (useExpandedTokens && !matchesSubstring(input, phraseHit)) {
+          cardEval.matchedViaExpansion = true;
+          cardEval.expansionUsed = 'synonym_phrase';
+        }
 
         logger.info('[TriggerCardMatcher] Matched card via phrase (substring)', {
           cardId: card.id,
           phrase: phraseHit,
-          inputPreview: clip(input, 80)
+          inputPreview: clip(input, 80),
+          usedExpansion: cardEval.matchedViaExpansion || false
         });
 
         return result;

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScrabEngine - Text Processing Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  <style>
+    .scrab-layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+    .scrab-sidebar { display: flex; flex-direction: column; gap: 16px; }
+    .scrab-main { display: flex; flex-direction: column; gap: 20px; }
+    
+    .scrab-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; }
+    .scrab-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .scrab-card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; }
+    .scrab-card-subtitle { font-size: 13px; color: #64748b; margin: 4px 0 0 0; }
+    
+    .scrab-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+    .scrab-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+    .scrab-stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px; }
+    .scrab-stat-value { font-size: 20px; font-weight: 700; color: #0f172a; }
+    .scrab-stat-unit { font-size: 12px; color: #94a3b8; margin-left: 2px; }
+    
+    .stage-indicator { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f1f5f9; border-radius: 8px; margin-bottom: 8px; }
+    .stage-number { width: 24px; height: 24px; border-radius: 50%; background: #3b82f6; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+    .stage-name { font-size: 13px; font-weight: 600; color: #1e293b; }
+    .stage-status { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .stage-status.active { background: #dcfce7; color: #166534; }
+    .stage-status.disabled { background: #fee2e2; color: #991b1b; }
+    
+    .entry-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
+    .entry-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .entry-item.disabled { opacity: 0.5; }
+    .entry-checkbox { width: 18px; height: 18px; cursor: pointer; }
+    .entry-content { flex: 1; display: flex; align-items: center; gap: 8px; }
+    .entry-from { font-size: 13px; color: #475569; font-family: 'Courier New', monospace; }
+    .entry-arrow { font-size: 12px; color: #94a3b8; }
+    .entry-to { font-size: 13px; color: #0f172a; font-weight: 600; font-family: 'Courier New', monospace; }
+    .entry-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #dbeafe; color: #1e40af; font-weight: 600; }
+    .entry-actions { display: flex; gap: 4px; }
+    .entry-btn { padding: 4px 8px; font-size: 11px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; cursor: pointer; }
+    .entry-btn:hover { background: #f1f5f9; }
+    
+    .test-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; color: #fff; }
+    .test-input { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 14px; resize: vertical; min-height: 80px; font-family: inherit; }
+    .test-input::placeholder { color: rgba(255,255,255,0.6); }
+    .test-btn { padding: 10px 20px; background: #fff; color: #667eea; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+    .test-btn:hover { background: #f8fafc; }
+    
+    .test-results { margin-top: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; }
+    .test-stage { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.2); }
+    .test-stage:last-child { border-bottom: none; margin-bottom: 0; }
+    .test-stage-title { font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.8; margin-bottom: 6px; }
+    .test-stage-text { font-family: 'Courier New', monospace; font-size: 13px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; }
+    .test-badge { display: inline-block; padding: 2px 8px; background: rgba(255,255,255,0.2); border-radius: 999px; font-size: 10px; margin: 2px; }
+    
+    .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
+    .empty-state-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state-text { font-size: 14px; }
+    
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.6); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: #fff; border-radius: 14px; box-shadow: 0 25px 50px rgba(0,0,0,0.25); max-width: 600px; width: 90%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; }
+    .modal-title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; }
+    .modal-subtitle { font-size: 13px; color: #64748b; margin: 4px 0 0 0; }
+    .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; }
+    
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px; }
+    .form-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+    .form-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
+    .form-help { font-size: 12px; color: #64748b; margin-top: 4px; }
+    
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; font-size: 12px; color: #1e40af; }
+    .tag-remove { cursor: pointer; font-weight: 700; margin-left: 2px; }
+    .tag-input { border: none; outline: none; background: transparent; font-size: 12px; min-width: 100px; }
+    
+    .pipeline-flow { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+    .pipeline-step { flex: 1; text-align: center; padding: 12px; background: #f1f5f9; border-radius: 8px; position: relative; }
+    .pipeline-step.active { background: #dbeafe; border: 2px solid #3b82f6; }
+    .pipeline-arrow { color: #94a3b8; font-size: 20px; }
+    .pipeline-step-num { display: inline-block; width: 24px; height: 24px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 12px; font-weight: 700; line-height: 24px; margin-bottom: 6px; }
+    .pipeline-step-name { font-size: 12px; font-weight: 600; color: #1e293b; }
+    
+    @media (max-width: 1200px) {
+      .scrab-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back" title="Back to Agent Console">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="header-title">🔍 ScrabEngine</span>
+      </div>
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary" id="btn-save-all">💾 Save All Changes</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="scrab-layout">
+        <!-- SIDEBAR: Pipeline Overview -->
+        <aside class="scrab-sidebar">
+          <div class="scrab-card">
+            <div class="scrab-card-header">
+              <h2 class="scrab-card-title">Pipeline Status</h2>
+            </div>
+            
+            <div class="stage-indicator">
+              <div class="stage-number">1</div>
+              <div class="stage-name">Fillers</div>
+              <span class="stage-status active" id="stage1-status">Active</span>
+            </div>
+            
+            <div class="stage-indicator">
+              <div class="stage-number">2</div>
+              <div class="stage-name">Vocabulary</div>
+              <span class="stage-status active" id="stage2-status">Active</span>
+            </div>
+            
+            <div class="stage-indicator">
+              <div class="stage-number">3</div>
+              <div class="stage-name">Synonyms</div>
+              <span class="stage-status active" id="stage3-status">Active</span>
+            </div>
+          </div>
+          
+          <div class="scrab-card">
+            <div class="scrab-card-header">
+              <h3 class="scrab-card-title">Performance</h3>
+            </div>
+            <div class="scrab-stats">
+              <div class="scrab-stat">
+                <div class="scrab-stat-label">Avg Time</div>
+                <div class="scrab-stat-value">12<span class="scrab-stat-unit">ms</span></div>
+              </div>
+              <div class="scrab-stat">
+                <div class="scrab-stat-label">Active Rules</div>
+                <div class="scrab-stat-value" id="total-rules">0</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="scrab-card">
+            <div class="scrab-card-header">
+              <h3 class="scrab-card-title">Quick Actions</h3>
+            </div>
+            <button class="btn btn-block" id="btn-test-panel">🧪 Test Pipeline</button>
+            <button class="btn btn-block" style="margin-top: 8px;" id="btn-view-logs">📊 View Logs</button>
+          </div>
+        </aside>
+
+        <!-- MAIN CONTENT: Tabs -->
+        <div class="scrab-main">
+          <!-- Pipeline Flow Visualization -->
+          <div class="pipeline-flow">
+            <div class="pipeline-step active" data-stage="1">
+              <div class="pipeline-step-num">1</div>
+              <div class="pipeline-step-name">Fillers</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-step" data-stage="2">
+              <div class="pipeline-step-num">2</div>
+              <div class="pipeline-step-name">Vocabulary</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-step" data-stage="3">
+              <div class="pipeline-step-num">3</div>
+              <div class="pipeline-step-name">Synonyms</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-step" data-stage="4">
+              <div class="pipeline-step-num">✓</div>
+              <div class="pipeline-step-name">Delivery</div>
+            </div>
+          </div>
+          
+          <!-- STAGE 1: FILLERS -->
+          <div class="scrab-card" id="stage-fillers">
+            <div class="scrab-card-header">
+              <div>
+                <h2 class="scrab-card-title">🧹 Stage 1: Filler Removal</h2>
+                <p class="scrab-card-subtitle">Remove conversational noise: "um", "uh", "you know"</p>
+              </div>
+              <button class="btn btn-primary btn-sm" id="btn-add-filler">+ Add Filler</button>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">
+                <input type="checkbox" id="toggle-fillers" checked> Enable Filler Removal
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Options</label>
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                <label style="font-size: 13px;">
+                  <input type="checkbox" id="strip-greetings" checked> Strip greetings at start (hi, hello)
+                </label>
+                <label style="font-size: 13px;">
+                  <input type="checkbox" id="strip-company-name" checked> Strip company name mentions
+                </label>
+              </div>
+            </div>
+            
+            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Built-in Fillers (always active)</h3>
+            <div class="tag-list" id="builtin-fillers">
+              <span class="tag">um</span>
+              <span class="tag">uh</span>
+              <span class="tag">you know</span>
+              <span class="tag">like</span>
+              <span class="tag">basically</span>
+              <span class="tag">actually</span>
+            </div>
+            
+            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Custom Fillers</h3>
+            <div class="entry-list" id="custom-fillers-list">
+              <div class="empty-state">
+                <div class="empty-state-icon">🔍</div>
+                <div class="empty-state-text">No custom fillers yet. Click "+ Add Filler" to create one.</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- STAGE 2: VOCABULARY -->
+          <div class="scrab-card" id="stage-vocabulary">
+            <div class="scrab-card-header">
+              <div>
+                <h2 class="scrab-card-title">📝 Stage 2: Vocabulary Normalization</h2>
+                <p class="scrab-card-subtitle">Fix mishears and slang: "acee" → "ac", "pulling" → "cooling"</p>
+              </div>
+              <button class="btn btn-primary btn-sm" id="btn-add-vocab">+ Add Normalization</button>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">
+                <input type="checkbox" id="toggle-vocabulary" checked> Enable Vocabulary Normalization
+              </label>
+            </div>
+            
+            <div class="entry-list" id="vocabulary-list">
+              <div class="empty-state">
+                <div class="empty-state-icon">📖</div>
+                <div class="empty-state-text">No vocabulary rules yet. Click "+ Add Normalization" to create one.</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- STAGE 3: SYNONYMS -->
+          <div class="scrab-card" id="stage-synonyms">
+            <div class="scrab-card-header">
+              <div>
+                <h2 class="scrab-card-title">🎯 Stage 3: Smart Synonyms</h2>
+                <p class="scrab-card-subtitle">Expand tokens for flexible matching (adds tokens, never replaces)</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-sm" id="btn-add-word-synonym">+ Word Synonym</button>
+                <button class="btn btn-primary btn-sm" id="btn-add-context-pattern">+ Context Pattern</button>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">
+                <input type="checkbox" id="toggle-synonyms" checked> Enable Synonym Expansion
+              </label>
+            </div>
+            
+            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Word Synonyms</h3>
+            <div class="entry-list" id="word-synonyms-list">
+              <div class="empty-state">
+                <div class="empty-state-icon">💬</div>
+                <div class="empty-state-text">No word synonyms yet. Click "+ Word Synonym" to create one.</div>
+              </div>
+            </div>
+            
+            <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 12px 0; color: #475569;">Context-Aware Patterns</h3>
+            <div class="entry-list" id="context-patterns-list">
+              <div class="empty-state">
+                <div class="empty-state-icon">🧠</div>
+                <div class="empty-state-text">No context patterns yet. Click "+ Context Pattern" to create one.</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- TESTING PANEL -->
+          <div class="test-panel" id="test-panel" style="display: none;">
+            <h2 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700;">🧪 Live Pipeline Testing</h2>
+            <p style="margin: 0 0 16px 0; font-size: 13px; opacity: 0.9;">Test your ScrabEngine pipeline in real-time</p>
+            
+            <textarea class="test-input" id="test-input" placeholder="Enter test text... e.g., 'um the thing in the garage isn't pulling you know'"></textarea>
+            <button class="test-btn" id="btn-run-test">▶ Process Text</button>
+            
+            <div class="test-results" id="test-results" style="display: none;">
+              <div class="test-stage">
+                <div class="test-stage-title">🎤 Raw Input</div>
+                <div class="test-stage-text" id="test-raw"></div>
+              </div>
+              
+              <div class="test-stage">
+                <div class="test-stage-title">Stage 1: Fillers Removed</div>
+                <div class="test-stage-text" id="test-stage1"></div>
+                <div id="test-stage1-removed"></div>
+              </div>
+              
+              <div class="test-stage">
+                <div class="test-stage-title">Stage 2: Vocabulary Normalized</div>
+                <div class="test-stage-text" id="test-stage2"></div>
+                <div id="test-stage2-applied"></div>
+              </div>
+              
+              <div class="test-stage">
+                <div class="test-stage-title">Stage 3: Tokens Expanded</div>
+                <div class="test-stage-text" id="test-stage3"></div>
+                <div id="test-stage3-expanded"></div>
+              </div>
+              
+              <div class="test-stage">
+                <div class="test-stage-title">✅ Final Delivery to Triggers</div>
+                <div class="test-stage-text" id="test-final"></div>
+                <div style="margin-top: 8px; font-size: 12px;">
+                  <strong>Processing Time:</strong> <span id="test-time">0</span>ms
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>ScrabEngine v1.0</span>
+      <span> · </span>
+      <span>Text Processing Pipeline</span>
+    </footer>
+  </div>
+
+  <!-- MODAL: Add/Edit Filler -->
+  <div id="modal-filler" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Custom Filler</h3>
+        <p class="modal-subtitle">Filler words to remove from transcripts</p>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Filler Phrase</label>
+          <input type="text" class="form-input" id="filler-phrase" placeholder="e.g., so anyway">
+          <div class="form-help">Word or phrase to remove (case-insensitive)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <input type="number" class="form-input" id="filler-priority" value="100" min="1" max="999">
+          <div class="form-help">Lower number = processed first</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-filler">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-filler">Add Filler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add/Edit Vocabulary -->
+  <div id="modal-vocabulary" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Vocabulary Normalization</h3>
+        <p class="modal-subtitle">Fix mishears or standardize industry slang</p>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">From (Mishear/Slang)</label>
+          <input type="text" class="form-input" id="vocab-from" placeholder="e.g., acee">
+          <div class="form-help">What the customer says (or STT mishears)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">To (Correct Term)</label>
+          <input type="text" class="form-input" id="vocab-to" placeholder="e.g., ac">
+          <div class="form-help">What it should be normalized to</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Match Mode</label>
+          <select class="form-select" id="vocab-mode">
+            <option value="EXACT">EXACT (word boundary)</option>
+            <option value="CONTAINS">CONTAINS (substring)</option>
+          </select>
+          <div class="form-help">EXACT: "acee" won't match "racee" | CONTAINS: more flexible</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <input type="number" class="form-input" id="vocab-priority" value="100" min="1" max="999">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-vocab">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-vocab">Add Normalization</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add/Edit Word Synonym -->
+  <div id="modal-word-synonym" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Word Synonym</h3>
+        <p class="modal-subtitle">Expand tokens for flexible trigger matching</p>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Word</label>
+          <input type="text" class="form-input" id="word-syn-word" placeholder="e.g., schedule">
+          <div class="form-help">Original word to expand</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Synonyms (comma-separated)</label>
+          <input type="text" class="form-input" id="word-syn-synonyms" placeholder="e.g., book, arrange, set up, reserve">
+          <div class="form-help">Alternate words that mean the same thing</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <input type="number" class="form-input" id="word-syn-priority" value="50" min="1" max="999">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-word-syn">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-word-syn">Add Synonym</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add/Edit Context Pattern -->
+  <div id="modal-context-pattern" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Context-Aware Pattern</h3>
+        <p class="modal-subtitle">Detect multi-word patterns and expand with component context</p>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Pattern Words (comma-separated)</label>
+          <input type="text" class="form-input" id="pattern-words" placeholder="e.g., thing, garage">
+          <div class="form-help">Words that must ALL appear together (order doesn't matter)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Component/Meaning</label>
+          <input type="text" class="form-input" id="pattern-component" placeholder="e.g., air handler">
+          <div class="form-help">What this pattern refers to</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Context Tokens (comma-separated)</label>
+          <input type="text" class="form-input" id="pattern-tokens" placeholder="e.g., ahu, indoor unit, blower">
+          <div class="form-help">Additional tokens to add when pattern matches</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Confidence</label>
+          <input type="number" class="form-input" id="pattern-confidence" value="0.9" min="0" max="1" step="0.05">
+          <div class="form-help">How confident are you this pattern is accurate? (0.0-1.0)</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <input type="number" class="form-input" id="pattern-priority" value="100" min="1" max="999">
+        </div>
+        
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-top: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #1e40af; margin-bottom: 4px;">Example:</div>
+          <div style="font-size: 12px; color: #1e3a8a;">
+            Customer: "the thing in the garage isn't working"<br>
+            Pattern: ["thing", "garage"] → Component: "air handler"<br>
+            Tokens Added: ["air", "handler", "ahu", "indoor", "unit"]
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-pattern">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-pattern">Add Pattern</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/scrabengine.js"></script>
+</body>
+</html>

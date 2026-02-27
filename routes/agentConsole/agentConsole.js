@@ -40,6 +40,10 @@ const VERSION = 'AC1.0';
 const truthExportRouter = require('./truthExport');
 router.use('/truth', truthExportRouter);
 
+// ScrabEngine routes (Text Processing Pipeline)
+const scrabEngineRouter = require('./scrabEngine');
+router.use('/:companyId', scrabEngineRouter);
+
 /* ============================================================================
    TRUTH CACHE — Short TTL to prevent Mongo hammering
    ============================================================================ */
