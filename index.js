@@ -439,6 +439,14 @@ app.get('/company-profile.html', (req, res) => {
 // ============================================================================
 app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
+// ════════════════════════════════════════════════════════════════════════════
+// BULLETPROOF AUDIO SERVING - MongoDB fallback for ephemeral storage
+// ════════════════════════════════════════════════════════════════════════════
+// Order matters: fallback route MUST come before static serving
+// 1. Try custom route with MongoDB fallback
+// 2. If not matched, fall through to static files
+app.use('/audio-safe', require('./routes/audioFallback'));
+
 // Optimized static file serving with aggressive caching for audio files
 app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
   maxAge: '1d',
