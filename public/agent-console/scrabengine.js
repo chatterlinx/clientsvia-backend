@@ -210,6 +210,15 @@
       btnAddContextPattern: document.getElementById('btn-add-context-pattern'),
       btnAddExtraction:     document.getElementById('btn-add-extraction'),
 
+      btnBulkVocab:        document.getElementById('btn-bulk-vocab'),
+      modalBulkVocab:      document.getElementById('modal-bulk-vocab'),
+      bulkVocabInput:      document.getElementById('bulk-vocab-input'),
+      bulkVocabMode:       document.getElementById('bulk-vocab-mode'),
+      bulkVocabPreview:    document.getElementById('bulk-vocab-preview'),
+      bulkVocabPreviewText: document.getElementById('bulk-vocab-preview-text'),
+      btnCancelBulkVocab:  document.getElementById('btn-cancel-bulk-vocab'),
+      btnParseBulkVocab:   document.getElementById('btn-parse-bulk-vocab'),
+
       modalFiller:         document.getElementById('modal-filler'),
       modalVocabulary:     document.getElementById('modal-vocabulary'),
       modalWordSynonym:    document.getElementById('modal-word-synonym'),
@@ -319,6 +328,14 @@
     safeListen(DOM.btnAddWordSynonym,    'click', () => { log('CLICK: btnAddWordSynonym'); openModal('wordSynonym'); });
     safeListen(DOM.btnAddContextPattern, 'click', () => { log('CLICK: btnAddContextPattern'); openModal('contextPattern'); });
     safeListen(DOM.btnAddExtraction,     'click', () => { log('CLICK: btnAddExtraction'); openModal('extraction'); });
+
+    log('BIND-D2: Bulk import');
+    safeListen(DOM.btnBulkVocab, 'click', () => { log('CLICK: btnBulkVocab'); openBulkVocabModal(); });
+    safeListen(DOM.btnCancelBulkVocab, 'click', () => { closeBulkVocabModal(); });
+    safeListen(DOM.btnParseBulkVocab, 'click', () => { log('CLICK: btnParseBulkVocab'); parseBulkVocab(); });
+    if (DOM.modalBulkVocab) {
+      DOM.modalBulkVocab.addEventListener('click', (e) => { if (e.target === DOM.modalBulkVocab) closeBulkVocabModal(); });
+    }
 
     log('BIND-E: Modal lifecycle (cancel, save, backdrop, escape)');
     Object.keys(MODAL_REGISTRY).forEach((type) => {
@@ -835,6 +852,110 @@
     el.innerHTML = badgeTexts.length > 0
       ? badgeTexts.map(t => `<span class="test-badge">${t}</span>`).join('')
       : '';
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // BULK IMPORT — Vocabulary
+  // Format: canonical=variant1, variant2, variant3  (one line per term)
+  // Each variant becomes: from=variant → to=canonical
+  // ════════════════════════════════════════════════════════════════════════════
+
+  function openBulkVocabModal() {
+    if (DOM.bulkVocabInput) DOM.bulkVocabInput.value = '';
+    if (DOM.bulkVocabPreview) DOM.bulkVocabPreview.style.display = 'none';
+    if (DOM.modalBulkVocab) DOM.modalBulkVocab.classList.add('active');
+  }
+
+  function closeBulkVocabModal() {
+    if (DOM.modalBulkVocab) DOM.modalBulkVocab.classList.remove('active');
+  }
+
+  function parseBulkVocabText(raw) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const entries = [];
+    const errors = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const eqIdx = line.indexOf('=');
+      if (eqIdx === -1) {
+        errors.push(`Line ${i + 1}: Missing "=" separator — "${line.substring(0, 40)}"`);
+        continue;
+      }
+
+      const canonical = line.substring(0, eqIdx).trim().toLowerCase();
+      const variantsRaw = line.substring(eqIdx + 1);
+
+      if (!canonical) {
+        errors.push(`Line ${i + 1}: Empty canonical term`);
+        continue;
+      }
+
+      const variants = variantsRaw.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+      if (variants.length === 0) {
+        errors.push(`Line ${i + 1}: No variants for "${canonical}"`);
+        continue;
+      }
+
+      for (const variant of variants) {
+        if (variant === canonical) continue;
+        entries.push({ from: variant, to: canonical });
+      }
+    }
+
+    return { entries, errors, lineCount: lines.length };
+  }
+
+  function parseBulkVocab() {
+    const raw = (DOM.bulkVocabInput?.value || '').trim();
+    if (!raw) { alert('Please paste your vocabulary map'); return; }
+
+    const mode = DOM.bulkVocabMode?.value || 'EXACT';
+    const { entries, errors, lineCount } = parseBulkVocabText(raw);
+
+    if (errors.length > 0 && entries.length === 0) {
+      alert('Parse errors:\n\n' + errors.join('\n'));
+      return;
+    }
+
+    const existing = new Set(
+      (state.config.vocabulary.entries || []).map(e => `${norm(e.from)}→${norm(e.to)}`)
+    );
+    const fresh = entries.filter(e => !existing.has(`${norm(e.from)}→${norm(e.to)}`));
+    const dupeCount = entries.length - fresh.length;
+
+    if (fresh.length === 0) {
+      alert(`All ${entries.length} entries already exist. Nothing to import.`);
+      return;
+    }
+
+    const confirmMsg = [
+      `Parsed ${lineCount} lines → ${entries.length} normalization rules`,
+      dupeCount > 0 ? `${dupeCount} duplicates skipped` : null,
+      `${fresh.length} new rules to import`,
+      errors.length > 0 ? `\n${errors.length} parse warning(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}` : null,
+      `\nMatch mode: ${mode}`,
+      `\nImport ${fresh.length} rules?`
+    ].filter(Boolean).join('\n');
+
+    if (!confirm(confirmMsg)) return;
+
+    for (const entry of fresh) {
+      state.config.vocabulary.entries.push({
+        id: makeId(),
+        from: entry.from,
+        to: entry.to,
+        matchMode: mode,
+        enabled: true,
+        priority: 100
+      });
+    }
+
+    markDirty();
+    closeBulkVocabModal();
+    render();
+    log(`BULK IMPORT: Added ${fresh.length} vocabulary entries`);
+    alert(`Imported ${fresh.length} vocabulary rules.\n\nDon't forget to click "Save All Changes" to persist!`);
   }
 
   // ════════════════════════════════════════════════════════════════════════════

@@ -292,7 +292,10 @@
                 <h2 class="scrab-card-title">📝 Stage 2: Vocabulary Normalization</h2>
                 <p class="scrab-card-subtitle">Fix mishears and slang: "acee" → "ac", "pulling" → "cooling"</p>
               </div>
-              <button class="btn btn-primary btn-sm" id="btn-add-vocab">+ Add Normalization</button>
+              <div class="scrab-card-actions">
+                <button class="btn btn-secondary btn-sm" id="btn-bulk-vocab">Bulk Import</button>
+                <button class="btn btn-primary btn-sm" id="btn-add-vocab">+ Add Normalization</button>
+              </div>
             </div>
             
             <div class="form-group">
@@ -701,6 +704,41 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-cancel-extraction">Cancel</button>
         <button class="btn btn-primary" id="btn-save-extraction">Add Pattern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Bulk Import Vocabulary -->
+  <div id="modal-bulk-vocab" class="modal-backdrop">
+    <div class="modal" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Bulk Import Vocabulary</h3>
+        <p class="modal-subtitle">Paste your terms in <code>canonical=variant1, variant2, variant3</code> format (one per line)</p>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Paste Vocabulary Map</label>
+          <textarea class="form-input" id="bulk-vocab-input" rows="14" style="font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6;" placeholder="ac=air conditioner, air conditioning, a/c, ay see, acee
+hvac=h v a c, h-vac, h back
+heat pump=heatpump, he pump, heet pump
+thermostat=thermo stat, termostat, thermastat"></textarea>
+          <div class="form-help">Each line: <strong>canonical=variant1, variant2, ...</strong> — Each variant becomes a normalization rule mapping to the canonical term.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Match Mode</label>
+          <select class="form-select" id="bulk-vocab-mode">
+            <option value="EXACT">EXACT (word boundary) — Recommended</option>
+            <option value="CONTAINS">CONTAINS (substring)</option>
+          </select>
+        </div>
+        <div id="bulk-vocab-preview" class="info-banner example" style="display: none;">
+          <div class="info-banner-title">Preview</div>
+          <div class="info-banner-body" id="bulk-vocab-preview-text"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-bulk-vocab">Cancel</button>
+        <button class="btn btn-primary" id="btn-parse-bulk-vocab">Preview & Import</button>
       </div>
     </div>
   </div>
