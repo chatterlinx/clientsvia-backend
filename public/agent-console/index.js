@@ -296,9 +296,6 @@
       case 'booking':
         window.location.href = `${baseUrl}/booking.html${companyParam}`;
         break;
-      case 'global-hub':
-        window.location.href = `${baseUrl}/global-hub.html${companyParam}`;
-        break;
       case 'calendar':
         window.location.href = `${baseUrl}/calendar.html${companyParam}`;
         break;
