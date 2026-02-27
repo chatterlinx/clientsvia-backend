@@ -569,112 +569,357 @@ class EntityExtractionEngine {
     };
     
     // ────────────────────────────────────────────────────────────────────────
-    // NAMES EXTRACTION
+    // HONORIFICS - Strip titles before name extraction
+    // ────────────────────────────────────────────────────────────────────────
+    const HONORIFICS = ['mr', 'mrs', 'ms', 'miss', 'dr', 'doctor', 'prof', 'professor', 'sir', 'madam'];
+    
+    // Helper: Strip honorifics and clean name tokens
+    const stripHonorifics = (nameCandidate) => {
+      const parts = nameCandidate.toLowerCase().split(/\s+/);
+      return parts.filter(part => !HONORIFICS.includes(part)).join(' ');
+    };
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // INTELLIGENT NAME EXTRACTION WITH GLOBALSHARE VALIDATION
+    // ────────────────────────────────────────────────────────────────────────
+    // Detects patterns like:
+    // - "I'm Mr. Johnson" → lastName="Johnson"
+    // - "I'm Mr. John Johnson" → firstName="John", lastName="Johnson"
+    // - "my name is John" → firstName="John"
+    // - "this is John Smith" → firstName="John", lastName="Smith"
+    // 
+    // Uses GlobalShare to distinguish first vs last names when ambiguous
     // ────────────────────────────────────────────────────────────────────────
     
-    // Pattern 1: "my name is [Name]" - First name only
-    const myNamePattern = /my name is (\w+)/i;
-    const myNameMatch = text.match(myNamePattern);
-    if (myNameMatch && myNameMatch[1]) {
-      const candidate = this.capitalizeFirst(myNameMatch[1]);
+    // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 1: "I'm Mr./Dr. [Name(s)]"
+    // ════════════════════════════════════════════════════════════════════════
+    // Handles: "I'm Mr. Johnson", "I'm Dr. John Smith", "I'm Mrs. Sarah Williams"
+    
+    const imHonorificPattern = /i'?m\s+(mr|mrs|ms|miss|dr|doctor|prof|professor)\.?\s+(\w+)(?:\s+(\w+))?/i;
+    const imHonorificMatch = text.match(imHonorificPattern);
+    
+    if (imHonorificMatch) {
+      const firstNameCandidate = imHonorificMatch[2] ? this.capitalizeFirst(imHonorificMatch[2]) : null;
+      const lastNameCandidate = imHonorificMatch[3] ? this.capitalizeFirst(imHonorificMatch[3]) : null;
       
-      // 🌐 GLOBALSHARE VALIDATION - Check against 9,530 first names
-      let isValidName = false;
-      if (context.GlobalHubService) {
-        try {
-          isValidName = await context.GlobalHubService.isFirstName(candidate);
-          validations.push({
-            entity: 'firstName',
-            value: candidate,
-            isValid: isValidName,
-            source: 'GlobalShare',
-            dictionarySize: 9530
+      if (context.GlobalHubService && firstNameCandidate && lastNameCandidate) {
+        // Two names after honorific - use GlobalShare to determine which is which
+        const isFirstAFirstName = await context.GlobalHubService.isFirstName(firstNameCandidate);
+        const isSecondAFirstName = await context.GlobalHubService.isFirstName(lastNameCandidate);
+        const isFirstALastName = await context.GlobalHubService.isLastName(firstNameCandidate);
+        const isSecondALastName = await context.GlobalHubService.isLastName(lastNameCandidate);
+        
+        validations.push({
+          scenario: 'im_honorific_two_names',
+          first_candidate: { value: firstNameCandidate, isFirstName: isFirstAFirstName, isLastName: isFirstALastName },
+          second_candidate: { value: lastNameCandidate, isFirstName: isSecondAFirstName, isLastName: isSecondALastName },
+          source: 'GlobalShare'
+        });
+        
+        if (isFirstAFirstName && isSecondALastName) {
+          // "I'm Mr. John Johnson" - clear case
+          entities.firstName = firstNameCandidate;
+          entities.lastName = lastNameCandidate;
+          entities.fullName = `${firstNameCandidate} ${lastNameCandidate}`;
+          
+          extractions.push({
+            type: 'fullName',
+            firstName: firstNameCandidate,
+            lastName: lastNameCandidate,
+            pattern: 'im_honorific_full',
+            confidence: 0.98,
+            validated: true
           });
-        } catch (err) {
-          // Non-blocking - proceed even if validation fails
+        } else if (!isFirstAFirstName && isSecondALastName) {
+          // "I'm Mr. Johnson" - only last name given
+          entities.lastName = lastNameCandidate;
+          
+          extractions.push({
+            type: 'lastName',
+            value: lastNameCandidate,
+            pattern: 'im_honorific_last',
+            confidence: 0.95,
+            validated: true
+          });
+        } else {
+          // Ambiguous - take best guess (first + last)
+          entities.firstName = firstNameCandidate;
+          entities.lastName = lastNameCandidate;
+          
+          extractions.push({
+            type: 'fullName',
+            firstName: firstNameCandidate,
+            lastName: lastNameCandidate,
+            pattern: 'im_honorific_ambiguous',
+            confidence: 0.75,
+            validated: false,
+            note: 'Ambiguous - neither name strongly matches dictionary'
+          });
         }
-      }
-      
-      entities.firstName = candidate;
-      extractions.push({
-        type: 'firstName',
-        value: entities.firstName,
-        pattern: 'my_name_is',
-        confidence: isValidName ? 0.98 : 0.85, // Higher confidence if validated
-        validated: isValidName
-      });
-    }
-    
-    // Pattern 2: "this is [First] [Last]" - Full name
-    const thisIsFullPattern = /this is (\w+)\s+(\w+)/i;
-    const thisIsFullMatch = text.match(thisIsFullPattern);
-    if (thisIsFullMatch && thisIsFullMatch[1] && thisIsFullMatch[2]) {
-      entities.firstName = this.capitalizeFirst(thisIsFullMatch[1]);
-      entities.lastName = this.capitalizeFirst(thisIsFullMatch[2]);
-      entities.fullName = `${entities.firstName} ${entities.lastName}`;
-      extractions.push({
-        type: 'fullName',
-        firstName: entities.firstName,
-        lastName: entities.lastName,
-        pattern: 'this_is_full',
-        confidence: 0.98
-      });
-    }
-    
-    // Pattern 3: "I'm [Name]" - First name
-    const imNamePattern = /i'?m\s+(\w+)/i;
-    const imNameMatch = text.match(imNamePattern);
-    if (imNameMatch && imNameMatch[1] && !entities.firstName) {
-      const candidate = this.capitalizeFirst(imNameMatch[1]);
-      // Avoid common false positives
-      if (!['calling', 'looking', 'trying', 'having', 'getting'].includes(candidate.toLowerCase())) {
-        entities.firstName = candidate;
+      } else if (firstNameCandidate && !lastNameCandidate) {
+        // Only one name after honorific: "I'm Mr. Johnson"
+        if (context.GlobalHubService) {
+          const isLastName = await context.GlobalHubService.isLastName(firstNameCandidate);
+          
+          if (isLastName) {
+            entities.lastName = firstNameCandidate;
+            validations.push({
+              entity: 'lastName',
+              value: firstNameCandidate,
+              isValid: true,
+              source: 'GlobalShare',
+              dictionarySize: 161427
+            });
+            
+            extractions.push({
+              type: 'lastName',
+              value: firstNameCandidate,
+              pattern: 'im_honorific_single',
+              confidence: 0.95,
+              validated: true
+            });
+          } else {
+            // Not in last names - might be first name
+            entities.firstName = firstNameCandidate;
+            extractions.push({
+              type: 'firstName',
+              value: firstNameCandidate,
+              pattern: 'im_honorific_single',
+              confidence: 0.75,
+              validated: false
+            });
+          }
+        } else {
+          // No GlobalShare - default to lastName
+          entities.lastName = firstNameCandidate;
+          extractions.push({
+            type: 'lastName',
+            value: firstNameCandidate,
+            pattern: 'im_honorific_single',
+            confidence: 0.70
+          });
+        }
+      } else if (firstNameCandidate && lastNameCandidate) {
+        // Two names but no GlobalShare - assume firstName + lastName
+        entities.firstName = firstNameCandidate;
+        entities.lastName = lastNameCandidate;
+        entities.fullName = `${firstNameCandidate} ${lastNameCandidate}`;
+        
         extractions.push({
-          type: 'firstName',
-          value: entities.firstName,
-          pattern: 'im_name',
-          confidence: 0.85
+          type: 'fullName',
+          firstName: firstNameCandidate,
+          lastName: lastNameCandidate,
+          pattern: 'im_honorific_full',
+          confidence: 0.80
         });
       }
     }
     
-    // Pattern 4: "call me [Name]"
-    const callMePattern = /call me (\w+)/i;
-    const callMeMatch = text.match(callMePattern);
-    if (callMeMatch && callMeMatch[1] && !entities.firstName) {
-      entities.firstName = this.capitalizeFirst(callMeMatch[1]);
-      extractions.push({
-        type: 'firstName',
-        value: entities.firstName,
-        pattern: 'call_me',
-        confidence: 0.90
-      });
+    // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 2: "my name is [Name]" - First name only
+    // ════════════════════════════════════════════════════════════════════════
+    
+    if (!entities.firstName && !entities.lastName) {
+      const myNamePattern = /my name is (\w+)/i;
+      const myNameMatch = text.match(myNamePattern);
+      if (myNameMatch && myNameMatch[1]) {
+        const candidate = this.capitalizeFirst(myNameMatch[1]);
+        
+        // 🌐 GLOBALSHARE VALIDATION - Check against 9,530 first names
+        let isValidFirstName = false;
+        if (context.GlobalHubService) {
+          try {
+            isValidFirstName = await context.GlobalHubService.isFirstName(candidate);
+            validations.push({
+              entity: 'firstName',
+              value: candidate,
+              isValid: isValidFirstName,
+              source: 'GlobalShare',
+              dictionarySize: 9530
+            });
+          } catch (err) {
+            // Non-blocking - proceed even if validation fails
+          }
+        }
+        
+        entities.firstName = candidate;
+        extractions.push({
+          type: 'firstName',
+          value: entities.firstName,
+          pattern: 'my_name_is',
+          confidence: isValidFirstName ? 0.98 : 0.85,
+          validated: isValidFirstName
+        });
+      }
     }
     
-    // Pattern 5: "first name is [Name]"
-    const firstNamePattern = /(?:my\s+)?first\s+name\s+(?:is\s+)?(\w+)/i;
-    const firstNameMatch = text.match(firstNamePattern);
-    if (firstNameMatch && firstNameMatch[1] && !entities.firstName) {
-      entities.firstName = this.capitalizeFirst(firstNameMatch[1]);
-      extractions.push({
-        type: 'firstName',
-        value: entities.firstName,
-        pattern: 'first_name_is',
-        confidence: 0.95
-      });
+    // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 3: "this is [First] [Last]" - Full name with GlobalShare validation
+    // ════════════════════════════════════════════════════════════════════════
+    
+    if (!entities.firstName || !entities.lastName) {
+      const thisIsFullPattern = /this is (\w+)\s+(\w+)/i;
+      const thisIsFullMatch = text.match(thisIsFullPattern);
+      
+      if (thisIsFullMatch && thisIsFullMatch[1] && thisIsFullMatch[2]) {
+        const firstCandidate = this.capitalizeFirst(thisIsFullMatch[1]);
+        const secondCandidate = this.capitalizeFirst(thisIsFullMatch[2]);
+        
+        // Use GlobalShare to validate proper order
+        if (context.GlobalHubService) {
+          const isFirstAFirstName = await context.GlobalHubService.isFirstName(firstCandidate);
+          const isSecondALastName = await context.GlobalHubService.isLastName(secondCandidate);
+          
+          validations.push({
+            scenario: 'this_is_full',
+            first_candidate: { value: firstCandidate, isFirstName: isFirstAFirstName },
+            second_candidate: { value: secondCandidate, isLastName: isSecondALastName },
+            source: 'GlobalShare'
+          });
+          
+          if (isFirstAFirstName && isSecondALastName) {
+            // Perfect match - high confidence
+            entities.firstName = firstCandidate;
+            entities.lastName = secondCandidate;
+            entities.fullName = `${firstCandidate} ${secondCandidate}`;
+            
+            extractions.push({
+              type: 'fullName',
+              firstName: firstCandidate,
+              lastName: secondCandidate,
+              pattern: 'this_is_full',
+              confidence: 0.99,
+              validated: true
+            });
+          } else {
+            // Not validated but still extract
+            entities.firstName = firstCandidate;
+            entities.lastName = secondCandidate;
+            entities.fullName = `${firstCandidate} ${secondCandidate}`;
+            
+            extractions.push({
+              type: 'fullName',
+              firstName: firstCandidate,
+              lastName: secondCandidate,
+              pattern: 'this_is_full',
+              confidence: 0.80,
+              validated: false,
+              note: 'Not validated against GlobalShare'
+            });
+          }
+        } else {
+          // No GlobalShare - assume firstName + lastName
+          entities.firstName = firstCandidate;
+          entities.lastName = secondCandidate;
+          entities.fullName = `${firstCandidate} ${secondCandidate}`;
+          
+          extractions.push({
+            type: 'fullName',
+            firstName: firstCandidate,
+            lastName: secondCandidate,
+            pattern: 'this_is_full',
+            confidence: 0.85
+          });
+        }
+      }
     }
     
-    // Pattern 6: "last name is [Name]"
-    const lastNamePattern = /(?:my\s+)?last\s+name\s+(?:is\s+)?(\w+)/i;
-    const lastNameMatch = text.match(lastNamePattern);
-    if (lastNameMatch && lastNameMatch[1]) {
-      entities.lastName = this.capitalizeFirst(lastNameMatch[1]);
-      extractions.push({
-        type: 'lastName',
-        value: entities.lastName,
-        pattern: 'last_name_is',
-        confidence: 0.95
-      });
+    // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 4: "call me [Name]" - First name
+    // ════════════════════════════════════════════════════════════════════════
+    
+    if (!entities.firstName) {
+      const callMePattern = /call me (\w+)/i;
+      const callMeMatch = text.match(callMePattern);
+      if (callMeMatch && callMeMatch[1]) {
+        const candidate = this.capitalizeFirst(callMeMatch[1]);
+        
+        let isValidFirstName = false;
+        if (context.GlobalHubService) {
+          isValidFirstName = await context.GlobalHubService.isFirstName(candidate);
+          validations.push({
+            entity: 'firstName',
+            value: candidate,
+            isValid: isValidFirstName,
+            source: 'GlobalShare'
+          });
+        }
+        
+        entities.firstName = candidate;
+        extractions.push({
+          type: 'firstName',
+          value: candidate,
+          pattern: 'call_me',
+          confidence: isValidFirstName ? 0.96 : 0.80,
+          validated: isValidFirstName
+        });
+      }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 5: "first name is [Name]" - Explicit first name
+    // ════════════════════════════════════════════════════════════════════════
+    
+    if (!entities.firstName) {
+      const firstNamePattern = /(?:my\s+)?first\s+name\s+(?:is\s+)?(\w+)/i;
+      const firstNameMatch = text.match(firstNamePattern);
+      if (firstNameMatch && firstNameMatch[1]) {
+        const candidate = this.capitalizeFirst(firstNameMatch[1]);
+        
+        let isValidFirstName = false;
+        if (context.GlobalHubService) {
+          isValidFirstName = await context.GlobalHubService.isFirstName(candidate);
+          validations.push({
+            entity: 'firstName',
+            value: candidate,
+            isValid: isValidFirstName,
+            source: 'GlobalShare'
+          });
+        }
+        
+        entities.firstName = candidate;
+        extractions.push({
+          type: 'firstName',
+          value: candidate,
+          pattern: 'first_name_is',
+          confidence: isValidFirstName ? 0.98 : 0.90,
+          validated: isValidFirstName
+        });
+      }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 6: "last name is [Name]" - Explicit last name
+    // ════════════════════════════════════════════════════════════════════════
+    
+    if (!entities.lastName) {
+      const lastNamePattern = /(?:my\s+)?last\s+name\s+(?:is\s+)?(\w+)/i;
+      const lastNameMatch = text.match(lastNamePattern);
+      if (lastNameMatch && lastNameMatch[1]) {
+        const candidate = this.capitalizeFirst(lastNameMatch[1]);
+        
+        let isValidLastName = false;
+        if (context.GlobalHubService) {
+          isValidLastName = await context.GlobalHubService.isLastName(candidate);
+          validations.push({
+            entity: 'lastName',
+            value: candidate,
+            isValid: isValidLastName,
+            source: 'GlobalShare',
+            dictionarySize: 161427
+          });
+        }
+        
+        entities.lastName = candidate;
+        extractions.push({
+          type: 'lastName',
+          value: candidate,
+          pattern: 'last_name_is',
+          confidence: isValidLastName ? 0.98 : 0.85,
+          validated: isValidLastName
+        });
+      }
     }
     
     // ────────────────────────────────────────────────────────────────────────
