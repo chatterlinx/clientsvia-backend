@@ -1123,19 +1123,46 @@ class ScrabEngine {
       });
     }
     
-    // Quality Gate
-    if (scrabResult.stage4_quality) {
+    // Stage 4: Entity Extraction
+    if (scrabResult.stage4_extraction) {
+      const extractions = scrabResult.stage4_extraction.extractions || [];
+      const entities = scrabResult.stage4_extraction.entities || {};
+      
+      const entitiesSummary = [];
+      if (entities.firstName) entitiesSummary.push(`First: "${entities.firstName}"`);
+      if (entities.lastName) entitiesSummary.push(`Last: "${entities.lastName}"`);
+      if (entities.phone) entitiesSummary.push(`Phone: ${entities.phone}`);
+      if (entities.address) entitiesSummary.push(`Address: ${entities.address}`);
+      if (entities.email) entitiesSummary.push(`Email: ${entities.email}`);
+      
       events.push({
-        stage: 'SCRABENGINE_QUALITY',
-        icon: scrabResult.stage4_quality.passed ? '✅' : '⚠️',
-        title: 'Stage 4: Quality Assessment',
-        status: scrabResult.stage4_quality.passed ? 'passed' : 'failed',
-        reason: scrabResult.stage4_quality.reason,
-        confidence: scrabResult.stage4_quality.confidence,
-        details: scrabResult.stage4_quality.details,
-        summary: scrabResult.stage4_quality.passed
-          ? `Quality OK (${Math.round(scrabResult.stage4_quality.confidence * 100)}% confidence)`
-          : `Quality ${scrabResult.stage4_quality.reason} - ${scrabResult.stage4_quality.shouldReprompt ? 'reprompt suggested' : 'proceeding'}`
+        stage: 'SCRABENGINE_STAGE4',
+        icon: '🏷️',
+        title: 'Stage 4: Entity Extraction',
+        text: entitiesSummary.length > 0 ? entitiesSummary.join(' | ') : 'No entities extracted',
+        status: extractions.length > 0 ? 'extracted' : 'none',
+        processingTimeMs: scrabResult.stage4_extraction.processingTimeMs,
+        entities: entities,
+        extractions: extractions,
+        summary: extractions.length > 0
+          ? `Extracted ${extractions.length} entit${extractions.length === 1 ? 'y' : 'ies'}: ${extractions.map(e => `${e.type}="${e.value}"`).join(', ')}`
+          : 'No entities found'
+      });
+    }
+    
+    // Stage 5: Quality Gate
+    if (scrabResult.stage5_quality) {
+      events.push({
+        stage: 'SCRABENGINE_STAGE5',
+        icon: scrabResult.stage5_quality.passed ? '✅' : '⚠️',
+        title: 'Stage 5: Quality Assessment',
+        status: scrabResult.stage5_quality.passed ? 'passed' : 'failed',
+        reason: scrabResult.stage5_quality.reason,
+        confidence: scrabResult.stage5_quality.confidence,
+        details: scrabResult.stage5_quality.details,
+        summary: scrabResult.stage5_quality.passed
+          ? `Quality OK (${Math.round(scrabResult.stage5_quality.confidence * 100)}% confidence)`
+          : `Quality ${scrabResult.stage5_quality.reason} - ${scrabResult.stage5_quality.shouldReprompt ? 'reprompt suggested' : 'proceeding'}`
       });
     }
     
