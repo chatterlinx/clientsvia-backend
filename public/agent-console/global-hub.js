@@ -49,7 +49,6 @@
     // Actions
     btnViewFirstnames: document.getElementById('btn-view-firstnames'),
     btnRefreshFirstnames: document.getElementById('btn-refresh-firstnames'),
-    btnViewDefaults: document.getElementById('btn-view-defaults'),
     
     // Modal
     modalFirstnames: document.getElementById('modal-firstnames'),
@@ -129,11 +128,6 @@
     DOM.btnSearchName.addEventListener('click', searchName);
     DOM.inputSearchName.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') searchName();
-    });
-    
-    // View defaults
-    DOM.btnViewDefaults.addEventListener('click', () => {
-      showToast('info', 'Platform Defaults', 'Default triggers are configured at the platform level. Contact admin to modify.');
     });
   }
 
