@@ -6,7 +6,6 @@
  * Responsibilities:
  * - Display platform-wide shared resources
  * - First Names dictionary lookup
- * - Platform default triggers status
  * 
  * Uses AgentConsoleAuth for centralized authentication.
  * ============================================================================
@@ -28,8 +27,7 @@
      -------------------------------------------------------------------------- */
   const state = {
     companyId: null,
-    firstNamesCount: 0,
-    platformDefaultsLoaded: false
+    firstNamesCount: 0
   };
 
   /* --------------------------------------------------------------------------
@@ -44,7 +42,6 @@
     statFirstnamesCount: document.getElementById('stat-firstnames-count'),
     statCacheStatus: document.getElementById('stat-cache-status'),
     badgeFirstnamesStatus: document.getElementById('badge-firstnames-status'),
-    badgeDefaultsStatus: document.getElementById('badge-defaults-status'),
     
     // Actions
     btnViewFirstnames: document.getElementById('btn-view-firstnames'),
@@ -154,15 +151,6 @@
           DOM.statCacheStatus.textContent = 'N/A';
         }
         
-        // Platform defaults
-        if (data.globalHub?.platformDefaults?.loaded) {
-          DOM.badgeDefaultsStatus.textContent = 'Active';
-          DOM.badgeDefaultsStatus.className = 'badge badge-success';
-        } else {
-          DOM.badgeDefaultsStatus.textContent = 'Not Loaded';
-          DOM.badgeDefaultsStatus.className = 'badge badge-warning';
-        }
-        
         return;
       }
       
@@ -173,8 +161,6 @@
       console.error('[GlobalHub] Failed to load stats:', error);
       DOM.statFirstnamesCount.textContent = '?';
       DOM.statCacheStatus.textContent = 'Error';
-      DOM.badgeDefaultsStatus.textContent = 'Unknown';
-      DOM.badgeDefaultsStatus.className = 'badge badge-neutral';
     }
   }
 
