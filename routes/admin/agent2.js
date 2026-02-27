@@ -2125,5 +2125,58 @@ router.post('/:companyId/generate-trigger-audio',
   }
 );
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * POST /:companyId/clear-all-audio
+ * Clear all audio cache for a company - marks all audio for regeneration
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+router.post('/:companyId/clear-all-audio',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const companyId = req.params.companyId;
+      
+      logger.info('[Agent2Audio] Clearing all audio cache', { companyId });
+      
+      // Mark all TriggerAudio as invalid
+      const result = await TriggerAudio.updateMany(
+        { companyId, isValid: true },
+        {
+          $set: {
+            isValid: false,
+            invalidatedAt: new Date(),
+            invalidatedReason: 'BULK_CLEAR_BY_ADMIN',
+            updatedBy: req.user?.email || 'admin'
+          }
+        }
+      );
+      
+      logger.info('[Agent2Audio] Audio cache cleared', {
+        companyId,
+        cleared: result.modifiedCount
+      });
+      
+      res.json({
+        success: true,
+        cleared: result.modifiedCount,
+        message: `Cleared ${result.modifiedCount} audio file(s). Use Bulk Audio to regenerate.`
+      });
+      
+    } catch (error) {
+      logger.error('[Agent2Audio] Clear all audio failed', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+);
+
 module.exports = router;
 

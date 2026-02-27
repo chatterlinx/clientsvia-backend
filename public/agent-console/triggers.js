@@ -72,6 +72,7 @@
     btnBack: document.getElementById('btn-back'),
     btnBackToAgent2: document.getElementById('btn-back-to-agent2'),
     btnAddTrigger: document.getElementById('btn-add-trigger'),
+    btnClearAllAudio: document.getElementById('btn-clear-all-audio'),
     btnBulkGenerateAudio: document.getElementById('btn-bulk-generate-audio'),
     btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
@@ -276,6 +277,9 @@
     if (DOM.btnPatienceSave) DOM.btnPatienceSave.addEventListener('click', savePatienceSettings);
     if (DOM.modalPatience) {
       DOM.modalPatience.addEventListener('click', (e) => { if (e.target === DOM.modalPatience) closePatienceModal(); });
+    }
+    if (DOM.btnClearAllAudio) {
+      DOM.btnClearAllAudio.addEventListener('click', clearAllAudio);
     }
     if (DOM.btnBulkGenerateAudio) {
       DOM.btnBulkGenerateAudio.addEventListener('click', bulkGenerateAudio);
@@ -1598,6 +1602,56 @@
       }
       
       showToast('error', 'Generation Failed', error.message || 'Could not generate audio');
+    }
+  }
+
+  async function clearAllAudio() {
+    const triggers = state.triggers || [];
+    const triggersWithAudio = triggers.filter(t => t.answer?.audioUrl);
+    
+    if (triggersWithAudio.length === 0) {
+      alert('No audio to clear. All triggers already use TTS.');
+      return;
+    }
+    
+    const confirmMsg = 
+      `⚠️ CLEAR ALL AUDIO CACHE\n\n` +
+      `This will invalidate audio for ${triggersWithAudio.length} trigger(s).\n\n` +
+      `After clearing, you can:\n` +
+      `1. Click "🎙️ Bulk Audio" to regenerate all\n` +
+      `2. Or triggers will use live TTS until regenerated\n\n` +
+      `Audio files are in MongoDB (permanent) but will be marked for regeneration.\n\n` +
+      `Type "CLEAR" to confirm:`;
+    
+    const userInput = prompt(confirmMsg);
+    
+    if (userInput !== 'CLEAR') {
+      console.log('[Triggers] Clear audio cancelled');
+      return;
+    }
+    
+    try {
+      const btn = DOM.btnClearAllAudio;
+      btn.disabled = true;
+      btn.textContent = 'Clearing...';
+      
+      const response = await apiFetch(
+        `/api/admin/agent2/${state.companyId}/clear-all-audio`,
+        { method: 'POST' }
+      );
+      
+      alert(`✅ Audio cache cleared!\n\n${response.cleared} trigger(s) marked for regeneration.\n\nClick "🎙️ Bulk Audio" to regenerate all at once.`);
+      
+      await loadTriggers();
+      showToast('success', 'Audio Cleared', `${response.cleared} audio files marked for regeneration`);
+      
+    } catch (err) {
+      console.error('[Triggers] Clear audio failed:', err);
+      alert('Failed to clear audio: ' + err.message);
+    } finally {
+      const btn = DOM.btnClearAllAudio;
+      btn.disabled = false;
+      btn.textContent = '🗑️ Clear Audio';
     }
   }
 
