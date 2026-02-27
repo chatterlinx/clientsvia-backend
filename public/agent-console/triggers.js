@@ -618,11 +618,13 @@
     return matches;
   }
   
+  // Variables resolved at call time by the runtime (not company-level static)
+  const RUNTIME_VARIABLES = new Set(['name']);
+  
   function extractAndRenderVariables() {
     state.detectedVariables.clear();
     
     for (const trigger of state.triggers) {
-      // Standard trigger fields
       const answerText = trigger.answer?.answerText || '';
       const followUpQuestion = trigger.followUp?.question || '';
       
@@ -637,7 +639,9 @@
       const excludedVars = extractVariablesFromText(excludedFacts);
       const backupVars = extractVariablesFromText(backupAnswer);
       
-      [...answerVars, ...followUpVars, ...includedVars, ...excludedVars, ...backupVars].forEach(v => state.detectedVariables.add(v));
+      [...answerVars, ...followUpVars, ...includedVars, ...excludedVars, ...backupVars]
+        .filter(v => !RUNTIME_VARIABLES.has(v))
+        .forEach(v => state.detectedVariables.add(v));
     }
     
     renderVariables();

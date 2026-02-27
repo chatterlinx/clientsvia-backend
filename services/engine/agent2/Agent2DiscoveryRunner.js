@@ -70,14 +70,37 @@ const triggerVariablesCache = new Map();
  * @param {string} companyId - Company ID to load variables for
  * @returns {Promise<string>} Text with variables substituted
  */
-async function substituteTriggerVariables(text, companyId) {
+/**
+ * Substitute trigger card variables in text.
+ * 
+ * Two kinds of variables:
+ * 1. STATIC (company): {diagnosticfee}, {maintenanceplanprice} — from CompanyTriggerSettings
+ * 2. RUNTIME (per-call): {name} — from ScrabEngine extraction / caller identity
+ * 
+ * Runtime variables are resolved first, then static company variables.
+ * {name} resolves to ", CallerName" or "" (empty) so triggers read naturally:
+ *   "Got it{name}." → "Got it, Marc." or "Got it."
+ * 
+ * @param {string} text - Text potentially containing {variable} placeholders
+ * @param {string} companyId - Company ID to load static variables for
+ * @param {Object} [runtimeVars] - Runtime variables (e.g., { name: "Marc" })
+ * @returns {Promise<string>} Text with variables substituted
+ */
+async function substituteTriggerVariables(text, companyId, runtimeVars = {}) {
   if (!text || typeof text !== 'string' || !companyId) return text;
-  
-  // Check if text contains any placeholders
   if (!text.includes('{')) return text;
   
+  let result = text;
+  
   try {
-    // Check cache first
+    // RUNTIME VARIABLES (per-call, e.g., {name} from ScrabEngine extraction)
+    if (runtimeVars.name) {
+      result = result.replace(/\{name\}/gi, `, ${runtimeVars.name}`);
+    } else {
+      result = result.replace(/\{name\}/gi, '');
+    }
+    
+    // STATIC VARIABLES (company-level, e.g., {diagnosticfee})
     let variables = triggerVariablesCache.get(companyId);
     
     if (!variables) {
@@ -92,10 +115,6 @@ async function substituteTriggerVariables(text, companyId) {
       triggerVariablesCache.set(companyId, variables);
     }
     
-    if (Object.keys(variables).length === 0) return text;
-    
-    // Replace placeholders (case-insensitive)
-    let result = text;
     for (const [varName, value] of Object.entries(variables)) {
       if (!value) continue;
       const regex = new RegExp(`\\{${varName}\\}`, 'gi');
@@ -108,7 +127,7 @@ async function substituteTriggerVariables(text, companyId) {
       companyId, 
       error: err.message 
     });
-    return text;
+    return result;
   }
 }
 
@@ -1573,11 +1592,16 @@ class Agent2DiscoveryRunner {
       // ════════════════════════════════════════════════════════════════════════
       
       // Build response - V126: No hardcoded text allowed
+      // If answerText contains {name}, skip buildAck name insertion to prevent
+      // double-naming (buildAck says "Ok, Marc." + answerText says "Got it, Marc.")
+      const textHasNameVar = answerText && /\{name\}/i.test(answerText);
+      const ackToUse = textHasNameVar ? ack : personalAck;
+      
       let response;
       if (answerText) {
         response = afterQuestion
-          ? `${personalAck} ${answerText} ${afterQuestion}`.trim()
-          : `${personalAck} ${answerText}`.trim();
+          ? `${ackToUse} ${answerText} ${afterQuestion}`.trim()
+          : `${ackToUse} ${answerText}`.trim();
       } else if (afterQuestion) {
         // Card has no answerText but has a follow-up question
         response = `${personalAck} ${afterQuestion}`.trim();
@@ -1662,10 +1686,10 @@ class Agent2DiscoveryRunner {
         nextAction
       });
 
-      // Substitute trigger card variables in response text for TTS fallback
-      // e.g., {diagnosticfee} → "80 dollars"
-      // This ensures if audio is missing/invalid, TTS reads actual values not placeholders
-      const finalResponse = await substituteTriggerVariables(response, companyId);
+      // Substitute trigger card variables in response text
+      // Static: {diagnosticfee} → "80 dollars"  |  Runtime: {name} → ", Marc" or ""
+      const runtimeVars = { name: callerName || null };
+      const finalResponse = await substituteTriggerVariables(response, companyId, runtimeVars);
       
       if (finalResponse !== response) {
         emit('A2_TRIGGER_VARIABLES_SUBSTITUTED', {
