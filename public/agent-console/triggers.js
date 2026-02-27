@@ -72,6 +72,7 @@
     btnBack: document.getElementById('btn-back'),
     btnBackToAgent2: document.getElementById('btn-back-to-agent2'),
     btnAddTrigger: document.getElementById('btn-add-trigger'),
+    btnBulkGenerateAudio: document.getElementById('btn-bulk-generate-audio'),
     btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
     btnCreateGroup: document.getElementById('btn-create-group'),
@@ -238,6 +239,9 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+    if (DOM.btnBulkGenerateAudio) {
+      DOM.btnBulkGenerateAudio.addEventListener('click', bulkGenerateAudio);
+    }
     if (DOM.btnBulkImportTriggers) {
       DOM.btnBulkImportTriggers.addEventListener('click', openBulkImportModal);
     }
@@ -1546,6 +1550,94 @@
       }
       
       showToast('error', 'Generation Failed', error.message || 'Could not generate audio');
+    }
+  }
+
+  async function bulkGenerateAudio() {
+    const triggers = state.triggers || [];
+    
+    const eligible = [];
+    const skipped = { hasAudio: 0, runtimeVar: 0, noText: 0, llm: 0, disabled: 0 };
+    
+    for (const t of triggers) {
+      const text = t.answer?.answerText || '';
+      const hasAudio = t.answer?.audioUrl && !t.answer?.audioNeedsRegeneration;
+      const isLlm = t.responseMode === 'llm';
+      const isDisabled = t.isEnabled === false;
+      const hasRuntimeVar = /\{name\}/i.test(text);
+      const ruleId = t.ruleId || '';
+      
+      if (isDisabled) { skipped.disabled++; continue; }
+      if (isLlm) { skipped.llm++; continue; }
+      if (!text.trim()) { skipped.noText++; continue; }
+      if (hasRuntimeVar) { skipped.runtimeVar++; continue; }
+      if (hasAudio) { skipped.hasAudio++; continue; }
+      
+      eligible.push({ ruleId, label: t.label || ruleId, text });
+    }
+    
+    const skipDetails = [];
+    if (skipped.hasAudio > 0) skipDetails.push(`${skipped.hasAudio} already have audio`);
+    if (skipped.runtimeVar > 0) skipDetails.push(`${skipped.runtimeVar} use {name} (runtime variable)`);
+    if (skipped.noText > 0) skipDetails.push(`${skipped.noText} have no answer text`);
+    if (skipped.llm > 0) skipDetails.push(`${skipped.llm} are LLM mode`);
+    if (skipped.disabled > 0) skipDetails.push(`${skipped.disabled} are disabled`);
+    
+    if (eligible.length === 0) {
+      alert(
+        `No triggers eligible for audio generation.\n\n` +
+        `Total triggers: ${triggers.length}\n` +
+        `Skipped:\n  ${skipDetails.join('\n  ') || 'None'}\n\n` +
+        `Triggers with {name} always use live TTS so the caller's name is spoken naturally.`
+      );
+      return;
+    }
+    
+    const confirmMsg =
+      `Generate audio for ${eligible.length} trigger(s)?\n\n` +
+      `Skipped:\n  ${skipDetails.join('\n  ')}\n\n` +
+      `This will use your ElevenLabs voice settings.`;
+    
+    if (!confirm(confirmMsg)) return;
+    
+    const btn = DOM.btnBulkGenerateAudio;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    
+    let generated = 0;
+    let failed = 0;
+    const failures = [];
+    
+    for (let i = 0; i < eligible.length; i++) {
+      const t = eligible[i];
+      btn.textContent = `Generating ${i + 1}/${eligible.length}...`;
+      
+      try {
+        await apiFetch(`/api/admin/agent2/${state.companyId}/generate-trigger-audio`, {
+          method: 'POST',
+          body: { ruleId: t.ruleId, text: t.text }
+        });
+        generated++;
+      } catch (err) {
+        failed++;
+        failures.push(`${t.label}: ${err.message}`);
+      }
+    }
+    
+    btn.textContent = originalText;
+    btn.disabled = false;
+    
+    const summary =
+      `Bulk audio generation complete!\n\n` +
+      `Generated: ${generated}\n` +
+      `Failed: ${failed}` +
+      (failures.length > 0 ? `\n\nFailures:\n${failures.slice(0, 10).join('\n')}` : '');
+    
+    alert(summary);
+    
+    if (generated > 0) {
+      await loadTriggers();
+      showToast('success', 'Bulk Audio', `${generated} audio file(s) generated.`);
     }
   }
   
