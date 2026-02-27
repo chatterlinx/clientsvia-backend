@@ -33,6 +33,14 @@
   };
 
   let DOM = {};
+  const MODAL_REGISTRY = {
+    filler: { key: 'modalFiller', cancel: 'btn-cancel-filler', save: 'btn-save-filler' },
+    vocabulary: { key: 'modalVocabulary', cancel: 'btn-cancel-vocab', save: 'btn-save-vocab' },
+    wordSynonym: { key: 'modalWordSynonym', cancel: 'btn-cancel-word-syn', save: 'btn-save-word-syn' },
+    contextPattern: { key: 'modalContextPattern', cancel: 'btn-cancel-pattern', save: 'btn-save-pattern' },
+    extraction: { key: 'modalExtraction', cancel: 'btn-cancel-extraction', save: 'btn-save-extraction' }
+  };
+  const STAGE_STATUS_IDS = ['stage1Status', 'stage2Status', 'stage3Status', 'stage4Status'];
 
   // ══════════════════════════════════════════════════════════════════════════
   // INITIALIZATION
@@ -88,7 +96,14 @@
       testResults: document.getElementById('test-results'),
       
       // Stats
-      totalRules: document.getElementById('total-rules')
+      totalRules: document.getElementById('total-rules'),
+
+      // Stage status pills + pipeline steps
+      stage1Status: document.getElementById('stage1-status'),
+      stage2Status: document.getElementById('stage2-status'),
+      stage3Status: document.getElementById('stage3-status'),
+      stage4Status: document.getElementById('stage4-status'),
+      pipelineSteps: Array.from(document.querySelectorAll('.pipeline-step'))
     };
   }
 
@@ -123,6 +138,7 @@
   // ══════════════════════════════════════════════════════════════════════════
 
   function bindEvents() {
+    // WIRING POINT A: Navigation and page actions
     if (DOM.btnBack) {
       DOM.btnBack.addEventListener('click', () => {
         if (state.hasChanges && !confirm('You have unsaved changes. Leave anyway?')) {
@@ -152,48 +168,49 @@
       DOM.btnRunTest.addEventListener('click', runTest);
     }
 
+    // WIRING POINT B: Pipeline stage toggles
     // Toggle handlers
     if (DOM.toggleFillers) {
       DOM.toggleFillers.addEventListener('change', (e) => {
         state.config.fillers.enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
+        updateStageIndicators();
       });
     }
 
     if (DOM.toggleVocabulary) {
       DOM.toggleVocabulary.addEventListener('change', (e) => {
         state.config.vocabulary.enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
+        updateStageIndicators();
       });
     }
 
     if (DOM.toggleSynonyms) {
       DOM.toggleSynonyms.addEventListener('change', (e) => {
         state.config.synonyms.enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
+        updateStageIndicators();
       });
     }
 
+    // WIRING POINT C: Stage options
     // Option toggles
     if (DOM.stripGreetings) {
       DOM.stripGreetings.addEventListener('change', (e) => {
         state.config.fillers.stripGreetings = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
       });
     }
 
     if (DOM.stripCompanyName) {
       DOM.stripCompanyName.addEventListener('change', (e) => {
         state.config.fillers.stripCompanyName = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
       });
     }
 
+    // WIRING POINT D: Create-rule actions
     // Add buttons
     if (DOM.btnAddFiller) DOM.btnAddFiller.addEventListener('click', () => openModal('filler'));
     if (DOM.btnAddVocab) DOM.btnAddVocab.addEventListener('click', () => openModal('vocabulary'));
@@ -206,31 +223,30 @@
       DOM.toggleExtraction.addEventListener('change', (e) => {
         if (!state.config.extraction) state.config.extraction = {};
         state.config.extraction.enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
+        updateStageIndicators();
       });
     }
 
-    // Modal close buttons
-    setupModal('filler');
-    setupModal('vocabulary');
-    setupModal('wordSynonym');
-    setupModal('contextPattern');
-    setupModal('extraction');
+    // WIRING POINT E: Modal close/save handlers
+    Object.keys(MODAL_REGISTRY).forEach(setupModal);
+
+    // Keyboard escape should close whichever modal is open
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const openType = Object.keys(MODAL_REGISTRY).find((type) => {
+        const modal = getModal(type);
+        return modal && modal.classList.contains('open');
+      });
+      if (openType) closeModal(openType);
+    });
   }
 
   function setupModal(type) {
-    const modalMap = {
-      filler: { modal: DOM.modalFiller, cancel: 'btn-cancel-filler', save: 'btn-save-filler' },
-      vocabulary: { modal: DOM.modalVocabulary, cancel: 'btn-cancel-vocab', save: 'btn-save-vocab' },
-      wordSynonym: { modal: DOM.modalWordSynonym, cancel: 'btn-cancel-word-syn', save: 'btn-save-word-syn' },
-      contextPattern: { modal: DOM.modalContextPattern, cancel: 'btn-cancel-pattern', save: 'btn-save-pattern' },
-      extraction: { modal: DOM.modalExtraction, cancel: 'btn-cancel-extraction', save: 'btn-save-extraction' }
-    };
-
-    const config = modalMap[type];
+    const config = MODAL_REGISTRY[type];
     if (!config) return;
 
+    const modal = getModal(type);
     const cancelBtn = document.getElementById(config.cancel);
     const saveBtn = document.getElementById(config.save);
 
@@ -242,9 +258,9 @@
       saveBtn.addEventListener('click', () => saveModalItem(type));
     }
 
-    if (config.modal) {
-      config.modal.addEventListener('click', (e) => {
-        if (e.target === config.modal) closeModal(type);
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal(type);
       });
     }
   }
@@ -342,6 +358,7 @@
     renderExtractionPatterns();
     
     updateStats();
+    updateStageIndicators();
   }
   
   function renderExtractionPatterns() {
@@ -382,8 +399,7 @@
         cb.addEventListener('change', (e) => {
           const idx = parseInt(e.target.dataset.idx);
           state.config.extraction.customPatterns[idx].enabled = e.target.checked;
-          state.hasChanges = true;
-          updateSaveButton();
+          markDirty();
           render();
         });
       });
@@ -393,8 +409,7 @@
           const idx = parseInt(e.target.dataset.idx);
           if (confirm('Delete this extraction pattern?')) {
             state.config.extraction.customPatterns.splice(idx, 1);
-            state.hasChanges = true;
-            updateSaveButton();
+            markDirty();
             render();
           }
         });
@@ -433,8 +448,7 @@
       cb.addEventListener('change', (e) => {
         const idx = parseInt(e.target.dataset.idx);
         state.config.fillers.customFillers[idx].enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
         render();
       });
     });
@@ -444,8 +458,7 @@
         const idx = parseInt(e.target.dataset.idx);
         if (confirm('Delete this filler?')) {
           state.config.fillers.customFillers.splice(idx, 1);
-          state.hasChanges = true;
-          updateSaveButton();
+          markDirty();
           render();
         }
       });
@@ -486,8 +499,7 @@
       cb.addEventListener('change', (e) => {
         const idx = parseInt(e.target.dataset.idx);
         state.config.vocabulary.entries[idx].enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
         render();
       });
     });
@@ -497,8 +509,7 @@
         const idx = parseInt(e.target.dataset.idx);
         if (confirm('Delete this vocabulary rule?')) {
           state.config.vocabulary.entries.splice(idx, 1);
-          state.hasChanges = true;
-          updateSaveButton();
+          markDirty();
           render();
         }
       });
@@ -538,8 +549,7 @@
       cb.addEventListener('change', (e) => {
         const idx = parseInt(e.target.dataset.idx);
         state.config.synonyms.wordSynonyms[idx].enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
         render();
       });
     });
@@ -549,8 +559,7 @@
         const idx = parseInt(e.target.dataset.idx);
         if (confirm('Delete this word synonym?')) {
           state.config.synonyms.wordSynonyms.splice(idx, 1);
-          state.hasChanges = true;
-          updateSaveButton();
+          markDirty();
           render();
         }
       });
@@ -591,8 +600,7 @@
       cb.addEventListener('change', (e) => {
         const idx = parseInt(e.target.dataset.idx);
         state.config.synonyms.contextPatterns[idx].enabled = e.target.checked;
-        state.hasChanges = true;
-        updateSaveButton();
+        markDirty();
         render();
       });
     });
@@ -602,8 +610,7 @@
         const idx = parseInt(e.target.dataset.idx);
         if (confirm('Delete this context pattern?')) {
           state.config.synonyms.contextPatterns.splice(idx, 1);
-          state.hasChanges = true;
-          updateSaveButton();
+          markDirty();
           render();
         }
       });
@@ -631,20 +638,38 @@
     }
   }
 
+  function updateStageIndicators() {
+    const stages = [
+      state.config.fillers.enabled !== false,
+      state.config.vocabulary.enabled !== false,
+      state.config.synonyms.enabled !== false,
+      state.config.extraction.enabled !== false
+    ];
+
+    STAGE_STATUS_IDS.forEach((id, idx) => {
+      const el = DOM[id];
+      if (!el) return;
+      const isActive = stages[idx];
+      el.textContent = isActive ? 'Active' : 'Disabled';
+      el.classList.toggle('active', isActive);
+      el.classList.toggle('disabled', !isActive);
+    });
+
+    if (Array.isArray(DOM.pipelineSteps)) {
+      DOM.pipelineSteps.forEach((stepEl) => {
+        const stageNum = parseInt(stepEl.dataset.stage, 10);
+        if (!Number.isFinite(stageNum) || stageNum > 4) return;
+        stepEl.classList.toggle('active', stages[stageNum - 1]);
+      });
+    }
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // MODALS
   // ══════════════════════════════════════════════════════════════════════════
 
   function openModal(type) {
-    const modalMap = {
-      filler: DOM.modalFiller,
-      vocabulary: DOM.modalVocabulary,
-      wordSynonym: DOM.modalWordSynonym,
-      contextPattern: DOM.modalContextPattern,
-      extraction: DOM.modalExtraction
-    };
-    
-    const modal = modalMap[type];
+    const modal = getModal(type);
     if (modal) {
       state.editingType = type;
       clearModalInputs(type);
@@ -653,15 +678,7 @@
   }
 
   function closeModal(type) {
-    const modalMap = {
-      filler: DOM.modalFiller,
-      vocabulary: DOM.modalVocabulary,
-      wordSynonym: DOM.modalWordSynonym,
-      contextPattern: DOM.modalContextPattern,
-      extraction: DOM.modalExtraction
-    };
-    
-    const modal = modalMap[type];
+    const modal = getModal(type);
     if (modal) {
       modal.classList.remove('open');
       state.editingType = null;
@@ -702,10 +719,14 @@
   function saveModalItem(type) {
     if (type === 'filler') {
       const phrase = document.getElementById('filler-phrase').value.trim();
-      const priority = parseInt(document.getElementById('filler-priority').value) || 100;
+      const priority = clampPriority(document.getElementById('filler-priority').value, 100);
       
       if (!phrase) {
         alert('Please enter a filler phrase');
+        return;
+      }
+      if ((state.config.fillers.customFillers || []).some(f => normalizeSimple(f.phrase) === normalizeSimple(phrase))) {
+        alert('This filler phrase already exists');
         return;
       }
       
@@ -716,8 +737,7 @@
         priority
       });
       
-      state.hasChanges = true;
-      updateSaveButton();
+      markDirty();
       closeModal(type);
       render();
       
@@ -725,10 +745,14 @@
       const from = document.getElementById('vocab-from').value.trim();
       const to = document.getElementById('vocab-to').value.trim();
       const mode = document.getElementById('vocab-mode').value;
-      const priority = parseInt(document.getElementById('vocab-priority').value) || 100;
+      const priority = clampPriority(document.getElementById('vocab-priority').value, 100);
       
       if (!from || !to) {
         alert('Please fill in both From and To fields');
+        return;
+      }
+      if ((state.config.vocabulary.entries || []).some(e => normalizeSimple(e.from) === normalizeSimple(from) && normalizeSimple(e.to) === normalizeSimple(to))) {
+        alert('This vocabulary normalization already exists');
         return;
       }
       
@@ -741,15 +765,14 @@
         priority
       });
       
-      state.hasChanges = true;
-      updateSaveButton();
+      markDirty();
       closeModal(type);
       render();
       
     } else if (type === 'wordSynonym') {
       const word = document.getElementById('word-syn-word').value.trim();
       const synonymsStr = document.getElementById('word-syn-synonyms').value.trim();
-      const priority = parseInt(document.getElementById('word-syn-priority').value) || 50;
+      const priority = clampPriority(document.getElementById('word-syn-priority').value, 50);
       
       if (!word || !synonymsStr) {
         alert('Please fill in both Word and Synonyms fields');
@@ -766,8 +789,7 @@
         priority
       });
       
-      state.hasChanges = true;
-      updateSaveButton();
+      markDirty();
       closeModal(type);
       render();
       
@@ -775,8 +797,8 @@
       const wordsStr = document.getElementById('pattern-words').value.trim();
       const component = document.getElementById('pattern-component').value.trim();
       const tokensStr = document.getElementById('pattern-tokens').value.trim();
-      const confidence = parseFloat(document.getElementById('pattern-confidence').value) || 0.9;
-      const priority = parseInt(document.getElementById('pattern-priority').value) || 100;
+      const confidence = clampConfidence(document.getElementById('pattern-confidence').value, 0.9);
+      const priority = clampPriority(document.getElementById('pattern-priority').value, 100);
       
       if (!wordsStr || !component) {
         alert('Please fill in Pattern Words and Component fields');
@@ -796,8 +818,7 @@
         priority
       });
       
-      state.hasChanges = true;
-      updateSaveButton();
+      markDirty();
       closeModal(type);
       render();
       
@@ -806,7 +827,7 @@
       const label = document.getElementById('extraction-label').value.trim();
       const pattern = document.getElementById('extraction-pattern').value.trim();
       const examples = document.getElementById('extraction-examples').value.trim();
-      const confidence = parseFloat(document.getElementById('extraction-confidence').value) || 0.85;
+      const confidence = clampConfidence(document.getElementById('extraction-confidence').value, 0.85);
       const autoHandoff = document.getElementById('extraction-handoff').checked;
       const validateGlobalShare = document.getElementById('extraction-globalshare').checked;
       
@@ -818,6 +839,17 @@
       // Validate entity name format (camelCase, no spaces)
       if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(entityName)) {
         alert('Entity Name must be camelCase with no spaces (e.g., companyName, urgencyLevel)');
+        return;
+      }
+      if ((state.config.extraction?.customPatterns || []).some(p => normalizeSimple(p.entityName) === normalizeSimple(entityName))) {
+        alert('An extraction with this Entity Name already exists');
+        return;
+      }
+      try {
+        // Validate regex syntax early to prevent runtime extractor failures.
+        new RegExp(pattern, 'i');
+      } catch (err) {
+        alert(`Invalid regex pattern: ${err.message}`);
         return;
       }
       
@@ -842,8 +874,7 @@
         enabled: true
       });
       
-      state.hasChanges = true;
-      updateSaveButton();
+      markDirty();
       closeModal(type);
       render();
     }
@@ -901,6 +932,8 @@
     if (removed.length > 0) {
       document.getElementById('test-stage1-removed').innerHTML = 
         removed.map(r => `<span class="test-badge">Removed: ${r.value}</span>`).join('');
+    } else {
+      document.getElementById('test-stage1-removed').innerHTML = '';
     }
     
     // Show vocabulary normalizations
@@ -908,6 +941,8 @@
     if (applied.length > 0) {
       document.getElementById('test-stage2-applied').innerHTML = 
         applied.map(a => `<span class="test-badge">${a.from} → ${a.to}</span>`).join('');
+    } else {
+      document.getElementById('test-stage2-applied').innerHTML = '';
     }
     
     // Show token expansion
@@ -915,6 +950,8 @@
     if (expansions.length > 0) {
       document.getElementById('test-stage3-expanded').innerHTML = 
         expansions.map(key => `<span class="test-badge">${key}: +${result.stage3_expansion.expansionMap[key].length}</span>`).join('');
+    } else {
+      document.getElementById('test-stage3-expanded').innerHTML = '';
     }
     
     // Show entity extraction
@@ -937,6 +974,8 @@
       entitiesDiv.innerHTML = extractions.map(e => 
         `<span class="test-badge">${e.type}="${e.value}" (${e.pattern}, ${Math.round(e.confidence * 100)}%${e.validated ? ' ✅' : ''})</span>`
       ).join('');
+    } else {
+      entitiesDiv.innerHTML = '';
     }
   }
 
@@ -960,6 +999,32 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function getModal(type) {
+    const config = MODAL_REGISTRY[type];
+    return config ? DOM[config.key] : null;
+  }
+
+  function markDirty() {
+    state.hasChanges = true;
+    updateSaveButton();
+  }
+
+  function clampPriority(raw, fallback) {
+    const parsed = parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(1, Math.min(999, parsed));
+  }
+
+  function clampConfidence(raw, fallback) {
+    const parsed = parseFloat(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(1, parsed));
+  }
+
+  function normalizeSimple(value) {
+    return String(value || '').trim().toLowerCase();
   }
 
   function normalizeConfig(inputConfig) {
