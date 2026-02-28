@@ -4247,6 +4247,49 @@ const companySchema = new mongoose.Schema({
                     }
                 },
                 
+                // ═══════════════════════════════════════════════════════════
+                // NAME GREETING - Personalized greeting using extracted name
+                // ═══════════════════════════════════════════════════════════
+                // Fires after ScrabEngine extracts caller's first name.
+                // Example: "Hello Marc, thank you for calling."
+                // UI: /agent-console/triggers.html (Name Greeting section)
+                // ═══════════════════════════════════════════════════════════
+                nameGreeting: {
+                    alwaysGreet: { type: Boolean, default: false },
+                    greetingLine: { 
+                        type: String, 
+                        default: 'Hello {name}, thank you for calling.', 
+                        trim: true, 
+                        maxlength: 500 
+                    },
+                    updatedAt: { type: Date, default: null }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // PATIENCE SETTINGS - "Hold on" / "Wait" behavior
+                // ═══════════════════════════════════════════════════════════
+                // Configures how agent responds when caller needs time.
+                // Example: "Take your time, I'll wait."
+                // UI: /agent-console/triggers.html (Patience Settings section)
+                // ═══════════════════════════════════════════════════════════
+                patienceSettings: {
+                    enabled: { type: Boolean, default: true },
+                    response: { 
+                        type: String, 
+                        default: 'Take your time, I\'ll wait.', 
+                        trim: true, 
+                        maxlength: 500 
+                    },
+                    waitDurationMs: { type: Number, default: 10000, min: 3000, max: 60000 },
+                    followUp: { 
+                        type: String, 
+                        default: 'I\'m still here whenever you\'re ready.', 
+                        trim: true, 
+                        maxlength: 500 
+                    },
+                    updatedAt: { type: Date, default: null }
+                },
+                
                 updatedAt: { type: Date, default: null }
             },
             // ═══════════════════════════════════════════════════════════════
