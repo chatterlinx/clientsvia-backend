@@ -944,14 +944,17 @@
             '<span class="scope-badge local">LOCAL</span>'
           }
         </div>
-        <div>
-          <label class="toggle-switch">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label class="toggle-switch" title="${isEnabled ? 'Enabled - Click to disable' : 'Disabled - Click to enable'}">
             <input type="checkbox" class="toggle-enabled" 
                    data-trigger-id="${trigger.triggerId}" 
                    data-scope="${trigger.scope}"
                    ${isEnabled ? 'checked' : ''}>
             <span class="toggle-slider"></span>
           </label>
+          <span style="font-size: 11px; font-weight: 600; color: ${isEnabled ? '#10b981' : '#94a3b8'}; min-width: 28px;">
+            ${isEnabled ? 'ON' : 'OFF'}
+          </span>
         </div>
         <div class="trigger-actions">
           <button class="btn btn-ghost btn-icon btn-edit-trigger" data-trigger-id="${trigger.triggerId}" title="Edit">
