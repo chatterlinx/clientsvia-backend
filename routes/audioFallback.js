@@ -148,30 +148,62 @@ router.get('/greetings/:filename', async (req, res) => {
   const audioPath = path.join(PUBLIC_AUDIO_DIR, 'greetings', filename);
   
   await serveAudioWithFallback(req, res, audioPath, async () => {
-    // MongoDB fallback - try exact audioUrl match first
-    const fullUrl = `/audio-safe/greetings/${filename}`;
+    logger.debug('[AudioFallback] Looking for greeting audio in MongoDB', { filename });
+    
+    // Try 1: Exact audioUrl match with /audio-safe
+    const fullUrlSafe = `/audio-safe/greetings/${filename}`;
     let audioDoc = await GreetingAudio.findOne({
-      audioUrl: fullUrl
+      audioUrl: fullUrlSafe
     }).select('audioData').lean();
     
-    // If not found, try regex match (for old URLs)
-    if (!audioDoc) {
-      audioDoc = await GreetingAudio.findOne({
-        audioUrl: { $regex: filename.replace('.mp3', '') }
-      }).select('audioData').lean();
+    if (audioDoc) {
+      logger.info('[AudioFallback] Found via exact /audio-safe URL match', { filename });
+      return audioDoc.audioData;
     }
     
-    // If still not found, try finding by text hash from filename
-    if (!audioDoc) {
-      const hashMatch = filename.match(/([a-f0-9]{16})\.mp3$/);
-      if (hashMatch) {
-        audioDoc = await GreetingAudio.findOne({
-          textHash: hashMatch[1]
-        }).select('audioData').lean();
+    // Try 2: Exact audioUrl match with old /audio
+    const fullUrlOld = `/audio/greetings/${filename}`;
+    audioDoc = await GreetingAudio.findOne({
+      audioUrl: fullUrlOld
+    }).select('audioData').lean();
+    
+    if (audioDoc) {
+      logger.info('[AudioFallback] Found via exact /audio URL match (old format)', { filename });
+      return audioDoc.audioData;
+    }
+    
+    // Try 3: Regex match on filename
+    audioDoc = await GreetingAudio.findOne({
+      audioUrl: { $regex: filename.replace('.mp3', '') }
+    }).select('audioData').lean();
+    
+    if (audioDoc) {
+      logger.info('[AudioFallback] Found via regex match', { filename });
+      return audioDoc.audioData;
+    }
+    
+    // Try 4: Find by text hash from filename
+    const hashMatch = filename.match(/([a-f0-9]{16})\.mp3$/);
+    if (hashMatch) {
+      const textHash = hashMatch[1];
+      audioDoc = await GreetingAudio.findOne({
+        textHash: textHash
+      }).select('audioData').lean();
+      
+      if (audioDoc) {
+        logger.info('[AudioFallback] Found via textHash match', { filename, textHash });
+        return audioDoc.audioData;
       }
     }
     
-    return audioDoc?.audioData || null;
+    // Not found anywhere
+    logger.warn('[AudioFallback] Greeting audio not found in MongoDB', {
+      filename,
+      triedUrls: [fullUrlSafe, fullUrlOld],
+      triedHash: hashMatch ? hashMatch[1] : null
+    });
+    
+    return null;
   });
 });
 
