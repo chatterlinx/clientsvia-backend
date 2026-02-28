@@ -1,0 +1,353 @@
+{
+  "companyId": "68e3f77a9d623b8058c700c4",
+  "exportedAt": "2026-02-28T03:30:00.000Z",
+  "notes": [
+    {
+      "id": "n_mm431spv_n90sh2",
+      "title": "NOTES 1 : FILE LOCATION",
+      "body": "| Component | File |\n|-----------|------|\n| **Main Call Router** | `routes/v2twilio.js` |\n| **AI Agent Runtime** | `services/v2AIAgentRuntime.js` |\n| **TTS Service** | `services/v2elevenLabsService.js` |\n| **Call State Management** | `services/engine/CallRuntime.js` |\n| **AI Brain** | `services/HybridReceptionistLLM.js` |\n| **STT Processing** | `services/STTPreprocessor.js` |\n| **Agent2 Discovery** | `services/engine/agent2/Agent2DiscoveryRunner.js` |\n| **ScrabEngine** | `services/ScrabEngine.js` |\n| **Trigger Matcher** | `services/engine/agent2/TriggerCardMatcher.js` |",
+      "x": 1511,
+      "y": 22,
+      "sequence": 1,
+      "z": 539
+    },
+    {
+      "id": "n_mm43j8ii_uy60k4",
+      "title": "Notes 2. Key Services | Purpose | Code Location",
+      "body": "Service |\tPurpose |  Code Location\n\n1. CallRuntime | Orchestrates turn processing | services/engine/CallRuntime.js\n\n2. Agent2DiscoveryRunner | Discovery mode handler | services/engine/agent2/Agent2DiscoveryRunner.js\n\n3. TriggerCardMatcher | Evaluates all triggers | services/engine/agent2/TriggerCardMatcher.js\n\n4. HybridReceptionistLLM\t| LLM fallback | services/HybridReceptionistLLM.js\n\n5. ScrabEngine | Text normalization & entity extraction | services/ScrabEngine.js\n\n6. Agent2GreetingInterceptor | Greeting detection (runs FIRST) | services/engine/agent2/Agent2GreetingInterceptor.js",
+      "x": 1817,
+      "y": 27,
+      "sequence": 2,
+      "z": 543
+    },
+    {
+      "id": "n_mm3uqgaf_eta3js",
+      "title": "1. Twilio Entry",
+      "body": "POST /api/twilio/voice\n\nWhen customer calls, Twilio finds phone number, looks up companyId\n\nFile: routes/v2twilio.js:1004",
+      "x": 13,
+      "y": 22,
+      "sequence": 3,
+      "z": 194
+    },
+    {
+      "id": "n_mm3wnobk_qja5p3",
+      "title": "2. Gatekeeper",
+      "body": "Configuration check:\n- Active → continue\n- Call Forward → transfer to number\n- Suspended → play message & hangup\n\nFile: routes/v2twilio.js:1328",
+      "x": 343,
+      "y": 28,
+      "sequence": 4,
+      "z": 288
+    },
+    {
+      "id": "n_mm3wqgq9_mxzm8t",
+      "title": "3. Spam Filter",
+      "body": "SmartCallFilter.checkCall()\n\nBlocks spam calls (global or local blocklist)\nIf blocked → hangup immediately\n\nFile: routes/v2twilio.js:1050",
+      "x": 686,
+      "y": 17,
+      "sequence": 5,
+      "z": 290
+    },
+    {
+      "id": "n_mm3xozxs_abo53r",
+      "title": "4. Call Start Greeting",
+      "body": "Agent 2.0 Greeting (on call connect)\n\nOptions:\n- Prerecorded audio (ElevenLabs)\n- TTS (text-to-speech)\n- Disabled (skip greeting)\n\nFile: routes/v2twilio.js:1578-1947\nUI: agent2.html → Greetings tab",
+      "x": 1162,
+      "y": 23,
+      "sequence": 6,
+      "z": 491
+    },
+    {
+      "id": "n_mm3y4hut_lhhk29",
+      "title": "5. Gather Setup (Deepgram STT)",
+      "body": "Twilio <Gather> configured:\n- input: 'speech'\n- action: /api/twilio/v2-agent-respond/:companyId\n- enhanced: true (Deepgram)\n- speechModel: 'phone_call'\n\nFile: routes/v2twilio.js:1644-1682",
+      "x": 1162,
+      "y": 342,
+      "sequence": 7,
+      "z": 503
+    },
+    {
+      "id": "n_mm42arm2_rzdqew",
+      "title": "6. Customer Speaks",
+      "body": "Customer says: \"I need to schedule a service\"\n\n→ Twilio captures audio\n→ Deepgram transcribes (Speech-to-Text)\n→ Returns transcript to Twilio",
+      "x": 759,
+      "y": 340,
+      "sequence": 8,
+      "z": 501
+    },
+    {
+      "id": "n_mm42fmmh_m00wl5",
+      "title": "7. SpeechResult Posted",
+      "body": "Twilio posts to action URL:\n\nPOST /api/twilio/v2-agent-respond/:companyId\nBody: {\n  SpeechResult: \"I need to schedule a service\",\n  CallSid: \"CA...\",\n  Confidence: 0.95\n}\n\nFile: routes/v2twilio.js:3523",
+      "x": 387,
+      "y": 338,
+      "sequence": 9,
+      "z": 500
+    },
+    {
+      "id": "n_mm42ld2j_cvttca",
+      "title": "8. Load Call State",
+      "body": "StateStore.load(callState)\n\nLoads from Redis:\n- Turn count\n- Session mode (DISCOVERY/BOOKING)\n- Extracted entities (name, phone, etc.)\n- Conversation history\n\nFile: services/engine/StateStore.js",
+      "x": 356,
+      "y": 745,
+      "sequence": 10,
+      "z": 536
+    },
+    {
+      "id": "n_mm42mdyj_4vz18a",
+      "title": "9. CallRuntime.processTurn()",
+      "body": "Main orchestrator - routes to correct engine\n\nIF booking mode → BookingLogicEngine\nELSE → Agent2DiscoveryRunner\n\nFile: services/engine/CallRuntime.js:293",
+      "x": 701,
+      "y": 631,
+      "sequence": 11,
+      "z": 465
+    },
+    {
+      "id": "n_mm42r9ih_v9yl33",
+      "title": "10. Agent2DiscoveryRunner.run()",
+      "body": "Discovery mode handler\n\nResponsible for:\n- Greeting detection\n- Text processing\n- Trigger matching\n- LLM fallback\n\nFile: services/engine/agent2/Agent2DiscoveryRunner.js:396",
+      "x": 1045,
+      "y": 630,
+      "sequence": 12,
+      "z": 464
+    },
+    {
+      "id": "n_greeting_interceptor",
+      "title": "11. 🚨 GREETING INTERCEPTOR",
+      "body": "⚠️ CRITICAL: RUNS FIRST, BEFORE SCRABENGINE ⚠️\n\nFile: Agent2DiscoveryRunner.js:516-583\nFunction: Agent2GreetingInterceptor.evaluate()\n\nChecks:\n- Is input a greeting? (\"hi\", \"hello\", \"good morning\")\n- Short-only gate (≤3-5 words)\n- No intent words detected\n\n🚨 BUG: IF MATCHED → IMMEDIATE RETURN (line 578)\n\nSKIPS:\n❌ ScrabEngine (line 605)\n❌ Trigger matching (line 1473)\n❌ Entity extraction\n\nBROKEN:\n- \"Hi I have an emergency\" → misses emergency trigger\n- \"Hello my name is John\" → never extracts name\n\nWORKING:\n- \"I need help\" → no greeting match, continues correctly",
+      "x": 683,
+      "y": 798,
+      "sequence": 13,
+      "z": 600
+    },
+    {
+      "id": "n_mm4sqta6_e8qplg",
+      "title": "12. ScrabEngine.process()",
+      "body": "🔍 ENTERPRISE TEXT PROCESSING PIPELINE\n\nFile: services/ScrabEngine.js\nCalled from: Agent2DiscoveryRunner.js:605\n\n⚠️ CRITICAL: Only runs if greeting interceptor didn't match!\n\nPIPELINE:\n1. Filler removal (\"um\", \"uh\", \"like\")\n2. Vocabulary expansion (\"acee\" → \"ac\")\n3. Synonym mapping (\"tstat\" → \"thermostat\")\n4. Entity extraction (names, phone, email, address)\n5. Quality gate (filters garbage input)\n\nOutputs:\n- normalizedText (cleaned)\n- entities (firstName, lastName, phone, email, address)\n- expandedTokens (vocabulary hints)",
+      "x": 15,
+      "y": 366,
+      "sequence": 14,
+      "z": 533
+    },
+    {
+      "id": "n_mm43ywkw_znfrkt",
+      "title": "12a. Stage 1: Filler Removal",
+      "body": "Remove speech fillers:\n- \"um\", \"uh\", \"like\"\n- \"you know\", \"I mean\"\n\nApply mishear corrections:\n- \"acee\" → \"AC\"\n- Common speech recognition fixes",
+      "x": 15,
+      "y": 529,
+      "sequence": 15,
+      "z": 532
+    },
+    {
+      "id": "n_mm445wpp_v99cqb",
+      "title": "12b. Stage 2: Vocabulary Expansion",
+      "body": "Normalize industry terms:\n- \"acee\" → \"ac\"\n- \"tstat\" → \"thermostat\"\n- \"furnace\" → \"heating system\"\n\nAdd hints for ambiguous phrases",
+      "x": 17,
+      "y": 743,
+      "sequence": 16,
+      "z": 534
+    },
+    {
+      "id": "n_mm4sm9gn_ppskdz",
+      "title": "12c. Stage 3: Entity Extraction",
+      "body": "Extract structured data:\n\n- First name\n- Last name\n- Phone number\n- Email address\n- Street address\n\nSmart name capture:\n- Collects first and last name\n- Confirms spelling\n- Identifies which is first/last",
+      "x": 15,
+      "y": 955,
+      "sequence": 17,
+      "z": 535
+    },
+    {
+      "id": "n_mm5eddy9_pnypot",
+      "title": "13. Name Greeting (Turn 1 Only)",
+      "body": "Optional personalized greeting:\n\n\"Got it{name}.\" → \"Got it, Marc.\"\n\nOnly fires on turn 1 if:\n- Name was extracted\n- Name greeting enabled in config\n\nFile: Agent2DiscoveryRunner.js:335-355",
+      "x": 1046,
+      "y": 798,
+      "sequence": 18,
+      "z": 564
+    },
+    {
+      "id": "n_mm5efvqa_cm3x84",
+      "title": "14. Hold Modal Check",
+      "body": "Patience Mode Detection:\n\nKeywords: \"please hold\", \"one moment\", \"give me a second\"\n\nIf matched:\n- Enter patience mode\n- Set timeout (default 45s)\n- Check-in after timeout\n- Max 2 check-ins before continuing\n\nFile: Agent2DiscoveryRunner.js (patience logic)",
+      "x": 1047,
+      "y": 962,
+      "sequence": 19,
+      "z": 585
+    },
+    {
+      "id": "n_mm42tbum_u67ad7",
+      "title": "15. 🎯 TRIGGER EVALUATION",
+      "body": "TriggerCardMatcher.match()\n\nFile: services/engine/agent2/TriggerCardMatcher.js\nCalled from: Agent2DiscoveryRunner.js:1473-1474\n\n⚠️ CRITICAL: Only runs if greeting interceptor didn't match!\n\nMatching logic:\n1. Load compiled triggers (global + company)\n2. Check keywords/phrases\n3. Check negative keywords (disqualifiers)\n4. Priority-based ranking\n5. Return best match\n\nLogged as: A2_TRIGGER_EVAL",
+      "x": 1049,
+      "y": 1174,
+      "sequence": 20,
+      "z": 584
+    },
+    {
+      "id": "n_mm42usx8_vlq8mr",
+      "title": "16a. IF TRIGGER MATCHED",
+      "body": "Fast path (instant response):\n\n→ Use trigger response text\n→ Use pre-recorded audio (if exists)\n→ SKIP LLM (no GPT-4 call needed!)\n→ Return in ~200ms\n\nLogged as: SPEECH_SOURCE_SELECTED",
+      "x": 1455,
+      "y": 1431,
+      "sequence": 21,
+      "z": 580
+    },
+    {
+      "id": "n_mm436hqm_ymobyl",
+      "title": "Path 1: Trigger Match (Fast!)",
+      "body": "Example: \"I need to schedule service\"\n\n↓\nTriggerCardMatcher finds: \"Schedule Service\" card\n↓\nUse pre-configured response\n↓\nUse pre-recorded audio (if exists) - SKIP TTS!\n↓\nReturn in ~200ms",
+      "x": 1460,
+      "y": 1633,
+      "sequence": 22,
+      "z": 581
+    },
+    {
+      "id": "n_mm42wglc_gh2309",
+      "title": "16b. IF NO TRIGGER MATCHED",
+      "body": "Fallback to LLM:\n\n→ HybridReceptionistLLM\n→ OpenAI GPT-4\n→ Generate dynamic response\n→ ElevenLabs TTS → audio\n→ Return in ~2-3 seconds\n\nLogged as: LLM_FALLBACK_USED",
+      "x": 609,
+      "y": 1414,
+      "sequence": 23,
+      "z": 576
+    },
+    {
+      "id": "n_mm438t3v_2ojtkz",
+      "title": "Path 2: No Match (Flexible!)",
+      "body": "Example: \"What's your warranty policy?\"\n\n↓\nNo trigger card matches\n↓\nFall back to HybridReceptionistLLM\n↓\nGPT-4 generates dynamic response\n↓\nElevenLabs TTS → audio\n↓\nReturn in ~2-3 seconds",
+      "x": 598,
+      "y": 1643,
+      "sequence": 24,
+      "z": 575
+    },
+    {
+      "id": "n_mm4svdsm_sym189",
+      "title": "17. Handoff to Booking",
+      "body": "IF trigger indicates booking intent:\n\n→ Switch to BOOKING mode\n→ Pass extracted entities to BookingLogicEngine\n→ Start booking flow\n\nEntities passed:\n- firstName, lastName\n- phone, email, address\n- call reason\n- any custom extractions from ScrabEngine",
+      "x": 1719,
+      "y": 701,
+      "sequence": 25,
+      "z": 549
+    },
+    {
+      "id": "n_mm42xy4h_z7zpsr",
+      "title": "18. BookingLogicEngine",
+      "body": "Booking flow handler (if in booking mode)\n\nSteps:\n1. Name collection\n2. Phone verification\n3. Address capture\n4. Service details\n5. Appointment scheduling\n6. Confirmation\n\nFile: services/engine/booking/BookingLogicEngine.js",
+      "x": 2099,
+      "y": 700,
+      "sequence": 26,
+      "z": 551
+    },
+    {
+      "id": "n_mm45dins_m0kif0",
+      "title": "SIMPLIFIED SEQUENCE SUMMARY",
+      "body": "1. Twilio Entry\n2. Gatekeeper\n3. Spam Filter\n4. Call Start Greeting (audio)\n5. Gather Setup (Deepgram)\n6. Customer Speaks\n7. SpeechResult Posted\n8. Load State\n9. CallRuntime\n10. Agent2DiscoveryRunner\n11. 🚨 GREETING INTERCEPTOR (runs FIRST)\n    → IF \"hi/hello\" → EARLY EXIT ❌\n    → ELSE → continues ✅\n12. ScrabEngine (if no greeting match)\n    a. Fillers\n    b. Vocabulary\n    c. Extraction\n13. Name Greeting (turn 1)\n14. Hold Modal Check\n15. Trigger Evaluation (if no greeting match)\n    → Matched → use trigger\n    → No match → LLM fallback\n16. Response Generated\n17. Handoff (if booking)\n18. BookingLogicEngine (if in booking mode)",
+      "x": 2119,
+      "y": 20,
+      "sequence": 27,
+      "z": 542
+    }
+  ],
+  "connections": [
+    {
+      "from": "n_mm3uqgaf_eta3js",
+      "to": "n_mm3wnobk_qja5p3"
+    },
+    {
+      "from": "n_mm3wnobk_qja5p3",
+      "to": "n_mm3wqgq9_mxzm8t"
+    },
+    {
+      "from": "n_mm3wqgq9_mxzm8t",
+      "to": "n_mm3xozxs_abo53r"
+    },
+    {
+      "from": "n_mm3xozxs_abo53r",
+      "to": "n_mm3y4hut_lhhk29"
+    },
+    {
+      "from": "n_mm3y4hut_lhhk29",
+      "to": "n_mm42arm2_rzdqew"
+    },
+    {
+      "from": "n_mm42arm2_rzdqew",
+      "to": "n_mm42fmmh_m00wl5"
+    },
+    {
+      "from": "n_mm42fmmh_m00wl5",
+      "to": "n_mm42ld2j_cvttca"
+    },
+    {
+      "from": "n_mm42ld2j_cvttca",
+      "to": "n_mm42mdyj_4vz18a"
+    },
+    {
+      "from": "n_mm42mdyj_4vz18a",
+      "to": "n_mm42r9ih_v9yl33"
+    },
+    {
+      "from": "n_mm42r9ih_v9yl33",
+      "to": "n_greeting_interceptor"
+    },
+    {
+      "from": "n_greeting_interceptor",
+      "to": "n_mm4sqta6_e8qplg",
+      "label": "IF NO greeting match → continue"
+    },
+    {
+      "from": "n_greeting_interceptor",
+      "to": "n_mm5eddy9_pnypot",
+      "label": "IF greeting matched → EARLY EXIT ❌",
+      "style": "dashed"
+    },
+    {
+      "from": "n_mm4sqta6_e8qplg",
+      "to": "n_mm43ywkw_znfrkt"
+    },
+    {
+      "from": "n_mm43ywkw_znfrkt",
+      "to": "n_mm445wpp_v99cqb"
+    },
+    {
+      "from": "n_mm445wpp_v99cqb",
+      "to": "n_mm4sm9gn_ppskdz"
+    },
+    {
+      "from": "n_mm4sm9gn_ppskdz",
+      "to": "n_mm5eddy9_pnypot"
+    },
+    {
+      "from": "n_mm5eddy9_pnypot",
+      "to": "n_mm5efvqa_cm3x84"
+    },
+    {
+      "from": "n_mm5efvqa_cm3x84",
+      "to": "n_mm42tbum_u67ad7"
+    },
+    {
+      "from": "n_mm42tbum_u67ad7",
+      "to": "n_mm42usx8_vlq8mr",
+      "label": "IF MATCHED"
+    },
+    {
+      "from": "n_mm42tbum_u67ad7",
+      "to": "n_mm42wglc_gh2309",
+      "label": "IF NO MATCH"
+    },
+    {
+      "from": "n_mm42usx8_vlq8mr",
+      "to": "n_mm436hqm_ymobyl"
+    },
+    {
+      "from": "n_mm42wglc_gh2309",
+      "to": "n_mm438t3v_2ojtkz"
+    },
+    {
+      "from": "n_mm42usx8_vlq8mr",
+      "to": "n_mm4svdsm_sym189",
+      "label": "IF booking intent"
+    },
+    {
+      "from": "n_mm4svdsm_sym189",
+      "to": "n_mm42xy4h_z7zpsr"
+    }
+  ]
+}
