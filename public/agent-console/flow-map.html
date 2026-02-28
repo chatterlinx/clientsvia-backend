@@ -9,9 +9,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/agent-console/styles.css">
   <style>
-    .map-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 140px); }
+    .map-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 140px); transition: grid-template-columns 0.3s ease; }
+    .map-layout.wide-panel { grid-template-columns: 600px 1fr; }
     .map-panel { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
-    .map-panel-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; }
+    .map-panel-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+    .panel-header-left { flex: 1; }
+    .btn-expand-panel { border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; transition: all 0.15s ease; display: flex; align-items: center; gap: 6px; }
+    .btn-expand-panel:hover { background: #f8fafc; border-color: #94a3b8; }
     .map-panel-body { padding: 12px; overflow: auto; }
     .map-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .step-list { display: flex; flex-direction: column; gap: 10px; }
@@ -98,8 +102,14 @@
       <div class="map-layout">
         <section class="map-panel">
           <div class="map-panel-header">
-            <h3 class="card-title">Sequence Notes</h3>
-            <p class="card-subtitle">Drag bubbles on the board and use up/down to reorder your designed flow.</p>
+            <div class="panel-header-left">
+              <h3 class="card-title">Sequence Notes</h3>
+              <p class="card-subtitle">Drag bubbles on the board and use up/down to reorder your designed flow.</p>
+            </div>
+            <button class="btn-expand-panel" id="btn-expand-panel" title="Expand panel for wider view">
+              <span id="expand-icon">◀◀</span>
+              <span id="expand-label">Expand</span>
+            </button>
           </div>
           <div class="map-panel-body">
             <div class="map-actions" style="margin-bottom: 10px;">

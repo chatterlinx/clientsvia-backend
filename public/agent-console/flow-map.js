@@ -14,7 +14,8 @@
     connectMode: false,
     connectFrom: null,
     arrowDrag: null, // {connIndex: number, startX: number, startY: number}
-    zoom: 1.0 // Zoom level (0.25 to 2.0)
+    zoom: 1.0, // Zoom level (0.25 to 2.0)
+    panelExpanded: false // Sequence notes panel expansion state
   };
 
   let DOM = {};
@@ -33,6 +34,10 @@
       btnZoomIn: document.getElementById('btn-zoom-in'),
       btnZoomOut: document.getElementById('btn-zoom-out'),
       btnZoomReset: document.getElementById('btn-zoom-reset'),
+      btnExpandPanel: document.getElementById('btn-expand-panel'),
+      expandIcon: document.getElementById('expand-icon'),
+      expandLabel: document.getElementById('expand-label'),
+      mapLayout: document.querySelector('.map-layout'),
       board: document.getElementById('map-board'),
       stepList: document.getElementById('step-list'),
       modalBackdrop: document.getElementById('map-modal-backdrop'),
@@ -199,6 +204,11 @@
     if (DOM.btnZoomOut) DOM.btnZoomOut.addEventListener('click', () => setZoom(state.zoom - 0.1));
     if (DOM.btnZoomReset) DOM.btnZoomReset.addEventListener('click', () => setZoom(1.0));
     
+    if (DOM.btnExpandPanel) {
+      console.log('[FlowMap] ✓ Binding Expand Panel button');
+      DOM.btnExpandPanel.addEventListener('click', togglePanelWidth);
+    }
+    
     // Ctrl+Scroll to zoom
     if (DOM.board && DOM.board.parentElement) {
       DOM.board.parentElement.addEventListener('wheel', (e) => {
@@ -244,6 +254,28 @@
     }
     
     console.log('[FlowMap] Zoom set to:', state.zoom);
+  }
+
+  function togglePanelWidth() {
+    state.panelExpanded = !state.panelExpanded;
+    
+    if (DOM.mapLayout) {
+      if (state.panelExpanded) {
+        DOM.mapLayout.classList.add('wide-panel');
+      } else {
+        DOM.mapLayout.classList.remove('wide-panel');
+      }
+    }
+    
+    // Update button label and icon
+    if (DOM.expandIcon) {
+      DOM.expandIcon.textContent = state.panelExpanded ? '▶▶' : '◀◀';
+    }
+    if (DOM.expandLabel) {
+      DOM.expandLabel.textContent = state.panelExpanded ? 'Collapse' : 'Expand';
+    }
+    
+    console.log('[FlowMap] Panel expanded:', state.panelExpanded);
   }
 
   function openModal(noteId) {
