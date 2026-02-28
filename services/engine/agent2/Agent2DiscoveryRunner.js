@@ -1,33 +1,71 @@
 /**
- * ============================================================================
- * AGENT 2.0 DISCOVERY RUNNER (V119 - HARD ISOLATION)
- * ============================================================================
+ * ════════════════════════════════════════════════════════════════════════════
+ * AGENT 2.0 DISCOVERY RUNNER (V125 - SCRABENGINE-FIRST ARCHITECTURE)
+ * ════════════════════════════════════════════════════════════════════════════
  *
  * Orchestrates the Discovery phase of Agent 2.0 calls.
  * When enabled, Agent 2.0 OWNS THE MIC — no fallback to legacy. EVER.
  *
+ * ✅ V125 CRITICAL FIX (Feb 27, 2026):
+ * SCRABENGINE NOW RUNS FIRST, BEFORE GREETING INTERCEPTOR
+ * 
+ * WHY THIS MATTERS:
+ * - User: "Hi I need emergency service"
+ * - OLD: Greeting saw "Hi" → returned early → never checked triggers ❌
+ * - NEW: ScrabEngine removes "Hi" → Greeting sees "need emergency service" → 
+ *        no greeting match → triggers evaluate → EMERGENCY fires ✅
+ * 
+ * ENTERPRISE SEQUENCE (V125):
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ 1. SCRABENGINE (4-step pipeline - runs FIRST on raw text)             │
+ * │    a. Filler removal ("hi", "um", "uh" stripped)                       │
+ * │    b. Vocabulary expansion ("acee" → "air conditioning")               │
+ * │    c. Synonym mapping ("broken" → "not working")                       │
+ * │    d. Entity extraction (name, phone, email, urgency)                  │
+ * │                                                                         │
+ * │ 2. GREETING INTERCEPTOR (now checks CLEANED text)                      │
+ * │    - If greeting-only → stores for fallback use                        │
+ * │    - No longer exits early → continues to triggers                     │
+ * │                                                                         │
+ * │ 3. TRIGGER CARD MATCHING (on CLEANED text from ScrabEngine)            │
+ * │    - Keywords, phrases, negative keywords                              │
+ * │    - PRIMARY PATH (instant response, pre-recorded audio)               │
+ * │                                                                         │
+ * │ 4. GREETING FALLBACK (if detected but no trigger matched)              │
+ * │    - Uses greeting response from step 2                                │
+ * │                                                                         │
+ * │ 5. LLM FALLBACK (if nothing matched)                                   │
+ * │    - GPT-4 dynamic response (max 1-2 per call)                         │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *
  * HARD RULES (V119):
- * 1. Greetings are handled by GreetingInterceptor BEFORE this runs (not here)
+ * 1. ScrabEngine runs FIRST (V125) - text cleaning is mandatory
  * 2. Legacy owners are BLOCKED and we emit proof of blocking
  * 3. ScenarioEngine is OFF by default (opt-in via playbook.useScenarioFallback)
  * 4. Fallback distinguishes "reason captured" vs "no reason"
  * 5. Every turn emits A2_GATE → A2_PATH → A2_RESPONSE chain
  *
  * Flow Order (deterministic-first):
- * 1. Robot challenge detection (UI-controlled response)
- * 2. TRIGGER CARD MATCHING — keywords/phrases/negatives (PRIMARY PATH)
- * 3. Scenario engine fallback (ONLY if playbook.useScenarioFallback=true)
- * 4. Captured reason acknowledgment (if reason extracted but no match)
- * 5. Generic fallback (last resort — different text if reason exists)
+ * 1. ScrabEngine text processing (V125 - NEW, runs FIRST)
+ * 2. Greeting detection (V125 - now on cleaned text, no early exit)
+ * 3. Robot challenge detection (UI-controlled response)
+ * 4. TRIGGER CARD MATCHING — keywords/phrases/negatives (PRIMARY PATH)
+ * 5. Greeting fallback (V125 - if greeting detected but no trigger)
+ * 6. Scenario engine fallback (ONLY if playbook.useScenarioFallback=true)
+ * 7. Captured reason acknowledgment (if reason extracted but no match)
+ * 8. LLM fallback (GPT-4 assist-only, max 1-2 per call)
+ * 9. Generic fallback (last resort — different text if reason exists)
  *
  * Raw Events Emitted (MANDATORY - proof trail):
- * - A2_GATE           : Entry proof (enabled, uiBuild, configHash, legacyBlocked)
- * - A2_PATH_SELECTED  : Which path was taken (ROBOT/TRIGGER/SCENARIO/FALLBACK)
- * - A2_TRIGGER_EVAL   : Trigger card evaluation details
- * - A2_SCENARIO_EVAL  : Scenario engine fallback details (if enabled)
- * - A2_RESPONSE_READY : Final response proof (text, audioUrl, source)
+ * - A2_GATE               : Entry proof (enabled, uiBuild, configHash, legacyBlocked)
+ * - SCRABENGINE_PROCESSED : Text processing result (V125)
+ * - A2_GREETING_EVALUATED : Greeting detection (V125 - on cleaned text)
+ * - A2_PATH_SELECTED      : Which path was taken (GREETING/TRIGGER/LLM/FALLBACK)
+ * - A2_TRIGGER_EVAL       : Trigger card evaluation details
+ * - A2_SCENARIO_EVAL      : Scenario engine fallback details (if enabled)
+ * - A2_RESPONSE_READY     : Final response proof (text, audioUrl, source)
  *
- * ============================================================================
+ * ════════════════════════════════════════════════════════════════════════════
  */
 
 const logger = require('../../../utils/logger');
@@ -513,78 +551,21 @@ class Agent2DiscoveryRunner {
     const nameGreetingConfig = safeObj(discoveryCfg.nameGreeting, null);
 
     // ══════════════════════════════════════════════════════════════════════════
-    // GREETING INTERCEPTOR (V122/V124 - RUNS BEFORE TRIGGER CARDS)
+    // 🔍 SCRABENGINE - UNIFIED TEXT PROCESSING PIPELINE (RUNS FIRST)
     // ══════════════════════════════════════════════════════════════════════════
-    // Handles short greetings like "hi", "good morning" with strict gating.
-    // SHORT-ONLY GATE: Only fires if input ≤ maxWordsToQualify AND no intent words.
-    // ONE-SHOT GUARD (V124): Once greeted, never re-greet on subsequent turns.
-    // If it fires → returns immediately, ends the turn.
-    // ══════════════════════════════════════════════════════════════════════════
-    const greetingsConfig = safeObj(agent2.greetings, {});
-    const greetingResult = Agent2GreetingInterceptor.evaluate({
-      input: input,
-      config: greetingsConfig,
-      turn: typeof turn === 'number' ? turn : 0,
-      state: nextState  // V124: Pass state for one-shot guard check
-    });
-
-    // Always emit greeting evaluation proof
-    emit('A2_GREETING_EVALUATED', greetingResult.proof);
-
-    if (greetingResult.intercepted) {
-      // Greeting matched — return immediately, end the turn
-      nextState.agent2.discovery.lastPath = 'GREETING_INTERCEPTED';
-      nextState.agent2.discovery.lastGreetingRuleId = greetingResult.proof.matchedRuleId;
-      
-      // V124: Apply state update (sets greeted=true for one-shot guard)
-      if (greetingResult.stateUpdate) {
-        nextState.agent2 = { ...nextState.agent2, ...greetingResult.stateUpdate };
-      }
-
-      emit('A2_PATH_SELECTED', {
-        path: 'GREETING_INTERCEPTED',
-        reason: `Matched greeting rule: ${greetingResult.proof.matchedRuleId}`,
-        matchedTrigger: greetingResult.proof.matchedTrigger,
-        responseSource: greetingResult.responseSource
-      });
-
-      const greetingAudioUrl = greetingResult.responseSource === 'audio' ? greetingResult.response : null;
-      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-        `agent2.greetings.interceptor.rules[${greetingResult.ruleIndex || 0}]`,
-        'aiAgentSettings.agent2.greetings.interceptor.rules',
-        greetingResult.response,
-        greetingAudioUrl,
-        `Greeting rule matched: ${greetingResult.matchedTrigger || 'unknown'}`
-      ));
-      emit('A2_RESPONSE_READY', {
-        path: 'GREETING_INTERCEPTED',
-        responsePreview: clip(greetingResult.response, 120),
-        responseLength: greetingResult.response?.length || 0,
-        hasAudio: !!greetingAudioUrl,
-        audioUrl: greetingAudioUrl,
-        source: `greeting:${greetingResult.proof.matchedRuleId}`
-      });
-
-      // Return audio URL if audio, otherwise TTS response
-      if (greetingResult.responseSource === 'audio') {
-        return {
-          response: null, // No TTS needed
-          matchSource: 'AGENT2_DISCOVERY',
-          state: nextState,
-          audioUrl: greetingResult.response
-        };
-      }
-
-      return {
-        response: greetingResult.response,
-        matchSource: 'AGENT2_DISCOVERY',
-        state: nextState
-      };
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 🔍 SCRABENGINE - UNIFIED TEXT PROCESSING PIPELINE
-    // ══════════════════════════════════════════════════════════════════════════
+    // ✅ V125 SEQUENCE FIX: ScrabEngine moved BEFORE greeting interceptor
+    // 
+    // CRITICAL: This must run FIRST to clean text before any decision logic.
+    // 
+    // WHY THIS ORDER MATTERS:
+    // - User says: "Hi I need emergency service"
+    // - ScrabEngine removes "Hi" → "need emergency service"
+    // - Greeting interceptor sees cleaned text → NO match (has intent)
+    // - Triggers evaluate cleaned text → EMERGENCY trigger fires ✅
+    // 
+    // OLD (BROKEN): Greeting ran first, saw "Hi", returned early, never reached triggers
+    // NEW (FIXED): ScrabEngine runs first, greeting sees cleaned text, triggers work
+    // 
     // Enterprise-grade normalization & token expansion.
     // Replaces: Agent2SpeechPreprocessor + Agent2VocabularyEngine (scattered logic)
     // 
@@ -725,6 +706,69 @@ class Agent2DiscoveryRunner {
         callSid,
         turn
       });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GREETING INTERCEPTOR (V125 - NOW RUNS ON CLEANED TEXT)
+    // ══════════════════════════════════════════════════════════════════════════
+    // ✅ V125 FIX: Moved AFTER ScrabEngine to receive cleaned text
+    // 
+    // CRITICAL IMPROVEMENT:
+    // - Now checks CLEANED text (after filler removal)
+    // - "Hi I need emergency" → sees "need emergency" (no greeting match)
+    // - Fewer false positives, better intent detection
+    // 
+    // Handles short greetings like "hi", "good morning" with strict gating.
+    // SHORT-ONLY GATE: Only fires if input ≤ maxWordsToQualify AND no intent words.
+    // ONE-SHOT GUARD (V124): Once greeted, never re-greet on subsequent turns.
+    // 
+    // NOTE: Early return REMOVED - now continues to trigger matching even if greeting detected
+    // This allows combined greeting+intent: "Hi I have emergency" → triggers still fire
+    // ══════════════════════════════════════════════════════════════════════════
+    const greetingsConfig = safeObj(agent2.greetings, {});
+    const greetingResult = Agent2GreetingInterceptor.evaluate({
+      input: normalizedInput,  // ✅ V125: Use CLEANED text from ScrabEngine
+      config: greetingsConfig,
+      turn: typeof turn === 'number' ? turn : 0,
+      state: nextState  // V124: Pass state for one-shot guard check
+    });
+
+    // Always emit greeting evaluation proof
+    emit('A2_GREETING_EVALUATED', greetingResult.proof);
+
+    // ✅ V125: NO MORE EARLY RETURN - greeting detection is now informational only
+    // Store greeting detection result for potential use in response prioritization
+    let greetingDetected = false;
+    let greetingResponse = null;
+    let greetingAudioUrl = null;
+    
+    if (greetingResult.intercepted) {
+      greetingDetected = true;
+      greetingResponse = greetingResult.response;
+      greetingAudioUrl = greetingResult.responseSource === 'audio' ? greetingResult.response : null;
+      
+      // Store in state but don't exit - continue to trigger matching
+      nextState.agent2.discovery.greetingDetected = true;
+      nextState.agent2.discovery.lastGreetingRuleId = greetingResult.proof.matchedRuleId;
+      
+      // V124: Apply state update (sets greeted=true for one-shot guard)
+      if (greetingResult.stateUpdate) {
+        nextState.agent2 = { ...nextState.agent2, ...greetingResult.stateUpdate };
+      }
+
+      emit('A2_PATH_SELECTED', {
+        path: 'GREETING_DETECTED_CONTINUE',
+        reason: `Matched greeting rule: ${greetingResult.proof.matchedRuleId} (continuing to triggers)`,
+        matchedTrigger: greetingResult.proof.matchedTrigger,
+        responseSource: greetingResult.responseSource
+      });
+
+      logger.info('[Greeting] Greeting detected but continuing to trigger matching', {
+        greetingRule: greetingResult.proof.matchedRuleId,
+        cleanedInput: normalizedInput.substring(0, 80)
+      });
+      
+      // ✅ Continue to trigger matching instead of returning early
     }
     
     // ══════════════════════════════════════════════════════════════════════════
@@ -2055,6 +2099,61 @@ class Agent2DiscoveryRunner {
       });
       
     } else {
+      // ══════════════════════════════════════════════════════════════════════════
+      // ✅ V125: GREETING FALLBACK (if greeting detected but no trigger matched)
+      // ══════════════════════════════════════════════════════════════════════════
+      // If greeting was detected earlier AND no trigger matched, use greeting response.
+      // This handles pure greetings like "hi" or "hello" without business intent.
+      // ══════════════════════════════════════════════════════════════════════════
+      if (greetingDetected && greetingResponse) {
+        nextState.agent2.discovery.lastPath = 'GREETING_ONLY';
+        
+        emit('A2_PATH_SELECTED', {
+          path: 'GREETING_ONLY',
+          reason: 'Greeting detected, no trigger matched, using greeting response',
+          greetingRuleId: nextState.agent2.discovery.lastGreetingRuleId
+        });
+        
+        const finalGreetingAudioUrl = greetingAudioUrl;
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          `agent2.greetings.interceptor.rules[${greetingResult.ruleIndex || 0}]`,
+          'aiAgentSettings.agent2.greetings.interceptor.rules',
+          greetingResponse,
+          finalGreetingAudioUrl,
+          `Greeting-only response (no trigger matched)`
+        ));
+        
+        emit('A2_RESPONSE_READY', {
+          path: 'GREETING_ONLY',
+          responsePreview: clip(greetingResponse, 120),
+          responseLength: greetingResponse?.length || 0,
+          hasAudio: !!finalGreetingAudioUrl,
+          audioUrl: finalGreetingAudioUrl,
+          source: `greeting:${nextState.agent2.discovery.lastGreetingRuleId}`
+        });
+
+        logger.info('[Greeting] Using greeting response (no trigger matched)', {
+          greetingRule: nextState.agent2.discovery.lastGreetingRuleId,
+          hasAudio: !!finalGreetingAudioUrl
+        });
+
+        // Return greeting response
+        if (greetingAudioUrl) {
+          return {
+            response: null,
+            matchSource: 'AGENT2_DISCOVERY',
+            state: nextState,
+            audioUrl: greetingAudioUrl
+          };
+        }
+
+        return {
+          response: greetingResponse,
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState
+        };
+      }
+      
       // ──────────────────────────────────────────────────────────────────────
       // PATH 4+: LLM FALLBACK (ASSIST-ONLY - UI-Controlled)
       // ──────────────────────────────────────────────────────────────────────
