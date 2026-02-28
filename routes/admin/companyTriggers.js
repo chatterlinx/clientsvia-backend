@@ -1530,20 +1530,33 @@ router.put('/:companyId/name-greeting',
         safeSettings
       });
 
-      const updateResult = await v2Company.findByIdAndUpdate(companyId, {
-        $set: { 'aiAgentSettings.agent2.discovery.nameGreeting': safeSettings }
-      }, { runValidators: false, new: true });
-
-      logger.info('[CompanyTriggers] Name greeting SAVE result', {
-        companyId,
-        foundDocument: !!updateResult,
-        savedValue: updateResult?.aiAgentSettings?.agent2?.discovery?.nameGreeting
-      });
-
-      if (!updateResult) {
+      // FIX: Use find + markModified + save pattern instead of findByIdAndUpdate
+      // Mongoose doesn't reliably persist deeply nested changes with $set on Mixed schemas
+      const company = await v2Company.findById(companyId);
+      
+      if (!company) {
         logger.error('[CompanyTriggers] Name greeting SAVE - Company not found!', { companyId });
         return res.status(404).json({ success: false, error: 'Company not found' });
       }
+
+      // Ensure nested path exists
+      if (!company.aiAgentSettings) company.aiAgentSettings = {};
+      if (!company.aiAgentSettings.agent2) company.aiAgentSettings.agent2 = {};
+      if (!company.aiAgentSettings.agent2.discovery) company.aiAgentSettings.agent2.discovery = {};
+      
+      // Set the value
+      company.aiAgentSettings.agent2.discovery.nameGreeting = safeSettings;
+      
+      // CRITICAL: Mark the path as modified so Mongoose detects the change
+      company.markModified('aiAgentSettings.agent2.discovery.nameGreeting');
+      company.markModified('aiAgentSettings');
+      
+      await company.save();
+
+      logger.info('[CompanyTriggers] Name greeting SAVE complete', {
+        companyId,
+        savedValue: company.aiAgentSettings?.agent2?.discovery?.nameGreeting
+      });
 
       return res.json({ success: true, settings: safeSettings });
     } catch (error) {
@@ -1615,9 +1628,23 @@ router.put('/:companyId/patience-settings',
         updatedAt: new Date()
       };
 
-      await v2Company.findByIdAndUpdate(companyId, {
-        $set: { 'aiAgentSettings.agent2.discovery.patienceSettings': safeSettings }
-      }, { runValidators: false });
+      // FIX: Use find + markModified + save pattern instead of findByIdAndUpdate
+      const company = await v2Company.findById(companyId);
+      
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      // Ensure nested path exists
+      if (!company.aiAgentSettings) company.aiAgentSettings = {};
+      if (!company.aiAgentSettings.agent2) company.aiAgentSettings.agent2 = {};
+      if (!company.aiAgentSettings.agent2.discovery) company.aiAgentSettings.agent2.discovery = {};
+      
+      company.aiAgentSettings.agent2.discovery.patienceSettings = safeSettings;
+      company.markModified('aiAgentSettings.agent2.discovery.patienceSettings');
+      company.markModified('aiAgentSettings');
+      
+      await company.save();
 
       logger.info('[CompanyTriggers] Patience settings saved', {
         companyId,
