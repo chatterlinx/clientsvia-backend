@@ -1510,6 +1510,11 @@ router.put('/:companyId/name-greeting',
       const { companyId } = req.params;
       const { settings } = req.body;
 
+      logger.info('[CompanyTriggers] Name greeting SAVE request', {
+        companyId,
+        receivedSettings: settings
+      });
+
       if (!settings || typeof settings !== 'object') {
         return res.status(400).json({ success: false, error: 'settings object is required' });
       }
@@ -1520,19 +1525,29 @@ router.put('/:companyId/name-greeting',
         updatedAt: new Date()
       };
 
-      await v2Company.findByIdAndUpdate(companyId, {
-        $set: { 'aiAgentSettings.agent2.discovery.nameGreeting': safeSettings }
-      }, { runValidators: false });
-
-      logger.info('[CompanyTriggers] Name greeting saved', {
+      logger.info('[CompanyTriggers] Name greeting SAVE sanitized', {
         companyId,
-        alwaysGreet: safeSettings.alwaysGreet,
-        lineLength: safeSettings.greetingLine.length
+        safeSettings
       });
+
+      const updateResult = await v2Company.findByIdAndUpdate(companyId, {
+        $set: { 'aiAgentSettings.agent2.discovery.nameGreeting': safeSettings }
+      }, { runValidators: false, new: true });
+
+      logger.info('[CompanyTriggers] Name greeting SAVE result', {
+        companyId,
+        foundDocument: !!updateResult,
+        savedValue: updateResult?.aiAgentSettings?.agent2?.discovery?.nameGreeting
+      });
+
+      if (!updateResult) {
+        logger.error('[CompanyTriggers] Name greeting SAVE - Company not found!', { companyId });
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
 
       return res.json({ success: true, settings: safeSettings });
     } catch (error) {
-      logger.error('[CompanyTriggers] Save name greeting error', { error: error.message });
+      logger.error('[CompanyTriggers] Save name greeting error', { error: error.message, stack: error.stack });
       return res.status(500).json({ success: false, error: error.message });
     }
   }
