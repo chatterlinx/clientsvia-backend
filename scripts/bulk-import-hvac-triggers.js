@@ -20,9 +20,10 @@ async function main() {
 
     const CompanyLocalTrigger = require('../models/CompanyLocalTrigger');
     
-    // Load HVAC triggers from JSON
-    const jsonPath = path.join(__dirname, '../docs/hvac-triggers-100.json');
+    // Load HVAC triggers from JSON (version without {name} variable)
+    const jsonPath = path.join(__dirname, '../docs/hvac-triggers-100-no-name.json');
     console.log('📂 Reading:', jsonPath);
+    console.log('ℹ️  Using version WITHOUT {name} variable (cleaner responses)');
     
     const triggersData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
     console.log(`📋 Found ${triggersData.length} triggers in JSON`);
