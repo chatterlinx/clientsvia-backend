@@ -2103,9 +2103,19 @@
 
   async function loadNameGreeting() {
     try {
+      console.log('[NameGreeting] LOAD — fetching settings...');
       const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`);
+      console.log('[NameGreeting] LOAD — API response:', data);
       const s = data.settings || {};
-      if (DOM.nameGreetingAlways) DOM.nameGreetingAlways.checked = s.alwaysGreet === true;
+      console.log('[NameGreeting] LOAD — extracted settings:', s);
+      console.log('[NameGreeting] LOAD — alwaysGreet value:', s.alwaysGreet, 'type:', typeof s.alwaysGreet);
+      
+      if (DOM.nameGreetingAlways) {
+        DOM.nameGreetingAlways.checked = s.alwaysGreet === true;
+        console.log('[NameGreeting] LOAD — set checkbox to:', DOM.nameGreetingAlways.checked);
+      } else {
+        console.error('[NameGreeting] LOAD — DOM.nameGreetingAlways is null!');
+      }
       if (DOM.nameGreetingText) DOM.nameGreetingText.value = s.greetingLine || '';
     } catch (err) {
       console.warn('[NameGreeting] Failed to load, using defaults:', err.message);
@@ -2125,10 +2135,16 @@
           || 'Hello {name}, thank you for calling.'
       };
 
-      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`, {
+      console.log('[NameGreeting] SAVE — checkbox element:', DOM.nameGreetingAlways);
+      console.log('[NameGreeting] SAVE — checkbox checked:', DOM.nameGreetingAlways?.checked);
+      console.log('[NameGreeting] SAVE — settings being sent:', settings);
+
+      const response = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`, {
         method: 'PUT',
         body: { settings }
       });
+
+      console.log('[NameGreeting] SAVE — API response:', response);
 
       showToast('success', 'Name Greeting Saved', settings.alwaysGreet ? 'Always greet (with or without name)' : 'Greet only when name captured');
       closeNameGreetingModal();
