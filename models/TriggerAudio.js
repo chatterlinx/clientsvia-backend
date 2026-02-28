@@ -156,10 +156,26 @@ triggerAudioSchema.statics.findByCompanyAndRule = function(companyId, ruleId) {
 };
 
 /**
- * Find all audio metadata for a company (excludes binary data)
+ * Find all audio metadata for a company (excludes binary data but includes hasAudioData flag)
+ * V130: Include hasAudioData computed field so resolveAudioUrl can verify binary exists
  */
-triggerAudioSchema.statics.findByCompanyId = function(companyId) {
-  return this.find({ companyId, isValid: true }).select('-audioData').sort({ createdAt: -1 }).lean();
+triggerAudioSchema.statics.findByCompanyId = async function(companyId) {
+  const docs = await this.find({ companyId, isValid: true })
+    .select('ruleId audioUrl textHash sourceText voiceId voiceProvider isValid createdAt updatedAt')
+    .sort({ createdAt: -1 })
+    .lean();
+  
+  // Check which docs have audioData (without loading the full binary)
+  const docsWithAudioCheck = await this.find(
+    { companyId, isValid: true, audioData: { $exists: true, $ne: null } },
+    { ruleId: 1 }
+  ).lean();
+  const hasAudioSet = new Set(docsWithAudioCheck.map(d => d.ruleId));
+  
+  return docs.map(d => ({
+    ...d,
+    hasAudioData: hasAudioSet.has(d.ruleId)
+  }));
 };
 
 /**

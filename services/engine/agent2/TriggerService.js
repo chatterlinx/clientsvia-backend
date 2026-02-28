@@ -117,12 +117,15 @@ function invalidateAllCache() {
 // ════════════════════════════════════════════════════════════════════════════════
 
 /**
- * Checks database validity (isValid flag + text hash match).
+ * Checks database validity (isValid flag + text hash match + audioData exists).
  * Audio binary is stored in MongoDB and served via a self-healing fallback
  * route, so filesystem existence is no longer a gating factor.
+ * 
+ * V130: Also verify audioData exists - prevents 404s when record exists but binary is missing
  */
 function resolveAudioUrl(companyAudio, effectiveAnswerText) {
   if (!companyAudio || !companyAudio.isValid) return '';
+  if (!companyAudio.hasAudioData) return '';  // V130: Binary must exist (from findByCompanyId)
   if (companyAudio.textHash !== TriggerAudio.hashText(effectiveAnswerText)) return '';
   return companyAudio.audioUrl || '';
 }
