@@ -48,7 +48,9 @@ async function main() {
       // Response
       answer: {
         answerText: t.answerText || '',
-        audioUrl: null // No audio initially - can be generated later
+        audioUrl: null // V125: Always null on import - use TTS, avoid 404 errors
+        // Audio can be generated per-trigger via UI after import
+        // This prevents ephemeral storage 404 issues
       },
       
       // Follow-up
@@ -88,8 +90,20 @@ async function main() {
     console.log('═'.repeat(60));
     
     console.log('\n✅ DONE! Triggers are now loaded and ready.');
-    console.log('🎯 Make a test call saying: "My AC is not cooling"');
-    console.log('Expected: Agent should match "AC not cooling" trigger');
+    console.log('\n📋 AUDIO STATUS:');
+    console.log('  • All triggers imported with audioUrl: null');
+    console.log('  • Will use ElevenLabs TTS (dynamic generation)');
+    console.log('  • No 404 errors - TTS works on every call');
+    console.log('  • Optional: Generate pre-recorded audio later via UI for faster responses');
+    console.log('\n🎯 TEST THE FIX:');
+    console.log('  1. Make a test call: "My AC is not cooling"');
+    console.log('  2. Expected: Agent matches "AC not cooling" trigger');
+    console.log('  3. Response: "Got it{name}. I can help with that..."');
+    console.log('  4. Audio: ElevenLabs TTS (2-3s generation time)');
+    console.log('\n💡 TO IMPROVE PERFORMANCE:');
+    console.log('  • Go to Triggers tab in UI');
+    console.log('  • Click "Generate Audio" on frequently-used triggers');
+    console.log('  • Pre-recorded audio = 200ms (vs 2-3s for TTS)');
 
   } catch (error) {
     console.error('❌ ERROR:', error);
