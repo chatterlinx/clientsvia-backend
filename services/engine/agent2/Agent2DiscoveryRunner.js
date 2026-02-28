@@ -487,7 +487,8 @@ class Agent2DiscoveryRunner {
       }
     }
     
-    const callerName = state?.plainSlots?.name || null;
+    // V129: Use 'let' so we can update after ScrabEngine extracts name on Turn 1
+    let callerName = state?.plainSlots?.name || null;
 
     // ──────────────────────────────────────────────────────────────────────
     // V119: COMPUTE CONFIG HASH FOR PROOF
@@ -691,6 +692,11 @@ class Agent2DiscoveryRunner {
     
     if (scrabResult.entities?.firstName && !nextState.callerName) {
       nextState.callerName = scrabResult.entities.firstName;
+      
+      // V129 FIX: Update local callerName variable so Name Greeting can use it
+      // Previously, callerName was captured from state BEFORE ScrabEngine ran,
+      // so on Turn 1 it was always null even though we extracted a name.
+      callerName = scrabResult.entities.firstName;
       
       emit('CALLER_NAME_EXTRACTED', {
         firstName: scrabResult.entities.firstName,

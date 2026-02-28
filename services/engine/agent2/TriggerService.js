@@ -200,12 +200,88 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
   // Load ONLY published global triggers (never draft - prevents draft leakage)
   if (settings && settings.activeGroupId && isGroupPublished) {
     const rawGlobalTriggers = await GlobalTrigger.findPublishedByGroupId(settings.activeGroupId);
-    globalTriggers = rawGlobalTriggers.map(gt => gt.toMatcherFormat ? gt.toMatcherFormat() : gt);
+    // CRITICAL FIX: .lean() returns raw docs without methods, so we must manually transform
+    // to the TriggerCardMatcher format which expects card.match.keywords (not card.keywords)
+    globalTriggers = rawGlobalTriggers.map(gt => {
+      if (gt.toMatcherFormat) {
+        return gt.toMatcherFormat();
+      }
+      // Manual transformation for lean() results - mirrors toMatcherFormat()
+      return {
+        id: gt.triggerId,
+        ruleId: gt.ruleId,
+        triggerId: gt.triggerId,
+        enabled: gt.enabled,
+        priority: gt.priority ?? 50,
+        label: gt.label,
+        match: {
+          keywords: gt.keywords || [],
+          phrases: gt.phrases || [],
+          negativeKeywords: gt.negativeKeywords || [],
+          scenarioTypeAllowlist: gt.scenarioTypeAllowlist || []
+        },
+        responseMode: gt.responseMode || 'standard',
+        answer: {
+          answerText: gt.answerText || '',
+          audioUrl: gt.audioUrl || ''
+        },
+        followUp: {
+          question: gt.followUpQuestion || '',
+          nextAction: gt.followUpNextAction || ''
+        },
+        llmFactPack: gt.responseMode === 'llm' && gt.llmFactPack ? {
+          includedFacts: gt.llmFactPack.includedFacts || '',
+          excludedFacts: gt.llmFactPack.excludedFacts || '',
+          backupAnswer: gt.llmFactPack.backupAnswer || ''
+        } : null,
+        _scope: 'GLOBAL'
+      };
+    });
   }
 
   // Load ONLY active local triggers (enabled=true, isDeleted!=true)
   const rawLocalTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
-  const localTriggers = rawLocalTriggers.map(lt => lt.toMatcherFormat ? lt.toMatcherFormat() : lt);
+  // CRITICAL FIX: .lean() returns raw docs without methods, so we must manually transform
+  // to the TriggerCardMatcher format which expects card.match.keywords (not card.keywords)
+  const localTriggers = rawLocalTriggers.map(lt => {
+    if (lt.toMatcherFormat) {
+      return lt.toMatcherFormat();
+    }
+    // Manual transformation for lean() results - mirrors toMatcherFormat()
+    return {
+      id: lt.triggerId,
+      ruleId: lt.ruleId,
+      triggerId: lt.triggerId,
+      enabled: lt.enabled,
+      priority: lt.priority ?? 50,
+      label: lt.label,
+      match: {
+        keywords: lt.keywords || [],
+        phrases: lt.phrases || [],
+        negativeKeywords: lt.negativeKeywords || [],
+        scenarioTypeAllowlist: lt.scenarioTypeAllowlist || []
+      },
+      responseMode: lt.responseMode || 'standard',
+      answer: {
+        answerText: lt.answerText || '',
+        audioUrl: lt.audioUrl || ''
+      },
+      followUp: {
+        question: lt.followUpQuestion || '',
+        nextAction: lt.followUpNextAction || ''
+      },
+      llmFactPack: lt.responseMode === 'llm' && lt.llmFactPack ? {
+        includedFacts: lt.llmFactPack.includedFacts || '',
+        excludedFacts: lt.llmFactPack.excludedFacts || '',
+        backupAnswer: lt.llmFactPack.backupAnswer || ''
+      } : null,
+      _scope: 'LOCAL',
+      _isOverride: lt.isOverride,
+      _overrideOfGroupId: lt.overrideOfGroupId,
+      _overrideOfRuleId: lt.overrideOfRuleId,
+      _overrideOfTriggerId: lt.overrideOfTriggerId
+    };
+  });
   
   // Load company-specific audio recordings
   const audioRecordings = await TriggerAudio.findByCompanyId(companyId);

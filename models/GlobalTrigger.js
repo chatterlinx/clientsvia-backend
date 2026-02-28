@@ -413,6 +413,7 @@ globalTriggerSchema.pre('save', function(next) {
 
 globalTriggerSchema.methods.toMatcherFormat = function() {
   const base = {
+    id: this.triggerId,  // TriggerCardMatcher expects card.id
     ruleId: this.ruleId,  // CANONICAL KEY - always use this for Map operations
     triggerId: this.triggerId,
     enabled: this.enabled,
