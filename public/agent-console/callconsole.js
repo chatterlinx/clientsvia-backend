@@ -594,6 +594,9 @@
       <!-- Problems Section -->
       ${renderProblemsSection(call, violations, fallbacks)}
 
+      <!-- DIAGNOSTIC ROADMAP - Complete sequence path visualization -->
+      ${renderDiagnosticRoadmap(call)}
+
       <!-- ScrabEngine Timeline -->
       ${renderScrabEngineSection(call)}
 
@@ -1262,6 +1265,213 @@
    * @param {Array} events - Array of event objects
    * @returns {string} HTML string
    */
+  function renderDiagnosticRoadmap(call) {
+    const turns = call.turns || [];
+    const events = call.events || [];
+    const trace = call.trace || [];
+    
+    // Build sequence from actual call data
+    const callerTurns = turns.filter(t => t.speaker === 'caller');
+    const agentTurns = turns.filter(t => t.speaker === 'agent');
+    
+    if (callerTurns.length === 0) {
+      return `
+        <div class="diagnostic-roadmap" style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 12px; padding: 20px; margin: 16px 0;">
+          <h4 style="color: #b45309; margin: 0 0 12px 0;">⚠️ No Caller Input Detected</h4>
+          <p style="font-size: 13px; color: #92400e;">
+            This call has no caller turns. Cannot analyze decision path.
+          </p>
+        </div>
+      `;
+    }
+    
+    // Analyze first turn to show decision path
+    const firstCallerTurn = callerTurns[0];
+    const firstAgentTurn = agentTurns[0];
+    const callerText = firstCallerTurn?.text || '';
+    const agentResponse = firstAgentTurn?.text || '';
+    const agentSource = firstAgentTurn?.source || 'UNKNOWN';
+    const hasEvents = events.length > 0 || trace.length > 0;
+    
+    // Check for specific event types to determine what happened
+    const scrabEvent = [...events, ...trace].find(e => 
+      e.type === 'SCRABENGINE_PROCESSED' || e.kind === 'SCRABENGINE_PROCESSED'
+    );
+    const greetingEvent = [...events, ...trace].find(e => 
+      e.type === 'A2_GREETING_EVALUATED' || e.kind === 'A2_GREETING_EVALUATED'
+    );
+    const triggerEvent = [...events, ...trace].find(e => 
+      e.type === 'A2_TRIGGER_EVAL' || e.kind === 'A2_TRIGGER_EVAL'
+    );
+    const pathEvent = [...events, ...trace].find(e => 
+      e.type === 'A2_PATH_SELECTED' || e.kind === 'A2_PATH_SELECTED'
+    );
+    
+    // Determine what happened based on response
+    const isFallback = agentResponse.toLowerCase().includes('cut out') || 
+                      agentResponse.toLowerCase().includes('how can i help');
+    const isGreeting = agentResponse.toLowerCase().includes('hello') && agentResponse.length < 50;
+    
+    return `
+      <div class="diagnostic-roadmap" style="background: #ffffff; border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 16px 0;">
+        <h3 style="color: #1e40af; margin: 0 0 16px 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M10 2V18M10 2L6 6M10 2L14 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          🗺️ DIAGNOSTIC ROADMAP - Turn 1
+        </h3>
+        
+        ${!hasEvents ? `
+          <div style="background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+            <strong style="color: #991b1b;">⚠️ NO EVENTS CAPTURED</strong>
+            <p style="font-size: 13px; color: #7f1d1d; margin: 8px 0 0 0;">
+              This call has no event data. Cannot show detailed decision path.
+              <br><br>
+              <strong>Likely Reason:</strong> Call was made before V125 event logging was deployed.
+              <br>
+              <strong>Solution:</strong> Make a new test call to see full diagnostic data.
+            </p>
+          </div>
+        ` : ''}
+        
+        <div style="display: grid; gap: 12px;">
+          <!-- Step 1: Caller Input -->
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: #10b981; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">1</div>
+            <div style="flex: 1; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px;">
+              <div style="font-weight: 600; color: #166534; margin-bottom: 6px;">📝 Caller Input (RAW)</div>
+              <div style="font-size: 14px; color: #15803d;">"${escapeHtml(callerText.substring(0, 200))}"</div>
+              <div style="font-size: 12px; color: #16a34a; margin-top: 6px;">✅ Received from Deepgram STT</div>
+            </div>
+          </div>
+          
+          <!-- Arrow -->
+          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
+          
+          <!-- Step 2: ScrabEngine -->
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${scrabEvent ? '#10b981' : '#ef4444'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">${scrabEvent ? '2' : '🚫'}</div>
+            <div style="flex: 1; background: ${scrabEvent ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${scrabEvent ? '#86efac' : '#fca5a5'}; border-radius: 8px; padding: 12px;">
+              <div style="font-weight: 600; color: ${scrabEvent ? '#166534' : '#991b1b'}; margin-bottom: 6px;">
+                🔍 ScrabEngine Processing
+              </div>
+              ${scrabEvent ? `
+                <div style="font-size: 13px; color: #15803d;">
+                  ✅ Text processed (4-step pipeline)
+                  <br>Cleaned text ready for trigger matching
+                </div>
+              ` : `
+                <div style="font-size: 13px; color: #991b1b;">
+                  ❌ NO SCRABENGINE EVENT FOUND
+                  <br><strong>This is the problem!</strong> Text was not cleaned before trigger matching.
+                  <br><br>
+                  <strong>Root Cause:</strong> Old code (pre-V125) or ScrabEngine failed
+                  <br><strong>Fix:</strong> V125 deployed - make new test call
+                </div>
+              `}
+            </div>
+          </div>
+          
+          <!-- Arrow -->
+          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
+          
+          <!-- Step 3: Greeting Check -->
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${greetingEvent ? '#10b981' : '#f59e0b'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">${greetingEvent ? '3' : '⚠️'}</div>
+            <div style="flex: 1; background: ${greetingEvent ? '#f0fdf4' : '#fffbeb'}; border: 1px solid ${greetingEvent ? '#86efac' : '#fcd34d'}; border-radius: 8px; padding: 12px;">
+              <div style="font-weight: 600; color: ${greetingEvent ? '#166534' : '#b45309'}; margin-bottom: 6px;">
+                🎭 Greeting Interceptor
+              </div>
+              ${greetingEvent ? `
+                <div style="font-size: 13px; color: #15803d;">
+                  Checked for greeting on cleaned text
+                </div>
+              ` : `
+                <div style="font-size: 13px; color: #92400e;">
+                  ⚠️ No greeting event - old code or events not captured
+                </div>
+              `}
+            </div>
+          </div>
+          
+          <!-- Arrow -->
+          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
+          
+          <!-- Step 4: Trigger Evaluation -->
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${triggerEvent ? '#10b981' : '#ef4444'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">${triggerEvent ? '4' : '🚫'}</div>
+            <div style="flex: 1; background: ${triggerEvent ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${triggerEvent ? '#86efac' : '#fca5a5'}; border-radius: 8px; padding: 12px;">
+              <div style="font-weight: 600; color: ${triggerEvent ? '#166534' : '#991b1b'}; margin-bottom: 6px;">
+                🎯 Trigger Evaluation
+              </div>
+              ${triggerEvent ? `
+                <div style="font-size: 13px; color: #15803d;">
+                  ${triggerEvent.payload?.matched ? '✅ TRIGGER MATCHED' : '❌ NO TRIGGER MATCHED'}
+                  ${triggerEvent.payload?.cardLabel ? '<br>Card: ' + escapeHtml(triggerEvent.payload.cardLabel) : ''}
+                  ${triggerEvent.payload?.totalCards ? '<br>Evaluated: ' + triggerEvent.payload.totalCards + ' cards' : ''}
+                </div>
+              ` : `
+                <div style="font-size: 13px; color: #991b1b;">
+                  🚫 STEP SKIPPED - Triggers never evaluated!
+                  <br><br>
+                  <strong>This is why agent gave wrong response!</strong>
+                  <br><br>
+                  <strong>Root Cause:</strong> Greeting exited early (pre-V125 bug)
+                  <br><strong>Fix:</strong> V125 deployed - ScrabEngine now runs first
+                </div>
+              `}
+            </div>
+          </div>
+          
+          <!-- Arrow -->
+          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
+          
+          <!-- Step 5: Response Generated -->
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${isFallback ? '#ef4444' : '#10b981'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">5</div>
+            <div style="flex: 1; background: ${isFallback ? '#fef2f2' : '#f0fdf4'}; border: 1px solid ${isFallback ? '#fca5a5' : '#86efac'}; border-radius: 8px; padding: 12px;">
+              <div style="font-weight: 600; color: ${isFallback ? '#991b1b' : '#166534'}; margin-bottom: 6px;">
+                💬 Agent Response
+              </div>
+              <div style="font-size: 13px; color: ${isFallback ? '#991b1b' : '#15803d'}; margin-bottom: 8px;">
+                "${escapeHtml(agentResponse.substring(0, 150))}"
+              </div>
+              <div style="font-size: 12px; color: ${isFallback ? '#7f1d1d' : '#16a34a'};">
+                ${isFallback ? '❌ FALLBACK RESPONSE (Generic/Wrong)' : '✅ Contextual Response'}
+                <br>Source: ${escapeHtml(agentSource)}
+                ${firstAgentTurn?.provenance?.uiPath ? '<br>UI Path: ' + escapeHtml(firstAgentTurn.provenance.uiPath) : ''}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Summary -->
+          <div style="background: ${isFallback || !triggerEvent ? '#fef2f2' : '#f0fdf4'}; border: 2px solid ${isFallback || !triggerEvent ? '#ef4444' : '#10b981'}; border-radius: 10px; padding: 16px; margin-top: 12px;">
+            <div style="font-weight: 700; font-size: 14px; color: ${isFallback || !triggerEvent ? '#991b1b' : '#166534'}; margin-bottom: 8px;">
+              ${isFallback || !triggerEvent ? '🚨 SEQUENCE DEVIATION DETECTED' : '✅ SEQUENCE FOLLOWED CORRECTLY'}
+            </div>
+            <div style="font-size: 13px; color: ${isFallback || !triggerEvent ? '#7f1d1d' : '#15803d'};">
+              <strong>Path Taken:</strong> 1 → ${scrabEvent ? '2' : '🚫'} → ${greetingEvent ? '3' : '🚫'} → ${triggerEvent ? '4' : '🚫'} → 5
+              <br><br>
+              ${!scrabEvent ? '❌ <strong>Step 2 MISSING:</strong> ScrabEngine didn\'t process text<br>' : ''}
+              ${!triggerEvent ? '❌ <strong>Step 4 SKIPPED:</strong> Triggers never evaluated<br>' : ''}
+              ${isFallback ? '❌ <strong>Step 5 WRONG:</strong> Generic fallback instead of trigger response<br>' : ''}
+              <br>
+              ${!hasEvents ? `
+                <strong>ROOT CAUSE:</strong> No events captured - call was before V125 deployment
+                <br><strong>ACTION:</strong> Make a new test call to verify V125 fix
+              ` : triggerEvent?.payload?.matched ? `
+                <strong>SUCCESS:</strong> Trigger matched and fired correctly!
+              ` : `
+                <strong>ISSUE:</strong> Triggers evaluated but none matched
+                <br><strong>ACTION:</strong> Check trigger configuration for this company
+              `}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderEventsSection(events) {
     if (events.length === 0) {
       return '';
