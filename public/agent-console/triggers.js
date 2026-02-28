@@ -43,6 +43,10 @@
     searchQuery: '',
     scopeFilter: 'all',
     
+    // Bulk selection
+    selectedTriggerIds: new Set(),
+    bulkSelectMode: false,
+    
     // Company Variables
     companyVariables: new Map(),
     detectedVariables: new Set(),
@@ -124,6 +128,12 @@
     triggerTableHeader: document.getElementById('trigger-table-header'),
     emptyState: document.getElementById('empty-state'),
     triggerSearch: document.getElementById('trigger-search'),
+    
+    selectAllTriggers: document.getElementById('select-all-triggers'),
+    bulkActionsBar: document.getElementById('bulk-actions-bar'),
+    bulkSelectedCount: document.getElementById('bulk-selected-count'),
+    btnClearSelection: document.getElementById('btn-clear-selection'),
+    btnBulkDelete: document.getElementById('btn-bulk-delete'),
     duplicateWarning: document.getElementById('duplicate-warning'),
     duplicateWarningText: document.getElementById('duplicate-warning-text'),
     btnFixDuplicates: document.getElementById('btn-fix-duplicates'),
@@ -265,6 +275,17 @@
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
     if (DOM.btnNameGreeting) DOM.btnNameGreeting.addEventListener('click', openNameGreetingModal);
+    
+    // Bulk selection
+    if (DOM.selectAllTriggers) {
+      DOM.selectAllTriggers.addEventListener('change', handleSelectAll);
+    }
+    if (DOM.btnClearSelection) {
+      DOM.btnClearSelection.addEventListener('click', clearSelection);
+    }
+    if (DOM.btnBulkDelete) {
+      DOM.btnBulkDelete.addEventListener('click', handleBulkDelete);
+    }
     if (DOM.modalNameGreetingClose) DOM.modalNameGreetingClose.addEventListener('click', closeNameGreetingModal);
     if (DOM.btnNameGreetingCancel) DOM.btnNameGreetingCancel.addEventListener('click', closeNameGreetingModal);
     if (DOM.btnNameGreetingSave) DOM.btnNameGreetingSave.addEventListener('click', saveNameGreeting);
@@ -626,6 +647,22 @@
       });
     });
     
+    // Checkbox selection handlers
+    DOM.triggerList.querySelectorAll('.trigger-select-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const triggerId = e.target.dataset.triggerId;
+        
+        if (e.target.checked) {
+          state.selectedTriggerIds.add(triggerId);
+        } else {
+          state.selectedTriggerIds.delete(triggerId);
+        }
+        
+        updateBulkActionsBar();
+        renderTriggers();
+      });
+    });
+    
     DOM.triggerList.querySelectorAll('.toggle-enabled').forEach(toggle => {
       toggle.addEventListener('change', async (e) => {
         const triggerId = e.target.dataset.triggerId;
@@ -883,8 +920,17 @@
     }
     if (hasFollowUp) answerBadges += '<span class="answer-badge follow" title="Has follow-up question (consent gate active)">FOLLOW</span>';
     
+    const isSelected = state.selectedTriggerIds.has(trigger.triggerId);
+    
     return `
-      <div class="trigger-row ${isEnabled ? '' : 'disabled'}" id="trigger-${escapeHtml(trigger.triggerId)}" data-trigger-id="${escapeHtml(trigger.triggerId)}">
+      <div class="trigger-row ${isEnabled ? '' : 'disabled'} ${isSelected ? 'selected' : ''}" id="trigger-${escapeHtml(trigger.triggerId)}" data-trigger-id="${escapeHtml(trigger.triggerId)}">
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <input type="checkbox" 
+                 class="trigger-select-checkbox" 
+                 data-trigger-id="${trigger.triggerId}"
+                 ${isSelected ? 'checked' : ''}
+                 title="Select for bulk action">
+        </div>
         <div>
           <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>
         </div>
@@ -2491,6 +2537,120 @@
     });
   } else {
     console.error('[Consent Cards] INIT-FAIL — btn-save-followup-consent NOT found in DOM');
+  }
+
+  /* --------------------------------------------------------------------------
+     BULK SELECTION & DELETE
+     -------------------------------------------------------------------------- */
+  
+  function handleSelectAll(e) {
+    const isChecked = e.target.checked;
+    
+    if (isChecked) {
+      // Select all visible triggers
+      const filtered = state.triggers.filter(t => {
+        if (state.scopeFilter === 'global' && t.scope !== 'GLOBAL') return false;
+        if (state.scopeFilter === 'local' && t.scope === 'GLOBAL') return false;
+        if (state.searchQuery) {
+          const query = state.searchQuery.toLowerCase();
+          const label = (t.label || '').toLowerCase();
+          const keywords = (t.match?.keywords || []).join(' ').toLowerCase();
+          if (!label.includes(query) && !keywords.includes(query)) return false;
+        }
+        return true;
+      });
+      
+      filtered.forEach(t => state.selectedTriggerIds.add(t.triggerId));
+    } else {
+      state.selectedTriggerIds.clear();
+    }
+    
+    updateBulkActionsBar();
+    renderTriggers();
+  }
+  
+  function clearSelection() {
+    state.selectedTriggerIds.clear();
+    if (DOM.selectAllTriggers) DOM.selectAllTriggers.checked = false;
+    updateBulkActionsBar();
+    renderTriggers();
+  }
+  
+  function updateBulkActionsBar() {
+    const count = state.selectedTriggerIds.size;
+    
+    if (DOM.bulkActionsBar) {
+      DOM.bulkActionsBar.style.display = count > 0 ? 'flex' : 'none';
+    }
+    if (DOM.bulkSelectedCount) {
+      DOM.bulkSelectedCount.textContent = `${count} selected`;
+    }
+  }
+  
+  async function handleBulkDelete() {
+    const count = state.selectedTriggerIds.size;
+    
+    if (count === 0) {
+      showToast('warning', 'No Selection', 'Please select triggers to delete');
+      return;
+    }
+    
+    // Confirmation popup with typed approval
+    const confirmText = `DELETE ${count} TRIGGERS`;
+    const userInput = prompt(
+      `⚠️ DELETE ${count} TRIGGER${count > 1 ? 'S' : ''}?\n\n` +
+      `This will permanently delete the selected triggers.\n\n` +
+      `To confirm, type exactly: ${confirmText}`
+    );
+    
+    if (userInput !== confirmText) {
+      if (userInput !== null) {
+        showToast('warning', 'Cancelled', 'Deletion cancelled - confirmation text did not match');
+      }
+      return;
+    }
+    
+    // Proceed with deletion
+    try {
+      const selectedIds = Array.from(state.selectedTriggerIds);
+      const localTriggers = selectedIds.filter(id => {
+        const trigger = state.triggers.find(t => t.triggerId === id);
+        return trigger && trigger.scope !== 'GLOBAL';
+      });
+      
+      const globalTriggers = selectedIds.filter(id => {
+        const trigger = state.triggers.find(t => t.triggerId === id);
+        return trigger && trigger.scope === 'GLOBAL';
+      });
+      
+      let deleted = 0;
+      
+      // Delete local triggers
+      for (const triggerId of localTriggers) {
+        const url = `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/${triggerId}`;
+        await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
+        deleted++;
+      }
+      
+      // Delete global triggers (if admin)
+      for (const triggerId of globalTriggers) {
+        const url = `${CONFIG.API_BASE_GLOBAL}/triggers/${triggerId}`;
+        await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
+        deleted++;
+      }
+      
+      showToast('success', 'Deleted', `Successfully deleted ${deleted} trigger${deleted > 1 ? 's' : ''}`);
+      
+      // Clear selection and reload
+      state.selectedTriggerIds.clear();
+      if (DOM.selectAllTriggers) DOM.selectAllTriggers.checked = false;
+      updateBulkActionsBar();
+      await loadTriggers();
+      
+    } catch (err) {
+      console.error('[Triggers] Bulk delete failed:', err);
+      showToast('error', 'Delete Failed', err.message);
+    }
   }
 
   /* --------------------------------------------------------------------------
