@@ -211,38 +211,44 @@ triggerAudioSchema.statics.findByCompanyId = async function(companyId) {
 triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUrl, answerText, voiceId, userId, audioBuffer) {
   const logger = require('../utils/logger');
   const textHash = this.hashText(answerText);
-  const safeBuf = audioBuffer
+  const hasBuffer = audioBuffer !== undefined && audioBuffer !== null;
+  const safeBuf = hasBuffer
     ? (Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer))
-    : null;
+    : undefined;
   
   logger.info('[TriggerAudio.saveAudio] Saving audio', {
     companyId,
     ruleId,
     audioUrl,
     textHash,
-    hasBuffer: Boolean(safeBuf),
+    hasBuffer,
     bufferBytes: safeBuf?.length || 0
   });
   
   // Use findOneAndUpdate with $set to bypass Mongoose change detection issues
   // with Buffer fields. Mongoose .save() silently skips Buffer changes unless
   // markModified() is called — this was the root cause of empty audioData.
+  const setFields = {
+    audioUrl,
+    textHash,
+    sourceText: answerText,
+    voiceId: voiceId || undefined,
+    voiceProvider: 'elevenlabs',
+    isValid: true,
+    invalidatedAt: null,
+    invalidatedReason: null,
+    updatedAt: new Date(),
+    updatedBy: userId
+  };
+  
+  if (hasBuffer) {
+    setFields.audioData = safeBuf;
+  }
+  
   const result = await this.findOneAndUpdate(
     { companyId, ruleId },
     {
-      $set: {
-        audioUrl,
-        audioData: safeBuf,
-        textHash,
-        sourceText: answerText,
-        voiceId: voiceId || undefined,
-        voiceProvider: 'elevenlabs',
-        isValid: true,
-        invalidatedAt: null,
-        invalidatedReason: null,
-        updatedAt: new Date(),
-        updatedBy: userId
-      },
+      $set: setFields,
       $setOnInsert: {
         createdAt: new Date(),
         createdBy: userId
