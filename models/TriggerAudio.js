@@ -156,44 +156,52 @@ triggerAudioSchema.statics.findByCompanyAndRule = function(companyId, ruleId) {
 };
 
 /**
- * Find all audio metadata for a company (excludes binary data but includes hasAudioData flag)
- * V130: Include hasAudioData computed field so resolveAudioUrl can verify binary exists
+ * Find all audio metadata for a company (includes hasAudioData flag)
+ * V132: Simplified - just check audioData field directly with a size projection
  */
 triggerAudioSchema.statics.findByCompanyId = async function(companyId) {
   const logger = require('../utils/logger');
   
-  const docs = await this.find({ companyId, isValid: true })
-    .select('ruleId audioUrl textHash sourceText voiceId voiceProvider isValid createdAt updatedAt')
-    .sort({ createdAt: -1 })
-    .lean();
-  
-  // Check which docs have audioData (without loading the full binary)
-  // V131: Use $type: 'binData' for more reliable Buffer detection
-  const docsWithAudioCheck = await this.find(
+  // Single query that includes a check for audioData existence
+  // Use aggregation to get audioData size without loading the full binary
+  const docs = await this.aggregate([
+    { $match: { companyId, isValid: true } },
     { 
-      companyId, 
-      isValid: true, 
-      audioData: { $exists: true, $type: 'binData' }
+      $project: {
+        ruleId: 1,
+        audioUrl: 1,
+        textHash: 1,
+        sourceText: 1,
+        voiceId: 1,
+        voiceProvider: 1,
+        isValid: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        // Check if audioData exists and has content
+        hasAudioData: { 
+          $cond: {
+            if: { $ifNull: ['$audioData', false] },
+            then: { $gt: [{ $binarySize: '$audioData' }, 0] },
+            else: false
+          }
+        }
+      }
     },
-    { ruleId: 1 }
-  ).lean();
-  const hasAudioSet = new Set(docsWithAudioCheck.map(d => d.ruleId));
+    { $sort: { createdAt: -1 } }
+  ]);
   
-  // Log first few for debugging
+  // Log for debugging
+  const withAudio = docs.filter(d => d.hasAudioData).length;
   if (docs.length > 0) {
-    logger.debug('[TriggerAudio.findByCompanyId] Results', {
-      companyId,
+    logger.info('[TriggerAudio.findByCompanyId] Results', {
+      companyId: companyId.slice(0, 12),
       totalDocs: docs.length,
-      docsWithAudio: docsWithAudioCheck.length,
-      sampleRuleIds: docs.slice(0, 3).map(d => d.ruleId),
-      sampleHasAudio: docs.slice(0, 3).map(d => hasAudioSet.has(d.ruleId))
+      docsWithAudio: withAudio,
+      sampleRuleIds: docs.slice(0, 3).map(d => d.ruleId)
     });
   }
   
-  return docs.map(d => ({
-    ...d,
-    hasAudioData: hasAudioSet.has(d.ruleId)
-  }));
+  return docs;
 };
 
 /**
