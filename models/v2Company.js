@@ -1405,12 +1405,20 @@ const companySchema = new mongoose.Schema({
         }],
         
         // -------------------------------------------------------------------
-        // LLM-0 CONTROLS - Brain Intelligence Behavior Settings (Dec 2025)
+        // LLM-0 CONTROLS - Call Edge Case Handling (Cleaned Feb 2026)
         // -------------------------------------------------------------------
-        // Configurable controls for LLM-0 behavior (silence, loops, spam, patience)
-        // These settings are per-company and control how the AI brain handles edge cases
+        // ☢️ NUKED Feb 2026: loopDetection, spamFilter, bailoutRules, confidenceThresholds
+        // These were never consumed at runtime - dead code removed.
+        // 
+        // KEPT (actually used):
+        // - silenceHandling: EdgeCaseHandler.js uses for silence prompts
+        // - customerPatience: EdgeCaseHandler.js uses for never-hangup mode
+        // - lowConfidenceHandling: v2twilio.js uses for STT quality guard
+        // - recoveryMessages: v2twilio.js uses for audio unclear/cutout messages
+        // - frustrationDetection: Escalation trigger keywords
+        // -------------------------------------------------------------------
         llm0Controls: {
-            // SILENCE HANDLING
+            // SILENCE HANDLING - Used by EdgeCaseHandler.js
             silenceHandling: {
                 enabled: { type: Boolean, default: true },
                 thresholdSeconds: { type: Number, default: 5, min: 2, max: 30 },
@@ -1437,54 +1445,7 @@ const companySchema = new mongoose.Schema({
                     trim: true
                 }
             },
-            // LOOP DETECTION
-            loopDetection: {
-                enabled: { type: Boolean, default: true },
-                maxRepeatedResponses: { type: Number, default: 3, min: 2, max: 10 },
-                detectionWindow: { type: Number, default: 5, min: 3, max: 15 },
-                onLoopAction: { 
-                    type: String, 
-                    enum: ['escalate', 'bailout', 'callback_offer', 'transfer'],
-                    default: 'escalate'
-                },
-                escalationMessage: {
-                    type: String,
-                    default: "I want to make sure I'm helping you correctly. Let me connect you with someone who can assist.",
-                    trim: true
-                }
-            },
-            // SPAM FILTER (Layer 3 - LLM Detection)
-            spamFilter: {
-                enabled: { type: Boolean, default: true },
-                telemarketerPhrases: {
-                    type: [String],
-                    default: [
-                        'google listing',
-                        'google business',
-                        'verify your business',
-                        'seo services',
-                        'website ranking',
-                        'marketing services',
-                        'special offer',
-                        'are you the owner',
-                        'decision maker',
-                        'person in charge'
-                    ]
-                },
-                onSpamDetected: {
-                    type: String,
-                    enum: ['polite_dismiss', 'silent_hangup', 'flag_only'],
-                    default: 'polite_dismiss'
-                },
-                dismissMessage: {
-                    type: String,
-                    default: "I appreciate the call, but we're not interested in any services at this time. Thank you, goodbye.",
-                    trim: true
-                },
-                autoAddToBlacklist: { type: Boolean, default: false },
-                logToBlackBox: { type: Boolean, default: true }
-            },
-            // CUSTOMER PATIENCE MODE
+            // CUSTOMER PATIENCE MODE - Used by EdgeCaseHandler.js
             customerPatience: {
                 enabled: { type: Boolean, default: true },
                 neverAutoHangup: { type: Boolean, default: true },
@@ -1495,26 +1456,6 @@ const companySchema = new mongoose.Schema({
                     default: "No rush at all. I'm here whenever you're ready.",
                     trim: true
                 }
-            },
-            // BAILOUT RULES
-            bailoutRules: {
-                enabled: { type: Boolean, default: true },
-                maxTurnsBeforeEscalation: { type: Number, default: 10, min: 5, max: 30 },
-                confusionThreshold: { type: Number, default: 0.3, min: 0.1, max: 0.5 },
-                escalateOnBailout: { type: Boolean, default: true },
-                bailoutMessage: {
-                    type: String,
-                    default: "I want to make sure you get the help you need. Let me transfer you to our team.",
-                    trim: true
-                },
-                transferTarget: { type: String, default: null, trim: true }
-            },
-            // CONFIDENCE THRESHOLDS
-            confidenceThresholds: {
-                highConfidence: { type: Number, default: 0.85, min: 0.5, max: 1.0 },
-                mediumConfidence: { type: Number, default: 0.65, min: 0.3, max: 0.9 },
-                lowConfidence: { type: Number, default: 0.45, min: 0.1, max: 0.7 },
-                fallbackToLLM: { type: Number, default: 0.4, min: 0.1, max: 0.6 }
             },
             // LOW CONFIDENCE HANDLING - STT Quality Guard (Dec 2025)
             // When STT confidence is low, don't guess - ask caller to repeat

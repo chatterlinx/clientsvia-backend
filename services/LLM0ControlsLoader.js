@@ -1,23 +1,32 @@
 /**
  * ============================================================================
- * LLM-0 CONTROLS LOADER
+ * LLM-0 CONTROLS LOADER (Cleaned Feb 2026)
  * ============================================================================
  * 
- * Loads and provides LLM-0 controls for runtime use.
- * These settings control Brain-1's behavior: silence handling, loops, spam, etc.
+ * Loads call edge-case handling settings for runtime use.
+ * 
+ * WHAT'S ACTUALLY USED:
+ * - silenceHandling: EdgeCaseHandler.js uses for silence prompts
+ * - customerPatience: EdgeCaseHandler.js uses for never-hangup mode
+ * 
+ * ☢️ NUKED Feb 2026:
+ * - loopDetection: Was never consumed (ConversationMemory uses hardcoded defaults)
+ * - spamFilter: Was never wired to main call flow
+ * - bailoutRules: Was never consumed anywhere
+ * - confidenceThresholds: Was never consumed anywhere
  * 
  * USAGE:
  *   const controls = await LLM0ControlsLoader.load(companyId);
- *   const silenceThreshold = controls.silenceHandling.thresholdSeconds;
+ *   const silencePrompt = LLM0ControlsLoader.getSilencePrompt(1, controls);
  * 
- * CACHING: Uses Redis for fast access during calls
+ * CACHING: Uses Redis for fast access during calls (5 min TTL)
  * 
  * ============================================================================
  */
 
 const logger = require('../utils/logger');
 
-// Default controls (matches the schema in v2Company.js)
+// Default controls - ONLY what's actually used
 const DEFAULT_CONTROLS = {
     silenceHandling: {
         enabled: true,
@@ -29,52 +38,12 @@ const DEFAULT_CONTROLS = {
         offerCallback: true,
         callbackMessage: "Would you like me to have someone call you back at this number?"
     },
-    loopDetection: {
-        enabled: true,
-        maxRepeatedResponses: 3,
-        detectionWindow: 5,
-        onLoopAction: 'escalate',
-        escalationMessage: "I want to make sure I'm helping you correctly. Let me connect you with someone who can assist."
-    },
-    spamFilter: {
-        enabled: true,
-        telemarketerPhrases: [
-            'google listing',
-            'google business',
-            'verify your business',
-            'seo services',
-            'website ranking',
-            'marketing services',
-            'special offer',
-            'are you the owner',
-            'decision maker',
-            'person in charge'
-        ],
-        onSpamDetected: 'polite_dismiss',
-        dismissMessage: "I appreciate the call, but we're not interested in any services at this time. Thank you, goodbye.",
-        autoAddToBlacklist: false,
-        logToBlackBox: true
-    },
     customerPatience: {
         enabled: true,
         neverAutoHangup: true,
         maxPatiencePrompts: 5,
         alwaysOfferCallback: true,
         patienceMessage: "No rush at all. I'm here whenever you're ready."
-    },
-    bailoutRules: {
-        enabled: true,
-        maxTurnsBeforeEscalation: 10,
-        confusionThreshold: 0.3,
-        escalateOnBailout: true,
-        bailoutMessage: "I want to make sure you get the help you need. Let me transfer you to our team.",
-        transferTarget: null
-    },
-    confidenceThresholds: {
-        highConfidence: 0.85,
-        mediumConfidence: 0.65,
-        lowConfidence: 0.45,
-        fallbackToLLM: 0.4
     }
 };
 
@@ -88,7 +57,6 @@ class LLM0ControlsLoader {
      */
     static async load(companyId, company = null) {
         try {
-            // If company not provided, try to load from cache or DB
             let controls = null;
             
             // Try Redis cache first
@@ -127,7 +95,7 @@ class LLM0ControlsLoader {
                         if (redisClient) {
                             await redisClient.setex(
                                 `llm0controls:${companyId}`,
-                                300, // 5 minutes
+                                300,
                                 JSON.stringify(controls)
                             );
                         }
@@ -137,7 +105,6 @@ class LLM0ControlsLoader {
                 }
             }
             
-            // Merge with defaults (ensures all fields exist)
             return this.mergeWithDefaults(controls || {});
             
         } catch (error) {
@@ -150,7 +117,7 @@ class LLM0ControlsLoader {
     }
     
     /**
-     * Merge loaded controls with defaults
+     * Merge loaded controls with defaults (only used fields)
      */
     static mergeWithDefaults(controls) {
         return {
@@ -158,28 +125,9 @@ class LLM0ControlsLoader {
                 ...DEFAULT_CONTROLS.silenceHandling,
                 ...(controls.silenceHandling || {})
             },
-            loopDetection: {
-                ...DEFAULT_CONTROLS.loopDetection,
-                ...(controls.loopDetection || {})
-            },
-            spamFilter: {
-                ...DEFAULT_CONTROLS.spamFilter,
-                ...(controls.spamFilter || {}),
-                // Ensure array is preserved
-                telemarketerPhrases: controls.spamFilter?.telemarketerPhrases || 
-                    DEFAULT_CONTROLS.spamFilter.telemarketerPhrases
-            },
             customerPatience: {
                 ...DEFAULT_CONTROLS.customerPatience,
                 ...(controls.customerPatience || {})
-            },
-            bailoutRules: {
-                ...DEFAULT_CONTROLS.bailoutRules,
-                ...(controls.bailoutRules || {})
-            },
-            confidenceThresholds: {
-                ...DEFAULT_CONTROLS.confidenceThresholds,
-                ...(controls.confidenceThresholds || {})
             }
         };
     }
@@ -208,20 +156,8 @@ class LLM0ControlsLoader {
     }
     
     // ========================================================================
-    // RUNTIME HELPERS - Use these in call handlers
+    // RUNTIME HELPERS - Used by EdgeCaseHandler.js
     // ========================================================================
-    
-    /**
-     * Check if input matches spam phrases
-     */
-    static isSpamPhrase(input, controls) {
-        if (!controls?.spamFilter?.enabled) return false;
-        
-        const lowerInput = input.toLowerCase();
-        const phrases = controls.spamFilter.telemarketerPhrases || [];
-        
-        return phrases.some(phrase => lowerInput.includes(phrase.toLowerCase()));
-    }
     
     /**
      * Get the appropriate silence prompt based on count
@@ -238,41 +174,10 @@ class LLM0ControlsLoader {
             return sh.callbackMessage;
         }
         
-        return sh.patienceMessage || "I'm still here when you're ready.";
-    }
-    
-    /**
-     * Check if we should escalate due to loop
-     */
-    static shouldEscalateLoop(repeatedCount, controls) {
-        if (!controls?.loopDetection?.enabled) return false;
-        return repeatedCount >= controls.loopDetection.maxRepeatedResponses;
-    }
-    
-    /**
-     * Check if we should bailout
-     */
-    static shouldBailout(turnCount, confusionScore, controls) {
-        if (!controls?.bailoutRules?.enabled) return false;
-        
-        const br = controls.bailoutRules;
-        return turnCount >= br.maxTurnsBeforeEscalation || 
-               confusionScore <= br.confusionThreshold;
-    }
-    
-    /**
-     * Check confidence level
-     */
-    static getConfidenceLevel(score, controls) {
-        const ct = controls?.confidenceThresholds || DEFAULT_CONTROLS.confidenceThresholds;
-        
-        if (score >= ct.highConfidence) return 'HIGH';
-        if (score >= ct.mediumConfidence) return 'MEDIUM';
-        if (score >= ct.lowConfidence) return 'LOW';
-        if (score >= ct.fallbackToLLM) return 'FALLBACK';
-        return 'UNKNOWN';
+        // Use patience message or fallback
+        const patience = controls.customerPatience;
+        return patience?.patienceMessage || sh.thirdPrompt || "I'm still here when you're ready.";
     }
 }
 
 module.exports = LLM0ControlsLoader;
-

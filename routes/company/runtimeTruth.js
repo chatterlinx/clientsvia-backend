@@ -957,25 +957,7 @@ router.get('/', async (req, res) => {
                 hasThirdPrompt: !!llm0Raw.silenceHandling?.thirdPrompt,
                 hasCallbackMessage: !!llm0Raw.silenceHandling?.callbackMessage
             },
-            // Loop Detection (prevents repeated responses)
-            loopDetection: {
-                enabled: llm0Raw.loopDetection?.enabled !== false,
-                maxRepeatedResponses: llm0Raw.loopDetection?.maxRepeatedResponses ?? 3,
-                detectionWindow: llm0Raw.loopDetection?.detectionWindow ?? 5,
-                onLoopAction: llm0Raw.loopDetection?.onLoopAction || 'escalate',
-                hasEscalationMessage: !!llm0Raw.loopDetection?.escalationMessage
-            },
-            // Spam Filter (telemarketer detection)
-            spamFilter: {
-                enabled: llm0Raw.spamFilter?.enabled !== false,
-                phraseCount: Array.isArray(llm0Raw.spamFilter?.telemarketerPhrases) 
-                    ? llm0Raw.spamFilter.telemarketerPhrases.length 
-                    : 0,
-                onSpamDetected: llm0Raw.spamFilter?.onSpamDetected || 'polite_dismiss',
-                autoAddToBlacklist: llm0Raw.spamFilter?.autoAddToBlacklist === true,
-                logToBlackBox: llm0Raw.spamFilter?.logToBlackBox !== false,
-                hasDismissMessage: !!llm0Raw.spamFilter?.dismissMessage
-            },
+            // ☢️ NUKED Feb 2026: loopDetection, spamFilter - never consumed at runtime
             // Customer Patience (never hang up on customers)
             customerPatience: {
                 enabled: llm0Raw.customerPatience?.enabled !== false,
@@ -984,22 +966,7 @@ router.get('/', async (req, res) => {
                 alwaysOfferCallback: llm0Raw.customerPatience?.alwaysOfferCallback !== false,
                 hasPatienceMessage: !!llm0Raw.customerPatience?.patienceMessage
             },
-            // Bailout Rules (when to escalate/transfer)
-            bailoutRules: {
-                enabled: llm0Raw.bailoutRules?.enabled !== false,
-                maxTurnsBeforeEscalation: llm0Raw.bailoutRules?.maxTurnsBeforeEscalation ?? 10,
-                confusionThreshold: llm0Raw.bailoutRules?.confusionThreshold ?? 0.3,
-                escalateOnBailout: llm0Raw.bailoutRules?.escalateOnBailout !== false,
-                hasBailoutMessage: !!llm0Raw.bailoutRules?.bailoutMessage,
-                hasTransferTarget: !!llm0Raw.bailoutRules?.transferTarget
-            },
-            // Confidence Thresholds (for decision making)
-            confidenceThresholds: {
-                highConfidence: llm0Raw.confidenceThresholds?.highConfidence ?? 0.85,
-                mediumConfidence: llm0Raw.confidenceThresholds?.mediumConfidence ?? 0.65,
-                lowConfidence: llm0Raw.confidenceThresholds?.lowConfidence ?? 0.45,
-                fallbackToLLM: llm0Raw.confidenceThresholds?.fallbackToLLM ?? 0.4
-            }
+            // ☢️ NUKED Feb 2026: bailoutRules, confidenceThresholds - never consumed at runtime
         };
         
         // ═══════════════════════════════════════════════════════════════════════

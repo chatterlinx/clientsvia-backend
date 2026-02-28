@@ -125,14 +125,13 @@ Not yet implemented.
 ### 6️⃣ Spam Filter Tab
 **Purpose:** Blacklist/whitelist management
 
+> ☢️ **NUKED Feb 2026:** The `llm0Controls.spamFilter` schema was removed - it was never consumed at runtime.
+> Spam filtering now uses the **blacklist/whitelist** system managed by `SpamFilterManager.js`.
+
 | UI Field | Schema Path | Used By Runtime |
 |----------|-------------|-----------------|
-| Spam Filter Enabled | `aiAgentSettings.llm0Controls.spamFilter.enabled` | ✅ Layer 3 protection |
-| Telemarketer Phrases | `aiAgentSettings.llm0Controls.spamFilter.telemarketerPhrases[]` | ✅ Pattern matching |
-| On Spam Action | `aiAgentSettings.llm0Controls.spamFilter.onSpamDetected` | ✅ What to do |
-| Dismiss Message | `aiAgentSettings.llm0Controls.spamFilter.dismissMessage` | ✅ Polite hangup |
-| Blacklist | (separate collection or inline) | ✅ Number blocking |
-| Whitelist | (separate collection or inline) | ✅ VIP numbers |
+| Blacklist | `aiAgentSettings.blacklist[]` | ✅ Number blocking |
+| Whitelist | `aiAgentSettings.whitelist[]` | ✅ VIP numbers |
 
 **JS Manager:** `SpamFilterManager.js`
 
@@ -178,17 +177,14 @@ aiAgentSettings: {
     // TRANSFER TARGETS
     transferTargets: [{id, label, destination, priority, enabled}]
     
-    // LLM-0 CONTROLS
+    // LLM-0 CONTROLS (Call Edge Case Handling)
+    // ☢️ NUKED Feb 2026: loopDetection, spamFilter, bailoutRules, confidenceThresholds
     llm0Controls: {
-        silenceHandling: {...},
-        loopDetection: {...},
-        spamFilter: {...},
-        customerPatience: {...},
-        bailoutRules: {...},
-        confidenceThresholds: {...},
-        lowConfidenceHandling: {...},
-        recoveryMessages: {...},
-        frustrationDetection: {...},
+        silenceHandling: {...},     // ✅ Used by EdgeCaseHandler.js
+        customerPatience: {...},    // ✅ Used by EdgeCaseHandler.js
+        lowConfidenceHandling: {...}, // ✅ Used by v2twilio.js
+        recoveryMessages: {...},    // ✅ Used by v2twilio.js
+        frustrationDetection: {...}, // ✅ Used for escalation
         responseTiming: {...},
         smartConfirmation: {...}
     }
@@ -257,7 +253,7 @@ Stream audio to Twilio → Caller hears response
 | `ConnectionMessagesManager.js` | Messages & Greetings | `connectionMessages.*` |
 | `VoiceSettingsManager.js` | AI Voice | `aiAgentSettings.voiceSettings.*` |
 | `FrontDeskBehaviorManager.js` | Control Plane | `aiAgentSettings.frontDeskBehavior.*` |
-| `SpamFilterManager.js` | Spam Filter | `aiAgentSettings.llm0Controls.spamFilter.*` |
+| `SpamFilterManager.js` | Spam Filter | `aiAgentSettings.blacklist[]`, `whitelist[]` |
 | `TransferDirectoryManager.js` | Control Plane | `aiAgentSettings.transferTargets[]` |
 | `CallProtectionManager.js` | Control Plane | `aiAgentSettings.cheatSheet.edgeCases[]` |
 
