@@ -168,41 +168,36 @@ triggerAudioSchema.statics.findByCompanyId = function(companyId) {
  */
 triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUrl, answerText, voiceId, userId, audioBuffer) {
   const textHash = this.hashText(answerText);
-  
-  // Ensure audioBuffer is a proper Node.js Buffer
   const safeBuf = audioBuffer
     ? (Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer))
     : null;
   
-  const existing = await this.findOne({ companyId, ruleId });
-  
-  if (existing) {
-    existing.audioUrl = audioUrl;
-    existing.audioData = safeBuf || existing.audioData;
-    existing.textHash = textHash;
-    existing.sourceText = answerText;
-    existing.voiceId = voiceId || existing.voiceId;
-    existing.isValid = true;
-    existing.invalidatedAt = null;
-    existing.invalidatedReason = null;
-    existing.updatedAt = new Date();
-    existing.updatedBy = userId;
-    return existing.save();
-  } else {
-    return this.create({
-      companyId,
-      ruleId,
-      audioUrl,
-      audioData: safeBuf || null,
-      textHash,
-      sourceText: answerText,
-      voiceId,
-      voiceProvider: 'elevenlabs',
-      isValid: true,
-      createdBy: userId,
-      updatedBy: userId
-    });
-  }
+  // Use findOneAndUpdate with $set to bypass Mongoose change detection issues
+  // with Buffer fields. Mongoose .save() silently skips Buffer changes unless
+  // markModified() is called — this was the root cause of empty audioData.
+  return this.findOneAndUpdate(
+    { companyId, ruleId },
+    {
+      $set: {
+        audioUrl,
+        audioData: safeBuf,
+        textHash,
+        sourceText: answerText,
+        voiceId: voiceId || undefined,
+        voiceProvider: 'elevenlabs',
+        isValid: true,
+        invalidatedAt: null,
+        invalidatedReason: null,
+        updatedAt: new Date(),
+        updatedBy: userId
+      },
+      $setOnInsert: {
+        createdAt: new Date(),
+        createdBy: userId
+      }
+    },
+    { upsert: true, new: true, runValidators: false }
+  );
 };
 
 /**
