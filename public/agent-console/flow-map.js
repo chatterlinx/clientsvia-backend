@@ -261,6 +261,11 @@
     console.log('[FlowMap] ✓ Modal opened successfully');
   }
 
+  function openEditModal(noteId) {
+    // Wrapper for opening edit modal from sequence list
+    openModal(noteId);
+  }
+
   function closeModal() {
     console.log('[FlowMap] ✓ closeModal() called');
     state.editingId = null;
@@ -385,6 +390,7 @@
               ${escapeHtml(note.title)}
             </p>
             <div class="step-item-controls">
+              <button class="tiny-btn" data-action="edit" data-id="${escapeHtml(note.id)}" title="Edit this card">✏️</button>
               <button class="tiny-btn" data-action="up" data-id="${escapeHtml(note.id)}">Up</button>
               <button class="tiny-btn" data-action="down" data-id="${escapeHtml(note.id)}">Down</button>
             </div>
@@ -414,7 +420,14 @@
       button.addEventListener('click', (event) => {
         event.stopPropagation();
         const id = button.dataset.id;
-        moveSequence(id, button.dataset.action === 'up' ? -1 : 1);
+        const action = button.dataset.action;
+        
+        if (action === 'edit') {
+          // Open edit modal for this note
+          openEditModal(id);
+        } else if (action === 'up' || action === 'down') {
+          moveSequence(id, action === 'up' ? -1 : 1);
+        }
       });
     });
   }
