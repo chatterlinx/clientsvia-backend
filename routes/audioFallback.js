@@ -114,27 +114,76 @@ router.get('/instant-lines/:filename', async (req, res) => {
   const filename = req.params.filename;
   const audioPath = path.join(INSTANT_LINES_DIR, filename);
   
-  // Extract trigger info from filename
-  // Format: TRIGGER_CARD_ANSWER_COMPANYID_RULEID.mp3
-  const match = filename.match(/TRIGGER_CARD_ANSWER_([^_]+)_(.+)\.mp3$/);
-  
-  if (!match) {
-    logger.warn('[AudioFallback] Invalid trigger filename format', { filename });
-    return res.status(404).json({ error: 'Invalid filename format' });
-  }
-  
-  const companyId = match[1];
-  const ruleId = match[2];
-  
   await serveAudioWithFallback(req, res, audioPath, async () => {
-    // MongoDB fallback
-    const audioDoc = await TriggerAudio.findOne({
-      companyId,
-      ruleId,
+    logger.debug('[AudioFallback] Looking for trigger audio in MongoDB', { filename });
+    
+    // Try 1: Match by audioUrl (exact - new /audio-safe format)
+    let audioDoc = await TriggerAudio.findOne({
+      audioUrl: `/audio-safe/instant-lines/${filename}`,
       isValid: true
     }).select('audioData').lean();
     
-    return audioDoc?.audioData || null;
+    if (audioDoc?.audioData) {
+      logger.info('[AudioFallback] Found trigger via /audio-safe URL', { filename });
+      return audioDoc.audioData;
+    }
+    
+    // Try 2: Match by old audioUrl format (/audio)
+    audioDoc = await TriggerAudio.findOne({
+      audioUrl: `/audio/instant-lines/${filename}`,
+      isValid: true
+    }).select('audioData').lean();
+    
+    if (audioDoc?.audioData) {
+      logger.info('[AudioFallback] Found trigger via /audio URL (old format)', { filename });
+      return audioDoc.audioData;
+    }
+    
+    // Try 3: Regex match on filename in audioUrl
+    audioDoc = await TriggerAudio.findOne({
+      audioUrl: { $regex: filename.replace('.mp3', '') },
+      isValid: true
+    }).select('audioData').lean();
+    
+    if (audioDoc?.audioData) {
+      logger.info('[AudioFallback] Found trigger via regex match', { filename });
+      return audioDoc.audioData;
+    }
+    
+    // Try 4: Match by textHash from filename
+    // Filename: TRIGGER_CARD_ANSWER_68e3f77a9d62_8c32e43a6dbfd96f.mp3
+    // The last part before .mp3 is the text hash
+    const hashMatch = filename.match(/([a-f0-9]{16})\.mp3$/);
+    if (hashMatch) {
+      audioDoc = await TriggerAudio.findOne({
+        textHash: hashMatch[1],
+        isValid: true
+      }).select('audioData').lean();
+      
+      if (audioDoc?.audioData) {
+        logger.info('[AudioFallback] Found trigger via textHash', { filename, hash: hashMatch[1] });
+        return audioDoc.audioData;
+      }
+    }
+    
+    // Try 5: Match by partial companyId (filename has truncated 12-char ID)
+    const companyMatch = filename.match(/TRIGGER_CARD_ANSWER_([a-f0-9]+)_/);
+    if (companyMatch) {
+      const partialCompanyId = companyMatch[1];
+      audioDoc = await TriggerAudio.findOne({
+        companyId: { $regex: `^${partialCompanyId}` },
+        isValid: true,
+        audioUrl: { $regex: filename.replace('.mp3', '') }
+      }).select('audioData').lean();
+      
+      if (audioDoc?.audioData) {
+        logger.info('[AudioFallback] Found trigger via partial companyId', { filename, partialCompanyId });
+        return audioDoc.audioData;
+      }
+    }
+    
+    logger.warn('[AudioFallback] Trigger audio not found in MongoDB', { filename });
+    return null;
   });
 });
 
