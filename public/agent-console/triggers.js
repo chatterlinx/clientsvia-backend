@@ -2630,19 +2630,27 @@
       
       // Delete local triggers
       for (const triggerId of localTriggers) {
-        // Extract just the trigger ID part (after the :: separator)
-        const cleanId = triggerId.includes('::') ? triggerId.split('::').pop() : triggerId;
-        const url = `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/${encodeURIComponent(cleanId)}`;
-        console.log('[Bulk Delete] Deleting local trigger:', cleanId, 'URL:', url);
+        // Extract the ruleId - need to find the trigger to get its ruleId
+        const trigger = state.triggers.find(t => t.triggerId === triggerId);
+        if (!trigger || !trigger.ruleId) {
+          console.warn('[Bulk Delete] Could not find ruleId for triggerId:', triggerId);
+          continue;
+        }
+        const url = `${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${encodeURIComponent(trigger.ruleId)}`;
+        console.log('[Bulk Delete] Deleting local trigger:', trigger.ruleId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
       
       // Delete global triggers (if admin)
       for (const triggerId of globalTriggers) {
-        const cleanId = triggerId.includes('::') ? triggerId.split('::').pop() : triggerId;
-        const url = `${CONFIG.API_BASE_GLOBAL}/triggers/${encodeURIComponent(cleanId)}`;
-        console.log('[Bulk Delete] Deleting global trigger:', cleanId, 'URL:', url);
+        const trigger = state.triggers.find(t => t.triggerId === triggerId);
+        if (!trigger || !trigger.ruleId || !trigger.groupId) {
+          console.warn('[Bulk Delete] Could not find ruleId/groupId for global triggerId:', triggerId);
+          continue;
+        }
+        const url = `${CONFIG.API_BASE_GLOBAL}/trigger-groups/${encodeURIComponent(trigger.groupId)}/triggers/${encodeURIComponent(trigger.ruleId)}`;
+        console.log('[Bulk Delete] Deleting global trigger:', trigger.ruleId, 'from group:', trigger.groupId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
