@@ -166,6 +166,7 @@
     // Page controls
     btnBack: document.getElementById('btn-back'),
     btnRefreshCalls: document.getElementById('btn-refresh-calls'),
+    btnFlowBuilder: document.getElementById('btn-flow-builder'),
 
     // Filters
     filterSearch: document.getElementById('filter-search'),
@@ -277,6 +278,12 @@
 
     // Refresh
     DOM.btnRefreshCalls.addEventListener('click', () => loadCalls());
+    
+    if (DOM.btnFlowBuilder) {
+      DOM.btnFlowBuilder.addEventListener('click', () => {
+        window.location.href = `/agent-console/flow-builder.html?companyId=${state.companyId}`;
+      });
+    }
 
     // Filters
     DOM.filterSearch.addEventListener('input', debounce(handleFilterChange, 300));

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow Builder — Call Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  <style>
+    .flow-builder-layout { display: grid; grid-template-columns: 400px 1fr; gap: 16px; height: calc(100vh - 140px); }
+    .flow-builder-layout.expanded-panel { grid-template-columns: 700px 1fr; }
+    
+    .flow-panel { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; transition: all 0.3s ease; }
+    .flow-panel-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+    .panel-header-left { flex: 1; }
+    .flow-panel-body { padding: 12px; overflow: auto; flex: 1; }
+    
+    .flow-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    
+    .sequence-list { display: flex; flex-direction: column; gap: 8px; }
+    .sequence-item { border: 1px solid #dbeafe; background: #eff6ff; border-radius: 10px; padding: 12px; transition: all 0.2s ease; }
+    .sequence-item.expanded { background: #dbeafe; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+    .sequence-item.active { border-color: #1d4ed8; box-shadow: 0 0 0 2px rgba(29,78,216,0.15); }
+    
+    .sequence-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; cursor: pointer; }
+    .sequence-item-title { flex: 1; font-size: 14px; font-weight: 600; color: #1e3a8a; display: flex; align-items: center; gap: 8px; }
+    .sequence-number { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; background: #3b82f6; color: white; border-radius: 50%; font-size: 13px; font-weight: 700; }
+    .expand-icon { font-size: 11px; color: #64748b; }
+    
+    .sequence-controls { display: flex; gap: 4px; }
+    .sequence-btn { border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+    .sequence-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+    
+    .sequence-meta { font-size: 12px; color: #64748b; margin-top: 6px; display: flex; gap: 12px; }
+    
+    .sequence-body { margin-top: 12px; padding: 14px; background: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6; font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: #334155; max-height: 500px; overflow-y: auto; }
+    .sequence-body strong { color: #1e293b; }
+    .sequence-body code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; }
+    
+    .preview-panel { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; overflow: auto; }
+    .preview-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
+    
+    .flow-diagram { display: flex; flex-direction: column; gap: 12px; }
+    .flow-step { display: flex; gap: 12px; align-items: center; padding: 12px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6; }
+    .flow-step.warning { border-left-color: #f59e0b; background: #fffbeb; }
+    .flow-step.error { border-left-color: #ef4444; background: #fef2f2; }
+    
+    .flow-step-num { min-width: 36px; height: 36px; border-radius: 50%; background: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+    .flow-step.warning .flow-step-num { background: #f59e0b; }
+    .flow-step.error .flow-step-num { background: #ef4444; }
+    
+    .flow-step-content { flex: 1; }
+    .flow-step-title { font-weight: 600; font-size: 14px; color: #1e293b; margin-bottom: 4px; }
+    .flow-step-desc { font-size: 13px; color: #64748b; }
+    .flow-step-file { font-size: 12px; color: #94a3b8; margin-top: 4px; font-family: 'Monaco', monospace; }
+    
+    .flow-arrow { text-align: center; color: #94a3b8; font-size: 20px; margin: -6px 0; }
+    
+    .btn-expand-panel { border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+    .btn-expand-panel:hover { background: #f8fafc; border-color: #94a3b8; }
+    
+    .btn-add-step { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-add-step:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+    
+    @media (max-width: 1200px) { 
+      .flow-builder-layout { grid-template-columns: 1fr; height: auto; } 
+      .flow-builder-layout.expanded-panel { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back" title="Back to Call Console">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="header-title">Flow Builder - Collaborative Sequence Designer</span>
+      </div>
+      <div class="header-center">
+        <span class="badge badge-success">Live Workspace</span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary" id="btn-reset">Reset to Default</button>
+        <button class="btn btn-primary btn-add-step" id="btn-add-step">+ Add Step</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="flow-builder-layout" id="flow-layout">
+        <!-- Left Panel: Sequence List -->
+        <section class="flow-panel">
+          <div class="flow-panel-header">
+            <div class="panel-header-left">
+              <h3 class="card-title">Sequence Steps</h3>
+              <p class="card-subtitle">Editable flow sequence - drag to reorder, click to expand</p>
+            </div>
+            <button class="btn-expand-panel" id="btn-expand-panel">
+              <span id="expand-icon">◀◀</span>
+              <span id="expand-label">Expand</span>
+            </button>
+          </div>
+          <div class="flow-panel-body">
+            <div class="flow-actions">
+              <button class="btn btn-sm" id="btn-save">💾 Save Changes</button>
+              <button class="btn btn-sm" id="btn-export">📥 Export JSON</button>
+              <button class="btn btn-sm" id="btn-import">📤 Import JSON</button>
+              <input type="file" id="input-import" accept="application/json" style="display:none;">
+            </div>
+            <div id="sequence-list" class="sequence-list">
+              <!-- Sequence items rendered here -->
+            </div>
+            <p class="hint" style="margin-top: 12px; font-size: 12px; color: #64748b;">
+              💡 Changes save automatically. This is a design workspace - doesn't affect live calls.
+            </p>
+          </div>
+        </section>
+
+        <!-- Right Panel: Live Preview -->
+        <section class="preview-panel">
+          <h3 class="preview-title">📊 Live Flow Diagram</h3>
+          <div id="flow-preview" class="flow-diagram">
+            <!-- Live preview rendered here -->
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Edit Modal -->
+    <div class="modal-backdrop" id="edit-modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3 id="modal-title">Edit Step</h3>
+          <button class="btn btn-ghost btn-icon" id="btn-close-modal">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Step Title</label>
+            <input type="text" id="input-step-title" class="form-input" placeholder="e.g., ScrabEngine Processing">
+          </div>
+          <div class="form-group">
+            <label>Step Description (Markdown supported)</label>
+            <textarea id="input-step-body" class="form-textarea" rows="12" placeholder="Describe what happens in this step...
+
+**Key Points:**
+- Point 1
+- Point 2
+
+**Files:**
+- services/ScrabEngine.js:605
+
+**Expected Behavior:**
+..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Sequence Number</label>
+            <input type="number" id="input-step-sequence" class="form-input" min="1">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btn-cancel-edit">Cancel</button>
+          <button class="btn btn-danger" id="btn-delete-step">Delete Step</button>
+          <button class="btn btn-primary" id="btn-save-step">Save Step</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/agent-console/auth.js"></script>
+  <script src="/agent-console/flow-builder.js"></script>
+</body>
+</html>
