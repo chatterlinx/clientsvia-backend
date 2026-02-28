@@ -938,11 +938,16 @@
         <div class="trigger-keywords" title="${escapeHtml((trigger.match?.keywords || []).join(', '))}">${escapeHtml(keywords) || '—'}</div>
         <div class="answer-format">${answerBadges}</div>
         <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
-        <div>
-          ${isGlobalScope ? 
-            '<span class="scope-badge global">GLOBAL</span>' :
-            '<span class="scope-badge local">LOCAL</span>'
-          }
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label class="toggle-switch" title="${isGlobalScope ? 'Global - Click to make local' : 'Local - Click to make global'}">
+            <input type="checkbox" class="toggle-scope" 
+                   data-trigger-id="${trigger.triggerId}"
+                   ${isGlobalScope ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size: 10px; font-weight: 600; color: ${isGlobalScope ? '#1d4ed8' : '#16a34a'}; min-width: 45px;">
+            ${isGlobalScope ? 'GLOBAL' : 'LOCAL'}
+          </span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <label class="toggle-switch" title="${isEnabled ? 'Enabled - Click to disable' : 'Disabled - Click to enable'}">
