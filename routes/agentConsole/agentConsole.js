@@ -1630,6 +1630,10 @@ router.get('/:companyId/calls/:callSid',
         }
       }
 
+      // V125: Events come from CallTranscriptV2.trace (real-time event log during call)
+      // CallSummary.events is legacy and often empty.
+      const events = trace.length > 0 ? trace : (callSummary.events || []);
+      
       const formattedCall = {
         callSid: canonicalSid,
         callId: callSummary.callId,
@@ -1645,7 +1649,7 @@ router.get('/:companyId/calls/:callSid',
         customer: callSummary.customer || {},
         llmUsage: callSummary.llmUsage || null,
         problems: callSummary.problems || [],
-        events: callSummary.events || [],
+        events: events,  // V125: Use trace array as events
         turns,
         trace,
         flags,
