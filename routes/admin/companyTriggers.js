@@ -1569,12 +1569,22 @@ router.put('/:companyId/name-greeting',
       // CRITICAL: Clear Redis cache so live calls use updated settings
       await clearCompanyCache(companyId, 'Name Greeting Save');
 
+      // VERIFY: Read back from DB to confirm save worked
+      const verifyCompany = await v2Company.findById(companyId)
+        .select('aiAgentSettings.agent2.discovery.nameGreeting')
+        .lean();
+      
+      const verifiedValue = verifyCompany?.aiAgentSettings?.agent2?.discovery?.nameGreeting;
+      
       logger.info('[CompanyTriggers] Name greeting SAVE complete', {
         companyId,
-        savedValue: company.aiAgentSettings?.agent2?.discovery?.nameGreeting
+        sentAlwaysGreet: safeSettings.alwaysGreet,
+        verifiedAlwaysGreet: verifiedValue?.alwaysGreet,
+        saveSuccessful: verifiedValue?.alwaysGreet === safeSettings.alwaysGreet
       });
 
-      return res.json({ success: true, settings: safeSettings });
+      // Return verified settings from DB, not what we tried to save
+      return res.json({ success: true, settings: verifiedValue || safeSettings });
     } catch (error) {
       logger.error('[CompanyTriggers] Save name greeting error', { error: error.message, stack: error.stack });
       return res.status(500).json({ success: false, error: error.message });
