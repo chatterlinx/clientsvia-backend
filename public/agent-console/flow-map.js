@@ -373,25 +373,39 @@
       return;
     }
 
-    DOM.stepList.innerHTML = notes.map((note) => `
-      <div class="step-item ${state.selectedId === note.id ? 'active' : ''}" data-step-id="${escapeHtml(note.id)}">
-        <div class="step-item-row">
-          <p class="step-item-title">${escapeHtml(note.title)}</p>
-          <div class="step-item-controls">
-            <button class="tiny-btn" data-action="up" data-id="${escapeHtml(note.id)}">Up</button>
-            <button class="tiny-btn" data-action="down" data-id="${escapeHtml(note.id)}">Down</button>
+    DOM.stepList.innerHTML = notes.map((note) => {
+      const isExpanded = state.selectedId === note.id;
+      const hasBody = note.body && note.body.trim();
+      
+      return `
+        <div class="step-item ${isExpanded ? 'active expanded' : ''}" data-step-id="${escapeHtml(note.id)}">
+          <div class="step-item-row" style="cursor: pointer;">
+            <p class="step-item-title">
+              ${hasBody ? '<span class="expand-icon">' + (isExpanded ? '▼' : '▶') + '</span> ' : ''}
+              ${escapeHtml(note.title)}
+            </p>
+            <div class="step-item-controls">
+              <button class="tiny-btn" data-action="up" data-id="${escapeHtml(note.id)}">Up</button>
+              <button class="tiny-btn" data-action="down" data-id="${escapeHtml(note.id)}">Down</button>
+            </div>
           </div>
+          <div class="step-item-meta">Sequence ${note.sequence} · (${Math.round(note.x)}, ${Math.round(note.y)})</div>
+          ${isExpanded && hasBody ? `
+            <div class="step-item-body" style="margin-top: 8px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; border-left: 3px solid #007bff;">
+              ${escapeHtml(note.body)}
+            </div>
+          ` : ''}
         </div>
-        <div class="step-item-meta">Sequence ${note.sequence} · (${Math.round(note.x)}, ${Math.round(note.y)})</div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     DOM.stepList.querySelectorAll('.step-item').forEach((item) => {
-      item.addEventListener('click', (event) => {
+      const titleRow = item.querySelector('.step-item-row');
+      titleRow.addEventListener('click', (event) => {
         if (event.target.closest('button')) return;
         const id = item.dataset.stepId;
-        state.selectedId = id;
-        focusNote(id);
+        // Toggle selection: if already selected, deselect; otherwise select
+        state.selectedId = state.selectedId === id ? null : id;
         render();
       });
     });
