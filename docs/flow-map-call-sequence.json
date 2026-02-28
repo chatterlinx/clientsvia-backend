@@ -84,111 +84,120 @@
       "z": 500
     },
     {
-      "id": "n_mm42ld2j_cvttca",
-      "title": "8. Load Call State",
-      "body": "StateStore.load(callState)\n\nLoads from Redis:\n- Turn count\n- Session mode (DISCOVERY/BOOKING)\n- Extracted entities (name, phone, etc.)\n- Conversation history\n\nFile: services/engine/StateStore.js",
-      "x": 356,
-      "y": 745,
+      "id": "n_mm4sqta6_e8qplg",
+      "title": "10. 🔍 SCRABENGINE (4-STEP PROCESS)",
+      "body": "🚨 CRITICAL: Runs IMMEDIATELY after SpeechResult\n\nFile: services/ScrabEngine.js\nCalled from: Agent2DiscoveryRunner.js:605\n\n4-STEP PIPELINE:\n\nSTEP 1: FILLER REMOVAL\n- Remove: \"um\", \"uh\", \"like\", \"you know\"\n- Remove: \"hi\", \"hello\", \"hey\" (greeting words)\n- Apply mishear corrections\n\nSTEP 2: VOCABULARY EXPANSION\n- Normalize: \"acee\" → \"ac\" → \"air conditioning\"\n- Normalize: \"tstat\" → \"thermostat\"\n- Normalize: \"furnace\" → \"heating system\"\n- Industry-specific expansions\n\nSTEP 3: SYNONYM MAPPING\n- Map common phrases to standard terms\n- Handle regional variations\n- Expand abbreviations\n\nSTEP 4: ENTITY EXTRACTION\n- Extract: firstName, lastName\n- Extract: phone, email, address\n- Extract: custom fields (service type, urgency)\n- Quality gate (filter garbage input)\n\nOUTPUT:\n- normalizedText (cleaned, ready for matching)\n- entities (structured data)\n- expandedTokens (vocabulary hints)\n\nEXAMPLE:\nInput:  \"Hi I need emergency acee service\"\n↓ Step 1: \"need emergency acee service\" (removed \"hi\")\n↓ Step 2: \"need emergency ac service\" (acee → ac)\n↓ Step 3: \"need emergency air conditioning service\"\n↓ Step 4: entities: { urgency: \"emergency\", serviceType: \"ac\" }",
+      "x": 15,
+      "y": 366,
       "sequence": 10,
+      "z": 533
+    },
+    {
+      "id": "n_scrab_step1",
+      "title": "10a. ScrabEngine Step 1: Filler Removal",
+      "body": "Remove speech fillers and greeting words:\n\n- \"um\", \"uh\", \"like\", \"you know\", \"I mean\"\n- \"hi\", \"hello\", \"hey\", \"good morning\", \"good afternoon\"\n- Mishear corrections\n\nEXAMPLE:\n\"Hi um I need emergency service\"\n→ \"need emergency service\"",
+      "x": 15,
+      "y": 529,
+      "sequence": 11,
+      "z": 532
+    },
+    {
+      "id": "n_scrab_step2",
+      "title": "10b. ScrabEngine Step 2: Vocabulary Expansion",
+      "body": "Normalize industry-specific terms:\n\n- \"acee\" → \"ac\" → \"air conditioning\"\n- \"tstat\" → \"thermostat\"\n- \"furnace\" → \"heating system\"\n- \"hvac\" → \"heating ventilation air conditioning\"\n\nEXAMPLE:\n\"need emergency acee service\"\n→ \"need emergency ac service\"",
+      "x": 17,
+      "y": 743,
+      "sequence": 12,
+      "z": 534
+    },
+    {
+      "id": "n_scrab_step3",
+      "title": "10c. ScrabEngine Step 3: Synonym Mapping",
+      "body": "Map common phrases to standard terms:\n\n- \"broken\" → \"not working\", \"malfunctioning\"\n- \"asap\" → \"urgent\", \"emergency\"\n- Regional variations\n\nEXAMPLE:\n\"ac is broken asap\"\n→ \"air conditioning not working urgent\"",
+      "x": 15,
+      "y": 850,
+      "sequence": 13,
+      "z": 535
+    },
+    {
+      "id": "n_scrab_step4",
+      "title": "10d. ScrabEngine Step 4: Entity Extraction",
+      "body": "Extract structured data + Quality Gate:\n\nENTITIES:\n- firstName, lastName\n- phone, email, address\n- serviceType, urgency level\n- custom fields\n\nQUALITY GATE:\n- Filter garbage input\n- Validate entity confidence\n- Check minimum quality threshold\n\nEXAMPLE OUTPUT:\nnormalizedText: \"need emergency air conditioning service\"\nentities: {\n  urgency: \"emergency\",\n  serviceType: \"air_conditioning\"\n}",
+      "x": 15,
+      "y": 955,
+      "sequence": 14,
       "z": 536
     },
     {
+      "id": "n_mm42ld2j_cvttca",
+      "title": "11. Load Call State",
+      "body": "StateStore.load(callState)\n\nLoads from Redis:\n- Turn count\n- Session mode (DISCOVERY/BOOKING)\n- Extracted entities (name, phone, etc.)\n- Conversation history\n\nFile: services/engine/StateStore.js",
+      "x": 356,
+      "y": 745,
+      "sequence": 15,
+      "z": 537
+    },
+    {
       "id": "n_mm42mdyj_4vz18a",
-      "title": "9. CallRuntime.processTurn()",
+      "title": "12. CallRuntime.processTurn()",
       "body": "Main orchestrator - routes to correct engine\n\nIF booking mode → BookingLogicEngine\nELSE → Agent2DiscoveryRunner\n\nFile: services/engine/CallRuntime.js:293",
       "x": 701,
       "y": 631,
-      "sequence": 11,
+      "sequence": 16,
       "z": 465
     },
     {
       "id": "n_mm42r9ih_v9yl33",
-      "title": "10. Agent2DiscoveryRunner.run()",
-      "body": "Discovery mode handler\n\nResponsible for:\n- Greeting detection\n- Text processing\n- Trigger matching\n- LLM fallback\n\nFile: services/engine/agent2/Agent2DiscoveryRunner.js:396",
+      "title": "13. Agent2DiscoveryRunner.run()",
+      "body": "Discovery mode handler\n\nReceives CLEANED text from ScrabEngine!\n\nResponsible for:\n- Greeting detection (on CLEANED text)\n- Trigger matching (on CLEANED text)\n- LLM fallback\n\nFile: services/engine/agent2/Agent2DiscoveryRunner.js:396",
       "x": 1045,
       "y": 630,
-      "sequence": 12,
+      "sequence": 17,
       "z": 464
     },
     {
       "id": "n_greeting_interceptor",
-      "title": "11. 🚨 GREETING INTERCEPTOR",
-      "body": "⚠️ CRITICAL: RUNS FIRST, BEFORE SCRABENGINE ⚠️\n\nFile: Agent2DiscoveryRunner.js:516-583\nFunction: Agent2GreetingInterceptor.evaluate()\n\nChecks:\n- Is input a greeting? (\"hi\", \"hello\", \"good morning\")\n- Short-only gate (≤3-5 words)\n- No intent words detected\n\n🚨 BUG: IF MATCHED → IMMEDIATE RETURN (line 578)\n\nSKIPS:\n❌ ScrabEngine (line 605)\n❌ Trigger matching (line 1473)\n❌ Entity extraction\n\nBROKEN:\n- \"Hi I have an emergency\" → misses emergency trigger\n- \"Hello my name is John\" → never extracts name\n\nWORKING:\n- \"I need help\" → no greeting match, continues correctly",
+      "title": "14. 🚨 GREETING INTERCEPTOR (NOW FIXED!)",
+      "body": "✅ NOW RECEIVES CLEANED TEXT FROM SCRABENGINE!\n\nFile: Agent2DiscoveryRunner.js:516-583\nFunction: Agent2GreetingInterceptor.evaluate()\n\nChecks CLEANED text:\n- Is input a greeting? (\"hi\", \"hello\", \"good morning\")\n- Short-only gate (≤3-5 words)\n- No intent words detected\n\n✅ FIXED EXAMPLE:\nRaw input: \"Hi I need emergency service\"\n↓ ScrabEngine removed \"Hi\" (Step 1)\n↓ Greeting Interceptor sees: \"need emergency service\"\n↓ NO greeting match (has intent words)\n↓ Continues to trigger matching ✅\n↓ EMERGENCY TRIGGER FIRES ✅\n\nOLD BUG (if ScrabEngine ran later):\n- Greeting Interceptor saw: \"Hi I need emergency service\"\n- Matched \"Hi\" → returned early\n- Never reached ScrabEngine or triggers ❌",
       "x": 683,
       "y": 798,
-      "sequence": 13,
+      "sequence": 18,
       "z": 600
     },
     {
-      "id": "n_mm4sqta6_e8qplg",
-      "title": "12. ScrabEngine.process()",
-      "body": "🔍 ENTERPRISE TEXT PROCESSING PIPELINE\n\nFile: services/ScrabEngine.js\nCalled from: Agent2DiscoveryRunner.js:605\n\n⚠️ CRITICAL: Only runs if greeting interceptor didn't match!\n\nPIPELINE:\n1. Filler removal (\"um\", \"uh\", \"like\")\n2. Vocabulary expansion (\"acee\" → \"ac\")\n3. Synonym mapping (\"tstat\" → \"thermostat\")\n4. Entity extraction (names, phone, email, address)\n5. Quality gate (filters garbage input)\n\nOutputs:\n- normalizedText (cleaned)\n- entities (firstName, lastName, phone, email, address)\n- expandedTokens (vocabulary hints)",
-      "x": 15,
-      "y": 366,
-      "sequence": 14,
-      "z": 533
-    },
-    {
-      "id": "n_mm43ywkw_znfrkt",
-      "title": "12a. Stage 1: Filler Removal",
-      "body": "Remove speech fillers:\n- \"um\", \"uh\", \"like\"\n- \"you know\", \"I mean\"\n\nApply mishear corrections:\n- \"acee\" → \"AC\"\n- Common speech recognition fixes",
-      "x": 15,
-      "y": 529,
-      "sequence": 15,
-      "z": 532
-    },
-    {
-      "id": "n_mm445wpp_v99cqb",
-      "title": "12b. Stage 2: Vocabulary Expansion",
-      "body": "Normalize industry terms:\n- \"acee\" → \"ac\"\n- \"tstat\" → \"thermostat\"\n- \"furnace\" → \"heating system\"\n\nAdd hints for ambiguous phrases",
-      "x": 17,
-      "y": 743,
-      "sequence": 16,
-      "z": 534
-    },
-    {
-      "id": "n_mm4sm9gn_ppskdz",
-      "title": "12c. Stage 3: Entity Extraction",
-      "body": "Extract structured data:\n\n- First name\n- Last name\n- Phone number\n- Email address\n- Street address\n\nSmart name capture:\n- Collects first and last name\n- Confirms spelling\n- Identifies which is first/last",
-      "x": 15,
-      "y": 955,
-      "sequence": 17,
-      "z": 535
-    },
-    {
       "id": "n_mm5eddy9_pnypot",
-      "title": "13. Name Greeting (Turn 1 Only)",
-      "body": "Optional personalized greeting:\n\n\"Got it{name}.\" → \"Got it, Marc.\"\n\nOnly fires on turn 1 if:\n- Name was extracted\n- Name greeting enabled in config\n\nFile: Agent2DiscoveryRunner.js:335-355",
+      "title": "15. Name Greeting (Turn 1 Only)",
+      "body": "Optional personalized greeting:\n\n\"Got it{name}.\" → \"Got it, Marc.\"\n\nOnly fires on turn 1 if:\n- Name was extracted by ScrabEngine\n- Name greeting enabled in config\n\nFile: Agent2DiscoveryRunner.js:335-355",
       "x": 1046,
       "y": 798,
-      "sequence": 18,
+      "sequence": 19,
       "z": 564
     },
     {
       "id": "n_mm5efvqa_cm3x84",
-      "title": "14. Hold Modal Check",
+      "title": "16. Hold Modal Check",
       "body": "Patience Mode Detection:\n\nKeywords: \"please hold\", \"one moment\", \"give me a second\"\n\nIf matched:\n- Enter patience mode\n- Set timeout (default 45s)\n- Check-in after timeout\n- Max 2 check-ins before continuing\n\nFile: Agent2DiscoveryRunner.js (patience logic)",
       "x": 1047,
       "y": 962,
-      "sequence": 19,
+      "sequence": 20,
       "z": 585
     },
     {
       "id": "n_mm42tbum_u67ad7",
-      "title": "15. 🎯 TRIGGER EVALUATION",
-      "body": "TriggerCardMatcher.match()\n\nFile: services/engine/agent2/TriggerCardMatcher.js\nCalled from: Agent2DiscoveryRunner.js:1473-1474\n\n⚠️ CRITICAL: Only runs if greeting interceptor didn't match!\n\nMatching logic:\n1. Load compiled triggers (global + company)\n2. Check keywords/phrases\n3. Check negative keywords (disqualifiers)\n4. Priority-based ranking\n5. Return best match\n\nLogged as: A2_TRIGGER_EVAL",
+      "title": "17. 🎯 TRIGGER EVALUATION (ON CLEANED TEXT)",
+      "body": "TriggerCardMatcher.match()\n\nFile: services/engine/agent2/TriggerCardMatcher.js\nCalled from: Agent2DiscoveryRunner.js:1473-1474\n\n✅ NOW MATCHES ON CLEANED TEXT FROM SCRABENGINE!\n\nMatching logic:\n1. Load compiled triggers (global + company)\n2. Check keywords/phrases (on CLEANED text)\n3. Check negative keywords (disqualifiers)\n4. Priority-based ranking\n5. Return best match\n\nEXAMPLE:\nRaw: \"Hi I need emergency acee service\"\n↓ ScrabEngine cleaned to: \"need emergency air conditioning service\"\n↓ Trigger matcher sees: \"emergency\" + \"air conditioning\"\n↓ Matches: EMERGENCY_AC_SERVICE trigger ✅\n\nLogged as: A2_TRIGGER_EVAL",
       "x": 1049,
       "y": 1174,
-      "sequence": 20,
+      "sequence": 21,
       "z": 584
     },
     {
       "id": "n_mm42usx8_vlq8mr",
-      "title": "16a. IF TRIGGER MATCHED",
+      "title": "18a. IF TRIGGER MATCHED",
       "body": "Fast path (instant response):\n\n→ Use trigger response text\n→ Use pre-recorded audio (if exists)\n→ SKIP LLM (no GPT-4 call needed!)\n→ Return in ~200ms\n\nLogged as: SPEECH_SOURCE_SELECTED",
       "x": 1455,
       "y": 1431,
-      "sequence": 21,
+      "sequence": 22,
       "z": 580
     },
     {
@@ -197,16 +206,16 @@
       "body": "Example: \"I need to schedule service\"\n\n↓\nTriggerCardMatcher finds: \"Schedule Service\" card\n↓\nUse pre-configured response\n↓\nUse pre-recorded audio (if exists) - SKIP TTS!\n↓\nReturn in ~200ms",
       "x": 1460,
       "y": 1633,
-      "sequence": 22,
+      "sequence": 23,
       "z": 581
     },
     {
       "id": "n_mm42wglc_gh2309",
-      "title": "16b. IF NO TRIGGER MATCHED",
+      "title": "18b. IF NO TRIGGER MATCHED",
       "body": "Fallback to LLM:\n\n→ HybridReceptionistLLM\n→ OpenAI GPT-4\n→ Generate dynamic response\n→ ElevenLabs TTS → audio\n→ Return in ~2-3 seconds\n\nLogged as: LLM_FALLBACK_USED",
       "x": 609,
       "y": 1414,
-      "sequence": 23,
+      "sequence": 24,
       "z": 576
     },
     {
@@ -215,34 +224,34 @@
       "body": "Example: \"What's your warranty policy?\"\n\n↓\nNo trigger card matches\n↓\nFall back to HybridReceptionistLLM\n↓\nGPT-4 generates dynamic response\n↓\nElevenLabs TTS → audio\n↓\nReturn in ~2-3 seconds",
       "x": 598,
       "y": 1643,
-      "sequence": 24,
+      "sequence": 25,
       "z": 575
     },
     {
       "id": "n_mm4svdsm_sym189",
-      "title": "17. Handoff to Booking",
-      "body": "IF trigger indicates booking intent:\n\n→ Switch to BOOKING mode\n→ Pass extracted entities to BookingLogicEngine\n→ Start booking flow\n\nEntities passed:\n- firstName, lastName\n- phone, email, address\n- call reason\n- any custom extractions from ScrabEngine",
+      "title": "19. Handoff to Booking",
+      "body": "IF trigger indicates booking intent:\n\n→ Switch to BOOKING mode\n→ Pass extracted entities to BookingLogicEngine\n→ Start booking flow\n\nEntities passed (from ScrabEngine Step 4):\n- firstName, lastName\n- phone, email, address\n- serviceType, urgency\n- call reason\n- any custom extractions",
       "x": 1719,
       "y": 701,
-      "sequence": 25,
+      "sequence": 26,
       "z": 549
     },
     {
       "id": "n_mm42xy4h_z7zpsr",
-      "title": "18. BookingLogicEngine",
-      "body": "Booking flow handler (if in booking mode)\n\nSteps:\n1. Name collection\n2. Phone verification\n3. Address capture\n4. Service details\n5. Appointment scheduling\n6. Confirmation\n\nFile: services/engine/booking/BookingLogicEngine.js",
+      "title": "20. BookingLogicEngine",
+      "body": "Booking flow handler (if in booking mode)\n\nReceives pre-extracted entities from ScrabEngine!\n\nSteps:\n1. Name collection (may skip if already extracted)\n2. Phone verification\n3. Address capture\n4. Service details\n5. Appointment scheduling\n6. Confirmation\n\nFile: services/engine/booking/BookingLogicEngine.js",
       "x": 2099,
       "y": 700,
-      "sequence": 26,
+      "sequence": 27,
       "z": 551
     },
     {
       "id": "n_mm45dins_m0kif0",
-      "title": "SIMPLIFIED SEQUENCE SUMMARY",
-      "body": "1. Twilio Entry\n2. Gatekeeper\n3. Spam Filter\n4. Call Start Greeting (audio)\n5. Gather Setup (Deepgram)\n6. Customer Speaks\n7. SpeechResult Posted\n8. Load State\n9. CallRuntime\n10. Agent2DiscoveryRunner\n11. 🚨 GREETING INTERCEPTOR (runs FIRST)\n    → IF \"hi/hello\" → EARLY EXIT ❌\n    → ELSE → continues ✅\n12. ScrabEngine (if no greeting match)\n    a. Fillers\n    b. Vocabulary\n    c. Extraction\n13. Name Greeting (turn 1)\n14. Hold Modal Check\n15. Trigger Evaluation (if no greeting match)\n    → Matched → use trigger\n    → No match → LLM fallback\n16. Response Generated\n17. Handoff (if booking)\n18. BookingLogicEngine (if in booking mode)",
+      "title": "✅ CORRECTED SEQUENCE SUMMARY",
+      "body": "1-2.  Documentation Notes\n3.    Twilio Entry\n4.    Gatekeeper Check\n5.    Spam Filter\n6.    Call Start Greeting (audio)\n7.    Gather Setup (Deepgram)\n8.    Customer Speaks\n9.    SpeechResult Posted\n\n🔍 10.   SCRABENGINE (4-STEP PROCESS) ← RUNS FIRST!\n      10a. Step 1: Filler Removal (removes \"hi\", \"hello\")\n      10b. Step 2: Vocabulary Expansion (\"acee\" → \"ac\")\n      10c. Step 3: Synonym Mapping (\"broken\" → \"not working\")\n      10d. Step 4: Entity Extraction + Quality Gate\n\n11.   Load Call State\n12.   CallRuntime.processTurn()\n13.   Agent2DiscoveryRunner.run()\n\n✅ 14.   Greeting Interceptor (NOW receives CLEANED text!)\n      → Sees \"need emergency service\" (not \"Hi I need...\")\n      → No greeting match → continues ✅\n\n15.   Name Greeting (turn 1, if extracted)\n16.   Hold Modal Check\n\n🎯 17.   TRIGGER EVALUATION (on CLEANED text)\n      → Matched → fast response (18a)\n      → No match → LLM fallback (18b)\n\n18a.  IF MATCHED: Use trigger response (~200ms)\n18b.  IF NO MATCH: GPT-4 fallback (~2-3s)\n\n19.   Handoff to Booking (if booking intent)\n20.   BookingLogicEngine (receives pre-extracted entities)\n\n🎉 FIX: ScrabEngine now runs at sequence 10, BEFORE greeting check!\n   This ensures greeting words are removed before any decision logic.",
       "x": 2119,
       "y": 20,
-      "sequence": 27,
+      "sequence": 28,
       "z": 542
     }
   ],
@@ -273,7 +282,33 @@
     },
     {
       "from": "n_mm42fmmh_m00wl5",
-      "to": "n_mm42ld2j_cvttca"
+      "to": "n_mm4sqta6_e8qplg",
+      "label": "Raw SpeechResult → ScrabEngine FIRST"
+    },
+    {
+      "from": "n_mm4sqta6_e8qplg",
+      "to": "n_scrab_step1",
+      "label": "Step 1: Filler Removal"
+    },
+    {
+      "from": "n_scrab_step1",
+      "to": "n_scrab_step2",
+      "label": "Step 2: Vocabulary"
+    },
+    {
+      "from": "n_scrab_step2",
+      "to": "n_scrab_step3",
+      "label": "Step 3: Synonyms"
+    },
+    {
+      "from": "n_scrab_step3",
+      "to": "n_scrab_step4",
+      "label": "Step 4: Entity Extraction"
+    },
+    {
+      "from": "n_scrab_step4",
+      "to": "n_mm42ld2j_cvttca",
+      "label": "Cleaned text + entities → Load State"
     },
     {
       "from": "n_mm42ld2j_cvttca",
@@ -289,30 +324,8 @@
     },
     {
       "from": "n_greeting_interceptor",
-      "to": "n_mm4sqta6_e8qplg",
-      "label": "IF NO greeting match → continue"
-    },
-    {
-      "from": "n_greeting_interceptor",
       "to": "n_mm5eddy9_pnypot",
-      "label": "IF greeting matched → EARLY EXIT ❌",
-      "style": "dashed"
-    },
-    {
-      "from": "n_mm4sqta6_e8qplg",
-      "to": "n_mm43ywkw_znfrkt"
-    },
-    {
-      "from": "n_mm43ywkw_znfrkt",
-      "to": "n_mm445wpp_v99cqb"
-    },
-    {
-      "from": "n_mm445wpp_v99cqb",
-      "to": "n_mm4sm9gn_ppskdz"
-    },
-    {
-      "from": "n_mm4sm9gn_ppskdz",
-      "to": "n_mm5eddy9_pnypot"
+      "label": "IF greeting (on CLEANED text) → skip to name greeting"
     },
     {
       "from": "n_mm5eddy9_pnypot",
