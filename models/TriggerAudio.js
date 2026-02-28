@@ -160,17 +160,35 @@ triggerAudioSchema.statics.findByCompanyAndRule = function(companyId, ruleId) {
  * V130: Include hasAudioData computed field so resolveAudioUrl can verify binary exists
  */
 triggerAudioSchema.statics.findByCompanyId = async function(companyId) {
+  const logger = require('../utils/logger');
+  
   const docs = await this.find({ companyId, isValid: true })
     .select('ruleId audioUrl textHash sourceText voiceId voiceProvider isValid createdAt updatedAt')
     .sort({ createdAt: -1 })
     .lean();
   
   // Check which docs have audioData (without loading the full binary)
+  // V131: Use $type: 'binData' for more reliable Buffer detection
   const docsWithAudioCheck = await this.find(
-    { companyId, isValid: true, audioData: { $exists: true, $ne: null } },
+    { 
+      companyId, 
+      isValid: true, 
+      audioData: { $exists: true, $type: 'binData' }
+    },
     { ruleId: 1 }
   ).lean();
   const hasAudioSet = new Set(docsWithAudioCheck.map(d => d.ruleId));
+  
+  // Log first few for debugging
+  if (docs.length > 0) {
+    logger.debug('[TriggerAudio.findByCompanyId] Results', {
+      companyId,
+      totalDocs: docs.length,
+      docsWithAudio: docsWithAudioCheck.length,
+      sampleRuleIds: docs.slice(0, 3).map(d => d.ruleId),
+      sampleHasAudio: docs.slice(0, 3).map(d => hasAudioSet.has(d.ruleId))
+    });
+  }
   
   return docs.map(d => ({
     ...d,
@@ -183,15 +201,25 @@ triggerAudioSchema.statics.findByCompanyId = async function(companyId) {
  * @param {Buffer} [audioBuffer] - MP3 binary data for MongoDB persistence
  */
 triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUrl, answerText, voiceId, userId, audioBuffer) {
+  const logger = require('../utils/logger');
   const textHash = this.hashText(answerText);
   const safeBuf = audioBuffer
     ? (Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer))
     : null;
   
+  logger.info('[TriggerAudio.saveAudio] Saving audio', {
+    companyId,
+    ruleId,
+    audioUrl,
+    textHash,
+    hasBuffer: Boolean(safeBuf),
+    bufferBytes: safeBuf?.length || 0
+  });
+  
   // Use findOneAndUpdate with $set to bypass Mongoose change detection issues
   // with Buffer fields. Mongoose .save() silently skips Buffer changes unless
   // markModified() is called — this was the root cause of empty audioData.
-  return this.findOneAndUpdate(
+  const result = await this.findOneAndUpdate(
     { companyId, ruleId },
     {
       $set: {
@@ -214,6 +242,20 @@ triggerAudioSchema.statics.saveAudio = async function(companyId, ruleId, audioUr
     },
     { upsert: true, new: true, runValidators: false }
   );
+  
+  // V131: Verify the save worked by checking if audioData exists
+  const verification = await this.findOne({ companyId, ruleId }).select('audioData textHash isValid').lean();
+  logger.info('[TriggerAudio.saveAudio] Verification after save', {
+    companyId,
+    ruleId,
+    savedTextHash: textHash,
+    verifiedTextHash: verification?.textHash,
+    hasAudioData: Boolean(verification?.audioData),
+    audioDataBytes: verification?.audioData?.length || 0,
+    isValid: verification?.isValid
+  });
+  
+  return result;
 };
 
 /**
