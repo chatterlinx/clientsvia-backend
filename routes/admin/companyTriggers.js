@@ -41,6 +41,7 @@ const router = express.Router();
 const logger = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
+const { redisClient } = require('../../clients');
 
 const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
 const GlobalTrigger = require('../../models/GlobalTrigger');
@@ -49,6 +50,18 @@ const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
 const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
 const { resolveAudioUrl } = require('../../services/engine/agent2/TriggerService');
+
+// Helper to clear Redis cache after company config changes
+async function clearCompanyCache(companyId, context = '') {
+  try {
+    if (redisClient && redisClient.isOpen) {
+      await redisClient.del(`company:${companyId}`);
+      logger.debug(`[CompanyTriggers] ${context} - Cleared Redis cache for company:${companyId}`);
+    }
+  } catch (err) {
+    logger.warn(`[CompanyTriggers] ${context} - Failed to clear cache:`, err.message);
+  }
+}
 
 // ════════════════════════════════════════════════════════════════════════════════
 // PERMISSION HELPERS
@@ -1552,6 +1565,9 @@ router.put('/:companyId/name-greeting',
       company.markModified('aiAgentSettings');
       
       await company.save();
+      
+      // CRITICAL: Clear Redis cache so live calls use updated settings
+      await clearCompanyCache(companyId, 'Name Greeting Save');
 
       logger.info('[CompanyTriggers] Name greeting SAVE complete', {
         companyId,
@@ -1645,6 +1661,9 @@ router.put('/:companyId/patience-settings',
       company.markModified('aiAgentSettings');
       
       await company.save();
+      
+      // CRITICAL: Clear Redis cache so live calls use updated settings
+      await clearCompanyCache(companyId, 'Patience Settings Save');
 
       logger.info('[CompanyTriggers] Patience settings saved', {
         companyId,
