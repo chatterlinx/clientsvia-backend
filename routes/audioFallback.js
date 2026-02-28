@@ -124,8 +124,11 @@ router.get('/instant-lines/:filename', async (req, res) => {
     }).select('audioData').lean();
     
     if (audioDoc?.audioData) {
-      logger.info('[AudioFallback] Found trigger via /audio-safe URL', { filename });
+      logger.info('[AudioFallback] Found trigger via /audio-safe URL', { filename, bytes: audioDoc.audioData.length });
       return audioDoc.audioData;
+    }
+    if (audioDoc && !audioDoc.audioData) {
+      logger.warn('[AudioFallback] TRIGGER DOC EXISTS but audioData is EMPTY — regenerate audio', { filename });
     }
     
     // Try 2: Match by old audioUrl format (/audio)
@@ -135,8 +138,11 @@ router.get('/instant-lines/:filename', async (req, res) => {
     }).select('audioData').lean();
     
     if (audioDoc?.audioData) {
-      logger.info('[AudioFallback] Found trigger via /audio URL (old format)', { filename });
+      logger.info('[AudioFallback] Found trigger via /audio URL (old format)', { filename, bytes: audioDoc.audioData.length });
       return audioDoc.audioData;
+    }
+    if (audioDoc && !audioDoc.audioData) {
+      logger.warn('[AudioFallback] TRIGGER DOC (old URL) EXISTS but audioData is EMPTY — regenerate audio', { filename });
     }
     
     // Try 3: Regex match on filename in audioUrl
@@ -205,9 +211,12 @@ router.get('/greetings/:filename', async (req, res) => {
       audioUrl: fullUrlSafe
     }).select('audioData').lean();
     
-    if (audioDoc) {
-      logger.info('[AudioFallback] Found via exact /audio-safe URL match', { filename });
+    if (audioDoc?.audioData) {
+      logger.info('[AudioFallback] Found via exact /audio-safe URL match', { filename, bytes: audioDoc.audioData.length });
       return audioDoc.audioData;
+    }
+    if (audioDoc && !audioDoc.audioData) {
+      logger.warn('[AudioFallback] GREETING DOC EXISTS but audioData is EMPTY — regenerate audio', { filename, url: fullUrlSafe });
     }
     
     // Try 2: Exact audioUrl match with old /audio
@@ -216,9 +225,12 @@ router.get('/greetings/:filename', async (req, res) => {
       audioUrl: fullUrlOld
     }).select('audioData').lean();
     
-    if (audioDoc) {
-      logger.info('[AudioFallback] Found via exact /audio URL match (old format)', { filename });
+    if (audioDoc?.audioData) {
+      logger.info('[AudioFallback] Found via exact /audio URL match (old format)', { filename, bytes: audioDoc.audioData.length });
       return audioDoc.audioData;
+    }
+    if (audioDoc && !audioDoc.audioData) {
+      logger.warn('[AudioFallback] GREETING DOC (old URL) EXISTS but audioData is EMPTY — regenerate audio', { filename, url: fullUrlOld });
     }
     
     // Try 3: Regex match on filename

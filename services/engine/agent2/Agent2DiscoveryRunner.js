@@ -1445,30 +1445,34 @@ class Agent2DiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────
     // PATH 2: TRIGGER CARD MATCHING (PRIMARY — DETERMINISTIC)
     // ──────────────────────────────────────────────────────────────────────
-    // Uses NORMALIZED input from vocabulary processing
-    // Passes hints for optional card boosting (if TriggerCardMatcher supports it)
+    // Uses TriggerService to load the full trigger pool (global + local),
+    // falling back to legacy playbook.rules when no global group is active.
     // V4: Intent Priority Gate config controls FAQ card disqualification
     // ──────────────────────────────────────────────────────────────────────
-    const triggerCards = safeArr(playbook.rules);
-    const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
     const activeHints = nextState.agent2.hints || [];
     const activeLocks = nextState.agent2.locks || {};
     const intentGateConfig = discoveryCfg.intentGate || {};
     const globalNegativeKeywords = agent2.globalNegativeKeywords || [];
-    
-    // ──────────────────────────────────────────────────────────────────────────
-    // TRIGGER MATCHING with ScrabEngine enhanced tokens
-    // ──────────────────────────────────────────────────────────────────────────
-    const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, {
+
+    const matchOptions = {
       hints: activeHints,
       locks: activeLocks,
       intentGateConfig,
       globalNegativeKeywords,
-      // 🔍 SCRABENGINE: Pass expanded tokens for flexible matching
       expandedTokens: expandedTokens,
       originalTokens: originalTokens,
       expansionMap: expansionMap
-    });
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // TRIGGER LOADING via TriggerService (global + local + legacy fallback)
+    // Loads from GlobalTrigger + CompanyLocalTrigger when a global group is
+    // active for this company, falling back to playbook.rules otherwise.
+    // Single load, used for both matching and pool stats.
+    // ──────────────────────────────────────────────────────────────────────────
+    const triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2);
+    const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, matchOptions);
+    const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
     
     // Store intent gate result for empathy layer (V4)
     if (triggerResult.intentGateResult) {
@@ -2195,6 +2199,19 @@ class Agent2DiscoveryRunner {
           llmAssistState: llmResult.mode === 'answer_return' ? nextState.agent2.llmAssist : null
         });
         
+        const llmSourceId = llmResult.llmMeta?.usedEmergencyFallback
+          ? 'agent2.llmFallback.emergencyFallback'
+          : 'agent2.llmFallback.llm';
+        const llmUiPath = llmResult.llmMeta?.usedEmergencyFallback
+          ? 'aiAgentSettings.agent2.llmFallback.emergencyFallbackLine.text'
+          : null;
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          llmSourceId,
+          llmUiPath,
+          response,
+          null,
+          `LLM fallback (${llmResult.mode || 'guided'}): ${llmResult.llmMeta?.usedEmergencyFallback ? 'emergency fallback' : 'validated LLM response'}`
+        ));
         emit('A2_RESPONSE_READY', {
           path: 'LLM_FALLBACK',
           responsePreview: clip(response, 120),
