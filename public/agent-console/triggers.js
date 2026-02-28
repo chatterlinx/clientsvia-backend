@@ -2627,14 +2627,19 @@
       
       // Delete local triggers
       for (const triggerId of localTriggers) {
-        const url = `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/${triggerId}`;
+        // Extract just the trigger ID part (after the :: separator)
+        const cleanId = triggerId.includes('::') ? triggerId.split('::').pop() : triggerId;
+        const url = `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/${encodeURIComponent(cleanId)}`;
+        console.log('[Bulk Delete] Deleting local trigger:', cleanId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
       
       // Delete global triggers (if admin)
       for (const triggerId of globalTriggers) {
-        const url = `${CONFIG.API_BASE_GLOBAL}/triggers/${triggerId}`;
+        const cleanId = triggerId.includes('::') ? triggerId.split('::').pop() : triggerId;
+        const url = `${CONFIG.API_BASE_GLOBAL}/triggers/${encodeURIComponent(cleanId)}`;
+        console.log('[Bulk Delete] Deleting global trigger:', cleanId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
