@@ -36,6 +36,18 @@ const GreetingAudio = require('../models/GreetingAudio');
 const PUBLIC_AUDIO_DIR = path.join(__dirname, '../public/audio');
 const INSTANT_LINES_DIR = path.join(PUBLIC_AUDIO_DIR, 'instant-lines');
 
+function normalizeAudioBuffer(audioData) {
+  if (!audioData) return null;
+  if (Buffer.isBuffer(audioData)) return audioData;
+  if (audioData instanceof Uint8Array) return Buffer.from(audioData);
+  if (audioData instanceof ArrayBuffer) return Buffer.from(audioData);
+  if (audioData.buffer) {
+    if (Buffer.isBuffer(audioData.buffer)) return audioData.buffer;
+    if (audioData.buffer instanceof ArrayBuffer) return Buffer.from(audioData.buffer);
+  }
+  return null;
+}
+
 /**
  * ════════════════════════════════════════════════════════════════════════════
  * BULLETPROOF AUDIO SERVING - Disk + MongoDB Fallback
@@ -57,11 +69,12 @@ async function serveAudioWithFallback(req, res, audioPath, mongoFallback) {
     // TIER 2: MongoDB fallback (survives deploys)
     // ════════════════════════════════════════════════════════════════════════
     const audioData = await mongoFallback();
+    const buffer = normalizeAudioBuffer(audioData);
     
-    if (audioData && Buffer.isBuffer(audioData)) {
+    if (buffer) {
       logger.info('[AudioFallback] ✅ Restored from MongoDB', {
         path: audioPath,
-        sizeBytes: audioData.length
+        sizeBytes: buffer.length
       });
       
       // Restore disk cache (so next request is fast)
@@ -70,7 +83,7 @@ async function serveAudioWithFallback(req, res, audioPath, mongoFallback) {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
-        fs.writeFileSync(audioPath, audioData);
+        fs.writeFileSync(audioPath, buffer);
         logger.info('[AudioFallback] ✅ Disk cache restored', { path: audioPath });
       } catch (cacheErr) {
         // Non-blocking - can still serve from memory
@@ -81,9 +94,17 @@ async function serveAudioWithFallback(req, res, audioPath, mongoFallback) {
       
       // Serve from MongoDB
       res.set('Content-Type', 'audio/mpeg');
-      res.set('Content-Length', audioData.length);
+      res.set('Content-Length', buffer.length);
       res.set('X-Audio-Source', 'mongodb-fallback');
-      return res.send(audioData);
+      return res.send(buffer);
+    }
+    
+    if (audioData) {
+      logger.warn('[AudioFallback] Audio data found but not a Buffer', {
+        path: audioPath,
+        type: typeof audioData,
+        constructor: audioData?.constructor?.name
+      });
     }
     
     // ════════════════════════════════════════════════════════════════════════
