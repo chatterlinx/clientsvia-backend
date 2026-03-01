@@ -66,7 +66,10 @@
     // Deep-link focus (e.g., from Call Console provenance links)
     focusId: null,
     editTriggerId: null,
-    editField: null
+    editField: null,
+
+    // Search index for fast, reliable filtering
+    searchIndex: new Map()
   };
 
   /* --------------------------------------------------------------------------
@@ -374,7 +377,7 @@
     }
     
     DOM.triggerSearch.addEventListener('input', (e) => {
-      state.searchQuery = e.target.value.toLowerCase();
+      state.searchQuery = normalizeSearchQuery(e.target.value);
       renderTriggers();
     });
     
@@ -548,6 +551,7 @@
       state.permissions = permissions;
       state.availableGroups = availableGroups;
       state.companyVariables = new Map(Object.entries(companyVariables));
+      buildSearchIndex(state.triggers);
       
       DOM.headerCompanyName.textContent = state.companyName;
       
@@ -634,59 +638,8 @@
         return false;
       }
       
-      // Apply search filter — DEEP SEARCH all trigger fields
-      if (!state.searchQuery) {
-        return true;
-      }
-      const q = state.searchQuery;
-      
-      // Basic fields
-      const label = (t.label || '').toLowerCase();
-      const ruleId = (t.ruleId || '').toLowerCase();
-      const priority = String(t.priority || '');
-      
-      // Match fields
-      const keywords = (t.match?.keywords || []).join(' ').toLowerCase();
-      const phrases = (t.match?.phrases || []).join(' ').toLowerCase();
-      const negatives = (t.match?.negativeKeywords || []).join(' ').toLowerCase();
-      
-      // Answer fields (all variations)
-      const answerText = (t.answer?.answerText || t.answerText || '').toLowerCase();
-      const quickReplies = (t.answer?.quickReplies || []).join(' ').toLowerCase();
-      const fullReplies = (t.answer?.fullReplies || []).join(' ').toLowerCase();
-      const audioUrl = (t.answer?.audioUrl || '').toLowerCase();
-      
-      // Follow-up fields
-      const followUp = (t.followUp?.question || '').toLowerCase();
-      const followUpMode = (t.followUp?.mode || '').toLowerCase();
-      
-      // LLM fields
-      const includedFacts = (t.llmFactPack?.includedFacts || '').toLowerCase();
-      const excludedFacts = (t.llmFactPack?.excludedFacts || '').toLowerCase();
-      const backupAnswer = (t.llmFactPack?.backupAnswer || '').toLowerCase();
-      const factPackName = (t.llmFactPack?.name || '').toLowerCase();
-      
-      // Entity fields
-      const entities = (t.entities || []).join(' ').toLowerCase();
-      
-      // Check all fields
-      return label.includes(q) || 
-             ruleId.includes(q) || 
-             keywords.includes(q) ||
-             phrases.includes(q) || 
-             negatives.includes(q) || 
-             answerText.includes(q) ||
-             quickReplies.includes(q) ||
-             fullReplies.includes(q) ||
-             audioUrl.includes(q) ||
-             followUp.includes(q) ||
-             followUpMode.includes(q) ||
-             includedFacts.includes(q) ||
-             excludedFacts.includes(q) ||
-             backupAnswer.includes(q) ||
-             factPackName.includes(q) ||
-             entities.includes(q) ||
-             priority.includes(q);
+      // Apply search filter — full-text index across trigger payload
+      return matchesSearchQuery(t, state.searchQuery);
     });
     
     if (filtered.length === 0) {
@@ -2501,6 +2454,77 @@
       .filter(Boolean);
   }
 
+  function normalizeSearchQuery(value) {
+    return (value || '').toString().toLowerCase().trim();
+  }
+
+  function buildTriggerSearchText(trigger) {
+    if (!trigger || typeof trigger !== 'object') {
+      return '';
+    }
+
+    const parts = [];
+    const pushText = (value) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach(v => pushText(v));
+        return;
+      }
+      if (typeof value === 'object') {
+        try {
+          parts.push(JSON.stringify(value));
+        } catch (err) {
+          // Ignore unstringifiable objects
+        }
+        return;
+      }
+      parts.push(String(value));
+    };
+
+    pushText(trigger.triggerId);
+    pushText(trigger.ruleId);
+    pushText(trigger.label);
+    pushText(trigger.priority);
+    pushText(trigger.scope);
+    pushText(trigger.responseMode);
+    pushText(trigger.originGroupId);
+    pushText(trigger.originGroupName);
+    pushText(trigger.overrideType);
+    pushText(trigger.overrideOfRuleId);
+    pushText(trigger.overrideOfTriggerId);
+    pushText(trigger.overrideOfGroupId);
+    pushText(trigger.match?.keywords);
+    pushText(trigger.match?.phrases);
+    pushText(trigger.match?.negativeKeywords);
+    pushText(trigger.answer?.answerText || trigger.answerText);
+    pushText(trigger.answer?.audioUrl);
+    pushText(trigger.answer?.quickReplies);
+    pushText(trigger.answer?.fullReplies);
+    pushText(trigger.followUp?.question);
+    pushText(trigger.followUp?.nextAction);
+    pushText(trigger.llmFactPack?.includedFacts);
+    pushText(trigger.llmFactPack?.excludedFacts);
+    pushText(trigger.llmFactPack?.backupAnswer);
+    pushText(trigger.entities);
+
+    return normalizeSearchQuery(parts.join(' '));
+  }
+
+  function buildSearchIndex(triggers) {
+    state.searchIndex = new Map();
+    (triggers || []).forEach(t => {
+      if (!t || !t.triggerId) return;
+      state.searchIndex.set(t.triggerId, buildTriggerSearchText(t));
+    });
+  }
+
+  function matchesSearchQuery(trigger, query) {
+    const q = normalizeSearchQuery(query);
+    if (!q) return true;
+    const searchText = state.searchIndex.get(trigger.triggerId) || buildTriggerSearchText(trigger);
+    return searchText.includes(q);
+  }
+
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -2746,12 +2770,7 @@
       const filtered = state.triggers.filter(t => {
         if (state.scopeFilter === 'global' && t.scope !== 'GLOBAL') return false;
         if (state.scopeFilter === 'local' && t.scope === 'GLOBAL') return false;
-        if (state.searchQuery) {
-          const query = state.searchQuery.toLowerCase();
-          const label = (t.label || '').toLowerCase();
-          const keywords = (t.match?.keywords || []).join(' ').toLowerCase();
-          if (!label.includes(query) && !keywords.includes(query)) return false;
-        }
+        if (!matchesSearchQuery(t, state.searchQuery)) return false;
         return true;
       });
       
