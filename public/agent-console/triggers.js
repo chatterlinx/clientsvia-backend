@@ -2529,6 +2529,8 @@
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};
     console.log('[Consent Cards] LOAD — raw followUpConsent from config:', JSON.stringify(fuc, null, 2));
+    const missingActionEl = document.getElementById('fuc-missing-response-action');
+    if (missingActionEl) missingActionEl.value = fuc.missingResponseAction || 'REASK_FOLLOWUP';
     for (const bucket of FUC_BUCKETS) {
       const data = fuc[bucket] || {};
       console.log(`[Consent Cards] LOAD.${bucket} — phrases: ${(data.phrases || []).length}, response: "${data.response || ''}", direction: "${data.direction || ''}"`);
@@ -2585,6 +2587,7 @@
 
   function collectFollowUpConsent() {
     const result = {};
+    result.missingResponseAction = (document.getElementById('fuc-missing-response-action')?.value || '').trim();
     for (const bucket of FUC_BUCKETS) {
       result[bucket] = {
         phrases: getFucPhrases(bucket),
@@ -2630,6 +2633,16 @@
       try {
         const followUpConsent = collectFollowUpConsent();
         console.log('[Consent Cards] CP2 — collectFollowUpConsent() result:', JSON.stringify(followUpConsent, null, 2));
+
+        const requiredBuckets = ['yes', 'no', 'reprompt', 'hesitant', 'maintenance', 'service_call'];
+        const missingResponses = requiredBuckets.filter(bucket => {
+          const resp = `${followUpConsent[bucket]?.response || ''}`.trim();
+          return !resp;
+        });
+        if (missingResponses.length > 0) {
+          showToast('error', 'Save Failed', `Missing response text for: ${missingResponses.join(', ')}`);
+          return;
+        }
 
         for (const bucket of FUC_BUCKETS) {
           const data = followUpConsent[bucket] || {};

@@ -89,6 +89,25 @@ Priority: SERVICE_CALL > MAINTENANCE > YES > NO > HESITANT > REPROMPT > COMPLEX
 | REPROMPT | Any configured REPROMPT phrase found, OR input ≤ 8 chars and not YES/NO/HESITANT/service choice |
 | COMPLEX | None of the above matched (catch-all) |
 
+---
+
+## Missing Config Behavior (UI-Only Enforcement)
+
+If a required bucket response is blank (e.g., `followUpConsent.yes.response`):
+
+- **Spoken text:** re-ask the follow-up question (UI-owned), or fall through to agent
+- **Fallback action:** `REASK_FOLLOWUP` or `BACK_TO_AGENT` (global toggle)
+- **Trace event:** `A2_FOLLOWUP_CONSENT_CONFIG_MISSING` with `missingFields` + `fallbackAction`
+
+No runtime fallback phrases are allowed.
+
+### Global Toggle
+
+`followUpConsent.missingResponseAction` controls the fallback:
+
+- `REASK_FOLLOWUP` → re-ask the trigger’s follow-up question
+- `BACK_TO_AGENT` → clear pending follow-up and resume discovery (ScrabEngine start)
+
 Single-word phrases match on word boundaries. Multi-word phrases match as substrings.
 
 ---

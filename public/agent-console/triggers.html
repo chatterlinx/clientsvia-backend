@@ -1115,6 +1115,14 @@
         <div class="card-body">
           <p class="form-hint mb-4">Configures how the agent classifies caller responses to trigger card follow-up questions. Only active when a trigger has follow-up text.</p>
 
+          <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center;">
+            <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Missing response behavior:</label>
+            <select class="form-select" id="fuc-missing-response-action" style="flex:1; font-size: 13px;">
+              <option value="REASK_FOLLOWUP">Re-ask follow-up question</option>
+              <option value="BACK_TO_AGENT">Back to Agent (restart discovery)</option>
+            </select>
+          </div>
+
           <div id="consent-cards-container" style="display: flex; flex-direction: column; gap: 16px;">
 
             <!-- YES -->

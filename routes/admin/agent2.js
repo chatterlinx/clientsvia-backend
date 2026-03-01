@@ -143,6 +143,7 @@ function defaultAgent2Config() {
       // Configurable keywords + directions for 7-bucket classification.
       // Only active when a trigger card has a follow-up question with text.
       followUpConsent: {
+        missingResponseAction: 'REASK_FOLLOWUP',
         yes: {
           phrases: [
             'yes', 'yeah', 'yep', 'yea', 'sure', 'ok', 'okay', 'please',
@@ -152,7 +153,7 @@ function defaultAgent2Config() {
             'set it up', 'im ready', 'perfect', 'great', 'yes please',
             'ya', 'yup', 'uh huh', 'mm hmm'
           ],
-          response: 'Got it — one moment.',
+          response: '',
           direction: 'HANDOFF_BOOKING'
         },
         no: {
@@ -174,7 +175,7 @@ function defaultAgent2Config() {
             'fall tune up', 'routine service', 'regular service',
             'clean and check', 'clean & check'
           ],
-          response: 'Got it — one moment.',
+          response: '',
           direction: 'HANDOFF_BOOKING',
           bookingMode: 'maintenance'
         },
@@ -187,7 +188,7 @@ function defaultAgent2Config() {
             'stopped working', 'broke', 'broken', 'error code', 'emergency',
             'asap', 'today'
           ],
-          response: 'Got it — one moment.',
+          response: '',
           direction: 'HANDOFF_BOOKING',
           bookingMode: 'service_call'
         },
@@ -851,7 +852,13 @@ function validatePublishReadiness(companyDoc) {
     { key: 'agent2.discovery.playbook.fallback.noMatchAnswer', ok: Boolean((fallback.noMatchAnswer || '').trim()) },
     { key: 'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured', ok: Boolean((fallback.noMatchWhenReasonCaptured || '').trim()) },
     { key: 'agent2.discovery.playbook.fallback.noMatchClarifierQuestion', ok: Boolean((fallback.noMatchClarifierQuestion || '').trim()) },
-    { key: 'voiceSettings.voiceId', ok: Boolean((voiceSettings.voiceId || '').trim()) }
+    { key: 'voiceSettings.voiceId', ok: Boolean((voiceSettings.voiceId || '').trim()) },
+    { key: 'agent2.discovery.followUpConsent.yes.response', ok: Boolean((discovery.followUpConsent?.yes?.response || '').trim()) },
+    { key: 'agent2.discovery.followUpConsent.no.response', ok: Boolean((discovery.followUpConsent?.no?.response || '').trim()) },
+    { key: 'agent2.discovery.followUpConsent.reprompt.response', ok: Boolean((discovery.followUpConsent?.reprompt?.response || '').trim()) },
+    { key: 'agent2.discovery.followUpConsent.hesitant.response', ok: Boolean((discovery.followUpConsent?.hesitant?.response || '').trim()) },
+    { key: 'agent2.discovery.followUpConsent.maintenance.response', ok: Boolean((discovery.followUpConsent?.maintenance?.response || '').trim()) },
+    { key: 'agent2.discovery.followUpConsent.service_call.response', ok: Boolean((discovery.followUpConsent?.service_call?.response || '').trim()) }
   ];
 
   const missingKeys = requiredChecks.filter(item => !item.ok).map(item => item.key);
@@ -868,7 +875,13 @@ function validatePublishReadiness(companyDoc) {
     'agent2.discovery.playbook.fallback.noMatchAnswer': 'agent2.html#discovery-fallback-messages',
     'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured': 'agent2.html#discovery-fallback-messages',
     'agent2.discovery.playbook.fallback.noMatchClarifierQuestion': 'agent2.html#discovery-fallback-messages',
-    'voiceSettings.voiceId': 'company-profile.html#voice-settings'
+    'voiceSettings.voiceId': 'company-profile.html#voice-settings',
+    'agent2.discovery.followUpConsent.yes.response': 'triggers.html#followup-consent-section',
+    'agent2.discovery.followUpConsent.no.response': 'triggers.html#followup-consent-section',
+    'agent2.discovery.followUpConsent.reprompt.response': 'triggers.html#followup-consent-section',
+    'agent2.discovery.followUpConsent.hesitant.response': 'triggers.html#followup-consent-section',
+    'agent2.discovery.followUpConsent.maintenance.response': 'triggers.html#followup-consent-section',
+    'agent2.discovery.followUpConsent.service_call.response': 'triggers.html#followup-consent-section'
   };
   const missingUiEditors = missingKeys.map((key) => ({
     key,
@@ -912,6 +925,14 @@ function getInvalidRequiredFieldUpdates(updates) {
   }
   if (updates?.discovery?.playbook?.fallback?.noMatchClarifierQuestion !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchClarifierQuestion)) {
     invalid.push('agent2.discovery.playbook.fallback.noMatchClarifierQuestion');
+  }
+  if (updates?.discovery?.followUpConsent) {
+    const requiredBuckets = ['yes', 'no', 'reprompt', 'hesitant', 'maintenance', 'service_call'];
+    for (const bucket of requiredBuckets) {
+      if (updates.discovery.followUpConsent[bucket]?.response !== undefined && isBlank(updates.discovery.followUpConsent[bucket].response)) {
+        invalid.push(`agent2.discovery.followUpConsent.${bucket}.response`);
+      }
+    }
   }
 
   return invalid;

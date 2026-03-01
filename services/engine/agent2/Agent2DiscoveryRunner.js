@@ -950,7 +950,9 @@ class Agent2DiscoveryRunner {
       const matchedPhrases = hasServiceChoiceConflict
         ? [...new Set([...matchedByBucket.maintenance, ...matchedByBucket.service_call])]
         : (matchedByBucket[bucketKey] || []);
-      const handoffHoldLine = `${discoveryCfg?.holdMessage || ''}`.trim() || 'Got it — one moment.';
+      const missingResponseAction = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
+      const responseRequiredBuckets = new Set(['YES', 'NO', 'MAINTENANCE', 'SERVICE_CALL', 'REPROMPT', 'HESITANT']);
+      const bucketResponse = `${bucketConfig.response || ''}`.trim();
 
       emit('A2_FOLLOWUP_CONSENT_CLASSIFIED', {
         bucket,
@@ -968,9 +970,48 @@ class Agent2DiscoveryRunner {
       nextState.agent2.discovery.usedNameThisTurn = fuqUsedName;
       if (fuqUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
 
+      let fallthroughMissingConfig = false;
+      // ── Missing response config: re-ask follow-up (UI-owned) or fall through ──
+      if (responseRequiredBuckets.has(bucket) && !bucketResponse) {
+        const missingFields = [`followUpConsent.${bucketKey}.response`];
+        const fallbackAction = missingResponseAction === 'BACK_TO_AGENT' ? 'BACK_TO_AGENT' : 'REASK_FOLLOWUP';
+        const missingResponse = `${fuqAck} ${pfuq}`.trim();
+        nextState.agent2.discovery.lastPath = fallbackAction === 'BACK_TO_AGENT'
+          ? 'FOLLOWUP_MISSING_CONFIG_AGENT'
+          : 'FOLLOWUP_MISSING_CONFIG_REASK';
+
+        emit('A2_FOLLOWUP_CONSENT_CONFIG_MISSING', {
+          bucket,
+          cardId: pfuqSource?.replace('card:', '') || null,
+          missingFields,
+          fallbackAction,
+          matchedPhrases
+        });
+
+        if (fallbackAction === 'BACK_TO_AGENT') {
+          // Clear pending follow-up and fall through to normal discovery processing
+          nextState.agent2.discovery.pendingFollowUpQuestion = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+          fallthroughMissingConfig = true;
+        } else {
+          emit('A2_RESPONSE_READY', {
+            path: nextState.agent2.discovery.lastPath,
+            responsePreview: clip(missingResponse, 120),
+            fallbackAction
+          });
+
+          return { response: missingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+      }
+
+      if (fallthroughMissingConfig) {
+        // Fall through — normal trigger matching / LLM will handle this turn
+      } else {
       // ── REPROMPT: re-ask the question ──
       if (bucket === 'REPROMPT') {
-        const repromptText = `${fuc.reprompt?.response || ''}`.trim() || `Sorry, I missed that. ${pfuq}`;
+        const repromptText = bucketResponse || `${pfuq}`;
         nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
         const repromptResponse = `${fuqAck} ${repromptText}`.trim();
 
@@ -980,8 +1021,7 @@ class Agent2DiscoveryRunner {
 
       // ── HESITANT: gentle clarification, keep question pending ──
       if (bucket === 'HESITANT') {
-        const hesitantText = `${fuc.hesitant?.response || ''}`.trim()
-          || "No worries - quick rule: if the system isn't cooling or acting up, pick service call so we can diagnose it. If everything is working and you just want a tune-up, pick maintenance. Which one should I book?";
+        const hesitantText = bucketResponse || `${pfuq}`;
         nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
         const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
 
@@ -1001,12 +1041,7 @@ class Agent2DiscoveryRunner {
 
       // ── MAINTENANCE / SERVICE CALL: handoff with booking mode ──
       if (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL') {
-        const defaultChoiceResponse = bucket === 'MAINTENANCE'
-          ? "Perfect - I'll get a maintenance appointment scheduled."
-          : "Got it - I'll get you scheduled for a service call so a diagnostic tech can troubleshoot it.";
-        const choiceText = direction === 'HANDOFF_BOOKING'
-          ? handoffHoldLine
-          : `${bucketConfig.response || ''}`.trim() || defaultChoiceResponse;
+        const choiceText = bucketResponse;
 
         if (direction === 'HANDOFF_BOOKING') {
           nextState.sessionMode = 'BOOKING';
@@ -1047,9 +1082,7 @@ class Agent2DiscoveryRunner {
       // ── YES: execute the configured direction ──
       if (bucket === 'YES') {
         const yesDirection = `${fuc.yes?.direction || pfuqNextAction || 'CONTINUE'}`.toUpperCase();
-        const yesText = yesDirection === 'HANDOFF_BOOKING'
-          ? handoffHoldLine
-          : `${fuc.yes?.response || ''}`.trim() || 'Great — let me get that scheduled for you.';
+        const yesText = bucketResponse;
 
         if (yesDirection === 'HANDOFF_BOOKING') {
           nextState.sessionMode = 'BOOKING';
@@ -1080,7 +1113,7 @@ class Agent2DiscoveryRunner {
 
       // ── NO: acknowledge and continue ──
       if (bucket === 'NO') {
-        const noText = `${fuc.no?.response || ''}`.trim() || 'No problem. How can I help you today?';
+        const noText = bucketResponse;
         nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
         const noResponse = `${fuqAck} ${noText}`.trim();
 
@@ -1095,6 +1128,7 @@ class Agent2DiscoveryRunner {
         inputPreview: clip(inputLowerCleanFUQ, 80)
       });
       // Fall through — normal trigger matching / LLM will handle this turn
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

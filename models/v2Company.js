@@ -4163,6 +4163,7 @@ const companySchema = new mongoose.Schema({
                 // Each bucket has: phrases, response text, and routing direction.
                 // UI-owned — configured in Triggers Console consent card section.
                 followUpConsent: {
+                    missingResponseAction: { type: String, default: 'REASK_FOLLOWUP', trim: true },
                     yes: {
                         phrases:   { type: [String], default: [] },
                         response:  { type: String, default: '', trim: true },
