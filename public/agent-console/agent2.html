@@ -31,6 +31,15 @@
     body.embed-greetings #card-greeting-interceptor {
       margin-top: 0;
     }
+
+    /* Full page: remove Greeting Interceptor (now managed in Triggers) */
+    body.hide-greeting-interceptor #card-greeting-interceptor {
+      display: none !important;
+    }
+
+    body.hide-greeting-interceptor #modal-greeting-rule {
+      display: none !important;
+    }
   </style>
 </head>
 <body>

@@ -2159,7 +2159,7 @@
     // Setup link to agent2 greetings
     if (DOM.btnOpenAgent2Greetings) {
       DOM.btnOpenAgent2Greetings.onclick = () => {
-        window.open(`/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}#card-greeting-interceptor`, '_blank');
+        window.open(`/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}&embed=greetings`, '_blank');
       };
     }
 

@@ -253,6 +253,8 @@
 
     if (state.embedMode === 'greetings') {
       document.body.classList.add('embed-greetings');
+    } else {
+      document.body.classList.add('hide-greeting-interceptor');
     }
     
     if (state.companyId) {
