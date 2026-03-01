@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Settings — Agent Console</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  
+  <style>
+    /* ════════════════════════════════════════════════════════════════════════
+       LLM SETTINGS PAGE SPECIFIC STYLES
+       ════════════════════════════════════════════════════════════════════════ */
+    
+    .llm-settings-layout {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 24px;
+      margin-top: 24px;
+    }
+    
+    @media (max-width: 1400px) {
+      .llm-settings-layout {
+        grid-template-columns: 1fr;
+      }
+      
+      .llm-preview-sidebar {
+        position: sticky;
+        top: 80px;
+        max-height: calc(100vh - 100px);
+      }
+    }
+    
+    /* Tabs Navigation */
+    .llm-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--color-gray-100);
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+      overflow-x: auto;
+    }
+    
+    .llm-tab {
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      color: var(--color-gray-600);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: var(--transition-base);
+    }
+    
+    .llm-tab:hover {
+      background: var(--color-gray-200);
+      color: var(--color-gray-900);
+    }
+    
+    .llm-tab.active {
+      background: var(--color-white);
+      color: var(--color-primary-600);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    /* Tab Panels */
+    .llm-tab-panel {
+      display: none;
+    }
+    
+    .llm-tab-panel.active {
+      display: block;
+    }
+    
+    /* Settings Sections */
+    .settings-section {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    
+    .settings-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    
+    .settings-section-title {
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
+      margin: 0;
+    }
+    
+    .settings-section-description {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+      margin: 8px 0 0 0;
+    }
+    
+    /* Profile Cards */
+    .profile-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    
+    .profile-card {
+      border: 2px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+    
+    .profile-card:hover {
+      border-color: var(--color-primary-300);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .profile-card.active {
+      border-color: var(--color-primary-500);
+      background: var(--color-primary-50);
+    }
+    
+    .profile-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    
+    .profile-card-title {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
+      margin: 0;
+    }
+    
+    .profile-card-badge {
+      padding: 4px 8px;
+      background: var(--color-primary-100);
+      color: var(--color-primary-700);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-medium);
+      border-radius: var(--radius-sm);
+    }
+    
+    .profile-card-description {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    
+    .profile-card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-500);
+    }
+    
+    .profile-card-meta-item {
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .profile-card-meta-label {
+      font-weight: var(--font-weight-medium);
+    }
+    
+    /* Guardrail Toggles */
+    .guardrail-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .guardrail-item {
+      padding: 16px;
+      background: var(--color-gray-50);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+    }
+    
+    .guardrail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    
+    .guardrail-title {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-900);
+    }
+    
+    .guardrail-description {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+      line-height: 1.5;
+    }
+    
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 24px;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--color-gray-300);
+      transition: var(--transition-base);
+      border-radius: 24px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: var(--transition-base);
+      border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+      background-color: var(--color-primary-500);
+    }
+    
+    input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    
+    /* Preview Sidebar */
+    .llm-preview-sidebar {
+      position: sticky;
+      top: 80px;
+      height: fit-content;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    
+    .preview-card {
+      background: var(--color-gray-900);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      color: var(--color-gray-100);
+    }
+    
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--color-gray-700);
+    }
+    
+    .preview-title {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-white);
+    }
+    
+    .preview-stats {
+      display: flex;
+      gap: 16px;
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-400);
+    }
+    
+    .preview-content {
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    
+    .preview-section {
+      margin-bottom: 20px;
+    }
+    
+    .preview-section-label {
+      display: inline-block;
+      padding: 4px 8px;
+      background: var(--color-gray-800);
+      color: var(--color-gray-300);
+      font-size: 10px;
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+    }
+    
+    .preview-section-label.base { background: var(--color-primary-900); color: var(--color-primary-200); }
+    .preview-section-label.profile { background: var(--color-purple-900); color: var(--color-purple-200); }
+    .preview-section-label.domain { background: var(--color-warning-900); color: var(--color-warning-200); }
+    .preview-section-label.guardrail { background: var(--color-error-900); color: var(--color-error-200); }
+    
+    .preview-text {
+      color: var(--color-gray-300);
+    }
+    
+    /* Export/Import Buttons */
+    .export-import-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    
+    /* Alert Boxes */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      margin-bottom: 16px;
+      font-size: var(--font-size-sm);
+    }
+    
+    .alert-warning {
+      background: var(--color-warning-50);
+      border: 1px solid var(--color-warning-200);
+      color: var(--color-warning-800);
+    }
+    
+    .alert-info {
+      background: var(--color-primary-50);
+      border: 1px solid var(--color-primary-200);
+      color: var(--color-primary-800);
+    }
+    
+    .alert-success {
+      background: var(--color-success-50);
+      border: 1px solid var(--color-success-200);
+      color: var(--color-success-800);
+    }
+    
+    /* Prompt Editor */
+    .prompt-editor {
+      width: 100%;
+      min-height: 200px;
+      padding: 12px;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      resize: vertical;
+    }
+    
+    .prompt-editor:focus {
+      outline: none;
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px var(--color-primary-100);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- ================================================================
+         HEADER — STICKY TOP BAR
+         ================================================================ -->
+    <header class="header">
+      <!-- Left: Back Button + Logo + Title -->
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back" title="Back to Agent Console">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <a href="/agent-console/" class="header-logo">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <span class="header-logo-text">ClientVia</span>
+        </a>
+        <div class="header-divider"></div>
+        <span class="header-title">🧠 LLM Settings</span>
+      </div>
+      
+      <!-- Center: Company Info -->
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      
+      <!-- Right: Actions -->
+      <div class="header-right">
+        <button class="btn btn-secondary btn-sm" id="btn-export-settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 10V2M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Export JSON
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-import-settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2V10M8 2L5 5M8 2L11 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Import JSON
+        </button>
+        <button class="btn btn-primary" id="btn-save-settings" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M13 2L14 3L7 10L3 6L4 5L7 8L13 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Save Changes
+        </button>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN CONTENT
+         ================================================================ -->
+    <main class="main-content">
+      <div class="container-fluid">
+        
+        <!-- Alert: Unsaved Changes -->
+        <div class="alert alert-warning" id="unsaved-changes-alert" style="display: none;">
+          ⚠️ You have unsaved changes. Click "Save Changes" to persist your settings.
+        </div>
+        
+        <!-- Export/Import Actions (Hidden File Input) -->
+        <input type="file" id="import-file-input" accept=".json" style="display: none;">
+        
+        <!-- Tabs Navigation -->
+        <div class="llm-tabs" role="tablist">
+          <button class="llm-tab active" data-tab="overview" role="tab">Overview</button>
+          <button class="llm-tab" data-tab="profiles" role="tab">Profiles</button>
+          <button class="llm-tab" data-tab="guardrails" role="tab">Guardrails</button>
+          <button class="llm-tab" data-tab="domains" role="tab">Domain Safety</button>
+          <button class="llm-tab" data-tab="prompts" role="tab">Prompts</button>
+          <button class="llm-tab" data-tab="generation" role="tab">Generation</button>
+        </div>
+        
+        <!-- Layout: Main Content + Preview Sidebar -->
+        <div class="llm-settings-layout">
+          
+          <!-- Main Content Area -->
+          <div class="llm-content-main">
+            
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB: OVERVIEW
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel active" id="panel-overview">
+              
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">LLM Configuration Overview</h2>
+                    <p class="settings-section-description">
+                      Configure how the AI behaves for this company. Settings are company-specific and don't affect other businesses.
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="alert alert-info">
+                  <strong>Company-Scoped Settings:</strong> These settings only apply to <strong id="overview-company-name">this company</strong>. 
+                  Each company has independent LLM configuration to prevent behavior bleeding between different business types 
+                  (e.g., dentist office vs HVAC company).
+                </div>
+                
+                <!-- Current Active Profile -->
+                <div style="margin-top: 24px;">
+                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Active Profile</h3>
+                  <div id="overview-active-profile" style="padding: 16px; background: var(--color-gray-50); border-radius: 8px;">
+                    Loading...
+                  </div>
+                </div>
+                
+                <!-- Enabled Domain Modes -->
+                <div style="margin-top: 24px;">
+                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Active Domain Safety Modes</h3>
+                  <div id="overview-domain-modes" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge badge-secondary">None Active</span>
+                  </div>
+                </div>
+                
+                <!-- Quick Stats -->
+                <div style="margin-top: 24px;">
+                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Configuration Summary</h3>
+                  <div id="overview-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <!-- Stats will be populated by JS -->
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB: PROFILES
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-profiles">
+              
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Behavior Profiles</h2>
+                    <p class="settings-section-description">
+                      Select the profile that best matches your business needs. Each profile has different creativity, safety, and tone settings.
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="profile-grid" id="profile-grid">
+                  <!-- Profiles will be populated by JS -->
+                </div>
+              </div>
+              
+              <!-- Model Override Section -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Advanced Model Settings</h2>
+                    <p class="settings-section-description">
+                      Override the default model and parameters for the active profile.
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label for="model-override">Model Override</label>
+                  <select id="model-override" class="form-control">
+                    <option value="">Use Profile Default</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini (Fast, Cost-Effective)</option>
+                    <option value="gpt-4o">GPT-4o (Balanced)</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo (High Quality)</option>
+                    <option value="o1-mini">O1 Mini (Reasoning)</option>
+                    <option value="o1-preview">O1 Preview (Advanced Reasoning)</option>
+                  </select>
+                </div>
+                
+                <div class="form-group">
+                  <label for="temperature-override">Temperature (Creativity)</label>
+                  <input type="range" id="temperature-override" min="0" max="1" step="0.05" class="form-range">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
+                    <span>Conservative (0.0)</span>
+                    <span id="temperature-value">0.2</span>
+                    <span>Creative (1.0)</span>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label for="max-tokens-override">Max Tokens (Response Length)</label>
+                  <input type="range" id="max-tokens-override" min="500" max="4000" step="100" class="form-range">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
+                    <span>Short</span>
+                    <span id="max-tokens-value">2200</span>
+                    <span>Long</span>
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB: GUARDRAILS
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-guardrails">
+              
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Behavioral Guardrails</h2>
+                    <p class="settings-section-description">
+                      Define hard boundaries for what the LLM can and cannot do. These are critical safety controls.
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                  <strong>⚠️ Critical Settings:</strong> Guardrails prevent the LLM from taking dangerous actions. 
+                  Only modify these if you understand the implications.
+                </div>
+                
+                <div class="guardrail-list" id="guardrail-list">
+                  <!-- Guardrails will be populated by JS -->
+                </div>
+              </div>
+              
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB: DOMAIN SAFETY
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-domains">
+              
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Domain Safety Modes</h2>
+                    <p class="settings-section-description">
+                      Enable industry-specific safety rules (medical, financial, legal, emergency).
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="guardrail-list" id="domain-list">
+                  <!-- Domain modes will be populated by JS -->
+                </div>
+              </div>
+              
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB: PROMPTS
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-prompts">
+              
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">System Prompts</h2>
+                    <p class="settings-section-description">
+                      Edit the text instructions sent to the LLM. Changes here directly affect behavior.
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="alert alert-info">
+                  <strong>Live Preview:</strong> The right sidebar shows exactly what the LLM receives. 
+                  Edit prompts here and see real-time updates.
+                </div>
+                
+                <!-- Base Prompt -->
+                <div style="margin-bottom: 24px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="font-weight: 600;">Base System Prompt (Always Applied)</label>
+                    <button class="btn btn-sm btn-ghost" id="btn-reset-base-prompt">Reset to Default</button>
+                  </div>
+                  <textarea id="prompt-base" class="prompt-editor"></textarea>
+                </div>
+                
+                <!-- Profile Prompt -->
+                <div style="margin-bottom: 24px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="font-weight: 600;">Active Profile Prompt</label>
+                    <button class="btn btn-sm btn-ghost" id="btn-reset-profile-prompt">Reset to Default</button>
+                  </div>
+                  <textarea id="prompt-profile" class="prompt-editor"></textarea>
+                </div>
+                
+                <!-- Domain Safety Prompts -->
+                <div id="domain-prompts-container">
+                  <!-- Will be populated dynamically based on enabled domains -->
+                </div>
+                
+              </div>
+              
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB: GENERATION
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-generation">
+              
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Generation Settings</h2>
+                    <p class="settings-section-description">
+                      Control how the LLM generates scenario drafts (variants, output format, etc.).
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label>Generation Mode</label>
+                  <div style="display: flex; gap: 16px;">
+                    <label class="radio-label">
+                      <input type="radio" name="generation-mode" value="single" checked>
+                      <span>Single (1 version)</span>
+                    </label>
+                    <label class="radio-label">
+                      <input type="radio" name="generation-mode" value="multi">
+                      <span>Multi-Variant (A/B testing)</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="form-group" id="variant-count-group" style="display: none;">
+                  <label for="variant-count">Number of Variants</label>
+                  <input type="range" id="variant-count" min="1" max="15" value="3" class="form-range">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
+                    <span>1</span>
+                    <span id="variant-count-value">3</span>
+                    <span>15</span>
+                  </div>
+                </div>
+                
+              </div>
+              
+            </div>
+            
+          </div>
+          
+          <!-- ═══════════════════════════════════════════════════════════
+               PREVIEW SIDEBAR
+               ═══════════════════════════════════════════════════════════ -->
+          <div class="llm-preview-sidebar">
+            <div class="preview-card">
+              <div class="preview-header">
+                <h3 class="preview-title">Live Prompt Preview</h3>
+                <button class="btn btn-sm btn-ghost" id="btn-copy-preview" style="color: var(--color-gray-400); border-color: var(--color-gray-700);">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M2 10V3C2 2.44772 2.44772 2 3 2H10" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <div class="preview-stats">
+                <span id="preview-char-count">0 chars</span>
+                <span>•</span>
+                <span id="preview-token-count">~0 tokens</span>
+              </div>
+              
+              <div class="preview-content" id="preview-content">
+                <div class="preview-section">
+                  <div class="preview-section-label base">Base Prompt</div>
+                  <div class="preview-text" id="preview-base">Loading...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+        
+      </div>
+    </main>
+
+    <!-- ================================================================
+         FOOTER
+         ================================================================ -->
+    <footer class="footer">
+      <span>LLM Settings v1.0.0</span>
+      <span> · </span>
+      <span id="footer-save-status">No changes</span>
+      <span> · </span>
+      <span id="footer-last-saved">Never saved</span>
+    </footer>
+
+    <!-- ================================================================
+         TOAST CONTAINER
+         ================================================================ -->
+    <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/llm.js"></script>
+</body>
+</html>

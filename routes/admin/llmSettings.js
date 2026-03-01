@@ -15,13 +15,17 @@ router.use(requireRole('admin'));
 // GET current settings + prompt text for UI display
 router.get('/', async (req, res, next) => {
   try {
-    const settings = await getSettings('global');
+    // Support company-scoped settings via query parameter
+    // ?scope=company:12345 or ?scope=global
+    const scope = req.query.scope || 'global';
+    const settings = await getSettings(scope);
     
     // Get prompt parts so UI can display exactly what the LLM sees
     const promptParts = getScenarioPromptPartsFromSettings(settings);
     
     res.json({
       success: true,
+      scope,
       settings,
       profiles: ARCHITECT_LLM_PROFILES, // Profile metadata for UI
       promptParts // Actual prompt text broken into parts
@@ -34,14 +38,18 @@ router.get('/', async (req, res, next) => {
 // UPDATE settings (partial)
 router.put('/', async (req, res, next) => {
   try {
-    const partial = req.body || {};
-    const settings = await saveSettings(partial, 'global');
+    // Support company-scoped updates
+    const { scope, settings: partial } = req.body;
+    const scopeToUse = scope || 'global';
+    
+    const settings = await saveSettings(partial, scopeToUse);
     
     // Return updated prompt parts so UI shows live changes
     const promptParts = getScenarioPromptPartsFromSettings(settings);
     
     res.json({ 
-      success: true, 
+      success: true,
+      scope: scopeToUse,
       settings,
       profiles: ARCHITECT_LLM_PROFILES,
       promptParts
@@ -54,15 +62,19 @@ router.put('/', async (req, res, next) => {
 // RESET settings
 router.post('/reset', async (req, res, next) => {
   try {
-    const scope = 'global';
-    const section = req.body?.scope || 'all';
-    const settings = await resetSettings(scope, section);
+    // Support company-scoped reset
+    const { scope, section } = req.body;
+    const scopeToUse = scope || 'global';
+    const sectionToReset = section || 'all';
+    
+    const settings = await resetSettings(scopeToUse, sectionToReset);
     
     // Return updated prompt parts so UI shows defaults
     const promptParts = getScenarioPromptPartsFromSettings(settings);
     
     res.json({ 
-      success: true, 
+      success: true,
+      scope: scopeToUse,
       settings,
       profiles: ARCHITECT_LLM_PROFILES,
       promptParts
