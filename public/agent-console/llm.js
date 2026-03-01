@@ -633,6 +633,15 @@ function setupEventListeners() {
     updateSetting('defaults.defaultVariantCount', parseInt(e.target.value));
   });
   
+  // Company context
+  const companyContextField = document.getElementById('company-context');
+  if (companyContextField) {
+    companyContextField.addEventListener('change', (e) => {
+      updateSetting('companyContext', e.target.value);
+      updatePreview();
+    });
+  }
+  
   // Prompt editors
   document.getElementById('prompt-base').addEventListener('change', (e) => {
     updateSetting('promptText.base', e.target.value);
