@@ -64,7 +64,9 @@
     currentResponseMode: 'standard',
 
     // Deep-link focus (e.g., from Call Console provenance links)
-    focusId: null
+    focusId: null,
+    editTriggerId: null,
+    editField: null
   };
 
   /* --------------------------------------------------------------------------
@@ -235,6 +237,8 @@
     const params = new URLSearchParams(window.location.search);
     state.companyId = params.get('companyId');
     const focus = params.get('focus');
+    const edit = params.get('edit');
+    const field = params.get('field');
     if (focus) {
       // Accept either "trigger-<id>" or "<id>"
       state.focusId = focus.startsWith('trigger-') ? focus : `trigger-${focus}`;
@@ -242,6 +246,15 @@
       state.searchQuery = '';
       state.scopeFilter = 'all';
       if (DOM.triggerSearch) DOM.triggerSearch.value = '';
+    }
+    if (edit) {
+      const normalizedEdit = edit.startsWith('trigger-') ? edit : `trigger-${edit}`;
+      state.editTriggerId = normalizedEdit.replace(/^trigger-/, '');
+      state.editField = field || 'answerText';
+      state.searchQuery = '';
+      state.scopeFilter = 'all';
+      if (DOM.triggerSearch) DOM.triggerSearch.value = '';
+      if (!state.focusId) state.focusId = `trigger-${state.editTriggerId}`;
     }
     
     if (state.companyId) {
@@ -754,6 +767,7 @@
 
     // Deep-link focus (scroll + highlight) after render
     applyFocusIfNeeded();
+    applyEditIfNeeded();
   }
 
   function applyFocusIfNeeded() {
@@ -776,6 +790,38 @@
 
     // One-shot
     state.focusId = null;
+  }
+
+  function applyEditIfNeeded() {
+    if (!state.editTriggerId) return;
+    const trigger = state.triggers.find(t =>
+      t.triggerId === state.editTriggerId ||
+      t.ruleId === state.editTriggerId
+    );
+    if (!trigger) {
+      showToast('warning', 'Edit Target Not Found', `Could not find trigger ${state.editTriggerId}.`);
+      state.editTriggerId = null;
+      state.editField = null;
+      return;
+    }
+
+    openTriggerModal(trigger);
+    const field = state.editField || 'answerText';
+    setTimeout(() => {
+      const fieldMap = {
+        answerText: DOM.inputTriggerAnswer,
+        followUpQuestion: DOM.inputTriggerFollowup,
+        keywords: DOM.inputTriggerKeywords,
+        phrases: DOM.inputTriggerPhrases,
+        negativeKeywords: DOM.inputTriggerNegative,
+        label: DOM.inputTriggerLabel
+      };
+      const el = fieldMap[field];
+      if (el && typeof el.focus === 'function') el.focus();
+    }, 0);
+
+    state.editTriggerId = null;
+    state.editField = null;
   }
   
   function extractVariablesFromText(text) {

@@ -1207,11 +1207,15 @@
 
     let sourceInfo = '';
     if (provenance.uiPath) {
-      const focusId =
-        provenance.uiAnchor ||
-        (provenance.triggerId ? `trigger-${provenance.triggerId}` : null);
+      const anchorId = provenance.uiAnchor || null;
+      const derivedTriggerId =
+        provenance.triggerId ||
+        provenance.triggerCardId ||
+        (anchorId ? anchorId.replace(/^trigger-/, '') : null) ||
+        extractTriggerIdFromUiPath(provenance.uiPath);
+      const focusId = anchorId || (derivedTriggerId ? `trigger-${derivedTriggerId}` : null);
 
-      const uiLink = buildUILink(provenance.uiPath, focusId);
+      const uiLink = buildUILink(provenance.uiPath, focusId, derivedTriggerId, 'answerText');
       sourceInfo = `
         <span class="provenance-label">UI Path:</span>
         <span class="provenance-value mono">${escapeHtml(displayUiPath)}</span>
@@ -1833,7 +1837,7 @@
    * @param {string} uiPath - The UI path (e.g., "greetings.callStart")
    * @returns {Object|null} Link object with href and label, or null
    */
-  function buildUILink(uiPath, focusId = null) {
+  function buildUILink(uiPath, focusId = null, editId = null, editField = null) {
     if (!uiPath) return null;
 
     // Find matching tab config from canonical and normalized path candidates.
@@ -1847,6 +1851,11 @@
     const params = new URLSearchParams();
     params.set('companyId', state.companyId);
     if (focusId) params.set('focus', focusId);
+    if (tabConfig.page === 'triggers.html' && editId) {
+      const normalizedEdit = `${editId}`.startsWith('trigger-') ? `${editId}` : `trigger-${editId}`;
+      params.set('edit', normalizedEdit);
+      if (editField) params.set('field', editField);
+    }
     const companyParam = `?${params.toString()}`;
     
     return {
@@ -1870,6 +1879,13 @@
       return Array.isArray(candidates) && candidates.length > 0 ? candidates : [uiPath];
     }
     return [uiPath];
+  }
+
+  function extractTriggerIdFromUiPath(uiPath) {
+    if (!uiPath || typeof uiPath !== 'string') return null;
+    const match = uiPath.match(/rules\[id=([^\]]+)\]/i);
+    if (match && match[1]) return match[1];
+    return null;
   }
 
   /* ==========================================================================
