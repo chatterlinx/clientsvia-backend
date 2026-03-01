@@ -50,6 +50,7 @@
     companyName: null,
     config: null,
     triggerStats: null,
+    embedMode: null,
     testSession: {
       mode: 'DISCOVERY',
       turn: 0,
@@ -238,14 +239,21 @@
     setupEventListeners();
     setupGreetingsEventListeners();
     setupUnsavedChangesProtection();
-    loadConfig();
     loadGreetings();
-    loadHealthStatus();
+    if (state.embedMode !== 'greetings') {
+      loadConfig();
+      loadHealthStatus();
+    }
   }
 
   function extractCompanyId() {
     const params = new URLSearchParams(window.location.search);
     state.companyId = params.get('companyId');
+    state.embedMode = params.get('embed');
+
+    if (state.embedMode === 'greetings') {
+      document.body.classList.add('embed-greetings');
+    }
     
     if (state.companyId) {
       DOM.headerCompanyId.textContent = truncateId(state.companyId);

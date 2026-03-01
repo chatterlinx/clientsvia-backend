@@ -91,6 +91,7 @@
     btnNameGreetingSave: document.getElementById('btn-name-greeting-save'),
     nameGreetingAlways: document.getElementById('name-greeting-always'),
     nameGreetingText: document.getElementById('name-greeting-text'),
+    greetingRulesEmbed: document.getElementById('greeting-rules-embed'),
     btnOpenAgent2Greetings: document.getElementById('btn-open-agent2-greetings'),
     
     btnPatienceSettings: document.getElementById('btn-patience-settings'),
@@ -2160,6 +2161,13 @@
       DOM.btnOpenAgent2Greetings.onclick = () => {
         window.open(`/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}#card-greeting-interceptor`, '_blank');
       };
+    }
+
+    if (DOM.greetingRulesEmbed) {
+      const embedUrl = `/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}&embed=greetings`;
+      if (DOM.greetingRulesEmbed.getAttribute('src') !== embedUrl) {
+        DOM.greetingRulesEmbed.setAttribute('src', embedUrl);
+      }
     }
   }
 

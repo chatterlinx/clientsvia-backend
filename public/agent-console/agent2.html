@@ -12,6 +12,26 @@
   
   <!-- Styles -->
   <link rel="stylesheet" href="/agent-console/styles.css">
+  <style>
+    /* Embed mode: show only Greeting Interceptor card */
+    body.embed-greetings .header,
+    body.embed-greetings .page-header,
+    body.embed-greetings .footer {
+      display: none !important;
+    }
+
+    body.embed-greetings .main-content {
+      padding: 16px;
+    }
+
+    body.embed-greetings .single-column-layout-full > *:not(#card-greeting-interceptor) {
+      display: none !important;
+    }
+
+    body.embed-greetings #card-greeting-interceptor {
+      margin-top: 0;
+    }
+  </style>
 </head>
 <body>
   <div class="app-container">
