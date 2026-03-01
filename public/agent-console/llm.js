@@ -69,21 +69,9 @@ async function loadSettings() {
   try {
     showLoadingState();
     
-    const token = localStorage.getItem('token');
     const scope = `company:${state.companyId}`;
     
-    const response = await fetch(`/api/admin/llm-settings?scope=${encodeURIComponent(scope)}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
+    const data = await AgentConsoleAuth.apiFetch(`/api/admin/llm-settings?scope=${encodeURIComponent(scope)}`);
     
     state.settings = data.settings;
     state.profiles = data.profiles;
@@ -109,26 +97,15 @@ async function loadSettings() {
  */
 async function saveSettings() {
   try {
-    const token = localStorage.getItem('token');
     const scope = `company:${state.companyId}`;
     
-    const response = await fetch('/api/admin/llm-settings', {
+    const data = await AgentConsoleAuth.apiFetch('/api/admin/llm-settings', {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify({
         scope,
         settings: state.settings
       })
     });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
     
     state.settings = data.settings;
     state.promptParts = data.promptParts;
