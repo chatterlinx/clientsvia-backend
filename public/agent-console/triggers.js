@@ -3008,6 +3008,10 @@
                   localStorage.getItem('token') ||
                   sessionStorage.getItem('token');
     
+    if (!token) {
+      throw new Error('Not authenticated - please log in');
+    }
+    
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -3018,13 +3022,20 @@
       body: options.body ? JSON.stringify(options.body) : undefined
     });
     
-    const data = await response.json();
-    
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Request failed');
+      const errorText = await response.text();
+      let errorMessage;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
+      } catch {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
     
-    return data.data || data;
+    const data = await response.json();
+    return data;
   }
 
   function showToast(type, title, message) {
