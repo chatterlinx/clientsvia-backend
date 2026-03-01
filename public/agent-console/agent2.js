@@ -968,6 +968,16 @@
    * RENDER GREETING RULES TABLE
    * ───────────────────────────────────────────────────────────────────────
    */
+  /**
+   * Highlight {name} placeholder in response text
+   */
+  function highlightNamePlaceholder(text) {
+    if (!text) return '—';
+    const escaped = escapeHtml(text);
+    // Highlight {name} with blue background
+    return escaped.replace(/\{name\}/gi, '<span style="background: #dbeafe; color: #1e40af; padding: 2px 4px; border-radius: 3px; font-weight: 600;">{name}</span>');
+  }
+  
   function renderGreetingRules() {
     if (!DOM.greetingRulesList) return;
     
@@ -1020,7 +1030,7 @@
             ${escapeHtml(triggersDisplay)}
           </div>
           <div style="font-size: 0.875rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(responseDisplay)}">
-            ${escapeHtml(responseDisplay)}
+            ${highlightNamePlaceholder(responseDisplay)}
           </div>
           <div style="text-align: center;">
             ${hasAudio 
