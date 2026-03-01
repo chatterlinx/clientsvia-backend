@@ -1131,7 +1131,7 @@
               </div>
               <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
                 <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-yes-response" placeholder="Great — let me get that scheduled for you." style="flex:1; font-size: 13px;">
+                <input type="text" class="form-input" id="fuc-yes-response" placeholder="Got it — one moment." style="flex:1; font-size: 13px;">
               </div>
               <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
                 <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
@@ -1164,6 +1164,72 @@
                 <select class="form-select" id="fuc-no-direction" style="flex:1; font-size: 13px;">
                   <option value="CONTINUE">Continue Conversation</option>
                   <option value="TRANSFER">Transfer to Human</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- MAINTENANCE -->
+            <div class="consent-card" data-bucket="maintenance" style="border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; background: rgba(14,165,233,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">🧰</span>
+                <strong>MAINTENANCE</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller chooses tune-up</span>
+              </div>
+              <div class="tag-list" id="fuc-maintenance-phrases"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <input type="text" class="form-input" id="fuc-maintenance-input" placeholder="Add maintenance phrases (comma-separated)..." style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('maintenance')">Add</button>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
+                <input type="text" class="form-input" id="fuc-maintenance-response" placeholder="Got it — one moment." style="flex:1; font-size: 13px;">
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
+                <select class="form-select" id="fuc-maintenance-direction" style="flex:1; font-size: 13px;">
+                  <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
+                  <option value="CONTINUE">Continue Conversation</option>
+                  <option value="TRANSFER">Transfer to Human</option>
+                </select>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Booking mode:</label>
+                <select class="form-select" id="fuc-maintenance-booking-mode" style="flex:1; font-size: 13px;">
+                  <option value="maintenance" selected>maintenance</option>
+                  <option value="service_call">service_call</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- SERVICE CALL -->
+            <div class="consent-card" data-bucket="service_call" style="border: 1px solid #f97316; border-radius: 8px; padding: 16px; background: rgba(249,115,22,0.04);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">🛠️</span>
+                <strong>SERVICE CALL</strong>
+                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller needs repair/diagnostic</span>
+              </div>
+              <div class="tag-list" id="fuc-service_call-phrases"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <input type="text" class="form-input" id="fuc-service_call-input" placeholder="Add service call phrases (comma-separated)..." style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('service_call')">Add</button>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
+                <input type="text" class="form-input" id="fuc-service_call-response" placeholder="Got it — one moment." style="flex:1; font-size: 13px;">
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
+                <select class="form-select" id="fuc-service_call-direction" style="flex:1; font-size: 13px;">
+                  <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
+                  <option value="CONTINUE">Continue Conversation</option>
+                  <option value="TRANSFER">Transfer to Human</option>
+                </select>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Booking mode:</label>
+                <select class="form-select" id="fuc-service_call-booking-mode" style="flex:1; font-size: 13px;">
+                  <option value="maintenance">maintenance</option>
+                  <option value="service_call" selected>service_call</option>
                 </select>
               </div>
             </div>
@@ -1201,7 +1267,7 @@
               </div>
               <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
                 <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-hesitant-response" placeholder="No worries — I just need to know so we send the right team." style="flex:1; font-size: 13px;">
+                <input type="text" class="form-input" id="fuc-hesitant-response" placeholder="No worries - quick rule: if the system isn't cooling or acting up, pick service call so we can diagnose it. If everything is working and you just want a tune-up, pick maintenance. Which one should I book?" style="flex:1; font-size: 13px;">
               </div>
               <p class="form-hint" style="margin-top: 4px;">Gently clarifies, then re-asks the follow-up question.</p>
             </div>

@@ -140,7 +140,7 @@ function defaultAgent2Config() {
         reprompt: 'Sorry, I missed that. Could you say yes or no?'
       },
       // Follow-up Consent (trigger card consent gate)
-      // Configurable keywords + directions for 5-bucket classification.
+      // Configurable keywords + directions for 7-bucket classification.
       // Only active when a trigger card has a follow-up question with text.
       followUpConsent: {
         yes: {
@@ -152,7 +152,7 @@ function defaultAgent2Config() {
             'set it up', 'im ready', 'perfect', 'great', 'yes please',
             'ya', 'yup', 'uh huh', 'mm hmm'
           ],
-          response: 'Great — let me get that scheduled for you.',
+          response: 'Got it — one moment.',
           direction: 'HANDOFF_BOOKING'
         },
         no: {
@@ -164,6 +164,32 @@ function defaultAgent2Config() {
           ],
           response: 'No problem. Is there anything else I can help you with?',
           direction: 'CONTINUE'
+        },
+        maintenance: {
+          phrases: [
+            'maintenance', 'tune up', 'tune-up', 'tuneup', 'service plan',
+            'membership', 'annual', 'seasonal', 'check up', 'checkup',
+            'inspection', 'preventative', 'preventive', 'maintenance visit',
+            'maintenance appointment', 'maintenance call', 'spring tune up',
+            'fall tune up', 'routine service', 'regular service',
+            'clean and check', 'clean & check'
+          ],
+          response: 'Got it — one moment.',
+          direction: 'HANDOFF_BOOKING',
+          bookingMode: 'maintenance'
+        },
+        service_call: {
+          phrases: [
+            'service call', 'repair', 'diagnostic', 'diagnosis',
+            'troubleshoot', 'troubleshooting', 'fix it', 'technician', 'tech',
+            'not cooling', 'no cool', 'blowing warm', 'leaking', 'water',
+            'noise', 'loud', 'frozen', 'ice', 'wont turn on', 'not working',
+            'stopped working', 'broke', 'broken', 'error code', 'emergency',
+            'asap', 'today'
+          ],
+          response: 'Got it — one moment.',
+          direction: 'HANDOFF_BOOKING',
+          bookingMode: 'service_call'
         },
         reprompt: {
           phrases: [
@@ -179,7 +205,7 @@ function defaultAgent2Config() {
             'do i have to', 'not certain', 'possibly', 'kind of',
             'sort of', 'i guess', 'hard to say', 'let me think'
           ],
-          response: 'No worries — I just need to know so we send the right team.',
+          response: "No worries - quick rule: if the system isn't cooling or acting up, pick service call so we can diagnose it. If everything is working and you just want a tune-up, pick maintenance. Which one should I book?",
           direction: 'CLARIFY'
         },
         complex: {

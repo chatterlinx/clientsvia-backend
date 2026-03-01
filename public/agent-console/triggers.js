@@ -2524,7 +2524,7 @@
   /* --------------------------------------------------------------------------
      FOLLOW-UP CONSENT CARDS
      -------------------------------------------------------------------------- */
-  const FUC_BUCKETS = ['yes', 'no', 'reprompt', 'hesitant', 'complex'];
+  const FUC_BUCKETS = ['yes', 'no', 'maintenance', 'service_call', 'reprompt', 'hesitant', 'complex'];
 
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};
@@ -2539,6 +2539,8 @@
       const dirEl = document.getElementById(`fuc-${bucket}-direction`);
       if (dirEl) dirEl.value = data.direction || '';
       else console.log(`[Consent Cards] LOAD — fuc-${bucket}-direction element not found (may be expected)`);
+      const modeEl = document.getElementById(`fuc-${bucket}-booking-mode`);
+      if (modeEl) modeEl.value = data.bookingMode || '';
     }
     console.log('[Consent Cards] LOAD — complete');
   }
@@ -2587,7 +2589,8 @@
       result[bucket] = {
         phrases: getFucPhrases(bucket),
         response: (document.getElementById(`fuc-${bucket}-response`)?.value || '').trim(),
-        direction: (document.getElementById(`fuc-${bucket}-direction`)?.value || '').trim()
+        direction: (document.getElementById(`fuc-${bucket}-direction`)?.value || '').trim(),
+        bookingMode: (document.getElementById(`fuc-${bucket}-booking-mode`)?.value || '').trim()
       };
     }
     return result;

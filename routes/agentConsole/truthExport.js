@@ -478,6 +478,8 @@ async function buildRuntimeTruth(companyId) {
       followUpConsentGate: {
         yes: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.yes || {},
         no: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.no || {},
+        maintenance: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.maintenance || {},
+        service_call: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.service_call || {},
         reprompt: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.reprompt || {},
         hesitant: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.hesitant || {},
         complex: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.complex || {}

@@ -169,6 +169,9 @@ async function runBookingLogicLane({
     // 🔍 SCRABENGINE AUTO-WIRE: Include handoff-eligible extracted entities
     const scrabEngineEntities = state?.agent2?.scrabEngine?.handoffEntities || state?.agent2?.scrabEngine?.entities || {};
     
+    const followUpBookingMode = state?.agent2?.discovery?.bookingMode || null;
+    const consentBucket = state?.consent?.bucket || null;
+    const consentMatchedPhrases = Array.isArray(state?.consent?.matchedPhrases) ? state.consent.matchedPhrases : [];
     const handoffPayload = {
         assumptions: {
             firstName: scrabEngineEntities.firstName || state?.plainSlots?.name || null,
@@ -183,13 +186,18 @@ async function runBookingLogicLane({
             ),
             callerPhone: state?.plainSlots?.phone || callState?.callerPhone || null,
             callReason: state?.plainSlots?.call_reason_detail || null,
-            address: state?.plainSlots?.address || null
+            address: state?.plainSlots?.address || null,
+            bookingMode: followUpBookingMode
         },
         discoveryContext: {
             companyId,
             callSid,
             turn,
-            consentGrantedAt: state?.consent?.grantedAt || new Date().toISOString()
+            consentGrantedAt: state?.consent?.grantedAt || new Date().toISOString(),
+            consent: {
+                bucket: consentBucket,
+                matchedPhrases: consentMatchedPhrases
+            }
         }
     };
     

@@ -1,4 +1,4 @@
-# Consent Gate — Trigger Card Follow-up → 5-Bucket Classification
+# Consent Gate — Trigger Card Follow-up → 7-Bucket Classification
 
 > **Last updated:** 2026-02-25
 > **Status:** Production-ready
@@ -7,7 +7,7 @@
 
 ## What It Does
 
-When a trigger card has a Follow-up Question with text, the engine enters a **consent gate** — it asks the question, waits for the caller's response, and classifies it into one of 5 buckets. Each bucket has configurable keywords, a response, and a direction.
+When a trigger card has a Follow-up Question with text, the engine enters a **consent gate** — it asks the question, waits for the caller's response, and classifies it into one of 7 buckets. Each bucket has configurable keywords, a response, and a direction.
 
 ```
 Caller: "I need a maintenance tune-up"
@@ -16,11 +16,13 @@ Agent:  "Absolutely. I would love to schedule — Just to confirm,
 
          [Waits for caller response]
 
-Caller: "Yes"      → ✅ YES      → Booking Logic handoff
-Caller: "No"       → ❌ NO       → "No problem. How can I help?"
-Caller: "Huh?"     → 🔄 REPROMPT → Re-asks the question
-Caller: "Maybe"    → 🤔 HESITANT → Gentle clarification + re-ask
-Caller: "My AC..." → 💬 COMPLEX  → Back to normal agent
+Caller: "Maintenance"  → 🧰 MAINTENANCE  → Booking handoff (bookingMode=maintenance)
+Caller: "Service call" → 🛠 SERVICE_CALL → Booking handoff (bookingMode=service_call)
+Caller: "Yes"          → ✅ YES         → Booking Logic handoff
+Caller: "No"           → ❌ NO          → "No problem. How can I help?"
+Caller: "Huh?"         → 🔄 REPROMPT    → Re-asks the question
+Caller: "Maybe"        → 🤔 HESITANT    → Gentle clarification + re-ask
+Caller: "My AC..."     → 💬 COMPLEX     → Back to normal agent
 ```
 
 ---
@@ -57,12 +59,14 @@ The Follow-up Question text IS the toggle. No checkbox, no extra state.
 
 ### Follow-up Consent Cards (company-level, triggers.html)
 
-5 cards below the Trigger Cards list, each with:
+7 cards below the Trigger Cards list, each with:
 
 | Card | Keywords | Response | Direction |
 |------|----------|----------|-----------|
 | **YES** | yes, yeah, sure, absolutely, go ahead... | "Great — let me get that scheduled." | Hand off to Booking Logic |
 | **NO** | no, nope, not yet, maybe later... | "No problem. How can I help?" | Continue Conversation |
+| **MAINTENANCE** | maintenance, tune-up, checkup... | "Perfect — I'll get a maintenance appointment scheduled." | Hand off to Booking Logic (bookingMode=maintenance) |
+| **SERVICE_CALL** | service call, repair, diagnostic... | "Got it — I'll get you scheduled for a service call..." | Hand off to Booking Logic (bookingMode=service_call) |
 | **REPROMPT** | huh, what, sorry, come again... | (re-asks original question) | Re-ask |
 | **HESITANT** | I don't know, maybe, I'm not sure... | "No worries — I just need to know..." | Gentle Clarification |
 | **COMPLEX** | (catch-all, no keywords) | (none — agent handles naturally) | Back to Agent |
@@ -71,16 +75,18 @@ Keywords are configurable per company via tag input (comma-separated bulk add).
 
 ---
 
-## 5-Bucket Classification
+## 7-Bucket Classification
 
-Priority: YES > NO > HESITANT > REPROMPT > COMPLEX
+Priority: SERVICE_CALL > MAINTENANCE > YES > NO > HESITANT > REPROMPT > COMPLEX
 
 | Bucket | Matching Logic |
 |--------|---------------|
+| SERVICE_CALL | Any configured service call phrase found |
+| MAINTENANCE | Any configured maintenance phrase found |
 | YES | Any configured YES phrase found, no NO phrase found |
 | NO | Any configured NO phrase found, no YES phrase found |
 | HESITANT | Any configured HESITANT phrase found |
-| REPROMPT | Any configured REPROMPT phrase found, OR input ≤ 8 chars and not YES/NO/HESITANT |
+| REPROMPT | Any configured REPROMPT phrase found, OR input ≤ 8 chars and not YES/NO/HESITANT/service choice |
 | COMPLEX | None of the above matched (catch-all) |
 
 Single-word phrases match on word boundaries. Multi-word phrases match as substrings.
@@ -91,7 +97,7 @@ Single-word phrases match on word boundaries. Multi-word phrases match as substr
 
 | Direction | What Happens |
 |-----------|-------------|
-| `HANDOFF_BOOKING` | Sets `sessionMode = BOOKING`. BookingLogicEngine takes over next turn via AC1 handoff. |
+| `HANDOFF_BOOKING` | Sets `sessionMode = BOOKING`. BookingLogicEngine takes over next turn via AC1 handoff (passes `bookingMode` when configured). Response uses `discovery.holdMessage` (default: "Got it — one moment."). |
 | `CONTINUE` | Clears pending state, continues in discovery mode. |
 | `REASK` | Keeps `pendingFollowUpQuestion` active, re-asks the original question. |
 | `CLARIFY` | Keeps `pendingFollowUpQuestion` active, gives gentle clarification + re-asks. |
@@ -118,6 +124,15 @@ state.sessionMode = "BOOKING"
 state.consent = { pending: false, given: true, turn: N+1, source: "followup_consent_gate" }
 ```
 
+### Turn N+1 — Caller chooses maintenance
+```
+state.agent2.discovery.pendingFollowUpQuestion = null  (cleared)
+state.agent2.discovery.bookingMode = "maintenance"
+state.agent2.discovery.lastPath = "FOLLOWUP_MAINTENANCE_HANDOFF_BOOKING"
+state.sessionMode = "BOOKING"
+state.consent = { pending: false, given: true, turn: N+1, source: "followup_consent_gate", bookingMode: "maintenance" }
+```
+
 ### Turn N+1 — Caller responds HESITANT
 ```
 state.agent2.discovery.pendingFollowUpQuestion = (kept active)
@@ -127,11 +142,24 @@ state.agent2.discovery.lastPath = "FOLLOWUP_HESITANT"
 
 ---
 
+## Handoff Payload Trace Fields
+
+When consent handoff occurs (YES / MAINTENANCE / SERVICE_CALL), the booking payload includes:
+
+```
+discoveryContext.consent.bucket = "yes" | "maintenance" | "service_call"
+discoveryContext.consent.matchedPhrases = ["..."]
+```
+
+This makes mode decisions auditable in Call Review.
+
+---
+
 ## Files
 
 | File | What |
 |------|------|
-| `services/engine/agent2/Agent2DiscoveryRunner.js` | 5-bucket handler (before pendingQuestion), trigger card routing to pendingFollowUpQuestion |
+| `services/engine/agent2/Agent2DiscoveryRunner.js` | 7-bucket handler (before pendingQuestion), trigger card routing to pendingFollowUpQuestion |
 | `routes/admin/agent2.js` | Default followUpConsent config with keywords + directions |
 | `public/agent-console/triggers.html` | Follow-up Consent Cards UI section |
 | `public/agent-console/triggers.js` | Tag management, save/load consent cards |

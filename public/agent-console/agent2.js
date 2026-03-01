@@ -744,12 +744,19 @@
       fromPhone: '+15551234567',
       assumptions: {
         firstName: state.testSession.callerName?.split(' ')[0] || 'Unknown',
-        lastName: state.testSession.callerName?.split(' ').slice(1).join(' ') || ''
+        lastName: state.testSession.callerName?.split(' ').slice(1).join(' ') || '',
+        bookingMode: 'maintenance'
       },
       summary: {
         issue: state.testSession.intent || 'Service request',
         serviceType: 'general',
         urgency: 'routine'
+      },
+      discoveryContext: {
+        consent: {
+          bucket: 'maintenance',
+          matchedPhrases: ['maintenance']
+        }
       }
     };
     

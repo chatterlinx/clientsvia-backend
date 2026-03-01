@@ -110,7 +110,7 @@
 │   │       ├─ User said NO → Clear clarifier, continue
 │   │       └─ No pending → Continue
 │   │
-│   ├─ 19. FOLLOW-UP QUESTION HANDLER (5-Bucket System, Line 814)
+│   ├─ 19. FOLLOW-UP QUESTION HANDLER (7-Bucket System, Line 814)
 │   │   └─ Check: pendingFollowUpQuestion from last turn
 │   │       ├─ User response bucket:
 │   │       │   ├─ YES → Execute nextAction, return response

@@ -4156,35 +4156,52 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // ═══════════════════════════════════════════════════════════
-                // V4: FOLLOW-UP CONSENT GATE - Caller yes/no classification
+                // V4: FOLLOW-UP CONSENT GATE - Caller response classification
                 // ═══════════════════════════════════════════════════════════
                 // Configures how the agent classifies caller responses to
-                // trigger card follow-up questions (yes/no/reprompt/hesitant/complex).
+                // trigger card follow-up questions (yes/no/reprompt/hesitant/complex + service choices).
                 // Each bucket has: phrases, response text, and routing direction.
                 // UI-owned — configured in Triggers Console consent card section.
                 followUpConsent: {
                     yes: {
                         phrases:   { type: [String], default: [] },
                         response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true }
+                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     },
                     no: {
                         phrases:   { type: [String], default: [] },
                         response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'CONTINUE', trim: true }
+                        direction: { type: String, default: 'CONTINUE', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
+                    },
+                    maintenance: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true },
+                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
+                    },
+                    service_call: {
+                        phrases:   { type: [String], default: [] },
+                        response:  { type: String, default: '', trim: true },
+                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     },
                     reprompt: {
                         phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true }
+                        response:  { type: String, default: '', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     },
                     hesitant: {
                         phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true }
+                        response:  { type: String, default: '', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     },
                     complex: {
                         phrases:   { type: [String], default: [] },
                         response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'AGENT', trim: true }
+                        direction: { type: String, default: 'AGENT', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     }
                 },
                 

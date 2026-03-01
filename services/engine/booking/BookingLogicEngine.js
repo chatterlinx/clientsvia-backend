@@ -161,6 +161,7 @@ async function loadCompanyConfig(companyId) {
 function initializeContext(payload, config) {
   return {
     step: STEPS.INIT,
+    bookingMode: payload?.assumptions?.bookingMode || null,
     collectedFields: {
       firstName: payload?.assumptions?.firstName || null,
       lastName: payload?.assumptions?.lastName || null,
