@@ -233,6 +233,18 @@
       max-height: 95vh;
     }
 
+    #call-detail-modal.fullscreen .modal {
+      width: 98vw;
+      max-width: 98vw;
+      height: 96vh;
+      max-height: 96vh;
+    }
+
+    #call-detail-modal.fullscreen .modal-body {
+      max-height: calc(96vh - 120px);
+      overflow: auto;
+    }
+
     .call-detail-header {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1135,11 +1147,14 @@
       <div class="modal">
         <div class="modal-header">
           <h3 class="modal-title">Call Details</h3>
-          <button class="modal-close" id="modal-close">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-ghost btn-sm" id="btn-toggle-fullscreen">Expand</button>
+            <button class="modal-close" id="modal-close">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="modal-body" id="modal-body">
           <!-- Dynamic content rendered here -->

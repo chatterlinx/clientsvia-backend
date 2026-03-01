@@ -143,7 +143,8 @@
 
     /** UI state */
     isLoading: false,
-    isModalOpen: false
+    isModalOpen: false,
+    isModalFullscreen: false
   };
 
   const pathNamespace = (typeof window !== 'undefined' && window.Agent2PathNamespace)
@@ -197,6 +198,7 @@
     modalClose: document.getElementById('modal-close'),
     btnCloseModal: document.getElementById('btn-close-modal'),
     btnDownloadCall: document.getElementById('btn-download-call'),
+    btnToggleFullscreen: document.getElementById('btn-toggle-fullscreen'),
 
     // Toast
     toastContainer: document.getElementById('toast-container'),
@@ -313,6 +315,9 @@
     DOM.modalClose.addEventListener('click', closeModal);
     DOM.btnCloseModal.addEventListener('click', closeModal);
     DOM.btnDownloadCall.addEventListener('click', downloadCallReport);
+    if (DOM.btnToggleFullscreen) {
+      DOM.btnToggleFullscreen.addEventListener('click', toggleModalFullscreen);
+    }
     DOM.callDetailModal.addEventListener('click', (e) => {
       if (e.target === DOM.callDetailModal) closeModal();
     });
@@ -1713,13 +1718,27 @@
     state.isModalOpen = true;
     DOM.callDetailModal.classList.add('open');
     document.body.style.overflow = 'hidden';
+    state.isModalFullscreen = true;
+    DOM.callDetailModal.classList.add('fullscreen');
+    if (DOM.btnToggleFullscreen) DOM.btnToggleFullscreen.textContent = 'Collapse';
   }
 
   function closeModal() {
     state.isModalOpen = false;
+    state.isModalFullscreen = false;
+    DOM.callDetailModal.classList.remove('fullscreen');
+    if (DOM.btnToggleFullscreen) DOM.btnToggleFullscreen.textContent = 'Expand';
     DOM.callDetailModal.classList.remove('open');
     document.body.style.overflow = '';
     state.selectedCall = null;
+  }
+
+  function toggleModalFullscreen() {
+    state.isModalFullscreen = !state.isModalFullscreen;
+    DOM.callDetailModal.classList.toggle('fullscreen', state.isModalFullscreen);
+    if (DOM.btnToggleFullscreen) {
+      DOM.btnToggleFullscreen.textContent = state.isModalFullscreen ? 'Collapse' : 'Expand';
+    }
   }
 
   /* ==========================================================================
