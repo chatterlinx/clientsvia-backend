@@ -91,6 +91,7 @@
     btnNameGreetingSave: document.getElementById('btn-name-greeting-save'),
     nameGreetingAlways: document.getElementById('name-greeting-always'),
     nameGreetingText: document.getElementById('name-greeting-text'),
+    btnOpenAgent2Greetings: document.getElementById('btn-open-agent2-greetings'),
     
     btnPatienceSettings: document.getElementById('btn-patience-settings'),
     modalPatience: document.getElementById('modal-patience'),
@@ -2153,6 +2154,13 @@
   function openNameGreetingModal() {
     loadNameGreeting();
     if (DOM.modalNameGreeting) DOM.modalNameGreeting.classList.add('active');
+    
+    // Setup link to agent2 greetings
+    if (DOM.btnOpenAgent2Greetings) {
+      DOM.btnOpenAgent2Greetings.onclick = () => {
+        window.open(`/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}#card-greeting-interceptor`, '_blank');
+      };
+    }
   }
 
   function closeNameGreetingModal() {

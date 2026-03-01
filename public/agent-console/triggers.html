@@ -1655,11 +1655,17 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
       <div class="modal-body">
         
         <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px;">
-          <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px; font-size: 13px;">💡 New: {name} Support in Greeting Rules!</div>
-          <div style="font-size: 12px; color: #1e3a8a; line-height: 1.5;">
-            All greeting rules now support <code>{name}</code> placeholder. Configure time-based greetings (good morning, good evening) 
-            in <strong>Flow Builder → Greetings tab</strong>. This modal handles the acknowledgment line that precedes trigger responses.
+          <div style="font-weight: 600; color: #1e40af; margin-bottom: 8px; font-size: 13px;">💡 Configure Time-Based Greetings</div>
+          <div style="font-size: 12px; color: #1e3a8a; line-height: 1.5; margin-bottom: 12px;">
+            For time-based greetings like "Good morning{name}!", "Good evening{name}!", and "Hi{name}!", 
+            configure greeting rules in Agent 2.0 settings. All greeting rules support <code>{name}</code> placeholder.
           </div>
+          <button class="btn btn-sm" id="btn-open-agent2-greetings" style="background: #3b82f6; color: white; width: 100%;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Open Greeting Rules (Agent 2.0)
+          </button>
         </div>
 
         <!-- TOGGLE: Always greet -->
