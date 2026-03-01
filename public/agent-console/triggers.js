@@ -2481,7 +2481,15 @@
   }
 
   async function saveGreetingRule() {
-    console.log('[Greetings] Save rule clicked', { currentRule: state.currentGreetingRule });
+    console.log('[Greetings] Save rule clicked', { 
+      currentRule: state.currentGreetingRule,
+      companyId: state.companyId 
+    });
+    
+    if (!state.companyId) {
+      showToast('error', 'Missing Company ID', 'Company ID not found. Please reload the page.');
+      return;
+    }
     
     try {
       const priority = parseInt(DOM.inputRulePriority.value) || 50;
@@ -2489,7 +2497,13 @@
       const triggersText = DOM.inputRuleTriggers.value.trim();
       const response = DOM.inputRuleResponse.value.trim();
       
-      console.log('[Greetings] Save rule data:', { priority, matchType, triggersText, response });
+      console.log('[Greetings] Save rule data:', { 
+        priority, 
+        matchType, 
+        triggersText, 
+        response,
+        companyId: state.companyId 
+      });
       
       // Validation
       if (!triggersText) {
