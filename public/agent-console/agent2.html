@@ -220,6 +220,106 @@
           </div>
         </div>
 
+        <!-- Greeting Interceptor -->
+        <div class="card" id="card-greeting-interceptor">
+          <div class="card-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <h2 class="card-title" style="margin: 0;">👋 Greeting Interceptor</h2>
+              <label class="toggle-switch" style="margin: 0;">
+                <input type="checkbox" id="toggle-interceptor-enabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="card-body">
+            <p class="text-muted text-sm" style="margin-bottom: 12px;">
+              Responds to short caller greetings like "hi", "good morning". Runs <strong>BEFORE</strong> trigger cards.
+            </p>
+            
+            <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 12px; margin-bottom: 20px; border-radius: 6px;">
+              <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px; font-size: 13px;">💡 {name} Placeholder Support</div>
+              <div style="font-size: 12px; color: #1e3a8a; line-height: 1.5;">
+                Use <code>{name}</code> in your responses to personalize greetings:<br>
+                • <strong>With name:</strong> "Good morning{name}!" → "Good morning, Sarah!"<br>
+                • <strong>Without name:</strong> "Good morning{name}!" → "Good morning!"<br>
+                The placeholder is automatically replaced or removed based on name extraction.
+              </div>
+            </div>
+            
+            <!-- Short-Only Gate -->
+            <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: start; gap: 10px; margin-bottom: 12px;">
+                <span style="font-size: 1.25rem;">⚠️</span>
+                <div>
+                  <strong style="color: #92400e;">Short-Only Gate (prevents hijacking real intent)</strong>
+                  <p style="font-size: 0.875rem; color: #92400e; margin: 4px 0 0 0;">
+                    Greeting only fires if caller input is short and contains no business keywords.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label class="form-label" style="color: #92400e;">Max Words to Qualify</label>
+                <input type="number" class="form-input" id="input-max-words" min="1" max="5" value="2" style="width: 80px;">
+                <p class="form-hint" style="color: #92400e;">Greeting only fires if input ≤ this many words</p>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="toggle-block-intent-words" checked>
+                  <strong style="color: #92400e;">Block if contains intent words</strong>
+                </label>
+                <p class="form-hint" style="color: #92400e; margin-left: 28px;">
+                  Prevents "hi my AC is broken" from triggering a greeting response
+                </p>
+              </div>
+            </div>
+            
+            <!-- Intent Words -->
+            <div class="form-group">
+              <label class="form-label">Intent Words (comma-separated)</label>
+              <textarea 
+                class="form-textarea" 
+                id="input-intent-words" 
+                rows="4"
+                placeholder="repair, maintenance, tune-up, not cooling, no cool, no heat, leak, water, dripping..."></textarea>
+              <p class="form-hint">If input contains any of these words, greeting is blocked and falls through to trigger cards</p>
+            </div>
+            
+            <!-- Greeting Rules Table -->
+            <div style="margin-top: 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">Greeting Rules</h3>
+                <button class="btn btn-primary btn-sm" id="btn-add-greeting-rule">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                  Add Rule
+                </button>
+              </div>
+              
+              <!-- Rules Table Header -->
+              <div style="display: grid; grid-template-columns: 50px 60px 80px 1fr 1fr 100px 80px; gap: 8px; padding: 10px 16px; background: #e5e7eb; border-bottom: 2px solid #d1d5db; font-size: 0.75rem; font-weight: 700; color: #111827; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 8px 8px 0 0;">
+                <div>On</div>
+                <div>Priority</div>
+                <div>Match</div>
+                <div>Triggers</div>
+                <div>Response</div>
+                <div>Audio</div>
+                <div>Actions</div>
+              </div>
+              
+              <!-- Rules List -->
+              <div id="greeting-rules-list" style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+                <!-- Rules will be rendered here by JavaScript -->
+                <div style="padding: 40px 20px; text-align: center; color: #6b7280;">
+                  <p>No greeting rules yet. Click "Add Rule" or "Seed From Global" to get started.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Recovery Messages -->
         <div class="card" id="recovery-messages">
           <div class="card-header">
@@ -484,6 +584,86 @@
 
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       🎙️ GREETING RULE MODAL - Add/Edit Greeting Rule
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-backdrop" id="modal-greeting-rule">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="greeting-rule-modal-title">Add Greeting Rule</h2>
+        <button class="btn btn-ghost btn-icon" id="btn-close-greeting-rule-modal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Rule ID (hidden field, auto-generated) -->
+        <input type="hidden" id="input-rule-id-edit">
+        
+        <!-- Priority -->
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <input type="number" class="form-input" id="input-rule-priority" min="1" max="1000" value="50" placeholder="50">
+          <p class="form-hint">Higher priority rules are matched first (1-1000)</p>
+        </div>
+        
+        <!-- Match Type -->
+        <div class="form-group">
+          <label class="form-label">Match Type</label>
+          <select class="form-input" id="input-rule-match-type">
+            <option value="EXACT">EXACT - Exact phrase match</option>
+            <option value="FUZZY">FUZZY - Similar words (hi matches hey, hello, hiya)</option>
+            <option value="CONTAINS">CONTAINS - Input contains trigger</option>
+            <option value="REGEX">REGEX - Advanced pattern (use carefully)</option>
+          </select>
+          <p class="form-hint">FUZZY is recommended for greetings - handles variations like "hi", "hey", "hiya" automatically</p>
+        </div>
+        
+        <!-- Triggers -->
+        <div class="form-group">
+          <label class="form-label">Triggers (comma-separated) *</label>
+          <input type="text" class="form-input" id="input-rule-triggers" placeholder="hi, hello, hey">
+          <p class="form-hint">Phrases that will trigger this greeting. Separate multiple triggers with commas.</p>
+        </div>
+        
+        <!-- Response -->
+        <div class="form-group">
+          <label class="form-label">Response *</label>
+          <textarea class="form-textarea" id="input-rule-response" rows="3" maxlength="300" placeholder="Hi! How can I help you today?"></textarea>
+          <p class="form-hint">What the agent says when this rule matches. Max 300 characters.</p>
+        </div>
+        
+        <!-- Audio URL -->
+        <div class="form-group">
+          <label class="form-label">Audio URL (optional — plays instead of TTS if provided)</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <input type="text" class="form-input" id="input-rule-audio" placeholder="Generated audio will appear here..." readonly style="flex: 1;">
+            <button type="button" class="btn btn-secondary" id="btn-play-rule-audio" style="padding: 8px 16px; display: none;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                <path d="M4 3L12 8L4 13V3Z" fill="currentColor"/>
+              </svg>
+              Play
+            </button>
+            <button type="button" class="btn" id="btn-generate-rule-audio" style="background: #16a34a; color: white; padding: 8px 16px;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+                <path d="M13.5 3.5L6 11L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Generate
+            </button>
+          </div>
+          <p class="form-hint" id="rule-audio-status">Save the rule first, then generate audio.</p>
+        </div>
+        
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-greeting-rule">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-greeting-rule">Save Rule</button>
+      </div>
+    </div>
   </div>
 
   <!-- JavaScript -->
