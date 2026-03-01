@@ -156,6 +156,12 @@ function updateCompanyHeader() {
 function renderOverviewTab() {
   if (!state.settings) return;
   
+  // Update company context textarea
+  const companyContextField = document.getElementById('company-context');
+  if (companyContextField) {
+    companyContextField.value = state.settings.companyContext || '';
+  }
+  
   const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
   const profileInfo = state.profiles[activeProfile];
   
@@ -480,6 +486,16 @@ function updatePreview() {
     </div>
   `;
   
+  // Company context (if provided)
+  if (state.promptParts.companyContext) {
+    html += `
+      <div class="preview-section">
+        <div class="preview-section-label" style="background: var(--color-success-900); color: var(--color-success-200);">Company Context</div>
+        <div class="preview-text">${escapeHtml(state.promptParts.companyContext)}</div>
+      </div>
+    `;
+  }
+  
   // Profile prompt
   if (state.promptParts.profile) {
     html += `
@@ -700,6 +716,14 @@ function resetDomainPrompt(domainId) {
     // TODO: Fetch default from backend
     showToast('info', 'Reset to default (not implemented yet)');
   }
+}
+
+/**
+ * Update company context
+ */
+function updateCompanyContext(value) {
+  updateSetting('companyContext', value);
+  updatePreview();
 }
 
 // ════════════════════════════════════════════════════════════════════════════

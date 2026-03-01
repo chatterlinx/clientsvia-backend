@@ -495,6 +495,25 @@
                   (e.g., dentist office vs HVAC company).
                 </div>
                 
+                <!-- Company Context / Business Description -->
+                <div style="margin-top: 24px;">
+                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 8px;">
+                    🏢 Company Context & Business Description
+                  </h3>
+                  <p style="font-size: 0.875rem; color: var(--color-gray-600); margin-bottom: 12px;">
+                    Tell the LLM what type of business this is. This context is automatically included in all AI-generated scenarios.
+                  </p>
+                  <textarea 
+                    id="company-context" 
+                    class="prompt-editor" 
+                    style="min-height: 120px;"
+                    placeholder="Example for HVAC company:&#10;&#10;You are helping configure scenarios for Bob's HVAC, a residential heating and cooling service company in Phoenix, Arizona. We provide AC installation, repair, and maintenance. Our busy seasons are summer (AC) and winter (heating). Common customer needs: emergency repairs, seasonal tune-ups, new system installations, filter replacements. Tone: Professional but friendly, service-focused, helpful."
+                    onchange="updateCompanyContext(this.value)"></textarea>
+                  <div style="margin-top: 8px; font-size: 0.75rem; color: var(--color-gray-500);">
+                    💡 Tip: Include industry type, services offered, seasonal patterns, and desired tone. The LLM will use this context to generate appropriate scenarios.
+                  </div>
+                </div>
+                
                 <!-- Current Active Profile -->
                 <div style="margin-top: 24px;">
                   <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Active Profile</h3>

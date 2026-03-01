@@ -245,6 +245,9 @@ const DEFAULT_PROFILE_KEY = 'compliance_safe';
 const DEFAULT_LLM_ENTERPRISE_SETTINGS = {
   profiles: ARCHITECT_LLM_PROFILES,
   
+  // 🏢 COMPANY CONTEXT: Tell the LLM what business this is
+  companyContext: '',
+  
   defaults: {
     activeProfile: DEFAULT_PROFILE_KEY,
     modelOverride: null, // 🚀 User can override model: 'gpt-4o', 'gpt-4-turbo', 'o1-mini', etc.
@@ -342,6 +345,11 @@ function buildScenarioArchitectSystemPromptFromSettings(settings = {}) {
   // Use custom promptText if admin edited it, otherwise fall back to defaults
   let prompt = merged.promptText.base || BASE_SCENARIO_ARCHITECT_PROMPT;
 
+  // 🏢 Add company context if provided (tells LLM what business this is)
+  if (merged.companyContext && merged.companyContext.trim()) {
+    prompt += '\n\n' + 'COMPANY CONTEXT:\n' + merged.companyContext.trim();
+  }
+
   // Add profile-specific block (use custom text if available)
   const profileBlock = merged.promptText.profiles[profileKey] || PROFILE_PROMPTS[profileKey];
   if (profileBlock) {
@@ -416,6 +424,7 @@ function getScenarioPromptPartsFromSettings(settings = {}) {
   return {
     // Use custom text if admin edited it, otherwise use defaults
     base: merged.promptText.base || BASE_SCENARIO_ARCHITECT_PROMPT,
+    companyContext: merged.companyContext || '', // 🏢 Company business description
     profileKey,
     profile: merged.promptText.profiles[profileKey] || PROFILE_PROMPTS[profileKey],
     domains: {
