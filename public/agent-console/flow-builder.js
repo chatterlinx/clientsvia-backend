@@ -216,25 +216,25 @@
         id: 'step_agent2discovery',
         sequence: 15,
         title: '🤖 Agent2DiscoveryRunner.run()',
-        body: 'Discovery mode handler\n\n**File:** services/engine/agent2/Agent2DiscoveryRunner.js:396\n\n**Receives:**\n- CLEANED text from ScrabEngine (normalizedText)\n- Extracted entities (firstName, urgency, etc.)\n- Call state\n\n**Orchestrates:**\n1. Greeting detection (on cleaned text)\n2. Clarifier questions (if ambiguous)\n3. Trigger card matching\n4. LLM fallback (if no match)\n5. Response generation\n\n**Output:**\n- Response text\n- Audio URL (if pre-recorded)\n- Next state\n- Match source'
-      },
-      {
-        id: 'step_greeting_check',
-        sequence: 16,
-        title: '🎭 Greeting Interceptor Check',
-        body: '**V125 FIX:** Now receives CLEANED text!\n\n**File:** Agent2DiscoveryRunner.js:516-583\n**Function:** Agent2GreetingInterceptor.evaluate()\n\n**Input:** normalizedText (cleaned by ScrabEngine)\n\n**Checks:**\n- Is it a pure greeting? ("hi", "hello", "good morning")\n- Short-only gate (≤3-5 words max)\n- No intent words present (no "emergency", "appointment", etc.)\n- One-shot guard (only greet once per call)\n\n**V125 Change:**\n- NO MORE EARLY EXIT!\n- Stores detection result\n- Continues to trigger matching\n\n**Example:**\n```\nRaw input: "Hi I need emergency service"\nScrabEngine cleaned: "need emergency service"\nGreeting check: NO MATCH (has intent words) ✅\n→ Continues to triggers\n```\n\n**Performance:** <2ms'
-      },
-      {
-        id: 'step_trigger_eval',
-        sequence: 17,
-        title: '🎯 Trigger Card Evaluation',
-        body: 'Match against trigger card database\n\n**File:** services/engine/agent2/TriggerCardMatcher.js\n**Called:** Agent2DiscoveryRunner.js:1473-1474\n\n**Input:** CLEANED text from ScrabEngine\n\n**Process:**\n1. Load compiled triggers (global + company)\n2. Check keywords in cleaned text\n3. Apply negative keywords (disqualifiers)\n4. Apply hint boosts (if component locked)\n5. Rank by priority\n6. Select best match\n\n**Example:**\n```\nInput: "need emergency air conditioning service"\nCards evaluated: 23\nTop candidate: "Emergency AC" (priority 100)\nKeywords matched: "emergency", "air conditioning"\nNegative keywords: none\nResult: ✅ MATCHED\n```\n\n**Events:** A2_TRIGGER_EVAL, TRIGGER_CARDS_EVALUATED\n**Performance:** ~10-20ms'
+        body: 'Discovery mode handler\n\n**File:** services/engine/agent2/Agent2DiscoveryRunner.js:396\n\n**Receives:**\n- CLEANED text from ScrabEngine (normalizedText)\n- Extracted entities (firstName, urgency, etc.)\n- Call state\n\n**Orchestrates:**\n1. Name greeting (if turn 1 + name extracted)\n2. Greeting detection (on cleaned text)\n3. Clarifier questions (if ambiguous)\n4. Trigger card matching\n5. LLM fallback (if no match)\n6. Response generation\n\n**Output:**\n- Response text\n- Audio URL (if pre-recorded)\n- Next state\n- Match source'
       },
       {
         id: 'step_name_greeting',
+        sequence: 16,
+        title: '👤 Name Greeting Interceptor (Turn 1 Only, First Step)',
+        body: '**FIRST STEP after ScrabEngine - Fires BEFORE greeting check**\n\n**File:** Agent2DiscoveryRunner.js:335-355\n**Config:** agent2.discovery.nameGreeting\n\n**When Fires:**\n- ✅ Turn 1 only\n- ✅ Name was extracted by ScrabEngine (Step 12d)\n- ✅ Name greeting enabled in config\n- ✅ Fires BEFORE greeting interceptor check\n\n**Template Examples:**\n```\n"Got it{name}." → "Got it, Mark."\n"Okay{name}." → "Okay, Sarah."\n"Perfect{name}." → "Perfect, Jennifer."\n```\n\n**If No Name Extracted:**\n- {name} resolves to empty string\n- "Got it{name}." → "Got it."\n- Still fires, just without personalization\n\n**Substitution Logic:**\n- {name} → ", FirstName" (with comma)\n- {name} → "" (empty if no name)\n- Natural language flow\n\n**Example Flow:**\n```\nCustomer: "Hi this is Mark I need emergency AC service"\n↓ ScrabEngine extracts: firstName="Mark"\n↓ Turn 1 detected\n↓ Name greeting fires: "Got it, Mark."\n↓ Then continues to trigger matching\n```\n\n**Event:** NAME_GREETING_FIRED\n**Performance:** <1ms (template substitution)\n**Priority:** Runs FIRST, in parallel with greeting check'
+      },
+      {
+        id: 'step_greeting_check',
+        sequence: 17,
+        title: '🎭 Greeting Interceptor Check (Runs in Parallel)',
+        body: '**V125 FIX:** Now receives CLEANED text!\n\n**File:** Agent2DiscoveryRunner.js:516-583\n**Function:** Agent2GreetingInterceptor.evaluate()\n\n**Input:** normalizedText (cleaned by ScrabEngine)\n\n**Checks:**\n- Is it a pure greeting? ("hi", "hello", "good morning")\n- Short-only gate (≤3-5 words max)\n- No intent words present (no "emergency", "appointment", etc.)\n- One-shot guard (only greet once per call)\n\n**V125 Change:**\n- NO MORE EARLY EXIT!\n- Stores detection result\n- Continues to trigger matching\n\n**Example:**\n```\nRaw input: "Hi I need emergency service"\nScrabEngine cleaned: "need emergency service"\nGreeting check: NO MATCH (has intent words) ✅\n→ Continues to triggers\n```\n\n**Runs in Parallel With:**\n- Step 16: Name Greeting (if turn 1)\n- Both execute on first turn\n\n**Performance:** <2ms'
+      },
+      {
+        id: 'step_trigger_eval',
         sequence: 18,
-        title: '👤 Name Greeting (Turn 1 Only)',
-        body: '**Optional personalized greeting**\n\n**File:** Agent2DiscoveryRunner.js:335-355\n**Config:** agent2.discovery.nameGreeting\n\n**When Fires:**\n- Turn 1 only\n- Name was extracted by ScrabEngine\n- Name greeting enabled in config\n\n**Template:**\n```\n"Got it{name}." → "Got it, Mark."\n"Okay{name}." → "Okay, Sarah."\n```\n\n**If No Name:**\n- {name} resolves to empty string\n- "Got it{name}." → "Got it."\n\n**Substitution:**\n- {name} → ", FirstName" or ""\n- Natural language flow\n\n**Event:** NAME_GREETING_FIRED'
+        title: '🎯 Trigger Card Evaluation',
+        body: 'Match against trigger card database\n\n**File:** services/engine/agent2/TriggerCardMatcher.js\n**Called:** Agent2DiscoveryRunner.js:1473-1474\n\n**Input:** CLEANED text from ScrabEngine\n\n**Process:**\n1. Load compiled triggers (global + company)\n2. Check keywords in cleaned text\n3. Apply negative keywords (disqualifiers)\n4. Apply hint boosts (if component locked)\n5. Rank by priority\n6. Select best match\n\n**Example:**\n```\nInput: "need emergency air conditioning service"\nCards evaluated: 23\nTop candidate: "Emergency AC" (priority 100)\nKeywords matched: "emergency", "air conditioning"\nNegative keywords: none\nResult: ✅ MATCHED\n```\n\n**Events:** A2_TRIGGER_EVAL, TRIGGER_CARDS_EVALUATED\n**Performance:** ~10-20ms'
       },
       {
         id: 'step_hold_modal',
