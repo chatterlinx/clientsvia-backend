@@ -272,9 +272,10 @@ class Agent2GreetingInterceptor {
    * @param {Object} params.config - Greetings config (agent2.greetings)
    * @param {number} params.turn - Current turn number
    * @param {Object} params.state - Call state (optional, for one-shot guard)
+   * @param {string} params.callerName - Caller's first name (optional, for {name} replacement)
    * @returns {Object} { intercepted, response, proof, stateUpdate }
    */
-  static evaluate({ input, config, turn, state }) {
+  static evaluate({ input, config, turn, state, callerName }) {
     const inputText = `${input || ''}`.trim();
     const greetingsConfig = safeObj(config, {});
     const interceptorConfig = safeObj(greetingsConfig.interceptor, {});
@@ -396,7 +397,38 @@ class Agent2GreetingInterceptor {
           result.responseSource = 'audio';
         } else {
           // V2 Schema Update (Feb 2026): rule.responseText → rule.response
-          result.response = rule.response || rule.responseText || "Hi! How can I help you?";
+          let responseText = rule.response || rule.responseText || "Hi! How can I help you?";
+          
+          // ═══════════════════════════════════════════════════════════════
+          // {name} PLACEHOLDER REPLACEMENT (V126 - Greeting Consolidation)
+          // ═══════════════════════════════════════════════════════════════
+          // Replace {name} with caller's first name if available.
+          // If no name: remove {name} cleanly without extra spaces.
+          // 
+          // Examples:
+          //   "Good morning{name}!" + name="John" → "Good morning, John!"
+          //   "Good morning{name}!" + no name    → "Good morning!"
+          //   "Hi{name}, thanks!"   + name="Sarah" → "Hi, Sarah, thanks!"
+          // ═══════════════════════════════════════════════════════════════
+          if (responseText.includes('{name}')) {
+            if (callerName && callerName.trim()) {
+              // With name: add comma + name
+              responseText = responseText.replace(/\{name\}/g, `, ${callerName.trim()}`);
+            } else {
+              // Without name: remove {name} placeholder
+              responseText = responseText.replace(/\{name\}/g, '');
+            }
+            
+            // Clean up any double spaces or awkward punctuation
+            responseText = responseText
+              .replace(/\s+/g, ' ')           // Multiple spaces → single space
+              .replace(/\s,/g, ',')            // Space before comma → no space
+              .replace(/,\s*,/g, ',')          // Double commas → single comma
+              .replace(/^,\s*/g, '')           // Leading comma → remove
+              .trim();
+          }
+          
+          result.response = responseText;
           result.responseSource = 'tts';
         }
 

@@ -736,7 +736,8 @@ class Agent2DiscoveryRunner {
       input: normalizedInput,  // ✅ V125: Use CLEANED text from ScrabEngine
       config: greetingsConfig,
       turn: typeof turn === 'number' ? turn : 0,
-      state: nextState  // V124: Pass state for one-shot guard check
+      state: nextState,  // V124: Pass state for one-shot guard check
+      callerName: callerName || null  // V126: Pass name for {name} replacement in greeting responses
     });
 
     // Always emit greeting evaluation proof

@@ -524,18 +524,22 @@ const DEFAULT_BOOKING_SLOTS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DEFAULT GREETING RESPONSES
+// DEFAULT GREETING RESPONSES (V126 - WITH {name} SUPPORT)
+// ═══════════════════════════════════════════════════════════════════════════
+// {name} placeholder is automatically replaced with caller's first name.
+// If no name: {name} is removed cleanly.
+// Example: "Good morning{name}!" → "Good morning, John!" or "Good morning!"
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_GREETING_RESPONSES = {
-    morning: "Good morning! How can I help you today?",
-    afternoon: "Good afternoon! How can I help you today?",
-    evening: "Good evening! How can I help you today?",
-    generic: "Hello! How can I help you today?",
+    morning: "Good morning{name}! How can I help you today?",
+    afternoon: "Good afternoon{name}! How can I help you today?",
+    evening: "Good evening{name}! How can I help you today?",
+    generic: "Hello{name}! How can I help you today?",
     // Casual greetings
     casual: {
-        hi: "Hi there! How can I help you?",
-        hey: "Hey! What can I do for you today?",
-        hello: "Hello! How can I help you today?"
+        hi: "Hi{name}! How can I help you?",
+        hey: "Hey{name}! What can I do for you today?",
+        hello: "Hello{name}! How can I help you today?"
     }
 };
 
