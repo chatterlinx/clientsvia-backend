@@ -651,7 +651,7 @@
       const negatives = (t.match?.negativeKeywords || []).join(' ').toLowerCase();
       
       // Answer fields (all variations)
-      const answerText = (t.answer?.answerText || '').toLowerCase();
+      const answerText = (t.answer?.answerText || t.answerText || '').toLowerCase();
       const quickReplies = (t.answer?.quickReplies || []).join(' ').toLowerCase();
       const fullReplies = (t.answer?.fullReplies || []).join(' ').toLowerCase();
       const audioUrl = (t.answer?.audioUrl || '').toLowerCase();
@@ -662,6 +662,8 @@
       
       // LLM fields
       const includedFacts = (t.llmFactPack?.includedFacts || '').toLowerCase();
+      const excludedFacts = (t.llmFactPack?.excludedFacts || '').toLowerCase();
+      const backupAnswer = (t.llmFactPack?.backupAnswer || '').toLowerCase();
       const factPackName = (t.llmFactPack?.name || '').toLowerCase();
       
       // Entity fields
@@ -680,6 +682,8 @@
              followUp.includes(q) ||
              followUpMode.includes(q) ||
              includedFacts.includes(q) ||
+             excludedFacts.includes(q) ||
+             backupAnswer.includes(q) ||
              factPackName.includes(q) ||
              entities.includes(q) ||
              priority.includes(q);
