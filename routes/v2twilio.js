@@ -1073,6 +1073,21 @@ router.post('/voice', async (req, res) => {
     // ════════════════════════════════════════════════════════════════════════
     // 📼 CALL CONSOLE VISUAL TRACE - Spam Filter Check
     // ════════════════════════════════════════════════════════════════════════
+    const spamTracePayload = {
+      decision: filterResult.shouldBlock ? 'BLOCKED' : 'ALLOWED',
+      spamScore: filterResult.spamScore || 0,
+      reason: filterResult.reason || 'passed_all_checks',
+      flags: filterResult.flags || [],
+      fromNumber: callerNumber,
+      visualTrace: {
+        icon: filterResult.shouldBlock ? '🚫' : '✅',
+        stage: 'Spam Filter',
+        status: filterResult.shouldBlock ? 'blocked' : 'passed',
+        details: filterResult.shouldBlock
+          ? `Call blocked: ${filterResult.reason}`
+          : `Passed security checks (score: ${filterResult.spamScore || 0})`
+      }
+    };
     if (CallLogger) {
       try {
         await CallLogger.logEvent({
@@ -1080,25 +1095,24 @@ router.post('/voice', async (req, res) => {
           companyId: company._id,
           type: 'SPAM_FILTER_CHECK',
           turn: 0,
-          data: {
-            decision: filterResult.shouldBlock ? 'BLOCKED' : 'ALLOWED',
-            spamScore: filterResult.spamScore || 0,
-            reason: filterResult.reason || 'passed_all_checks',
-            flags: filterResult.flags || [],
-            fromNumber: callerNumber,
-            visualTrace: {
-              icon: filterResult.shouldBlock ? '🚫' : '✅',
-              stage: 'Spam Filter',
-              status: filterResult.shouldBlock ? 'blocked' : 'passed',
-              details: filterResult.shouldBlock 
-                ? `Call blocked: ${filterResult.reason}`
-                : `Passed security checks (score: ${filterResult.spamScore || 0})`
-            }
-          }
+          data: spamTracePayload
         });
       } catch (logErr) {
         logger.warn('[SPAM FILTER] Failed to log event (non-blocking)', { error: logErr.message });
       }
+    }
+    try {
+      const CallTranscriptV2 = require('../models/CallTranscriptV2');
+      await CallTranscriptV2.appendTrace(company._id, req.body.CallSid, [
+        {
+          kind: 'SPAM_FILTER_CHECK',
+          turnNumber: 0,
+          ts: new Date().toISOString(),
+          payload: spamTracePayload
+        }
+      ]);
+    } catch (traceErr) {
+      logger.warn('[SPAM FILTER] Failed to append trace (non-blocking)', { error: traceErr.message });
     }
 
     if (filterResult.shouldBlock) {
@@ -4171,6 +4185,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         await CallRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
       }
       timings.eventFlushMs = Date.now() - T3_start;
+
+      // Persist runtime trace events for Call Console (ScrabEngine, greeting, etc.)
+      if (runtimeResult.turnEventBuffer && runtimeResult.turnEventBuffer.length > 0) {
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          const traceEntries = runtimeResult.turnEventBuffer.map(ev => ({
+            kind: `${ev.type || ''}`,
+            turnNumber: Number.isFinite(ev.turn) ? ev.turn : turnNumber,
+            ts: ev.ts || new Date().toISOString(),
+            payload: ev.data || {}
+          }));
+          await CallTranscriptV2.appendTrace(companyID, callSid, traceEntries);
+        } catch (traceErr) {
+          logger.warn('[V2TWILIO] Failed to append runtime trace events (non-blocking)', {
+            callSid: callSid?.slice(-8),
+            error: traceErr.message
+          });
+        }
+      }
 
       const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
       persistedState._lastUpdatedTs = new Date().toISOString();

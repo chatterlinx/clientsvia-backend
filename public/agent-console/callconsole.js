@@ -1776,9 +1776,11 @@
           llmUsage: call.llmUsage,
           problems: call.problems,
           turns: call.turns,
-          events: call.events
+          events: call.events,
+          trace: call.trace
         },
-        provenanceSummary: buildProvenanceSummary(call.turns || [])
+        provenanceSummary: buildProvenanceSummary(call.turns || []),
+        scrabTimeline: buildScrabTimeline(call)
       };
 
       const jsonString = JSON.stringify(report, null, 2);
