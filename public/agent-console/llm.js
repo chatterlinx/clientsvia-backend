@@ -568,12 +568,26 @@ function updatePreview() {
 function setupEventListeners() {
   // Back button
   document.getElementById('btn-back').addEventListener('click', () => {
+    const backUrl = `/agent-console/?companyId=${encodeURIComponent(state.companyId)}`;
     if (state.unsavedChanges) {
       if (confirm('You have unsaved changes. Are you sure you want to leave?')) {
-        window.location.href = '/agent-console/';
+        window.location.href = backUrl;
       }
     } else {
-      window.location.href = '/agent-console/';
+      window.location.href = backUrl;
+    }
+  });
+  
+  // Logo link (same as back button)
+  document.getElementById('header-logo-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    const backUrl = `/agent-console/?companyId=${encodeURIComponent(state.companyId)}`;
+    if (state.unsavedChanges) {
+      if (confirm('You have unsaved changes. Are you sure you want to leave?')) {
+        window.location.href = backUrl;
+      }
+    } else {
+      window.location.href = backUrl;
     }
   });
   
