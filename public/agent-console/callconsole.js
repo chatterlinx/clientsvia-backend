@@ -976,7 +976,19 @@
       }))
     ];
 
-    const interesting = normalizedEvents.filter(ev => {
+    const deduped = [];
+    const seen = new Set();
+    for (const ev of normalizedEvents) {
+      const payloadKey = (() => {
+        try { return JSON.stringify(ev.payload || {}); } catch { return ''; }
+      })();
+      const key = `${ev.type}|${ev.turnNumber ?? 'na'}|${ev.timestamp || ''}|${payloadKey}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(ev);
+    }
+
+    const interesting = deduped.filter(ev => {
       if (!ev.type) return false;
       return ev.type === 'INPUT_TEXT_FINALIZED'
         || ev.type === 'CALLER_NAME_EXTRACTED'
