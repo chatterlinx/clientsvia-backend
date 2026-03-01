@@ -592,24 +592,55 @@
         return false;
       }
       
-      // Apply search filter — searches all trigger fields
+      // Apply search filter — DEEP SEARCH all trigger fields
       if (!state.searchQuery) {
         return true;
       }
       const q = state.searchQuery;
+      
+      // Basic fields
       const label = (t.label || '').toLowerCase();
       const ruleId = (t.ruleId || '').toLowerCase();
+      const priority = String(t.priority || '');
+      
+      // Match fields
       const keywords = (t.match?.keywords || []).join(' ').toLowerCase();
       const phrases = (t.match?.phrases || []).join(' ').toLowerCase();
       const negatives = (t.match?.negativeKeywords || []).join(' ').toLowerCase();
-      const answerText = (t.answer?.answerText || '').toLowerCase();
-      const followUp = (t.followUp?.question || '').toLowerCase();
-      const includedFacts = (t.llmFactPack?.includedFacts || '').toLowerCase();
-      const priority = String(t.priority || '');
       
-      return label.includes(q) || ruleId.includes(q) || keywords.includes(q) ||
-             phrases.includes(q) || negatives.includes(q) || answerText.includes(q) ||
-             followUp.includes(q) || includedFacts.includes(q) || priority.includes(q);
+      // Answer fields (all variations)
+      const answerText = (t.answer?.answerText || '').toLowerCase();
+      const quickReplies = (t.answer?.quickReplies || []).join(' ').toLowerCase();
+      const fullReplies = (t.answer?.fullReplies || []).join(' ').toLowerCase();
+      const audioUrl = (t.answer?.audioUrl || '').toLowerCase();
+      
+      // Follow-up fields
+      const followUp = (t.followUp?.question || '').toLowerCase();
+      const followUpMode = (t.followUp?.mode || '').toLowerCase();
+      
+      // LLM fields
+      const includedFacts = (t.llmFactPack?.includedFacts || '').toLowerCase();
+      const factPackName = (t.llmFactPack?.name || '').toLowerCase();
+      
+      // Entity fields
+      const entities = (t.entities || []).join(' ').toLowerCase();
+      
+      // Check all fields
+      return label.includes(q) || 
+             ruleId.includes(q) || 
+             keywords.includes(q) ||
+             phrases.includes(q) || 
+             negatives.includes(q) || 
+             answerText.includes(q) ||
+             quickReplies.includes(q) ||
+             fullReplies.includes(q) ||
+             audioUrl.includes(q) ||
+             followUp.includes(q) ||
+             followUpMode.includes(q) ||
+             includedFacts.includes(q) ||
+             factPackName.includes(q) ||
+             entities.includes(q) ||
+             priority.includes(q);
     });
     
     if (filtered.length === 0) {
