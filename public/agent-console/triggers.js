@@ -323,8 +323,35 @@
     if (DOM.btnBulkGenerateAudio) {
       DOM.btnBulkGenerateAudio.addEventListener('click', bulkGenerateAudio);
     }
+    // Import/Export dropdown menu
+    const btnImportExportMenu = document.getElementById('btn-import-export-menu');
+    const importExportDropdown = document.getElementById('import-export-dropdown');
+    
+    if (btnImportExportMenu && importExportDropdown) {
+      btnImportExportMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        importExportDropdown.style.display = importExportDropdown.style.display === 'none' ? 'block' : 'none';
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', () => {
+        importExportDropdown.style.display = 'none';
+      });
+    }
+    
     if (DOM.btnBulkImportTriggers) {
-      DOM.btnBulkImportTriggers.addEventListener('click', openBulkImportModal);
+      DOM.btnBulkImportTriggers.addEventListener('click', () => {
+        document.getElementById('import-export-dropdown').style.display = 'none';
+        openBulkImportModal();
+      });
+    }
+    
+    const btnBulkExport = document.getElementById('btn-bulk-export-triggers');
+    if (btnBulkExport) {
+      btnBulkExport.addEventListener('click', () => {
+        document.getElementById('import-export-dropdown').style.display = 'none';
+        exportAllTriggers();
+      });
     }
     DOM.btnCheckDuplicates.addEventListener('click', checkDuplicates);
     if (DOM.btnFixDuplicates) {
@@ -2265,8 +2292,39 @@
   }
 
   /* --------------------------------------------------------------------------
-     BULK IMPORT TRIGGERS
+     BULK IMPORT/EXPORT TRIGGERS
      -------------------------------------------------------------------------- */
+  function exportAllTriggers() {
+    if (!state.triggers || state.triggers.length === 0) {
+      alert('No triggers to export');
+      return;
+    }
+    
+    // Map triggers to export format (same as import format)
+    const exportData = state.triggers.map(t => ({
+      ruleId: t.ruleId,
+      label: t.label,
+      priority: t.priority || 50,
+      keywords: t.match?.keywords || [],
+      phrases: t.match?.phrases || [],
+      negativeKeywords: t.match?.negativeKeywords || [],
+      answerText: t.answer?.answerText || '',
+      followUpQuestion: t.followUp?.question || ''
+    }));
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `triggers-export-${state.companyId}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('success', 'Export Complete', `Exported ${exportData.length} triggers`);
+  }
+  
   function openBulkImportModal() {
     if (DOM.bulkImportJson) DOM.bulkImportJson.value = '';
     if (DOM.bulkImportStatus) DOM.bulkImportStatus.style.display = 'none';

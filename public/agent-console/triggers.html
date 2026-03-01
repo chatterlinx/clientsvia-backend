@@ -345,6 +345,11 @@
       line-height: 1.6;
     }
     
+    /* Dropdown Menu */
+    .dropdown-item:hover {
+      background: #f3f4f6;
+    }
+    
     /* Follow-up Column */
     .trigger-followup {
       font-size: 0.75rem;
@@ -898,10 +903,31 @@
           🎙️ Bulk Audio
         </button>
         
-        <!-- Import/Export -->
-        <button class="btn btn-secondary" id="btn-bulk-import-triggers" title="Import triggers from JSON">
-          Import
-        </button>
+        <!-- Import/Export Dropdown -->
+        <div class="dropdown" style="position: relative; display: inline-block;">
+          <button class="btn btn-secondary" id="btn-import-export-menu" title="Import or Export triggers">
+            Import/Export
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-left: 4px;">
+              <path d="M3 5L6 8L9 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div id="import-export-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 180px; z-index: 1000;">
+            <button class="dropdown-item" id="btn-bulk-import-triggers" style="width: 100%; text-align: left; padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: #374151; display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2V10M8 2L5 5M8 2L11 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Import Triggers
+            </button>
+            <button class="dropdown-item" id="btn-bulk-export-triggers" style="width: 100%; text-align: left; padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: #374151; display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 10V2M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Export All Triggers
+            </button>
+          </div>
+        </div>
         
         <!-- Primary Action -->
         <button class="btn btn-primary" id="btn-add-trigger">

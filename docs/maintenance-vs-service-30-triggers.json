@@ -1,0 +1,302 @@
+[
+  {
+    "ruleId": "maint.q01.save_money",
+    "label": "Can I just do a maintenance instead of a service call to save money?",
+    "priority": 3,
+    "keywords": ["maintenance instead", "save money", "rather maintenance"],
+    "phrases": ["can I do maintenance instead", "maintenance to save money", "rather do maintenance"],
+    "negativeKeywords": ["scheduled", "annual"],
+    "answerText": "Maintenance is preventative; a service call is for diagnosing a problem. Are you having symptoms right now?",
+    "followUpQuestion": "Are you having symptoms right now?"
+  },
+  {
+    "ruleId": "maint.q02.same_price",
+    "label": "If maintenance is the same price, I'd rather do that",
+    "priority": 3,
+    "keywords": ["same price", "rather do that", "same cost"],
+    "phrases": ["same price rather maintenance", "same cost prefer maintenance"],
+    "negativeKeywords": ["quote", "pricing"],
+    "answerText": "I get it—maintenance is great when everything's running normally; diagnostics fit active issues. What's it doing today?",
+    "followUpQuestion": "What's it doing today?"
+  },
+  {
+    "ruleId": "maint.q03.tuneup_fix",
+    "label": "AC stopped, but maybe a tune-up will get it going again",
+    "priority": 4,
+    "keywords": ["tune-up", "get it going", "stopped"],
+    "phrases": ["tune-up will fix", "tune-up get going", "stopped tune-up"],
+    "negativeKeywords": ["working fine"],
+    "answerText": "A tune-up helps performance, but a no-cool needs problem identification first. Is it blowing warm or not running?",
+    "followUpQuestion": "Is it blowing warm or not running?"
+  },
+  {
+    "ruleId": "maint.q04.more_value",
+    "label": "Acting up, but I want maintenance because feels like more value",
+    "priority": 3,
+    "keywords": ["acting up", "more value", "feels like value"],
+    "phrases": ["acting up want maintenance", "maintenance more value"],
+    "negativeKeywords": ["working normally"],
+    "answerText": "Totally fair—maintenance adds care, but diagnostics find the exact failure causing trouble. Is this intermittent or constant?",
+    "followUpQuestion": "Is this intermittent or constant?"
+  },
+  {
+    "ruleId": "maint.q05.skipped_forever",
+    "label": "Haven't serviced it in forever, so maybe maintenance fixes it",
+    "priority": 3,
+    "keywords": ["haven't serviced", "in forever", "skipped"],
+    "phrases": ["haven't serviced forever", "never maintained", "skipped maintenance"],
+    "negativeKeywords": ["recent"],
+    "answerText": "Skipped maintenance can contribute, but rough operation usually needs a proper diagnostic. Any strange noises or smells?",
+    "followUpQuestion": "Any strange noises or smells?"
+  },
+  {
+    "ruleId": "maint.q06.car_analogy",
+    "label": "Like a car—if I do the oil change now, it'll probably be fine",
+    "priority": 3,
+    "keywords": ["like car", "oil change", "car maintenance"],
+    "phrases": ["like car oil change", "AC like car maintenance"],
+    "negativeKeywords": ["mechanic"],
+    "answerText": "Great analogy—maintenance helps prevent damage, but once it's running rough, we diagnose. Is cooling weak or fully out?",
+    "followUpQuestion": "Is cooling weak or fully out?"
+  },
+  {
+    "ruleId": "maint.q07.no_fee",
+    "label": "Don't want a service call fee if you're not fixing anything",
+    "priority": 3,
+    "keywords": ["don't want fee", "service fee", "not fixing"],
+    "phrases": ["service call fee not fixing", "don't want pay fee"],
+    "negativeKeywords": ["cost"],
+    "answerText": "The service visit is what finds the cause and options; repairs come after approval. What problem are you noticing most?",
+    "followUpQuestion": "What problem are you noticing most?"
+  },
+  {
+    "ruleId": "maint.q08.check_if_find",
+    "label": "Can you just come do maintenance and if you find something, tell me?",
+    "priority": 3,
+    "keywords": ["do maintenance find", "if you find", "tell me"],
+    "phrases": ["maintenance if find something", "do maintenance tell me"],
+    "negativeKeywords": ["annual"],
+    "answerText": "We can, but if you're calling for a specific issue, diagnostics is the cleaner route. Is this a comfort problem or routine?",
+    "followUpQuestion": "Is this a comfort problem or routine?"
+  },
+  {
+    "ruleId": "maint.q09.started_working",
+    "label": "It started working again, so maybe I should just do maintenance",
+    "priority": 3,
+    "keywords": ["started working", "working again", "fixed itself"],
+    "phrases": ["started working again maintenance", "recovered maintenance"],
+    "negativeKeywords": ["stopped"],
+    "answerText": "If it recovered, maintenance is smart; if it's failing intermittently, diagnosis prevents repeats. How often has it happened?",
+    "followUpQuestion": "How often has it happened?"
+  },
+  {
+    "ruleId": "maint.q10.not_spend",
+    "label": "Trying not to spend more than I have to—maintenance sounds safer",
+    "priority": 3,
+    "keywords": ["not spend more", "maintenance safer", "trying save"],
+    "phrases": ["not spend more maintenance", "maintenance sounds safer"],
+    "negativeKeywords": ["quote"],
+    "answerText": "I respect that—right service type avoids wasted visits: maintenance for prevention, diagnostic for symptoms. What's the main symptom today?",
+    "followUpQuestion": "What's the main symptom today?"
+  },
+  {
+    "ruleId": "nocool.q11.schedule_maintenance",
+    "label": "System is not cooling—can I schedule a maintenance instead?",
+    "priority": 4,
+    "keywords": ["not cooling", "schedule maintenance", "instead"],
+    "phrases": ["not cooling schedule maintenance", "maintenance instead not cooling"],
+    "negativeKeywords": ["cooling fine"],
+    "answerText": "If it's not cooling, that's an active issue and diagnostics fits best. Is it blowing warm or just weak?",
+    "followUpQuestion": "Is it blowing warm or just weak?"
+  },
+  {
+    "ruleId": "nocool.q12.just_want",
+    "label": "AC is not cooling, but I just want a maintenance visit",
+    "priority": 4,
+    "keywords": ["not cooling", "just want maintenance", "but want"],
+    "phrases": ["not cooling just want maintenance", "AC not cooling want maintenance"],
+    "negativeKeywords": ["fine"],
+    "answerText": "I understand—maintenance is preventative, but no-cool needs the cause identified first. Is the whole house affected?",
+    "followUpQuestion": "Is the whole house affected?"
+  },
+  {
+    "ruleId": "nocool.q13.put_down",
+    "label": "System isn't cooling at all; can you put me down for maintenance?",
+    "priority": 4,
+    "keywords": ["not cooling at all", "put me down", "isn't cooling"],
+    "phrases": ["not cooling all put down", "isn't cooling maintenance"],
+    "negativeKeywords": ["partially"],
+    "answerText": "For no-cool, we treat it as a service diagnosis so nothing gets missed. Is it running but warm?",
+    "followUpQuestion": "Is it running but warm?"
+  },
+  {
+    "ruleId": "nocool.q14.running_schedule",
+    "label": "Unit is running and not cooling—schedule me for maintenance please",
+    "priority": 4,
+    "keywords": ["running not cooling", "schedule me", "running warm"],
+    "phrases": ["running not cooling schedule", "running warm schedule maintenance"],
+    "negativeKeywords": ["not running"],
+    "answerText": "Got it—when it runs but won't cool, diagnostics is the right visit type. Any unusual sounds or smells?",
+    "followUpQuestion": "Any unusual sounds or smells?"
+  },
+  {
+    "ruleId": "nocool.q15.89_dollar",
+    "label": "House is hot, system not cooling; I want the $89 maintenance",
+    "priority": 4,
+    "keywords": ["house hot", "$89", "not cooling want"],
+    "phrases": ["house hot 89 maintenance", "not cooling want 89"],
+    "negativeKeywords": ["quote"],
+    "answerText": "I hear you—maintenance won't reliably address a no-cool complaint without diagnosis. Is airflow strong from the vents?",
+    "followUpQuestion": "Is airflow strong from the vents?"
+  },
+  {
+    "ruleId": "nocool.q16.book_even_though",
+    "label": "Can I book a maintenance even though the AC isn't cooling?",
+    "priority": 4,
+    "keywords": ["book maintenance", "even though", "isn't cooling"],
+    "phrases": ["book maintenance even though", "even though not cooling"],
+    "negativeKeywords": ["fine"],
+    "answerText": "We can schedule the correct visit so you get answers, not guesswork. Is it completely warm air?",
+    "followUpQuestion": "Is it completely warm air?"
+  },
+  {
+    "ruleId": "nocool.q17.tuneup_instead",
+    "label": "Not cooling—I want a tune-up instead of a service call",
+    "priority": 4,
+    "keywords": ["tune-up instead", "not service call", "want tune-up"],
+    "phrases": ["tune-up instead service", "want tune-up not cooling"],
+    "negativeKeywords": ["working"],
+    "answerText": "A tune-up helps when it's operating normally; no-cool needs targeted diagnosis first. When did it start?",
+    "followUpQuestion": "When did it start?"
+  },
+  {
+    "ruleId": "nocool.q18.check_out",
+    "label": "Not cooling—just schedule a maintenance and check it out",
+    "priority": 4,
+    "keywords": ["check it out", "schedule maintenance", "just schedule"],
+    "phrases": ["maintenance check it out", "schedule maintenance check"],
+    "negativeKeywords": ["working"],
+    "answerText": "Alright — hang with me for a moment.",
+    "followUpQuestion": "Is it short-cycling or running nonstop?"
+  },
+  {
+    "ruleId": "nocool.q19.same_price_rather",
+    "label": "Not cooling but it's same price so I'd rather do maintenance",
+    "priority": 4,
+    "keywords": ["same price rather", "not cooling same", "rather maintenance"],
+    "phrases": ["same price rather maintenance", "not cooling same cost"],
+    "negativeKeywords": ["quote"],
+    "answerText": "Totally understandable—same price, different purpose; diagnostics finds the failure causing no-cool. Any breaker trips?",
+    "followUpQuestion": "Any breaker trips?"
+  },
+  {
+    "ruleId": "nocool.q20.schedule_for_me",
+    "label": "Air conditioner is not cooling; can you schedule maintenance for me?",
+    "priority": 4,
+    "keywords": ["air conditioner", "not cooling", "schedule for me"],
+    "phrases": ["air conditioner not cooling schedule", "AC not cooling maintenance"],
+    "negativeKeywords": ["fine"],
+    "answerText": "We'll take care of you—when it's not cooling, we schedule a diagnostic to identify the issue. One system or two?",
+    "followUpQuestion": "One system or two?"
+  },
+  {
+    "ruleId": "why.q21.cant_schedule",
+    "label": "Why can't I just schedule a maintenance?",
+    "priority": 3,
+    "keywords": ["why can't", "just schedule", "why not"],
+    "phrases": ["why can't schedule maintenance", "why not maintenance"],
+    "negativeKeywords": ["scheduled"],
+    "answerText": "Maintenance and diagnostic visits are routed differently; troubleshooting techs carry different tools and parts. What symptom are you having?",
+    "followUpQuestion": "What symptom are you having?"
+  },
+  {
+    "ruleId": "why.q22.same_price_wont",
+    "label": "Same price—why won't you just put it as maintenance?",
+    "priority": 3,
+    "keywords": ["same price why", "won't you", "put it as"],
+    "phrases": ["same price why not", "won't put maintenance"],
+    "negativeKeywords": ["quote"],
+    "answerText": "Different appointment types use different tech assignments and truck stock; diagnostics is built for problem-solving. Is it not cooling?",
+    "followUpQuestion": "Is it not cooling?"
+  },
+  {
+    "ruleId": "why.q23.techs_same",
+    "label": "Aren't all your technicians the same? Why not maintenance?",
+    "priority": 2,
+    "keywords": ["technicians same", "all same", "techs same"],
+    "phrases": ["aren't technicians same", "all techs same"],
+    "negativeKeywords": ["which"],
+    "answerText": "They're all experienced, but some are scheduled for preventive work, not active troubleshooting. Is your system currently acting up?",
+    "followUpQuestion": "Is your system currently acting up?"
+  },
+  {
+    "ruleId": "why.q24.keep_saying",
+    "label": "Just want maintenance—why do you keep saying service call?",
+    "priority": 3,
+    "keywords": ["just want", "keep saying", "why keep"],
+    "phrases": ["just want maintenance", "keep saying service"],
+    "negativeKeywords": ["scheduled"],
+    "answerText": "Maintenance crews focus on tune-ups; diagnostic techs are dispatched for failures and carry the right repair-ready inventory. What's it doing?",
+    "followUpQuestion": "What's it doing?"
+  },
+  {
+    "ruleId": "why.q25.label_matter",
+    "label": "Why does it matter what you label it as?",
+    "priority": 2,
+    "keywords": ["why matter", "label it", "does matter"],
+    "phrases": ["why does matter label", "matter what label"],
+    "negativeKeywords": ["type"],
+    "answerText": "Labels control routing, time blocks, and what's on the truck; diagnostics avoids wasted trips. Is it a comfort issue today?",
+    "followUpQuestion": "Is it a comfort issue today?"
+  },
+  {
+    "ruleId": "why.q26.tech_figure",
+    "label": "Can't a maintenance tech just figure it out while they're there?",
+    "priority": 3,
+    "keywords": ["tech figure out", "while there", "figure it out"],
+    "phrases": ["tech figure out while there", "maintenance tech figure"],
+    "negativeKeywords": ["during"],
+    "answerText": "Sometimes, but maintenance schedules and equipment aren't built for deeper troubleshooting. Better to send the right tech first. Is it no-cool?",
+    "followUpQuestion": "Is it no-cool?"
+  },
+  {
+    "ruleId": "why.q27.no_difference",
+    "label": "Don't see the difference—maintenance should cover it",
+    "priority": 2,
+    "keywords": ["don't see", "no difference", "should cover"],
+    "phrases": ["don't see difference", "maintenance should cover"],
+    "negativeKeywords": ["what's"],
+    "answerText": "Maintenance is preventive checks; diagnostics is targeted testing for a specific problem and often needs different parts. What problem started this call?",
+    "followUpQuestion": "What problem started this call?"
+  },
+  {
+    "ruleId": "why.q28.cant_fix",
+    "label": "So you're telling me maintenance techs can't fix problems?",
+    "priority": 2,
+    "keywords": ["can't fix", "maintenance techs", "telling me"],
+    "phrases": ["maintenance techs can't fix", "techs can't fix problems"],
+    "negativeKeywords": ["which"],
+    "answerText": "They can handle many basics, but complex troubleshooting is routed to diagnostic techs with specialized testing focus. What symptom are you seeing?",
+    "followUpQuestion": "What symptom are you seeing?"
+  },
+  {
+    "ruleId": "why.q29.send_whoever",
+    "label": "Why can't you just send whoever is available?",
+    "priority": 2,
+    "keywords": ["whoever available", "send whoever", "just send"],
+    "phrases": ["send whoever available", "just send anyone"],
+    "negativeKeywords": ["when"],
+    "answerText": "Sending the wrong visit type can delay resolution; the right technician and parts matter. Is the system running but not cooling?",
+    "followUpQuestion": "Is the system running but not cooling?"
+  },
+  {
+    "ruleId": "why.q30.still_want",
+    "label": "I still want maintenance—why can't you schedule it anyway?",
+    "priority": 3,
+    "keywords": ["still want", "schedule anyway", "can't you"],
+    "phrases": ["still want maintenance", "schedule anyway"],
+    "negativeKeywords": ["scheduled"],
+    "answerText": "We want to solve it fast, not guess—diagnostic scheduling matches troubleshooting skills and truck inventory. Is this urgent no-cool?",
+    "followUpQuestion": "Is this urgent no-cool?"
+  }
+]
