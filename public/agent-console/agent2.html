@@ -232,9 +232,19 @@
             </div>
           </div>
           <div class="card-body">
-            <p class="text-muted text-sm" style="margin-bottom: 20px;">
+            <p class="text-muted text-sm" style="margin-bottom: 12px;">
               Responds to short caller greetings like "hi", "good morning". Runs <strong>BEFORE</strong> trigger cards.
             </p>
+            
+            <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 12px; margin-bottom: 20px; border-radius: 6px;">
+              <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px; font-size: 13px;">💡 {name} Placeholder Support</div>
+              <div style="font-size: 12px; color: #1e3a8a; line-height: 1.5;">
+                Use <code>{name}</code> in your responses to personalize greetings:<br>
+                • <strong>With name:</strong> "Good morning{name}!" → "Good morning, Sarah!"<br>
+                • <strong>Without name:</strong> "Good morning{name}!" → "Good morning!"<br>
+                The placeholder is automatically replaced or removed based on name extraction.
+              </div>
+            </div>
             
             <!-- Short-Only Gate -->
             <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
