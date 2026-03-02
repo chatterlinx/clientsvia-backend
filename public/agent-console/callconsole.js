@@ -92,6 +92,7 @@
       // Phase 4 — Agent2CallRouter
       'A2_CALL_ROUTER_CLASSIFIED': 'Call Router: Intent Classified',
       'A2_CALL_ROUTER_POOL_FILTERED': 'Call Router: Trigger Pool Filtered',
+      'A2_CALL_ROUTER_RETRY_FULL_POOL': 'Call Router: Retry Full Pool',
       // Phase 1–2 — Trigger system visibility
       'TRIGGER_POOL_EMPTY': 'Trigger Pool EMPTY',
       'TRIGGER_POOL_SOURCE': 'Trigger Pool Source',
@@ -1018,6 +1019,7 @@
         || ev.type === 'PATIENCE_TIMEOUT_CHECK_IN'
         || ev.type === 'A2_CALL_ROUTER_CLASSIFIED'
         || ev.type === 'A2_CALL_ROUTER_POOL_FILTERED'
+        || ev.type === 'A2_CALL_ROUTER_RETRY_FULL_POOL'
         || ev.type === 'TRIGGER_POOL_EMPTY'
         || ev.type === 'TRIGGER_POOL_SOURCE'
         || ev.type === 'A2_TRIGGER_EVAL'
@@ -1064,6 +1066,7 @@
       PATIENCE_TIMEOUT_CHECK_IN:     'Patience Check-in',
       A2_CALL_ROUTER_CLASSIFIED:     'Call Router — Intent Classified',
       A2_CALL_ROUTER_POOL_FILTERED:  'Call Router — Trigger Pool Filtered',
+      A2_CALL_ROUTER_RETRY_FULL_POOL: '🔄 Call Router — Retry Full Pool',
       TRIGGER_POOL_EMPTY:            '⚠️ Trigger Pool EMPTY',
       TRIGGER_POOL_SOURCE:           'Trigger Pool Source',
       LEGACY_FALLBACK_USED:          '🚨 LEGACY FALLBACK ACTIVE',
@@ -1641,8 +1644,8 @@
     },
     info: {
       color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe',
-      types: ['A2_CALL_ROUTER_CLASSIFIED', 'A2_CALL_ROUTER_POOL_FILTERED', 'A2_PATH_SELECTED',
-              'SCRABENGINE_PROCESSED', 'SCRABENGINE_DELIVERY', 'INPUT_TEXT_FINALIZED',
+      types: ['A2_CALL_ROUTER_CLASSIFIED', 'A2_CALL_ROUTER_POOL_FILTERED', 'A2_CALL_ROUTER_RETRY_FULL_POOL',
+              'A2_PATH_SELECTED', 'SCRABENGINE_PROCESSED', 'SCRABENGINE_DELIVERY', 'INPUT_TEXT_FINALIZED',
               'A2_GATE', 'A2_TRIGGER_EVAL']
     },
     stage: {
@@ -1719,6 +1722,11 @@
     }
     if (type === 'A2_CALL_ROUTER_POOL_FILTERED') {
       return `${payload.beforeFilter ?? '?'} → ${payload.afterFilter ?? '?'} cards (bucket: ${escapeHtml(payload.bucket || '?')}, confidence: ${payload.confidence != null ? Math.round(payload.confidence * 100) + '%' : '?'})`;
+    }
+    // V131: Bucket filter retry event
+    if (type === 'A2_CALL_ROUTER_RETRY_FULL_POOL') {
+      const matched = payload.retryMatched ? `✅ matched: ${escapeHtml(payload.retryCardLabel || payload.retryCardId || '?')}` : '❌ still no match';
+      return `Filtered pool had no match → retried with full pool (${payload.filteredPoolSize} → ${payload.fullPoolSize} cards). ${matched}`;
     }
     if (type === 'A2_FOLLOWUP_CONSENT_CLASSIFIED') {
       return `bucket: <strong>${escapeHtml(payload.bucket || '?')}</strong> · direction: ${escapeHtml(payload.direction || '?')}`;
