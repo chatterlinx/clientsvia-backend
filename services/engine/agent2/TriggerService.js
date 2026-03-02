@@ -171,11 +171,38 @@ async function loadTriggersForCompany(companyId, options = {}) {
     }
   }
 
+  // VISIBILITY: Warn when a group is assigned but not published — triggers will be empty.
+  // This surfaces the silent blackout that previously made the system fall to LLM
+  // with no indication of why. Visible in call console as TRIGGERS_GROUP_NOT_PUBLISHED.
+  if (settings?.activeGroupId && !isGroupPublished) {
+    logger.warn('[TriggerService] ⚠️ Active group exists but is NOT published — zero global triggers will load', {
+      companyId,
+      activeGroupId: settings.activeGroupId,
+      publishedVersion: groupInfo?.publishedVersion ?? 0,
+      isDraft: groupInfo?.isDraft,
+      action: 'Publish the trigger group in the admin console to activate triggers'
+    });
+  }
+
   // Pass isGroupPublished to merge - if not published, global triggers are not loaded
   const triggers = await mergeTriggers(companyId, settings, groupInfo, isGroupPublished);
 
   setCachedTriggers(cacheKey, triggers);
-  
+
+  // VISIBILITY: Warn if the final compiled pool is empty — admin should know immediately.
+  if (triggers.length === 0) {
+    logger.warn('[TriggerService] ⚠️ Trigger pool is EMPTY — all calls will fall through to LLM fallback', {
+      companyId,
+      activeGroupId: settings?.activeGroupId || null,
+      isGroupPublished,
+      hint: !settings?.activeGroupId
+        ? 'No trigger group assigned to this company'
+        : !isGroupPublished
+          ? 'Trigger group is assigned but not published'
+          : 'Group is published but contains no enabled triggers'
+    });
+  }
+
   logger.debug('[TriggerService] Triggers loaded', {
     companyId,
     activeGroupId: settings?.activeGroupId,
@@ -395,16 +422,66 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
 // LEGACY COMPATIBILITY
 // ════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Transform a legacy playbook.rules card (flat format) into the TriggerCardMatcher
+ * format (card.match.keywords / card.answer.answerText / card.followUp.question).
+ *
+ * Legacy cards are stored directly in company.aiAgentSettings.agent2.discovery.playbook.rules
+ * and have a flat structure:  { ruleId, keywords, phrases, negativeKeywords, answerText, followUpQuestion }
+ *
+ * TriggerCardMatcher expects:  { id, match: { keywords, phrases, negativeKeywords }, answer: { answerText }, followUp: { question } }
+ *
+ * Without this transform, TriggerCardMatcher reads card.match?.keywords = undefined → safeArr([]) → zero matches ever fire.
+ */
+function transformLegacyCard(card) {
+  if (!card) return null;
+
+  // Already in new format — has card.match structure
+  if (card.match && typeof card.match === 'object') return card;
+
+  return {
+    id:        card.id || card.ruleId || card.triggerId,
+    ruleId:    card.ruleId || card.id,
+    triggerId: card.triggerId || card.ruleId || card.id,
+    enabled:   card.enabled !== false,
+    priority:  typeof card.priority === 'number' ? card.priority : 50,
+    label:     card.label || card.ruleId || '',
+    match: {
+      keywords:        card.keywords        || [],
+      phrases:         card.phrases         || [],
+      negativeKeywords: card.negativeKeywords || [],
+      scenarioTypeAllowlist: card.scenarioTypeAllowlist || []
+    },
+    responseMode: card.responseMode || 'standard',
+    answer: {
+      answerText: card.answerText || card.answer?.answerText || '',
+      audioUrl:   card.audioUrl   || card.answer?.audioUrl   || ''
+    },
+    followUp: {
+      question:   card.followUpQuestion  || card.followUp?.question   || '',
+      nextAction: card.followUpNextAction || card.followUp?.nextAction || 'CONTINUE'
+    },
+    llmFactPack: card.llmFactPack || null,
+    _scope: 'LEGACY'
+  };
+}
+
 async function loadTriggersWithLegacyFallback(companyId, legacyConfig) {
   const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
-  
+
   if (!settings || !settings.activeGroupId) {
     if (legacyConfig && legacyConfig.discovery?.playbook?.rules) {
-      logger.debug('[TriggerService] Using legacy trigger cards', {
+      const rawCards = legacyConfig.discovery.playbook.rules;
+      // CRITICAL FIX: Transform legacy flat-format cards into TriggerCardMatcher format.
+      // Without this, card.match?.keywords is undefined → safeArr([]) → zero triggers ever fire.
+      const transformed = rawCards.map(transformLegacyCard).filter(Boolean);
+
+      logger.debug('[TriggerService] Using legacy trigger cards (transformed)', {
         companyId,
-        legacyCount: legacyConfig.discovery.playbook.rules.length
+        rawCount: rawCards.length,
+        transformedCount: transformed.length
       });
-      return legacyConfig.discovery.playbook.rules;
+      return transformed;
     }
     return [];
   }

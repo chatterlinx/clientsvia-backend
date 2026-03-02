@@ -266,15 +266,15 @@
               </div>
             </div>
             
-            <h3 class="section-label">Built-in Fillers (always active)</h3>
-            <div class="tag-list" id="builtin-fillers">
-              <span class="tag">um</span>
-              <span class="tag">uh</span>
-              <span class="tag">you know</span>
-              <span class="tag">like</span>
-              <span class="tag">basically</span>
-              <span class="tag">actually</span>
+            <h3 class="section-label">Built-in Fillers <span style="font-size:11px;font-weight:400;color:#94a3b8;">(always active when Stage 1 is enabled)</span></h3>
+            <div class="info-banner example" style="margin-bottom:12px;">
+              <div class="info-banner-title">Fully Visible — No Hidden Processing</div>
+              <div class="info-banner-body">These are the complete built-in filler and greeting lists. They run automatically when Stage 1 is enabled. To override, disable Stage 1 or add opposing vocabulary rules in Stage 2.</div>
             </div>
+            <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:#475569;">Filler Words</div>
+            <div class="tag-list" id="builtin-fillers-list" style="margin-bottom:14px;"></div>
+            <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:#475569;">Greeting Phrases (stripped from start of input only)</div>
+            <div class="tag-list" id="builtin-greetings-list"></div>
             
             <h3 class="section-label">Custom Fillers</h3>
             <div class="entry-list" id="custom-fillers-list">
@@ -303,11 +303,49 @@
                 <input type="checkbox" id="toggle-vocabulary" checked> Enable Vocabulary Normalization
               </label>
             </div>
-            
+
+            <!-- ═══════════════════════════════════════════════════════════════
+                 SYSTEM LANGUAGE DEFAULTS
+                 UI-controlled, fully visible, per-company toggleable.
+                 Stored in: vocabulary.languageDefaults.contractionsEnabled / laymanEnabled
+                 ═══════════════════════════════════════════════════════════════ -->
+            <h3 class="section-label">System Language Defaults <span style="font-size:11px;padding:2px 7px;background:#dbeafe;color:#1e40af;border-radius:4px;font-weight:600;margin-left:6px;">Auto-Applied</span></h3>
+            <div class="info-banner example" style="margin-bottom:14px;">
+              <div class="info-banner-title">Visible & Controllable — Not Hidden</div>
+              <div class="info-banner-body">These system rules run before your custom vocabulary entries. They handle universal speech patterns that every HVAC caller uses. Toggle any block off if it conflicts with your setup.</div>
+            </div>
+
+            <!-- Block 1: English Contractions -->
+            <div class="lang-default-block" id="block-contractions" style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="toggle-contractions" style="width:16px;height:16px;">
+                  <span style="font-size:14px;font-weight:600;color:#0f172a;">English Contractions</span>
+                  <span id="contractions-count-badge" style="font-size:10px;padding:2px 7px;background:#dcfce7;color:#166534;border-radius:4px;font-weight:600;"></span>
+                </label>
+              </div>
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">Expands contractions so trigger keywords match: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">"isn't cooling"</code> → <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">"is not cooling"</code></p>
+              <div class="tag-list" id="contractions-preview-list"></div>
+            </div>
+
+            <!-- Block 2: Layman Service Vocabulary -->
+            <div class="lang-default-block" id="block-layman" style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:20px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="toggle-layman" style="width:16px;height:16px;">
+                  <span style="font-size:14px;font-weight:600;color:#0f172a;">Layman Service Vocabulary</span>
+                  <span id="layman-count-badge" style="font-size:10px;padding:2px 7px;background:#fef3c7;color:#92400e;border-radius:4px;font-weight:600;"></span>
+                </label>
+              </div>
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">Normalizes informal speech: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">"quit"</code> → <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">"stopped working"</code>, <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">"on the fritz"</code> → <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">"not working"</code></p>
+              <div class="tag-list" id="layman-preview-list"></div>
+            </div>
+
+            <h3 class="section-label">Your Custom Rules</h3>
             <div class="entry-list" id="vocabulary-list">
               <div class="empty-state">
                 <div class="empty-state-icon">📖</div>
-                <div class="empty-state-text">No vocabulary rules yet. Click "+ Add Normalization" to create one.</div>
+                <div class="empty-state-text">No custom vocabulary rules yet. Click "+ Add Normalization" to create one.</div>
               </div>
             </div>
           </div>

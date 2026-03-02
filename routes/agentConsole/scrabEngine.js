@@ -19,7 +19,13 @@ const { getDB } = require('../../db');
 const { ObjectId } = require('mongodb');
 const logger = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
-const { ScrabEngine } = require('../../services/ScrabEngine');
+const {
+  ScrabEngine,
+  DEFAULT_FILLERS,
+  DEFAULT_GREETINGS,
+  DEFAULT_CONTRACTIONS,
+  DEFAULT_LAYMAN_VOCABULARY
+} = require('../../services/ScrabEngine');
 
 // 🔒 All routes require authentication
 router.use(authenticateJWT);
@@ -44,25 +50,42 @@ router.get('/:companyId/scrabengine', async (req, res) => {
       return res.status(404).json({ error: 'Company not found' });
     }
     
-    // Get config or return defaults
+    // Get config or return defaults — languageDefaults enabled by default for new companies
     const config = company.aiAgentSettings?.scrabEngine || {
       enabled: true,
       fillers: { enabled: true, customFillers: [], stripGreetings: true, stripCompanyName: true },
-      vocabulary: { enabled: true, entries: [] },
+      vocabulary: {
+        enabled: true,
+        entries: [],
+        languageDefaults: { contractionsEnabled: true, laymanEnabled: true }
+      },
       synonyms: { enabled: true, wordSynonyms: [], contextPatterns: [] },
       extraction: { enabled: true, customPatterns: [] },
       qualityGates: { minWordCount: 2, minConfidence: 0.5, repromptOnLowQuality: true }
     };
-    
+
+    // Ensure languageDefaults structure exists on existing configs
+    if (!config.vocabulary) config.vocabulary = { enabled: true, entries: [] };
+    if (!config.vocabulary.languageDefaults) {
+      config.vocabulary.languageDefaults = { contractionsEnabled: true, laymanEnabled: true };
+    }
+
     const stats = ScrabEngine.getStats(config);
-    
+
     res.json({
       config,
       stats,
+      // Serve system default lists to UI so they can be displayed — not hardcoded in frontend
+      systemDefaults: {
+        fillers:    DEFAULT_FILLERS,
+        greetings:  DEFAULT_GREETINGS,
+        contractions:  DEFAULT_CONTRACTIONS,
+        laymanVocab:   DEFAULT_LAYMAN_VOCABULARY
+      },
       meta: {
-        companyId: company._id.toString(),
+        companyId:   company._id.toString(),
         companyName: company.businessName || company.companyName,
-        version: config.version || '1.0.0'
+        version:     config.version || '1.0.0'
       }
     });
     

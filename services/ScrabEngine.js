@@ -105,6 +105,62 @@ const PROTECTED_WORDS = new Set([
 ]);
 
 // ════════════════════════════════════════════════════════════════════════════
+// SYSTEM LANGUAGE DEFAULTS
+// These are surfaced in the ScrabEngine admin UI (Stage 2 → Language Defaults).
+// Each block is individually toggleable per company via:
+//   company.aiAgentSettings.scrabEngine.vocabulary.languageDefaults.contractionsEnabled
+//   company.aiAgentSettings.scrabEngine.vocabulary.languageDefaults.laymanEnabled
+//
+// They are NOT hidden. Admins can see and disable them in the UI.
+// They run BEFORE company vocabulary entries.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * English contraction expansion.
+ * Ensures "isn't cooling" → "is not cooling" so keyword "not cooling" fires.
+ * Without this, contraction forms never match expanded-form keywords.
+ */
+const DEFAULT_CONTRACTIONS = [
+  { from: "isn't",    to: 'is not'     },
+  { from: "won't",    to: 'will not'   },
+  { from: "doesn't",  to: 'does not'   },
+  { from: "can't",    to: 'cannot'     },
+  { from: "couldn't", to: 'could not'  },
+  { from: "wouldn't", to: 'would not'  },
+  { from: "shouldn't",to: 'should not' },
+  { from: "hasn't",   to: 'has not'    },
+  { from: "haven't",  to: 'have not'   },
+  { from: "wasn't",   to: 'was not'    },
+  { from: "weren't",  to: 'were not'   },
+  { from: "didn't",   to: 'did not'    },
+  { from: "don't",    to: 'do not'     },
+  { from: "aren't",   to: 'are not'    },
+  { from: "it's",     to: 'it is'      },
+  { from: "that's",   to: 'that is'    },
+  { from: "there's",  to: 'there is'   },
+  { from: "it'll",    to: 'it will'    },
+  { from: "won't",    to: 'will not'   }
+];
+
+/**
+ * Layman service vocabulary.
+ * Normalizes informal customer speech into terms triggers are built for.
+ * "my AC quit" → "my AC stopped working" → matches keyword "stopped working".
+ */
+const DEFAULT_LAYMAN_VOCABULARY = [
+  { from: 'quit working',   to: 'stopped working' },
+  { from: 'quit on me',     to: 'stopped working' },
+  { from: 'went out',       to: 'stopped working' },
+  { from: 'conked out',     to: 'stopped working' },
+  { from: 'crapped out',    to: 'stopped working' },
+  { from: 'on the fritz',   to: 'not working'     },
+  { from: 'acting up',      to: 'not working'     },
+  { from: 'acting weird',   to: 'not working'     },
+  { from: 'gone out',       to: 'stopped working' },
+  { from: 'broke down',     to: 'stopped working' }
+];
+
+// ════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS - Pure, side-effect-free utilities
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -301,10 +357,52 @@ class VocabularyNormalizationEngine {
       };
     }
     
+    // ────────────────────────────────────────────────────────────────────────
+    // SYSTEM LANGUAGE DEFAULTS (run BEFORE company entries)
+    // Controlled via: config.languageDefaults.contractionsEnabled / laymanEnabled
+    // Surfaced in the ScrabEngine admin UI — not hidden, fully toggleable.
+    // ────────────────────────────────────────────────────────────────────────
+    const langDefaults = safeObj(config.languageDefaults, {});
+
+    // Block 1: English Contraction Expansion
+    if (langDefaults.contractionsEnabled !== false) {
+      for (const entry of DEFAULT_CONTRACTIONS) {
+        const regex = new RegExp(`\\b${escapeRegex(entry.from)}\\b`, 'gi');
+        const matches = normalized.match(regex);
+        if (matches) {
+          normalized = normalized.replace(regex, entry.to);
+          const count = matches.length;
+          applied.push({ from: entry.from, to: entry.to, matchMode: 'EXACT', count, source: 'system_contraction' });
+          transformations.push(createTransformation('vocabulary', 'system_contraction', {
+            from: entry.from, to: entry.to, count
+          }));
+        }
+      }
+    }
+
+    // Block 2: Layman Service Vocabulary
+    if (langDefaults.laymanEnabled !== false) {
+      for (const entry of DEFAULT_LAYMAN_VOCABULARY) {
+        const regex = new RegExp(`\\b${escapeRegex(entry.from)}\\b`, 'gi');
+        const matches = normalized.match(regex);
+        if (matches) {
+          normalized = normalized.replace(regex, entry.to);
+          const count = matches.length;
+          applied.push({ from: entry.from, to: entry.to, matchMode: 'EXACT', count, source: 'system_layman' });
+          transformations.push(createTransformation('vocabulary', 'system_layman', {
+            from: entry.from, to: entry.to, count
+          }));
+        }
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // COMPANY VOCABULARY ENTRIES (run AFTER system defaults)
+    // ────────────────────────────────────────────────────────────────────────
     const entries = safeArr(config.entries)
       .filter(e => e.enabled !== false)
       .sort((a, b) => (a.priority || 100) - (b.priority || 100)); // Lower priority = first
-    
+
     for (const entry of entries) {
       const from = normalizeText(entry.from);
       const to = `${entry.to || ''}`.trim();
@@ -1359,17 +1457,29 @@ class ScrabEngine {
     const synonymConfig = safeObj(config.synonyms, {});
     const extractionConfig = safeObj(config.extraction, {});
     
+    const langDefaults = safeObj(vocabConfig.languageDefaults, {});
+
     return {
       enabled: config.enabled !== false,
       stages: {
         fillers: {
           enabled: fillerConfig.enabled !== false,
           customCount: safeArr(fillerConfig.customFillers).filter(f => f.enabled !== false).length,
-          totalFillers: DEFAULT_FILLERS.length + (safeArr(fillerConfig.customFillers).filter(f => f.enabled !== false).length)
+          totalFillers: DEFAULT_FILLERS.length + (safeArr(fillerConfig.customFillers).filter(f => f.enabled !== false).length),
+          builtinFillers: DEFAULT_FILLERS,
+          builtinGreetings: DEFAULT_GREETINGS
         },
         vocabulary: {
           enabled: vocabConfig.enabled !== false,
-          entryCount: safeArr(vocabConfig.entries).filter(e => e.enabled !== false).length
+          entryCount: safeArr(vocabConfig.entries).filter(e => e.enabled !== false).length,
+          languageDefaults: {
+            contractionsEnabled: langDefaults.contractionsEnabled !== false,
+            laymanEnabled:       langDefaults.laymanEnabled       !== false,
+            contractionCount:    DEFAULT_CONTRACTIONS.length,
+            laymanCount:         DEFAULT_LAYMAN_VOCABULARY.length,
+            contractionRules:    DEFAULT_CONTRACTIONS,
+            laymanRules:         DEFAULT_LAYMAN_VOCABULARY
+          }
         },
         synonyms: {
           enabled: synonymConfig.enabled !== false,
@@ -1570,5 +1680,10 @@ module.exports = {
   VocabularyNormalizationEngine,
   TokenExpansionEngine,
   EntityExtractionEngine,
-  QualityGate
+  QualityGate,
+  // Export system defaults so the admin route can serve them to the UI
+  DEFAULT_FILLERS,
+  DEFAULT_GREETINGS,
+  DEFAULT_CONTRACTIONS,
+  DEFAULT_LAYMAN_VOCABULARY
 };

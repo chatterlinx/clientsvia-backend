@@ -77,7 +77,9 @@ const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
-const Agent2SpeechPreprocessor = require('./Agent2SpeechPreprocessor');
+// Agent2SpeechPreprocessor was removed: ScrabEngine (V125) fully replaces it.
+// The preprocessor ran duplicate filler/greeting stripping that ScrabEngine already handles,
+// creating hidden double-processing. Nuked to eliminate the hidden nightmare.
 
 // ════════════════════════════════════════════════════════════════════════════
 // 🔍 SCRABENGINE - Enterprise Text Processing Pipeline

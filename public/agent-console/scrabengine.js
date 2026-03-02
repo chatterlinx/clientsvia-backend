@@ -52,9 +52,20 @@
     config: {
       enabled: true,
       fillers: { enabled: true, stripGreetings: true, stripCompanyName: true, customFillers: [] },
-      vocabulary: { enabled: true, entries: [] },
+      vocabulary: {
+        enabled: true,
+        entries: [],
+        languageDefaults: { contractionsEnabled: true, laymanEnabled: true }
+      },
       synonyms: { enabled: true, wordSynonyms: [], contextPatterns: [] },
       extraction: { enabled: true, customPatterns: [] }
+    },
+    // System defaults served from API (not hardcoded here)
+    systemDefaults: {
+      fillers: [],
+      greetings: [],
+      contractions: [],
+      laymanVocab: []
     },
     editingIndex: -1,
     editingType: null,
@@ -198,6 +209,14 @@
       stripGreetings:   document.getElementById('strip-greetings'),
       stripCompanyName: document.getElementById('strip-company-name'),
 
+      builtinFillersList:    document.getElementById('builtin-fillers-list'),
+      builtinGreetingsList:  document.getElementById('builtin-greetings-list'),
+      toggleContractions:    document.getElementById('toggle-contractions'),
+      toggleLayman:          document.getElementById('toggle-layman'),
+      contractionsPreview:   document.getElementById('contractions-preview-list'),
+      laymanPreview:         document.getElementById('layman-preview-list'),
+      contractionsBadge:     document.getElementById('contractions-count-badge'),
+      laymanBadge:           document.getElementById('layman-count-badge'),
       customFillersList:     document.getElementById('custom-fillers-list'),
       vocabularyList:        document.getElementById('vocabulary-list'),
       wordSynonymsList:      document.getElementById('word-synonyms-list'),
@@ -322,6 +341,18 @@
     bindToggle(DOM.stripGreetings,   (v) => { state.config.fillers.stripGreetings = v; }, false);
     bindToggle(DOM.stripCompanyName, (v) => { state.config.fillers.stripCompanyName = v; }, false);
 
+    // BIND: Language Defaults toggles — saved to vocabulary.languageDefaults
+    bindToggle(DOM.toggleContractions, (v) => {
+      if (!state.config.vocabulary.languageDefaults) state.config.vocabulary.languageDefaults = {};
+      state.config.vocabulary.languageDefaults.contractionsEnabled = v;
+      updateLangDefaultBlockStyle('block-contractions', v);
+    }, false);
+    bindToggle(DOM.toggleLayman, (v) => {
+      if (!state.config.vocabulary.languageDefaults) state.config.vocabulary.languageDefaults = {};
+      state.config.vocabulary.languageDefaults.laymanEnabled = v;
+      updateLangDefaultBlockStyle('block-layman', v);
+    }, false);
+
     log('BIND-D: Add buttons → openModal');
     safeListen(DOM.btnAddFiller,         'click', () => { log('CLICK: btnAddFiller'); openModal('filler'); });
     safeListen(DOM.btnAddVocab,          'click', () => { log('CLICK: btnAddVocab'); openModal('vocabulary'); });
@@ -397,6 +428,10 @@
       );
       if (data && data.config) {
         state.config = normalizeConfig(data.config);
+        // Store system defaults served from backend (not hardcoded in this file)
+        if (data.systemDefaults) {
+          state.systemDefaults = data.systemDefaults;
+        }
         render();
         log('Configuration loaded');
       }
@@ -455,6 +490,30 @@
     if (DOM.toggleVocabulary) DOM.toggleVocabulary.checked = state.config.vocabulary.enabled !== false;
     if (DOM.toggleSynonyms)   DOM.toggleSynonyms.checked   = state.config.synonyms.enabled !== false;
     if (DOM.toggleExtraction) DOM.toggleExtraction.checked = (state.config.extraction || {}).enabled !== false;
+
+    // Render built-in fillers and greetings (served from API, not hardcoded)
+    renderBuiltinList(DOM.builtinFillersList, state.systemDefaults.fillers || []);
+    renderBuiltinList(DOM.builtinGreetingsList, state.systemDefaults.greetings || []);
+
+    // Render Language Defaults toggles and previews
+    const langDefaults = (state.config.vocabulary || {}).languageDefaults || {};
+    const contractionsOn = langDefaults.contractionsEnabled !== false;
+    const laymanOn       = langDefaults.laymanEnabled       !== false;
+
+    if (DOM.toggleContractions) DOM.toggleContractions.checked = contractionsOn;
+    if (DOM.toggleLayman)       DOM.toggleLayman.checked       = laymanOn;
+
+    updateLangDefaultBlockStyle('block-contractions', contractionsOn);
+    updateLangDefaultBlockStyle('block-layman', laymanOn);
+
+    const contractions = state.systemDefaults.contractions || [];
+    const laymanVocab  = state.systemDefaults.laymanVocab  || [];
+
+    if (DOM.contractionsBadge) DOM.contractionsBadge.textContent = `${contractions.length} rules`;
+    if (DOM.laymanBadge)       DOM.laymanBadge.textContent       = `${laymanVocab.length} rules`;
+
+    renderLangDefaultRules(DOM.contractionsPreview, contractions);
+    renderLangDefaultRules(DOM.laymanPreview,       laymanVocab);
 
     if (DOM.stripGreetings)   DOM.stripGreetings.checked   = state.config.fillers.stripGreetings !== false;
     if (DOM.stripCompanyName) DOM.stripCompanyName.checked = state.config.fillers.stripCompanyName !== false;
@@ -532,6 +591,42 @@
         }
       });
     });
+  }
+
+  // ── System Defaults Renderers ──
+
+  function renderBuiltinList(container, items) {
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = '<span style="font-size:12px;color:#94a3b8;">None loaded</span>';
+      return;
+    }
+    container.innerHTML = items.map(item =>
+      `<span class="tag" style="background:#f1f5f9;color:#334155;border-color:#cbd5e1;">${escapeHtml(item)}</span>`
+    ).join('');
+  }
+
+  function renderLangDefaultRules(container, rules) {
+    if (!container) return;
+    if (!rules || rules.length === 0) {
+      container.innerHTML = '<span style="font-size:12px;color:#94a3b8;">No rules</span>';
+      return;
+    }
+    container.innerHTML = rules.map(r =>
+      `<span class="tag" style="font-size:11px;background:#f8fafc;color:#475569;border-color:#e2e8f0;">
+        <code style="color:#7c3aed;">${escapeHtml(r.from)}</code>
+        <span style="color:#94a3b8;margin:0 3px;">→</span>
+        <code style="color:#059669;">${escapeHtml(r.to)}</code>
+      </span>`
+    ).join('');
+  }
+
+  function updateLangDefaultBlockStyle(blockId, isEnabled) {
+    const block = document.getElementById(blockId);
+    if (!block) return;
+    block.style.opacity   = isEnabled ? '1' : '0.5';
+    block.style.borderColor = isEnabled ? '#bfdbfe' : '#e2e8f0';
+    block.style.background  = isEnabled ? '#f0f9ff' : '#fafafa';
   }
 
   // ── Per-stage renderers (thin wrappers calling generic renderEntryList) ──
@@ -1015,7 +1110,11 @@
       },
       vocabulary: {
         enabled: c.vocabulary?.enabled !== false,
-        entries: Array.isArray(c.vocabulary?.entries) ? c.vocabulary.entries : []
+        entries: Array.isArray(c.vocabulary?.entries) ? c.vocabulary.entries : [],
+        languageDefaults: {
+          contractionsEnabled: c.vocabulary?.languageDefaults?.contractionsEnabled !== false,
+          laymanEnabled:       c.vocabulary?.languageDefaults?.laymanEnabled       !== false
+        }
       },
       synonyms: {
         enabled: c.synonyms?.enabled !== false,
