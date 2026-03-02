@@ -168,6 +168,17 @@ const companyTriggerSettingsSchema = new mongoose.Schema({
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // HEALTH ASSERTIONS (tenant-owned, never hardcoded in service layer)
+  // ─────────────────────────────────────────────────────────────────────────
+  // When set, TriggerService escalates to logger.error if local trigger count
+  // falls below this threshold at runtime. Null = no assertion enforced.
+  expectedLocalTriggersMin: {
+    type: Number,
+    default: null,
+    min: 0
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // LEGACY DATA MIGRATION
   // ─────────────────────────────────────────────────────────────────────────
   migratedFromLegacy: {

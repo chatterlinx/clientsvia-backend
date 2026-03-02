@@ -209,7 +209,11 @@ async function loadTriggersForCompany(companyId, options = {}) {
   }
 
   // Pass isGroupPublished to merge - if not published, global triggers are not loaded
-  const triggers = await mergeTriggers(companyId, settings, groupInfo, isGroupPublished, options);
+  const ctx = {
+    callSid: options.callSid || 'NO_CALL_SID',
+    toPhone:  options.toPhone  || 'unknown'
+  };
+  const triggers = await mergeTriggers(companyId, settings, groupInfo, isGroupPublished, ctx);
 
   setCachedTriggers(cacheKey, triggers);
 
@@ -241,7 +245,8 @@ async function loadTriggersForCompany(companyId, options = {}) {
 // MERGE LOGIC
 // ════════════════════════════════════════════════════════════════════════════════
 
-async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = true) {
+async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = true, ctx = {}) {
+  const { callSid = 'NO_CALL_SID', toPhone = 'unknown' } = ctx;
   let globalTriggers = [];
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -300,9 +305,9 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
   
   // 🔍 DIAGNOSTIC: Log what we actually loaded
   logger.info('[TriggerService] 🔍 LOCAL_LOADED', {
-    callSid,
+    callSid: ctx.callSid,
     companyId,
-    toPhone,
+    toPhone: ctx.toPhone,
     localCount: rawLocalTriggers.length,
     globalCount: globalTriggers.length,
     firstLocalRuleId: rawLocalTriggers[0]?.ruleId || null,
@@ -311,25 +316,35 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
     queryFilters: { companyId, enabled: true, isDeleted: { $ne: true } },
     collectionQueried: 'companyLocalTriggers'
   });
-  
-  // 🚨 CRITICAL ASSERTION: If this is Penguin and we get 0, something is WRONG
-  if (companyId === '68e3f77a9d623b8058c700c4' && rawLocalTriggers.length === 0) {
-    logger.error('[TriggerService] 🚨 ASSERTION_FAILED', {
-      callSid,
-      companyId,
-      toPhone,
-      expected: 42,
-      actual: 0,
-      message: 'Penguin Air should have 42 local triggers but query returned 0',
-      mongoHost: mongoose.connection.host,
-      mongoDbName: mongoose.connection.name,
-      possibleCauses: [
-        '1. Wrong companyId passed to this function',
-        '2. Wrong MongoDB connection (different DB than UI)',
-        '3. Field name mismatch (enabled vs isEnabled)',
-        '4. Collection name mismatch'
-      ]
-    });
+
+  // Generic empty-pool diagnostic — applies to all tenants.
+  // If a company has configured expectedLocalTriggersMin, escalate to error.
+  if (rawLocalTriggers.length === 0) {
+    const minExpected = settings?.expectedLocalTriggersMin;
+    if (typeof minExpected === 'number' && minExpected > 0) {
+      logger.error('[TriggerService] 🚨 LOCAL_BELOW_EXPECTED', {
+        callSid: ctx.callSid,
+        companyId,
+        toPhone: ctx.toPhone,
+        expected: minExpected,
+        actual: 0,
+        note: 'Local trigger count is below the configured minimum for this company.',
+        possibleCauses: [
+          'Wrong companyId passed to this function',
+          'Wrong MongoDB connection (different DB than UI)',
+          'All local triggers disabled or soft-deleted',
+          'Collection name or field mismatch'
+        ]
+      });
+    } else {
+      logger.warn('[TriggerService] ⚠️ LOCAL_EMPTY', {
+        callSid: ctx.callSid,
+        companyId,
+        toPhone: ctx.toPhone,
+        note: 'No local triggers returned. Valid for companies using global-only config, but investigate if unexpected.',
+        queryFilters: { companyId, enabled: true, isDeletedNotTrue: true }
+      });
+    }
   }
   
   // CRITICAL FIX: .lean() returns raw docs without methods, so we must manually transform

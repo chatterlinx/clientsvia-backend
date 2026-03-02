@@ -1279,7 +1279,17 @@ router.delete('/:companyId/trigger-override/:triggerId',
 
 /**
  * PUT /:companyId/trigger-scope
- * Change a trigger's scope between LOCAL and GLOBAL
+ * Promote a LOCAL trigger to the active GLOBAL group.
+ *
+ * CONTRACT (non-negotiable):
+ *  1. Build full trigger shape from local — no field is silently dropped.
+ *  2. Upsert PUBLISHED global trigger first (live at runtime immediately).
+ *  3. Upsert DRAFT copy (admin editing workflow; non-critical).
+ *  4. Only after both writes succeed: soft-delete the local trigger.
+ *  5. Update group metadata + audit log.
+ *  6. Bust cache for every company on this group.
+ *
+ * Audio is intentionally NOT promoted — it is always company-specific.
  */
 router.put('/:companyId/trigger-scope',
   authenticateJWT,
@@ -1291,111 +1301,178 @@ router.put('/:companyId/trigger-scope',
       const userId = req.user.id || req.user._id?.toString() || 'unknown';
 
       if (!triggerId || !scope) {
+        return res.status(400).json({ success: false, error: 'triggerId and scope are required' });
+      }
+
+      if (scope !== 'GLOBAL') {
         return res.status(400).json({
           success: false,
-          error: 'triggerId and scope are required'
+          error: 'Converting GLOBAL triggers back to LOCAL is not supported. Global triggers belong to the group and are visible to all companies using it.'
         });
       }
 
-      if (scope !== 'LOCAL' && scope !== 'GLOBAL') {
-        return res.status(400).json({
+      if (!isPlatformAdmin(req.user)) {
+        return res.status(403).json({
           success: false,
-          error: 'scope must be either LOCAL or GLOBAL'
+          error: 'Only platform admins can promote triggers to GLOBAL scope'
         });
       }
 
-      const trigger = await CompanyLocalTrigger.findOne({ 
-        companyId, 
+      // ── Resolve the local trigger ──────────────────────────────────────────
+      const localTrigger = await CompanyLocalTrigger.findOne({
+        companyId,
         triggerId,
         isDeleted: { $ne: true }
       });
 
-      if (!trigger) {
-        return res.status(404).json({
-          success: false,
-          error: 'Trigger not found'
-        });
+      if (!localTrigger) {
+        return res.status(404).json({ success: false, error: 'Local trigger not found' });
       }
 
-      if (scope === 'GLOBAL') {
-        if (!isPlatformAdmin(req.user)) {
-          return res.status(403).json({
-            success: false,
-            error: 'Only platform admins can change triggers to GLOBAL scope'
-          });
-        }
-
-        const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
-        if (!settings?.activeGroupId) {
-          return res.status(400).json({
-            success: false,
-            error: 'Cannot change to GLOBAL scope: No active global group selected'
-          });
-        }
-
-        const globalTrigger = await GlobalTrigger.create({
-          groupId: settings.activeGroupId,
-          ruleId: trigger.ruleId,
-          triggerId: `GLOBAL_${settings.activeGroupId}_${trigger.ruleId}`,
-          label: trigger.label,
-          description: trigger.description || '',
-          priority: trigger.priority,
-          keywords: trigger.keywords || [],
-          phrases: trigger.phrases || [],
-          negativeKeywords: trigger.negativeKeywords || [],
-          answerText: trigger.answerText,
-          audioUrl: trigger.audioUrl || '',
-          followUpQuestion: trigger.followUpQuestion || '',
-          followUpNextAction: trigger.followUpNextAction || '',
-          tags: trigger.tags || [],
-          createdBy: userId,
-          updatedBy: userId
-        });
-
-        await CompanyLocalTrigger.updateOne(
-          { _id: trigger._id },
-          {
-            $set: {
-              isDeleted: true,
-              deletedAt: new Date(),
-              deletedBy: userId,
-              deletedReason: 'CONVERTED_TO_GLOBAL'
-            }
-          }
-        );
-
-        await GlobalTriggerGroup.updateOne(
-          { groupId: settings.activeGroupId },
-          { $inc: { triggerCount: 1 } }
-        );
-
-        logger.info('[CompanyTriggers] Trigger converted to GLOBAL', {
-          companyId,
-          triggerId,
-          ruleId: trigger.ruleId,
-          newGlobalTriggerId: globalTrigger.triggerId,
-          convertedBy: userId
-        });
-
-        return res.json({
-          success: true,
-          message: 'Trigger converted to GLOBAL scope',
-          data: {
-            scope: 'GLOBAL',
-            triggerId: globalTrigger.triggerId,
-            ruleId: trigger.ruleId
-          }
-        });
-
-      } else {
+      // ── Resolve the active group ───────────────────────────────────────────
+      const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+      if (!settings?.activeGroupId) {
         return res.status(400).json({
           success: false,
-          error: 'Converting GLOBAL triggers to LOCAL is not currently supported'
+          error: 'Cannot promote to GLOBAL: this company has no active global group selected. Select a group first.'
         });
       }
 
+      const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+      if (!group) {
+        return res.status(400).json({
+          success: false,
+          error: `Active group "${settings.activeGroupId}" not found in the database.`
+        });
+      }
+
+      const groupId = settings.activeGroupId;
+
+      // ── Build the complete global trigger shape ────────────────────────────
+      // Every field from the local trigger is copied. Nothing is dropped.
+      // Audio is intentionally excluded — it is always company-specific.
+      const baseDoc = {
+        groupId,
+        ruleId:           localTrigger.ruleId,
+        label:            localTrigger.label,
+        description:      localTrigger.description || '',
+        enabled:          localTrigger.enabled !== false,
+        priority:         typeof localTrigger.priority === 'number' ? localTrigger.priority : 50,
+        keywords:         localTrigger.keywords || [],
+        phrases:          localTrigger.phrases  || [],
+        negativeKeywords: localTrigger.negativeKeywords || [],
+        negativePhrases:  localTrigger.negativePhrases  || [],
+        bucket:           localTrigger.bucket  || null,
+        maxInputWords:    typeof localTrigger.maxInputWords === 'number' ? localTrigger.maxInputWords : null,
+        scenarioTypeAllowlist: localTrigger.scenarioTypeAllowlist || [],
+        responseMode:     localTrigger.responseMode || 'standard',
+        answerText:       localTrigger.answerText || '',
+        audioUrl:         '',   // Audio is company-specific — never promoted
+        llmFactPack: {
+          includedFacts: localTrigger.llmFactPack?.includedFacts || '',
+          excludedFacts: localTrigger.llmFactPack?.excludedFacts || '',
+          backupAnswer:  localTrigger.llmFactPack?.backupAnswer  || ''
+        },
+        followUpQuestion:   localTrigger.followUpQuestion   || '',
+        followUpNextAction: localTrigger.followUpNextAction || 'CONTINUE',
+        tags:       localTrigger.tags || [],
+        version:    1,
+        createdBy:  userId,
+        updatedBy:  userId,
+        isDeleted:  false,
+        deletedAt:  null,
+        deletedBy:  null,
+        deletedReason: null
+      };
+
+      // ── Canonical IDs (matches seed script pattern) ────────────────────────
+      const publishedTriggerId = GlobalTrigger.generateTriggerId(groupId, localTrigger.ruleId);
+      const draftTriggerId     = `${publishedTriggerId}::draft`;
+
+      // ── Step 1: Upsert PUBLISHED (runtime-visible immediately) ────────────
+      await GlobalTrigger.findOneAndUpdate(
+        { groupId, ruleId: localTrigger.ruleId, state: 'published' },
+        { $set: { ...baseDoc, state: 'published', triggerId: publishedTriggerId } },
+        { upsert: true, new: true }
+      );
+
+      // ── Step 2: Upsert DRAFT copy (admin editing; non-critical) ───────────
+      try {
+        await GlobalTrigger.findOneAndUpdate(
+          { groupId, ruleId: localTrigger.ruleId, state: 'draft' },
+          { $set: { ...baseDoc, state: 'draft', triggerId: draftTriggerId } },
+          { upsert: true, new: true }
+        );
+      } catch (draftErr) {
+        // Draft failure does not block promotion — published is the runtime record
+        logger.warn('[CompanyTriggers] Draft copy upsert failed on promote (non-critical)', {
+          companyId, ruleId: localTrigger.ruleId, error: draftErr.message
+        });
+      }
+
+      // ── Step 3: Soft-delete the local trigger (only after global is live) ──
+      await CompanyLocalTrigger.updateOne(
+        { _id: localTrigger._id },
+        {
+          $set: {
+            isDeleted:     true,
+            deletedAt:     new Date(),
+            deletedBy:     userId,
+            deletedReason: 'PROMOTED_TO_GLOBAL'
+          }
+        }
+      );
+
+      // ── Step 4: Update group metadata ──────────────────────────────────────
+      const publishedCount = await GlobalTrigger.countDocuments({
+        groupId,
+        state: 'published',
+        isDeleted: { $ne: true }
+      });
+
+      group.triggerCount = publishedCount;
+      group.addAuditEntry('TRIGGER_ADDED', userId, {
+        ruleId: localTrigger.ruleId,
+        triggerId: publishedTriggerId,
+        promotedFromCompany: companyId,
+        note: 'Promoted from LOCAL to GLOBAL'
+      });
+      group.updatedAt  = new Date();
+      group.updatedBy  = userId;
+      await group.save();
+
+      // ── Step 5: Bust cache for all companies on this group ─────────────────
+      const TriggerService = require('../../services/engine/agent2/TriggerService');
+      TriggerService.invalidateCacheForGroup(groupId);
+      TriggerService.invalidateCacheForCompany(companyId);
+
+      logger.info('[CompanyTriggers] ✅ PROMOTE_SCOPE local→global', {
+        companyId,
+        ruleId:        localTrigger.ruleId,
+        groupId,
+        publishedTriggerId,
+        createdState:  'published',
+        promotedBy:    userId
+      });
+
+      return res.json({
+        success: true,
+        message: `Trigger "${localTrigger.label}" is now GLOBAL in group "${group.name}"`,
+        data: {
+          scope:           'GLOBAL',
+          triggerId:       publishedTriggerId,
+          ruleId:          localTrigger.ruleId,
+          groupId,
+          groupName:       group.name,
+          publishedCount
+        }
+      });
+
     } catch (error) {
-      logger.error('[CompanyTriggers] Change scope error', { error: error.message });
+      logger.error('[CompanyTriggers] PROMOTE_SCOPE failed', {
+        error: error.message,
+        stack: error.stack
+      });
       return res.status(500).json({ success: false, error: error.message });
     }
   }

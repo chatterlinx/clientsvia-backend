@@ -138,6 +138,7 @@
     bulkImportStatus: document.getElementById('bulk-import-status'),
     btnCancelBulkImport: document.getElementById('btn-cancel-bulk-import'),
     btnExecuteBulkImport: document.getElementById('btn-execute-bulk-import'),
+    chkLocalImportConfirm: document.getElementById('chk-local-import-confirm'),
     
     groupSelector: document.getElementById('group-selector'),
     groupIcon: document.getElementById('group-icon'),
@@ -497,6 +498,15 @@
     if (DOM.btnExecuteBulkImport) DOM.btnExecuteBulkImport.addEventListener('click', executeBulkImport);
     if (DOM.modalBulkImport) {
       DOM.modalBulkImport.addEventListener('click', (e) => { if (e.target === DOM.modalBulkImport) closeBulkImportModal(); });
+    }
+    // Enable the import button only when the LOCAL-only checkbox is checked
+    if (DOM.chkLocalImportConfirm && DOM.btnExecuteBulkImport) {
+      DOM.chkLocalImportConfirm.addEventListener('change', () => {
+        const confirmed = DOM.chkLocalImportConfirm.checked;
+        DOM.btnExecuteBulkImport.disabled = !confirmed;
+        DOM.btnExecuteBulkImport.style.opacity = confirmed ? '1' : '0.5';
+        DOM.btnExecuteBulkImport.style.cursor  = confirmed ? 'pointer' : 'not-allowed';
+      });
     }
     
     // GPT Settings & Prefill
@@ -2628,6 +2638,13 @@
   function openBulkImportModal() {
     if (DOM.bulkImportJson) DOM.bulkImportJson.value = '';
     if (DOM.bulkImportStatus) DOM.bulkImportStatus.style.display = 'none';
+    // Always reset checkbox + button state on open — force conscious opt-in every time
+    if (DOM.chkLocalImportConfirm) DOM.chkLocalImportConfirm.checked = false;
+    if (DOM.btnExecuteBulkImport) {
+      DOM.btnExecuteBulkImport.disabled = true;
+      DOM.btnExecuteBulkImport.style.opacity = '0.5';
+      DOM.btnExecuteBulkImport.style.cursor  = 'not-allowed';
+    }
     if (DOM.modalBulkImport) DOM.modalBulkImport.classList.add('active');
   }
 
@@ -2707,11 +2724,10 @@
       return;
     }
 
-    const confirmMsg = `Import ${valid.length} trigger(s)?` +
-      (errors.length > 0 ? `\n\n${errors.length} skipped due to errors.` : '') +
-      `\n\nThey will be created as LOCAL triggers for this company.`;
-
-    if (!confirm(confirmMsg)) return;
+    if (errors.length > 0 && valid.length > 0) {
+      // Non-blocking notice about skipped triggers — checkbox already confirmed intent
+      showToast('warning', 'Import Validation', `${errors.length} trigger(s) skipped due to validation errors. Importing ${valid.length} valid.`);
+    }
 
     const statusEl = DOM.bulkImportStatus;
     statusEl.style.display = 'block';
@@ -2747,7 +2763,7 @@
     if (created > 0) {
       closeBulkImportModal();
       await loadTriggers();
-      showToast('success', 'Bulk Import', `${created} trigger(s) imported successfully.`);
+      showToast('success', 'LOCAL Import Complete', `${created} LOCAL trigger(s) imported for this company. Global groups unchanged.`);
     }
   }
 
