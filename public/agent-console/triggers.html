@@ -1598,6 +1598,42 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
                 YES/NO routing, phrases, and responses are all configured there.
               </div>
             </div>
+
+            <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="form-label">Follow-Up Action</label>
+                <select id="input-trigger-followup-action" class="form-select" style="width:100%;">
+                  <option value="CONTINUE">CONTINUE (stay in discovery)</option>
+                  <option value="HANDOFF_BOOKING">HANDOFF_BOOKING (go to booking)</option>
+                </select>
+                <p class="form-hint">What happens when caller says YES to the follow-up.</p>
+              </div>
+              <div>
+                <label class="form-label">Intent Bucket</label>
+                <select id="input-trigger-bucket" class="form-select" style="width:100%;">
+                  <option value="">— Untagged (always included) —</option>
+                  <option value="booking_service">booking_service</option>
+                  <option value="billing_payment">billing_payment</option>
+                  <option value="membership_plan">membership_plan</option>
+                  <option value="existing_appointment">existing_appointment</option>
+                  <option value="other_operator">other_operator</option>
+                </select>
+                <p class="form-hint">Pre-filters trigger pool when CallRouter classifies this bucket.</p>
+              </div>
+            </div>
+
+            <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0;">
+              <div>
+                <label class="form-label">Negative Phrases <span style="font-weight:400;color:#94a3b8;">(one per line)</span></label>
+                <textarea id="input-trigger-negative-phrases" class="form-textarea" rows="3" placeholder="cancel my appointment&#10;calling to cancel&#10;need to cancel"></textarea>
+                <p class="form-hint">Exact phrase blocks this card (context-aware vs single-word negatives).</p>
+              </div>
+              <div>
+                <label class="form-label">Max Input Words</label>
+                <input type="number" id="input-trigger-max-words" class="form-input" min="0" max="100" placeholder="e.g. 8 for goodbye cards">
+                <p class="form-hint">Card skipped if caller utterance exceeds this word count. Leave blank for no limit.</p>
+              </div>
+            </div>
           </div>
           
           <!-- Scope (for new triggers) -->

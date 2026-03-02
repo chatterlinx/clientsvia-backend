@@ -1138,11 +1138,23 @@ router.put('/:companyId/trigger-override',
         setBy: userId
       });
 
+      // partialOverrides may be a Mongoose Map, plain Object, or Array depending on schema
+      // Normalize to array before calling .find()
+      let overrideFound = null;
+      const po = settings.partialOverrides;
+      if (po instanceof Map) {
+        overrideFound = po.get(globalTriggerId) || null;
+      } else if (Array.isArray(po)) {
+        overrideFound = po.find(o => o.globalTriggerId === globalTriggerId) || null;
+      } else if (po && typeof po === 'object') {
+        overrideFound = po[globalTriggerId] || null;
+      }
+
       return res.json({
         success: true,
         data: {
           globalTriggerId,
-          override: settings.partialOverrides.find(po => po.globalTriggerId === globalTriggerId)
+          override: overrideFound
         }
       });
     } catch (error) {

@@ -1414,6 +1414,18 @@
       DOM.inputTriggerAnswer.value = trigger.answer?.answerText || '';
       DOM.inputTriggerAudio.value = trigger.answer?.audioUrl || '';
       DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
+      // Populate followUpNextAction
+      const followupActionEl = document.getElementById('input-trigger-followup-action');
+      if (followupActionEl) followupActionEl.value = trigger.followUp?.nextAction || 'CONTINUE';
+      // Populate bucket
+      const bucketEl = document.getElementById('input-trigger-bucket');
+      if (bucketEl) bucketEl.value = trigger.bucket || '';
+      // Populate maxInputWords
+      const maxWordsEl = document.getElementById('input-trigger-max-words');
+      if (maxWordsEl) maxWordsEl.value = trigger.maxInputWords || '';
+      // Populate negativePhrases
+      const negPhrasesEl = document.getElementById('input-trigger-negative-phrases');
+      if (negPhrasesEl) negPhrasesEl.value = (trigger.match?.negativePhrases || trigger.negativePhrases || []).join('\n');
       updateFollowupActionVisibility();
       DOM.scopeSection.style.display = 'none';
       
@@ -1555,11 +1567,18 @@
       return;
     }
     
-    if (!/^[a-z0-9_.]+$/.test(ruleId)) {
-      showToast('error', 'Invalid Rule ID', 'Use lowercase letters, numbers, dots, underscores only.');
+    // Regex matches backend: /^[a-z0-9]+(\.[a-z0-9_-]+)*$/
+    // Valid: "hvac.cooling.not_cooling", "pricing.freon-r22"
+    // Invalid: leading underscore, double dots, trailing dot
+    if (!/^[a-z0-9]+(\.[a-z0-9_-]+)*$/.test(ruleId)) {
+      showToast('error', 'Invalid Rule ID', 'Use lowercase letters/numbers, dots as separators (e.g. hvac.cooling.not_cooling). Hyphens allowed within segments.');
       return;
     }
     
+    // Read followUpNextAction from modal if present
+    const followUpNextActionEl = document.getElementById('input-trigger-followup-action');
+    const followUpNextAction = followUpNextActionEl ? (followUpNextActionEl.value || 'CONTINUE') : 'CONTINUE';
+
     const payload = {
       ruleId,
       label,
@@ -1567,10 +1586,15 @@
       keywords,
       phrases,
       negativeKeywords,
+      negativePhrases: (document.getElementById('input-trigger-negative-phrases')?.value || '')
+        .split('\n').map(s => s.trim().toLowerCase()).filter(Boolean),
+      maxInputWords: parseInt(document.getElementById('input-trigger-max-words')?.value || '0') || null,
+      bucket: document.getElementById('input-trigger-bucket')?.value || null,
       responseMode,
       answerText,
       audioUrl,
-      followUpQuestion
+      followUpQuestion,
+      followUpNextAction
     };
     
     // Include LLM fact pack if in LLM mode
@@ -2340,13 +2364,26 @@
       const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/duplicates`);
       
       if (data.healthy) {
-        DOM.duplicateWarning.style.display = 'none';
+        if (DOM.duplicateWarning) DOM.duplicateWarning.style.display = 'none';
         showToast('success', 'All Clear', 'No duplicate triggers found.');
       } else {
-        const count = (data.localDuplicates?.length || 0) + (data.mergedDuplicates?.length || 0);
-        DOM.duplicateWarningText.textContent = `${count} duplicate rule ID(s) detected. This may cause unexpected behavior.`;
-        DOM.duplicateWarning.style.display = 'flex';
-        showToast('warning', 'Duplicates Found', `${count} duplicate(s) detected.`);
+        // API returns data.issues[] array — count critical + warning severity items
+        const issues = data.issues || [];
+        const critCount = issues.filter(i => i.severity === 'critical').length;
+        const warnCount = issues.filter(i => i.severity === 'warning').length;
+        const totalItems = issues.reduce((sum, i) => sum + (i.items?.length || 1), 0);
+
+        const parts = [];
+        if (critCount > 0) parts.push(`${critCount} critical`);
+        if (warnCount > 0) parts.push(`${warnCount} warning`);
+        const summary = parts.length > 0 ? parts.join(', ') : `${issues.length} issue(s)`;
+
+        if (DOM.duplicateWarningText) {
+          DOM.duplicateWarningText.textContent = `${summary} detected (${totalItems} affected item(s)). Check console for details.`;
+        }
+        if (DOM.duplicateWarning) DOM.duplicateWarning.style.display = 'flex';
+        showToast('warning', 'Issues Found', `${summary} detected.`);
+        console.warn('[Triggers] Health issues:', issues);
       }
       
     } catch (error) {
@@ -2757,7 +2794,21 @@
       throw new Error(data.error || data.message || 'Request failed');
     }
     
-    return data.data || data;
+    // If response has a 'data' wrapper, unwrap it but preserve top-level metadata fields
+    // (audioInvalidated, audioInvalidatedCount, etc.) that backends place at root level.
+    if (data.data !== undefined) {
+      const unwrapped = data.data;
+      // Attach top-level metadata to the unwrapped result so callers can read it
+      if (typeof unwrapped === 'object' && unwrapped !== null && !Array.isArray(unwrapped)) {
+        const meta = {};
+        for (const [k, v] of Object.entries(data)) {
+          if (k !== 'data' && k !== 'success') meta[k] = v;
+        }
+        return Object.assign(unwrapped, meta);
+      }
+      return unwrapped;
+    }
+    return data;
   }
 
   function showToast(type, title, message) {
@@ -3059,14 +3110,16 @@
       }
       
       // Delete global triggers (if admin)
+      // NOTE: global triggers use originGroupId (not groupId) from buildMergedTriggerList()
       for (const triggerId of globalTriggers) {
         const trigger = state.triggers.find(t => t.triggerId === triggerId);
-        if (!trigger || !trigger.ruleId || !trigger.groupId) {
-          console.warn('[Bulk Delete] Could not find ruleId/groupId for global triggerId:', triggerId);
+        const groupId = trigger?.originGroupId || trigger?.groupId;
+        if (!trigger || !trigger.ruleId || !groupId) {
+          console.warn('[Bulk Delete] Could not find ruleId/originGroupId for global triggerId:', triggerId, 'trigger:', trigger);
           continue;
         }
-        const url = `${CONFIG.API_BASE_GLOBAL}/trigger-groups/${encodeURIComponent(trigger.groupId)}/triggers/${encodeURIComponent(trigger.ruleId)}`;
-        console.log('[Bulk Delete] Deleting global trigger:', trigger.ruleId, 'from group:', trigger.groupId, 'URL:', url);
+        const url = `${CONFIG.API_BASE_GLOBAL}/trigger-groups/${encodeURIComponent(groupId)}/triggers/${encodeURIComponent(trigger.ruleId)}`;
+        console.log('[Bulk Delete] Deleting global trigger:', trigger.ruleId, 'from group:', groupId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
