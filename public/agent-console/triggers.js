@@ -85,6 +85,7 @@
     btnBulkGenerateAudio: document.getElementById('btn-bulk-generate-audio'),
     btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
+    btnRefreshCache: document.getElementById('btn-refresh-cache'),
     btnCreateGroup: document.getElementById('btn-create-group'),
     btnSettingsMenu: document.getElementById('btn-settings-menu'),
     settingsDropdown: document.getElementById('settings-dropdown'),
@@ -292,6 +293,43 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+
+    // Refresh Cache button — flushes the 60-second runtime trigger cache immediately
+    if (DOM.btnRefreshCache) {
+      DOM.btnRefreshCache.addEventListener('click', async () => {
+        const btn = DOM.btnRefreshCache;
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+        try {
+          const result = await apiFetch(
+            `${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/refresh`,
+            { method: 'POST' }
+          );
+          btn.textContent = '✓ Cache Cleared';
+          btn.style.background = '#dcfce7';
+          btn.style.color = '#166534';
+          btn.style.borderColor = '#86efac';
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.borderColor = '';
+            btn.disabled = false;
+          }, 2500);
+        } catch (err) {
+          btn.textContent = '✗ Failed';
+          btn.style.background = '#fee2e2';
+          btn.style.color = '#991b1b';
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.disabled = false;
+          }, 2500);
+        }
+      });
+    }
     if (DOM.btnNameGreeting) DOM.btnNameGreeting.addEventListener('click', openNameGreetingModal);
     
     // Bulk selection

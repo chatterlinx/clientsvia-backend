@@ -44,6 +44,33 @@ router.use('/truth', truthExportRouter);
 const scrabEngineRouter = require('./scrabEngine');
 router.use('/', scrabEngineRouter);
 
+// ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/triggers/refresh — Flush runtime trigger cache
+// ════════════════════════════════════════════════════════════════════════════
+// The runtime caches compiled triggers for 60 seconds to avoid DB hits on
+// every call turn. During testing or after saving changes, this endpoint lets
+// admins force-clear the cache immediately so the next call picks up fresh data.
+// Previously required waiting up to 60 seconds — now instant.
+router.post('/:companyId/triggers/refresh', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const TriggerService = require('../../services/engine/agent2/TriggerService');
+
+    TriggerService.invalidateCacheForCompany(companyId);
+
+    logger.info('[AgentConsole] Trigger cache cleared', { companyId });
+
+    res.json({
+      success: true,
+      message: 'Trigger cache cleared. Next call will load fresh triggers from the database.',
+      companyId
+    });
+  } catch (error) {
+    logger.error('[AgentConsole] Trigger cache refresh error:', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /* ============================================================================
    TRUTH CACHE — Short TTL to prevent Mongo hammering
    ============================================================================ */

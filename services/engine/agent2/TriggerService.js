@@ -244,10 +244,12 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
         enabled: gt.enabled,
         priority: gt.priority ?? 50,
         label: gt.label,
+        maxInputWords: typeof gt.maxInputWords === 'number' ? gt.maxInputWords : undefined,
         match: {
           keywords: gt.keywords || [],
           phrases: gt.phrases || [],
           negativeKeywords: gt.negativeKeywords || [],
+          negativePhrases:  gt.negativePhrases  || [],
           scenarioTypeAllowlist: gt.scenarioTypeAllowlist || []
         },
         responseMode: gt.responseMode || 'standard',
@@ -285,10 +287,12 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
       enabled: lt.enabled,
       priority: lt.priority ?? 50,
       label: lt.label,
+      maxInputWords: typeof lt.maxInputWords === 'number' ? lt.maxInputWords : undefined,
       match: {
         keywords: lt.keywords || [],
         phrases: lt.phrases || [],
         negativeKeywords: lt.negativeKeywords || [],
+        negativePhrases:  lt.negativePhrases  || [],
         scenarioTypeAllowlist: lt.scenarioTypeAllowlist || []
       },
       responseMode: lt.responseMode || 'standard',
@@ -447,9 +451,10 @@ function transformLegacyCard(card) {
     priority:  typeof card.priority === 'number' ? card.priority : 50,
     label:     card.label || card.ruleId || '',
     match: {
-      keywords:        card.keywords        || [],
-      phrases:         card.phrases         || [],
-      negativeKeywords: card.negativeKeywords || [],
+      keywords:         card.keywords         || [],
+      phrases:          card.phrases          || [],
+      negativeKeywords: card.negativeKeywords  || [],
+      negativePhrases:  card.negativePhrases   || [],
       scenarioTypeAllowlist: card.scenarioTypeAllowlist || []
     },
     responseMode: card.responseMode || 'standard',

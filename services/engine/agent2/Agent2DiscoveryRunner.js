@@ -1668,6 +1668,25 @@ class Agent2DiscoveryRunner {
     // Single load, used for both matching and pool stats.
     // ──────────────────────────────────────────────────────────────────────────
     const triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2);
+
+    // ── VISIBILITY: Emit TRIGGER_POOL_EMPTY when no cards loaded ──────────
+    // This event surfaces in Call Console transcript so admins can see EXACTLY
+    // why every turn falls through to LLM. Previously this failed silently.
+    // Cause is almost always: no group assigned, group not published, or all
+    // triggers disabled. Use the Triggers admin page → Refresh Cache to debug.
+    if (triggerCards.length === 0) {
+      emit('TRIGGER_POOL_EMPTY', {
+        companyId,
+        callSid,
+        turn,
+        message: 'No trigger cards loaded — all turns will fall through to LLM fallback',
+        action: 'Go to Admin → Triggers → Verify group is assigned and published, then click Refresh Cache'
+      });
+      logger.warn('[Agent2] ⚠️ TRIGGER_POOL_EMPTY — no cards to evaluate', {
+        companyId, callSid, turn
+      });
+    }
+
     const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, matchOptions);
     const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
     

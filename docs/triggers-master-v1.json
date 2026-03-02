@@ -8,9 +8,14 @@
     "_comment6": "  isn't→is not  won't→will not  doesn't→does not  can't→cannot",
     "_comment7": "Priority: lower number = evaluated FIRST. Conversational = 91-100 (LAST).",
     "_comment8": "followUpNextAction: HANDOFF_BOOKING drives to booking flow on YES.",
-    "_comment9": "============================================================================="
+    "_comment9": "=============================================================================",
+    "_comment10": "PHASE 2 ADDITIONS:",
+    "_comment11": "negativePhrases: substring-match negatives (context-aware). Use instead of single",
+    "_comment12": "  word 'cancel' to avoid blocking service calls where 'cancel' appears in passing.",
+    "_comment13": "maxInputWords: integer. Card only fires if utterance has <= N words.",
+    "_comment14": "  Use on conversational cards (goodbye, robot, thank-you) to prevent them",
+    "_comment15": "  from stealing long service-related utterances."
   },
-
   {
     "ruleId": "emergency.gas_smell",
     "label": "Gas smell or leak",
@@ -18,14 +23,25 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["gas leak", "gas smell"],
-    "phrases": ["smell gas", "gas odor", "gas leak", "smells like gas", "gas coming from", "gas fumes", "rotten egg smell", "smells like rotten eggs"],
+    "keywords": [
+      "gas leak",
+      "gas smell"
+    ],
+    "phrases": [
+      "smell gas",
+      "gas odor",
+      "gas leak",
+      "smells like gas",
+      "gas coming from",
+      "gas fumes",
+      "rotten egg smell",
+      "smells like rotten eggs"
+    ],
     "negativeKeywords": [],
     "answerText": "That is a serious safety concern. Please turn your system off immediately, leave the area if there is a strong odor, and call your gas company or 911 right now. Do not flip any switches or use your phone near the smell. Once you are safe, we can dispatch our on-call team.",
     "followUpQuestion": "Are you and your family safely out of the area?",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "emergency.carbon_monoxide",
     "label": "Carbon monoxide alarm or detector",
@@ -33,14 +49,23 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["carbon monoxide"],
-    "phrases": ["co alarm", "co detector", "carbon monoxide detector", "co alarm going off", "co detector beeping", "carbon monoxide alarm", "detector going off"],
+    "keywords": [
+      "carbon monoxide"
+    ],
+    "phrases": [
+      "co alarm",
+      "co detector",
+      "carbon monoxide detector",
+      "co alarm going off",
+      "co detector beeping",
+      "carbon monoxide alarm",
+      "detector going off"
+    ],
     "negativeKeywords": [],
     "answerText": "Get everyone out of the building right now and call 911. Do not go back inside until emergency services say it is safe. Once you are outside, I can connect you to our on-call team to check your system.",
     "followUpQuestion": "Is everyone out of the building?",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "emergency.sparks_arcing",
     "label": "Sparks, arcing, or electrical hazard",
@@ -48,14 +73,23 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["sparks"],
-    "phrases": ["sparks from unit", "sparks coming from", "arcing", "electrical arcing", "sparking", "sparks flying", "electrical spark"],
+    "keywords": [
+      "sparks"
+    ],
+    "phrases": [
+      "sparks from unit",
+      "sparks coming from",
+      "arcing",
+      "electrical arcing",
+      "sparking",
+      "sparks flying",
+      "electrical spark"
+    ],
     "negativeKeywords": [],
     "answerText": "Turn the system off at the thermostat and at the breaker right now — do not touch the equipment. If there is active arcing or fire, call 911 immediately. I can get our on-call team dispatched to you.",
     "followUpQuestion": "Do you want me to connect you with our emergency team right now?",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "emergency.burning_smell",
     "label": "Burning smell from system",
@@ -63,14 +97,33 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["burning", "smell"],
-    "phrases": ["burning smell", "smells like burning", "smell burning", "burning electrical", "smells like wires", "burning wires", "hot electrical smell", "acrid smell", "burning plastic smell"],
-    "negativeKeywords": ["candle", "fireplace", "stove", "oven", "food", "smoke detector test"],
+    "keywords": [
+      "burning",
+      "smell"
+    ],
+    "phrases": [
+      "burning smell",
+      "smells like burning",
+      "smell burning",
+      "burning electrical",
+      "smells like wires",
+      "burning wires",
+      "hot electrical smell",
+      "acrid smell",
+      "burning plastic smell"
+    ],
+    "negativeKeywords": [
+      "candle",
+      "fireplace",
+      "stove",
+      "oven",
+      "food",
+      "smoke detector test"
+    ],
     "answerText": "Turn the system off at the thermostat immediately. A burning smell from your HVAC system can indicate an electrical issue that needs urgent attention. I can get a technician dispatched to you right away.",
     "followUpQuestion": "Do you want me to schedule an emergency service call right now?",
     "followUpNextAction": "HANDOFF_BOOKING"
   },
-
   {
     "ruleId": "emergency.flooding_water",
     "label": "Major water leak or flooding from HVAC",
@@ -78,14 +131,30 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["flooding"],
-    "phrases": ["water everywhere", "water flooding", "ceiling leaking", "water pouring", "water coming through ceiling", "water pouring from unit", "flooding from ac", "water all over the floor", "pouring water"],
-    "negativeKeywords": ["outside", "rain", "storm", "yard"],
+    "keywords": [
+      "flooding"
+    ],
+    "phrases": [
+      "water everywhere",
+      "water flooding",
+      "ceiling leaking",
+      "water pouring",
+      "water coming through ceiling",
+      "water pouring from unit",
+      "flooding from ac",
+      "water all over the floor",
+      "pouring water"
+    ],
+    "negativeKeywords": [
+      "outside",
+      "rain",
+      "storm",
+      "yard"
+    ],
     "answerText": "Turn the system off right now to stop more water from flowing. If water is near any electrical panels or outlets, stay back and call an electrician. I can get a technician out to you urgently.",
     "followUpQuestion": "Do you want me to schedule an emergency dispatch right now?",
     "followUpNextAction": "HANDOFF_BOOKING"
   },
-
   {
     "ruleId": "emergency.vulnerable_occupant",
     "label": "No cooling with vulnerable occupant at home",
@@ -93,14 +162,26 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["baby"],
-    "phrases": ["baby in the house", "newborn at home", "elderly person", "elderly parent", "medical condition no ac", "oxygen machine", "on oxygen", "medical equipment", "infant at home", "disabled person no cool"],
+    "keywords": [
+      "baby"
+    ],
+    "phrases": [
+      "baby in the house",
+      "newborn at home",
+      "elderly person",
+      "elderly parent",
+      "medical condition no ac",
+      "oxygen machine",
+      "on oxygen",
+      "medical equipment",
+      "infant at home",
+      "disabled person no cool"
+    ],
     "negativeKeywords": [],
     "answerText": "I understand — that is urgent. Please keep anyone vulnerable cool with fans, wet towels, or a cooler space if possible, and make sure they stay hydrated. I am scheduling the first available technician for you right now.",
     "followUpQuestion": "Can I get your address so I can confirm the fastest available slot?",
     "followUpNextAction": "HANDOFF_BOOKING"
   },
-
   {
     "ruleId": "emergency.after_hours_urgent",
     "label": "After hours emergency or urgent same-day service",
@@ -108,14 +189,40 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["emergency"],
-    "phrases": ["emergency service", "after hours emergency", "need someone now", "urgent service", "as soon as possible", "right away", "today urgent", "need help now", "emergency call"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "emergency"
+    ],
+    "phrases": [
+      "emergency service",
+      "after hours emergency",
+      "need someone now",
+      "urgent service",
+      "as soon as possible",
+      "right away",
+      "today urgent",
+      "need help now",
+      "emergency call"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "I understand this is urgent. Let me connect you with our on-call team to get someone dispatched as fast as possible.",
     "followUpQuestion": "Do you want me to connect you with our on-call team right now?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.electrical.breaker_tripping",
     "label": "Breaker keeps tripping or popping",
@@ -123,14 +230,41 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["breaker", "tripping"],
-    "phrases": ["breaker keeps tripping", "breaker keeps popping", "trips the breaker", "blows the breaker", "breaker popping", "ac breaker trips", "keeps tripping the breaker", "breaker will not stay on", "breaker flips"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "breaker",
+      "tripping"
+    ],
+    "phrases": [
+      "breaker keeps tripping",
+      "breaker keeps popping",
+      "trips the breaker",
+      "blows the breaker",
+      "breaker popping",
+      "ac breaker trips",
+      "keeps tripping the breaker",
+      "breaker will not stay on",
+      "breaker flips"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Leave the breaker off for now — do not keep resetting it. A breaker that trips repeatedly is a sign of an electrical fault that needs proper diagnosis before it causes more damage. I can get a technician scheduled for you.",
     "followUpQuestion": "Do you want me to get that on the schedule?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.water.ceiling_vent_drip",
     "label": "Water dripping from ceiling or vent",
@@ -138,14 +272,30 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["ceiling", "dripping"],
-    "phrases": ["water dripping from ceiling", "ceiling is dripping", "drip from vent", "water coming from vent", "water stain on ceiling", "ceiling stain from ac", "dripping from ceiling", "water through ceiling", "wet ceiling"],
-    "negativeKeywords": ["outside", "rain", "roof"],
+    "keywords": [
+      "ceiling",
+      "dripping"
+    ],
+    "phrases": [
+      "water dripping from ceiling",
+      "ceiling is dripping",
+      "drip from vent",
+      "water coming from vent",
+      "water stain on ceiling",
+      "ceiling stain from ac",
+      "dripping from ceiling",
+      "water through ceiling",
+      "wet ceiling"
+    ],
+    "negativeKeywords": [
+      "outside",
+      "rain",
+      "roof"
+    ],
     "answerText": "Turn the system off to prevent more water from coming through. Water from your AC usually means a clogged drain or overflowing pan — it can damage ceilings fast. I can get a technician out to you.",
     "followUpQuestion": "Do you want me to schedule that right away?",
     "followUpNextAction": "HANDOFF_BOOKING"
   },
-
   {
     "ruleId": "hvac.water.indoor_unit_leak",
     "label": "Water leaking from indoor unit or air handler",
@@ -153,14 +303,43 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["water", "leaking"],
-    "phrases": ["water leaking", "water dripping from unit", "puddle near unit", "water by air handler", "water in closet", "leaking from unit", "water around indoor unit", "water at the base", "water on the floor near unit"],
-    "negativeKeywords": ["outside", "outdoor", "cancel", "reschedule"],
+    "keywords": [
+      "water",
+      "leaking"
+    ],
+    "phrases": [
+      "water leaking",
+      "water dripping from unit",
+      "puddle near unit",
+      "water by air handler",
+      "water in closet",
+      "leaking from unit",
+      "water around indoor unit",
+      "water at the base",
+      "water on the floor near unit"
+    ],
+    "negativeKeywords": [
+      "outside",
+      "outdoor",
+      "reschedule"
+    ],
     "answerText": "Turn the system off to stop the flow. Water near your indoor unit is usually a blocked drain line or a cracked drain pan — it is a quick fix but needs attention before it causes damage. I can schedule a technician.",
     "followUpQuestion": "Do you want me to get someone out there?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.cooling.not_cooling",
     "label": "AC not cooling or blowing warm air",
@@ -168,14 +347,66 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["not cooling", "not cool", "stopped cooling", "not working"],
-    "phrases": ["not cooling", "not getting cold", "blowing warm air", "warm air coming out", "blowing warm", "ac not working", "air conditioner not working", "not cold anymore", "not cooling the house", "no cold air", "hot air from vents", "ac stopped cooling", "system not cooling", "stopped cooling", "ac stopped working", "quit cooling", "does not cool", "stopped working"],
-    "negativeKeywords": ["cancel", "reschedule", "billing", "invoice", "thermostat", "furnace", "heat"],
+    "keywords": [
+      "not cooling",
+      "not cool",
+      "stopped cooling",
+      "not working",
+      "fix ac",
+      "fix unit"
+    ],
+    "phrases": [
+      "not cooling",
+      "not getting cold",
+      "blowing warm air",
+      "warm air coming out",
+      "blowing warm",
+      "ac not working",
+      "air conditioner not working",
+      "not cold anymore",
+      "not cooling the house",
+      "no cold air",
+      "hot air from vents",
+      "ac stopped cooling",
+      "system not cooling",
+      "stopped cooling",
+      "ac stopped working",
+      "quit cooling",
+      "does not cool",
+      "stopped working",
+      "ac broke",
+      "unit broke",
+      "ac broken",
+      "come fix my ac",
+      "fix my ac",
+      "someone to fix",
+      "broke down"
+    ],
+    "negativeKeywords": [
+      "reschedule",
+      "billing",
+      "invoice",
+      "thermostat",
+      "furnace",
+      "heat"
+    ],
     "answerText": "I can take care of that. We will get a technician out to diagnose why the system is not cooling and get it fixed.",
     "followUpQuestion": "Do you want me to get that scheduled?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.cooling.wont_turn_on",
     "label": "AC or system will not turn on",
@@ -183,14 +414,44 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["not turning on"],
-    "phrases": ["won't turn on", "will not turn on", "not turning on", "not coming on", "not starting up", "nothing happens", "system will not start", "ac dead", "system not responding", "unit not coming on", "no response from system", "unit is dead", "system stopped working"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "not turning on"
+    ],
+    "phrases": [
+      "won't turn on",
+      "will not turn on",
+      "not turning on",
+      "not coming on",
+      "not starting up",
+      "nothing happens",
+      "system will not start",
+      "ac dead",
+      "system not responding",
+      "unit not coming on",
+      "no response from system",
+      "unit is dead",
+      "system stopped working"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "We will get a technician out to track down the power or control issue and get your system running again.",
     "followUpQuestion": "Do you want me to schedule a service call?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.cooling.short_cycling",
     "label": "System turns on and off repeatedly",
@@ -198,14 +459,41 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["keeps turning off"],
-    "phrases": ["turns on and off", "keeps turning off", "keeps shutting off", "cycling on and off", "short cycling", "on and off every few minutes", "starts and stops", "keeps cycling", "runs for a minute then shuts off", "turns off after a few minutes"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "keeps turning off"
+    ],
+    "phrases": [
+      "turns on and off",
+      "keeps turning off",
+      "keeps shutting off",
+      "cycling on and off",
+      "short cycling",
+      "on and off every few minutes",
+      "starts and stops",
+      "keeps cycling",
+      "runs for a minute then shuts off",
+      "turns off after a few minutes"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Short cycling puts a lot of strain on the compressor and runs your bill up fast. We can get a technician out to diagnose the cause and fix it.",
     "followUpQuestion": "Do you want me to schedule a diagnostic?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.cooling.frozen_coil",
     "label": "Ice or frozen coil on AC unit",
@@ -213,14 +501,50 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["frozen", "ice forming", "ice buildup"],
-    "phrases": ["frozen coil", "ice on unit", "ice on the lines", "iced up", "ice buildup", "frozen pipes on ac", "ice on indoor unit", "coil is frozen", "ice on air handler", "ice forming on system", "ice forming on", "ice on the unit", "ice on my ac", "ice on the pipes"],
-    "negativeKeywords": ["cancel", "reschedule", "freezer", "refrigerator", "food"],
+    "keywords": [
+      "frozen",
+      "ice forming",
+      "ice buildup"
+    ],
+    "phrases": [
+      "frozen coil",
+      "ice on unit",
+      "ice on the lines",
+      "iced up",
+      "ice buildup",
+      "frozen pipes on ac",
+      "ice on indoor unit",
+      "coil is frozen",
+      "ice on air handler",
+      "ice forming on system",
+      "ice forming on",
+      "ice on the unit",
+      "ice on my ac",
+      "ice on the pipes"
+    ],
+    "negativeKeywords": [
+      "reschedule",
+      "freezer",
+      "refrigerator",
+      "food"
+    ],
     "answerText": "Turn the system off and let it thaw — running it while frozen can damage the compressor. Once it thaws, we need a technician to find the root cause, whether that is low refrigerant or an airflow problem.",
     "followUpQuestion": "Do you want me to schedule a technician while it thaws?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.cooling.runs_nonstop",
     "label": "AC runs constantly and never shuts off",
@@ -228,14 +552,42 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["running", "nonstop"],
-    "phrases": ["runs nonstop", "running all day", "will not shut off", "never turns off", "running constantly", "cannot reach temperature", "runs all the time", "never shuts off", "runs forever", "cannot cool down the house"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "running",
+      "nonstop"
+    ],
+    "phrases": [
+      "runs nonstop",
+      "running all day",
+      "will not shut off",
+      "never turns off",
+      "running constantly",
+      "cannot reach temperature",
+      "runs all the time",
+      "never shuts off",
+      "runs forever",
+      "cannot cool down the house"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "A system that runs nonstop is either undersized for the load, has an airflow problem, or is losing refrigerant. All three have solutions — I can get a technician out to find the cause.",
     "followUpQuestion": "Do you want me to schedule a service call?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.heat.not_heating",
     "label": "No heat or heat not working",
@@ -243,14 +595,54 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["no heat", "not heating", "heat not working", "furnace not working"],
-    "phrases": ["no heat", "heat not working", "heater not working", "no heat coming out", "heat is out", "heat stopped working", "not getting heat", "heat will not come on", "furnace not working", "heat does not work", "no warm air", "heat stopped", "heater stopped working", "heat quit working", "furnace not heating", "furnace stopped", "furnace stopped working", "furnace quit", "furnace is out", "furnace died"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "no heat",
+      "not heating",
+      "heat not working",
+      "furnace not working"
+    ],
+    "phrases": [
+      "no heat",
+      "heat not working",
+      "heater not working",
+      "no heat coming out",
+      "heat is out",
+      "heat stopped working",
+      "not getting heat",
+      "heat will not come on",
+      "furnace not working",
+      "heat does not work",
+      "no warm air",
+      "heat stopped",
+      "heater stopped working",
+      "heat quit working",
+      "furnace not heating",
+      "furnace stopped",
+      "furnace stopped working",
+      "furnace quit",
+      "furnace is out",
+      "furnace died"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "I can get a technician scheduled to diagnose and fix the heating issue. We will figure out whether it is the furnace, heat pump, or controls.",
     "followUpQuestion": "Do you want me to schedule that?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.heat.blowing_cold",
     "label": "Heat mode blowing cold air",
@@ -258,14 +650,42 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["heat blowing cold", "heating cold air", "heat cold air"],
-    "phrases": ["heat blowing cold", "blowing cold on heat", "cold air on heat mode", "set to heat but blowing cold", "heat but still cold air", "heat mode but cold", "supposed to be heating but blowing cold", "heat is blowing cold air", "blows cold when set to heat"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "heat blowing cold",
+      "heating cold air",
+      "heat cold air"
+    ],
+    "phrases": [
+      "heat blowing cold",
+      "blowing cold on heat",
+      "cold air on heat mode",
+      "set to heat but blowing cold",
+      "heat but still cold air",
+      "heat mode but cold",
+      "supposed to be heating but blowing cold",
+      "heat is blowing cold air",
+      "blows cold when set to heat"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Cold air on heat mode is usually a thermostat setting, a heat pump issue, or an auxiliary heat problem. A technician can diagnose it quickly and get your heat working.",
     "followUpQuestion": "Do you want me to schedule that?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.airflow.weak_or_none",
     "label": "Weak airflow or no air from vents",
@@ -273,14 +693,43 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["weak", "airflow"],
-    "phrases": ["weak airflow", "no air coming out", "barely blowing", "no air from vents", "nothing coming from vents", "poor airflow", "air barely coming out", "vents not blowing", "weak air from vents", "low airflow", "not much air coming out"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "weak",
+      "airflow"
+    ],
+    "phrases": [
+      "weak airflow",
+      "no air coming out",
+      "barely blowing",
+      "no air from vents",
+      "nothing coming from vents",
+      "poor airflow",
+      "air barely coming out",
+      "vents not blowing",
+      "weak air from vents",
+      "low airflow",
+      "not much air coming out"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Weak or no airflow is usually related to the filter, blower, or ductwork. A technician can pinpoint the issue and restore proper airflow to every room.",
     "followUpQuestion": "Do you want me to schedule a visit?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.airflow.uneven_rooms",
     "label": "Uneven temperature between rooms",
@@ -288,14 +737,49 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["hot room", "upstairs hotter", "rooms hotter"],
-    "phrases": ["one room hot", "upstairs hot", "uneven cooling", "some rooms hot", "rooms not the same temperature", "hot upstairs", "second floor hot", "certain rooms hot", "room not cooling", "one side of the house hot", "bedroom not cooling", "upstairs is hotter", "upstairs always hotter", "hotter upstairs", "some rooms hotter than others", "one room hotter"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "hot room",
+      "upstairs hotter",
+      "rooms hotter"
+    ],
+    "phrases": [
+      "one room hot",
+      "upstairs hot",
+      "uneven cooling",
+      "some rooms hot",
+      "rooms not the same temperature",
+      "hot upstairs",
+      "second floor hot",
+      "certain rooms hot",
+      "room not cooling",
+      "one side of the house hot",
+      "bedroom not cooling",
+      "upstairs is hotter",
+      "upstairs always hotter",
+      "hotter upstairs",
+      "some rooms hotter than others",
+      "one room hotter"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Uneven temperatures usually come from airflow balancing, duct issues, or insulation differences. A technician can evaluate and fix the imbalance.",
     "followUpQuestion": "Do you want me to schedule an inspection?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.thermostat.blank_screen",
     "label": "Thermostat screen blank, dark, or dead",
@@ -303,14 +787,45 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["thermostat blank", "thermostat dark", "thermostat dead", "thermostat screen off"],
-    "phrases": ["thermostat blank", "thermostat screen off", "thermostat went dark", "blank thermostat", "thermostat not showing anything", "thermostat black screen", "thermostat has no display", "thermostat is dead", "thermostat screen is off", "thermostat has no power", "thermostat went off"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "thermostat blank",
+      "thermostat dark",
+      "thermostat dead",
+      "thermostat screen off"
+    ],
+    "phrases": [
+      "thermostat blank",
+      "thermostat screen off",
+      "thermostat went dark",
+      "blank thermostat",
+      "thermostat not showing anything",
+      "thermostat black screen",
+      "thermostat has no display",
+      "thermostat is dead",
+      "thermostat screen is off",
+      "thermostat has no power",
+      "thermostat went off"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "A blank thermostat is usually a power, battery, or safety switch issue. Before we schedule, try replacing the batteries if it uses them. If that does not bring it back, a technician can track down the power issue.",
     "followUpQuestion": "Do you want me to schedule a technician just in case?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.thermostat.not_working",
     "label": "Thermostat not responding or not working",
@@ -318,14 +833,40 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["thermostat not working", "thermostat not responding"],
-    "phrases": ["thermostat not working", "thermostat broken", "thermostat not responding", "thermostat unresponsive", "thermostat does not work", "cannot control system", "thermostat will not change temperature", "thermostat not controlling the system"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "thermostat not working",
+      "thermostat not responding"
+    ],
+    "phrases": [
+      "thermostat not working",
+      "thermostat broken",
+      "thermostat not responding",
+      "thermostat unresponsive",
+      "thermostat does not work",
+      "cannot control system",
+      "thermostat will not change temperature",
+      "thermostat not controlling the system"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Thermostat problems can be as simple as wiring or as complex as a control board issue. A technician can diagnose the thermostat and the system it controls.",
     "followUpQuestion": "Do you want me to schedule that?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.noise.banging_rattling",
     "label": "Banging or rattling noise from system",
@@ -333,14 +874,41 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["banging"],
-    "phrases": ["banging noise", "loud banging", "rattling noise", "rattling sound", "banging from unit", "loud bang from system", "bang when it starts", "rattle when it runs", "knocking noise", "loud knocking"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "banging"
+    ],
+    "phrases": [
+      "banging noise",
+      "loud banging",
+      "rattling noise",
+      "rattling sound",
+      "banging from unit",
+      "loud bang from system",
+      "bang when it starts",
+      "rattle when it runs",
+      "knocking noise",
+      "loud knocking"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Banging or rattling usually means something is loose — a blower wheel, fan blade, or mounting hardware. Running it that way can cause more damage. I can get a technician out to find and fix it.",
     "followUpQuestion": "Do you want me to schedule that?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.noise.squealing_grinding",
     "label": "Squealing, grinding, or screeching noise",
@@ -348,14 +916,41 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["squealing"],
-    "phrases": ["squealing noise", "grinding noise", "screeching noise", "high pitched noise", "grinding sound", "metal on metal", "screeching from unit", "squealing from system", "grinding from unit", "high pitched squeal"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "squealing"
+    ],
+    "phrases": [
+      "squealing noise",
+      "grinding noise",
+      "screeching noise",
+      "high pitched noise",
+      "grinding sound",
+      "metal on metal",
+      "screeching from unit",
+      "squealing from system",
+      "grinding from unit",
+      "high pitched squeal"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Squealing or grinding usually points to motor bearings, blower wheel contact, or a belt issue. That kind of noise tends to get worse fast — I can get a technician out before it leads to a bigger repair.",
     "followUpQuestion": "Do you want me to schedule a service call?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.refrigerant.low_or_leak",
     "label": "Low refrigerant or freon leak",
@@ -363,14 +958,42 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["freon"],
-    "phrases": ["low freon", "needs freon", "add freon", "freon leak", "refrigerant leak", "low refrigerant", "losing refrigerant", "out of freon", "low on refrigerant", "refrigerant is low", "needs refrigerant"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "freon"
+    ],
+    "phrases": [
+      "low freon",
+      "needs freon",
+      "add freon",
+      "freon leak",
+      "refrigerant leak",
+      "low refrigerant",
+      "losing refrigerant",
+      "out of freon",
+      "low on refrigerant",
+      "refrigerant is low",
+      "needs refrigerant"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "If the system is low on refrigerant, there is almost always a leak that needs to be found and repaired first — otherwise adding refrigerant just buys time. I can schedule a technician to check the charge level and find the leak.",
     "followUpQuestion": "Do you want me to schedule that?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.install.new_system",
     "label": "New system installation or replacement",
@@ -378,14 +1001,53 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["new system"],
-    "phrases": ["new ac", "new air conditioner", "new hvac", "need a new system", "replace my system", "replace the unit", "system is old", "want a replacement", "how much for a new system", "looking at a new unit", "time to replace", "system needs to be replaced", "replace my furnace"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "new system",
+      "new unit",
+      "new installed"
+    ],
+    "phrases": [
+      "new ac",
+      "new air conditioner",
+      "new hvac",
+      "need a new system",
+      "replace my system",
+      "replace the unit",
+      "system is old",
+      "want a replacement",
+      "how much for a new system",
+      "looking at a new unit",
+      "time to replace",
+      "system needs to be replaced",
+      "replace my furnace",
+      "new one installed",
+      "install new unit",
+      "new unit installed",
+      "install a new",
+      "get a new unit",
+      "need a new unit",
+      "buy a new unit"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "We can have a comfort advisor come out, evaluate your home, and walk you through your options with pricing. There is no obligation and no pressure.",
     "followUpQuestion": "Do you want me to schedule a free in-home estimate?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.install.quote_estimate",
     "label": "Quote or estimate request",
@@ -393,14 +1055,43 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["quote"],
-    "phrases": ["get a quote", "need an estimate", "how much would it cost", "what do you charge", "pricing for", "how much to fix", "how much does it cost", "what is the price", "can I get a quote", "cost to repair"],
-    "negativeKeywords": ["cancel", "reschedule", "billing", "invoice"],
+    "keywords": [
+      "quote"
+    ],
+    "phrases": [
+      "get a quote",
+      "need an estimate",
+      "how much would it cost",
+      "what do you charge",
+      "pricing for",
+      "how much to fix",
+      "how much does it cost",
+      "what is the price",
+      "can I get a quote",
+      "cost to repair"
+    ],
+    "negativeKeywords": [
+      "reschedule",
+      "billing",
+      "invoice"
+    ],
     "answerText": "Our service call fee covers the visit and full diagnosis, and it gets applied toward the repair if you move forward. Beyond that, pricing depends on what we find. I can get you scheduled.",
     "followUpQuestion": "Do you want to set up a visit?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "hvac.install.second_opinion",
     "label": "Second opinion on diagnosis or repair",
@@ -408,14 +1099,39 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["second opinion"],
-    "phrases": ["second opinion", "get another opinion", "someone else told me", "want a second opinion", "another company said", "other technician said", "not sure about the diagnosis", "want another tech to look at it"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "second opinion"
+    ],
+    "phrases": [
+      "second opinion",
+      "get another opinion",
+      "someone else told me",
+      "want a second opinion",
+      "another company said",
+      "other technician said",
+      "not sure about the diagnosis",
+      "want another tech to look at it"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Absolutely — we are happy to give you an honest second opinion. A technician will come out and give you their full assessment with no obligation.",
     "followUpQuestion": "Do you want me to schedule that?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "billing.invoice_or_payment",
     "label": "Billing, invoice, or payment question",
@@ -423,14 +1139,27 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["invoice"],
-    "phrases": ["billing question", "about my invoice", "payment question", "what was I charged for", "about my bill", "question about my payment", "charge on my account", "billing issue", "payment problem", "invoice question", "about the charge"],
+    "keywords": [
+      "invoice"
+    ],
+    "phrases": [
+      "billing question",
+      "about my invoice",
+      "payment question",
+      "what was I charged for",
+      "about my bill",
+      "question about my payment",
+      "charge on my account",
+      "billing issue",
+      "payment problem",
+      "invoice question",
+      "about the charge"
+    ],
     "negativeKeywords": [],
     "answerText": "I want to make sure we get that resolved for you. For billing and payment questions, let me connect you with someone on our team who can pull up your account and give you the details.",
     "followUpQuestion": "Can I get your name so they can locate your account?",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "membership.plan_inquiry",
     "label": "Maintenance plan or service agreement question",
@@ -438,14 +1167,41 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["maintenance plan"],
-    "phrases": ["maintenance plan", "service agreement", "service plan", "about the membership", "what does the plan cover", "maintenance membership", "service plan question", "how does the plan work", "maintenance agreement", "service contract"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "maintenance plan"
+    ],
+    "phrases": [
+      "maintenance plan",
+      "service agreement",
+      "service plan",
+      "about the membership",
+      "what does the plan cover",
+      "maintenance membership",
+      "service plan question",
+      "how does the plan work",
+      "maintenance agreement",
+      "service contract"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Our maintenance plan gives you priority scheduling, discounted service rates, and annual tune-ups to keep your system running at peak efficiency. I can get you the details and set one up if you are interested.",
     "followUpQuestion": "Do you want me to go over the plan details with you?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "membership.plan_signup",
     "label": "Wants to sign up for maintenance plan",
@@ -453,14 +1209,42 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["sign up maintenance", "enroll maintenance", "join membership"],
-    "phrases": ["sign up for the plan", "want to join", "enroll in the plan", "interested in a maintenance plan", "want the service plan", "how do I sign up", "want to start a plan", "sign me up for maintenance", "sign me up", "i want to sign up", "want to enroll"],
-    "negativeKeywords": ["cancel"],
+    "keywords": [
+      "sign up maintenance",
+      "enroll maintenance",
+      "join membership"
+    ],
+    "phrases": [
+      "sign up for the plan",
+      "want to join",
+      "enroll in the plan",
+      "interested in a maintenance plan",
+      "want the service plan",
+      "how do I sign up",
+      "want to start a plan",
+      "sign me up for maintenance",
+      "sign me up",
+      "i want to sign up",
+      "want to enroll"
+    ],
+    "negativeKeywords": [],
     "answerText": "Great choice. I can get you set up with our maintenance plan and schedule your first visit at the same time.",
     "followUpQuestion": "Do you want me to get that going for you now?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "maintenance.tune_up",
     "label": "Annual tune-up or maintenance visit request",
@@ -468,14 +1252,42 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["tune up"],
-    "phrases": ["tune up", "annual maintenance", "yearly maintenance", "maintenance visit", "service my system", "system checkup", "spring tune up", "fall tune up", "maintenance check", "preventive maintenance", "annual service call"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "tune up"
+    ],
+    "phrases": [
+      "tune up",
+      "annual maintenance",
+      "yearly maintenance",
+      "maintenance visit",
+      "service my system",
+      "system checkup",
+      "spring tune up",
+      "fall tune up",
+      "maintenance check",
+      "preventive maintenance",
+      "annual service call"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Regular maintenance keeps your system running efficiently and helps catch problems before they become expensive repairs. Let me pull up the schedule for you.",
     "followUpQuestion": "Do you want the first available appointment?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "maintenance.filter_service",
     "label": "Filter change or filter question",
@@ -483,14 +1295,42 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["filter", "change"],
-    "phrases": ["change the filter", "replace filter", "filter replacement", "where is the filter", "how often change filter", "filter question", "need a filter change", "filter service", "air filter question", "what filter do I need"],
-    "negativeKeywords": ["cancel", "reschedule"],
+    "keywords": [
+      "filter",
+      "change"
+    ],
+    "phrases": [
+      "change the filter",
+      "replace filter",
+      "filter replacement",
+      "where is the filter",
+      "how often change filter",
+      "filter question",
+      "need a filter change",
+      "filter service",
+      "air filter question",
+      "what filter do I need"
+    ],
+    "negativeKeywords": [
+      "reschedule"
+    ],
     "answerText": "Filters should typically be replaced every one to three months depending on the filter type and how much the system runs. We can handle that during any service visit or tune-up.",
     "followUpQuestion": "Do you want me to schedule a visit?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "booking.schedule_service",
     "label": "Generic request to schedule a service call",
@@ -498,14 +1338,43 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["schedule", "appointment"],
-    "phrases": ["schedule an appointment", "need someone to come out", "book a service", "set up a visit", "schedule service", "send someone out", "can you come out", "need a technician to come out", "want to book", "I need to schedule"],
-    "negativeKeywords": ["cancel", "reschedule", "existing"],
+    "keywords": [
+      "schedule",
+      "appointment"
+    ],
+    "phrases": [
+      "schedule an appointment",
+      "need someone to come out",
+      "book a service",
+      "set up a visit",
+      "schedule service",
+      "send someone out",
+      "can you come out",
+      "need a technician to come out",
+      "want to book",
+      "I need to schedule"
+    ],
+    "negativeKeywords": [
+      "reschedule",
+      "existing"
+    ],
     "answerText": "Absolutely. Let me pull up the schedule and get you set up.",
     "followUpQuestion": "What day works best for you?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "negativePhrases": [
+      "cancel appointment",
+      "cancel my appointment",
+      "cancel service",
+      "cancel my service",
+      "cancel the service",
+      "calling to cancel",
+      "need to cancel",
+      "want to cancel",
+      "cancel the appointment",
+      "i need to cancel",
+      "cancel my call"
+    ]
   },
-
   {
     "ruleId": "booking.reschedule_or_cancel",
     "label": "Reschedule or cancel existing appointment",
@@ -513,14 +1382,33 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["reschedule"],
-    "phrases": ["reschedule my appointment", "cancel my appointment", "need to reschedule", "cancel the service call", "change my appointment", "move my appointment", "I need to cancel", "postpone my appointment", "push back my appointment"],
+    "keywords": [
+      "reschedule"
+    ],
+    "phrases": [
+      "reschedule my appointment",
+      "cancel my appointment",
+      "need to reschedule",
+      "cancel the service call",
+      "change my appointment",
+      "move my appointment",
+      "I need to cancel",
+      "postpone my appointment",
+      "push back my appointment",
+      "calling to cancel",
+      "cancel my service",
+      "cancel service call",
+      "want to cancel",
+      "i want to cancel",
+      "cancel the service",
+      "calling about canceling",
+      "cancel my visit"
+    ],
     "negativeKeywords": [],
     "answerText": "No problem — I can take care of that for you. Let me look up your appointment.",
     "followUpQuestion": "Can I get your name so I can find your appointment?",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "booking.appointment_status",
     "label": "Check status of existing appointment",
@@ -528,14 +1416,32 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["appointment status", "technician coming", "tech coming"],
-    "phrases": ["check on my appointment", "when is the technician coming", "what time is my appointment", "is my appointment still on", "appointment status", "confirm my appointment", "is someone still coming", "what time is the technician coming", "when is my tech coming", "when is my technician", "what time is the tech", "is the tech still coming", "when are you coming", "what time is someone coming"],
+    "keywords": [
+      "appointment status",
+      "technician coming",
+      "tech coming"
+    ],
+    "phrases": [
+      "check on my appointment",
+      "when is the technician coming",
+      "what time is my appointment",
+      "is my appointment still on",
+      "appointment status",
+      "confirm my appointment",
+      "is someone still coming",
+      "what time is the technician coming",
+      "when is my tech coming",
+      "when is my technician",
+      "what time is the tech",
+      "is the tech still coming",
+      "when are you coming",
+      "what time is someone coming"
+    ],
     "negativeKeywords": [],
     "answerText": "Let me look that up for you right now.",
     "followUpQuestion": "Can I get your name or the phone number on the account?",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "booking.service_area",
     "label": "Service area question",
@@ -543,14 +1449,23 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["service area"],
-    "phrases": ["do you service my area", "do you come to", "what areas do you cover", "are you in my area", "do you service", "do you work in my zip code", "do you come to my neighborhood"],
+    "keywords": [
+      "service area"
+    ],
+    "phrases": [
+      "do you service my area",
+      "do you come to",
+      "what areas do you cover",
+      "are you in my area",
+      "do you service",
+      "do you work in my zip code",
+      "do you come to my neighborhood"
+    ],
     "negativeKeywords": [],
     "answerText": "We cover the local area. When we get you scheduled, we will confirm your address is within our service zone.",
     "followUpQuestion": "Do you want me to go ahead and get you on the schedule?",
     "followUpNextAction": "HANDOFF_BOOKING"
   },
-
   {
     "ruleId": "booking.hours",
     "label": "Business hours question",
@@ -558,14 +1473,25 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
-    "keywords": ["hours"],
-    "phrases": ["what are your hours", "are you open", "when do you close", "what time do you open", "weekend hours", "are you open on weekends", "do you work on saturday", "do you work on sunday", "when are you available"],
+    "keywords": [
+      "hours"
+    ],
+    "phrases": [
+      "what are your hours",
+      "are you open",
+      "when do you close",
+      "what time do you open",
+      "weekend hours",
+      "are you open on weekends",
+      "do you work on saturday",
+      "do you work on sunday",
+      "when are you available"
+    ],
     "negativeKeywords": [],
     "answerText": "Our office hours are Monday through Friday. We also have an on-call team available for after-hours emergencies. For standard appointments, I can get you on the schedule right now.",
     "followUpQuestion": "Would you like to set something up?",
     "followUpNextAction": "HANDOFF_BOOKING"
   },
-
   {
     "ruleId": "conversation.robot_challenge",
     "label": "Caller asks if they are talking to a robot or AI",
@@ -573,14 +1499,26 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
+    "maxInputWords": 12,
     "keywords": [],
-    "phrases": ["are you a robot", "is this a robot", "is this a real person", "am i talking to a robot", "is this automated", "is this ai", "who am i talking to", "are you real", "am i talking to a computer", "is this a machine"],
+    "phrases": [
+      "are you a robot",
+      "is this a robot",
+      "is this a real person",
+      "am i talking to a robot",
+      "is this automated",
+      "is this ai",
+      "who am i talking to",
+      "are you real",
+      "am i talking to a computer",
+      "is this a machine"
+    ],
     "negativeKeywords": [],
+    "negativePhrases": [],
     "answerText": "I am the virtual assistant for this company. I handle scheduling and answer questions about your system around the clock. A real technician handles all the actual service work. What can I help you with today?",
     "followUpQuestion": "",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "conversation.repeat_request",
     "label": "Caller asks to repeat what was said",
@@ -589,13 +1527,22 @@
     "state": "published",
     "responseMode": "standard",
     "keywords": [],
-    "phrases": ["can you repeat that", "say that again", "what did you say", "i did not catch that", "one more time please", "repeat that", "say it again", "i missed that", "could not hear you"],
+    "phrases": [
+      "can you repeat that",
+      "say that again",
+      "what did you say",
+      "i did not catch that",
+      "one more time please",
+      "repeat that",
+      "say it again",
+      "i missed that",
+      "could not hear you"
+    ],
     "negativeKeywords": [],
     "answerText": "Of course. Let me say that again for you.",
     "followUpQuestion": "",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "conversation.thank_you",
     "label": "Caller says thank you or wraps up positively",
@@ -603,14 +1550,24 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
+    "maxInputWords": 10,
     "keywords": [],
-    "phrases": ["thank you so much", "thanks so much", "appreciate your help", "thanks for your help", "really appreciate it", "thank you for that", "you have been very helpful", "that was very helpful"],
+    "phrases": [
+      "thank you so much",
+      "thanks so much",
+      "appreciate your help",
+      "thanks for your help",
+      "really appreciate it",
+      "thank you for that",
+      "you have been very helpful",
+      "that was very helpful"
+    ],
     "negativeKeywords": [],
+    "negativePhrases": [],
     "answerText": "You are very welcome. Is there anything else I can help you with today?",
     "followUpQuestion": "",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "conversation.goodbye",
     "label": "Caller says goodbye or signs off",
@@ -618,14 +1575,25 @@
     "enabled": true,
     "state": "published",
     "responseMode": "standard",
+    "maxInputWords": 8,
     "keywords": [],
-    "phrases": ["goodbye", "bye bye", "have a great day", "have a good day", "talk to you later", "that is all i needed", "nothing else for now", "all done thank you", "have a good one"],
+    "phrases": [
+      "goodbye",
+      "bye bye",
+      "have a great day",
+      "have a good day",
+      "talk to you later",
+      "that is all i needed",
+      "nothing else for now",
+      "all done thank you",
+      "have a good one"
+    ],
     "negativeKeywords": [],
+    "negativePhrases": [],
     "answerText": "Thank you for calling. Have a great day and we will see you soon.",
     "followUpQuestion": "",
     "followUpNextAction": "CONTINUE"
   },
-
   {
     "ruleId": "conversation.callback_request",
     "label": "Caller requests a callback from a live person",
@@ -634,7 +1602,18 @@
     "state": "published",
     "responseMode": "standard",
     "keywords": [],
-    "phrases": ["call me back", "have someone call me", "can someone call me", "i need a callback", "want to speak to someone", "speak to a person", "talk to a real person", "speak with a human", "connect me with someone", "transfer me"],
+    "phrases": [
+      "call me back",
+      "have someone call me",
+      "can someone call me",
+      "i need a callback",
+      "want to speak to someone",
+      "speak to a person",
+      "talk to a real person",
+      "speak with a human",
+      "connect me with someone",
+      "transfer me"
+    ],
     "negativeKeywords": [],
     "answerText": "Absolutely. I will make sure someone on our team reaches out to you directly. Let me get your callback number.",
     "followUpQuestion": "What is the best number to reach you?",

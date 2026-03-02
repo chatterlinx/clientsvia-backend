@@ -170,7 +170,9 @@ function matchesSubstring(input, phrase) {
  * @property {Array} evaluated - Debug info for all cards evaluated
  * @property {number} totalCards - Total cards in pool
  * @property {number} enabledCards - Cards that were enabled
- * @property {number} negativeBlocked - Cards blocked by negative keywords
+ * @property {number} negativeBlocked - Cards blocked by negative keywords (word-based)
+ * @property {number} negativePhraseBlocked - Cards blocked by negativePhrases (substring)
+ * @property {number} maxWordsBlocked - Cards blocked by maxInputWords guard
  */
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -229,6 +231,8 @@ class TriggerCardMatcher {
       ? `${input} ${expandedTokens.join(' ')}`  // Original + expanded tokens
       : input;
 
+    const inputWordCount = extractWords(input).length;
+
     const result = {
       matched: false,
       card: null,
@@ -240,6 +244,8 @@ class TriggerCardMatcher {
       totalCards: cardList.length,
       enabledCards: 0,
       negativeBlocked: 0,
+      negativePhraseBlocked: 0,
+      maxWordsBlocked: 0,
       intentGateBlocked: 0,
       globalNegativeBlocked: false,
       globalNegativeHit: null,
@@ -382,6 +388,8 @@ class TriggerCardMatcher {
         skipped: false,
         skipReason: null,
         negativeHit: null,
+        negativePhraseHit: null,
+        maxWordsBlocked: false,
         keywordHit: null,
         phraseHit: null,
         greetingBlocked: null,
@@ -389,7 +397,9 @@ class TriggerCardMatcher {
         matched: false
       };
 
-      // Skip disabled cards
+      // ─────────────────────────────────────────────────────────────────────
+      // SKIP DISABLED CARDS
+      // ─────────────────────────────────────────────────────────────────────
       if (card.enabled === false) {
         cardEval.skipped = true;
         cardEval.skipReason = 'DISABLED';
@@ -398,8 +408,37 @@ class TriggerCardMatcher {
       }
 
       result.enabledCards++;
-      
-      // V4: Skip cards disqualified by Intent Gate (emergency mode)
+
+      // ─────────────────────────────────────────────────────────────────────
+      // MAX INPUT WORDS GUARD (UI-controlled per card via card.maxInputWords)
+      // Prevents conversational cards (goodbye, robot, thank-you) from firing
+      // on long service-related utterances.
+      //
+      // Usage in trigger cards: set maxInputWords: 6 on any card that should
+      // only match short utterances (greetings, closings, single-word queries).
+      // Stored in: card.maxInputWords (integer, optional)
+      // Admin: visible in trigger card edit modal as "Max Input Words"
+      // ─────────────────────────────────────────────────────────────────────
+      if (typeof card.maxInputWords === 'number' && card.maxInputWords > 0) {
+        if (inputWordCount > card.maxInputWords) {
+          cardEval.skipped = true;
+          cardEval.skipReason = 'MAX_WORDS_EXCEEDED';
+          cardEval.maxWordsBlocked = true;
+          result.maxWordsBlocked++;
+          result.evaluated.push(cardEval);
+          logger.debug('[TriggerCardMatcher] maxInputWords guard blocked card', {
+            cardId: card.id,
+            maxAllowed: card.maxInputWords,
+            inputWordCount,
+            inputPreview: clip(input, 40)
+          });
+          continue;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // INTENT GATE DISQUALIFICATION
+      // ─────────────────────────────────────────────────────────────────────
       if (card._gateInfo && card._gateInfo.disqualified) {
         cardEval.skipped = true;
         cardEval.skipReason = 'INTENT_GATE_DISQUALIFIED';
@@ -414,7 +453,8 @@ class TriggerCardMatcher {
       }
 
       // ─────────────────────────────────────────────────────────────────────
-      // NEGATIVE KEYWORDS (word-based) — if ALL words found, block this card
+      // NEGATIVE KEYWORDS (word-based) — ALL words in keyword must appear
+      // Use for broad exclusions: "billing", "invoice", "reschedule"
       // ─────────────────────────────────────────────────────────────────────
       const negKeywords = safeArr(card.match?.negativeKeywords)
         .map(normalizeText)
@@ -427,6 +467,36 @@ class TriggerCardMatcher {
         cardEval.skipReason = 'NEGATIVE_KEYWORD';
         result.negativeBlocked++;
         result.evaluated.push(cardEval);
+        continue;
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // NEGATIVE PHRASES (substring) — exact phrase must appear in input
+      // Use for context-aware exclusions where word-based matching is too broad.
+      //
+      // Example: "cancel" as a negativeKeyword blocks "my ac broke, someone
+      // tried to cancel the service call but I still need help."
+      // Use negativePhrases: ["cancel appointment", "need to cancel", "calling to cancel"]
+      // to only block when the caller is EXPLICITLY cancelling.
+      //
+      // Stored in: card.match.negativePhrases (array of strings)
+      // ─────────────────────────────────────────────────────────────────────
+      const negPhrases = safeArr(card.match?.negativePhrases)
+        .map(normalizeText)
+        .filter(Boolean);
+
+      const negativePhraseHit = negPhrases.find((np) => matchesSubstring(input, np));
+      if (negativePhraseHit) {
+        cardEval.negativePhraseHit = negativePhraseHit;
+        cardEval.skipped = true;
+        cardEval.skipReason = 'NEGATIVE_PHRASE';
+        result.negativePhraseBlocked++;
+        result.evaluated.push(cardEval);
+        logger.debug('[TriggerCardMatcher] Negative phrase blocked card', {
+          cardId: card.id,
+          negativePhraseHit,
+          inputPreview: clip(input, 60)
+        });
         continue;
       }
 
