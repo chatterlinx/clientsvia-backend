@@ -1763,19 +1763,56 @@ class Agent2DiscoveryRunner {
     // ── VISIBILITY: TRIGGER_POOL_SOURCE — show exactly where triggers came from ──
     if (triggerCards.length > 0) {
       const scopes = {};
-      triggerCards.forEach(c => { const s = c._scope || 'UNKNOWN'; scopes[s] = (scopes[s] || 0) + 1; });
+      const ruleIdsByScope = { GLOBAL: [], LOCAL: [], LEGACY: [], UNKNOWN: [] };
+      
+      triggerCards.forEach(c => { 
+        const s = c._scope || 'UNKNOWN'; 
+        scopes[s] = (scopes[s] || 0) + 1;
+        
+        // Track actual ruleIds by scope for forensics
+        const ruleId = c.ruleId || c.id || c.triggerId || 'NO_ID';
+        if (ruleIdsByScope[s]) {
+          ruleIdsByScope[s].push(ruleId);
+        } else {
+          ruleIdsByScope.UNKNOWN.push(ruleId);
+        }
+      });
+      
       const hasLegacy = triggerCards.some(c => c._scope === 'LEGACY');
+      const hasUnknown = triggerCards.some(c => !c._scope || c._scope === 'UNKNOWN');
+      
       emit('TRIGGER_POOL_SOURCE', {
         total: triggerCards.length,
         scopes,
+        ruleIdsByScope,  // FORENSIC: Expose exact IDs by scope
         hasLegacyCards: hasLegacy,
+        hasUnknownScope: hasUnknown,
         strictMode: loadMetadata.strictMode,
         source: loadMetadata.source,
-        warning: hasLegacy ? 'Legacy playbook.rules cards in pool. Click "Clear Legacy" in Triggers admin.' : null,
+        activeGroupId: loadMetadata.activeGroupId || null,  // CRITICAL: Show if group is assigned
+        isGroupPublished: loadMetadata.isGroupPublished || false,
+        warning: hasLegacy ? 'Legacy playbook.rules cards in pool. Click "Clear Legacy" in Triggers admin.' : 
+                 hasUnknown ? 'UNKNOWN scope triggers detected — investigate trigger source immediately' : null,
         turn
       });
+      
       if (hasLegacy) {
-        logger.warn('[Agent2] ⚠️ Legacy trigger cards still in pool', { legacyCount: scopes['LEGACY'] || 0, companyId, turn });
+        logger.warn('[Agent2] ⚠️ Legacy trigger cards still in pool', { 
+          legacyCount: scopes['LEGACY'] || 0, 
+          legacyIds: ruleIdsByScope.LEGACY,
+          companyId, 
+          turn 
+        });
+      }
+      
+      if (hasUnknown) {
+        logger.error('[Agent2] 🚨 UNKNOWN scope triggers in pool - DATA INTEGRITY ISSUE', {
+          unknownCount: scopes['UNKNOWN'] || 0,
+          unknownIds: ruleIdsByScope.UNKNOWN,
+          companyId,
+          turn,
+          action: 'INVESTIGATE_TRIGGER_SOURCE'
+        });
       }
     }
 

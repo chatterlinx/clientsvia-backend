@@ -502,15 +502,22 @@ async function loadTriggersWithLegacyFallback(companyId, legacyConfig, options =
     strictMode: isStrictMode,
     legacyUsed: false,
     legacyCardCount: 0,
-    source: null
+    source: null,
+    activeGroupId: settings?.activeGroupId || null,
+    isGroupPublished: false
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PATH 1: Company has activeGroupId set → use full merge logic
   // ═══════════════════════════════════════════════════════════════════════════
   if (settings && settings.activeGroupId) {
-    const triggers = await loadTriggersForCompany(companyId);
+    const result = await loadTriggersForCompany(companyId, { includeMeta: true });
+    const triggers = result.triggers || result;
+    const groupInfo = result.meta?.groupInfo;
+    
     loadMetadata.source = 'GLOBAL_PLUS_LOCAL';
+    loadMetadata.activeGroupId = settings.activeGroupId;
+    loadMetadata.isGroupPublished = groupInfo?.isPublished || false;
     
     // Attach metadata to result for caller inspection
     triggers._loadMetadata = loadMetadata;
