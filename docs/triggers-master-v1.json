@@ -1372,7 +1372,10 @@
     "responseMode": "standard",
     "keywords": [
       "schedule",
-      "appointment"
+      "appointment",
+      "need service",
+      "need ac service",
+      "looking for service"
     ],
     "phrases": [
       "schedule an appointment",
@@ -1384,7 +1387,21 @@
       "can you come out",
       "need a technician to come out",
       "want to book",
-      "I need to schedule"
+      "I need to schedule",
+      "looking for ac service",
+      "looking for air conditioning",
+      "looking for hvac",
+      "need hvac service",
+      "need air conditioning service",
+      "looking for a technician",
+      "need a technician",
+      "looking for help with",
+      "calling about service",
+      "want to schedule service",
+      "want to get service",
+      "i need service",
+      "need some help with my ac",
+      "need help with air conditioning"
     ],
     "negativeKeywords": [
       "reschedule",

@@ -94,6 +94,7 @@
       'A2_CALL_ROUTER_POOL_FILTERED': 'Call Router: Trigger Pool Filtered',
       // Phase 1–2 — Trigger system visibility
       'TRIGGER_POOL_EMPTY': 'Trigger Pool EMPTY',
+      'TRIGGER_POOL_SOURCE': 'Trigger Pool Source',
       'TRIGGER_CARDS_EVALUATED': 'Trigger Cards Evaluated',
       'A2_TRIGGER_EVAL': 'Trigger Evaluation',
       'A2_RESPONSE_READY': 'Response Ready',
@@ -1018,6 +1019,7 @@
         || ev.type === 'A2_CALL_ROUTER_CLASSIFIED'
         || ev.type === 'A2_CALL_ROUTER_POOL_FILTERED'
         || ev.type === 'TRIGGER_POOL_EMPTY'
+        || ev.type === 'TRIGGER_POOL_SOURCE'
         || ev.type === 'A2_TRIGGER_EVAL'
         || ev.type === 'TRIGGER_CARDS_EVALUATED'
         || ev.type === 'A2_RESPONSE_READY'
@@ -1063,6 +1065,7 @@
       A2_CALL_ROUTER_CLASSIFIED:     'Call Router — Intent Classified',
       A2_CALL_ROUTER_POOL_FILTERED:  'Call Router — Trigger Pool Filtered',
       TRIGGER_POOL_EMPTY:            '⚠️ Trigger Pool EMPTY',
+      TRIGGER_POOL_SOURCE:           'Trigger Pool Source',
       A2_TRIGGER_EVAL:               'Trigger Evaluation Result',
       TRIGGER_CARDS_EVALUATED:       'Trigger Cards Evaluated',
       A2_RESPONSE_READY:             'Response Ready',
@@ -1371,6 +1374,7 @@
     const routerEv       = findEv('A2_CALL_ROUTER_CLASSIFIED');
     const greetingEv     = findEv('A2_GREETING_EVALUATED');
     const poolEmptyEv    = findEv('TRIGGER_POOL_EMPTY');
+    const poolSourceEv   = findEv('TRIGGER_POOL_SOURCE');
     const poolFilteredEv = findEv('A2_CALL_ROUTER_POOL_FILTERED');
     const triggerEv      = findEv('TRIGGER_CARDS_EVALUATED') || findEv('A2_TRIGGER_EVAL');
     const responseEv     = findEv('A2_RESPONSE_READY');
@@ -1504,8 +1508,15 @@
       const poolDetail = totalCards > 0
         ? `Pool: ${totalCards} cards loaded${poolFiltered ? ` (pre-filtered from ${beforeFilter} by CallRouter bucket)` : ''}`
         : 'Pool size unknown';
-      steps.push(roadmapStep(5, '🗂️', 'Trigger Pool — Loaded', true, poolDetail,
-        'Source: TriggerService (GlobalTrigger + LocalTrigger + legacy fallback)'
+      const poolSrc     = poolSourceEv?.payload;
+      const hasLegacy   = poolSrc?.hasLegacyCards;
+      const scopeDetail = poolSrc ? Object.entries(poolSrc.scopes || {}).map(([s,n])=>`${n} ${s}`).join(', ') : null;
+      steps.push(roadmapStep(5, '🗂️', hasLegacy ? 'Trigger Pool — LEGACY CARDS ACTIVE ⚠️' : 'Trigger Pool — Loaded',
+        hasLegacy ? null : true,
+        hasLegacy
+          ? `${totalCards} cards loaded — but includes old hardcoded legacy cards (pricing.service_call, problem.not_cooling, etc.).<br><strong>These bypass your 42 local triggers.</strong> Click "Clear Legacy" in the Triggers admin to remove them.`
+          : poolDetail,
+        scopeDetail ? `Sources: ${escapeHtml(scopeDetail)}` : 'Source: TriggerService (GlobalTrigger + LocalTrigger + legacy fallback)'
       ));
     } else {
       steps.push(roadmapStep(5, '🗂️', 'Trigger Pool — No Pool Event', null,
@@ -1684,6 +1695,13 @@
     }
     if (type === 'TRIGGER_POOL_EMPTY') {
       return `⚠️ <strong>${escapeHtml(payload.message || 'No triggers loaded')}</strong>`;
+    }
+    if (type === 'TRIGGER_POOL_SOURCE') {
+      const scopeStr = Object.entries(payload.scopes || {}).map(([s, n]) => `${n} ${s}`).join(', ');
+      const legacyWarn = payload.hasLegacyCards
+        ? ` <span style="color:#dc2626;font-weight:700;">⚠️ LEGACY CARDS ACTIVE — click "Clear Legacy" in Triggers admin</span>`
+        : ' ✅ clean pool';
+      return `${payload.total} cards loaded (${escapeHtml(scopeStr)})${legacyWarn}`;
     }
     if (type === 'CALLER_NAME_EXTRACTED') {
       return `name: <strong>${escapeHtml(payload.firstName || '?')}</strong>${payload.lastName ? ' ' + escapeHtml(payload.lastName) : ''} · source: ${escapeHtml(payload.source || '?')}`;

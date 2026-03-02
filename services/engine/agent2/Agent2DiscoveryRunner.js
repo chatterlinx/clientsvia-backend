@@ -1732,6 +1732,23 @@ class Agent2DiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────────
     let triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2);
 
+    // ── VISIBILITY: TRIGGER_POOL_SOURCE — show exactly where triggers came from ──
+    if (triggerCards.length > 0) {
+      const scopes = {};
+      triggerCards.forEach(c => { const s = c._scope || 'UNKNOWN'; scopes[s] = (scopes[s] || 0) + 1; });
+      const hasLegacy = triggerCards.some(c => c._scope === 'LEGACY');
+      emit('TRIGGER_POOL_SOURCE', {
+        total: triggerCards.length,
+        scopes,
+        hasLegacyCards: hasLegacy,
+        warning: hasLegacy ? 'Legacy playbook.rules cards in pool. Click "Clear Legacy" in Triggers admin.' : null,
+        turn
+      });
+      if (hasLegacy) {
+        logger.warn('[Agent2] ⚠️ Legacy trigger cards still in pool', { legacyCount: scopes['LEGACY'] || 0, companyId, turn });
+      }
+    }
+
     // ── APPLY CALL ROUTER POOL FILTERING ─────────────────────────────────────
     // When Agent2CallRouter classifies with confidence >= filterThreshold (0.70),
     // pre-filter the card pool to bucket-matching cards.

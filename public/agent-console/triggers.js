@@ -85,6 +85,7 @@
     btnBulkGenerateAudio: document.getElementById('btn-bulk-generate-audio'),
     btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
+    btnClearLegacy:  document.getElementById('btn-clear-legacy'),
     btnRefreshCache: document.getElementById('btn-refresh-cache'),
     btnOpenTestPanel: document.getElementById('btn-open-test-panel'),
     btnCloseTestPanel: document.getElementById('btn-close-test-panel'),
@@ -310,6 +311,40 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+
+    // Clear Legacy Triggers button
+    if (DOM.btnClearLegacy) {
+      DOM.btnClearLegacy.addEventListener('click', async () => {
+        if (!confirm('Remove old hardcoded legacy trigger cards (pricing.service_call, problem.not_cooling, etc.) from this company\'s config?\n\nThis is a one-time cleanup. Your 42 local triggers are NOT affected.')) return;
+        const btn = DOM.btnClearLegacy;
+        btn.disabled = true;
+        btn.textContent = 'Clearing...';
+        try {
+          const result = await apiFetch(
+            `${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/clear-legacy`,
+            { method: 'POST' }
+          );
+          if (result.removed === 0) {
+            btn.textContent = '✓ Already Clean';
+          } else {
+            btn.textContent = `✓ Removed ${result.removed}`;
+            btn.style.background = '#dcfce7';
+            btn.style.color = '#166534';
+          }
+          setTimeout(() => {
+            btn.textContent = '🗑 Clear Legacy';
+            btn.style.background = '';
+            btn.style.color = '#dc2626';
+            btn.disabled = false;
+          }, 3000);
+          // Reload triggers to reflect clean state
+          setTimeout(() => loadTriggers(), 500);
+        } catch (err) {
+          btn.textContent = '✗ Failed';
+          setTimeout(() => { btn.textContent = '🗑 Clear Legacy'; btn.disabled = false; }, 2500);
+        }
+      });
+    }
 
     // Test Panel open/close
     if (DOM.btnOpenTestPanel) {

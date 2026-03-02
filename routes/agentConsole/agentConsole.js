@@ -183,6 +183,59 @@ router.post('/:companyId/triggers/test', authenticateJWT, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/triggers/clear-legacy — Remove hardcoded legacy triggers
+// ════════════════════════════════════════════════════════════════════════════
+// Clears the old hardcoded trigger cards from playbook.rules in MongoDB.
+// These were injected by defaultAgent2Config() before the V130 nuke.
+// Companies that saved their config before the nuke still have them in their DB.
+// Run this once per company to remove them.
+router.post('/:companyId/triggers/clear-legacy', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    const company = await v2Company.findById(companyId).lean();
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const existingRules = company.aiAgentSettings?.agent2?.discovery?.playbook?.rules || [];
+    const LEGACY_IDS = new Set(['pricing.service_call', 'problem.water_leak', 'problem.not_cooling', 'problem.system_not_running', 'problem.thermostat']);
+
+    const legacyFound   = existingRules.filter(r => LEGACY_IDS.has(r.id || r.ruleId));
+    const cleanedRules  = existingRules.filter(r => !LEGACY_IDS.has(r.id || r.ruleId));
+
+    if (legacyFound.length === 0) {
+      return res.json({ success: true, message: 'No legacy trigger cards found — already clean.', removed: 0 });
+    }
+
+    const db = getDB();
+    await db.collection('companiesCollection').updateOne(
+      { _id: company._id },
+      { $set: { 'aiAgentSettings.agent2.discovery.playbook.rules': cleanedRules } }
+    );
+
+    // Invalidate trigger cache so next call picks up the clean state
+    const TriggerService = require('../../services/engine/agent2/TriggerService');
+    TriggerService.invalidateCacheForCompany(companyId);
+
+    logger.info('[AgentConsole] Legacy trigger cards cleared', {
+      companyId,
+      removedIds: legacyFound.map(r => r.id || r.ruleId),
+      remainingRules: cleanedRules.length
+    });
+
+    res.json({
+      success: true,
+      message: `Removed ${legacyFound.length} legacy trigger card(s) from playbook.rules.`,
+      removed: legacyFound.length,
+      removedIds: legacyFound.map(r => r.id || r.ruleId),
+      remaining: cleanedRules.length
+    });
+  } catch (error) {
+    logger.error('[AgentConsole] Legacy trigger clear error:', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/triggers/refresh — Flush runtime trigger cache
 // ════════════════════════════════════════════════════════════════════════════
 // The runtime caches compiled triggers for 60 seconds to avoid DB hits on

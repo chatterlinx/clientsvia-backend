@@ -475,19 +475,91 @@ async function loadTriggersWithLegacyFallback(companyId, legacyConfig) {
   const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
 
   if (!settings || !settings.activeGroupId) {
+    // ── CRITICAL FIX (V130): ALWAYS load CompanyLocalTriggers ──────────────────
+    // Previously this path returned ONLY the legacy playbook.rules when no
+    // activeGroupId was set, completely ignoring CompanyLocalTrigger documents.
+    //
+    // This caused the bug where 42 triggers visible in the Trigger Console were
+    // completely invisible to the runtime — they existed in CompanyLocalTrigger
+    // but were never loaded because the short-circuit returned before reaching
+    // the code that loads local triggers (which lives in loadTriggersForCompany).
+    //
+    // Fix: ALWAYS load CompanyLocalTriggers, then layer legacy cards as a fallback
+    // only if the local trigger pool is empty.
+    // ───────────────────────────────────────────────────────────────────────────
+    try {
+      const localTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
+
+      if (localTriggers && localTriggers.length > 0) {
+        // Company has local triggers configured — use them exclusively.
+        // Map to TriggerCardMatcher format (same transform as mergeTriggers does).
+        const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
+        const audioMap = new Map();
+        audioRecordings.forEach(a => { audioMap.set(a.ruleId, a); });
+
+        const formatted = localTriggers.map(lt => {
+          if (lt.toMatcherFormat) return lt.toMatcherFormat();
+          const audioUrl = resolveAudioUrl(audioMap.get(lt.ruleId), lt.answerText);
+          return {
+            id:        lt.triggerId,
+            ruleId:    lt.ruleId,
+            triggerId: lt.triggerId,
+            enabled:   lt.enabled,
+            priority:  lt.priority ?? 50,
+            label:     lt.label,
+            bucket:    lt.bucket || null,
+            maxInputWords: lt.maxInputWords || null,
+            match: {
+              keywords:         lt.keywords         || [],
+              phrases:          lt.phrases          || [],
+              negativeKeywords: lt.negativeKeywords  || [],
+              negativePhrases:  lt.negativePhrases   || [],
+              scenarioTypeAllowlist: lt.scenarioTypeAllowlist || []
+            },
+            responseMode: lt.responseMode || 'standard',
+            answer: {
+              answerText: lt.answerText || '',
+              audioUrl:   audioUrl      || ''
+            },
+            followUp: {
+              question:   lt.followUpQuestion     || '',
+              nextAction: lt.followUpNextAction   || 'CONTINUE'
+            },
+            llmFactPack: lt.llmFactPack || null,
+            _scope: 'LOCAL'
+          };
+        }).filter(Boolean);
+
+        // Sort by priority
+        formatted.sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999));
+
+        logger.debug('[TriggerService] Loaded CompanyLocalTriggers (no activeGroupId)', {
+          companyId,
+          localCount: formatted.length
+        });
+        return formatted;
+      }
+    } catch (localLoadErr) {
+      logger.warn('[TriggerService] Failed to load CompanyLocalTriggers, falling back to legacy', {
+        companyId,
+        error: localLoadErr.message
+      });
+    }
+
+    // No local triggers found — fall back to legacy playbook.rules
     if (legacyConfig && legacyConfig.discovery?.playbook?.rules) {
       const rawCards = legacyConfig.discovery.playbook.rules;
-      // CRITICAL FIX: Transform legacy flat-format cards into TriggerCardMatcher format.
-      // Without this, card.match?.keywords is undefined → safeArr([]) → zero triggers ever fire.
+      // Transform legacy flat-format cards into TriggerCardMatcher format.
       const transformed = rawCards.map(transformLegacyCard).filter(Boolean);
 
-      logger.debug('[TriggerService] Using legacy trigger cards (transformed)', {
+      logger.debug('[TriggerService] Using legacy trigger cards (no local triggers found)', {
         companyId,
         rawCount: rawCards.length,
         transformedCount: transformed.length
       });
       return transformed;
     }
+
     return [];
   }
 
