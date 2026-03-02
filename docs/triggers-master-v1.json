@@ -1,22 +1,5 @@
 [
   {
-    "_comment": "=============================================================================",
-    "_comment2": "CLIENTSVIA MASTER TRIGGER LIBRARY — V1",
-    "_comment3": "Built for ScrabEngine V125+ with contraction normalization.",
-    "_comment4": "Keywords designed for word-based matching (ALL words must appear in input,",
-    "_comment5": "order-independent). Contractions normalized BEFORE matching:",
-    "_comment6": "  isn't→is not  won't→will not  doesn't→does not  can't→cannot",
-    "_comment7": "Priority: lower number = evaluated FIRST. Conversational = 91-100 (LAST).",
-    "_comment8": "followUpNextAction: HANDOFF_BOOKING drives to booking flow on YES.",
-    "_comment9": "=============================================================================",
-    "_comment10": "PHASE 2 ADDITIONS:",
-    "_comment11": "negativePhrases: substring-match negatives (context-aware). Use instead of single",
-    "_comment12": "  word 'cancel' to avoid blocking service calls where 'cancel' appears in passing.",
-    "_comment13": "maxInputWords: integer. Card only fires if utterance has <= N words.",
-    "_comment14": "  Use on conversational cards (goodbye, robot, thank-you) to prevent them",
-    "_comment15": "  from stealing long service-related utterances."
-  },
-  {
     "ruleId": "emergency.gas_smell",
     "label": "Gas smell or leak",
     "priority": 1,

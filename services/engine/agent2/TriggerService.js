@@ -491,15 +491,9 @@ function transformLegacyCard(card) {
 async function loadTriggersWithLegacyFallback(companyId, legacyConfig, options = {}) {
   const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // STRICT MODE CHECK - default is STRICT (true)
-  // In strict mode, legacy playbook.rules is NEVER loaded.
-  // ═══════════════════════════════════════════════════════════════════════════
-  const isStrictMode = settings?.strictMode !== false;  // Default to strict
-  
-  // Track metadata for caller (Agent2DiscoveryRunner can emit events based on this)
+  // Track metadata for caller
   const loadMetadata = {
-    strictMode: isStrictMode,
+    strictMode: true,  // Always true, no legacy mode
     legacyUsed: false,
     legacyCardCount: 0,
     source: null,
@@ -508,136 +502,64 @@ async function loadTriggersWithLegacyFallback(companyId, legacyConfig, options =
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PATH 1: Company has activeGroupId set → use full merge logic
+  // ONLY PATH: Load from official GlobalTrigger system
   // ═══════════════════════════════════════════════════════════════════════════
-  if (settings && settings.activeGroupId) {
-    const result = await loadTriggersForCompany(companyId, { includeMeta: true });
-    const triggers = result.triggers || result;
-    const groupInfo = result.meta?.groupInfo;
-    
-    loadMetadata.source = 'GLOBAL_PLUS_LOCAL';
-    loadMetadata.activeGroupId = settings.activeGroupId;
-    loadMetadata.isGroupPublished = groupInfo?.isPublished || false;
-    
-    // Attach metadata to result for caller inspection
-    triggers._loadMetadata = loadMetadata;
-    return triggers;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PATH 2: No activeGroupId → try CompanyLocalTrigger first
-  // ═══════════════════════════════════════════════════════════════════════════
-  try {
-    const localTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
-
-    if (localTriggers && localTriggers.length > 0) {
-      const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
-      const audioMap = new Map();
-      audioRecordings.forEach(a => { audioMap.set(a.ruleId, a); });
-
-      const formatted = localTriggers.map(lt => {
-        if (lt.toMatcherFormat) return lt.toMatcherFormat();
-        const audioUrl = resolveAudioUrl(audioMap.get(lt.ruleId), lt.answerText);
-        return {
-          id:        lt.triggerId,
-          ruleId:    lt.ruleId,
-          triggerId: lt.triggerId,
-          enabled:   lt.enabled,
-          priority:  lt.priority ?? 50,
-          label:     lt.label,
-          bucket:    lt.bucket || null,
-          maxInputWords: typeof lt.maxInputWords === 'number' ? lt.maxInputWords : null,
-          match: {
-            keywords:         lt.keywords         || [],
-            phrases:          lt.phrases          || [],
-            negativeKeywords: lt.negativeKeywords  || [],
-            negativePhrases:  lt.negativePhrases   || [],
-            scenarioTypeAllowlist: lt.scenarioTypeAllowlist || []
-          },
-          responseMode: lt.responseMode || 'standard',
-          answer: {
-            answerText: lt.answerText || '',
-            audioUrl:   audioUrl      || ''
-          },
-          followUp: {
-            question:   lt.followUpQuestion     || '',
-            nextAction: lt.followUpNextAction   || 'CONTINUE'
-          },
-          llmFactPack: lt.llmFactPack || null,
-          _scope: 'LOCAL'
-        };
-      }).filter(Boolean);
-
-      formatted.sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999));
-
-      logger.debug('[TriggerService] Loaded CompanyLocalTriggers (no activeGroupId)', {
-        companyId,
-        localCount: formatted.length,
-        strictMode: isStrictMode
-      });
-      
-      loadMetadata.source = 'LOCAL_ONLY';
-      formatted._loadMetadata = loadMetadata;
-      return formatted;
-    }
-  } catch (localLoadErr) {
-    logger.warn('[TriggerService] Failed to load CompanyLocalTriggers', {
-      companyId,
-      error: localLoadErr.message,
-      strictMode: isStrictMode
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PATH 3: No local triggers found — STRICT MODE vs LEGACY MODE divergence
-  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW PLATFORM: activeGroupId is REQUIRED. No fallback, no legacy mode.
   
-  if (isStrictMode) {
-    // ── STRICT MODE: Return empty. Caller will emit TRIGGER_POOL_EMPTY warning.
-    logger.warn('[TriggerService] STRICT MODE: No triggers found, returning empty pool', {
+  if (!settings || !settings.activeGroupId) {
+    // CRITICAL ERROR: Company has no trigger group assigned
+    logger.error('[TriggerService] 🚨 CRITICAL: Company has no activeGroupId assigned', {
       companyId,
-      hasLegacyConfig: Boolean(legacyConfig?.discovery?.playbook?.rules?.length),
-      legacyBlocked: true
+      hasSettings: Boolean(settings),
+      action: 'ASSIGN_TRIGGER_GROUP_IMMEDIATELY',
+      impact: 'All calls will fall to generic fallback',
+      remediation: 'Run: CompanyTriggerSettings.setActiveGroup(companyId, "hvac-master-v1", 1, "admin")'
     });
     
-    loadMetadata.source = 'EMPTY_STRICT';
+    loadMetadata.source = 'EMPTY_NO_GROUP';
     const emptyResult = [];
     emptyResult._loadMetadata = loadMetadata;
     return emptyResult;
   }
   
-  // ── LEGACY MODE: Allow fallback to playbook.rules (with loud logging)
-  if (legacyConfig && legacyConfig.discovery?.playbook?.rules) {
-    const rawCards = legacyConfig.discovery.playbook.rules;
-    const transformed = rawCards.map(transformLegacyCard).filter(Boolean);
-
-    // Record legacy usage for auditing
-    try {
-      await CompanyTriggerSettings.recordLegacyFallback(companyId);
-    } catch (recordErr) {
-      logger.error('[TriggerService] Failed to record legacy fallback usage', {
-        companyId,
-        error: recordErr.message
-      });
-    }
-
-    logger.warn('[TriggerService] ⚠️ LEGACY_FALLBACK_USED — playbook.rules loaded', {
+  // Load triggers from official GlobalTrigger + CompanyLocalTrigger system
+  const result = await loadTriggersForCompany(companyId, { includeMeta: true });
+  const triggers = result.triggers || result;
+  const groupInfo = result.meta?.groupInfo;
+  
+  loadMetadata.source = 'OFFICIAL_LIBRARY';
+  loadMetadata.activeGroupId = settings.activeGroupId;
+  loadMetadata.isGroupPublished = groupInfo?.isPublished || false;
+  
+  if (triggers.length === 0) {
+    logger.error('[TriggerService] 🚨 CRITICAL: Trigger pool is EMPTY despite activeGroupId', {
       companyId,
-      rawCount: rawCards.length,
-      transformedCount: transformed.length,
-      legacyMode: true,
-      remediation: 'Enable strict mode or migrate triggers to CompanyLocalTrigger'
+      activeGroupId: settings.activeGroupId,
+      isGroupPublished: groupInfo?.isPublished,
+      action: 'VERIFY_GROUP_IS_PUBLISHED_AND_HAS_TRIGGERS'
     });
-    
-    loadMetadata.source = 'LEGACY_FALLBACK';
-    loadMetadata.legacyUsed = true;
-    loadMetadata.legacyCardCount = transformed.length;
-    transformed._loadMetadata = loadMetadata;
-    return transformed;
   }
+  
+  // Attach metadata
+  triggers._loadMetadata = loadMetadata;
+  return triggers;
 
-  // ── No triggers anywhere — return empty
-  loadMetadata.source = 'EMPTY_LEGACY';
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NO TRIGGERS FOUND — CRITICAL ERROR
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW PLATFORM: No legacy fallback, no migration mode.
+  // If triggers aren't found, it's a configuration error that must be fixed.
+  
+  logger.error('[TriggerService] 🚨 CRITICAL: No triggers found for company', {
+    companyId,
+    hasSettings: Boolean(settings),
+    hasActiveGroupId: Boolean(settings?.activeGroupId),
+    action: 'ASSIGN_TRIGGER_GROUP_IMMEDIATELY',
+    impact: 'All calls falling through to generic fallback',
+    remediation: 'Ensure company has activeGroupId set to a published trigger group'
+  });
+  
+  loadMetadata.source = 'EMPTY_NO_TRIGGERS';
   const emptyResult = [];
   emptyResult._loadMetadata = loadMetadata;
   return emptyResult;
