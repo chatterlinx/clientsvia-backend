@@ -313,6 +313,19 @@
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
 
+    // Architecture help toggle
+    const btnShowArchHelp = document.getElementById('btn-show-architecture-help');
+    const archHelpContent = document.getElementById('architecture-help-content');
+    if (btnShowArchHelp && archHelpContent) {
+      btnShowArchHelp.addEventListener('click', () => {
+        const isVisible = archHelpContent.style.display !== 'none';
+        archHelpContent.style.display = isVisible ? 'none' : 'block';
+        btnShowArchHelp.textContent = isVisible 
+          ? 'ℹ️  How LOCAL vs GLOBAL Triggers Work' 
+          : '✕  Close';
+      });
+    }
+
     // Test Panel open/close
     if (DOM.btnOpenTestPanel) {
       DOM.btnOpenTestPanel.addEventListener('click', () => {
