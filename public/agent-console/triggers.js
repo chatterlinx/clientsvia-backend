@@ -86,6 +86,23 @@
     btnBulkImportTriggers: document.getElementById('btn-bulk-import-triggers'),
     btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
     btnRefreshCache: document.getElementById('btn-refresh-cache'),
+    btnOpenTestPanel: document.getElementById('btn-open-test-panel'),
+    btnCloseTestPanel: document.getElementById('btn-close-test-panel'),
+    btnRunTriggerTest: document.getElementById('btn-run-trigger-test'),
+    triggerTestPanel: document.getElementById('trigger-test-panel'),
+    triggerTestInput: document.getElementById('trigger-test-input'),
+    triggerTestResults: document.getElementById('trigger-test-results'),
+    testRawInput: document.getElementById('test-raw-input'),
+    testNormalizedInput: document.getElementById('test-normalized-input'),
+    testTransformCount: document.getElementById('test-transform-count'),
+    testScrabTime: document.getElementById('test-scrab-time'),
+    testMatchBox: document.getElementById('trigger-test-match-box'),
+    testMatchTitle: document.getElementById('trigger-test-match-title'),
+    testMatchDetail: document.getElementById('trigger-test-match-detail'),
+    testAnswerText: document.getElementById('trigger-test-answer-text'),
+    testPoolStats: document.getElementById('test-pool-stats'),
+    testTrace: document.getElementById('trigger-test-trace'),
+    testEvalCount: document.getElementById('test-eval-count'),
     btnCreateGroup: document.getElementById('btn-create-group'),
     btnSettingsMenu: document.getElementById('btn-settings-menu'),
     settingsDropdown: document.getElementById('settings-dropdown'),
@@ -293,6 +310,33 @@
     DOM.groupSelector.addEventListener('change', handleGroupChange);
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+
+    // Test Panel open/close
+    if (DOM.btnOpenTestPanel) {
+      DOM.btnOpenTestPanel.addEventListener('click', () => {
+        if (DOM.triggerTestPanel) {
+          DOM.triggerTestPanel.style.display = DOM.triggerTestPanel.style.display === 'none' ? 'block' : 'none';
+          if (DOM.triggerTestPanel.style.display === 'block' && DOM.triggerTestInput) {
+            DOM.triggerTestInput.focus();
+          }
+        }
+      });
+    }
+    if (DOM.btnCloseTestPanel) {
+      DOM.btnCloseTestPanel.addEventListener('click', () => {
+        if (DOM.triggerTestPanel) DOM.triggerTestPanel.style.display = 'none';
+      });
+    }
+
+    // Run trigger test
+    if (DOM.btnRunTriggerTest) {
+      DOM.btnRunTriggerTest.addEventListener('click', runTriggerTest);
+    }
+    if (DOM.triggerTestInput) {
+      DOM.triggerTestInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runTriggerTest();
+      });
+    }
 
     // Refresh Cache button — flushes the 60-second runtime trigger cache immediately
     if (DOM.btnRefreshCache) {
@@ -562,6 +606,94 @@
       if (DOM.responseModeHint) {
         DOM.responseModeHint.innerHTML = '<span style="color: #8b5cf6;">LLM Fact Pack: AI generates response from your facts. Always uses live TTS via ElevenLabs.</span>';
       }
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     TRIGGER TEST PANEL
+     -------------------------------------------------------------------------- */
+  async function runTriggerTest() {
+    const text = DOM.triggerTestInput?.value?.trim();
+    if (!text) return;
+
+    const btn = DOM.btnRunTriggerTest;
+    if (btn) { btn.disabled = true; btn.textContent = 'Testing...'; }
+
+    try {
+      const result = await apiFetch(
+        `${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/test`,
+        { method: 'POST', body: { text } }
+      );
+
+      if (DOM.triggerTestResults) DOM.triggerTestResults.style.display = 'block';
+
+      // ScrabEngine output
+      if (DOM.testRawInput)        DOM.testRawInput.textContent        = result.input.raw;
+      if (DOM.testNormalizedInput) DOM.testNormalizedInput.textContent = result.input.normalized;
+      if (DOM.testTransformCount)  DOM.testTransformCount.textContent  = `${result.input.transformations?.length || 0} applied`;
+      if (DOM.testScrabTime)       DOM.testScrabTime.textContent       = `${result.input.performance?.totalTimeMs || 0}ms`;
+
+      // Match result
+      const matched = result.match.matched;
+      if (DOM.testMatchBox) {
+        DOM.testMatchBox.style.background = matched ? 'rgba(22,163,74,0.25)' : 'rgba(220,38,38,0.2)';
+        DOM.testMatchBox.style.border     = matched ? '1px solid rgba(134,239,172,0.4)' : '1px solid rgba(252,165,165,0.4)';
+      }
+      if (DOM.testMatchTitle) {
+        DOM.testMatchTitle.textContent = matched
+          ? `✅ MATCHED: ${result.match.cardLabel || result.match.cardId}`
+          : '❌ NO MATCH — fell through to LLM fallback';
+      }
+      if (DOM.testMatchDetail && matched) {
+        const card = result.match.card;
+        DOM.testMatchDetail.innerHTML = [
+          `<span style="opacity:0.7;">Rule ID:</span> <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:3px;">${result.match.cardId}</code>`,
+          `<span style="opacity:0.7;">Priority:</span> ${card?.priority ?? '—'}`,
+          `<span style="opacity:0.7;">Bucket:</span> <span style="color:#fde68a;">${card?.bucket || 'untagged'}</span>`,
+          `<span style="opacity:0.7;">Matched via:</span> <span style="color:#86efac;">${result.match.matchType}</span>`,
+          `<span style="opacity:0.7;">Matched on:</span> <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:3px;">"${result.match.matchedOn}"</code>`
+        ].join(' &nbsp;|&nbsp; ');
+      } else if (DOM.testMatchDetail) {
+        DOM.testMatchDetail.innerHTML = `<span style="opacity:0.7;">Total pool: ${result.pool.total} triggers</span>`;
+      }
+      if (DOM.testAnswerText && matched && result.match.card?.answerText) {
+        DOM.testAnswerText.style.display = 'block';
+        DOM.testAnswerText.textContent = `"${result.match.card.answerText}"`;
+      } else if (DOM.testAnswerText) {
+        DOM.testAnswerText.style.display = 'none';
+      }
+
+      // Pool stats
+      if (DOM.testPoolStats) {
+        const p = result.pool;
+        DOM.testPoolStats.innerHTML = [
+          `<strong>${p.total}</strong> total`,
+          `<strong>${p.enabled}</strong> enabled`,
+          `<strong>${p.negativeBlocked + (p.negativePhraseBlocked||0)}</strong> negative-blocked`,
+          p.maxWordsBlocked ? `<strong>${p.maxWordsBlocked}</strong> maxWords-blocked` : null
+        ].filter(Boolean).join(' · ');
+      }
+
+      // Evaluation trace
+      if (DOM.testEvalCount) DOM.testEvalCount.textContent = result.evaluated.length;
+      if (DOM.testTrace) {
+        DOM.testTrace.innerHTML = result.evaluated.map(e => {
+          const icon = e.matched ? '✅' : e.skipped ? '⊘' : '○';
+          const color = e.matched ? '#86efac' : e.skipped ? '#94a3b8' : '#cbd5e1';
+          const reason = e.skipReason ? ` <span style="color:#fca5a5;">[${e.skipReason}]</span>` : '';
+          const hit = e.keywordHit ? ` <span style="color:#fde68a;">kw:"${e.keywordHit}"</span>` : e.phraseHit ? ` <span style="color:#a5f3fc;">ph:"${e.phraseHit}"</span>` : '';
+          return `<div style="color:${color};">${icon} P${e.priority} ${e.cardLabel || e.cardId}${reason}${hit}</div>`;
+        }).join('');
+      }
+
+    } catch (err) {
+      if (DOM.triggerTestResults) DOM.triggerTestResults.style.display = 'block';
+      if (DOM.testMatchTitle) {
+        DOM.testMatchTitle.textContent = '⚠️ Test failed: ' + err.message;
+        if (DOM.testMatchBox) DOM.testMatchBox.style.background = 'rgba(234,179,8,0.2)';
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Test'; }
     }
   }
 

@@ -74,6 +74,7 @@ const { Agent2VocabularyEngine } = require('./Agent2VocabularyEngine');
 const { Agent2GreetingInterceptor } = require('./Agent2GreetingInterceptor');
 const { Agent2CallReasonSanitizer } = require('./Agent2CallReasonSanitizer');
 const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
+const { Agent2CallRouter }         = require('./Agent2CallRouter');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
@@ -1639,6 +1640,67 @@ class Agent2DiscoveryRunner {
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🧭 AGENT2CALLROUTER — TOP-LEVEL INTENT GATE (5-BUCKET CLASSIFIER)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Classifies caller intent into one of 5 business buckets BEFORE trigger scan.
+    // Runs on ScrabEngine-normalized text. Zero API calls, < 5ms.
+    //
+    // Phase 1 (current): ADVISORY ONLY — emits events, no filtering yet.
+    //   callRouterResult stored in state and passed to TriggerCardMatcher.
+    // Phase 2 (next):    ACTIVE — when confidence >= filterThreshold, TriggerCardMatcher
+    //   pre-filters to bucket-matching cards only (200+ cards → ~15-30).
+    //
+    // Buckets: booking_service | billing_payment | membership_plan |
+    //          existing_appointment | other_operator
+    //
+    // UI config: company.aiAgentSettings.agent2.discovery.callRouter
+    // ══════════════════════════════════════════════════════════════════════════
+    const callRouterConfig = safeObj(discoveryCfg.callRouter, {});
+    const callRouterEnabled = callRouterConfig.enabled !== false;
+    let callRouterResult = null;
+
+    if (callRouterEnabled) {
+      // Pass multi-turn prior for context-aware classification
+      const priorBucket     = nextState.agent2.discovery?.lastCallBucket     || null;
+      const priorConfidence = nextState.agent2.discovery?.lastCallConfidence  || 0;
+
+      callRouterResult = Agent2CallRouter.classify(
+        normalizedInput,
+        callRouterConfig,
+        { turn, priorBucket, priorConfidence }
+      );
+
+      // Persist bucket in call state for multi-turn awareness
+      nextState.agent2.discovery.lastCallBucket     = callRouterResult.bucket;
+      nextState.agent2.discovery.lastCallConfidence = callRouterResult.confidence;
+
+      // Emit classification event — visible in Call Console transcript
+      emit('A2_CALL_ROUTER_CLASSIFIED', {
+        bucket:         callRouterResult.bucket,
+        subBucket:      callRouterResult.subBucket,
+        confidence:     callRouterResult.confidence,
+        tier:           callRouterResult.tier,
+        matchedAnchor:  callRouterResult.matchedAnchor,
+        shouldFilter:   callRouterResult.shouldFilter,
+        turn,
+        inputPreview:   clip(normalizedInput, 60),
+        scores: Object.fromEntries(
+          Object.entries(callRouterResult.scores || {}).map(([k, v]) => [k, v.total])
+        )
+      });
+
+      logger.info('[Agent2CallRouter] 🧭 Intent classified', {
+        bucket:     callRouterResult.bucket,
+        subBucket:  callRouterResult.subBucket,
+        confidence: callRouterResult.confidence,
+        tier:       callRouterResult.tier,
+        anchor:     callRouterResult.matchedAnchor || null,
+        turn,
+        companyId
+      });
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // PATH 2: TRIGGER CARD MATCHING (PRIMARY — DETERMINISTIC)
     // ──────────────────────────────────────────────────────────────────────
@@ -1658,7 +1720,8 @@ class Agent2DiscoveryRunner {
       globalNegativeKeywords,
       expandedTokens: expandedTokens,
       originalTokens: originalTokens,
-      expansionMap: expansionMap
+      expansionMap: expansionMap,
+      callRouterResult: callRouterResult  // Pass router result to matcher
     };
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1667,7 +1730,38 @@ class Agent2DiscoveryRunner {
     // active for this company, falling back to playbook.rules otherwise.
     // Single load, used for both matching and pool stats.
     // ──────────────────────────────────────────────────────────────────────────
-    const triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2);
+    let triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2);
+
+    // ── APPLY CALL ROUTER POOL FILTERING ─────────────────────────────────────
+    // When Agent2CallRouter classifies with confidence >= filterThreshold (0.70),
+    // pre-filter the card pool to bucket-matching cards.
+    // Untagged cards (bucket: null) always pass through regardless of bucket.
+    // Phase 1: only filter if callRouter.filteringEnabled is explicitly true.
+    // This allows observation period before enabling active filtering.
+    if (callRouterResult && callRouterEnabled) {
+      const filteringEnabled = callRouterConfig.filteringEnabled === true;
+      if (filteringEnabled) {
+        const poolResult = Agent2CallRouter.applyToTriggerPool(triggerCards, callRouterResult);
+        if (poolResult.filtered) {
+          triggerCards = poolResult.filteredCards;
+          emit('A2_CALL_ROUTER_POOL_FILTERED', {
+            bucket:        callRouterResult.bucket,
+            confidence:    callRouterResult.confidence,
+            beforeFilter:  poolResult.totalCards,
+            afterFilter:   poolResult.filteredCards.length,
+            excluded:      poolResult.filteredCount,
+            turn
+          });
+          logger.info('[Agent2CallRouter] 🗂️ Trigger pool filtered', {
+            bucket:   callRouterResult.bucket,
+            before:   poolResult.totalCards,
+            after:    poolResult.filteredCards.length,
+            excluded: poolResult.filteredCount,
+            companyId
+          });
+        }
+      }
+    }
 
     // ── VISIBILITY: Emit TRIGGER_POOL_EMPTY when no cards loaded ──────────
     // This event surfaces in Call Console transcript so admins can see EXACTLY
@@ -1705,6 +1799,16 @@ class Agent2DiscoveryRunner {
       totalCards: triggerResult.totalCards,
       enabledCards: triggerResult.enabledCards,
       negativeBlocked: triggerResult.negativeBlocked,
+      negativePhraseBlocked: triggerResult.negativePhraseBlocked || 0,
+      maxWordsBlocked: triggerResult.maxWordsBlocked || 0,
+      // Call Router context
+      callRouter: callRouterResult ? {
+        bucket:     callRouterResult.bucket,
+        subBucket:  callRouterResult.subBucket,
+        confidence: callRouterResult.confidence,
+        tier:       callRouterResult.tier,
+        filtered:   callRouterConfig.filteringEnabled === true && callRouterResult.shouldFilter
+      } : null,
       // V4: Intent Priority Gate info
       intentGateBlocked: triggerResult.intentGateBlocked || 0,
       intentGateResult: triggerResult.intentGateResult ? {

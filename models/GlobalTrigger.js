@@ -103,9 +103,32 @@ const globalTriggerSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  // Context-aware negative matching: exact substring blocks card.
+  // More precise than negativeKeywords for words that appear in non-negative contexts.
+  // e.g. "cancel appointment" instead of single-word "cancel" which over-blocks.
+  negativePhrases: {
+    type: [String],
+    default: []
+  },
   scenarioTypeAllowlist: {
     type: [String],
     default: []
+  },
+  // Top-Level Intent Gate bucket — used by Agent2CallRouter to pre-filter trigger pool.
+  // When Agent2CallRouter classifies a call with confidence >= 0.70, only cards whose
+  // bucket matches (or bucket is null) are evaluated. Dramatically reduces false positives.
+  bucket: {
+    type: String,
+    enum: ['booking_service', 'billing_payment', 'membership_plan', 'existing_appointment', 'other_operator', null],
+    default: null
+  },
+  // Conversational card guard: if set, card only fires when input has <= N words.
+  // Prevents goodbye/thank-you/robot cards from stealing long service utterances.
+  maxInputWords: {
+    type: Number,
+    default: null,
+    min: 1,
+    max: 100
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -403,6 +426,9 @@ globalTriggerSchema.pre('save', function(next) {
   if (this.negativeKeywords && this.negativeKeywords.length > 0) {
     this.negativeKeywords = this.negativeKeywords.map(n => n.toLowerCase().trim()).filter(Boolean);
   }
+  if (this.negativePhrases && this.negativePhrases.length > 0) {
+    this.negativePhrases = this.negativePhrases.map(p => p.toLowerCase().trim()).filter(Boolean);
+  }
 
   next();
 });
@@ -419,10 +445,13 @@ globalTriggerSchema.methods.toMatcherFormat = function() {
     enabled: this.enabled,
     priority: this.priority ?? 50,  // Default priority if missing
     label: this.label,
+    bucket: this.bucket || null,
+    maxInputWords: this.maxInputWords || null,
     match: {
       keywords: this.keywords || [],
       phrases: this.phrases || [],
       negativeKeywords: this.negativeKeywords || [],
+      negativePhrases:  this.negativePhrases  || [],
       scenarioTypeAllowlist: this.scenarioTypeAllowlist || []
     },
     responseMode: this.responseMode || 'standard',

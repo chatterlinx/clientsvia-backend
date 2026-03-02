@@ -45,6 +45,144 @@ const scrabEngineRouter = require('./scrabEngine');
 router.use('/', scrabEngineRouter);
 
 // ════════════════════════════════════════════════════════════════════════════
+// GET /:companyId/triggers/router-config — Serve Call Router ontologies + IntentGate
+// ════════════════════════════════════════════════════════════════════════════
+// Makes ALL hardcoded defaults from Agent2CallRouter and Agent2IntentPriorityGate
+// visible to the admin console. No more hidden patterns affecting live calls.
+// Companies can see every default token, anchor, and regex that shapes routing.
+router.get('/:companyId/triggers/router-config', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { Agent2CallRouter, DEFAULT_ONTOLOGIES } = require('../../services/engine/agent2/Agent2CallRouter');
+    const { Agent2IntentPriorityGate } = require('../../services/engine/agent2/Agent2IntentPriorityGate');
+
+    const company = await v2Company.findById(companyId).lean();
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const callRouterConfig  = company.aiAgentSettings?.agent2?.discovery?.callRouter || Agent2CallRouter.getDefaultConfig();
+    const intentGateConfig  = company.aiAgentSettings?.agent2?.discovery?.intentGate || Agent2IntentPriorityGate.getDefaultConfig();
+
+    res.json({
+      callRouter: {
+        config:      callRouterConfig,
+        ontologies:  DEFAULT_ONTOLOGIES,
+        description: 'Top-Level Intent Gate — classifies calls into 5 buckets before trigger scan',
+        buckets:     Object.entries(DEFAULT_ONTOLOGIES).map(([key, ont]) => ({
+          key,
+          label:       ont.label,
+          description: ont.description,
+          color:       ont.color,
+          anchorCount: (ont.anchors || []).length,
+          primaryTokenCount: (ont.primaryTokens || []).length,
+          subBuckets:  Object.keys(ont.subBuckets || {})
+        }))
+      },
+      intentGate: {
+        config:      intentGateConfig,
+        description: 'Legacy binary gate — detects service_down/emergency to penalize FAQ cards',
+        note:        'Agent2CallRouter is the successor. IntentGate remains for emergency detection.'
+      }
+    });
+  } catch (error) {
+    logger.error('[AgentConsole] Router config error:', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/triggers/test — Live trigger matching test
+// ════════════════════════════════════════════════════════════════════════════
+// Runs a full simulation: ScrabEngine text processing → TriggerCardMatcher.
+// Returns matched card, all evaluated cards, and ScrabEngine output.
+// Used by the "Trigger Test Panel" in the admin console.
+router.post('/:companyId/triggers/test', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    const { ScrabEngine } = require('../../services/ScrabEngine');
+    const { TriggerCardMatcher } = require('../../services/engine/agent2/TriggerCardMatcher');
+    const TriggerService = require('../../services/engine/agent2/TriggerService');
+
+    // Load company for ScrabEngine config
+    const company = await v2Company.findById(companyId).lean();
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    // Step 1: Run ScrabEngine
+    const scrabResult = await ScrabEngine.process({
+      rawText: text.trim(),
+      company,
+      context: { companyName: company.businessName || company.name || '', callSid: 'test-panel', turn: 0 }
+    });
+
+    // Step 2: Load compiled triggers (bypass cache for test accuracy)
+    const agent2Config = company.aiAgentSettings?.agent2 || {};
+    const triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2Config);
+
+    // Step 3: Run matcher with ScrabEngine output
+    const matchResult = TriggerCardMatcher.match(scrabResult.normalizedText, triggerCards, {
+      expandedTokens: scrabResult.expandedTokens,
+      originalTokens:  scrabResult.originalTokens,
+      expansionMap:    scrabResult.expansionMap
+    });
+
+    const poolStats = TriggerCardMatcher.getPoolStats(triggerCards);
+
+    res.json({
+      input: {
+        raw:        text.trim(),
+        normalized: scrabResult.normalizedText,
+        transformations: scrabResult.transformations,
+        performance: scrabResult.performance
+      },
+      match: {
+        matched:     matchResult.matched,
+        cardId:      matchResult.cardId,
+        cardLabel:   matchResult.cardLabel,
+        matchType:   matchResult.matchType,
+        matchedOn:   matchResult.matchedOn,
+        card:        matchResult.card ? {
+          ruleId:    matchResult.card.ruleId,
+          label:     matchResult.card.label,
+          priority:  matchResult.card.priority,
+          bucket:    matchResult.card.bucket || null,
+          answerText: matchResult.card.answer?.answerText || '',
+          followUpQuestion: matchResult.card.followUp?.question || ''
+        } : null
+      },
+      pool: {
+        total:             poolStats.total,
+        enabled:           poolStats.enabled,
+        evaluated:         matchResult.evaluated.length,
+        negativeBlocked:   matchResult.negativeBlocked,
+        negativePhraseBlocked: matchResult.negativePhraseBlocked || 0,
+        maxWordsBlocked:   matchResult.maxWordsBlocked || 0,
+        intentGateBlocked: matchResult.intentGateBlocked || 0
+      },
+      evaluated: matchResult.evaluated.map(e => ({
+        cardId:      e.cardId,
+        cardLabel:   e.cardLabel,
+        priority:    e.effectivePriority,
+        skipped:     e.skipped,
+        skipReason:  e.skipReason,
+        matched:     e.matched,
+        keywordHit:  e.keywordHit,
+        phraseHit:   e.phraseHit,
+        negativeHit: e.negativeHit,
+        negativePhraseHit: e.negativePhraseHit
+      }))
+    });
+  } catch (error) {
+    logger.error('[AgentConsole] Trigger test error:', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/triggers/refresh — Flush runtime trigger cache
 // ════════════════════════════════════════════════════════════════════════════
 // The runtime caches compiled triggers for 60 seconds to avoid DB hits on

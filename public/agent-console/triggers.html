@@ -970,6 +970,9 @@
             </div>
           </div>
           <div class="group-actions">
+            <button class="btn btn-secondary btn-sm" id="btn-open-test-panel" title="Open live trigger test panel">
+              🧪 Test Triggers
+            </button>
             <button class="btn btn-secondary btn-sm" id="btn-refresh-cache" title="Flush runtime trigger cache — next call loads fresh triggers immediately">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 7A5 5 0 1 1 7 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -1006,6 +1009,63 @@
           <div class="trigger-stat">
             <span class="trigger-stat-value stat-value-muted" id="stat-disabled">0</span>
             <span class="trigger-stat-label">Disabled</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRIGGER TEST PANEL -->
+      <div class="card" id="trigger-test-panel" style="display: none; background: linear-gradient(135deg, #1e3a5f 0%, #1a1a2e 100%); border: none; color: #fff; margin-bottom: 20px;">
+        <div style="padding: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: #fff;">🧪 Live Trigger Test Panel</h2>
+            <button id="btn-close-test-panel" style="background: rgba(255,255,255,0.15); border: none; color: #fff; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-size: 12px;">✕ Close</button>
+          </div>
+          <p style="margin: 0 0 14px 0; font-size: 12px; opacity: 0.8;">Type any caller utterance to see which trigger fires, what ScrabEngine normalized it to, and the full evaluation trace.</p>
+
+          <div style="display: flex; gap: 10px; align-items: flex-start;">
+            <input type="text" id="trigger-test-input"
+              placeholder='e.g., "my air conditioner isn\'t cooling"'
+              style="flex: 1; padding: 10px 14px; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 14px; outline: none;"
+            />
+            <button id="btn-run-trigger-test"
+              style="padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; white-space: nowrap;">
+              ▶ Test
+            </button>
+          </div>
+
+          <!-- Results area -->
+          <div id="trigger-test-results" style="display: none; margin-top: 16px;">
+            <!-- ScrabEngine output -->
+            <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+              <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; opacity: 0.7; margin-bottom: 6px;">ScrabEngine Output</div>
+              <div style="display: flex; gap: 16px; font-size: 12px; flex-wrap: wrap;">
+                <div><span style="opacity: 0.6;">Raw:</span> <code id="test-raw-input" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px; font-size: 11px;"></code></div>
+                <div><span style="opacity: 0.6;">Normalized:</span> <code id="test-normalized-input" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px; font-size: 11px; color: #86efac;"></code></div>
+                <div><span style="opacity: 0.6;">Transforms:</span> <span id="test-transform-count" style="color: #fde68a;"></span></div>
+                <div><span style="opacity: 0.6;">Time:</span> <span id="test-scrab-time" style="color: #93c5fd;"></span></div>
+              </div>
+            </div>
+
+            <!-- Match result -->
+            <div id="trigger-test-match-box" style="border-radius: 8px; padding: 14px; margin-bottom: 10px;">
+              <div style="font-size: 13px; font-weight: 700;" id="trigger-test-match-title"></div>
+              <div style="font-size: 12px; margin-top: 6px; opacity: 0.9;" id="trigger-test-match-detail"></div>
+              <div style="font-size: 12px; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 6px; font-style: italic;" id="trigger-test-answer-text" style="display:none;"></div>
+            </div>
+
+            <!-- Pool stats -->
+            <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 11px; opacity: 0.8;">
+              <span style="font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Pool: </span>
+              <span id="test-pool-stats"></span>
+            </div>
+
+            <!-- Evaluation trace (collapsible) -->
+            <details>
+              <summary style="cursor: pointer; font-size: 11px; font-weight: 600; text-transform: uppercase; opacity: 0.7; margin-bottom: 8px; list-style: none; display: flex; align-items: center; gap: 6px;">
+                ▶ Full Evaluation Trace (<span id="test-eval-count"></span> cards)
+              </summary>
+              <div id="trigger-test-trace" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; max-height: 280px; overflow-y: auto; font-size: 11px; font-family: monospace; line-height: 1.8;"></div>
+            </details>
           </div>
         </div>
       </div>

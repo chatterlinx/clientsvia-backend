@@ -40,7 +40,8 @@
     "negativeKeywords": [],
     "answerText": "That is a serious safety concern. Please turn your system off immediately, leave the area if there is a strong odor, and call your gas company or 911 right now. Do not flip any switches or use your phone near the smell. Once you are safe, we can dispatch our on-call team.",
     "followUpQuestion": "Are you and your family safely out of the area?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "emergency.carbon_monoxide",
@@ -64,7 +65,8 @@
     "negativeKeywords": [],
     "answerText": "Get everyone out of the building right now and call 911. Do not go back inside until emergency services say it is safe. Once you are outside, I can connect you to our on-call team to check your system.",
     "followUpQuestion": "Is everyone out of the building?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "emergency.sparks_arcing",
@@ -88,7 +90,8 @@
     "negativeKeywords": [],
     "answerText": "Turn the system off at the thermostat and at the breaker right now — do not touch the equipment. If there is active arcing or fire, call 911 immediately. I can get our on-call team dispatched to you.",
     "followUpQuestion": "Do you want me to connect you with our emergency team right now?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "emergency.burning_smell",
@@ -122,7 +125,8 @@
     ],
     "answerText": "Turn the system off at the thermostat immediately. A burning smell from your HVAC system can indicate an electrical issue that needs urgent attention. I can get a technician dispatched to you right away.",
     "followUpQuestion": "Do you want me to schedule an emergency service call right now?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "emergency.flooding_water",
@@ -153,7 +157,8 @@
     ],
     "answerText": "Turn the system off right now to stop more water from flowing. If water is near any electrical panels or outlets, stay back and call an electrician. I can get a technician out to you urgently.",
     "followUpQuestion": "Do you want me to schedule an emergency dispatch right now?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "emergency.vulnerable_occupant",
@@ -180,7 +185,8 @@
     "negativeKeywords": [],
     "answerText": "I understand — that is urgent. Please keep anyone vulnerable cool with fans, wet towels, or a cooler space if possible, and make sure they stay hydrated. I am scheduling the first available technician for you right now.",
     "followUpQuestion": "Can I get your address so I can confirm the fastest available slot?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "emergency.after_hours_urgent",
@@ -221,7 +227,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.electrical.breaker_tripping",
@@ -263,7 +270,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.water.ceiling_vent_drip",
@@ -294,7 +302,8 @@
     ],
     "answerText": "Turn the system off to prevent more water from coming through. Water from your AC usually means a clogged drain or overflowing pan — it can damage ceilings fast. I can get a technician out to you.",
     "followUpQuestion": "Do you want me to schedule that right away?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.water.indoor_unit_leak",
@@ -338,7 +347,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.cooling.not_cooling",
@@ -405,7 +415,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.cooling.wont_turn_on",
@@ -450,7 +461,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.cooling.short_cycling",
@@ -492,7 +504,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.cooling.frozen_coil",
@@ -543,7 +556,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.cooling.runs_nonstop",
@@ -586,7 +600,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.heat.not_heating",
@@ -641,7 +656,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.heat.blowing_cold",
@@ -684,7 +700,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.airflow.weak_or_none",
@@ -728,7 +745,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.airflow.uneven_rooms",
@@ -778,7 +796,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.thermostat.blank_screen",
@@ -824,7 +843,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.thermostat.not_working",
@@ -865,7 +885,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.noise.banging_rattling",
@@ -907,7 +928,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.noise.squealing_grinding",
@@ -949,7 +971,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.refrigerant.low_or_leak",
@@ -992,7 +1015,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.install.new_system",
@@ -1046,7 +1070,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.install.quote_estimate",
@@ -1090,7 +1115,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "hvac.install.second_opinion",
@@ -1130,7 +1156,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "billing.invoice_or_payment",
@@ -1158,7 +1185,8 @@
     "negativeKeywords": [],
     "answerText": "I want to make sure we get that resolved for you. For billing and payment questions, let me connect you with someone on our team who can pull up your account and give you the details.",
     "followUpQuestion": "Can I get your name so they can locate your account?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "billing_payment"
   },
   {
     "ruleId": "membership.plan_inquiry",
@@ -1200,7 +1228,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "membership_plan"
   },
   {
     "ruleId": "membership.plan_signup",
@@ -1243,7 +1272,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "membership_plan"
   },
   {
     "ruleId": "maintenance.tune_up",
@@ -1286,7 +1316,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "maintenance.filter_service",
@@ -1329,7 +1360,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "booking.schedule_service",
@@ -1373,7 +1405,8 @@
       "cancel the appointment",
       "i need to cancel",
       "cancel my call"
-    ]
+    ],
+    "bucket": "booking_service"
   },
   {
     "ruleId": "booking.reschedule_or_cancel",
@@ -1407,7 +1440,8 @@
     "negativeKeywords": [],
     "answerText": "No problem — I can take care of that for you. Let me look up your appointment.",
     "followUpQuestion": "Can I get your name so I can find your appointment?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "existing_appointment"
   },
   {
     "ruleId": "booking.appointment_status",
@@ -1440,7 +1474,8 @@
     "negativeKeywords": [],
     "answerText": "Let me look that up for you right now.",
     "followUpQuestion": "Can I get your name or the phone number on the account?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "existing_appointment"
   },
   {
     "ruleId": "booking.service_area",
@@ -1464,7 +1499,8 @@
     "negativeKeywords": [],
     "answerText": "We cover the local area. When we get you scheduled, we will confirm your address is within our service zone.",
     "followUpQuestion": "Do you want me to go ahead and get you on the schedule?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "bucket": "booking_service"
   },
   {
     "ruleId": "booking.hours",
@@ -1490,7 +1526,8 @@
     "negativeKeywords": [],
     "answerText": "Our office hours are Monday through Friday. We also have an on-call team available for after-hours emergencies. For standard appointments, I can get you on the schedule right now.",
     "followUpQuestion": "Would you like to set something up?",
-    "followUpNextAction": "HANDOFF_BOOKING"
+    "followUpNextAction": "HANDOFF_BOOKING",
+    "bucket": "other_operator"
   },
   {
     "ruleId": "conversation.robot_challenge",
@@ -1517,7 +1554,8 @@
     "negativePhrases": [],
     "answerText": "I am the virtual assistant for this company. I handle scheduling and answer questions about your system around the clock. A real technician handles all the actual service work. What can I help you with today?",
     "followUpQuestion": "",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "other_operator"
   },
   {
     "ruleId": "conversation.repeat_request",
@@ -1541,7 +1579,8 @@
     "negativeKeywords": [],
     "answerText": "Of course. Let me say that again for you.",
     "followUpQuestion": "",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "other_operator"
   },
   {
     "ruleId": "conversation.thank_you",
@@ -1566,7 +1605,8 @@
     "negativePhrases": [],
     "answerText": "You are very welcome. Is there anything else I can help you with today?",
     "followUpQuestion": "",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "other_operator"
   },
   {
     "ruleId": "conversation.goodbye",
@@ -1592,7 +1632,8 @@
     "negativePhrases": [],
     "answerText": "Thank you for calling. Have a great day and we will see you soon.",
     "followUpQuestion": "",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "other_operator"
   },
   {
     "ruleId": "conversation.callback_request",
@@ -1617,6 +1658,7 @@
     "negativeKeywords": [],
     "answerText": "Absolutely. I will make sure someone on our team reaches out to you directly. Let me get your callback number.",
     "followUpQuestion": "What is the best number to reach you?",
-    "followUpNextAction": "CONTINUE"
+    "followUpNextAction": "CONTINUE",
+    "bucket": "other_operator"
   }
 ]
