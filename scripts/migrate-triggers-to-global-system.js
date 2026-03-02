@@ -192,9 +192,7 @@ async function createDefaultHVACGroup() {
   //   - Diagnostic instructions baked into code, not UI
   //   - No admin visibility or customization
   //
-  // DO NOT RESTORE. Use docs/triggers-master-v1.json instead:
-  //   node scripts/seedTriggerGroupV1.js
-  // This seeds 42 validated, UI-controlled triggers into the GlobalTrigger system.
+  // DO NOT RESTORE. Create triggers via Admin → Trigger Cards in the UI.
   //
   // ORIGINAL CONTENT preserved in git history (commit before Mar 1, 2026).
   const defaultTriggers = [];
