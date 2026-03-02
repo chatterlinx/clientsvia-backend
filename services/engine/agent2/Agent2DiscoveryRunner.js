@@ -1736,13 +1736,20 @@ class Agent2DiscoveryRunner {
     // When Agent2CallRouter classifies with confidence >= filterThreshold (0.70),
     // pre-filter the card pool to bucket-matching cards.
     // Untagged cards (bucket: null) always pass through regardless of bucket.
-    // Phase 1: only filter if callRouter.filteringEnabled is explicitly true.
-    // This allows observation period before enabling active filtering.
+    //
+    // THREE SAFETY RULES (all enforced here):
+    // 1. ADVISORY BY DEFAULT: only filter if callRouter.filteringEnabled === true
+    // 2. UNTAGGED ALWAYS INCLUDED: applyToTriggerPool always includes bucket:null cards
+    // 3. ZERO-MATCH RETRY: if filtered pool produces 0 matches → retry with full pool
+    //    This prevents mixed-intent calls ("charged AND AC broken") from missing triggers
+    //    when CallRouter picks one bucket and the other intent's triggers are filtered out.
+    let callRouterFilteredPool = null; // track for retry logic
     if (callRouterResult && callRouterEnabled) {
       const filteringEnabled = callRouterConfig.filteringEnabled === true;
       if (filteringEnabled) {
         const poolResult = Agent2CallRouter.applyToTriggerPool(triggerCards, callRouterResult);
-        if (poolResult.filtered) {
+        if (poolResult.filtered && poolResult.filteredCards.length > 0) {
+          callRouterFilteredPool = triggerCards; // save full pool for zero-match retry
           triggerCards = poolResult.filteredCards;
           emit('A2_CALL_ROUTER_POOL_FILTERED', {
             bucket:        callRouterResult.bucket,
@@ -1750,6 +1757,8 @@ class Agent2DiscoveryRunner {
             beforeFilter:  poolResult.totalCards,
             afterFilter:   poolResult.filteredCards.length,
             excluded:      poolResult.filteredCount,
+            safetyRule2:   'untagged cards included regardless of bucket',
+            safetyRule3:   'zero-match retry with full pool active',
             turn
           });
           logger.info('[Agent2CallRouter] 🗂️ Trigger pool filtered', {
@@ -1758,6 +1767,11 @@ class Agent2DiscoveryRunner {
             after:    poolResult.filteredCards.length,
             excluded: poolResult.filteredCount,
             companyId
+          });
+        } else if (poolResult.filtered && poolResult.filteredCards.length === 0) {
+          // Filtered pool is completely empty — skip filtering, use full pool
+          logger.warn('[Agent2CallRouter] ⚠️ Filtered pool empty — using full pool (safety rule 3 pre-check)', {
+            bucket: callRouterResult.bucket, totalCards: poolResult.totalCards, companyId
           });
         }
       }
@@ -1781,8 +1795,49 @@ class Agent2DiscoveryRunner {
       });
     }
 
-    const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, matchOptions);
-    const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
+    let triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, matchOptions);
+    let cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
+
+    // ── SAFETY RULE 3: ZERO-MATCH RETRY WITH FULL POOL ────────────────────────
+    // If pool filtering was active and produced no match, retry with the complete
+    // unfiltered pool. This handles mixed-intent calls where CallRouter picked the
+    // wrong bucket (e.g., "I got charged AND my AC isn't cooling" classified as
+    // billing_payment → AC triggers filtered out → retry fires AC trigger).
+    if (!triggerResult.matched && callRouterFilteredPool && callRouterFilteredPool.length > 0) {
+      logger.info('[Agent2CallRouter] 🔄 ZERO-MATCH RETRY: filtered pool had no match — retrying with full pool', {
+        bucket:          callRouterResult?.bucket,
+        filteredPoolSize: triggerCards.length,
+        fullPoolSize:    callRouterFilteredPool.length,
+        companyId,
+        callSid,
+        turn
+      });
+
+      const retryResult = TriggerCardMatcher.match(normalizedInput, callRouterFilteredPool, matchOptions);
+
+      emit('A2_CALL_ROUTER_RETRY_FULL_POOL', {
+        bucket:          callRouterResult?.bucket,
+        confidence:      callRouterResult?.confidence,
+        filteredPoolSize: triggerCards.length,
+        fullPoolSize:    callRouterFilteredPool.length,
+        retryMatched:    retryResult.matched,
+        retryCardId:     retryResult.cardId,
+        retryCardLabel:  retryResult.cardLabel,
+        turn,
+        note: 'Safety Rule 3: filtered pool had no match — expanded to full pool'
+      });
+
+      if (retryResult.matched) {
+        // Retry succeeded — use the full-pool result
+        triggerResult = retryResult;
+        cardPoolStats  = TriggerCardMatcher.getPoolStats(callRouterFilteredPool);
+        logger.info('[Agent2CallRouter] ✅ RETRY SUCCEEDED — full pool match found', {
+          cardId: retryResult.cardId, cardLabel: retryResult.cardLabel, companyId, turn
+        });
+      }
+      // Whether retry matched or not, clear the saved pool — don't retry twice
+      callRouterFilteredPool = null;
+    }
     
     // Store intent gate result for empathy layer (V4)
     if (triggerResult.intentGateResult) {
