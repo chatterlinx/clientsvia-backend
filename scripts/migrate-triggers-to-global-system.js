@@ -185,36 +185,21 @@ async function createDefaultHVACGroup() {
     createdBy: MIGRATION_USER
   });
   
-  const defaultTriggers = [
-    {
-      ruleId: 'pricing.service_call',
-      label: 'Service call pricing',
-      priority: 10,
-      keywords: ['service call', 'diagnostic fee', 'trip charge'],
-      phrases: ['how much is', 'what does it cost'],
-      negativeKeywords: ['cancel', 'refund'],
-      answerText: 'Our service call is $89, which includes the diagnostic. If we do the repair, the diagnostic fee is waived.',
-      followUpQuestion: 'Would you like to schedule a repair visit, or were you looking for a maintenance tune-up?'
-    },
-    {
-      ruleId: 'problem.not_cooling',
-      label: 'AC not cooling',
-      priority: 12,
-      keywords: ['not cooling', 'not cold', 'blowing warm', 'warm air', 'hot air'],
-      phrases: ['running but not cooling', 'blowing but not cold'],
-      answerText: 'If your system is running but not cooling, it could be a refrigerant issue, a dirty filter, or a problem with the compressor.',
-      followUpQuestion: 'When did you last change the filter?'
-    },
-    {
-      ruleId: 'problem.water_leak',
-      label: 'Water leak / dripping',
-      priority: 15,
-      keywords: ['water leak', 'leaking water', 'dripping', 'puddle'],
-      phrases: ['water coming from', 'dripping from'],
-      answerText: 'Water leaking from an AC unit is often caused by a clogged drain line or a frozen evaporator coil. If you see a lot of water, turn the system off to prevent damage.',
-      followUpQuestion: 'Is the water actively dripping right now, or have you noticed it pooling over time?'
-    }
-  ];
+  // ⚠️ VIOLATION BLOCK — PERMANENTLY EMPTIED — Mar 1, 2026
+  // These 3 hardcoded trigger cards (pricing.service_call, problem.not_cooling,
+  // problem.water_leak) were a platform violation:
+  //   - Hardcoded prices ("$89") that differ per company
+  //   - Diagnostic instructions baked into code, not UI
+  //   - No admin visibility or customization
+  //
+  // DO NOT RESTORE. Use docs/triggers-master-v1.json instead:
+  //   node scripts/seedTriggerGroupV1.js
+  // This seeds 42 validated, UI-controlled triggers into the GlobalTrigger system.
+  //
+  // ORIGINAL CONTENT preserved in git history (commit before Mar 1, 2026).
+  const defaultTriggers = [];
+  // NOTE: If this function is called, it will now create an empty group.
+  // Assign the 'hvac-master-v1' group from seedTriggerGroupV1.js instead.
   
   for (const t of defaultTriggers) {
     await GlobalTrigger.create({
