@@ -88,7 +88,18 @@
       'ESCALATION': 'Escalation',
       'PATIENCE_WAIT': 'Patience (Waiting)',
       'PATIENCE_CHECKIN': 'Patience Check-in',
-      'PATIENCE_FINAL_CHECKIN': 'Patience Final Check-in'
+      'PATIENCE_FINAL_CHECKIN': 'Patience Final Check-in',
+      // Phase 4 — Agent2CallRouter
+      'A2_CALL_ROUTER_CLASSIFIED': 'Call Router: Intent Classified',
+      'A2_CALL_ROUTER_POOL_FILTERED': 'Call Router: Trigger Pool Filtered',
+      // Phase 1–2 — Trigger system visibility
+      'TRIGGER_POOL_EMPTY': 'Trigger Pool EMPTY',
+      'TRIGGER_CARDS_EVALUATED': 'Trigger Cards Evaluated',
+      'A2_TRIGGER_EVAL': 'Trigger Evaluation',
+      'A2_RESPONSE_READY': 'Response Ready',
+      'A2_PATH_SELECTED': 'Path Selected',
+      'A2_FOLLOWUP_CONSENT_CLASSIFIED': 'Follow-Up Consent Classified',
+      'A2_PENDING_QUESTION_RESOLVED': 'Pending Question Resolved'
     },
 
     /** UI Tab mapping for provenance links */
@@ -109,7 +120,11 @@
       'triggers': { page: 'triggers.html', tab: 'triggers', section: 'Trigger Cards' },
       'bookingPrompts': { page: 'booking.html', tab: 'prompts', section: 'Booking Prompts' },
       'bookingLogic': { page: 'booking.html', tab: 'logic', section: 'Booking Logic' },
-      'globalHub.vocabulary': { page: 'global-hub.html', tab: 'vocabulary', section: 'Vocabulary' }
+      'globalHub.vocabulary': { page: 'global-hub.html', tab: 'vocabulary', section: 'Vocabulary' },
+      'scrabengine': { page: 'scrabengine.html', tab: 'vocabulary', section: 'ScrabEngine Config' },
+      'aiAgentSettings.scrabEngine': { page: 'scrabengine.html', tab: 'vocabulary', section: 'ScrabEngine Config' },
+      'triggers': { page: 'triggers.html', tab: 'triggers', section: 'Trigger Cards' },
+      'callRouter': { page: 'triggers.html', tab: 'router', section: 'Call Router Config' }
     }
   };
 
@@ -1000,6 +1015,14 @@
         || ev.type === 'NAME_GREETING_FIRED'
         || ev.type === 'PATIENCE_MODE_ACTIVE'
         || ev.type === 'PATIENCE_TIMEOUT_CHECK_IN'
+        || ev.type === 'A2_CALL_ROUTER_CLASSIFIED'
+        || ev.type === 'A2_CALL_ROUTER_POOL_FILTERED'
+        || ev.type === 'TRIGGER_POOL_EMPTY'
+        || ev.type === 'A2_TRIGGER_EVAL'
+        || ev.type === 'TRIGGER_CARDS_EVALUATED'
+        || ev.type === 'A2_RESPONSE_READY'
+        || ev.type === 'A2_PATH_SELECTED'
+        || ev.type === 'A2_GREETING_EVALUATED'
         || ev.type.startsWith('SCRABENGINE_');
     });
 
@@ -1023,20 +1046,28 @@
 
   function toScrabLabel(type) {
     const map = {
-      INPUT_TEXT_FINALIZED: 'Raw Input',
-      SCRABENGINE_ENTRY: 'ScrabEngine Entry',
-      SCRABENGINE_STAGE1: 'Stage 1 Fillers',
-      SCRABENGINE_STAGE2: 'Stage 2 Vocabulary',
-      SCRABENGINE_STAGE3: 'Stage 3 Expansion',
-      SCRABENGINE_STAGE4: 'Stage 4 Extraction',
-      SCRABENGINE_STAGE5: 'Stage 5 Quality',
-      SCRABENGINE_DELIVERY: 'Final Delivery',
-      SCRABENGINE_PROCESSED: 'Processing Summary',
-      SCRABENGINE_QUALITY_FAILED: 'Quality Failure',
-      CALLER_NAME_EXTRACTED: 'Caller Name Extracted',
-      NAME_GREETING_FIRED: 'Name Greeting',
-      PATIENCE_MODE_ACTIVE: 'Patience Mode',
-      PATIENCE_TIMEOUT_CHECK_IN: 'Patience Check-in'
+      INPUT_TEXT_FINALIZED:          'Raw Input from Deepgram',
+      SCRABENGINE_ENTRY:             'ScrabEngine — Entry',
+      SCRABENGINE_STAGE1:            'Stage 1 — Filler Removal',
+      SCRABENGINE_STAGE2:            'Stage 2 — Vocabulary Normalization',
+      SCRABENGINE_STAGE3:            'Stage 3 — Token Expansion',
+      SCRABENGINE_STAGE4:            'Stage 4 — Entity Extraction',
+      SCRABENGINE_STAGE5:            'Stage 5 — Quality Gate',
+      SCRABENGINE_DELIVERY:          'ScrabEngine — Delivery to Triggers',
+      SCRABENGINE_PROCESSED:         'ScrabEngine — Pipeline Summary',
+      SCRABENGINE_QUALITY_FAILED:    'ScrabEngine — Quality Gate FAILED',
+      CALLER_NAME_EXTRACTED:         'Caller Name Extracted',
+      NAME_GREETING_FIRED:           'Name Greeting Fired',
+      PATIENCE_MODE_ACTIVE:          'Patience Mode Active',
+      PATIENCE_TIMEOUT_CHECK_IN:     'Patience Check-in',
+      A2_CALL_ROUTER_CLASSIFIED:     'Call Router — Intent Classified',
+      A2_CALL_ROUTER_POOL_FILTERED:  'Call Router — Trigger Pool Filtered',
+      TRIGGER_POOL_EMPTY:            '⚠️ Trigger Pool EMPTY',
+      A2_TRIGGER_EVAL:               'Trigger Evaluation Result',
+      TRIGGER_CARDS_EVALUATED:       'Trigger Cards Evaluated',
+      A2_RESPONSE_READY:             'Response Ready',
+      A2_PATH_SELECTED:              'Path Selected',
+      A2_GREETING_EVALUATED:         'Greeting Interceptor Result'
     };
     return map[type] || type;
   }
@@ -1138,8 +1169,17 @@
     }
     if (stage2?.payload?.summary || stage2?.payload?.text) {
       const s = stage2.payload;
-      const status = s.status || (s.changes?.length > 0 ? 'modified' : 'unchanged');
-      stages.push(renderScrabStageChip('2', 'Vocab', s.summary || s.text, status));
+      const changes = s.changes || [];
+      const contractionFires = changes.some(c => c.type === 'system_contraction' || (c.from && c.from.includes("'")));
+      const laymanFires      = changes.some(c => c.type === 'system_layman');
+      const status = s.status || (changes.length > 0 ? 'modified' : 'unchanged');
+      // Enrich summary with system default badges
+      let summary = s.summary || s.text || '';
+      const badges = [];
+      if (contractionFires) badges.push('contractions');
+      if (laymanFires)      badges.push('layman vocab');
+      if (badges.length) summary = (summary ? summary + ' · ' : '') + badges.join(' · ');
+      stages.push(renderScrabStageChip('2', 'Vocab', summary, status));
     }
     if (stage3?.payload?.summary || stage3?.payload?.text) {
       const s = stage3.payload;
@@ -1286,236 +1326,445 @@
    * @param {Array} events - Array of event objects
    * @returns {string} HTML string
    */
+  // ── Diagnostic Roadmap helpers ─────────────────────────────────────────────
+
+  function roadmapStep(num, icon, title, ok, detail, extra) {
+    const bg     = ok === true  ? '#f0fdf4' : ok === false ? '#fef2f2' : '#fffbeb';
+    const border = ok === true  ? '#86efac' : ok === false ? '#fca5a5' : '#fcd34d';
+    const numBg  = ok === true  ? '#10b981' : ok === false ? '#ef4444' : '#f59e0b';
+    const tc     = ok === true  ? '#166534' : ok === false ? '#991b1b' : '#b45309';
+    return `
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div style="min-width:40px;height:40px;border-radius:50%;background:${numBg};color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">${ok === false ? '🚫' : num}</div>
+        <div style="flex:1;background:${bg};border:1px solid ${border};border-radius:8px;padding:12px;">
+          <div style="font-weight:600;color:${tc};margin-bottom:4px;">${icon} ${escapeHtml(title)}</div>
+          <div style="font-size:12px;color:${tc};line-height:1.6;">${detail}</div>
+          ${extra ? `<div style="font-size:11px;color:#64748b;margin-top:6px;padding-top:6px;border-top:1px solid ${border};">${extra}</div>` : ''}
+        </div>
+      </div>
+      <div style="text-align:center;color:#cbd5e1;font-size:20px;margin:-4px 0;">↓</div>
+    `;
+  }
+
   function renderDiagnosticRoadmap(call) {
-    const turns = call.turns || [];
-    const events = call.events || [];
-    const trace = call.trace || [];
-    
-    // Build sequence from actual call data
+    const allEvts = [...(call.events || []), ...(call.trace || [])];
+    const findEv  = (t) => allEvts.find(e => (e.type || e.kind) === t);
+    const hasEvts = allEvts.length > 0;
+
+    const turns      = call.turns || [];
     const callerTurns = turns.filter(t => t.speaker === 'caller');
-    const agentTurns = turns.filter(t => t.speaker === 'agent');
-    
+    const agentTurns  = turns.filter(t => t.speaker === 'agent');
+
     if (callerTurns.length === 0) {
       return `
-        <div class="diagnostic-roadmap" style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 12px; padding: 20px; margin: 16px 0;">
-          <h4 style="color: #b45309; margin: 0 0 12px 0;">⚠️ No Caller Input Detected</h4>
-          <p style="font-size: 13px; color: #92400e;">
-            This call has no caller turns. Cannot analyze decision path.
-          </p>
-        </div>
-      `;
+        <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:20px;margin:16px 0;">
+          <h4 style="color:#b45309;margin:0 0 8px 0;">⚠️ No Caller Input — Cannot Analyze Decision Path</h4>
+          <p style="font-size:13px;color:#92400e;margin:0;">Call ended before any speech was captured, or STT failed.</p>
+        </div>`;
     }
-    
-    // Analyze first turn to show decision path
-    const firstCallerTurn = callerTurns[0];
-    const firstAgentTurn = agentTurns[0];
-    const callerText = firstCallerTurn?.text || '';
-    const agentResponse = firstAgentTurn?.text || '';
-    const agentSource = firstAgentTurn?.source || 'UNKNOWN';
-    const hasEvents = events.length > 0 || trace.length > 0;
-    
-    // Check for specific event types to determine what happened
-    const scrabEvent = [...events, ...trace].find(e => 
-      e.type === 'SCRABENGINE_PROCESSED' || e.kind === 'SCRABENGINE_PROCESSED'
-    );
-    const greetingEvent = [...events, ...trace].find(e => 
-      e.type === 'A2_GREETING_EVALUATED' || e.kind === 'A2_GREETING_EVALUATED'
-    );
-    const triggerEvent = [...events, ...trace].find(e => 
-      e.type === 'A2_TRIGGER_EVAL' || e.kind === 'A2_TRIGGER_EVAL'
-    );
-    const pathEvent = [...events, ...trace].find(e => 
-      e.type === 'A2_PATH_SELECTED' || e.kind === 'A2_PATH_SELECTED'
-    );
-    
-    // Determine what happened based on response
-    const isFallback = agentResponse.toLowerCase().includes('cut out') || 
-                      agentResponse.toLowerCase().includes('how can i help');
-    const isGreeting = agentResponse.toLowerCase().includes('hello') && agentResponse.length < 50;
-    
-    return `
-      <div class="diagnostic-roadmap" style="background: #ffffff; border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 16px 0;">
-        <h3 style="color: #1e40af; margin: 0 0 16px 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M10 2V18M10 2L6 6M10 2L14 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          🗺️ DIAGNOSTIC ROADMAP - Turn 1
-        </h3>
-        
-        ${!hasEvents ? `
-          <div style="background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-            <strong style="color: #991b1b;">⚠️ NO EVENTS CAPTURED</strong>
-            <p style="font-size: 13px; color: #7f1d1d; margin: 8px 0 0 0;">
-              This call has no event data. Cannot show detailed decision path.
-              <br><br>
-              <strong>Likely Reason:</strong> Call was made before V125 event logging was deployed.
-              <br>
-              <strong>Solution:</strong> Make a new test call to see full diagnostic data.
-            </p>
+
+    const firstCaller = callerTurns[0];
+    const firstAgent  = agentTurns[0];
+
+    // Collect key events
+    const scrabEv        = findEv('SCRABENGINE_PROCESSED') || findEv('SCRABENGINE_DELIVERY');
+    const routerEv       = findEv('A2_CALL_ROUTER_CLASSIFIED');
+    const greetingEv     = findEv('A2_GREETING_EVALUATED');
+    const poolEmptyEv    = findEv('TRIGGER_POOL_EMPTY');
+    const poolFilteredEv = findEv('A2_CALL_ROUTER_POOL_FILTERED');
+    const triggerEv      = findEv('TRIGGER_CARDS_EVALUATED') || findEv('A2_TRIGGER_EVAL');
+    const responseEv     = findEv('A2_RESPONSE_READY');
+    const pathEv         = findEv('A2_PATH_SELECTED');
+
+    // ScrabEngine details
+    const scrabPayload     = scrabEv?.payload || {};
+    const normalized       = scrabPayload.normalizedPreview || scrabPayload.normalizedText || null;
+    const scrabMs          = scrabPayload.performance?.totalTimeMs ?? scrabPayload.processingTimeMs ?? null;
+    const transformCount   = scrabPayload.transformations?.length ?? 0;
+    const hadContractions  = (scrabPayload.transformations || []).some(t => t.type === 'system_contraction');
+    const hadLayman        = (scrabPayload.transformations || []).some(t => t.type === 'system_layman');
+
+    // CallRouter details
+    const routerPayload  = routerEv?.payload || {};
+    const bucket         = routerPayload.bucket;
+    const confidence     = routerPayload.confidence;
+    const tier           = routerPayload.tier;
+    const anchor         = routerPayload.matchedAnchor;
+    const BUCKET_COLORS  = {
+      booking_service: '#3b82f6', billing_payment: '#f59e0b',
+      membership_plan: '#8b5cf6', existing_appointment: '#10b981', other_operator: '#6b7280'
+    };
+    const bucketColor = bucket ? (BUCKET_COLORS[bucket] || '#64748b') : '#64748b';
+
+    // Pool details
+    const poolFilterPayload = poolFilteredEv?.payload || {};
+    const poolFiltered       = poolFilteredEv != null;
+    const beforeFilter       = poolFilterPayload.beforeFilter ?? null;
+    const afterFilter        = poolFilterPayload.afterFilter ?? null;
+
+    // Trigger details
+    const trigPayload       = triggerEv?.payload || {};
+    const trigMatched       = trigPayload.matched ?? trigPayload.winnersSelected > 0;
+    const trigCard          = trigPayload.winner || (trigPayload.matched ? { cardId: trigPayload.cardId, cardLabel: trigPayload.cardLabel, matchType: trigPayload.matchType, matchedOn: trigPayload.matchedOn } : null);
+    const totalCards        = trigPayload.totalCardsInPool ?? trigPayload.totalCards ?? 0;
+    const negativeBlocked   = (trigPayload.blocked?.byNegativeKeywords ?? trigPayload.negativeBlocked ?? 0) + (trigPayload.negativePhraseBlocked ?? 0);
+    const maxWordsBlocked   = trigPayload.maxWordsBlocked ?? 0;
+    const gateBlocked       = trigPayload.blocked?.byIntentGate ?? trigPayload.intentGateBlocked ?? 0;
+    const candidatesFound   = trigPayload.candidatesFound ?? 0;
+
+    // Response details
+    const responsePayload   = responseEv?.payload || {};
+    const responsePath      = responsePayload.path || pathEv?.payload?.path || firstAgent?.source || 'UNKNOWN';
+    const responsePreview   = responsePayload.responsePreview || (firstAgent?.text || '').substring(0, 120);
+    const hasAudio          = responsePayload.hasAudio;
+
+    const isLLMPath         = responsePath.includes('LLM') || responsePath.includes('FALLBACK');
+    const isTriggerPath     = responsePath.includes('TRIGGER') || trigMatched;
+    const isGreetingPath    = responsePath.includes('GREETING');
+
+    const pathColor  = isTriggerPath ? '#10b981' : isLLMPath ? '#f59e0b' : '#64748b';
+    const pathIcon   = isTriggerPath ? '✅' : isLLMPath ? '⚠️' : '➡️';
+
+    const steps = [];
+
+    // ── Step 1: Caller Input ────────────────────────────────────────────────
+    steps.push(roadmapStep(1, '📞', 'Caller Input — Raw from Deepgram STT', true,
+      `"${escapeHtml((firstCaller?.text || '').substring(0, 200))}"`,
+      'Raw, unprocessed speech. Contractions intact. Fillers present. ScrabEngine processes this next.'
+    ));
+
+    // ── Step 2: ScrabEngine ─────────────────────────────────────────────────
+    if (!hasEvts) {
+      steps.push(roadmapStep(2, '🔍', 'ScrabEngine — No Events Captured', false,
+        'No event data available. Call was made before event logging was deployed.',
+        'Action: Make a new test call. All V130 events are captured automatically.'
+      ));
+    } else if (!scrabEv) {
+      steps.push(roadmapStep(2, '🔍', 'ScrabEngine — Event Missing', false,
+        'SCRABENGINE_PROCESSED event not found in trace. Pipeline may have failed.',
+        'Check: services/ScrabEngine.js · Check server logs for errors on this CallSid'
+      ));
+    } else {
+      const badges = [];
+      if (transformCount > 0) badges.push(`${transformCount} transformation${transformCount !== 1 ? 's' : ''}`);
+      if (hadContractions) badges.push('✓ Contractions expanded');
+      if (hadLayman) badges.push('✓ Layman vocab normalized');
+      if (scrabMs != null) badges.push(`${scrabMs}ms`);
+      steps.push(roadmapStep(2, '🔍', 'ScrabEngine — 5-Stage Pipeline Completed', true,
+        normalized ? `"${escapeHtml(normalized)}"<br><span style="font-size:11px;opacity:0.75;">↑ Normalized text delivered to triggers</span>` : '✅ Pipeline completed',
+        badges.join(' · ')
+      ));
+    }
+
+    // ── Step 3: Agent2CallRouter ────────────────────────────────────────────
+    if (!routerEv) {
+      steps.push(roadmapStep(3, '🧭', 'Agent2CallRouter — No Classification Event', null,
+        'Router event not captured. CallRouter may be disabled or call was before Phase 4 deployment.',
+        'Config: company.aiAgentSettings.agent2.discovery.callRouter.enabled = true'
+      ));
+    } else {
+      const confPct = confidence != null ? Math.round(confidence * 100) : '?';
+      const bucketLabel = bucket ? bucket.replace(/_/g, ' ').toUpperCase() : 'UNKNOWN';
+      steps.push(roadmapStep(3, '🧭', 'Agent2CallRouter — 5-Bucket Intent Gate', true,
+        `<span style="display:inline-block;background:${bucketColor};color:white;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:700;margin-bottom:4px;">${escapeHtml(bucketLabel)}</span>
+         <br>Confidence: ${confPct}% (${escapeHtml(tier || '?')})
+         ${anchor ? `<br>Anchor match: "${escapeHtml(anchor)}"` : ''}`,
+        poolFiltered
+          ? `Pool filtered: ${beforeFilter} → ${afterFilter} cards (bucket: ${escapeHtml(bucket || '')})`
+          : 'Pool filtering: OFF (filteringEnabled=false — observing only)'
+      ));
+    }
+
+    // ── Step 4: Greeting Interceptor ────────────────────────────────────────
+    if (!greetingEv) {
+      steps.push(roadmapStep(4, '🎭', 'Greeting Interceptor — No Event', null,
+        'A2_GREETING_EVALUATED not captured.',
+        'Non-critical if triggers fired correctly. Check for older calls pre-V125.'
+      ));
+    } else {
+      const gPayload = greetingEv?.payload || {};
+      const intercepted = gPayload.intercepted;
+      steps.push(roadmapStep(4, '🎭', 'Greeting Interceptor', true,
+        intercepted
+          ? `Greeting detected: "${escapeHtml(gPayload.matchedTrigger || 'unknown')}" — stored, processing continued to triggers.`
+          : 'No greeting detected on cleaned text. Proceeded directly to trigger evaluation.',
+        'V125 fix: No early exit — greeting detection is informational only. Triggers always evaluate.'
+      ));
+    }
+
+    // ── Step 5: Trigger Pool ────────────────────────────────────────────────
+    if (poolEmptyEv) {
+      steps.push(roadmapStep(5, '🗂️', 'Trigger Pool — EMPTY ⚠️', false,
+        `<strong>CRITICAL: Zero trigger cards loaded for this company.</strong>
+         <br>Every call turn falls through to LLM fallback when pool is empty.
+         <br><br>Message: ${escapeHtml(poolEmptyEv.payload?.message || 'No triggers loaded')}`,
+        'Action: Admin → Triggers → Assign a published group → Refresh Cache. Run: node scripts/seedTriggerGroupV1.js'
+      ));
+    } else if (triggerEv) {
+      const poolDetail = totalCards > 0
+        ? `Pool: ${totalCards} cards loaded${poolFiltered ? ` (pre-filtered from ${beforeFilter} by CallRouter bucket)` : ''}`
+        : 'Pool size unknown';
+      steps.push(roadmapStep(5, '🗂️', 'Trigger Pool — Loaded', true, poolDetail,
+        'Source: TriggerService (GlobalTrigger + LocalTrigger + legacy fallback)'
+      ));
+    } else {
+      steps.push(roadmapStep(5, '🗂️', 'Trigger Pool — No Pool Event', null,
+        'TRIGGER_POOL_EMPTY not found, but no trigger eval event either.',
+        'Check: TriggerService logs for this CallSid. Pool may have loaded but eval was skipped.'
+      ));
+    }
+
+    // ── Step 6: TriggerCardMatcher ──────────────────────────────────────────
+    if (!triggerEv) {
+      steps.push(roadmapStep(6, '🎯', 'TriggerCardMatcher — Not Evaluated', false,
+        'A2_TRIGGER_EVAL / TRIGGER_CARDS_EVALUATED event not found.',
+        'Possible causes: (1) Pool was empty, (2) Greeting exited early (pre-V125), (3) Pending question consumed this turn.'
+      ));
+    } else if (!trigMatched) {
+      const blockedSummary = [
+        negativeBlocked > 0 ? `${negativeBlocked} negative-blocked` : '',
+        maxWordsBlocked > 0 ? `${maxWordsBlocked} maxWords-blocked` : '',
+        gateBlocked > 0 ? `${gateBlocked} intent-gate-blocked` : ''
+      ].filter(Boolean).join(' · ');
+      steps.push(roadmapStep(6, '🎯', 'TriggerCardMatcher — No Match', false,
+        `Evaluated ${totalCards} card${totalCards !== 1 ? 's' : ''}. Candidates found: ${candidatesFound}. NONE matched.
+         ${blockedSummary ? `<br>Blocked: ${escapeHtml(blockedSummary)}` : ''}`,
+        'Debug: Open Trigger Test Panel (Triggers page) → type this exact input → see which cards evaluated and why each missed.'
+      ));
+    } else {
+      const c = trigCard;
+      const matchBadge = c?.matchType === 'KEYWORD' ? '🔑 Keyword' : c?.matchType === 'PHRASE' ? '💬 Phrase' : '✓';
+      steps.push(roadmapStep(6, '🎯', 'TriggerCardMatcher — MATCHED', true,
+        `<strong>${escapeHtml(c?.cardLabel || c?.cardId || 'Unknown card')}</strong>
+         <br>${matchBadge}: "${escapeHtml(c?.matchedOn || '')}"
+         ${blockedSummary(negativeBlocked, maxWordsBlocked, gateBlocked)}`,
+        `Evaluated ${totalCards} cards · Candidates: ${candidatesFound}`
+      ));
+    }
+
+    // ── Step 7: Response ────────────────────────────────────────────────────
+    const respOk = isTriggerPath || (!isLLMPath && !isGreetingPath);
+    steps.push(roadmapStep(7, '💬', `Response — ${escapeHtml(responsePath)}`, respOk,
+      `"${escapeHtml(responsePreview)}"
+       ${hasAudio != null ? `<br>${hasAudio ? '🎵 Pre-recorded audio served' : '🎙️ ElevenLabs TTS generated'}` : ''}`,
+      isLLMPath
+        ? '⚠️ LLM responded. If this was a service call it means triggers didn\'t match. Check Step 6.'
+        : isTriggerPath
+          ? '✅ Trigger response delivered correctly.'
+          : `Path: ${escapeHtml(responsePath)}`
+    ));
+
+    // ── Summary bar ─────────────────────────────────────────────────────────
+    const allGood = !!scrabEv && !!routerEv && !poolEmptyEv && trigMatched;
+    const summaryBg     = allGood ? '#f0fdf4' : '#fef2f2';
+    const summaryBorder = allGood ? '#10b981' : '#ef4444';
+    const summaryColor  = allGood ? '#166534' : '#991b1b';
+    const pathStr = [
+      scrabEv ? '2✓' : '2✗',
+      routerEv ? `3✓(${bucket || '?'})` : '3?',
+      greetingEv ? '4✓' : '4?',
+      poolEmptyEv ? '5✗EMPTY' : triggerEv ? '5✓' : '5?',
+      triggerEv ? (trigMatched ? '6✓MATCH' : '6✗MISS') : '6✗SKIP',
+      '7'
+    ].join(' → ');
+
+    const summary = `
+      <div style="background:${summaryBg};border:2px solid ${summaryBorder};border-radius:10px;padding:14px;margin-top:4px;">
+        <div style="font-weight:700;font-size:13px;color:${summaryColor};margin-bottom:6px;">
+          ${allGood ? '✅ CALL PROCESSED CORRECTLY' : '🔎 REVIEW REQUIRED — See highlighted steps above'}
+        </div>
+        <div style="font-size:11px;color:${summaryColor};font-family:monospace;">
+          Path: 1 → ${escapeHtml(pathStr)}
+        </div>
+        ${!allGood ? `
+          <div style="margin-top:8px;font-size:12px;color:${summaryColor};">
+            ${!scrabEv && hasEvts ? '<strong>Missing:</strong> ScrabEngine events — pipeline may have failed<br>' : ''}
+            ${poolEmptyEv ? '<strong>Critical:</strong> Trigger pool empty — assign + publish a trigger group<br>' : ''}
+            ${!trigMatched && triggerEv ? '<strong>Debug:</strong> Use Trigger Test Panel → paste caller utterance → see evaluation<br>' : ''}
+            ${isLLMPath && !isTriggerPath ? '<strong>Warning:</strong> LLM responded instead of a trigger — check trigger coverage<br>' : ''}
           </div>
         ` : ''}
-        
-        <div style="display: grid; gap: 12px;">
-          <!-- Step 1: Caller Input -->
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: #10b981; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">1</div>
-            <div style="flex: 1; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px;">
-              <div style="font-weight: 600; color: #166534; margin-bottom: 6px;">📝 Caller Input (RAW)</div>
-              <div style="font-size: 14px; color: #15803d;">"${escapeHtml(callerText.substring(0, 200))}"</div>
-              <div style="font-size: 12px; color: #16a34a; margin-top: 6px;">✅ Received from Deepgram STT</div>
-            </div>
+      </div>
+    `;
+
+    return `
+      <div style="background:#fff;border:2px solid #3b82f6;border-radius:12px;padding:20px;margin:16px 0;">
+        <h3 style="color:#1e40af;margin:0 0 16px 0;font-size:15px;display:flex;align-items:center;gap:8px;">
+          🗺️ V130 Diagnostic Roadmap — Turn 1 Decision Path
+          <span style="font-size:11px;font-weight:400;color:#64748b;margin-left:auto;">
+            ${callerTurns.length} caller turn${callerTurns.length !== 1 ? 's' : ''} · ${agentTurns.length} agent response${agentTurns.length !== 1 ? 's' : ''}
+          </span>
+        </h3>
+        ${!hasEvts ? `
+          <div style="background:#fee2e2;border:1px solid #ef4444;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#991b1b;">
+            <strong>⚠️ NO EVENTS CAPTURED</strong> — Call predates V130 event logging. Make a new test call to see full trace.
           </div>
-          
-          <!-- Arrow -->
-          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
-          
-          <!-- Step 2: ScrabEngine -->
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${scrabEvent ? '#10b981' : '#ef4444'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">${scrabEvent ? '2' : '🚫'}</div>
-            <div style="flex: 1; background: ${scrabEvent ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${scrabEvent ? '#86efac' : '#fca5a5'}; border-radius: 8px; padding: 12px;">
-              <div style="font-weight: 600; color: ${scrabEvent ? '#166534' : '#991b1b'}; margin-bottom: 6px;">
-                🔍 ScrabEngine Processing
-              </div>
-              ${scrabEvent ? `
-                <div style="font-size: 13px; color: #15803d;">
-                  ✅ Text processed (4-step pipeline)
-                  <br>Cleaned text ready for trigger matching
-                </div>
-              ` : `
-                <div style="font-size: 13px; color: #991b1b;">
-                  ❌ NO SCRABENGINE EVENT FOUND
-                  <br><strong>This is the problem!</strong> Text was not cleaned before trigger matching.
-                  <br><br>
-                  <strong>Root Cause:</strong> Old code (pre-V125) or ScrabEngine failed
-                  <br><strong>Fix:</strong> V125 deployed - make new test call
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Arrow -->
-          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
-          
-          <!-- Step 3: Greeting Check -->
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${greetingEvent ? '#10b981' : '#f59e0b'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">${greetingEvent ? '3' : '⚠️'}</div>
-            <div style="flex: 1; background: ${greetingEvent ? '#f0fdf4' : '#fffbeb'}; border: 1px solid ${greetingEvent ? '#86efac' : '#fcd34d'}; border-radius: 8px; padding: 12px;">
-              <div style="font-weight: 600; color: ${greetingEvent ? '#166534' : '#b45309'}; margin-bottom: 6px;">
-                🎭 Greeting Interceptor
-              </div>
-              ${greetingEvent ? `
-                <div style="font-size: 13px; color: #15803d;">
-                  Checked for greeting on cleaned text
-                </div>
-              ` : `
-                <div style="font-size: 13px; color: #92400e;">
-                  ⚠️ No greeting event - old code or events not captured
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Arrow -->
-          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
-          
-          <!-- Step 4: Trigger Evaluation -->
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${triggerEvent ? '#10b981' : '#ef4444'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">${triggerEvent ? '4' : '🚫'}</div>
-            <div style="flex: 1; background: ${triggerEvent ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${triggerEvent ? '#86efac' : '#fca5a5'}; border-radius: 8px; padding: 12px;">
-              <div style="font-weight: 600; color: ${triggerEvent ? '#166534' : '#991b1b'}; margin-bottom: 6px;">
-                🎯 Trigger Evaluation
-              </div>
-              ${triggerEvent ? `
-                <div style="font-size: 13px; color: #15803d;">
-                  ${triggerEvent.payload?.matched ? '✅ TRIGGER MATCHED' : '❌ NO TRIGGER MATCHED'}
-                  ${triggerEvent.payload?.cardLabel ? '<br>Card: ' + escapeHtml(triggerEvent.payload.cardLabel) : ''}
-                  ${triggerEvent.payload?.totalCards ? '<br>Evaluated: ' + triggerEvent.payload.totalCards + ' cards' : ''}
-                </div>
-              ` : `
-                <div style="font-size: 13px; color: #991b1b;">
-                  🚫 STEP SKIPPED - Triggers never evaluated!
-                  <br><br>
-                  <strong>This is why agent gave wrong response!</strong>
-                  <br><br>
-                  <strong>Root Cause:</strong> Greeting exited early (pre-V125 bug)
-                  <br><strong>Fix:</strong> V125 deployed - ScrabEngine now runs first
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Arrow -->
-          <div style="text-align: center; color: #cbd5e1; font-size: 24px; font-weight: 700; margin: -8px 0;">↓</div>
-          
-          <!-- Step 5: Response Generated -->
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="min-width: 40px; height: 40px; border-radius: 50%; background: ${isFallback ? '#ef4444' : '#10b981'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0;">5</div>
-            <div style="flex: 1; background: ${isFallback ? '#fef2f2' : '#f0fdf4'}; border: 1px solid ${isFallback ? '#fca5a5' : '#86efac'}; border-radius: 8px; padding: 12px;">
-              <div style="font-weight: 600; color: ${isFallback ? '#991b1b' : '#166534'}; margin-bottom: 6px;">
-                💬 Agent Response
-              </div>
-              <div style="font-size: 13px; color: ${isFallback ? '#991b1b' : '#15803d'}; margin-bottom: 8px;">
-                "${escapeHtml(agentResponse.substring(0, 150))}"
-              </div>
-              <div style="font-size: 12px; color: ${isFallback ? '#7f1d1d' : '#16a34a'};">
-                ${isFallback ? '❌ FALLBACK RESPONSE (Generic/Wrong)' : '✅ Contextual Response'}
-                <br>Source: ${escapeHtml(agentSource)}
-                ${firstAgentTurn?.provenance?.uiPath ? '<br>UI Path: ' + escapeHtml(firstAgentTurn.provenance.uiPath) : ''}
-              </div>
-            </div>
-          </div>
-          
-          <!-- Summary -->
-          <div style="background: ${isFallback || !triggerEvent ? '#fef2f2' : '#f0fdf4'}; border: 2px solid ${isFallback || !triggerEvent ? '#ef4444' : '#10b981'}; border-radius: 10px; padding: 16px; margin-top: 12px;">
-            <div style="font-weight: 700; font-size: 14px; color: ${isFallback || !triggerEvent ? '#991b1b' : '#166534'}; margin-bottom: 8px;">
-              ${isFallback || !triggerEvent ? '🚨 SEQUENCE DEVIATION DETECTED' : '✅ SEQUENCE FOLLOWED CORRECTLY'}
-            </div>
-            <div style="font-size: 13px; color: ${isFallback || !triggerEvent ? '#7f1d1d' : '#15803d'};">
-              <strong>Path Taken:</strong> 1 → ${scrabEvent ? '2' : '🚫'} → ${greetingEvent ? '3' : '🚫'} → ${triggerEvent ? '4' : '🚫'} → 5
-              <br><br>
-              ${!scrabEvent ? '❌ <strong>Step 2 MISSING:</strong> ScrabEngine didn\'t process text<br>' : ''}
-              ${!triggerEvent ? '❌ <strong>Step 4 SKIPPED:</strong> Triggers never evaluated<br>' : ''}
-              ${isFallback ? '❌ <strong>Step 5 WRONG:</strong> Generic fallback instead of trigger response<br>' : ''}
-              <br>
-              ${!hasEvents ? `
-                <strong>ROOT CAUSE:</strong> No events captured - call was before V125 deployment
-                <br><strong>ACTION:</strong> Make a new test call to verify V125 fix
-              ` : triggerEvent?.payload?.matched ? `
-                <strong>SUCCESS:</strong> Trigger matched and fired correctly!
-              ` : `
-                <strong>ISSUE:</strong> Triggers evaluated but none matched
-                <br><strong>ACTION:</strong> Check trigger configuration for this company
-              `}
-            </div>
-          </div>
+        ` : ''}
+        <div style="display:grid;gap:8px;">
+          ${steps.join('')}
+          ${summary}
         </div>
       </div>
     `;
   }
 
-  function renderEventsSection(events) {
-    if (events.length === 0) {
-      return '';
+  // Helper to build a blocked summary string
+  function blockedSummary(negBlocked, maxBlocked, gateBlocked) {
+    const parts = [];
+    if (negBlocked > 0)  parts.push(`${negBlocked} negative-blocked`);
+    if (maxBlocked > 0)  parts.push(`${maxBlocked} maxWords-blocked`);
+    if (gateBlocked > 0) parts.push(`${gateBlocked} intent-gate-blocked`);
+    return parts.length > 0 ? `<br><span style="font-size:11px;opacity:0.75;">Blocked: ${escapeHtml(parts.join(' · '))}</span>` : '';
+  }
+
+  // Event type categories for color coding in the events log
+  const EVENT_CATEGORIES = {
+    critical: {
+      color: '#ef4444', bg: '#fef2f2', border: '#fca5a5',
+      types: ['TRIGGER_POOL_EMPTY', 'SCRABENGINE_QUALITY_FAILED']
+    },
+    success: {
+      color: '#16a34a', bg: '#f0fdf4', border: '#86efac',
+      types: ['TRIGGER_CARDS_EVALUATED', 'A2_RESPONSE_READY', 'BOOKING_COMPLETED', 'CALLER_NAME_EXTRACTED']
+    },
+    info: {
+      color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe',
+      types: ['A2_CALL_ROUTER_CLASSIFIED', 'A2_CALL_ROUTER_POOL_FILTERED', 'A2_PATH_SELECTED',
+              'SCRABENGINE_PROCESSED', 'SCRABENGINE_DELIVERY', 'INPUT_TEXT_FINALIZED',
+              'A2_GATE', 'A2_TRIGGER_EVAL']
+    },
+    stage: {
+      color: '#7c3aed', bg: '#faf5ff', border: '#ddd6fe',
+      types: ['SCRABENGINE_ENTRY', 'SCRABENGINE_STAGE1', 'SCRABENGINE_STAGE2',
+              'SCRABENGINE_STAGE3', 'SCRABENGINE_STAGE4', 'SCRABENGINE_STAGE5']
+    },
+    warning: {
+      color: '#b45309', bg: '#fffbeb', border: '#fde68a',
+      types: ['A2_FOLLOWUP_CONSENT_CLASSIFIED', 'A2_PENDING_QUESTION_RESOLVED',
+              'A2_CLARIFIER_RESOLVED', 'A2_GREETING_EVALUATED', 'NAME_GREETING_FIRED',
+              'A2_CONSENT_GATE_BOOKING', 'A2_COMPLEXITY_SCORE']
+    }
+  };
+
+  function getEventCategory(type) {
+    for (const [cat, def] of Object.entries(EVENT_CATEGORIES)) {
+      if (def.types.includes(type)) return def;
+    }
+    return { color: '#475569', bg: '#f8fafc', border: '#e2e8f0' };
+  }
+
+  function renderEventPayloadSummary(type, payload) {
+    if (!payload || Object.keys(payload).length === 0) return '';
+
+    // Human-readable summaries for key event types
+    if (type === 'A2_CALL_ROUTER_CLASSIFIED') {
+      const b = payload.bucket ? payload.bucket.replace(/_/g, ' ').toUpperCase() : '?';
+      const c = payload.confidence != null ? Math.round(payload.confidence * 100) + '%' : '?';
+      return `bucket: <strong>${escapeHtml(b)}</strong> · confidence: <strong>${c}</strong> · tier: ${escapeHtml(payload.tier || '?')}${payload.matchedAnchor ? ` · anchor: "${escapeHtml(payload.matchedAnchor)}"` : ''}`;
+    }
+    if (type === 'TRIGGER_CARDS_EVALUATED' || type === 'A2_TRIGGER_EVAL') {
+      const matched = payload.matched ?? payload.winnersSelected > 0;
+      const card    = payload.winner;
+      return matched
+        ? `✅ <strong>MATCHED</strong>: ${escapeHtml(card?.cardLabel || payload.cardLabel || '?')} via ${escapeHtml(card?.matchType || payload.matchType || '?')}: "${escapeHtml(card?.matchedOn || payload.matchedOn || '')}"`
+        : `❌ <strong>NO MATCH</strong> — ${payload.totalCardsInPool ?? payload.totalCards ?? 0} cards evaluated`;
+    }
+    if (type === 'SCRABENGINE_PROCESSED') {
+      const t = payload.transformations?.length ?? 0;
+      const ms = payload.performance?.totalTimeMs ?? '?';
+      return `${t} transformation${t !== 1 ? 's' : ''} · ${ms}ms · normalized: "${escapeHtml((payload.normalizedPreview || '').substring(0, 80))}"`;
+    }
+    if (type === 'A2_RESPONSE_READY') {
+      const src = escapeHtml(payload.path || payload.source || '?');
+      const prev = escapeHtml((payload.responsePreview || '').substring(0, 100));
+      return `path: <strong>${src}</strong>${prev ? ` · "${prev}"` : ''}`;
+    }
+    if (type === 'A2_PATH_SELECTED') {
+      return `path: <strong>${escapeHtml(payload.path || '?')}</strong>${payload.reason ? ` · ${escapeHtml(payload.reason.substring(0, 80))}` : ''}`;
+    }
+    if (type === 'TRIGGER_POOL_EMPTY') {
+      return `⚠️ <strong>${escapeHtml(payload.message || 'No triggers loaded')}</strong>`;
+    }
+    if (type === 'CALLER_NAME_EXTRACTED') {
+      return `name: <strong>${escapeHtml(payload.firstName || '?')}</strong>${payload.lastName ? ' ' + escapeHtml(payload.lastName) : ''} · source: ${escapeHtml(payload.source || '?')}`;
+    }
+    if (type === 'INPUT_TEXT_FINALIZED') {
+      return `"${escapeHtml((payload.raw || '').substring(0, 100))}"`;
+    }
+    if (type === 'A2_CALL_ROUTER_POOL_FILTERED') {
+      return `${payload.beforeFilter ?? '?'} → ${payload.afterFilter ?? '?'} cards (bucket: ${escapeHtml(payload.bucket || '?')}, confidence: ${payload.confidence != null ? Math.round(payload.confidence * 100) + '%' : '?'})`;
+    }
+    if (type === 'A2_FOLLOWUP_CONSENT_CLASSIFIED') {
+      return `bucket: <strong>${escapeHtml(payload.bucket || '?')}</strong> · direction: ${escapeHtml(payload.direction || '?')}`;
+    }
+    if (type === 'A2_GREETING_EVALUATED') {
+      const hit = payload.intercepted ? `✅ intercepted: "${escapeHtml(payload.matchedTrigger || '?')}"` : '⬜ no greeting detected';
+      return hit;
     }
 
-    const eventItems = events.map(event => `
-      <div class="event-item">
-        <span class="event-time">${formatTimestamp(event.timestamp)}</span>
-        <span class="event-type">${escapeHtml(event.type)}</span>
-        <span class="event-data">${escapeHtml(JSON.stringify(event.data || {}))}</span>
-      </div>
-    `).join('');
+    // Generic: show first 3 key→value pairs
+    const entries = Object.entries(payload).filter(([, v]) => v != null && v !== '').slice(0, 4);
+    return entries.map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v).substring(0, 40))}`).join(' · ');
+  }
+
+  function renderEventsSection(events) {
+    if (!events || events.length === 0) return '';
+
+    // Sort events by turn then timestamp
+    const sorted = [...events].sort((a, b) => {
+      const ta = (a.turnNumber ?? a.turn ?? 0);
+      const tb = (b.turnNumber ?? b.turn ?? 0);
+      if (ta !== tb) return ta - tb;
+      const aTs = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const bTs = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return aTs - bTs;
+    });
+
+    // Group by turn
+    const byTurn = new Map();
+    sorted.forEach(ev => {
+      const t = ev.turnNumber ?? ev.turn ?? 0;
+      if (!byTurn.has(t)) byTurn.set(t, []);
+      byTurn.get(t).push(ev);
+    });
+
+    let html = '';
+    for (const [turnNum, turnEvents] of byTurn) {
+      const evRows = turnEvents.map(ev => {
+        const type    = ev.type || ev.kind || '?';
+        const payload = ev.payload || ev.data || {};
+        const cat     = getEventCategory(type);
+        const label   = toScrabLabel(type);
+        const summary = renderEventPayloadSummary(type, payload);
+        const ts      = ev.timestamp ? formatTimestamp(ev.timestamp) : '';
+
+        return `
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:6px 10px;border-radius:6px;background:${cat.bg};border:1px solid ${cat.border};margin-bottom:4px;">
+            <div style="font-size:10px;color:${cat.color};font-weight:700;min-width:180px;padding-top:1px;">${escapeHtml(label)}</div>
+            <div style="flex:1;font-size:12px;color:#334155;line-height:1.5;">${summary || '<span style="opacity:0.5;">—</span>'}</div>
+            ${ts ? `<div style="font-size:10px;color:#94a3b8;white-space:nowrap;">${escapeHtml(ts)}</div>` : ''}
+          </div>`;
+      }).join('');
+
+      html += `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;padding:4px 0;">
+            Turn ${turnNum} — ${turnEvents.length} event${turnEvents.length !== 1 ? 's' : ''}
+          </div>
+          ${evRows}
+        </div>`;
+    }
 
     return `
       <div class="events-section">
         <button class="events-toggle">
-          <span>Call Events (${events.length})</span>
+          <span>Full Event Trace (${events.length} events across ${byTurn.size} turn${byTurn.size !== 1 ? 's' : ''})</span>
           <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <div class="events-list">
-          ${eventItems}
+        <div class="events-list" style="max-height:500px;overflow-y:auto;padding:12px;">
+          ${html}
         </div>
       </div>
     `;
