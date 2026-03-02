@@ -128,155 +128,236 @@
 
   function getDefaultSteps() {
     return [
+
+      // ═══════════════════════════════════════════════════════════
+      // TIER 1 — CALL ENTRY  (Steps 1–5)
+      // ═══════════════════════════════════════════════════════════
       {
         id: 'step_twilio_entry',
         sequence: 1,
-        title: '📞 Twilio Entry',
-        body: 'Incoming call received by Twilio\n\n**File:** routes/v2twilio.js:1004\n**Endpoint:** POST /api/twilio/voice\n\n**What Happens:**\n- Customer dials Twilio phone number\n- Twilio looks up companyId by phone number\n- Webhook fires to backend\n\n**Data:**\n- From: Caller phone number\n- To: Company Twilio number\n- CallSid: Unique call ID\n\n**Next:** Gatekeeper check'
+        title: '📞 TIER 1 · Twilio Entry',
+        body: '**Platform entry point. Every call starts here.**\n\n**File:** routes/v2twilio.js\n**Endpoint:** POST /api/twilio/voice\n\n**What Happens:**\n- Customer dials a Twilio number assigned to a company\n- Twilio looks up companyId by the "To" phone number\n- Twilio webhook POSTs call metadata to backend\n- Company record loaded from MongoDB\n\n**Incoming Data:**\n```\nFrom: "+12395551234"  (caller)\nTo:   "+19545559999"  (company Twilio number)\nCallSid: "CAxxxx"    (unique per call)\n```\n\n**Key Principle:** One Twilio number = one company. The entire platform is multi-tenant from this point forward.\n\n**Next:** Gatekeeper Check'
       },
       {
         id: 'step_gatekeeper',
         sequence: 2,
-        title: '🛡️ Gatekeeper Check',
-        body: 'Account status verification\n\n**File:** routes/v2twilio.js:1328\n**Config:** company.accountStatus.status\n\n**Options:**\n- **Active:** Continue to spam filter ✅\n- **Suspended:** Play message, hangup 🚫\n- **Call Forward:** Transfer to alternate number 📞\n\n**Decision Point:** Only active accounts proceed\n\n**Next:** Spam filter'
+        title: '🛡️ TIER 1 · Gatekeeper Check',
+        body: '**First business logic gate. Prevents processing for suspended or forwarded accounts.**\n\n**File:** routes/v2twilio.js\n**UI Config:** Admin → Account Status\n**Reads:** company.accountStatus.status\n\n**Decision Matrix:**\n- **active** → Continue to spam filter ✅\n- **suspended** → Play configured suspension message, hangup 🚫\n- **call_forward** → Transfer to alternate number, log as FORWARDED 📞\n- **after_hours** → Check schedule, possibly forward or respond with hours\n\n**Why This Matters:**\nNo wasted processing cycles, no ElevenLabs costs, no LLM calls for suspended accounts. The gate is fast and absolute.\n\n**Self-Healing Audio:**\nSuspension message MP3 is stored in MongoDB binary — survives Render.com filesystem resets.\n\n**Next:** Spam Filter'
       },
       {
         id: 'step_spam_filter',
         sequence: 3,
-        title: '🚫 Spam Filter',
-        body: 'Block spam/robocalls before processing\n\n**File:** routes/v2twilio.js:1050\n**Service:** SmartCallFilter.checkCall()\n\n**Checks:**\n- Global blocklist (platform-wide)\n- Company blocklist (local)\n- Spam score patterns\n- Repeat caller patterns\n\n**If Blocked:**\n- Play rejection message\n- Hangup immediately\n- Log as SPAM_BLOCKED\n\n**If Passed:**\n- Log as SPAM_ALLOWED\n- Continue to greeting\n\n**Next:** Call start greeting'
+        title: '🚫 TIER 1 · Spam Filter',
+        body: '**Blocks robocalls and known spam before ANY processing.**\n\n**File:** routes/v2twilio.js\n**Service:** SmartCallFilter.checkCall()\n\n**Filter Layers:**\n1. Platform global blocklist (Twilio SPAM, known robocallers)\n2. Company-specific blocklist (phone numbers)\n3. Pattern detection (repeated short calls, silent calls)\n4. Carrier spam flags\n\n**If Blocked:**\n- Log SPAM_BLOCKED event\n- Play short rejection message (or silence)\n- Hangup — no further processing\n\n**If Clear:**\n- Log SPAM_ALLOWED event\n- Proceed to greeting\n\n**Cost Impact:**\nBlocking spam here prevents ElevenLabs TTS costs, LLM API calls, and Redis state creation for fraudulent/robocalls.\n\n**Next:** Greeting'
       },
       {
         id: 'step_call_greeting',
         sequence: 4,
-        title: '👋 Call Start Greeting (Twilio → Deepgram → TTS)',
-        body: 'Initial greeting when call connects\n\n**File:** routes/v2twilio.js:1578-1947\n**UI Config:** agent2.html → Greetings tab\n\n**Modes:**\n- **Prerecorded Audio:** Play ElevenLabs MP3 (fast!)\n- **TTS:** Generate speech from text\n- **Disabled:** Skip greeting, go straight to listening\n\n**Greeting Sources:**\n1. Agent 2.0 Call Start (agent2.greetings.callStart)\n2. Legacy greeting (connectionMessages.greeting)\n\n**Audio Generation:**\n- Text → ElevenLabs API\n- Cached as MP3\n- Served via /audio-safe/greetings/\n\n**Next:** Gather setup'
+        title: '👋 TIER 1 · Call Start Greeting',
+        body: '**What the customer hears first. First impression of the AI receptionist.**\n\n**File:** routes/v2twilio.js\n**UI Config:** Agent Console → Greetings tab\n**Config Path:** company.aiAgentSettings.agent2.greetings.callStart\n\n**Greeting Sources (priority order):**\n1. Pre-recorded audio URL (MP3, instant playback)\n2. ElevenLabs TTS from text (generated, ~2-3s)\n3. Twilio <Say> fallback (last resort)\n\n**Returning Caller Detection:**\nIf caller phone matches a previous booking, AI greets by name:\n"Hi John! Welcome back to ABC Plumbing."\n\n**Self-Healing Audio:**\nGreeting MP3s stored in MongoDB as binary blobs. If server filesystem is wiped (Render.com ephemeral), files auto-restore from DB.\n\n**Performance Target:** < 500ms from answer to audio playing.\n\n**Next:** Gather Setup (start listening for speech)'
       },
       {
         id: 'step_gather',
         sequence: 5,
-        title: '🎧 Gather Setup (Deepgram STT)',
-        body: 'Configure Twilio to listen for customer speech\n\n**File:** routes/v2twilio.js:1644-1682\n\n**Twilio <Gather> Config:**\n- input: "speech"\n- action: /api/twilio/v2-agent-respond/:companyId\n- enhanced: true (uses Deepgram, not Twilio STT)\n- speechModel: "phone_call"\n- timeout: 7s (initial)\n- speechTimeout: "auto" (end of speech detection)\n\n**STT Provider:** Deepgram (via Twilio Enhanced)\n\n**Next:** Customer speaks → Deepgram transcribes'
+        title: '🎧 TIER 1 · Gather Setup (Deepgram STT)',
+        body: '**Configures Twilio to listen for customer speech and transcribe it.**\n\n**File:** routes/v2twilio.js\n**STT Provider:** Deepgram Enhanced (not native Twilio STT)\n\n**TwiML <Gather> Config:**\n```xml\n<Gather\n  input="speech"\n  action="/api/twilio/v2-agent-respond/:companyId"\n  enhanced="true"\n  speechModel="phone_call"\n  language="en-US"\n  timeout="7"\n  speechTimeout="auto"\n/>\n```\n\n**Why Deepgram:**\n- Significantly better accuracy than Twilio STT\n- Better with HVAC terminology\n- Handles accents better\n- Confidence scores available\n\n**Audio plays INSIDE the Gather:**\nGreeting plays while Gather listens — customer can interrupt greeting and start speaking.\n\n**After Gather completes:**\nTwilio POSTs SpeechResult + Confidence to action URL.\n\n**Next:** Customer Speaks'
       },
+      // ═══════════════════════════════════════════════════════════
+      // TIER 2 — SPEECH CAPTURE  (Steps 6–7)
+      // ═══════════════════════════════════════════════════════════
       {
         id: 'step_customer_speaks',
         sequence: 6,
-        title: '🗣️ Customer Speaks (Deepgram Transcribes)',
-        body: 'Customer provides their request\n\n**STT Flow:**\n1. Customer speaks into phone\n2. Twilio captures audio stream\n3. Deepgram transcribes in real-time\n4. Twilio receives transcript\n5. Twilio posts to action URL\n\n**Example:**\nCustomer says: "Hi I need emergency AC service"\nDeepgram transcribes: "Hi I need emergency AC service"\nConfidence: 0.95\n\n**Next:** POST to /v2-agent-respond'
+        title: '🗣️ TIER 2 · Customer Speaks',
+        body: '**The raw human input. Everything downstream serves this moment.**\n\n**What Happens:**\n1. Customer speaks into their phone\n2. Twilio streams audio to Deepgram in real-time\n3. Deepgram returns transcript with confidence score\n4. Twilio fires webhook with SpeechResult\n\n**Real Examples — What Deepgram Returns:**\n```\n"Hi um my air conditioning isn\'t cooling my house"\n"the AC quit working last night"\n"I need to reschedule my appointment for tomorrow"\n"good morning I\'m calling about my invoice"\n```\n\n**What We Receive (RAW, unfiltered):**\n- Contractions intact: "isn\'t", "won\'t", "doesn\'t"\n- Filler words present: "um", "uh", "you know"\n- Greetings present: "hi", "good morning"\n- Layman terms: "quit", "on the fritz", "dead"\n\n**This is why ScrabEngine exists** — all of the above must be normalized before trigger matching.\n\n**Confidence Score:**\n0.0–1.0. Quality gate checks this in ScrabEngine Stage 5.\n\n**Next:** SpeechResult POSTed to backend'
       },
       {
         id: 'step_speechresult_post',
         sequence: 7,
-        title: '📨 SpeechResult Posted to Backend',
-        body: 'Twilio posts Deepgram transcript to backend\n\n**File:** routes/v2twilio.js:3523\n**Endpoint:** POST /api/twilio/v2-agent-respond/:companyId\n\n**Request Body:**\n```json\n{\n  "SpeechResult": "Hi I need emergency AC service",\n  "CallSid": "CAxxxx...",\n  "Confidence": 0.95,\n  "From": "+1234567890",\n  "To": "+1987654321"\n}\n```\n\n**Next:** ScrabEngine processes RAW text'
+        title: '📨 TIER 2 · SpeechResult Posted to Backend',
+        body: '**Twilio delivers the transcript to our processing pipeline.**\n\n**File:** routes/v2twilio.js\n**Endpoint:** POST /api/twilio/v2-agent-respond/:companyId\n\n**Request Body:**\n```json\n{\n  "SpeechResult": "Hi um my ac isn\'t cooling",\n  "CallSid": "CAxxxx...",\n  "Confidence": "0.93",\n  "From": "+12395551234",\n  "To":   "+19545559999"\n}\n```\n\n**Backend Validates:**\n- CompanyId valid and active\n- CallSid present\n- SpeechResult not empty\n\n**This begins the AI processing pipeline.**\nEverything from here is deterministic, measured, and logged.\n\n**Next:** ScrabEngine text processing pipeline (RUNS FIRST)'
       },
+      // ═══════════════════════════════════════════════════════════
+      // TIER 3 — SCRABENGINE TEXT PROCESSING PIPELINE  (Steps 8–13)
+      // ═══════════════════════════════════════════════════════════
       {
         id: 'step_scrabengine',
         sequence: 8,
-        title: '🔍 ScrabEngine - Unified Text Processor',
-        body: '**V125 CRITICAL:** Runs FIRST before any decision logic!\n\n**File:** services/ScrabEngine.js\n**Called from:** Agent2DiscoveryRunner.js:605\n\n**Input:** RAW SpeechResult text\n**Output:** Cleaned text + entities\n**Performance:** <30ms target\n\n**Contains 4 sub-steps (see next items)**\n\n**Events Emitted:**\n- SCRABENGINE_PROCESSED\n- SCRABENGINE_STAGE1_FILLERS\n- SCRABENGINE_STAGE2_VOCABULARY\n- SCRABENGINE_STAGE3_SYNONYMS\n- SCRABENGINE_STAGE4_EXTRACTION'
+        title: '🔍 TIER 3 · ScrabEngine — Pipeline Entry',
+        body: '**V125+: Runs ABSOLUTELY FIRST before any decision logic. Text normalization is mandatory.**\n\n**File:** services/ScrabEngine.js\n**Called from:** Agent2DiscoveryRunner.js (immediately after SpeechResult received)\n**UI Config:** Admin Console → ScrabEngine (5-tab admin page)\n\n**CRITICAL ARCHITECTURAL RULE:**\nNo trigger matching, no intent detection, no greeting check runs against RAW text.\nEvery downstream system receives ScrabEngine-normalized text.\n\n**Why V125 moved this first:**\nPreviously: Greeting interceptor ran first → saw "Hi" → early return → triggers never fired.\nNow: ScrabEngine removes "Hi" first → greeting sees clean text → triggers evaluate correctly.\n\n**Pipeline Output:**\n```json\n{\n  "rawText":         "Hi um my ac isn\'t cooling",\n  "normalizedText":  "my ac is not cooling",\n  "expandedTokens":  ["my","ac","is","not","cooling","air","conditioner"],\n  "entities":        { "firstName": null, "phone": null },\n  "quality":         { "passed": true, "confidence": 0.95 },\n  "performance":     { "totalTimeMs": 12 }\n}\n```\n\n**Events:** SCRABENGINE_ENTRY → SCRABENGINE_STAGE1..5 → SCRABENGINE_DELIVERY\n**Performance Target:** < 30ms total (warn at 50ms)\n**Guarantee:** rawText is NEVER mutated. All transforms are logged. Idempotent.'
       },
       {
-        id: 'step_se_fillers',
+        id: 'step_se_stage1',
         sequence: 9,
-        title: '🔍 SE Step 1: Filler Removal',
-        body: '**ScrabEngine Stage 1**\n\n**Removes:**\n- Speech fillers: "um", "uh", "like", "you know", "I mean"\n- Greeting words: "hi", "hello", "hey", "good morning"\n- Mishear corrections\n\n**Example:**\n```\nInput:  "Hi um I need uh emergency service"\nOutput: "need emergency service"\n```\n\n**Why Important:**\n- Greeting words removed here (not later!)\n- Cleaner text for trigger matching\n- Fewer false positive greetings\n\n**Performance:** ~5-8ms'
+        title: '🧹 TIER 3 · SE Stage 1: Filler Removal',
+        body: '**Strips conversational noise that adds zero semantic value.**\n\n**File:** services/ScrabEngine.js → FillerRemovalEngine\n**UI Config:** ScrabEngine Admin → Stage 1 (Fillers tab)\n\n**Built-in Fillers (always active, visible in UI):**\n"um", "uh", "er", "ah", "eh", "hmm", "hm", "like", "basically", "actually", "literally", "you know", "i mean", "you see", "kind of", "sort of"\n\n**Built-in Greeting Stripping (start of input only):**\n"hi", "hello", "hey", "hi there", "good morning", "good afternoon"\n\n**Company-Configurable:**\n- Custom filler phrases (admin-added)\n- Toggle strip greetings on/off\n- Toggle strip company name on/off\n\n**Protected Words (NEVER removed):**\n"no", "yes", "ok", "sure", "right", "wrong", "maybe"\n— These have semantic value in context.\n\n**Example:**\n```\nInput:  "Hi um good morning I need uh emergency service"\nOutput: "need emergency service"\n```\n\n**Performance:** ~1-3ms'
       },
       {
-        id: 'step_se_vocabulary',
+        id: 'step_se_stage2',
         sequence: 10,
-        title: '🔍 SE Step 2: Vocabulary Expansion',
-        body: '**ScrabEngine Stage 2**\n\n**Industry-Specific Normalization:**\n- "acee" → "ac" → "air conditioning"\n- "tstat" → "thermostat"\n- "furnace" → "heating system"\n- "hvac" → "heating ventilation air conditioning"\n\n**Example:**\n```\nInput:  "my acee is broken"\nOutput: "my air conditioning broken"\n```\n\n**Configuration:**\n- Loaded from STTProfile per template\n- Company-specific vocabulary\n- Trade-specific terms\n\n**Performance:** ~3-5ms'
+        title: '📝 TIER 3 · SE Stage 2: Vocabulary Normalization',
+        body: '**Three-layer normalization. Runs in this order: System Defaults → Company Rules.**\n\n**File:** services/ScrabEngine.js → VocabularyNormalizationEngine\n**UI Config:** ScrabEngine Admin → Stage 2 (Vocabulary tab)\n\n**LAYER A — System Language Defaults (Phase 1 fix, UI-toggleable):**\n\nContraction Expansion (19 rules) — CRITICAL for trigger matching:\n```\nisn\'t    → is not     won\'t   → will not\ndoesn\'t  → does not   can\'t   → cannot\nhasn\'t   → has not    wasn\'t  → was not\ndidn\'t   → did not    wouldn\'t → would not\naren\'t   → are not    haven\'t  → have not\n```\nWhy: Keyword "not cooling" won\'t match "isn\'t cooling" without this.\n\nLayman Service Vocabulary (10 rules):\n```\n"quit working"  → "stopped working"\n"quit on me"    → "stopped working"\n"on the fritz"  → "not working"\n"acting up"     → "not working"\n"went out"      → "stopped working"\n"broke down"    → "stopped working"\n```\n\n**LAYER B — Company Vocabulary Rules (custom, admin-configured):**\n```\n"acee" → "ac"          "tstat" → "thermostat"\n"pulling" → "cooling"  "hvac"  → "heating cooling"\n```\nMatchModes: EXACT (word boundary) or CONTAINS (substring)\n\n**Both layers visible + toggleable in ScrabEngine UI. No hidden processing.**\n\n**Performance:** ~2-8ms'
       },
       {
-        id: 'step_se_synonyms',
+        id: 'step_se_stage3',
         sequence: 11,
-        title: '🔍 SE Step 3: Synonym Mapping',
-        body: '**ScrabEngine Stage 3**\n\n**Maps Common Phrases:**\n- "broken" → "not working", "malfunctioning"\n- "asap" → "urgent", "emergency"\n- "won\'t start" → "not working"\n- Regional variations\n\n**Example:**\n```\nInput:  "ac is broken asap"\nOutput: "air conditioning not working urgent"\n```\n\n**Why Important:**\n- Standardizes language for trigger matching\n- Handles regional dialects\n- Improves match accuracy\n\n**Performance:** ~2-4ms'
+        title: '🎯 TIER 3 · SE Stage 3: Token Expansion',
+        body: '**Expands the token set so triggers match even when caller used synonyms.**\n\n**File:** services/ScrabEngine.js → TokenExpansionEngine\n**UI Config:** ScrabEngine Admin → Stage 3 (Synonyms tab)\n\n**How It Works:**\n- ADDS tokens to the match space — never replaces original text\n- rawText is preserved\n- Both original AND expanded tokens available to TriggerCardMatcher\n\n**Word Synonyms (admin-configured):**\n```\n"ac" → adds ["air conditioning", "air conditioner", "cooling system"]\n"unit" → adds ["system", "equipment", "air handler", "condenser"]\n```\n\n**Context Patterns (admin-configured):**\nDetects multi-word contexts and infers component:\n```\n"thing" + "garage" → infer "air handler" → adds [air, handler, ahu, indoor, unit]\n"box outside" + "hot" → infer "condenser" → adds [condenser, outdoor, compressor]\n```\n\n**Enhanced Input for Matching:**\n```\nnormalizedText: "my ac is not cooling"\nexpandedTokens: ["my","ac","is","not","cooling","air","conditioner","cooling","system"]\nenhancedInput:  "my ac is not cooling air conditioner cooling system"\n```\nTriggerCardMatcher checks BOTH normalizedText AND enhancedInput.\n\n**Performance:** ~5-15ms'
       },
       {
-        id: 'step_se_extraction',
+        id: 'step_se_stage4',
         sequence: 12,
-        title: '🔍 SE Step 4: Entity Extraction + Quality Gate',
-        body: '**ScrabEngine Stage 4**\n\n**Extracts Entities:**\n- **firstName:** "Mark", "John", "Sarah"\n- **lastName:** "Smith", "Johnson"\n- **phone:** "(239) 555-1234"\n- **email:** "mark@example.com"\n- **address:** Street addresses\n- **serviceType:** "AC", "furnace", "thermostat"\n- **urgency:** "emergency", "today", "asap"\n\n**Quality Gate:**\n- Filters garbage input\n- Validates entity confidence\n- Checks minimum quality threshold\n- Blocks nonsense/spam\n\n**Example Output:**\n```json\n{\n  "normalizedText": "need emergency air conditioning service",\n  "entities": {\n    "firstName": "Mark",\n    "urgency": "emergency",\n    "serviceType": "air_conditioning"\n  }\n}\n```\n\n**Performance:** ~10-15ms\n**Events:** CALLER_NAME_EXTRACTED (if name found)'
+        title: '🏷️ TIER 3 · SE Stage 4: Entity Extraction',
+        body: '**Extracts business-critical data from caller speech for booking handoff.**\n\n**File:** services/ScrabEngine.js → EntityExtractionEngine\n**UI Config:** ScrabEngine Admin → Stage 4 (Extraction tab)\n\n**Built-in Extractors (always active, visible in UI):**\n- **firstName:** "my name is Mark" / "I\'m Mark" / "call me Mark"\n  Validated against 9,530 first names via GlobalHubService\n- **lastName:** "last name is Smith" / "I\'m Mr. Johnson"\n  Validated against 161,427 surnames\n- **phone:** "(239) 555-1234" / "239-555-1234" / "2395551234"\n- **email:** "mark@example.com"\n- **address:** Street addresses (regex + pattern matching)\n\n**Custom Patterns (company-configurable):**\nAdd any entity your booking flow needs — membershipId, serviceAddress, etc.\n\n**Auto-Handoff:**\nExtracted entities automatically passed to BookingLogicEngine when booking starts.\nZero re-asking for information already captured.\n\n**Example:**\n```\nInput: "Hi this is Mark Smith at 239-555-1234"\nOutput: firstName="Mark", lastName="Smith", phone="239-555-1234"\n→ Auto-populates booking slots\n```\n\n**Event:** CALLER_NAME_EXTRACTED (if name found → turn 1 name greeting fires)\n**Performance:** ~10-15ms'
       },
+      {
+        id: 'step_se_stage5',
+        sequence: 13,
+        title: '✅ TIER 3 · SE Stage 5: Quality Gate',
+        body: '**Final quality check before delivering normalized text to triggers.**\n\n**File:** services/ScrabEngine.js → QualityGate\n**UI Config:** ScrabEngine Admin → Quality Gates section\n\n**Quality Checks:**\n- Minimum word count (configurable, default: 2 words)\n- Minimum confidence score from Deepgram (configurable, default: 0.5)\n- Text not empty after normalization\n- Not all-noise (fillers stripped to nothing)\n\n**If Quality FAILS:**\n- Emit SCRABENGINE_QUALITY_FAILED event (visible in Call Console)\n- shouldReprompt: true → system can re-ask caller\n- Does NOT crash the pipeline — graceful degradation\n\n**If Quality PASSES:**\n- normalizedText delivered downstream\n- All 5 stage results bundled into ScrabResult\n- Visual trace events emitted for Call Console (each stage visible in transcript)\n\n**ScrabResult Bundle:**\n```\nnormalizedText, expandedTokens, entities,\ntransformations[], quality{}, performance{}\n```\nThis bundle is the SINGLE authoritative input for all downstream systems.\n\n**Performance:** ~1-2ms\n**Total Pipeline:** < 30ms target'
+      },
+      // ═══════════════════════════════════════════════════════════
+      // TIER 4 — CALL ROUTING  (Steps 14–17)
+      // ═══════════════════════════════════════════════════════════
       {
         id: 'step_loadstate',
-        sequence: 13,
-        title: '💾 Load Call State',
-        body: 'Load conversation history from Redis\n\n**File:** services/engine/StateStore.js\n**Key:** `call:{CallSid}`\n\n**Loads:**\n- Turn count\n- Session mode (DISCOVERY/BOOKING)\n- Extracted slots (name, phone, address)\n- Conversation history\n- Pending questions\n- Booking context\n\n**First Turn:** Creates new state\n**Later Turns:** Loads existing state\n\n**Performance:** <5ms (Redis lookup)'
+        sequence: 14,
+        title: '💾 TIER 4 · Load Call State',
+        body: '**Restores the full conversation context from Redis — makes multi-turn calls intelligent.**\n\n**File:** services/engine/StateStore.js\n**Storage:** Redis (key: call:{CallSid})\n**TTL:** Expires when call ends + buffer\n\n**State Contains:**\n- Turn number (which turn are we on?)\n- Session mode: DISCOVERY or BOOKING\n- Pending questions (follow-up awaiting answer)\n- Booking context (slots filled so far)\n- Call Router prior bucket (what bucket did Turn 1 classify as?)\n- Caller name (if extracted Turn 1)\n- Greeting-fired flag (one-shot guard)\n- LLM turn count (max 1-2 per call)\n- Entity extractions (name, phone, address)\n\n**Turn 1:** Creates fresh state\n**Turn 2+:** Loads and extends state\n\n**Multi-Turn Awareness:**\nState is what allows the AI to say "As I mentioned..." or continue booking where it left off.\nWithout state, every turn is a fresh conversation — the AI would be amnesiac.\n\n**Performance:** < 5ms (Redis in-memory lookup)'
       },
       {
         id: 'step_callruntime',
-        sequence: 14,
-        title: '🚦 CallRuntime.processTurn()',
-        body: 'Main orchestrator - routes to correct engine\n\n**File:** services/engine/CallRuntime.js:293\n\n**Decision Logic:**\n```javascript\nIF state.sessionMode === BOOKING:\n  → Route to BookingLogicEngine\nELSE:\n  → Route to Agent2DiscoveryRunner\n```\n\n**Think of it as:** Traffic cop that directs to the right handler\n\n**Also Handles:**\n- Error recovery\n- State persistence\n- Event buffering\n- Opener engine (micro-acknowledgments)\n\n**Performance:** <2ms (routing only)'
+        sequence: 15,
+        title: '🚦 TIER 4 · CallRuntime — Session Mode Router',
+        body: '**Traffic cop. Routes to the correct engine based on current session mode.**\n\n**File:** services/engine/CallRuntime.js\n\n**Decision:**\n```\nIF state.sessionMode === "BOOKING":\n  → BookingLogicEngine (slot filling)\nELSE (default: "DISCOVERY"):\n  → Agent2DiscoveryRunner (intent + triggers)\n```\n\n**Session Modes:**\n- **DISCOVERY:** Customer hasn\'t agreed to book yet. AI qualifies intent.\n- **BOOKING:** Customer said yes. AI collects name/phone/address/time.\n\n**The Switch Happens When:**\n1. Trigger follow-up consent = YES + nextAction = HANDOFF_BOOKING\n2. Trigger directly starts booking\n3. Consent gate fires (CallRouter classified booking_service + caller confirmed)\n\n**Also Handles:**\n- After-hours detection\n- Emergency transfer bypass\n- Error recovery and graceful degradation\n\n**Performance:** < 2ms (routing only, no I/O)'
+      },
+      {
+        id: 'step_agent2callrouter',
+        sequence: 16,
+        title: '🧭 TIER 4 · Agent2CallRouter — 5-Bucket Intent Gate',
+        body: '**NEW (Phase 4): Pre-classifies call intent BEFORE trigger scan. The intelligence layer.**\n\n**File:** services/engine/agent2/Agent2CallRouter.js\n**Called from:** Agent2DiscoveryRunner.js (after ScrabEngine, before TriggerCardMatcher)\n**UI Config:** company.aiAgentSettings.agent2.discovery.callRouter\n**All defaults visible via:** GET /api/agent-console/:companyId/triggers/router-config\n\n**5 Business Buckets:**\n- **booking_service:** Repair, maintenance, install, emergency dispatch (31 of 42 triggers)\n- **billing_payment:** Invoice, payment, charge questions\n- **membership_plan:** Service agreements, contract inquiries\n- **existing_appointment:** Reschedule, cancel, confirm status\n- **other_operator:** Human transfer, complaint, hours, robot challenge\n\n**Scoring Algorithm (zero API, < 5ms):**\n1. Anchor phrase check → instant HIGH confidence (0.95) if matched\n2. Primary token score × 3 each\n3. Secondary token score × 1 each\n4. Negative token penalty × 2 each\n5. Confidence = winner_score / calibration_max\n\n**Confidence Tiers:**\n- HIGH (≥ 0.85): Strong signal, enforce filtering\n- MEDIUM (0.60-0.84): Advisory\n- LOW (< 0.60): No filtering, full scan\n\n**Multi-Turn Prior:**\nTurn 1 bucket stored in state. Turn 2+ uses prior to prevent flip-flopping when caller elaborates.\n\n**Pool Filtering (when filteringEnabled=true):**\n200+ card pool → ~15-30 cards for matched bucket\nCards with bucket:null (untagged) always included\n\n**Sub-Buckets:**\nbooking_service → repair / maintenance / install_quote\nexisting_appointment → reschedule / cancel / status\n\n**Event:** A2_CALL_ROUTER_CLASSIFIED (visible in Call Console)\n**Company Overrides:** bucketOverrides.{bucket}.additionalPrimaryTokens etc.'
       },
       {
         id: 'step_agent2discovery',
-        sequence: 15,
-        title: '🤖 Agent2DiscoveryRunner.run()',
-        body: 'Discovery mode handler\n\n**File:** services/engine/agent2/Agent2DiscoveryRunner.js:396\n\n**Receives:**\n- CLEANED text from ScrabEngine (normalizedText)\n- Extracted entities (firstName, urgency, etc.)\n- Call state\n\n**Orchestrates:**\n1. Name greeting (if turn 1 + name extracted)\n2. Greeting detection (on cleaned text)\n3. Clarifier questions (if ambiguous)\n4. Trigger card matching\n5. LLM fallback (if no match)\n6. Response generation\n\n**Output:**\n- Response text\n- Audio URL (if pre-recorded)\n- Next state\n- Match source'
+        sequence: 17,
+        title: '🤖 TIER 4 · Agent2DiscoveryRunner — Orchestrator',
+        body: '**The brain of DISCOVERY mode. Owns the mic. Determines the response.**\n\n**File:** services/engine/agent2/Agent2DiscoveryRunner.js\n**Activated when:** sessionMode === "DISCOVERY"\n\n**Orchestration Sequence (deterministic-first, V125+):**\n1. ScrabEngine processes raw text (Stage 1-5)\n2. Entity extraction from ScrabEngine (name → greeting)\n3. Agent2CallRouter intent classification (bucket)\n4. Greeting Interceptor (on cleaned text)\n5. Patience Mode check ("hold on", "wait")\n6. Pending Follow-Up Question state machine (7-bucket)\n7. Pending Question state machine (legacy YES/NO)\n8. **TriggerCardMatcher (PRIMARY PATH)**\n9. Greeting Fallback (if greeting detected, no trigger)\n10. LLM Fallback (last resort, max 1-2 per call)\n11. Generic Fallback (absolute last resort)\n\n**Hard Rules:**\n- No hardcoded response text — all comes from UI config or trigger cards\n- ScrabEngine ALWAYS runs first\n- Every decision emits a proof event\n- LLM is assist-only, not primary responder\n\n**Output:** { response, audioUrl, matchSource, state }\n\n**Event Chain per Turn:**\nA2_GATE → SCRABENGINE_PROCESSED → A2_CALL_ROUTER_CLASSIFIED → A2_GREETING_EVALUATED → A2_TRIGGER_EVAL → A2_RESPONSE_READY'
       },
+      // ═══════════════════════════════════════════════════════════
+      // TIER 5 — DISCOVERY ENGINE  (Steps 18–25)
+      // ═══════════════════════════════════════════════════════════
       {
         id: 'step_name_greeting',
-        sequence: 16,
-        title: '👤 Name Greeting Interceptor (Turn 1 Only, First Step)',
-        body: '**FIRST STEP after ScrabEngine - Fires BEFORE greeting check**\n\n**File:** Agent2DiscoveryRunner.js:335-355\n**Config:** agent2.discovery.nameGreeting\n\n**When Fires:**\n- ✅ Turn 1 only\n- ✅ Name was extracted by ScrabEngine (Step 12d)\n- ✅ Name greeting enabled in config\n- ✅ Fires BEFORE greeting interceptor check\n\n**Template Examples:**\n```\n"Got it{name}." → "Got it, Mark."\n"Okay{name}." → "Okay, Sarah."\n"Perfect{name}." → "Perfect, Jennifer."\n```\n\n**If No Name Extracted:**\n- {name} resolves to empty string\n- "Got it{name}." → "Got it."\n- Still fires, just without personalization\n\n**Substitution Logic:**\n- {name} → ", FirstName" (with comma)\n- {name} → "" (empty if no name)\n- Natural language flow\n\n**Example Flow:**\n```\nCustomer: "Hi this is Mark I need emergency AC service"\n↓ ScrabEngine extracts: firstName="Mark"\n↓ Turn 1 detected\n↓ Name greeting fires: "Got it, Mark."\n↓ Then continues to trigger matching\n```\n\n**Event:** NAME_GREETING_FIRED\n**Performance:** <1ms (template substitution)\n**Priority:** Runs FIRST, in parallel with greeting check'
+        sequence: 18,
+        title: '👤 TIER 5 · Name Greeting (Turn 1 Only)',
+        body: '**If caller gave their name, personalize the acknowledgment immediately.**\n\n**File:** Agent2DiscoveryRunner.js\n**Config:** agent2.discovery.nameGreeting\n**Condition:** Turn 1 only + firstName extracted by ScrabEngine Stage 4\n\n**Template:**\n```\n"Got it{name}."  → "Got it, Mark."\n"Okay{name}."    → "Okay, Sarah."\n"Perfect{name}." → "Perfect, Jennifer."\n```\n\n**If No Name Extracted:**\n{name} resolves to empty → "Got it." (still natural, no blank)\n\n**One-Shot Guard:**\nNameGreeting fires maximum ONCE per call. State tracks "usedNameGreetingThisCall".\n\n**Why This Matters:**\nPersonalization in the first second of AI response builds caller trust. Callers feel heard, not processed.\n\n**Event:** NAME_GREETING_FIRED\n**Performance:** < 1ms (template substitution)'
       },
       {
         id: 'step_greeting_check',
-        sequence: 17,
-        title: '🎭 Greeting Interceptor Check (Runs in Parallel)',
-        body: '**V125 FIX:** Now receives CLEANED text!\n\n**File:** Agent2DiscoveryRunner.js:516-583\n**Function:** Agent2GreetingInterceptor.evaluate()\n\n**Input:** normalizedText (cleaned by ScrabEngine)\n\n**Checks:**\n- Is it a pure greeting? ("hi", "hello", "good morning")\n- Short-only gate (≤3-5 words max)\n- No intent words present (no "emergency", "appointment", etc.)\n- One-shot guard (only greet once per call)\n\n**V125 Change:**\n- NO MORE EARLY EXIT!\n- Stores detection result\n- Continues to trigger matching\n\n**Example:**\n```\nRaw input: "Hi I need emergency service"\nScrabEngine cleaned: "need emergency service"\nGreeting check: NO MATCH (has intent words) ✅\n→ Continues to triggers\n```\n\n**Runs in Parallel With:**\n- Step 16: Name Greeting (if turn 1)\n- Both execute on first turn\n\n**Performance:** <2ms'
+        sequence: 19,
+        title: '🎭 TIER 5 · Greeting Interceptor',
+        body: '**Detects pure greeting-only inputs and handles them gracefully.**\n\n**File:** Agent2DiscoveryRunner.js → Agent2GreetingInterceptor.evaluate()\n**Input:** normalizedText from ScrabEngine (already cleaned!)\n\n**V125 Fix:** NO MORE EARLY EXIT.\nPreviously a greeting caused immediate return → triggers never fired.\nNow: Greeting is detected and STORED, but processing CONTINUES to triggers.\n\n**Detection Rules:**\n- Short-only gate (≤ configured max words)\n- No intent words present\n- One-shot guard: greets once per call maximum\n\n**Example:**\n```\nRaw: "Hi good morning I need my AC fixed"\nScrabEngine: "need my AC fixed"  (greeting stripped)\nGreeting check: NO MATCH (has intent words) ✅\nResult: Continue to triggers normally\n```\n\n```\nRaw: "Hi"\nScrabEngine: ""  (empty after stripping)\nGreeting check: MATCH (pure greeting)\nResult: Store greeting result, continue to triggers\nIf no trigger matches → Greeting Fallback path fires\n```\n\n**Event:** A2_GREETING_EVALUATED'
+      },
+      {
+        id: 'step_patience_mode',
+        sequence: 20,
+        title: '⏸️ TIER 5 · Patience Mode',
+        body: '**Handles "hold on" / "wait a second" requests before trigger scan.**\n\n**File:** Agent2DiscoveryRunner.js → patienceSettings\n**Config:** company.aiAgentSettings.agent2.discovery.patienceSettings (UI-controlled)\n\n**Trigger Phrases (configurable in admin):**\n"please hold", "one moment", "hold on", "give me a second", "let me check", "hang on", "just a minute"\n\n**When Activated:**\n- Respond: "No problem — take your time, I\'m right here."\n- Enter patience mode state\n- Set check-in timer\n- If caller doesn\'t speak after timeout:\n  → "Are you still there?" (check-in)\n  → Max 2 check-ins\n  → Final: "I\'ll be here whenever you\'re ready."\n\n**Why Checked Here:**\nPatience mode must intercept BEFORE trigger scan. Otherwise a trigger might fire for "hold" matching something unrelated.\n\n**State:** patienceMode: true, patienceCheckinCount: 0\n**Event:** A2_PATH_SELECTED (path: PATIENCE_MODE)'
+      },
+      {
+        id: 'step_trigger_pool_load',
+        sequence: 21,
+        title: '🗂️ TIER 5 · Trigger Pool Loading',
+        body: '**Compiles the complete, deduplicated, priority-sorted trigger card pool for this company.**\n\n**File:** services/engine/agent2/TriggerService.js\n**Cache:** In-memory Map, 60-second TTL per company\n\n**Merge Hierarchy (5 layers):**\n1. Load PUBLISHED GlobalTrigger docs from company\'s active group\n2. Remove hidden triggers (company-specific hide list)\n3. Apply partial text overrides (company custom answer text)\n4. Replace globals with full local overrides (company-specific cards)\n5. Add pure local triggers (company-exclusive cards)\n6. Deduplicate by ruleId (Map, no duplicates possible)\n7. Sort by priority (ascending, lower = fires first)\n\n**Legacy Fallback (Phase 1 fix):**\nIf no activeGroupId → load playbook.rules → transform to card.match.* format.\nCritical: WITHOUT this transform, card.match.keywords = undefined → zero triggers ever fire.\n\n**Safety Visibility (Phase 1 fix):**\n- WARN logged when group is assigned but not published\n- WARN logged when compiled pool is empty\n- TRIGGER_POOL_EMPTY event emitted (visible in Call Console)\n\n**Admin Action:**\nRefresh Cache button in Triggers admin → clears 60-second cache immediately.\nUse after saving trigger changes during testing.\n\n**Cache Key:** `triggers:{companyId}:{activeGroupId}:v{publishedVersion}`\n\n**New Trigger Library:**\nRun: node scripts/seedTriggerGroupV1.js → imports 42-trigger HVAC Master V1 library'
       },
       {
         id: 'step_trigger_eval',
-        sequence: 18,
-        title: '🎯 Trigger Card Evaluation',
-        body: 'Match against trigger card database\n\n**File:** services/engine/agent2/TriggerCardMatcher.js\n**Called:** Agent2DiscoveryRunner.js:1473-1474\n\n**Input:** CLEANED text from ScrabEngine\n\n**Process:**\n1. Load compiled triggers (global + company)\n2. Check keywords in cleaned text\n3. Apply negative keywords (disqualifiers)\n4. Apply hint boosts (if component locked)\n5. Rank by priority\n6. Select best match\n\n**Example:**\n```\nInput: "need emergency air conditioning service"\nCards evaluated: 23\nTop candidate: "Emergency AC" (priority 100)\nKeywords matched: "emergency", "air conditioning"\nNegative keywords: none\nResult: ✅ MATCHED\n```\n\n**Events:** A2_TRIGGER_EVAL, TRIGGER_CARDS_EVALUATED\n**Performance:** ~10-20ms'
-      },
-      {
-        id: 'step_hold_modal',
-        sequence: 19,
-        title: '⏸️ Hold Modal (Patience Mode)',
-        body: '**Triggered by hold request keywords**\n\n**File:** Agent2DiscoveryRunner.js (patience logic)\n**Config:** agent2.discovery.patienceSettings\n\n**Trigger Keywords:**\n- "please hold"\n- "one moment"\n- "give me a second"\n- "let me check"\n- "hang on"\n\n**When Activated:**\n- Enter patience mode\n- Set timeout (default: 45 seconds)\n- If timeout expires with no speech:\n  - Check-in: "Are you still there?"\n  - Max 2 check-ins\n  - Final: "I\'m here when ready"\n\n**Response:**\n"No problem — take your time."\n\n**State:** patienceMode = true\n**Event:** PATIENCE_MODE_ACTIVATED'
+        sequence: 22,
+        title: '🎯 TIER 5 · TriggerCardMatcher — Keyword/Phrase Matching',
+        body: '**PRIMARY RESPONSE PATH. Deterministic, auditable, zero LLM.**\n\n**File:** services/engine/agent2/TriggerCardMatcher.js\n**Input:** normalizedText + expandedTokens (from ScrabEngine)\n\n**Evaluation Pipeline (per card, priority order):**\n1. Skip DISABLED cards\n2. **maxInputWords guard (Phase 2 new):** If card.maxInputWords set and input exceeds it → skip\n   (Prevents goodbye/robot cards from firing on long service utterances)\n3. Intent Gate disqualification (emergency = blocks FAQ cards)\n4. **negativeKeywords (word-based):** ALL words must appear → block card\n5. **negativePhrases (substring, Phase 2 new):** Exact phrase match → block card\n   (Context-aware: "cancel appointment" blocks, not single-word "cancel")\n6. keywords: ALL words in keyword appear (order-independent) → MATCH\n7. phrases: Exact substring in input → MATCH\n8. First match by priority wins → RETURN immediately\n\n**Enhanced Input from ScrabEngine:**\nMatching runs against: normalizedText + expandedTokens\n"my unit" → expandedTokens adds "condenser", "air handler" → matches broader range of triggers\n\n**GREETING_PROTECTION:**\nSingle-word greeting keywords ("hi", "hello") ONLY match if utterance ≤ 4 words.\n\n**Debug Output per Card:**\n{ cardId, skipped, skipReason, negativeHit, negativePhraseHit, keywordHit, phraseHit, matched }\n\n**Events:** A2_TRIGGER_EVAL, TRIGGER_CARDS_EVALUATED\n**Admin Tool:** 🧪 Trigger Test Panel → type any utterance → see live evaluation trace\n**Performance:** ~2-15ms'
       },
       {
         id: 'step_trigger_response',
-        sequence: 20,
-        title: '💬 Trigger Response (If Matched)',
-        body: '**Fast path - Pre-configured response**\n\n**File:** Agent2DiscoveryRunner.js:1549-1799\n\n**If Trigger Matched:**\n\n**1. Use Trigger answerText:**\n- Get answerText from trigger card\n- Substitute variables: {name}, {company}, {diagnosticfee}\n- Build final response\n\n**2. Audio Handling:**\n- **If audioUrl exists:** Use pre-recorded MP3 (FAST! ~200ms)\n- **Else:** Generate via ElevenLabs TTS (~2s)\n\n**3. ElevenLabs TTS (if needed):**\n- Text → ElevenLabs API\n- Voice ID from company config\n- Stability, similarity_boost, style settings\n- Cache MP3 for future use\n- Serve via /audio/\n\n**Performance:**\n- Pre-recorded: ~200ms ⚡\n- Fresh TTS: ~2-3s\n\n**Events:**\n- SPEECH_SOURCE_SELECTED\n- A2_RESPONSE_READY\n\n**Next:** Check for follow-up'
+        sequence: 23,
+        title: '💬 TIER 5 · Trigger Response Delivery',
+        body: '**When a trigger matches, this delivers the pre-configured response.**\n\n**File:** Agent2DiscoveryRunner.js → trigger match path\n\n**Response Sources (priority):**\n1. Pre-recorded audio (MP3 URL on trigger card) → instant playback ~200ms ⚡\n2. ElevenLabs TTS from answerText → generated ~2-3s\n3. LLM Trigger Mode (responseMode=\'llm\') → GPT generates from fact pack\n\n**Response Modes:**\n- **standard:** Use answerText as-is (or generate audio)\n- **llm:** Use llmFactPack to have GPT generate a constrained response\n\n**Variable Substitution:**\n{name} → caller first name\n{company} → company name\n{diagnosticfee} → diagnostic fee from company settings\n\n**Follow-Up Question:**\nIf trigger card has followUpQuestion → appended after answerText.\nStored as pendingFollowUpQuestion for next turn.\n\n**Events:** SPEECH_SOURCE_SELECTED, A2_RESPONSE_READY\n**Performance:**\n- Pre-recorded: ~200ms\n- TTS fresh: ~2000-3000ms\n- Cached TTS: ~50ms'
       },
       {
         id: 'step_followup_consent',
-        sequence: 21,
-        title: '🔄 Trigger Follow-Up & Consent Cards',
-        body: '**Conditional - only if trigger has follow-up**\n\n**File:** Agent2DiscoveryRunner.js:1586-1597\n**Config:** trigger.followUp\n\n**When Activated:**\n- Trigger card has followUp.question configured\n- Trigger card has followUp.nextAction\n\n**Follow-Up Question:**\n```\nTrigger Response: "I can help with your AC emergency."\nFollow-Up: "Would you like to schedule a technician?"\n```\n\n**Next Actions:**\n- **BOOKING:** Start booking flow\n- **TRANSFER:** Transfer to live person\n- **CONTINUE:** Stay in discovery\n- **END:** End call\n\n**Consent Handling:**\nIf nextAction = BOOKING:\n- Ask consent: "May I book that for you?"\n- Wait for YES/NO (or a service choice)\n- YES → Switch to BOOKING mode\n- NO → Stay in DISCOVERY\n\n**7-Bucket Follow-Up System:**\n1. MAINTENANCE (tune-up choice)\n2. SERVICE_CALL (repair/diagnostic choice)\n3. YES (affirmative)\n4. NO (negative)\n5. REPROMPT (didn\'t understand)\n6. HESITANT (maybe, unsure)\n7. COMPLEX (non-yes/no response)\n\n**State:**\n- pendingFollowUpQuestion\n- pendingFollowUpQuestionNextAction\n- bookingConsentPending (if BOOKING)\n\n**Events:**\n- FOLLOWUP_QUESTION_ASKED\n- BOOKING_CONSENT_REQUESTED'
+        sequence: 24,
+        title: '🔄 TIER 5 · Follow-Up Consent Gate',
+        body: '**7-Bucket classification of caller\'s answer to the follow-up question.**\n\n**File:** Agent2DiscoveryRunner.js → pendingFollowUpQuestion state machine\n**Config:** company.aiAgentSettings.agent2.discovery.followUpConsent\n\n**When Active:**\nPrevious turn ended with a follow-up question: "Would you like to schedule a technician?"\nThis turn classifies the caller\'s answer.\n\n**7 Buckets:**\n1. **YES** — "yes", "sure", "absolutely", "go ahead", "do it"\n2. **NO** — "no", "not right now", "maybe later", "just asking"\n3. **MAINTENANCE** — "tune-up", "annual", "maintenance visit"\n4. **SERVICE_CALL** — "repair", "diagnostic", "technician", "come out"\n5. **HESITANT** — "maybe", "not sure", "let me think"\n6. **REPROMPT** — unclear/too short → re-ask the question\n7. **COMPLEX** — full sentence with new question → fall through to discovery\n\n**Outcome Routing:**\n- YES + nextAction=HANDOFF_BOOKING → switch to BOOKING mode ✅\n- MAINTENANCE → HANDOFF_BOOKING (bookingMode=maintenance)\n- SERVICE_CALL → HANDOFF_BOOKING (bookingMode=service_call)\n- NO → acknowledge and continue\n- HESITANT → gentle re-ask\n- REPROMPT → re-ask directly\n- COMPLEX → fall through to trigger scan\n\n**Event:** A2_FOLLOWUP_CONSENT_CLASSIFIED'
       },
       {
-        id: 'step_booking_handoff',
-        sequence: 22,
-        title: '📅 Booking Handoff (If Consent YES)',
-        body: '**Switch from DISCOVERY → BOOKING mode**\n\n**File:** services/engine/booking/BookingLogicEngine.js\n\n**Triggered When:**\n- Follow-up consent = YES\n- nextAction = BOOKING\n- OR trigger directly starts booking\n\n**Entities Passed to Booking:**\n```javascript\n{\n  assumptions: {\n    firstName: "Mark",        // From ScrabEngine\n    lastName: null,\n    phone: "+1234567890",\n    email: null,\n    address: null,\n    callerPhone: "+1234567890",\n    callReason: "emergency AC service",\n    serviceType: "air_conditioning",\n    urgency: "emergency"\n  },\n  discoveryContext: {\n    companyId,\n    callSid,\n    turn,\n    consentGrantedAt\n  }\n}\n```\n\n**Booking Steps:**\n1. **NAME:** Collect/confirm name (skip if extracted)\n2. **PHONE:** Verify callback number\n3. **ADDRESS:** Collect service address\n4. **SERVICE:** Confirm service details\n5. **TIME:** Select appointment slot\n6. **CONFIRM:** Read back and confirm\n\n**State Change:**\n- sessionMode: DISCOVERY → BOOKING\n- bookingCtx.step: NAME\n\n**Next Turn:** BookingLogicEngine owns the mic'
+        id: 'step_patience_exit',
+        sequence: 25,
+        title: '⏸️ TIER 5 · Patience Mode Exit / Clarifier Resolution',
+        body: '**Two additional state machines that intercept before trigger scan.**\n\n**FILE A: Clarifier Resolution**\n**File:** Agent2DiscoveryRunner.js → pendingClarifier\n\nWhen a clarifier question was asked (e.g., "Is it the indoor unit or outdoor unit?"), the next turn resolves it:\n- YES → locks component context, boosts matching for that component\n- NO → clears hints, continues normally\n- UNCLEAR → clears clarifier, falls through\n\n**FILE B: LLM Handoff Pending**\n**File:** Agent2DiscoveryRunner.js → llmHandoffPending\n\nWhen LLM Fallback asked "Can I schedule a technician for you?" last turn:\n- YES → HANDOFF_BOOKING (same as follow-up consent)\n- NO → acknowledge decline, offer alternatives\n- NEITHER → clear pending, fall through to discovery\n\n**Why This Order:**\nAll pending question state machines resolve BEFORE trigger scan so:\n1. Turn N response ends with question\n2. Turn N+1 answer is classified FIRST\n3. If answer is clear → route immediately (booking, continue, etc.)\n4. If answer is complex/new question → fall through to trigger scan\n\nThis is what makes multi-turn conversation feel natural and coherent.'
+      },
+      // ═══════════════════════════════════════════════════════════
+      // TIER 6 — FALLBACK PATHS  (Steps 26–28)
+      // ═══════════════════════════════════════════════════════════
+      {
+        id: 'step_greeting_fallback',
+        sequence: 26,
+        title: '👋 TIER 6 · Greeting Fallback Path',
+        body: '**Handles the case where caller said only "hi" and nothing else fired.**\n\n**File:** Agent2DiscoveryRunner.js\n**Condition:** Greeting was detected (Step 19) + no trigger matched + no pending questions\n\n**Priority Chain:**\n```\nTriggers (Step 22) → [if no match] →\nGreeting Fallback (Step 26) → [if no greeting either] →\nLLM Fallback (Step 27) → [if LLM blocked] →\nGeneric Fallback (Step 28)\n```\n\n**Example:**\n```\nInput: "Hi"\nScrabEngine: ""  (greeting stripped)\nCallRouter: unknown (no tokens to score)\nTriggers: NO MATCH (empty normalized text)\nGreeting detected: YES\nPath: GREETING_FALLBACK\nResponse: "Hello! What can I help you with today?"\n```\n\n**Config:** agent2.greetings (UI-controlled text)\n**Event:** A2_PATH_SELECTED (path: GREETING_ONLY)'
       },
       {
         id: 'step_llm_fallback',
-        sequence: 23,
-        title: '🧠 LLM Fallback (If No Trigger Matched)',
-        body: '**GPT-4 Assist - Last Resort**\n\n**File:** Agent2DiscoveryRunner.js:2124\n**Service:** services/Agent2LLMFallbackService.js\n\n**When Used:**\n- No trigger matched\n- No greeting detected (or greeting with complex intent)\n- LLM not blocked\n- Under max LLM turns per call (default: 1-2)\n\n**Blocking Conditions:**\n- In booking flow (blocked during critical steps)\n- Pending consent question (blocked)\n- Max LLM turns reached (blocked)\n- After-hours flow active (blocked)\n\n**LLM Call:**\n- Model: GPT-4 or GPT-4o\n- Prompt: HybridReceptionistLLM\n- Context: Call history, company info\n- Max tokens: ~400\n\n**Performance:** ~2-3 seconds\n\n**Events:**\n- A2_LLM_FALLBACK_DECISION\n- LLM_CALL_STARTED\n- LLM_CALL_COMPLETED\n\n**Next:** Generate TTS for LLM response (ElevenLabs)'
+        sequence: 27,
+        title: '🧠 TIER 6 · LLM Fallback',
+        body: '**GPT-4 assist — intelligent last resort. NEVER primary responder.**\n\n**File:** services/engine/agent2/Agent2LLMFallbackService.js\n**Model:** GPT-4o (hardcoded — Phase 4 TODO: surface to UI)\n\n**When LLM Fires:**\n- No trigger matched\n- No greeting fallback\n- LLM not blocked\n- Under max LLM turns for this call (default: 1-2)\n\n**Blocking Conditions (LLM does NOT fire if):**\n- In BOOKING mode (booking handles its own flow)\n- Pending consent question active\n- Max LLM turns already used\n- After-hours flow active\n- Transfer flow active\n\n**LLM Role:**\nLLM is a HELPER, not a responder. It:\n- Empathizes with caller\n- Extracts the core service intent\n- Asks a clarifying question OR offers to schedule\n- NEVER quotes prices, times, or slots\n- NEVER books directly — triggers booking handoff\n\n**After LLM responds:**\nIf LLM determines caller needs service → asks "Can I schedule a technician for you?"\nNext turn: llmHandoffPending state machine handles YES/NO\n\n**Performance:** ~2-3 seconds (GPT API)\n**Cost:** ~$0.003 per call (GPT-4o mini)\n**Event:** A2_LLM_FALLBACK_DECISION\n\n⚠️ If LLM is firing frequently, it means triggers aren\'t matching.\nCheck: Trigger Test Panel → see which cards are evaluating and why.'
       },
+      {
+        id: 'step_generic_fallback',
+        sequence: 28,
+        title: '🆘 TIER 6 · Generic Fallback',
+        body: '**Absolute last resort. Never should fire in a properly configured system.**\n\n**File:** Agent2DiscoveryRunner.js → generic fallback\n**Config:** agent2.discovery.playbook.fallback (UI-controlled text)\n\n**When It Fires:**\n- No trigger matched\n- No greeting\n- LLM was blocked (max turns reached, booking mode, etc.)\n- Nothing else caught it\n\n**Two Generic Variants:**\n- **With captured reason:** "I understand you need help with [reason]. Let me transfer you to our team."\n- **Without reason:** "I apologize, I\'m having trouble understanding. Would you like me to connect you with our team?"\n\n**Config Paths:**\n- `agent2.discovery.playbook.fallback.noCapturedReason`\n- `agent2.discovery.playbook.fallback.capturedReason`\n\n**If Generic Fires Regularly → Action Required:**\n1. Check trigger vocabulary coverage\n2. Run Trigger Test Panel with common call phrases\n3. Add missing triggers or expand keyword coverage\n4. Check LLM turn limit setting\n\n**Event:** A2_PATH_SELECTED (path: GENERIC_FALLBACK)'
+      },
+
+      // ═══════════════════════════════════════════════════════════
+      // TIER 7 — BOOKING FLOW  (Steps 29–31)
+      // ═══════════════════════════════════════════════════════════
+      {
+        id: 'step_booking_handoff',
+        sequence: 29,
+        title: '📅 TIER 7 · Booking Handoff — DISCOVERY → BOOKING',
+        body: '**The moment the AI transitions from understanding the problem to solving it.**\n\n**File:** Agent2DiscoveryRunner.js → HANDOFF_BOOKING path\n**Activated by:**\n1. Follow-up consent YES + nextAction=HANDOFF_BOOKING\n2. 7-bucket MAINTENANCE or SERVICE_CALL classification\n3. LLM handoff confirmation\n4. Trigger directly sets sessionMode=BOOKING\n\n**State Switch:**\n```\nsessionMode: "DISCOVERY" → "BOOKING"\nbookingCtx.step: "NAME"\nconsent: { given: true, source: "followup_consent_gate", grantedAt: ... }\n```\n\n**Entities Pre-Loaded from ScrabEngine:**\n```\nfirstName: "Mark"           (extracted Turn 1)\nphone: "+12395551234"        (extracted if stated)\ncallReason: "AC not cooling" (from normalizedText)\nbookingMode: "service_call"  (or "maintenance")\n```\n\nEntities extracted by ScrabEngine auto-populate booking slots.\nBookingLogicEngine skips asking for pre-known data.\n\n**Event:** A2_CONSENT_GATE_BOOKING\n\n**Next Turn:** BookingLogicEngine owns the conversation completely.'
+      },
+      {
+        id: 'step_booking_engine',
+        sequence: 30,
+        title: '📋 TIER 7 · BookingLogicEngine — Slot Filling',
+        body: '**Slot-filling state machine. Collects everything needed to book an appointment.**\n\n**File:** services/engine/booking/BookingLogicEngine.js\n**Activated when:** state.sessionMode === "BOOKING"\n\n**Booking Steps (each turn = one step):**\n1. **NAME** — "Can I get your name?" (skip if extracted)\n2. **PHONE** — "What\'s the best number to reach you?" (skip if extracted)\n3. **ADDRESS** — "What\'s the service address?"\n4. **SERVICE_TYPE** — "And this is for [AC/heating/other]?" (skip if known)\n5. **TIME_PREF** — "When works best for you?"\n6. **SLOT_SELECT** — Present available slots from Google Calendar\n7. **CONFIRM** — Read back full booking: name, address, time, service\n8. **DONE** — Book confirmed, SMS confirmation queued\n\n**Smart Skipping:**\nSlots already populated by ScrabEngine entity extraction are skipped.\n"Hi this is Mark at 239-555-1234" → NAME and PHONE already filled → skip to ADDRESS.\n\n**Google Calendar Integration:**\nChecks real availability. Returns open slots in conversational format.\n"I have tomorrow at 9am or Thursday at 2pm — which works better?"\n\n**SMS Confirmation:**\nAfter booking → SMS reminder fired via Twilio SMS within 60 seconds.\n\n**State per turn:** bookingCtx.step → next question → answer → advance step'
+      },
+      {
+        id: 'step_booking_confirm',
+        sequence: 31,
+        title: '✅ TIER 7 · Booking Confirmation + Calendar + SMS',
+        body: '**Final step: write to calendar, confirm to caller, send SMS.**\n\n**File:** services/engine/booking/ + Google Calendar API\n**Triggers when:** bookingCtx.step === "CONFIRM" + caller says YES\n\n**What Happens:**\n1. Google Calendar event created (company calendar)\n2. SMS confirmation sent to caller phone\n3. Call state marked: booking_completed = true\n4. sessionMode: BOOKING → DONE\n5. AI delivers confirmation response\n\n**Confirmation SMS:**\n"Confirmed! [Name] at [Address] on [Date/Time] for [Service].\nCompany: ABC HVAC — 239-555-1234"\n\n**Confirmation Response:**\n"Perfect. You\'re all set for [Date] at [Time]. You\'ll get a text confirmation shortly. Is there anything else I can help you with?"\n\n**If Calendar API Fails:**\n- Graceful fallback: "I\'ve noted your request and our team will call to confirm."\n- Log BOOKING_CALENDAR_ERROR\n- Still send SMS if possible\n\n**Events:** BOOKING_COMPLETED, SMS_CONFIRMATION_QUEUED'
+      },
+
+      // ═══════════════════════════════════════════════════════════
+      // TIER 8 — RESPONSE DELIVERY  (Steps 32–34)
+      // ═══════════════════════════════════════════════════════════
       {
         id: 'step_elevenlabs_tts',
-        sequence: 24,
-        title: '🎙️ ElevenLabs TTS (For Dynamic Responses)',
-        body: '**When ElevenLabs TTS Is Used:**\n\n**File:** services/v2elevenLabsService.js\n\n**Scenarios:**\n1. Trigger response has NO pre-recorded audio\n2. LLM generated dynamic response\n3. Greeting text (if no audio configured)\n4. Follow-up questions\n\n**Process:**\n```\nText → ElevenLabs API\n  ↓\nMP3 audio buffer\n  ↓\nSave to /public/audio/\n  ↓\nServe via <Play> in TwiML\n```\n\n**Voice Settings:**\n- voiceId: From company config\n- stability: 0.5-1.0\n- similarity_boost: 0.5-1.0\n- style: 0.0-1.0\n- model_id: "eleven_turbo_v2" or "eleven_multilingual_v2"\n\n**Caching:**\n- Hash: text + voiceId + settings\n- Cache hit: <50ms (serve existing MP3)\n- Cache miss: ~2-3s (generate new)\n\n**Performance:**\n- Cached: 50-100ms ⚡\n- Fresh: 2000-3000ms\n\n**Cost:** ~$0.30 per 1000 characters'
+        sequence: 32,
+        title: '🎙️ TIER 8 · ElevenLabs TTS',
+        body: '**Converts text responses to audio. Runs for any response without pre-recorded audio.**\n\n**File:** services/v2elevenLabsService.js\n\n**When TTS Runs:**\n- Trigger card has no pre-recorded audioUrl\n- LLM-generated response (always TTS — dynamic text, no pre-recording)\n- Greeting text (if no audio configured)\n- Follow-up questions\n- Booking responses\n\n**Pre-Recorded Audio Fast Path:**\nIf trigger card has audioUrl → SKIP TTS completely → serve MP3 directly → ~200ms ⚡\nAlways record common trigger responses for production performance.\n\n**TTS Process:**\n```\nResponse text\n  ↓\nText formatting (phone numbers read digit-by-digit, etc.)\n  ↓\nElevenLabs API → voice synthesis\n  ↓\nMP3 audio buffer (~2-3 seconds)\n  ↓\nSave to disk + MongoDB (binary backup)\n  ↓\nServe via <Play> URL in TwiML\n```\n\n**Voice Config (company-level, UI-controlled):**\n- voiceId (ElevenLabs voice)\n- stability: 0.0-1.0\n- similarity_boost: 0.0-1.0\n- style: 0.0-1.0\n- model_id: "eleven_turbo_v2" (fast) or "eleven_multilingual_v2" (quality)\n\n**Caching:**\n- Hash: SHA256(text + voiceId + settings)\n- Cache hit: < 50ms ⚡\n- Cache miss: 2000-3000ms\n\n**Self-Healing:**\nAudio files stored in MongoDB as binary. If server filesystem wiped → auto-restore from DB.\n\n**Cost:** ~$0.30 per 1000 characters generated'
       },
       {
-        id: 'step_greeting_fallback',
-        sequence: 25,
-        title: '👋 Greeting Fallback (If No Trigger + Greeting Detected)',
-        body: '**V125 NEW PATH:** Greeting response when no trigger matched\n\n**File:** Agent2DiscoveryRunner.js:2075 (V125 addition)\n\n**When Used:**\n- Greeting was detected in step 16\n- BUT no trigger matched in step 17\n- This handles pure greetings: "hi", "hello" alone\n\n**Example:**\n```\nInput: "Hi"\nScrabEngine: "" (removed "Hi")\nGreeting: DETECTED (was greeting word)\nTriggers: NO MATCH (empty text)\nPath: GREETING_FALLBACK\nResponse: "Hello! How can I help you?"\n```\n\n**Priority:**\nTriggers > Greeting > LLM > Generic\n\n**Event:** A2_PATH_SELECTED (path: GREETING_ONLY)'
+        id: 'step_twiml_response',
+        sequence: 33,
+        title: '📢 TIER 8 · Twilio TwiML Response',
+        body: '**Sends TwiML back to Twilio with the audio and next-listen setup.**\n\n**File:** routes/v2twilio.js\n\n**TwiML Structure:**\n```xml\n<Response>\n  <Gather\n    input="speech"\n    action="/api/twilio/v2-agent-respond/:companyId"\n    enhanced="true"\n    speechModel="phone_call"\n    timeout="7"\n    speechTimeout="auto"\n  >\n    <!-- Audio plays INSIDE Gather so customer can interrupt -->\n    <Play>https://server.com/audio/response-hash.mp3</Play>\n  </Gather>\n  <!-- Fallback if no speech detected -->\n  <Redirect>/api/twilio/v2-agent-respond/:companyId?timeout=true</Redirect>\n</Response>\n```\n\n**Why Audio Inside Gather:**\nCustomer can start speaking BEFORE audio finishes.\nIf customer interrupts → Deepgram captures partial speech → still processes correctly.\n\n**End of Call:**\nIf response is goodbye/confirmation → TwiML omits <Gather>:\n```xml\n<Response>\n  <Play>goodbye.mp3</Play>\n  <Hangup/>\n</Response>\n```\n\n**Performance:** < 5ms to generate TwiML XML (just string building)'
+      },
+      {
+        id: 'step_next_turn',
+        sequence: 34,
+        title: '🔁 TIER 8 · Next Turn Setup',
+        body: '**Persists state, awaits customer speech. The loop continues.**\n\n**File:** services/engine/StateStore.js + routes/v2twilio.js\n\n**After Response Delivered:**\n1. Save updated call state to Redis (turn++)\n2. Twilio plays audio + opens Gather listener\n3. Customer speaks\n4. Loop back to Step 6 (Customer Speaks)\n\n**State Saved Per Turn:**\n```json\n{\n  "turn": 2,\n  "sessionMode": "DISCOVERY",\n  "agent2": {\n    "discovery": {\n      "lastCallBucket": "booking_service",\n      "lastCallConfidence": 0.95,\n      "lastPath": "TRIGGER_CARD_ANSWER",\n      "lastTriggerId": "hvac.cooling.not_cooling",\n      "pendingFollowUpQuestion": "Do you want me to get that scheduled?"\n    }\n  },\n  "callerName": "Mark"\n}\n```\n\n**Call Console Live View:**\nEvery event emitted during this turn is saved and visible in Call Console:\n- ScrabEngine transformation trace\n- Agent2CallRouter bucket classification\n- Trigger evaluation (all cards, skip reasons, winner)\n- Response source\n- Performance timings\n\n**Turn Lifecycle:**\nTurn N → State saved → Twilio listens → Customer speaks → Turn N+1\nIf customer hangs up → Redis state expires (TTL) → Call complete\n\n**Typical Full Call:**\nTurn 1: "My AC isn\'t cooling" → Trigger fires → Follow-up question\nTurn 2: "Yes please schedule it" → Consent → BOOKING mode\nTurn 3-6: Slot filling (name, phone, address, time)\nTurn 7: "Confirmed for Thursday at 2pm" → SMS → Goodbye'
       }
     ];
   }
@@ -343,20 +424,55 @@
     });
   }
 
+  // Tier color coding for the live preview panel
+  const TIER_COLORS = {
+    1: { bg: '#fef3c7', border: '#f59e0b', label: 'TIER 1 — CALL ENTRY',       num: '#92400e' },
+    2: { bg: '#fce7f3', border: '#ec4899', label: 'TIER 2 — SPEECH CAPTURE',    num: '#9d174d' },
+    3: { bg: '#ede9fe', border: '#8b5cf6', label: 'TIER 3 — SCRABENGINE',       num: '#5b21b6' },
+    4: { bg: '#dcfce7', border: '#22c55e', label: 'TIER 4 — CALL ROUTING',      num: '#14532d' },
+    5: { bg: '#dbeafe', border: '#3b82f6', label: 'TIER 5 — DISCOVERY ENGINE',  num: '#1e40af' },
+    6: { bg: '#fee2e2', border: '#ef4444', label: 'TIER 6 — FALLBACK PATHS',    num: '#7f1d1d' },
+    7: { bg: '#d1fae5', border: '#10b981', label: 'TIER 7 — BOOKING FLOW',      num: '#064e3b' },
+    8: { bg: '#f1f5f9', border: '#64748b', label: 'TIER 8 — RESPONSE DELIVERY', num: '#334155' }
+  };
+
+  function getTierForStep(seq) {
+    if (seq <= 5)  return 1;
+    if (seq <= 7)  return 2;
+    if (seq <= 13) return 3;
+    if (seq <= 17) return 4;
+    if (seq <= 25) return 5;
+    if (seq <= 28) return 6;
+    if (seq <= 31) return 7;
+    return 8;
+  }
+
   function renderFlowPreview() {
     const sorted = [...state.steps].sort((a, b) => a.sequence - b.sequence);
+    let lastTier = 0;
     
     DOM.flowPreview.innerHTML = sorted.map((step, idx) => {
+      const tier = getTierForStep(step.sequence);
+      const tc = TIER_COLORS[tier] || TIER_COLORS[8];
+      let tierHeader = '';
+      if (tier !== lastTier) {
+        lastTier = tier;
+        tierHeader = `
+          <div style="margin:${idx > 0 ? '16px' : '0'} 0 8px 0;padding:6px 12px;background:${tc.bg};border-left:4px solid ${tc.border};border-radius:6px;font-size:11px;font-weight:700;color:${tc.num};text-transform:uppercase;letter-spacing:0.5px;">
+            ${tc.label}
+          </div>`;
+      }
       return `
-        <div class="flow-step">
-          <div class="flow-step-num">${step.sequence}</div>
+        ${tierHeader}
+        <div class="flow-step" style="border-left-color:${tc.border};background:${tc.bg}10;">
+          <div class="flow-step-num" style="background:${tc.border};font-size:13px;">${step.sequence}</div>
           <div class="flow-step-content">
-            <div class="flow-step-title">${escapeHtml(step.title)}</div>
+            <div class="flow-step-title">${escapeHtml(step.title.replace(/TIER \d+ · /,''))}</div>
             <div class="flow-step-desc">${getFirstLine(step.body)}</div>
             <div class="flow-step-file">${extractFile(step.body)}</div>
           </div>
         </div>
-        ${idx < sorted.length - 1 ? '<div class="flow-arrow">↓</div>' : ''}
+        ${idx < sorted.length - 1 ? `<div class="flow-arrow" style="color:${tc.border};">↓</div>` : ''}
       `;
     }).join('');
   }
@@ -494,7 +610,9 @@
     const data = {
       companyId: state.companyId,
       exportedAt: new Date().toISOString(),
-      version: 'V125',
+      version: 'V130',
+      totalSteps: state.steps.length,
+      tiers: 8,
       steps: state.steps
     };
     
