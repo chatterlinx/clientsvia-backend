@@ -312,40 +312,6 @@
     DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
     DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
 
-    // Clear Legacy Triggers button
-    if (DOM.btnClearLegacy) {
-      DOM.btnClearLegacy.addEventListener('click', async () => {
-        if (!confirm('Remove old hardcoded legacy trigger cards (pricing.service_call, problem.not_cooling, etc.) from this company\'s config?\n\nThis is a one-time cleanup. Your 42 local triggers are NOT affected.')) return;
-        const btn = DOM.btnClearLegacy;
-        btn.disabled = true;
-        btn.textContent = 'Clearing...';
-        try {
-          const result = await apiFetch(
-            `${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/clear-legacy`,
-            { method: 'POST' }
-          );
-          if (result.removed === 0) {
-            btn.textContent = '✓ Already Clean';
-          } else {
-            btn.textContent = `✓ Removed ${result.removed}`;
-            btn.style.background = '#dcfce7';
-            btn.style.color = '#166534';
-          }
-          setTimeout(() => {
-            btn.textContent = '🗑 Clear Legacy';
-            btn.style.background = '';
-            btn.style.color = '#dc2626';
-            btn.disabled = false;
-          }, 3000);
-          // Reload triggers to reflect clean state
-          setTimeout(() => loadTriggers(), 500);
-        } catch (err) {
-          btn.textContent = '✗ Failed';
-          setTimeout(() => { btn.textContent = '🗑 Clear Legacy'; btn.disabled = false; }, 2500);
-        }
-      });
-    }
-
     // Test Panel open/close
     if (DOM.btnOpenTestPanel) {
       DOM.btnOpenTestPanel.addEventListener('click', () => {
@@ -802,7 +768,7 @@
   // Shows warnings when trigger system has issues or is in legacy mode
   // ═══════════════════════════════════════════════════════════════════════════
   function renderHealthBanner() {
-    // Remove any existing banner
+    // Legacy mode removed - new platform only shows critical configuration errors
     const existingBanner = document.getElementById('trigger-health-banner');
     if (existingBanner) existingBanner.remove();
     
@@ -810,99 +776,34 @@
     if (!stsInfo || !stsInfo.showHealthBanner) return;
     
     const issues = stsInfo.criticalIssues || [];
-    const isLegacyMode = !stsInfo.strictMode;
+    if (issues.length === 0) return;  // No banner if no issues
     
-    // Determine banner type
-    let bannerClass = 'health-banner-warning';
-    let bannerIcon = '⚠️';
-    if (issues.some(i => i.code === 'TRIGGER_POOL_EMPTY')) {
-      bannerClass = 'health-banner-critical';
-      bannerIcon = '🚨';
-    }
-    
-    // Build banner content
-    let bannerHtml = `
-      <div id="trigger-health-banner" class="${bannerClass}" style="
+    // Critical errors only (no legacy mode warnings)
+    const bannerHtml = `
+      <div id="trigger-health-banner" style="
         padding: 12px 16px;
         margin-bottom: 16px;
         border-radius: 8px;
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        ${bannerClass === 'health-banner-critical' 
-          ? 'background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;' 
-          : 'background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;'}
+        background: #fef2f2;
+        border: 1px solid #fca5a5;
+        color: #991b1b;
       ">
-        <span style="font-size: 20px;">${bannerIcon}</span>
-        <div style="flex: 1;">
-          <div style="font-weight: 600; margin-bottom: 4px;">
-            ${isLegacyMode ? 'Legacy Mode Active' : 'Trigger System Issue'}
-          </div>
-          <div style="font-size: 13px; line-height: 1.5;">
-    `;
-    
-    if (issues.length > 0) {
-      bannerHtml += issues.map(i => `<div>• ${escapeHtml(i.message)}</div>`).join('');
-    }
-    
-    if (isLegacyMode && !issues.some(i => i.code === 'LEGACY_MODE_ACTIVE')) {
-      bannerHtml += `<div>• Legacy playbook.rules may override modern triggers</div>`;
-    }
-    
-    bannerHtml += `
-          </div>
-          <div style="margin-top: 8px;">
-            <button onclick="window.TriggerAdmin?.toggleStrictMode?.()" class="btn btn-sm ${isLegacyMode ? 'btn-primary' : 'btn-secondary'}" style="font-size: 12px; padding: 4px 12px;">
-              ${isLegacyMode ? 'Enable Strict Mode' : 'View Health Report'}
-            </button>
-          </div>
+        <div style="font-weight: 600; margin-bottom: 4px;">
+          🚨 Trigger Configuration Required
         </div>
-        <button onclick="this.parentElement.remove()" style="
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-size: 18px;
-          opacity: 0.6;
-          padding: 0;
-          line-height: 1;
-        ">×</button>
+        <div style="font-size: 13px; line-height: 1.5;">
+          ${issues.map(i => `<div>• ${escapeHtml(i.message)}</div>`).join('')}
+        </div>
       </div>
     `;
     
-    // Insert banner at top of main content
     const mainContent = document.querySelector('.triggers-main') || document.querySelector('main');
     if (mainContent) {
       mainContent.insertAdjacentHTML('afterbegin', bannerHtml);
     }
   }
   
-  // V131: Toggle strict mode
-  async function toggleStrictMode() {
-    const currentMode = state.strictTriggerSystem?.strictMode !== false;
-    const newMode = !currentMode;
-    
-    const confirmMsg = newMode
-      ? 'Enable STRICT MODE?\n\nLegacy playbook.rules will be disabled. All triggers must come from GlobalTrigger or CompanyLocalTrigger.'
-      : 'Disable STRICT MODE?\n\nLegacy playbook.rules may be loaded if no other triggers are found. This is not recommended.';
-    
-    if (!confirm(confirmMsg)) return;
-    
-    try {
-      const result = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/strict-mode`, {
-        method: 'POST',
-        body: { enabled: newMode }
-      });
-      
-      showToast('success', 'Mode Changed', result.message);
-      await loadTriggers();
-    } catch (error) {
-      showToast('error', 'Failed', error.message);
-    }
-  }
-  
-  // Expose for inline onclick
-  window.TriggerAdmin = window.TriggerAdmin || {};
-  window.TriggerAdmin.toggleStrictMode = toggleStrictMode;
+  // Legacy mode removed - new platform has no legacy options
 
   function renderGroupSelector() {
     DOM.groupSelector.innerHTML = '<option value="">— No group selected —</option>';

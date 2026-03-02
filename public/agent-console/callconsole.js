@@ -1748,14 +1748,14 @@
         ? `Pool: ${totalCards} cards loaded${poolFiltered ? ` (pre-filtered from ${beforeFilter} by CallRouter bucket)` : ''}`
         : 'Pool size unknown';
       const poolSrc     = poolSourceEv?.payload;
-      const hasLegacy   = poolSrc?.hasLegacyCards;
+      const hasUnknown  = poolSrc?.hasUnknownScope;
       const scopeDetail = poolSrc ? Object.entries(poolSrc.scopes || {}).map(([s,n])=>`${n} ${s}`).join(', ') : null;
-      steps.push(roadmapStep(5, '🗂️', hasLegacy ? 'Trigger Pool — LEGACY CARDS ACTIVE ⚠️' : 'Trigger Pool — Loaded',
-        hasLegacy ? null : true,
-        hasLegacy
-          ? `${totalCards} cards loaded — but includes old hardcoded legacy cards (pricing.service_call, problem.not_cooling, etc.).<br><strong>These bypass your 42 local triggers.</strong> Click "Clear Legacy" in the Triggers admin to remove them.`
+      steps.push(roadmapStep(5, '🗂️', hasUnknown ? 'Trigger Pool — UNKNOWN SOURCE ⚠️' : 'Trigger Pool — Loaded',
+        hasUnknown ? null : true,
+        hasUnknown
+          ? `${totalCards} cards loaded from UNKNOWN source - data integrity violation<br><strong>Check activeGroupId assignment</strong>`
           : poolDetail,
-        scopeDetail ? `Sources: ${escapeHtml(scopeDetail)}` : 'Source: TriggerService (GlobalTrigger + LocalTrigger + legacy fallback)'
+        scopeDetail ? `Sources: ${escapeHtml(scopeDetail)}` : 'Source: Official GlobalTrigger library'
       ));
     } else {
       steps.push(roadmapStep(5, '🗂️', 'Trigger Pool — No Pool Event', null,
@@ -1944,10 +1944,10 @@
     }
     if (type === 'TRIGGER_POOL_SOURCE') {
       const scopeStr = Object.entries(payload.scopes || {}).map(([s, n]) => `${n} ${s}`).join(', ');
-      const legacyWarn = payload.hasLegacyCards
-        ? ` <span style="color:#dc2626;font-weight:700;">⚠️ LEGACY CARDS ACTIVE — click "Clear Legacy" in Triggers admin</span>`
-        : ' ✅ clean pool';
-      return `${payload.total} cards loaded (${escapeHtml(scopeStr)})${legacyWarn}`;
+      const unknownWarn = payload.hasUnknownScope
+        ? ` <span style="color:#dc2626;font-weight:700;">🚨 UNKNOWN SOURCE - data integrity violation</span>`
+        : ' ✅ clean';
+      return `${payload.total} cards loaded (${escapeHtml(scopeStr)})${unknownWarn}`;
     }
     if (type === 'CALLER_NAME_EXTRACTED') {
       return `name: <strong>${escapeHtml(payload.firstName || '?')}</strong>${payload.lastName ? ' ' + escapeHtml(payload.lastName) : ''} · source: ${escapeHtml(payload.source || '?')}`;
