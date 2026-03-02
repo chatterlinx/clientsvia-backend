@@ -1066,6 +1066,7 @@
       A2_CALL_ROUTER_POOL_FILTERED:  'Call Router — Trigger Pool Filtered',
       TRIGGER_POOL_EMPTY:            '⚠️ Trigger Pool EMPTY',
       TRIGGER_POOL_SOURCE:           'Trigger Pool Source',
+      LEGACY_FALLBACK_USED:          '🚨 LEGACY FALLBACK ACTIVE',
       A2_TRIGGER_EVAL:               'Trigger Evaluation Result',
       TRIGGER_CARDS_EVALUATED:       'Trigger Cards Evaluated',
       A2_RESPONSE_READY:             'Response Ready',
@@ -1632,7 +1633,7 @@
   const EVENT_CATEGORIES = {
     critical: {
       color: '#ef4444', bg: '#fef2f2', border: '#fca5a5',
-      types: ['TRIGGER_POOL_EMPTY', 'SCRABENGINE_QUALITY_FAILED']
+      types: ['TRIGGER_POOL_EMPTY', 'SCRABENGINE_QUALITY_FAILED', 'LEGACY_FALLBACK_USED']
     },
     success: {
       color: '#16a34a', bg: '#f0fdf4', border: '#86efac',
@@ -1694,7 +1695,14 @@
       return `path: <strong>${escapeHtml(payload.path || '?')}</strong>${payload.reason ? ` · ${escapeHtml(payload.reason.substring(0, 80))}` : ''}`;
     }
     if (type === 'TRIGGER_POOL_EMPTY') {
-      return `⚠️ <strong>${escapeHtml(payload.message || 'No triggers loaded')}</strong>`;
+      const strictInfo = payload.strictMode ? ' <span style="color:#7c3aed;">[STRICT MODE]</span>' : '';
+      return `⚠️ <strong>${escapeHtml(payload.message || 'No triggers loaded')}</strong>${strictInfo}`;
+    }
+    // STRICT TRIGGER SYSTEM: LEGACY_FALLBACK_USED event (V131)
+    if (type === 'LEGACY_FALLBACK_USED') {
+      return `🚨 <strong>LEGACY FALLBACK ACTIVE</strong> — ${payload.legacyCardCount || 0} cards from playbook.rules. ` +
+        `<span style="color:#dc2626;">Modern trigger system bypassed!</span> ` +
+        `<em>${escapeHtml(payload.remediation || 'Enable strict mode to disable legacy.')}</em>`;
     }
     if (type === 'TRIGGER_POOL_SOURCE') {
       const scopeStr = Object.entries(payload.scopes || {}).map(([s, n]) => `${n} ${s}`).join(', ');

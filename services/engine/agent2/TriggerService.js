@@ -471,99 +471,169 @@ function transformLegacyCard(card) {
   };
 }
 
-async function loadTriggersWithLegacyFallback(companyId, legacyConfig) {
+// ════════════════════════════════════════════════════════════════════════════════
+// STRICT TRIGGER SYSTEM - UNIFIED LOADER (V131)
+// ════════════════════════════════════════════════════════════════════════════════
+// This is the ONLY entry point for loading triggers at runtime.
+// It enforces strict mode and tracks legacy usage.
+//
+// STRICT MODE (default):
+// - Only GlobalTrigger + CompanyLocalTrigger are loaded
+// - Legacy playbook.rules is NEVER used
+// - Empty pool returns empty array (caller handles warning)
+//
+// LEGACY MODE (explicit opt-in):
+// - Falls back to playbook.rules if no other triggers exist
+// - Records usage for auditing
+// - Returns metadata indicating legacy was used
+// ════════════════════════════════════════════════════════════════════════════════
+
+async function loadTriggersWithLegacyFallback(companyId, legacyConfig, options = {}) {
   const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STRICT MODE CHECK - default is STRICT (true)
+  // In strict mode, legacy playbook.rules is NEVER loaded.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const isStrictMode = settings?.strictMode !== false;  // Default to strict
+  
+  // Track metadata for caller (Agent2DiscoveryRunner can emit events based on this)
+  const loadMetadata = {
+    strictMode: isStrictMode,
+    legacyUsed: false,
+    legacyCardCount: 0,
+    source: null
+  };
 
-  if (!settings || !settings.activeGroupId) {
-    // ── CRITICAL FIX (V130): ALWAYS load CompanyLocalTriggers ──────────────────
-    // Previously this path returned ONLY the legacy playbook.rules when no
-    // activeGroupId was set, completely ignoring CompanyLocalTrigger documents.
-    //
-    // This caused the bug where 42 triggers visible in the Trigger Console were
-    // completely invisible to the runtime — they existed in CompanyLocalTrigger
-    // but were never loaded because the short-circuit returned before reaching
-    // the code that loads local triggers (which lives in loadTriggersForCompany).
-    //
-    // Fix: ALWAYS load CompanyLocalTriggers, then layer legacy cards as a fallback
-    // only if the local trigger pool is empty.
-    // ───────────────────────────────────────────────────────────────────────────
-    try {
-      const localTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
-
-      if (localTriggers && localTriggers.length > 0) {
-        // Company has local triggers configured — use them exclusively.
-        // Map to TriggerCardMatcher format (same transform as mergeTriggers does).
-        const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
-        const audioMap = new Map();
-        audioRecordings.forEach(a => { audioMap.set(a.ruleId, a); });
-
-        const formatted = localTriggers.map(lt => {
-          if (lt.toMatcherFormat) return lt.toMatcherFormat();
-          const audioUrl = resolveAudioUrl(audioMap.get(lt.ruleId), lt.answerText);
-          return {
-            id:        lt.triggerId,
-            ruleId:    lt.ruleId,
-            triggerId: lt.triggerId,
-            enabled:   lt.enabled,
-            priority:  lt.priority ?? 50,
-            label:     lt.label,
-            bucket:    lt.bucket || null,
-            maxInputWords: lt.maxInputWords || null,
-            match: {
-              keywords:         lt.keywords         || [],
-              phrases:          lt.phrases          || [],
-              negativeKeywords: lt.negativeKeywords  || [],
-              negativePhrases:  lt.negativePhrases   || [],
-              scenarioTypeAllowlist: lt.scenarioTypeAllowlist || []
-            },
-            responseMode: lt.responseMode || 'standard',
-            answer: {
-              answerText: lt.answerText || '',
-              audioUrl:   audioUrl      || ''
-            },
-            followUp: {
-              question:   lt.followUpQuestion     || '',
-              nextAction: lt.followUpNextAction   || 'CONTINUE'
-            },
-            llmFactPack: lt.llmFactPack || null,
-            _scope: 'LOCAL'
-          };
-        }).filter(Boolean);
-
-        // Sort by priority
-        formatted.sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999));
-
-        logger.debug('[TriggerService] Loaded CompanyLocalTriggers (no activeGroupId)', {
-          companyId,
-          localCount: formatted.length
-        });
-        return formatted;
-      }
-    } catch (localLoadErr) {
-      logger.warn('[TriggerService] Failed to load CompanyLocalTriggers, falling back to legacy', {
-        companyId,
-        error: localLoadErr.message
-      });
-    }
-
-    // No local triggers found — fall back to legacy playbook.rules
-    if (legacyConfig && legacyConfig.discovery?.playbook?.rules) {
-      const rawCards = legacyConfig.discovery.playbook.rules;
-      // Transform legacy flat-format cards into TriggerCardMatcher format.
-      const transformed = rawCards.map(transformLegacyCard).filter(Boolean);
-
-      logger.debug('[TriggerService] Using legacy trigger cards (no local triggers found)', {
-        companyId,
-        rawCount: rawCards.length,
-        transformedCount: transformed.length
-      });
-      return transformed;
-    }
-
-    return [];
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PATH 1: Company has activeGroupId set → use full merge logic
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (settings && settings.activeGroupId) {
+    const triggers = await loadTriggersForCompany(companyId);
+    loadMetadata.source = 'GLOBAL_PLUS_LOCAL';
+    
+    // Attach metadata to result for caller inspection
+    triggers._loadMetadata = loadMetadata;
+    return triggers;
   }
 
-  return loadTriggersForCompany(companyId);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PATH 2: No activeGroupId → try CompanyLocalTrigger first
+  // ═══════════════════════════════════════════════════════════════════════════
+  try {
+    const localTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
+
+    if (localTriggers && localTriggers.length > 0) {
+      const audioRecordings = await TriggerAudio.findByCompanyId(companyId);
+      const audioMap = new Map();
+      audioRecordings.forEach(a => { audioMap.set(a.ruleId, a); });
+
+      const formatted = localTriggers.map(lt => {
+        if (lt.toMatcherFormat) return lt.toMatcherFormat();
+        const audioUrl = resolveAudioUrl(audioMap.get(lt.ruleId), lt.answerText);
+        return {
+          id:        lt.triggerId,
+          ruleId:    lt.ruleId,
+          triggerId: lt.triggerId,
+          enabled:   lt.enabled,
+          priority:  lt.priority ?? 50,
+          label:     lt.label,
+          bucket:    lt.bucket || null,
+          maxInputWords: typeof lt.maxInputWords === 'number' ? lt.maxInputWords : null,
+          match: {
+            keywords:         lt.keywords         || [],
+            phrases:          lt.phrases          || [],
+            negativeKeywords: lt.negativeKeywords  || [],
+            negativePhrases:  lt.negativePhrases   || [],
+            scenarioTypeAllowlist: lt.scenarioTypeAllowlist || []
+          },
+          responseMode: lt.responseMode || 'standard',
+          answer: {
+            answerText: lt.answerText || '',
+            audioUrl:   audioUrl      || ''
+          },
+          followUp: {
+            question:   lt.followUpQuestion     || '',
+            nextAction: lt.followUpNextAction   || 'CONTINUE'
+          },
+          llmFactPack: lt.llmFactPack || null,
+          _scope: 'LOCAL'
+        };
+      }).filter(Boolean);
+
+      formatted.sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999));
+
+      logger.debug('[TriggerService] Loaded CompanyLocalTriggers (no activeGroupId)', {
+        companyId,
+        localCount: formatted.length,
+        strictMode: isStrictMode
+      });
+      
+      loadMetadata.source = 'LOCAL_ONLY';
+      formatted._loadMetadata = loadMetadata;
+      return formatted;
+    }
+  } catch (localLoadErr) {
+    logger.warn('[TriggerService] Failed to load CompanyLocalTriggers', {
+      companyId,
+      error: localLoadErr.message,
+      strictMode: isStrictMode
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PATH 3: No local triggers found — STRICT MODE vs LEGACY MODE divergence
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  if (isStrictMode) {
+    // ── STRICT MODE: Return empty. Caller will emit TRIGGER_POOL_EMPTY warning.
+    logger.warn('[TriggerService] STRICT MODE: No triggers found, returning empty pool', {
+      companyId,
+      hasLegacyConfig: Boolean(legacyConfig?.discovery?.playbook?.rules?.length),
+      legacyBlocked: true
+    });
+    
+    loadMetadata.source = 'EMPTY_STRICT';
+    const emptyResult = [];
+    emptyResult._loadMetadata = loadMetadata;
+    return emptyResult;
+  }
+  
+  // ── LEGACY MODE: Allow fallback to playbook.rules (with loud logging)
+  if (legacyConfig && legacyConfig.discovery?.playbook?.rules) {
+    const rawCards = legacyConfig.discovery.playbook.rules;
+    const transformed = rawCards.map(transformLegacyCard).filter(Boolean);
+
+    // Record legacy usage for auditing
+    try {
+      await CompanyTriggerSettings.recordLegacyFallback(companyId);
+    } catch (recordErr) {
+      logger.error('[TriggerService] Failed to record legacy fallback usage', {
+        companyId,
+        error: recordErr.message
+      });
+    }
+
+    logger.warn('[TriggerService] ⚠️ LEGACY_FALLBACK_USED — playbook.rules loaded', {
+      companyId,
+      rawCount: rawCards.length,
+      transformedCount: transformed.length,
+      legacyMode: true,
+      remediation: 'Enable strict mode or migrate triggers to CompanyLocalTrigger'
+    });
+    
+    loadMetadata.source = 'LEGACY_FALLBACK';
+    loadMetadata.legacyUsed = true;
+    loadMetadata.legacyCardCount = transformed.length;
+    transformed._loadMetadata = loadMetadata;
+    return transformed;
+  }
+
+  // ── No triggers anywhere — return empty
+  loadMetadata.source = 'EMPTY_LEGACY';
+  const emptyResult = [];
+  emptyResult._loadMetadata = loadMetadata;
+  return emptyResult;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -591,6 +661,144 @@ async function checkDuplicates(companyId) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+// STRICT TRIGGER SYSTEM - COMPREHENSIVE HEALTH CHECK (V131)
+// ════════════════════════════════════════════════════════════════════════════════
+// Returns a full health report for a company's trigger system.
+// Call this on startup, on publish, or on-demand via admin API.
+// ════════════════════════════════════════════════════════════════════════════════
+
+async function checkTriggerSystemHealth(companyId, legacyConfig = null) {
+  const issues = [];
+  const warnings = [];
+  const info = [];
+  
+  // 1. Load settings
+  const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+  const isStrictMode = settings?.strictMode !== false;
+  
+  info.push({
+    code: 'STRICT_MODE_STATUS',
+    message: isStrictMode ? 'Strict mode is ENABLED (legacy blocked)' : 'Strict mode is DISABLED (legacy allowed)',
+    strictMode: isStrictMode
+  });
+  
+  // 2. Check if group is assigned
+  const hasActiveGroup = Boolean(settings?.activeGroupId);
+  if (!hasActiveGroup) {
+    warnings.push({
+      code: 'NO_ACTIVE_GROUP',
+      message: 'No global trigger group assigned — company relies on local triggers only',
+      remediation: 'Assign a global trigger group in Triggers admin'
+    });
+  }
+  
+  // 3. Count local triggers
+  const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+  const activeLocalCount = localTriggers.filter(t => t.enabled && !t.isDeleted).length;
+  
+  info.push({
+    code: 'LOCAL_TRIGGER_COUNT',
+    message: `${activeLocalCount} active local triggers`,
+    total: localTriggers.length,
+    active: activeLocalCount
+  });
+  
+  // 4. Check for legacy playbook.rules
+  const hasLegacyRules = Boolean(legacyConfig?.discovery?.playbook?.rules?.length);
+  const legacyCount = legacyConfig?.discovery?.playbook?.rules?.length || 0;
+  
+  if (hasLegacyRules) {
+    if (isStrictMode) {
+      info.push({
+        code: 'LEGACY_BLOCKED',
+        message: `${legacyCount} legacy playbook.rules exist but are BLOCKED by strict mode`,
+        legacyCount,
+        blocked: true
+      });
+    } else {
+      warnings.push({
+        code: 'LEGACY_ACTIVE',
+        message: `${legacyCount} legacy playbook.rules may be loaded at runtime — enable strict mode to prevent`,
+        legacyCount,
+        remediation: 'Enable strict mode OR migrate legacy triggers to CompanyLocalTrigger'
+      });
+    }
+  }
+  
+  // 5. Check for empty trigger pool
+  const totalAvailable = activeLocalCount + (hasActiveGroup ? 1 : 0); // Rough check
+  if (activeLocalCount === 0 && !hasActiveGroup) {
+    issues.push({
+      code: 'TRIGGER_POOL_EMPTY',
+      severity: 'CRITICAL',
+      message: 'No triggers will load at runtime — all calls will fall through to LLM fallback',
+      remediation: 'Create local triggers OR assign a global trigger group'
+    });
+  }
+  
+  // 6. Check for duplicate ruleIds
+  const duplicateCheck = await checkDuplicates(companyId);
+  if (!duplicateCheck.healthy) {
+    issues.push({
+      code: 'DUPLICATE_RULE_IDS',
+      severity: 'ERROR',
+      message: `${duplicateCheck.duplicates.length} duplicate ruleIds found`,
+      duplicates: duplicateCheck.duplicates,
+      remediation: 'Remove duplicate triggers — only one trigger per ruleId is allowed'
+    });
+  }
+  
+  // 7. Check for required fields in local triggers (isomorphic validation)
+  const triggersWithoutAnswerText = localTriggers.filter(t => 
+    !t.isDeleted && t.enabled && t.responseMode !== 'llm' && !t.answerText
+  );
+  if (triggersWithoutAnswerText.length > 0) {
+    issues.push({
+      code: 'MISSING_ANSWER_TEXT',
+      severity: 'ERROR',
+      message: `${triggersWithoutAnswerText.length} enabled triggers have no answerText`,
+      triggerIds: triggersWithoutAnswerText.slice(0, 5).map(t => t.ruleId),
+      remediation: 'Add answer text to all standard-mode triggers'
+    });
+  }
+  
+  // 8. Track legacy fallback usage
+  if (settings?.legacyFallbackCount > 0) {
+    warnings.push({
+      code: 'LEGACY_USAGE_HISTORY',
+      message: `Legacy fallback has been used ${settings.legacyFallbackCount} times`,
+      lastUsed: settings.lastLegacyFallbackAt,
+      count: settings.legacyFallbackCount,
+      remediation: 'Enable strict mode to prevent future legacy usage'
+    });
+  }
+  
+  // Compile health report
+  const isHealthy = issues.length === 0;
+  const healthScore = Math.max(0, 100 - (issues.length * 25) - (warnings.length * 10));
+  
+  return {
+    companyId,
+    healthy: isHealthy,
+    healthScore,
+    strictMode: isStrictMode,
+    timestamp: new Date().toISOString(),
+    summary: {
+      issueCount: issues.length,
+      warningCount: warnings.length,
+      infoCount: info.length,
+      localTriggerCount: activeLocalCount,
+      hasActiveGroup,
+      hasLegacyRules,
+      legacyBlocked: isStrictMode && hasLegacyRules
+    },
+    issues,
+    warnings,
+    info
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ════════════════════════════════════════════════════════════════════════════════
 
@@ -603,6 +811,7 @@ module.exports = {
   invalidateAllCache,
   
   checkDuplicates,
+  checkTriggerSystemHealth,  // V131: Comprehensive health check
   resolveAudioUrl,
   
   buildCacheKey,

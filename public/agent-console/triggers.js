@@ -756,9 +756,14 @@
       state.permissions = permissions;
       state.availableGroups = availableGroups;
       state.companyVariables = new Map(Object.entries(companyVariables));
+      // V131: Strict Trigger System health info
+      state.strictTriggerSystem = data.strictTriggerSystem || null;
       buildSearchIndex(state.triggers);
       
       DOM.headerCompanyName.textContent = state.companyName;
+      
+      // V131: Render health banner if needed
+      renderHealthBanner();
       
       renderGroupSelector();
       renderStats();
@@ -791,6 +796,114 @@
   /* --------------------------------------------------------------------------
      RENDERING
      -------------------------------------------------------------------------- */
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // V131: STRICT TRIGGER SYSTEM - HEALTH BANNER
+  // Shows warnings when trigger system has issues or is in legacy mode
+  // ═══════════════════════════════════════════════════════════════════════════
+  function renderHealthBanner() {
+    // Remove any existing banner
+    const existingBanner = document.getElementById('trigger-health-banner');
+    if (existingBanner) existingBanner.remove();
+    
+    const stsInfo = state.strictTriggerSystem;
+    if (!stsInfo || !stsInfo.showHealthBanner) return;
+    
+    const issues = stsInfo.criticalIssues || [];
+    const isLegacyMode = !stsInfo.strictMode;
+    
+    // Determine banner type
+    let bannerClass = 'health-banner-warning';
+    let bannerIcon = '⚠️';
+    if (issues.some(i => i.code === 'TRIGGER_POOL_EMPTY')) {
+      bannerClass = 'health-banner-critical';
+      bannerIcon = '🚨';
+    }
+    
+    // Build banner content
+    let bannerHtml = `
+      <div id="trigger-health-banner" class="${bannerClass}" style="
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        ${bannerClass === 'health-banner-critical' 
+          ? 'background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;' 
+          : 'background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;'}
+      ">
+        <span style="font-size: 20px;">${bannerIcon}</span>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; margin-bottom: 4px;">
+            ${isLegacyMode ? 'Legacy Mode Active' : 'Trigger System Issue'}
+          </div>
+          <div style="font-size: 13px; line-height: 1.5;">
+    `;
+    
+    if (issues.length > 0) {
+      bannerHtml += issues.map(i => `<div>• ${escapeHtml(i.message)}</div>`).join('');
+    }
+    
+    if (isLegacyMode && !issues.some(i => i.code === 'LEGACY_MODE_ACTIVE')) {
+      bannerHtml += `<div>• Legacy playbook.rules may override modern triggers</div>`;
+    }
+    
+    bannerHtml += `
+          </div>
+          <div style="margin-top: 8px;">
+            <button onclick="window.TriggerAdmin?.toggleStrictMode?.()" class="btn btn-sm ${isLegacyMode ? 'btn-primary' : 'btn-secondary'}" style="font-size: 12px; padding: 4px 12px;">
+              ${isLegacyMode ? 'Enable Strict Mode' : 'View Health Report'}
+            </button>
+          </div>
+        </div>
+        <button onclick="this.parentElement.remove()" style="
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 18px;
+          opacity: 0.6;
+          padding: 0;
+          line-height: 1;
+        ">×</button>
+      </div>
+    `;
+    
+    // Insert banner at top of main content
+    const mainContent = document.querySelector('.triggers-main') || document.querySelector('main');
+    if (mainContent) {
+      mainContent.insertAdjacentHTML('afterbegin', bannerHtml);
+    }
+  }
+  
+  // V131: Toggle strict mode
+  async function toggleStrictMode() {
+    const currentMode = state.strictTriggerSystem?.strictMode !== false;
+    const newMode = !currentMode;
+    
+    const confirmMsg = newMode
+      ? 'Enable STRICT MODE?\n\nLegacy playbook.rules will be disabled. All triggers must come from GlobalTrigger or CompanyLocalTrigger.'
+      : 'Disable STRICT MODE?\n\nLegacy playbook.rules may be loaded if no other triggers are found. This is not recommended.';
+    
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+      const result = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/strict-mode`, {
+        method: 'POST',
+        body: { enabled: newMode }
+      });
+      
+      showToast('success', 'Mode Changed', result.message);
+      await loadTriggers();
+    } catch (error) {
+      showToast('error', 'Failed', error.message);
+    }
+  }
+  
+  // Expose for inline onclick
+  window.TriggerAdmin = window.TriggerAdmin || {};
+  window.TriggerAdmin.toggleStrictMode = toggleStrictMode;
+
   function renderGroupSelector() {
     DOM.groupSelector.innerHTML = '<option value="">— No group selected —</option>';
     
@@ -1481,6 +1594,20 @@
       updateFollowupActionVisibility();
       DOM.inputTriggerLocal.checked = true;
       DOM.scopeSection.style.display = 'block';
+      
+      // ═══════════════════════════════════════════════════════════════════════
+      // STRICT TRIGGER SYSTEM - ISOMORPHIC FIELD CLEARING
+      // All fields that exist in schema MUST be cleared for new triggers.
+      // ═══════════════════════════════════════════════════════════════════════
+      // Clear bucket, maxInputWords, negativePhrases (Added V131)
+      const bucketElNew = document.getElementById('input-trigger-bucket');
+      if (bucketElNew) bucketElNew.value = '';
+      const maxWordsElNew = document.getElementById('input-trigger-max-words');
+      if (maxWordsElNew) maxWordsElNew.value = '';
+      const negPhrasesElNew = document.getElementById('input-trigger-negative-phrases');
+      if (negPhrasesElNew) negPhrasesElNew.value = '';
+      const followupActionElNew = document.getElementById('input-trigger-followup-action');
+      if (followupActionElNew) followupActionElNew.value = 'CONTINUE';
       
       // Default to standard mode for new triggers
       setResponseMode('standard');
@@ -2561,16 +2688,27 @@
       return;
     }
     
-    // Map triggers to export format (same as import format)
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - ISOMORPHIC EXPORT
+    // All fields that exist in schema MUST be exported. No silent data loss.
+    // ═══════════════════════════════════════════════════════════════════════
     const exportData = state.triggers.map(t => ({
       ruleId: t.ruleId,
       label: t.label,
       priority: t.priority || 50,
+      // ISOMORPHIC: bucket + maxInputWords (Added V131)
+      bucket: t.bucket || null,
+      maxInputWords: typeof t.maxInputWords === 'number' ? t.maxInputWords : null,
       keywords: t.match?.keywords || [],
       phrases: t.match?.phrases || [],
       negativeKeywords: t.match?.negativeKeywords || [],
+      negativePhrases: t.match?.negativePhrases || [],  // ISOMORPHIC: Added V131
+      responseMode: t.responseMode || 'standard',
       answerText: t.answer?.answerText || '',
-      followUpQuestion: t.followUp?.question || ''
+      followUpQuestion: t.followUp?.question || '',
+      followUpNextAction: t.followUp?.nextAction || '',
+      // Include LLM fact pack if present
+      ...(t.llmFactPack ? { llmFactPack: t.llmFactPack } : {})
     }));
     
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -2615,8 +2753,14 @@
 
     const errors = [];
     const valid = [];
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - ISOMORPHIC IMPORT
+    // All fields that exist in schema MUST be imported. No silent data loss.
+    // ═══════════════════════════════════════════════════════════════════════
     triggers.forEach((t, i) => {
-      if (!t.ruleId || !t.label || !t.answerText) {
+      // LLM mode doesn't require answerText
+      const isLlmMode = t.responseMode === 'llm';
+      if (!t.ruleId || !t.label || (!isLlmMode && !t.answerText)) {
         errors.push(`[${i}] Missing ruleId, label, or answerText`);
         return;
       }
@@ -2624,17 +2768,30 @@
         errors.push(`[${i}] Invalid ruleId "${t.ruleId}" — use lowercase, dots, underscores`);
         return;
       }
+      // Validate bucket enum if provided
+      const validBuckets = ['booking_service', 'billing_payment', 'membership_plan', 'existing_appointment', 'other_operator', null];
+      if (t.bucket && !validBuckets.includes(t.bucket)) {
+        errors.push(`[${i}] Invalid bucket "${t.bucket}"`);
+        return;
+      }
       valid.push({
         ruleId: t.ruleId,
         label: t.label,
         priority: t.priority || 50,
+        // ISOMORPHIC: bucket + maxInputWords (Added V131)
+        bucket: t.bucket || null,
+        maxInputWords: typeof t.maxInputWords === 'number' ? t.maxInputWords : null,
         keywords: Array.isArray(t.keywords) ? t.keywords : [],
         phrases: Array.isArray(t.phrases) ? t.phrases : [],
         negativeKeywords: Array.isArray(t.negativeKeywords) ? t.negativeKeywords : [],
-        responseMode: 'standard',
-        answerText: t.answerText,
+        negativePhrases: Array.isArray(t.negativePhrases) ? t.negativePhrases : [],  // ISOMORPHIC: Added V131
+        responseMode: t.responseMode || 'standard',
+        answerText: t.answerText || '',
         audioUrl: '',
-        followUpQuestion: t.followUpQuestion || ''
+        followUpQuestion: t.followUpQuestion || '',
+        followUpNextAction: t.followUpNextAction || '',
+        // Include LLM fact pack if present
+        ...(t.llmFactPack ? { llmFactPack: t.llmFactPack } : {})
       });
     });
 
@@ -2735,9 +2892,16 @@
     pushText(trigger.overrideOfRuleId);
     pushText(trigger.overrideOfTriggerId);
     pushText(trigger.overrideOfGroupId);
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - ISOMORPHIC SEARCH INDEX (Added V132)
+    // All fields must be searchable. Missing = users can't find triggers.
+    // ═══════════════════════════════════════════════════════════════════════
+    pushText(trigger.bucket);
+    pushText(trigger.maxInputWords);
     pushText(trigger.match?.keywords);
     pushText(trigger.match?.phrases);
     pushText(trigger.match?.negativeKeywords);
+    pushText(trigger.match?.negativePhrases);
     pushText(trigger.answer?.answerText || trigger.answerText);
     pushText(trigger.answer?.audioUrl);
     pushText(trigger.answer?.quickReplies);

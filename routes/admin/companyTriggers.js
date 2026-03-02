@@ -184,6 +184,10 @@ async function buildMergedTriggerList(companyId) {
     const effectiveAudioUrl = resolveAudioUrl(companyAudio, effectiveAnswerText);
     const hasValidAudio = Boolean(effectiveAudioUrl);
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - ISOMORPHIC OUTPUT FOR GLOBAL TRIGGERS
+    // All fields must be sent to UI. Missing fields = broken editor.
+    // ═══════════════════════════════════════════════════════════════════════
     const triggerData = {
       triggerId: gt.triggerId,
       ruleId: gt.ruleId,
@@ -195,11 +199,15 @@ async function buildMergedTriggerList(companyId) {
       isOverridden: Boolean(partialOverride),
       overrideType: partialOverride ? 'PARTIAL' : null,
       priority: gt.priority,
+      // ISOMORPHIC: bucket + maxInputWords at top level
+      bucket: gt.bucket || null,
+      maxInputWords: typeof gt.maxInputWords === 'number' ? gt.maxInputWords : null,
       responseMode: gt.responseMode || 'standard',
       match: {
         keywords: gt.keywords || [],
         phrases: gt.phrases || [],
-        negativeKeywords: gt.negativeKeywords || []
+        negativeKeywords: gt.negativeKeywords || [],
+        negativePhrases: gt.negativePhrases || []  // ISOMORPHIC: Added V131
       },
       answer: {
         answerText: effectiveAnswerText,
@@ -237,6 +245,10 @@ async function buildMergedTriggerList(companyId) {
     const effectiveAudioUrl = resolveAudioUrl(companyAudio, lt.answerText);
     const hasValidAudio = Boolean(effectiveAudioUrl);
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - ISOMORPHIC OUTPUT FOR LOCAL TRIGGERS
+    // All fields must be sent to UI. Missing fields = broken editor.
+    // ═══════════════════════════════════════════════════════════════════════
     const localTriggerData = {
       triggerId: lt.triggerId,
       ruleId: lt.ruleId,
@@ -251,11 +263,15 @@ async function buildMergedTriggerList(companyId) {
       overrideOfGroupId: lt.overrideOfGroupId || null,
       overrideOfRuleId: lt.overrideOfRuleId || null,
       priority: lt.priority,
+      // ISOMORPHIC: bucket + maxInputWords at top level
+      bucket: lt.bucket || null,
+      maxInputWords: typeof lt.maxInputWords === 'number' ? lt.maxInputWords : null,
       responseMode: lt.responseMode || 'standard',
       match: {
         keywords: lt.keywords || [],
         phrases: lt.phrases || [],
-        negativeKeywords: lt.negativeKeywords || []
+        negativeKeywords: lt.negativeKeywords || [],
+        negativePhrases: lt.negativePhrases || []  // ISOMORPHIC: Added V131
       },
       answer: {
         answerText: lt.answerText,
@@ -365,6 +381,37 @@ router.get('/:companyId/triggers',
         }
       }
 
+      // ═══════════════════════════════════════════════════════════════════════
+      // STRICT TRIGGER SYSTEM - Include health info in response (V131)
+      // ═══════════════════════════════════════════════════════════════════════
+      const isStrictMode = settings?.strictMode !== false;  // Default to strict
+      const hasLegacyFallbackHistory = (settings?.legacyFallbackCount || 0) > 0;
+      
+      // Quick health check (not full report, just critical indicators)
+      const healthIndicators = {
+        strictMode: isStrictMode,
+        hasActiveGroup: Boolean(settings?.activeGroupId),
+        localTriggerCount: result.stats?.localCount || 0,
+        totalTriggerCount: result.triggers?.length || 0,
+        legacyFallbackCount: settings?.legacyFallbackCount || 0,
+        lastLegacyFallbackAt: settings?.lastLegacyFallbackAt || null
+      };
+      
+      // Determine if there are critical issues to show in banner
+      const criticalIssues = [];
+      if (healthIndicators.totalTriggerCount === 0) {
+        criticalIssues.push({
+          code: 'TRIGGER_POOL_EMPTY',
+          message: 'No triggers configured — all calls will fall through to LLM fallback'
+        });
+      }
+      if (!isStrictMode && hasLegacyFallbackHistory) {
+        criticalIssues.push({
+          code: 'LEGACY_MODE_ACTIVE',
+          message: `Legacy mode active — playbook.rules may override modern triggers (used ${settings.legacyFallbackCount} times)`
+        });
+      }
+
       return res.json({
         success: true,
         data: {
@@ -372,6 +419,14 @@ router.get('/:companyId/triggers',
           companyName: company.companyName,
           availableGroups: groups,
           companyVariables,
+          // V131: Strict Trigger System health info
+          strictTriggerSystem: {
+            strictMode: isStrictMode,
+            strictModeSetAt: settings?.strictModeSetAt || null,
+            healthIndicators,
+            criticalIssues,
+            showHealthBanner: criticalIssues.length > 0 || !isStrictMode
+          },
           permissions: {
             canEditGlobalTriggers: isPlatformAdmin(req.user),
             canEditLocalTriggers: true,
@@ -569,6 +624,10 @@ router.post('/:companyId/local-triggers',
     try {
       const { companyId } = req.params;
       const userId = req.user.id || req.user._id?.toString() || 'unknown';
+      // ═══════════════════════════════════════════════════════════════════════
+      // STRICT TRIGGER SYSTEM - ISOMORPHIC FIELD EXTRACTION
+      // All fields that exist in schema MUST be extracted here. No silent drops.
+      // ═══════════════════════════════════════════════════════════════════════
       const {
         ruleId: rawRuleId,
         label,
@@ -578,6 +637,9 @@ router.post('/:companyId/local-triggers',
         keywords,
         phrases,
         negativeKeywords,
+        negativePhrases,    // ISOMORPHIC: Added V131
+        bucket,             // ISOMORPHIC: Added V131
+        maxInputWords,      // ISOMORPHIC: Added V131
         responseMode,
         answerText,
         audioUrl,
@@ -721,6 +783,10 @@ router.post('/:companyId/local-triggers',
         deletedTrigger.keywords = keywords || [];
         deletedTrigger.phrases = phrases || [];
         deletedTrigger.negativeKeywords = negativeKeywords || [];
+        // ISOMORPHIC: Added V131 - ensure these fields survive revival
+        deletedTrigger.negativePhrases = negativePhrases || [];
+        deletedTrigger.bucket = bucket || null;
+        deletedTrigger.maxInputWords = typeof maxInputWords === 'number' ? maxInputWords : null;
         deletedTrigger.answerText = answerText;
         deletedTrigger.audioUrl = audioUrl || '';
         deletedTrigger.followUpQuestion = followUpQuestion || '';
@@ -757,6 +823,10 @@ router.post('/:companyId/local-triggers',
         overrideOfTriggerId
       );
 
+      // ═══════════════════════════════════════════════════════════════════════
+      // STRICT TRIGGER SYSTEM - ISOMORPHIC CREATE
+      // All schema fields MUST be explicitly set. No implicit defaults that hide bugs.
+      // ═══════════════════════════════════════════════════════════════════════
       const trigger = await CompanyLocalTrigger.create({
         companyId,
         ruleId,
@@ -768,6 +838,10 @@ router.post('/:companyId/local-triggers',
         keywords: keywords || [],
         phrases: phrases || [],
         negativeKeywords: negativeKeywords || [],
+        // ISOMORPHIC: Added V131 - these fields MUST be persisted
+        negativePhrases: negativePhrases || [],
+        bucket: bucket || null,
+        maxInputWords: typeof maxInputWords === 'number' ? maxInputWords : null,
         responseMode: responseMode || 'standard',
         answerText: answerText || (isLlmMode ? '[LLM-generated response]' : ''),
         audioUrl: '',  // Audio is always stored separately in TriggerAudio
@@ -903,9 +977,17 @@ router.patch('/:companyId/local-triggers/:ruleId',
         });
       }
 
+      // ═══════════════════════════════════════════════════════════════════════
+      // STRICT TRIGGER SYSTEM - ISOMORPHIC ALLOWED FIELDS
+      // Any field that can be set on create MUST be updatable here.
+      // Missing fields = silent data freeze (can set but never change).
+      // ═══════════════════════════════════════════════════════════════════════
       const allowedFields = [
         'label', 'description', 'enabled', 'priority',
         'keywords', 'phrases', 'negativeKeywords',
+        'negativePhrases',  // ISOMORPHIC: Added V131
+        'bucket',           // ISOMORPHIC: Added V131
+        'maxInputWords',    // ISOMORPHIC: Added V131
         'responseMode', 'answerText', 'llmFactPack',
         'followUpQuestion', 'followUpNextAction',
         'tags'
@@ -1858,6 +1940,93 @@ router.get('/:companyId/duplicates',
       });
     } catch (error) {
       logger.error('[CompanyTriggers] Integrity check error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// STRICT TRIGGER SYSTEM - HEALTH CHECK ENDPOINT (V131)
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/system-health
+ * Comprehensive health check for the trigger system.
+ * Returns issues, warnings, and info about the company's trigger configuration.
+ */
+router.get('/:companyId/system-health',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      
+      const company = await v2Company.findById(companyId)
+        .select('aiAgentSettings.agent2')
+        .lean();
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+      
+      const legacyConfig = company.aiAgentSettings?.agent2 || null;
+      const TriggerService = require('../../services/engine/agent2/TriggerService');
+      
+      const healthReport = await TriggerService.checkTriggerSystemHealth(companyId, legacyConfig);
+      
+      return res.json({
+        success: true,
+        ...healthReport
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] System health check error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/strict-mode
+ * Toggle strict mode for the trigger system.
+ */
+router.post('/:companyId/strict-mode',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+      const { enabled } = req.body;
+      
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          error: 'enabled must be a boolean'
+        });
+      }
+      
+      const settings = await CompanyTriggerSettings.setStrictMode(companyId, enabled, userId);
+      
+      // Invalidate trigger cache so next call picks up the mode change
+      const TriggerService = require('../../services/engine/agent2/TriggerService');
+      TriggerService.invalidateCacheForCompany(companyId);
+      
+      logger.info('[CompanyTriggers] Strict mode toggled', {
+        companyId,
+        strictMode: enabled,
+        setBy: userId
+      });
+      
+      return res.json({
+        success: true,
+        strictMode: settings.strictMode,
+        setAt: settings.strictModeSetAt,
+        setBy: settings.strictModeSetBy,
+        message: enabled 
+          ? 'Strict mode ENABLED — legacy playbook.rules will not be loaded'
+          : 'Strict mode DISABLED — legacy playbook.rules may be used as fallback'
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Strict mode toggle error', { error: error.message });
       return res.status(500).json({ success: false, error: error.message });
     }
   }

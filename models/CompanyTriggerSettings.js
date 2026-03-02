@@ -67,6 +67,42 @@ const companyTriggerSettingsSchema = new mongoose.Schema({
     index: true
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STRICT TRIGGER SYSTEM - MODE CONTROL (Added V131)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DEFAULT: STRICT (true)
+  // - Legacy playbook.rules is DISABLED
+  // - Triggers load ONLY from GlobalTrigger + CompanyLocalTrigger
+  // - Zero-trigger pool emits loud warning + remediation hint
+  //
+  // LEGACY MODE: strictMode = false (explicit opt-in)
+  // - Legacy playbook.rules is allowed as fallback
+  // - Runtime emits LEGACY_FALLBACK_USED event on every use
+  // - Admin console shows warning banner
+  // - Intended ONLY for migration, not permanent state
+  // ═══════════════════════════════════════════════════════════════════════════
+  strictMode: {
+    type: Boolean,
+    default: true  // STRICT by default — legacy is opt-in, not opt-out
+  },
+  strictModeSetAt: {
+    type: Date,
+    default: null
+  },
+  strictModeSetBy: {
+    type: String,
+    default: null
+  },
+  // Track when legacy was last used (for auditing)
+  lastLegacyFallbackAt: {
+    type: Date,
+    default: null
+  },
+  legacyFallbackCount: {
+    type: Number,
+    default: 0
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // GROUP SELECTION
   // ─────────────────────────────────────────────────────────────────────────
@@ -291,6 +327,51 @@ companyTriggerSettingsSchema.statics.getCompaniesUsingGroup = function(groupId) 
   return this.find({ activeGroupId: groupId.toLowerCase() })
     .select('companyId groupSelectedAt')
     .lean();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STRICT TRIGGER SYSTEM - MODE CONTROL STATICS (Added V131)
+// ═══════════════════════════════════════════════════════════════════════════
+
+companyTriggerSettingsSchema.statics.setStrictMode = function(companyId, enabled, userId) {
+  const now = new Date();
+  return this.findOneAndUpdate(
+    { companyId },
+    { 
+      $set: { 
+        strictMode: enabled,
+        strictModeSetAt: now,
+        strictModeSetBy: userId,
+        updatedAt: now 
+      }
+    },
+    { upsert: true, new: true }
+  );
+};
+
+companyTriggerSettingsSchema.statics.isStrictMode = async function(companyId) {
+  const settings = await this.findOne({ companyId }).select('strictMode').lean();
+  // Default to strict mode if no settings exist
+  return settings?.strictMode !== false;
+};
+
+companyTriggerSettingsSchema.statics.recordLegacyFallback = function(companyId) {
+  return this.findOneAndUpdate(
+    { companyId },
+    { 
+      $set: { lastLegacyFallbackAt: new Date() },
+      $inc: { legacyFallbackCount: 1 }
+    },
+    { upsert: true, new: true }
+  );
+};
+
+companyTriggerSettingsSchema.statics.getStrictModeStats = async function() {
+  const [strictCount, legacyCount] = await Promise.all([
+    this.countDocuments({ strictMode: true }),
+    this.countDocuments({ strictMode: false })
+  ]);
+  return { strictCount, legacyCount, total: strictCount + legacyCount };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

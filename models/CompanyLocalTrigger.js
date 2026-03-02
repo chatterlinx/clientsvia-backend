@@ -117,6 +117,32 @@ const companyLocalTriggerSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  // ─────────────────────────────────────────────────────────────────────────
+  // STRICT TRIGGER SYSTEM - ISOMORPHIC FIELDS (must exist in schema/API/UI/export)
+  // These fields were missing pre-V131. Their absence caused silent data loss.
+  // ─────────────────────────────────────────────────────────────────────────
+  negativePhrases: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: function(v) {
+        return v.every(phrase => typeof phrase === 'string' && phrase.length <= 200);
+      },
+      message: 'Each negative phrase must be a string under 200 characters'
+    }
+  },
+  bucket: {
+    type: String,
+    enum: ['booking_service', 'billing_payment', 'membership_plan', 
+           'existing_appointment', 'other_operator', null],
+    default: null
+  },
+  maxInputWords: {
+    type: Number,
+    default: null,
+    min: 1,
+    max: 100
+  },
   scenarioTypeAllowlist: {
     type: [String],
     default: []
@@ -402,6 +428,10 @@ companyLocalTriggerSchema.pre('save', function(next) {
   if (this.negativeKeywords && this.negativeKeywords.length > 0) {
     this.negativeKeywords = this.negativeKeywords.map(n => n.toLowerCase().trim()).filter(Boolean);
   }
+  // ISOMORPHIC: negativePhrases normalization (added V131)
+  if (this.negativePhrases && this.negativePhrases.length > 0) {
+    this.negativePhrases = this.negativePhrases.map(p => p.toLowerCase().trim()).filter(Boolean);
+  }
 
   next();
 });
@@ -411,6 +441,11 @@ companyLocalTriggerSchema.pre('save', function(next) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 companyLocalTriggerSchema.methods.toMatcherFormat = function() {
+  // ─────────────────────────────────────────────────────────────────────────
+  // STRICT TRIGGER SYSTEM - ISOMORPHIC OUTPUT
+  // This method MUST output every field that TriggerCardMatcher consumes.
+  // Missing fields = silent matching failures at runtime.
+  // ─────────────────────────────────────────────────────────────────────────
   const base = {
     id: this.triggerId,  // TriggerCardMatcher expects card.id
     ruleId: this.ruleId,  // CANONICAL KEY - always use this for Map operations
@@ -418,10 +453,14 @@ companyLocalTriggerSchema.methods.toMatcherFormat = function() {
     enabled: this.enabled,
     priority: this.priority ?? 50,  // Default priority if missing
     label: this.label,
+    // ISOMORPHIC: bucket + maxInputWords at top level (CallRouter + greeting protection)
+    bucket: this.bucket || null,
+    maxInputWords: typeof this.maxInputWords === 'number' ? this.maxInputWords : null,
     match: {
       keywords: this.keywords || [],
       phrases: this.phrases || [],
       negativeKeywords: this.negativeKeywords || [],
+      negativePhrases: this.negativePhrases || [],  // ISOMORPHIC: was missing pre-V131
       scenarioTypeAllowlist: this.scenarioTypeAllowlist || []
     },
     responseMode: this.responseMode || 'standard',

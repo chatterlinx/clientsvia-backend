@@ -1732,6 +1732,34 @@ class Agent2DiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────────
     let triggerCards = await TriggerCardMatcher.getCompiledTriggers(companyId, agent2);
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - VISIBILITY EVENTS (V131)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Extract load metadata from trigger array (attached by TriggerService)
+    const loadMetadata = triggerCards._loadMetadata || { strictMode: true, legacyUsed: false };
+    
+    // ── CRITICAL: Emit LEGACY_FALLBACK_USED if legacy was loaded ──
+    if (loadMetadata.legacyUsed) {
+      emit('LEGACY_FALLBACK_USED', {
+        companyId,
+        callSid,
+        turn,
+        legacyCardCount: loadMetadata.legacyCardCount,
+        source: loadMetadata.source,
+        strictMode: false,
+        severity: 'WARNING',
+        message: 'Legacy playbook.rules loaded — modern trigger system bypassed',
+        remediation: 'Admin → Triggers → Enable Strict Mode to disable legacy fallback'
+      });
+      logger.warn('[Agent2] ⚠️ LEGACY_FALLBACK_USED — playbook.rules active', {
+        companyId,
+        callSid,
+        turn,
+        legacyCardCount: loadMetadata.legacyCardCount
+      });
+    }
+    
     // ── VISIBILITY: TRIGGER_POOL_SOURCE — show exactly where triggers came from ──
     if (triggerCards.length > 0) {
       const scopes = {};
@@ -1741,6 +1769,8 @@ class Agent2DiscoveryRunner {
         total: triggerCards.length,
         scopes,
         hasLegacyCards: hasLegacy,
+        strictMode: loadMetadata.strictMode,
+        source: loadMetadata.source,
         warning: hasLegacy ? 'Legacy playbook.rules cards in pool. Click "Clear Legacy" in Triggers admin.' : null,
         turn
       });
@@ -1794,18 +1824,26 @@ class Agent2DiscoveryRunner {
       }
     }
 
-    // ── VISIBILITY: Emit TRIGGER_POOL_EMPTY when no cards loaded ──────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STRICT TRIGGER SYSTEM - EMPTY POOL WARNING (V131)
     // This event surfaces in Call Console transcript so admins can see EXACTLY
     // why every turn falls through to LLM. Previously this failed silently.
-    // Cause is almost always: no group assigned, group not published, or all
-    // triggers disabled. Use the Triggers admin page → Refresh Cache to debug.
+    // ═══════════════════════════════════════════════════════════════════════════
     if (triggerCards.length === 0) {
+      const isStrictEmpty = loadMetadata.source === 'EMPTY_STRICT';
       emit('TRIGGER_POOL_EMPTY', {
         companyId,
         callSid,
         turn,
-        message: 'No trigger cards loaded — all turns will fall through to LLM fallback',
-        action: 'Go to Admin → Triggers → Verify group is assigned and published, then click Refresh Cache'
+        strictMode: loadMetadata.strictMode,
+        source: loadMetadata.source,
+        severity: 'CRITICAL',
+        message: isStrictEmpty 
+          ? 'STRICT MODE: No triggers loaded — legacy fallback blocked' 
+          : 'No trigger cards loaded — all turns will fall through to LLM fallback',
+        action: isStrictEmpty
+          ? 'Create local triggers OR assign a global trigger group. Legacy is disabled in strict mode.'
+          : 'Go to Admin → Triggers → Verify group is assigned and published, then click Refresh Cache'
       });
       logger.warn('[Agent2] ⚠️ TRIGGER_POOL_EMPTY — no cards to evaluate', {
         companyId, callSid, turn
