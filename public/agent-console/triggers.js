@@ -2657,6 +2657,12 @@
     // ═══════════════════════════════════════════════════════════════════════
     // STRICT TRIGGER SYSTEM - ISOMORPHIC IMPORT
     // All fields that exist in schema MUST be imported. No silent data loss.
+    // 
+    // CRITICAL: This import creates LOCAL triggers ONLY.
+    // - The filename is NEVER read or used
+    // - No groups are created or referenced
+    // - All triggers are scoped to the current company only
+    // - Groups can ONLY be created via Admin UI or seed scripts
     // ═══════════════════════════════════════════════════════════════════════
     triggers.forEach((t, i) => {
       // LLM mode doesn't require answerText

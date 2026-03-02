@@ -179,10 +179,21 @@ async function loadTriggersForCompany(companyId, options = {}) {
   if (useCache) {
     const cached = getCachedTriggers(cacheKey);
     if (cached) {
-      logger.debug('[TriggerService] Cache hit', { companyId, cacheKey });
+      logger.info('[TriggerService] 🔍 CACHE_HIT', { 
+        companyId, 
+        cacheKey,
+        cachedTriggerCount: cached.length,
+        cachedFirstRuleId: cached[0]?.ruleId || null
+      });
       return includeMeta ? { triggers: cached, meta: { fromCache: true, groupInfo } } : cached;
     }
   }
+  
+  logger.info('[TriggerService] 🔍 CACHE_MISS', { 
+    companyId, 
+    cacheKey,
+    willQueryDatabase: true
+  });
 
   // VISIBILITY: Warn when a group is assigned but not published — triggers will be empty.
   // This surfaces the silent blackout that previously made the system fall to LLM
@@ -198,7 +209,7 @@ async function loadTriggersForCompany(companyId, options = {}) {
   }
 
   // Pass isGroupPublished to merge - if not published, global triggers are not loaded
-  const triggers = await mergeTriggers(companyId, settings, groupInfo, isGroupPublished);
+  const triggers = await mergeTriggers(companyId, settings, groupInfo, isGroupPublished, options);
 
   setCachedTriggers(cacheKey, triggers);
 
@@ -286,6 +297,41 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
 
   // Load ONLY active local triggers (enabled=true, isDeleted!=true)
   const rawLocalTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
+  
+  // 🔍 DIAGNOSTIC: Log what we actually loaded
+  logger.info('[TriggerService] 🔍 LOCAL_LOADED', {
+    callSid,
+    companyId,
+    toPhone,
+    localCount: rawLocalTriggers.length,
+    globalCount: globalTriggers.length,
+    firstLocalRuleId: rawLocalTriggers[0]?.ruleId || null,
+    firstLocalLabel: rawLocalTriggers[0]?.label || null,
+    queryMethod: 'CompanyLocalTrigger.findActiveByCompanyId',
+    queryFilters: { companyId, enabled: true, isDeleted: { $ne: true } },
+    collectionQueried: 'companyLocalTriggers'
+  });
+  
+  // 🚨 CRITICAL ASSERTION: If this is Penguin and we get 0, something is WRONG
+  if (companyId === '68e3f77a9d623b8058c700c4' && rawLocalTriggers.length === 0) {
+    logger.error('[TriggerService] 🚨 ASSERTION_FAILED', {
+      callSid,
+      companyId,
+      toPhone,
+      expected: 42,
+      actual: 0,
+      message: 'Penguin Air should have 42 local triggers but query returned 0',
+      mongoHost: mongoose.connection.host,
+      mongoDbName: mongoose.connection.name,
+      possibleCauses: [
+        '1. Wrong companyId passed to this function',
+        '2. Wrong MongoDB connection (different DB than UI)',
+        '3. Field name mismatch (enabled vs isEnabled)',
+        '4. Collection name mismatch'
+      ]
+    });
+  }
+  
   // CRITICAL FIX: .lean() returns raw docs without methods, so we must manually transform
   // to the TriggerCardMatcher format which expects card.match.keywords (not card.keywords)
   const localTriggers = rawLocalTriggers.map(lt => {

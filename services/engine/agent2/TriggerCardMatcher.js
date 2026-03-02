@@ -727,9 +727,32 @@ class TriggerCardMatcher {
    */
   static async matchForCompany(companyId, inputText, legacyConfig = null, options = {}) {
     try {
+      // Extract correlation ID from options or context
+      const callSid = options.callSid || legacyConfig?.callSid || 'NO_CALL_SID';
+      const toPhone = options.toPhone || legacyConfig?.toPhone || 'unknown';
+      
+      // 🔍 DIAGNOSTIC: Log the companyId at match entry point
+      logger.info('[TriggerCardMatcher] 🔍 MATCH_ENTRY', {
+        callSid,
+        companyId,
+        toPhone,
+        inputText: inputText?.substring(0, 50),
+        hasLegacyConfig: Boolean(legacyConfig)
+      });
+      
       const TriggerService = require('./TriggerService');
       
-      const triggers = await TriggerService.loadTriggersWithLegacyFallback(companyId, legacyConfig);
+      const triggers = await TriggerService.loadTriggersWithLegacyFallback(companyId, legacyConfig, { callSid, toPhone });
+      
+      // 🔍 DIAGNOSTIC: Log what we got back
+      logger.info('[TriggerCardMatcher] 🔍 TRIGGERS_RECEIVED', {
+        callSid,
+        companyId,
+        toPhone,
+        triggerCount: triggers.length,
+        firstTriggerRuleId: triggers[0]?.ruleId || null,
+        loadMetadata: triggers._loadMetadata || null
+      });
       
       return this.match(inputText, triggers, options);
     } catch (error) {
