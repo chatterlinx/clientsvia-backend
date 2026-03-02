@@ -199,7 +199,7 @@ async function createDefaultHVACGroup() {
   // ORIGINAL CONTENT preserved in git history (commit before Mar 1, 2026).
   const defaultTriggers = [];
   // NOTE: If this function is called, it will now create an empty group.
-  // Assign the 'hvac-master-v1' group from seedTriggerGroupV1.js instead.
+  // Assign the correct active group to the company via Admin → Triggers.
   
   for (const t of defaultTriggers) {
     await GlobalTrigger.create({

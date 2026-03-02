@@ -241,9 +241,8 @@ function defaultAgent2Config() {
         //   - Created "ghost" triggers that competed with the real GlobalTrigger system
         //
         // REPLACEMENT: All trigger cards must live in the GlobalTrigger system.
-        // Import the validated 42-trigger library:
-        //   node scripts/seedTriggerGroupV1.js
-        // Then assign the 'hvac-master-v1' group to companies via Admin → Triggers.
+        // Create triggers via Admin → Trigger Cards. Assign the active global
+        // group to each company via Admin → Triggers.
         //
         // DO NOT ADD HARDCODED TRIGGER CARDS BACK HERE. EVER.
         rules: []

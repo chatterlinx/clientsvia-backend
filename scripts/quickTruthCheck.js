@@ -145,23 +145,21 @@ async function quickCheck() {
   // ──────────────────────────────────────────────────────────────────────────
   // CHECK 4: GlobalTriggerGroup
   // ──────────────────────────────────────────────────────────────────────────
-  console.log('CHECK 4: GlobalTriggerGroup (hvac-master-v1)');
+  console.log('CHECK 4: All GlobalTriggerGroups');
   console.log('─'.repeat(80));
-  
-  const group = await db.collection('globalTriggerGroups')
-    .findOne({ groupId: 'hvac-master-v1' });
-  
-  if (!group) {
-    console.log('❌ Global group NOT FOUND');
-    console.log('   Official library has never been seeded!');
+
+  const allGroups = await db.collection('globalTriggerGroups')
+    .find({}, { projection: { groupId:1, name:1, publishedVersion:1, triggerCount:1 } })
+    .toArray();
+
+  if (allGroups.length === 0) {
+    console.log('ℹ️  No global trigger groups exist (normal if no triggers have been promoted yet)');
   } else {
-    console.log('✅ Global group exists');
-    console.log(`   publishedVersion: ${group.publishedVersion}`);
-    console.log(`   triggerCount: ${group.triggerCount}`);
-    
-    const publishedCount = await db.collection('globalTriggers')
-      .countDocuments({ groupId: 'hvac-master-v1', state: 'published' });
-    console.log(`   Triggers in DB: ${publishedCount}`);
+    for (const group of allGroups) {
+      const publishedCount = await db.collection('globalTriggers')
+        .countDocuments({ groupId: group.groupId, state: 'published', isDeleted: { $ne: true } });
+      console.log(`  groupId: "${group.groupId}"  name: "${group.name}"  publishedVersion: ${group.publishedVersion}  published triggers: ${publishedCount}`);
+    }
   }
   console.log();
 
