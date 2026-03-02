@@ -3,23 +3,36 @@
  * TRIGGER SERVICE - Runtime trigger loading and merging
  * ============================================================================
  *
- * This service handles loading and merging triggers for runtime use.
- * It combines global triggers (from the company's selected group) with
- * local triggers, applying visibility and override rules.
+ * MULTI-TENANT ARCHITECTURE:
+ * 
+ * Each company has their OWN trigger collection (CompanyLocalTrigger).
+ * Triggers can be:
+ *   - LOCAL: Private to that company only (default)
+ *   - GLOBAL: Published to a shared group template (e.g., "HVAC")
+ * 
+ * HOW LOCAL/GLOBAL WORKS:
+ * 1. Company creates a trigger → stored in CompanyLocalTrigger with their companyId
+ * 2. By default, trigger is LOCAL (only that company sees it at runtime)
+ * 3. Admin toggles trigger to GLOBAL → it becomes part of the group template
+ * 4. Other companies using the same group (e.g., "HVAC") will see GLOBAL triggers
+ * 
+ * EXAMPLE:
+ *   - Penguin Air (HVAC company) creates "gas leak emergency" trigger
+ *   - Toggles it to GLOBAL
+ *   - Now ALL companies in the HVAC group see that trigger
+ *   - Each company can still override the answer text for their business
+ * 
+ * RUNTIME MERGE:
+ * 1. Load CompanyLocalTrigger (company's own triggers - both local and global-toggled)
+ * 2. Load GlobalTrigger (triggers other companies published to this group)
+ * 3. Merge both pools
+ * 4. Dedupe by ruleId
+ * 5. Sort by priority
  *
  * CACHE STRATEGY:
  * - Cache key includes: companyId, activeGroupId, groupVersion
  * - Automatic invalidation when data changes
  * - Safe multi-tenant isolation via key structure
- *
- * MERGE RULES:
- * 1. Load global triggers from active group
- * 2. Remove hidden global triggers
- * 3. Apply partial overrides to global triggers
- * 4. Replace global triggers with full local overrides
- * 5. Add pure local triggers
- * 6. Dedupe by ruleId (Map-based, guaranteed no duplicates)
- * 7. Sort by priority
  *
  * ============================================================================
  */
