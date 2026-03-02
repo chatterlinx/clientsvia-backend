@@ -20,7 +20,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const fs = require('fs');
 
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const CompanyLocalTrigger = require('../models/CompanyLocalTrigger');
 const GlobalTrigger = require('../models/GlobalTrigger');
 const CompanyTriggerSettings = require('../models/CompanyTriggerSettings');

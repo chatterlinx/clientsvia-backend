@@ -27,7 +27,7 @@ const mongoose = require('mongoose');
 const GlobalTriggerGroup = require('../models/GlobalTriggerGroup');
 const GlobalTrigger = require('../models/GlobalTrigger');
 const CompanyTriggerSettings = require('../models/CompanyTriggerSettings');
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 
 const GROUP_ID = 'hvac-master-v1';
 const PENGUIN_AIR_ID = '68e3f77a9d623b8058c700c4';
