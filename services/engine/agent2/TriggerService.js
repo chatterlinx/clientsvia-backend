@@ -550,78 +550,97 @@ function transformLegacyCard(card) {
 async function loadTriggersWithLegacyFallback(companyId, legacyConfig, options = {}) {
   const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
   
+  const callSid = options.callSid || legacyConfig?.callSid || 'NO_CALL_SID';
+  const toPhone = options.toPhone || legacyConfig?.toPhone || 'unknown';
+  
   // Track metadata for caller
   const loadMetadata = {
-    strictMode: true,  // Always true, no legacy mode
+    strictMode: true,
     legacyUsed: false,
     legacyCardCount: 0,
     source: null,
     activeGroupId: settings?.activeGroupId || null,
-    isGroupPublished: false
+    isGroupPublished: false,
+    globalSkippedReason: null,
+    callSid,
+    toPhone,
+    companyId
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ONLY PATH: Load from official GlobalTrigger system
+  // CRITICAL CONTRACT (NON-NEGOTIABLE):
+  // 1. LOCAL triggers ALWAYS load by companyId (no dependency on groups)
+  // 2. GLOBAL triggers load ONLY if activeGroupId is valid + published
+  // 3. If activeGroupId missing → global = empty, local STILL LOADS
+  // 
+  // NO EARLY RETURNS. Local must always be queried.
   // ═══════════════════════════════════════════════════════════════════════════
-  // NEW PLATFORM: activeGroupId is REQUIRED. No fallback, no legacy mode.
   
   if (!settings || !settings.activeGroupId) {
-    // CRITICAL ERROR: Company has no trigger group assigned
-    logger.error('[TriggerService] 🚨 CRITICAL: Company has no activeGroupId assigned', {
+    // Log warning but DO NOT RETURN EARLY - local must still load!
+    logger.warn('[TriggerService] ⚠️ NO_ACTIVE_GROUP', {
+      callSid,
       companyId,
+      toPhone,
       hasSettings: Boolean(settings),
-      action: 'ASSIGN_TRIGGER_GROUP_IMMEDIATELY',
-      impact: 'All calls will fall to generic fallback',
-      remediation: 'Run: CompanyTriggerSettings.setActiveGroup(companyId, "hvac-master-v1", 1, "admin")'
+      globalSkippedReason: !settings ? 'NO_SETTINGS_DOC' : 'NO_ACTIVE_GROUP_ID',
+      localWillStillLoad: true,
+      impact: 'Global triggers skipped, local triggers will still load'
     });
     
-    loadMetadata.source = 'EMPTY_NO_GROUP';
-    const emptyResult = [];
-    emptyResult._loadMetadata = loadMetadata;
-    return emptyResult;
+    loadMetadata.globalSkippedReason = !settings ? 'NO_SETTINGS_DOC' : 'NO_ACTIVE_GROUP_ID';
+    loadMetadata.source = 'LOCAL_ONLY';
   }
   
-  // Load triggers from official GlobalTrigger + CompanyLocalTrigger system
-  const result = await loadTriggersForCompany(companyId, { includeMeta: true });
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ALWAYS load triggers - this calls mergeTriggers which loads BOTH local & global
+  // mergeTriggers handles the case where global is empty/skipped
+  // ═══════════════════════════════════════════════════════════════════════════
+  const result = await loadTriggersForCompany(companyId, { 
+    includeMeta: true,
+    callSid,
+    toPhone
+  });
   const triggers = result.triggers || result;
   const groupInfo = result.meta?.groupInfo;
   
-  loadMetadata.source = 'OFFICIAL_LIBRARY';
-  loadMetadata.activeGroupId = settings.activeGroupId;
+  // Update metadata with what we actually loaded
+  if (!loadMetadata.source) {
+    loadMetadata.source = 'OFFICIAL_LIBRARY';
+  }
+  if (settings?.activeGroupId) {
+    loadMetadata.activeGroupId = settings.activeGroupId;
+  }
   loadMetadata.isGroupPublished = groupInfo?.isPublished || false;
   
+  // Log final counts for visibility
+  logger.info('[TriggerService] 🔍 LOAD_COMPLETE', {
+    callSid,
+    companyId,
+    toPhone,
+    totalTriggerCount: triggers.length,
+    activeGroupId: settings?.activeGroupId || null,
+    isGroupPublished: groupInfo?.isPublished || false,
+    globalSkippedReason: loadMetadata.globalSkippedReason,
+    source: loadMetadata.source
+  });
+  
   if (triggers.length === 0) {
-    logger.error('[TriggerService] 🚨 CRITICAL: Trigger pool is EMPTY despite activeGroupId', {
+    logger.error('[TriggerService] 🚨 TRIGGER_POOL_EMPTY', {
+      callSid,
       companyId,
-      activeGroupId: settings.activeGroupId,
+      toPhone,
+      activeGroupId: settings?.activeGroupId || null,
       isGroupPublished: groupInfo?.isPublished,
-      action: 'VERIFY_GROUP_IS_PUBLISHED_AND_HAS_TRIGGERS'
+      globalSkippedReason: loadMetadata.globalSkippedReason,
+      action: 'CHECK_LOCAL_TRIGGERS_EXIST_FOR_COMPANY',
+      impact: 'All calls will fall through to LLM fallback'
     });
   }
   
   // Attach metadata
   triggers._loadMetadata = loadMetadata;
   return triggers;
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // NO TRIGGERS FOUND — CRITICAL ERROR
-  // ═══════════════════════════════════════════════════════════════════════════
-  // NEW PLATFORM: No legacy fallback, no migration mode.
-  // If triggers aren't found, it's a configuration error that must be fixed.
-  
-  logger.error('[TriggerService] 🚨 CRITICAL: No triggers found for company', {
-    companyId,
-    hasSettings: Boolean(settings),
-    hasActiveGroupId: Boolean(settings?.activeGroupId),
-    action: 'ASSIGN_TRIGGER_GROUP_IMMEDIATELY',
-    impact: 'All calls falling through to generic fallback',
-    remediation: 'Ensure company has activeGroupId set to a published trigger group'
-  });
-  
-  loadMetadata.source = 'EMPTY_NO_TRIGGERS';
-  const emptyResult = [];
-  emptyResult._loadMetadata = loadMetadata;
-  return emptyResult;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
