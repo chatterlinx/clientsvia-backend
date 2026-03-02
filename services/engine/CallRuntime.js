@@ -54,6 +54,60 @@ try {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ERROR FALLBACK RESOLVER (UI-CONFIGURED, NO HARDCODED STRINGS)
+// ═══════════════════════════════════════════════════════════════════════════
+// Resolves error/recovery messages from UI config instead of hardcoding.
+// Priority: recoveryMessages.{type} → emergencyFallbackLine → minimal safe
+// ═══════════════════════════════════════════════════════════════════════════
+
+function resolveErrorFallback(company, type, bufferEvent) {
+    const recoveryMessages = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+    const agent2Config = company?.aiAgentSettings?.agent2 || {};
+    
+    // Type-specific fallback mapping
+    const typeToRecoveryKey = {
+        generalError: 'generalError',
+        bookingError: 'generalError',
+        bookingRejected: 'generalError',
+        audioUnclear: 'audioUnclear',
+        noSpeech: 'noSpeech',
+        timeout: 'timeout',
+        technicalTransfer: 'technicalTransfer'
+    };
+    
+    const recoveryKey = typeToRecoveryKey[type] || 'generalError';
+    
+    // Try recovery message variants
+    let variants = recoveryMessages[recoveryKey];
+    if (Array.isArray(variants) && variants.length > 0) {
+        return variants[Math.floor(Math.random() * variants.length)];
+    }
+    if (typeof variants === 'string' && variants.trim()) {
+        return variants.trim();
+    }
+    
+    // Fallback to emergency line
+    const emergencyLine = agent2Config.emergencyFallbackLine?.text;
+    if (emergencyLine && typeof emergencyLine === 'string' && emergencyLine.trim()) {
+        return emergencyLine.trim();
+    }
+    
+    // Last resort: minimal safe acknowledgment (better than "repeat that")
+    bufferEvent?.('EMERGENCY_FALLBACK_NOT_CONFIGURED', {
+        severity: 'WARNING',
+        type,
+        recoveryKey,
+        message: `No UI-configured fallback for type="${type}". Using minimal safe.`,
+        attemptedPaths: [
+            `aiAgentSettings.llm0Controls.recoveryMessages.${recoveryKey}`,
+            'aiAgentSettings.agent2.emergencyFallbackLine.text'
+        ]
+    });
+    
+    return 'I can help you with that.';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // AGENT 2.0 PERMANENT DEFAULT ENFORCEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -130,7 +184,8 @@ const CRITICAL_EVENTS = new Set([
     'INPUT_TEXT_SELECTED',
     'CORE_RUNTIME_TURN_START',
     'CORE_RUNTIME_OWNER_RESULT',
-    'CORE_RUNTIME_ERROR'
+    'CORE_RUNTIME_ERROR',
+    'TURN_TRACE_SUMMARY'  // The single source of truth for debugging
 ]);
 
 function createEvent({ callSid, companyId, turn, type, data }) {
@@ -226,8 +281,11 @@ async function runBookingLogicLane({
             error: err.message,
             stack: err.stack?.substring(0, 300)
         });
+        
+        // Resolve booking error fallback from UI config
+        const bookingErrorResponse = resolveErrorFallback(company, 'bookingError', bufferEvent);
         return {
-            response: "One moment — I'm having trouble pulling up the system. Let me try again.",
+            response: bookingErrorResponse,
             matchSource: 'BOOKING_LOGIC_ERROR_FALLBACK',
             complete: false,
             state: { ...state, lane: 'BOOKING' }
@@ -242,8 +300,11 @@ async function runBookingLogicLane({
             trace: bookingResult.trace,
             latencyMs
         });
+        
+        // Resolve booking rejected fallback from UI config
+        const bookingRejectedResponse = resolveErrorFallback(company, 'bookingRejected', bufferEvent);
         return {
-            response: "One moment — there's an issue with the booking info. Let me start fresh.",
+            response: bookingRejectedResponse,
             matchSource: 'BOOKING_LOGIC_REJECTED',
             complete: false,
             state: { ...state, lane: 'BOOKING', bookingCtx: null }
@@ -448,8 +509,10 @@ class CallRuntime {
                         reason: 'BREAK_GLASS_ALLOWLIST_BUT_LEGACY_DELETED'
                     });
                     
+                    // Resolve break-glass fallback from UI config
+                    const breakGlassResponse = resolveErrorFallback(company, 'generalError', bufferEvent);
                     ownerResult = {
-                        response: "I'm sorry, I'm having trouble with the system. How can I help you today?",
+                        response: breakGlassResponse,
                         matchSource: 'BREAK_GLASS_NO_FALLBACK',
                         state
                     };
@@ -491,11 +554,18 @@ class CallRuntime {
                 if (hasAgent2Audio) {
                     finalResponse = '';
                 } else {
-                    finalResponse = "One moment — I'm pulling up your account.";
+                    // Resolve empty response fallback from UI bridge lines (these are hold/wait messages)
+                    const bridgeLines = company?.aiAgentSettings?.agent2?.bridge?.lines || [];
+                    if (Array.isArray(bridgeLines) && bridgeLines.length > 0) {
+                        finalResponse = bridgeLines[Math.floor(Math.random() * bridgeLines.length)];
+                    } else {
+                        finalResponse = resolveErrorFallback(company, 'generalError', bufferEvent);
+                    }
                     bufferEvent('SECTION_EMPTY_RESPONSE_FALLBACK', {
                         matchSource: ownerResult?.matchSource || null,
                         lane,
-                        reason: 'OWNER_RETURNED_EMPTY_RESPONSE'
+                        reason: 'OWNER_RETURNED_EMPTY_RESPONSE',
+                        resolvedFrom: bridgeLines.length > 0 ? 'bridge.lines' : 'generalError'
                     });
                 }
             }
@@ -527,6 +597,74 @@ class CallRuntime {
                 bookingComplete: ownerResult.complete === true,
                 openerApplied: openerResult.opener ? true : false,
                 architecture: 'V2_CLEAN_SWEEP'
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // TURN_TRACE_SUMMARY - THE SINGLE SOURCE OF TRUTH FOR DEBUGGING
+            // ═══════════════════════════════════════════════════════════════════════════
+            // This event consolidates ALL turn decisions into one record.
+            // If you're hunting "hidden hardcoded" or "triggers not firing", start here.
+            // ═══════════════════════════════════════════════════════════════════════════
+            const triggerCard = ownerResult.triggerCard || null;
+            const isUiOwned = !!(
+                triggerCard?.id ||
+                ownerResult.matchSource === 'AGENT2_DISCOVERY' ||
+                ownerResult.matchSource === 'BOOKING_LOGIC_ENGINE' ||
+                ownerResult.uiPath ||
+                ownerResult.errorFallbackUiPath
+            );
+            
+            bufferEvent('TURN_TRACE_SUMMARY', {
+                // WHO OWNED THE MIC
+                ownerSelected: lane === 'BOOKING' ? 'BOOKING_ENGINE' : 
+                               (agent2Enabled ? 'AGENT2_DISCOVERY' : 'BREAK_GLASS_FALLBACK'),
+                agent2Enabled,
+                agent2Ran: agent2Enabled && ownerResult.matchSource !== 'BREAK_GLASS_NO_FALLBACK',
+                
+                // TRIGGER EVALUATION
+                triggerPoolCount: ownerResult._triggerPoolCount ?? null,
+                triggerMatched: triggerCard ? {
+                    ruleId: triggerCard.id,
+                    label: triggerCard.label,
+                    matchType: triggerCard.matchType,
+                    matchedOn: triggerCard.matchedOn
+                } : null,
+                
+                // EXIT REASON (why triggers might not have fired)
+                exitReason: ownerResult._exitReason || null,
+                
+                // WHAT FALLBACK WAS USED (if any)
+                fallbackUsed: ownerResult._fallbackUsed || null,
+                
+                // RESPONSE PROVENANCE - THE KEY QUESTION
+                responseSource: {
+                    type: isUiOwned ? 'UI_OWNED' : 'HARDCODED',
+                    uiPath: ownerResult.uiPath || triggerCard?.id ? 
+                            `aiAgentSettings.agent2.discovery.playbook.rules[id=${triggerCard?.id}]` : null,
+                    matchSource: ownerResult.matchSource
+                },
+                
+                // INPUT SUMMARY
+                inputSummary: {
+                    rawLen: (userInput || '').length,
+                    inputTextSource: context?.inputTextSource || 'unknown'
+                },
+                
+                // RESPONSE SUMMARY
+                responseSummary: {
+                    len: (finalResponse || '').length,
+                    hasAudio: !!ownerResult.audioUrl,
+                    openerApplied: !!(openerResult.opener && !skipOpener)
+                },
+                
+                // SECTION TRAIL (for crash diagnosis)
+                sectionTrail: tracer?.getTrailString() || null,
+                
+                // VERDICT - One-liner for quick scanning
+                verdict: triggerCard ? `TRIGGER:${triggerCard.label || triggerCard.id}` :
+                         ownerResult.matchSource === 'AGENT2_DISCOVERY' ? 'AGENT2:LLM_OR_FALLBACK' :
+                         lane === 'BOOKING' ? 'BOOKING_ENGINE' :
+                         `FALLBACK:${ownerResult.matchSource}`
             });
 
             logger.info('[CALL_RUNTIME] Turn result', {
@@ -569,13 +707,122 @@ class CallRuntime {
                 stack: error.stack?.substring(0, 500)
             });
             
+            // ═══════════════════════════════════════════════════════════════════════════
+            // RESOLVE ERROR FALLBACK FROM UI CONFIG (NO HARDCODED STRINGS)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // Priority:
+            // 1. llm0Controls.recoveryMessages.generalError (UI-configured)
+            // 2. agent2.emergencyFallbackLine.text (UI-configured)  
+            // 3. Minimal safe acknowledgment (last resort, system-level)
+            // ═══════════════════════════════════════════════════════════════════════════
+            const recoveryMessages = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+            const agent2Config = company?.aiAgentSettings?.agent2 || {};
+            
+            let errorResponse = null;
+            let errorUiPath = null;
+            
+            // Try generalError from Recovery Messages
+            const generalErrorVariants = recoveryMessages.generalError;
+            if (Array.isArray(generalErrorVariants) && generalErrorVariants.length > 0) {
+                errorResponse = generalErrorVariants[Math.floor(Math.random() * generalErrorVariants.length)];
+                errorUiPath = 'aiAgentSettings.llm0Controls.recoveryMessages.generalError';
+            } else if (typeof generalErrorVariants === 'string' && generalErrorVariants.trim()) {
+                errorResponse = generalErrorVariants.trim();
+                errorUiPath = 'aiAgentSettings.llm0Controls.recoveryMessages.generalError';
+            }
+            
+            // Fallback to agent2.emergencyFallbackLine
+            if (!errorResponse) {
+                const emergencyLine = agent2Config.emergencyFallbackLine?.text;
+                if (emergencyLine && typeof emergencyLine === 'string' && emergencyLine.trim()) {
+                    errorResponse = emergencyLine.trim();
+                    errorUiPath = 'aiAgentSettings.agent2.emergencyFallbackLine.text';
+                }
+            }
+            
+            // Last resort: minimal safe acknowledgment (not a "repeat" request)
+            if (!errorResponse) {
+                errorResponse = 'I can help you with that.';
+                errorUiPath = 'SYSTEM_MINIMAL_SAFE_FALLBACK';
+                bufferEvent('EMERGENCY_FALLBACK_NOT_CONFIGURED', {
+                    severity: 'CRITICAL',
+                    message: 'Runtime crashed but no generalError or emergencyFallbackLine configured',
+                    attemptedPaths: [
+                        'aiAgentSettings.llm0Controls.recoveryMessages.generalError',
+                        'aiAgentSettings.agent2.emergencyFallbackLine.text'
+                    ],
+                    usedFallback: errorResponse
+                });
+            }
+            
+            bufferEvent('ERROR_FALLBACK_RESOLVED', {
+                errorResponse: errorResponse?.substring(0, 80),
+                uiPath: errorUiPath,
+                crashSection: currentSection,
+                originalError: error.message
+            });
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // TURN_TRACE_SUMMARY - ERROR PATH
+            // ═══════════════════════════════════════════════════════════════════════════
+            // CRITICAL: This is the "mic stolen by crash" scenario.
+            // Agent2 never got to speak because processTurn() threw.
+            // ═══════════════════════════════════════════════════════════════════════════
+            const isErrorUiOwned = errorUiPath && !errorUiPath.includes('SYSTEM_MINIMAL');
+            
+            bufferEvent('TURN_TRACE_SUMMARY', {
+                // WHO OWNED THE MIC - Crash stole it
+                ownerSelected: 'CORE_ERROR_FALLBACK',
+                agent2Enabled: null,  // Unknown - crashed before we could check
+                agent2Ran: false,     // CRITICAL: Agent2 never ran
+                
+                // TRIGGER EVALUATION - Never happened
+                triggerPoolCount: null,
+                triggerMatched: null,
+                
+                // EXIT REASON - The crash
+                exitReason: 'RUNTIME_CRASH',
+                crashSection: currentSection,
+                crashError: error.message,
+                
+                // WHAT FALLBACK WAS USED
+                fallbackUsed: isErrorUiOwned ? 'UI_ERROR_FALLBACK' : 'SYSTEM_MINIMAL_SAFE',
+                
+                // RESPONSE PROVENANCE
+                responseSource: {
+                    type: isErrorUiOwned ? 'UI_OWNED' : 'SYSTEM_FALLBACK',
+                    uiPath: errorUiPath,
+                    matchSource: 'UI_ERROR_FALLBACK'
+                },
+                
+                // INPUT SUMMARY
+                inputSummary: {
+                    rawLen: (userInput || '').length,
+                    inputTextSource: context?.inputTextSource || 'unknown'
+                },
+                
+                // RESPONSE SUMMARY
+                responseSummary: {
+                    len: (errorResponse || '').length,
+                    hasAudio: false,
+                    openerApplied: false
+                },
+                
+                // SECTION TRAIL - Where did it crash?
+                sectionTrail: tracer?.getTrailString() || currentSection,
+                
+                // VERDICT - Clear indicator of crash
+                verdict: `CRASH:${currentSection}:${error.message?.substring(0, 50)}`
+            });
+            
             return {
-                response: "I'm sorry, I didn't quite catch that. Could you repeat?",
+                response: errorResponse,
                 state: state || callState,
                 lane: 'DISCOVERY',
                 signals: { escalate: false, bookingComplete: false },
                 action: 'CONTINUE',
-                matchSource: 'CORE_RUNTIME_ERROR_FALLBACK',
+                matchSource: 'UI_ERROR_FALLBACK',
+                errorFallbackUiPath: errorUiPath,
                 turnEventBuffer
             };
         }

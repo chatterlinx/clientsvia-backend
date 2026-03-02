@@ -646,7 +646,7 @@
           </div>
         </div>
         <div class="transcript-body">
-          ${renderTranscript(call.turns || [], buildScrabByTurnMap(call))}
+          ${renderTranscript(call.turns || [], buildScrabByTurnMap(call), buildTraceSummaryByTurnMap(call), buildCheckpointsByTurnMap(call))}
         </div>
       </div>
 
@@ -882,14 +882,133 @@
   }
 
   /**
+   * Build map of TURN_TRACE_SUMMARY events by turn number.
+   * @param {Object} call - Call data with events
+   * @returns {Map<number, Object>} turnNumber → trace summary data
+   */
+  function buildTraceSummaryByTurnMap(call) {
+    const events = Array.isArray(call?.events) ? call.events : [];
+    const byTurn = new Map();
+    
+    for (const ev of events) {
+      if (ev?.type === 'TURN_TRACE_SUMMARY') {
+        const turnNum = ev?.turn ?? ev?.data?.turn ?? null;
+        if (turnNum !== null) {
+          byTurn.set(turnNum, ev?.data || ev);
+        }
+      }
+    }
+    
+    return byTurn;
+  }
+
+  /**
+   * Build map of FLOW_CHECKPOINT events by turn number.
+   * @param {Object} call - Call data with events
+   * @returns {Map<number, Array>} turnNumber → array of checkpoint events (ordered by stepNum)
+   */
+  function buildCheckpointsByTurnMap(call) {
+    const events = Array.isArray(call?.events) ? call.events : [];
+    const byTurn = new Map();
+    
+    for (const ev of events) {
+      if (ev?.type === 'FLOW_CHECKPOINT') {
+        const turnNum = ev?.turn ?? ev?.data?.turn ?? 0;
+        if (!byTurn.has(turnNum)) {
+          byTurn.set(turnNum, []);
+        }
+        byTurn.get(turnNum).push(ev?.data || ev);
+      }
+    }
+    
+    // Sort each turn's checkpoints by stepNum
+    for (const [turn, checkpoints] of byTurn) {
+      checkpoints.sort((a, b) => (a.stepNum || 0) - (b.stepNum || 0));
+    }
+    
+    return byTurn;
+  }
+
+  /**
+   * Render Flow Checkpoints timeline for a turn.
+   * @param {number} turnNumber - The turn number
+   * @param {Map<number, Array>} checkpointsByTurn - Map of checkpoints by turn
+   * @returns {string} HTML string
+   */
+  function renderFlowCheckpoints(turnNumber, checkpointsByTurn) {
+    const checkpoints = checkpointsByTurn.get(turnNumber);
+    if (!checkpoints || checkpoints.length === 0) return '';
+
+    const checkpointItems = checkpoints.map(cp => {
+      const statusIcon = cp.status === 'FIRED' ? '✅' : 
+                         cp.status === 'SKIPPED' ? '⏭️' : 
+                         cp.status === 'BLOCKED' ? '🚫' : 
+                         cp.status === 'FAILED' ? '❌' : '❓';
+      const statusClass = cp.status === 'FIRED' ? 'checkpoint-ok' : 
+                          cp.status === 'SKIPPED' ? 'checkpoint-skip' : 
+                          cp.status === 'BLOCKED' ? 'checkpoint-block' : 
+                          cp.status === 'FAILED' ? 'checkpoint-fail' : 'checkpoint-unknown';
+      
+      // Build data tooltip with key metrics
+      const dataEntries = [];
+      if (cp.durationMs !== null && cp.durationMs !== undefined) {
+        dataEntries.push(`${cp.durationMs}ms`);
+      }
+      if (cp.data) {
+        // Add key data points
+        for (const [key, val] of Object.entries(cp.data)) {
+          if (val === null || val === undefined || key === 'visualTrace') continue;
+          if (typeof val === 'object') continue;
+          if (typeof val === 'string' && val.length > 50) continue;
+          dataEntries.push(`${key}: ${val}`);
+        }
+      }
+      const dataStr = dataEntries.slice(0, 4).join(' · ');
+
+      return `
+        <div class="checkpoint-item ${statusClass}" title="${escapeHtml(cp.details || '')}">
+          <span class="checkpoint-icon">${statusIcon}</span>
+          <span class="checkpoint-step">Step ${cp.stepNum}</span>
+          <span class="checkpoint-title">${escapeHtml(cp.title || cp.stepId || '')}</span>
+          <span class="checkpoint-status">${cp.status}</span>
+          ${dataStr ? `<span class="checkpoint-data">${escapeHtml(dataStr)}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="flow-checkpoints-container">
+        <div class="flow-checkpoints-header" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="flow-checkpoints-icon">📍</span>
+          <span class="flow-checkpoints-label">Flow Checkpoints</span>
+          <span class="flow-checkpoints-count">${checkpoints.length} steps</span>
+          <span class="flow-checkpoints-expand">▼</span>
+        </div>
+        <div class="flow-checkpoints-body">
+          ${checkpointItems}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
    * Render the transcript with provenance tracking and inline ScrabEngine data.
    * @param {Array} turns - Array of turn objects
    * @param {Map<number, Object[]>} scrabByTurn - ScrabEngine events grouped by turn
+   * @param {Map<number, Object>} traceSummaryByTurn - TURN_TRACE_SUMMARY events by turn
+   * @param {Map<number, Array>} checkpointsByTurn - FLOW_CHECKPOINT events by turn
    * @returns {string} HTML string
    */
-  function renderTranscript(turns, scrabByTurn) {
+  function renderTranscript(turns, scrabByTurn, traceSummaryByTurn, checkpointsByTurn) {
     if (turns.length === 0) {
+      // Check if we have turn 0 checkpoints (call start - greeting, spam filter, etc.)
+      const turn0Checkpoints = checkpointsByTurn && checkpointsByTurn.get(0);
+      const turn0Html = turn0Checkpoints && turn0Checkpoints.length > 0 
+        ? renderFlowCheckpoints(0, checkpointsByTurn) 
+        : '';
+      
       return `
+        ${turn0Html}
         <div style="padding: 20px; background: #f1f5f9; border-radius: 8px; text-align: center;">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 12px; opacity: 0.5;">
             <path d="M8 12H8.01M12 12H12.01M16 12H16.01M21 12C21 16.9706 16.9706 21 12 21C10.2289 21 8.57736 20.4884 7.17677 19.6067L3 21L4.39334 16.8232C3.51156 15.4226 3 13.7711 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#64748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -903,7 +1022,13 @@
       `;
     }
 
-    return turns.map(turn => renderTurn(turn, scrabByTurn)).join('');
+    // Render turn 0 checkpoints first (call start), then each turn
+    const turn0Checkpoints = checkpointsByTurn && checkpointsByTurn.get(0);
+    const turn0Html = turn0Checkpoints && turn0Checkpoints.length > 0 
+      ? renderFlowCheckpoints(0, checkpointsByTurn) 
+      : '';
+    
+    return turn0Html + turns.map(turn => renderTurn(turn, scrabByTurn, traceSummaryByTurn, checkpointsByTurn)).join('');
   }
 
   /**
@@ -1082,11 +1207,14 @@
   /**
    * Render a single turn in the transcript.
    * For caller turns, injects inline ScrabEngine pipeline visualization.
+   * For agent turns, injects TURN_TRACE_SUMMARY evidence block.
    * @param {Object} turn - Turn data
    * @param {Map<number, Object[]>} scrabByTurn - ScrabEngine events by turn
+   * @param {Map<number, Object>} traceSummaryByTurn - TURN_TRACE_SUMMARY events by turn
+   * @param {Map<number, Array>} checkpointsByTurn - FLOW_CHECKPOINT events by turn
    * @returns {string} HTML string
    */
-  function renderTurn(turn, scrabByTurn) {
+  function renderTurn(turn, scrabByTurn, traceSummaryByTurn, checkpointsByTurn) {
     const isCaller = turn.speaker === 'caller';
     const isAgent = turn.speaker === 'agent';
     const isSystem = turn.speaker === 'system';
@@ -1121,6 +1249,18 @@
       scrabInlineHtml = renderInlineScrabPipeline(turn.turnNumber, scrabByTurn);
     }
 
+    // TURN_TRACE_SUMMARY: Hard evidence for agent turns — no hunting
+    let traceSummaryHtml = '';
+    if ((isAgent || isSystem) && traceSummaryByTurn) {
+      traceSummaryHtml = renderTurnTraceSummary(turn.turnNumber, traceSummaryByTurn);
+    }
+
+    // FLOW_CHECKPOINT: Pipeline visibility for each turn
+    let checkpointsHtml = '';
+    if (checkpointsByTurn) {
+      checkpointsHtml = renderFlowCheckpoints(turn.turnNumber, checkpointsByTurn);
+    }
+
     return `
       <div class="${turnClass}">
         <div class="turn-header">
@@ -1131,8 +1271,103 @@
         </div>
         <div class="turn-text">${escapeHtml(turn.text)}</div>
         ${scrabInlineHtml}
+        ${checkpointsHtml}
+        ${traceSummaryHtml}
         ${provenanceHtml}
         ${violationAlert}
+      </div>
+    `;
+  }
+
+  /**
+   * Render TURN_TRACE_SUMMARY as inline evidence block.
+   * Shows exactly what happened: who owned mic, did triggers fire, what fallback used.
+   * NO HUNTING — hard evidence exposed inline.
+   * 
+   * @param {number} turnNumber
+   * @param {Map<number, Object>} traceSummaryByTurn
+   * @returns {string} HTML or empty string
+   */
+  function renderTurnTraceSummary(turnNumber, traceSummaryByTurn) {
+    const summary = traceSummaryByTurn.get(turnNumber);
+    if (!summary) return '';
+
+    const verdict = summary.verdict || 'UNKNOWN';
+    const ownerSelected = summary.ownerSelected || 'UNKNOWN';
+    const agent2Ran = summary.agent2Ran;
+    const triggerPoolCount = summary.triggerPoolCount;
+    const triggerMatched = summary.triggerMatched;
+    const exitReason = summary.exitReason;
+    const fallbackUsed = summary.fallbackUsed;
+    const responseSource = summary.responseSource || {};
+    const crashSection = summary.crashSection;
+    const crashError = summary.crashError;
+
+    // Determine status class based on outcome
+    const isHealthy = triggerMatched || (responseSource.type === 'UI_OWNED' && !crashError);
+    const isCrash = exitReason === 'RUNTIME_CRASH' || crashError;
+    const isWarning = !isHealthy && !isCrash && (fallbackUsed || exitReason);
+    
+    const statusClass = isCrash ? 'trace-status-error' : 
+                        isWarning ? 'trace-status-warning' : 
+                        'trace-status-ok';
+    const statusIcon = isCrash ? '🔴' : isWarning ? '🟡' : '🟢';
+
+    // Build evidence rows
+    const rows = [];
+
+    // Verdict (headline)
+    rows.push(`<div class="trace-row trace-verdict ${statusClass}"><span class="trace-label">Verdict:</span> <span class="trace-value">${statusIcon} ${escapeHtml(verdict)}</span></div>`);
+
+    // Owner
+    rows.push(`<div class="trace-row"><span class="trace-label">Mic Owner:</span> <span class="trace-value">${escapeHtml(ownerSelected)}</span></div>`);
+
+    // Agent2 ran?
+    if (agent2Ran !== undefined) {
+      rows.push(`<div class="trace-row"><span class="trace-label">Agent2 Ran:</span> <span class="trace-value">${agent2Ran ? '✓ Yes' : '✗ No'}</span></div>`);
+    }
+
+    // Trigger pool
+    if (triggerPoolCount !== null && triggerPoolCount !== undefined) {
+      rows.push(`<div class="trace-row"><span class="trace-label">Trigger Pool:</span> <span class="trace-value">${triggerPoolCount} cards</span></div>`);
+    }
+
+    // Trigger matched
+    if (triggerMatched) {
+      rows.push(`<div class="trace-row trace-match"><span class="trace-label">Trigger Matched:</span> <span class="trace-value mono">${escapeHtml(triggerMatched.label || triggerMatched.ruleId)} (${escapeHtml(triggerMatched.matchType || '')}${triggerMatched.matchedOn ? ': ' + escapeHtml(triggerMatched.matchedOn) : ''})</span></div>`);
+    }
+
+    // Exit reason (if no trigger)
+    if (exitReason && !triggerMatched) {
+      rows.push(`<div class="trace-row"><span class="trace-label">Exit Reason:</span> <span class="trace-value">${escapeHtml(exitReason)}</span></div>`);
+    }
+
+    // Fallback used
+    if (fallbackUsed) {
+      rows.push(`<div class="trace-row"><span class="trace-label">Fallback Used:</span> <span class="trace-value">${escapeHtml(fallbackUsed)}</span></div>`);
+    }
+
+    // Response source
+    if (responseSource.type) {
+      const sourceClass = responseSource.type === 'UI_OWNED' ? 'trace-source-ui' : 
+                          responseSource.type === 'HARDCODED' ? 'trace-source-hardcoded' : '';
+      rows.push(`<div class="trace-row ${sourceClass}"><span class="trace-label">Response Source:</span> <span class="trace-value">${escapeHtml(responseSource.type)}${responseSource.uiPath ? ' → ' + escapeHtml(responseSource.uiPath) : ''}</span></div>`);
+    }
+
+    // Crash details (if error)
+    if (crashError) {
+      rows.push(`<div class="trace-row trace-crash"><span class="trace-label">Crash Section:</span> <span class="trace-value">${escapeHtml(crashSection || 'UNKNOWN')}</span></div>`);
+      rows.push(`<div class="trace-row trace-crash"><span class="trace-label">Error:</span> <span class="trace-value mono">${escapeHtml(crashError)}</span></div>`);
+    }
+
+    return `
+      <div class="turn-trace-summary">
+        <div class="trace-header">
+          <span class="trace-title">Turn Trace</span>
+        </div>
+        <div class="trace-body">
+          ${rows.join('')}
+        </div>
       </div>
     `;
   }

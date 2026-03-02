@@ -2092,7 +2092,12 @@ class Agent2DiscoveryRunner {
             nextAction,
             responseMode: 'llm',
             llmMeta: llmTriggerResult.llmMeta
-          }
+          },
+          // TURN_TRACE_SUMMARY metadata
+          _triggerPoolCount: triggerCards?.length ?? null,
+          _exitReason: null,
+          _fallbackUsed: null,
+          uiPath: `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}].llmFactPack`
         };
       }
 
@@ -2220,7 +2225,12 @@ class Agent2DiscoveryRunner {
           matchType: triggerResult.matchType,
           matchedOn: triggerResult.matchedOn,
           nextAction
-        }
+        },
+        // TURN_TRACE_SUMMARY metadata
+        _triggerPoolCount: triggerCards?.length ?? null,
+        _exitReason: null,
+        _fallbackUsed: null,
+        uiPath: `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}]`
       };
     }
 
@@ -3026,7 +3036,24 @@ class Agent2DiscoveryRunner {
       }
     }
 
-    return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+    // Determine what fallback was used for TURN_TRACE_SUMMARY
+    const lastPath = nextState.agent2?.discovery?.lastPath || 'UNKNOWN';
+    let fallbackUsed = null;
+    if (lastPath.includes('LLM')) fallbackUsed = 'LLM_FALLBACK';
+    else if (lastPath.includes('GREETING')) fallbackUsed = 'GREETING';
+    else if (lastPath.includes('SCENARIO')) fallbackUsed = 'SCENARIO_ENGINE';
+    else if (lastPath.includes('CAPTURED_REASON')) fallbackUsed = 'CAPTURED_REASON_ACK';
+    else if (lastPath.includes('NO_MATCH')) fallbackUsed = 'GENERIC_FALLBACK';
+    
+    return { 
+      response, 
+      matchSource: 'AGENT2_DISCOVERY', 
+      state: nextState,
+      // TURN_TRACE_SUMMARY metadata
+      _triggerPoolCount: typeof triggerCards !== 'undefined' ? triggerCards?.length : null,
+      _exitReason: lastPath,
+      _fallbackUsed: fallbackUsed
+    };
   }
 }
 

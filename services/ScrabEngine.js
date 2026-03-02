@@ -1504,10 +1504,14 @@ class ScrabEngine {
    * Creates a comprehensive transformation story for Call Console transcript display
    * Shows the complete journey from raw STT → cleaned delivery to triggers
    * 
+   * IMPORTANT: This is a diagnostic function. It must NEVER crash the call flow.
+   * If any error occurs, we return an empty array and log the error.
+   * 
    * @param {Object} scrabResult - Complete ScrabEngine result
    * @returns {Array} Array of trace events for Call Console
    */
   static generateCallConsoleTrace(scrabResult) {
+    try {
     const events = [];
     
     // Entry event - Raw STT received
@@ -1630,7 +1634,7 @@ class ScrabEngine {
           ? `Extracted ${extractions.length} entit${extractions.length === 1 ? 'y' : 'ies'}: ${extractions.map(e => `${e.type}="${e.value}"${e.validated ? ' (validated ✅)' : ''}`).join(', ')}`
           : 'No entities found',
         globalShareCheck: validations.length > 0 
-          ? validations.map(v => `${v.value} checked against ${v.dictionarySize.toLocaleString()} ${v.entity}s → ${v.isValid ? 'VALID ✅' : 'NOT FOUND ⚠️'}`).join('; ')
+          ? validations.map(v => `${v.value} checked against ${v.dictionarySize?.toLocaleString?.() ?? 'N/A'} ${v.entity || 'entity'}s → ${v.isValid ? 'VALID ✅' : 'NOT FOUND ⚠️'}`).join('; ')
           : null
       });
     }
@@ -1667,6 +1671,13 @@ class ScrabEngine {
     });
     
     return events;
+    } catch (err) {
+      logger.error('[ScrabEngine] generateCallConsoleTrace CRASHED - returning empty (non-fatal)', {
+        error: err.message,
+        stack: err.stack?.substring(0, 300)
+      });
+      return [];
+    }
   }
 }
 

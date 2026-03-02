@@ -281,6 +281,91 @@ function computeAwProof(company) {
 }
 
 // ============================================================================
+// FLOW_CHECKPOINT — Structured checkpoint events for Call Console visibility
+// ============================================================================
+// Mirrors the 34-step Flow Builder. Each checkpoint shows:
+// - stepId: matches flow-builder.js step IDs
+// - stepNum: sequence number (1-34)
+// - tier: which tier (1-8)
+// - title: human-readable step name
+// - status: FIRED | SKIPPED | FAILED | BLOCKED
+// - details: why this status, what happened
+// - duration: ms spent at this step
+// ============================================================================
+function emitFlowCheckpoint(callLogger, callSid, companyId, turn, checkpoint) {
+  if (!callLogger?.logEvent) return;
+  
+  const { stepId, stepNum, tier, title, status, details, durationMs, data } = checkpoint;
+  
+  callLogger.logEvent({
+    callId: callSid,
+    companyId,
+    turn: turn || 0,
+    type: 'FLOW_CHECKPOINT',
+    data: {
+      stepId,
+      stepNum,
+      tier,
+      title,
+      status,
+      details,
+      durationMs: durationMs || null,
+      ...data,
+      // Visual trace for Call Console rendering
+      visualTrace: {
+        icon: status === 'FIRED' ? '✅' : 
+              status === 'SKIPPED' ? '⏭️' : 
+              status === 'BLOCKED' ? '🚫' : 
+              status === 'FAILED' ? '❌' : '❓',
+        stage: `Step ${stepNum}: ${title}`,
+        status: status.toLowerCase(),
+        details: details || ''
+      }
+    }
+  }).catch(err => {
+    logger.warn('[FLOW_CHECKPOINT] Failed to log checkpoint', { stepId, error: err.message });
+  });
+}
+
+// Flow step definitions (matches flow-builder.js)
+const FLOW_STEPS = {
+  TWILIO_ENTRY:     { stepId: 'step_twilio_entry',     stepNum: 1,  tier: 1, title: 'Twilio Entry' },
+  GATEKEEPER:       { stepId: 'step_gatekeeper',       stepNum: 2,  tier: 1, title: 'Gatekeeper Check' },
+  SPAM_FILTER:      { stepId: 'step_spam_filter',      stepNum: 3,  tier: 1, title: 'Spam Filter' },
+  CALL_GREETING:    { stepId: 'step_call_greeting',    stepNum: 4,  tier: 1, title: 'Call Start Greeting' },
+  GATHER_SETUP:     { stepId: 'step_gather',           stepNum: 5,  tier: 1, title: 'Gather Setup' },
+  CUSTOMER_SPEAKS:  { stepId: 'step_customer_speaks',  stepNum: 6,  tier: 2, title: 'Customer Speaks' },
+  SPEECHRESULT:     { stepId: 'step_speechresult_post',stepNum: 7,  tier: 2, title: 'SpeechResult Posted' },
+  SCRABENGINE:      { stepId: 'step_scrabengine',      stepNum: 8,  tier: 3, title: 'ScrabEngine Entry' },
+  SE_STAGE1:        { stepId: 'step_se_stage1',        stepNum: 9,  tier: 3, title: 'SE Filler Removal' },
+  SE_STAGE2:        { stepId: 'step_se_stage2',        stepNum: 10, tier: 3, title: 'SE Vocabulary' },
+  SE_STAGE3:        { stepId: 'step_se_stage3',        stepNum: 11, tier: 3, title: 'SE Token Expansion' },
+  SE_STAGE4:        { stepId: 'step_se_stage4',        stepNum: 12, tier: 3, title: 'SE Entity Extraction' },
+  SE_STAGE5:        { stepId: 'step_se_stage5',        stepNum: 13, tier: 3, title: 'SE Quality Gate' },
+  LOAD_STATE:       { stepId: 'step_loadstate',        stepNum: 14, tier: 4, title: 'Load Call State' },
+  CALL_RUNTIME:     { stepId: 'step_callruntime',      stepNum: 15, tier: 4, title: 'CallRuntime Router' },
+  CALL_ROUTER:      { stepId: 'step_agent2callrouter', stepNum: 16, tier: 4, title: 'Agent2CallRouter' },
+  AGENT2_DISCOVERY: { stepId: 'step_agent2discovery',  stepNum: 17, tier: 4, title: 'Agent2DiscoveryRunner' },
+  NAME_GREETING:    { stepId: 'step_name_greeting',    stepNum: 18, tier: 5, title: 'Name Greeting' },
+  GREETING_CHECK:   { stepId: 'step_greeting_check',   stepNum: 19, tier: 5, title: 'Greeting Interceptor' },
+  FOLLOWUP_CONSENT: { stepId: 'step_followup_consent', stepNum: 20, tier: 5, title: 'Follow-Up Consent Gate' },
+  CLARIFIER_EXIT:   { stepId: 'step_patience_exit',    stepNum: 21, tier: 5, title: 'Clarifier/Pending' },
+  PATIENCE_MODE:    { stepId: 'step_patience_mode',    stepNum: 22, tier: 5, title: 'Patience Mode' },
+  TRIGGER_POOL:     { stepId: 'step_trigger_pool_load',stepNum: 23, tier: 5, title: 'Trigger Pool Load' },
+  TRIGGER_EVAL:     { stepId: 'step_trigger_eval',     stepNum: 24, tier: 5, title: 'TriggerCardMatcher' },
+  TRIGGER_RESPONSE: { stepId: 'step_trigger_response', stepNum: 25, tier: 5, title: 'Trigger Response' },
+  GREETING_FALLBACK:{ stepId: 'step_greeting_fallback',stepNum: 26, tier: 6, title: 'Greeting Fallback' },
+  LLM_FALLBACK:     { stepId: 'step_llm_fallback',     stepNum: 27, tier: 6, title: 'LLM Fallback' },
+  GENERIC_FALLBACK: { stepId: 'step_generic_fallback', stepNum: 28, tier: 6, title: 'Generic Fallback' },
+  BOOKING_HANDOFF:  { stepId: 'step_booking_handoff',  stepNum: 29, tier: 7, title: 'Booking Handoff' },
+  BOOKING_ENGINE:   { stepId: 'step_booking_engine',   stepNum: 30, tier: 7, title: 'BookingLogicEngine' },
+  ELEVENLABS_TTS:   { stepId: 'step_elevenlabs',       stepNum: 31, tier: 8, title: 'ElevenLabs TTS' },
+  TWIML_BUILD:      { stepId: 'step_twiml',            stepNum: 32, tier: 8, title: 'TwiML Build' },
+  VOICE_SEND:       { stepId: 'step_voice_send',       stepNum: 33, tier: 8, title: 'Voice Response Send' },
+  TURN_COMPLETE:    { stepId: 'step_turn_complete',    stepNum: 34, tier: 8, title: 'Turn Complete' }
+};
+
+// ============================================================================
 // RECOVERY MESSAGE HELPER — UI-controlled, per-company
 // ============================================================================
 // Multi-tenant rule: NO hardcoded English. Every word the agent speaks must be
@@ -1031,12 +1116,41 @@ router.post('/voice', async (req, res) => {
     const callerNumber = normalizePhoneNumber(req.body.From);
     logger.info(`[PHONE LOOKUP] [SEARCH] Searching for company with phone: ${calledNumber}`);
     
+    const companyLookupStart = Date.now();
     const company = await getCompanyByPhoneNumber(calledNumber);
+    const companyLookupMs = Date.now() - companyLookupStart;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CHECKPOINT 1: TWILIO_ENTRY — Platform entry point
+    // ═══════════════════════════════════════════════════════════════════
+    if (company && CallLogger) {
+      emitFlowCheckpoint(CallLogger, req.body.CallSid, company._id, 0, {
+        ...FLOW_STEPS.TWILIO_ENTRY,
+        status: 'FIRED',
+        details: `Webhook received from ${callerNumber} → ${calledNumber}`,
+        durationMs: Date.now() - callStartTime,
+        data: {
+          from: callerNumber,
+          to: calledNumber,
+          companyFound: true,
+          companyName: company.businessName || company.name || 'unknown',
+          companyLookupMs
+        }
+      });
+    }
 
     const twiml = new twilio.twiml.VoiceResponse();
 
     if (!company) {
       logger.info(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
+      
+      // CHECKPOINT 1 (Failed case): No company for number
+      // We can't log to CallLogger without a companyId, but we log to server
+      logger.warn('[FLOW_CHECKPOINT] Step 1 FAILED - No company for phone', { 
+        stepId: 'step_twilio_entry', 
+        calledNumber, 
+        callerNumber 
+      });
       
       // Configuration error for unconfigured numbers
       const msg = 'Configuration error: Company must configure AI Agent Logic responses';
@@ -1048,12 +1162,31 @@ router.post('/voice', async (req, res) => {
     }
 
     // 🚫 SPAM FILTER - Check if call should be blocked
+    const spamFilterStart = Date.now();
     const SmartCallFilter = require('../services/SmartCallFilter');
     const filterResult = await SmartCallFilter.checkCall({
       callerPhone: callerNumber,
       companyId: company._id.toString(),
       companyPhone: calledNumber,
       twilioCallSid: req.body.CallSid
+    });
+    const spamFilterMs = Date.now() - spamFilterStart;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CHECKPOINT 3: SPAM_FILTER — Security gate
+    // ═══════════════════════════════════════════════════════════════════
+    emitFlowCheckpoint(CallLogger, req.body.CallSid, company._id, 0, {
+      ...FLOW_STEPS.SPAM_FILTER,
+      status: filterResult.shouldBlock ? 'BLOCKED' : 'FIRED',
+      details: filterResult.shouldBlock 
+        ? `Call blocked: ${filterResult.reason}` 
+        : `Passed security checks (score: ${filterResult.spamScore || 0})`,
+      durationMs: spamFilterMs,
+      data: {
+        spamScore: filterResult.spamScore || 0,
+        reason: filterResult.reason || 'passed_all_checks',
+        flags: filterResult.flags || []
+      }
     });
 
     // 📊 STRUCTURED SPAM LOG - For traceability
@@ -1340,6 +1473,28 @@ router.post('/voice', async (req, res) => {
     // 📼 CALL CONSOLE VISUAL TRACE - Gatekeeper Configuration Check
     // ════════════════════════════════════════════════════════════════════════
     const gatekeeperStatus = company.accountStatus?.status || 'active';
+    const gatekeeperDecision = gatekeeperStatus === 'active' ? 'PROCEED' 
+      : gatekeeperStatus === 'suspended' ? 'BLOCKED' 
+      : gatekeeperStatus === 'call_forward' ? 'FORWARD' : 'PROCEED';
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // CHECKPOINT 2: GATEKEEPER — Account status gate
+    // ═══════════════════════════════════════════════════════════════════
+    emitFlowCheckpoint(CallLogger, req.body.CallSid, company._id, 0, {
+      ...FLOW_STEPS.GATEKEEPER,
+      status: gatekeeperDecision === 'PROCEED' ? 'FIRED' : gatekeeperDecision === 'BLOCKED' ? 'BLOCKED' : 'SKIPPED',
+      details: gatekeeperDecision === 'PROCEED' 
+        ? 'Account active → proceeding to AI Agent'
+        : gatekeeperDecision === 'BLOCKED'
+        ? `Account suspended → playing suspension message`
+        : `Call forward enabled → transferring to ${company.accountStatus?.callForwardNumber || 'N/A'}`,
+      data: {
+        accountStatus: gatekeeperStatus,
+        decision: gatekeeperDecision,
+        callForwardNumber: gatekeeperDecision === 'FORWARD' ? company.accountStatus?.callForwardNumber : null
+      }
+    });
+    
     if (CallLogger) {
       try {
         await CallLogger.logEvent({
@@ -1713,11 +1868,54 @@ router.post('/voice', async (req, res) => {
       }
 
       // ═══════════════════════════════════════════════════════════════════════
+      // CHECKPOINT 5: GATHER_SETUP — STT listening configured
+      // ═══════════════════════════════════════════════════════════════════════
+      emitFlowCheckpoint(CallLogger, req.body.CallSid, company._id, 0, {
+        ...FLOW_STEPS.GATHER_SETUP,
+        status: 'FIRED',
+        details: `Gather configured: timeout=${gatherConfig.timeout}s, speechTimeout=${gatherConfig.speechTimeout}, enhanced=${gatherConfig.enhanced}`,
+        data: {
+          actionUrl: gatherConfig.action,
+          timeout: gatherConfig.timeout,
+          speechTimeout: gatherConfig.speechTimeout,
+          bargeIn: gatherConfig.bargeIn,
+          enhanced: gatherConfig.enhanced,
+          speechModel: gatherConfig.speechModel,
+          hintsCount: hints.split(',').length
+        }
+      });
+      
+      // ═══════════════════════════════════════════════════════════════════════
       // GREETING PLAYBACK: Handle prerecorded audio vs TTS
       // ═══════════════════════════════════════════════════════════════════════
       const greetingMode = initResult.greetingConfig?.mode;
       const greetingSource = initResult.greetingConfig?.source || 'legacy';
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
+      
+      // ═══════════════════════════════════════════════════════════════════════
+      // CHECKPOINT 4: CALL_GREETING — Initial greeting to caller
+      // ═══════════════════════════════════════════════════════════════════════
+      const greetingSkipped = !initResult.greeting && !initResult.greetingConfig?.audioUrl;
+      emitFlowCheckpoint(CallLogger, req.body.CallSid, company._id, 0, {
+        ...FLOW_STEPS.CALL_GREETING,
+        status: greetingSkipped ? 'SKIPPED' : 'FIRED',
+        details: greetingSkipped 
+          ? 'No greeting configured'
+          : greetingMode === 'prerecorded' 
+            ? `Playing prerecorded audio (source: ${greetingSource})`
+            : elevenLabsVoice 
+              ? `TTS via ElevenLabs (voiceId: ${elevenLabsVoice?.slice(-8)})`
+              : 'TTS via Twilio Say',
+        data: {
+          mode: greetingMode || 'unknown',
+          source: greetingSource,
+          hasText: Boolean(initResult.greeting),
+          hasAudio: Boolean(initResult.greetingConfig?.audioUrl),
+          voiceProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+          textPreview: initResult.greeting?.slice(0, 60) || null,
+          isReturningCaller: Boolean(callContext?.isReturning)
+        }
+      });
       
       // 🛡️ CRITICAL: Validate greeting text before use (prevents code/JSON being read aloud)
       const validatedGreeting = validateGreetingText(initResult.greeting);
@@ -3546,6 +3744,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const sttConfidence = parseFloat(req.body.Confidence) || null;
   const turnCountFromBody = parseInt(req.body.turnCount || 0, 10) || 0;
   
+  // ═══════════════════════════════════════════════════════════════════════
+  // CHECKPOINT 6 & 7: CUSTOMER_SPEAKS + SPEECHRESULT_POSTED
+  // ═══════════════════════════════════════════════════════════════════════
+  emitFlowCheckpoint(CallLogger, callSid, companyID, turnCountFromBody + 1, {
+    ...FLOW_STEPS.CUSTOMER_SPEAKS,
+    status: speechResult ? 'FIRED' : 'SKIPPED',
+    details: speechResult 
+      ? `Customer spoke: "${speechResult.slice(0, 50)}${speechResult.length > 50 ? '...' : ''}"` 
+      : 'No speech detected (silence/timeout)',
+    data: {
+      rawLength: speechResult?.length || 0,
+      confidence: sttConfidence,
+      hasContent: Boolean(speechResult && speechResult.trim())
+    }
+  });
+  
+  emitFlowCheckpoint(CallLogger, callSid, companyID, turnCountFromBody + 1, {
+    ...FLOW_STEPS.SPEECHRESULT,
+    status: 'FIRED',
+    details: `Webhook received from Twilio with SpeechResult (confidence: ${sttConfidence ? (sttConfidence * 100).toFixed(0) + '%' : 'N/A'})`,
+    data: {
+      speechResultLength: speechResult?.length || 0,
+      confidence: sttConfidence,
+      fromNumber: fromNumber?.slice(-4) || 'unknown'
+    }
+  });
+  
   // ════════════════════════════════════════════════════════════════════════
   // 📼 CALL CONSOLE VISUAL TRACE - Deepgram STT Result Received
   // ════════════════════════════════════════════════════════════════════════
@@ -3586,8 +3811,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const company = await Company.findById(companyID).lean();
     timings.companyLoadMs = Date.now() - T1_start;
     if (!company) {
+      // CRITICAL: Company not found - cannot resolve UI config
+      // Use system-level minimal safe response (not "repeat that" which frustrates callers)
+      logger.error('[V2TWILIO] Company not found - cannot load UI config', { companyID });
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say("I'm sorry, I didn't catch that. Could you repeat that?");
+      twiml.say("I can help you with that. One moment please.");
       twiml.gather({
         input: 'speech',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
@@ -4162,6 +4390,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
 
       // ═══════════════════════════════════════════════════════════════════════════
+      // CHECKPOINT 14: LOAD_STATE — Call state loaded
+      // ═══════════════════════════════════════════════════════════════════════════
+      emitFlowCheckpoint(CallLogger, callSid, companyID, turnNumber, {
+        ...FLOW_STEPS.LOAD_STATE,
+        status: 'FIRED',
+        details: `State loaded: turn=${turnNumber}, sessionMode=${callState?.sessionMode || 'DISCOVERY'}`,
+        data: {
+          turn: turnNumber,
+          sessionMode: callState?.sessionMode || 'DISCOVERY',
+          lane: callState?.lane || 'DISCOVERY',
+          hasBookingCtx: Boolean(callState?.bookingCtx),
+          hasPendingFollowUp: Boolean(callState?.agent2?.discovery?.pendingFollowUpQuestion)
+        }
+      });
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CHECKPOINT 15: CALL_RUNTIME — Session mode router
+      // ═══════════════════════════════════════════════════════════════════════════
+      emitFlowCheckpoint(CallLogger, callSid, companyID, turnNumber, {
+        ...FLOW_STEPS.CALL_RUNTIME,
+        status: 'FIRED',
+        details: `Routing to ${callState?.lane === 'BOOKING' || callState?.sessionMode === 'BOOKING' ? 'BOOKING_ENGINE' : 'AGENT2_DISCOVERY'}`,
+        data: {
+          lane: callState?.lane || 'DISCOVERY',
+          sessionMode: callState?.sessionMode || 'DISCOVERY',
+          routingTo: callState?.lane === 'BOOKING' || callState?.sessionMode === 'BOOKING' ? 'BOOKING_ENGINE' : 'AGENT2_DISCOVERY'
+        }
+      });
+      
+      // ═══════════════════════════════════════════════════════════════════════════
       // CORE RUNTIME - Process turn and collect events in buffer
       // ═══════════════════════════════════════════════════════════════════════════
       const T2_start = Date.now();
@@ -4264,7 +4522,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
       const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
       const elevenLabsVoice = voiceSettings.voiceId;
-      const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
+      
+      // Resolve response text - use runtimeResult.response, fallback to UI config (not hardcoded)
+      let responseText = runtimeResult.response;
+      if (!responseText || !responseText.trim()) {
+        responseText = getRecoveryMessage(company, 'generalError') || 'I can help you with that.';
+      }
 
       // ═══════════════════════════════════════════════════════════════════════════
       // 📊 UPDATE CALL SUMMARY TURN COUNT
@@ -4764,13 +5027,58 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           text: responseText.trim(),
           turnNumber,
           sourceKey: runtimeResult?.matchSource || 'UNKNOWN',
-          provenance: {
-            type: (runtimeResult?.triggerCard?.id || runtimeResult?.matchSource === 'AGENT2_DISCOVERY') ? 'UI_OWNED' : 'HARDCODED',
-            uiPath: runtimeResult?.triggerCard?.id ? 'triggers' : null,
-            matchSource: runtimeResult?.matchSource || null,
-            voiceProviderUsed: localVoiceProviderUsed,
-            audioUrl: audioUrl || null
-          }
+          provenance: (() => {
+            // ═══════════════════════════════════════════════════════════════════════════
+            // PROVENANCE DETERMINATION - WHITELIST-BASED (NOT HARDCODED UNLESS PROVEN)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // UI_OWNED sources: any matchSource that resolves text from UI config
+            // ═══════════════════════════════════════════════════════════════════════════
+            const UI_DRIVEN_SOURCES = new Set([
+              'AGENT2_DISCOVERY',
+              'AGENT2_LLM_FALLBACK',
+              'AGENT2_GREETING',
+              'AGENT2_TRIGGER_MATCH',
+              'AGENT2_PLAYBOOK',
+              'AGENT2_EMPATHY',
+              'AGENT2_HANDOFF',
+              'BOOKING_LOGIC_ENGINE',
+              'SCENARIO_MATCH',
+              'UI_ERROR_FALLBACK',                    // NEW: Error fallbacks resolved from UI
+              'BOOKING_LOGIC_ERROR_FALLBACK',         // Booking errors now use UI config
+              'BOOKING_LOGIC_REJECTED',               // Booking rejected now uses UI config
+              'BREAK_GLASS_NO_FALLBACK',              // Break glass now uses UI config
+              'OPENER_ENGINE',
+              'BRIDGE_LINE'
+            ]);
+            
+            const matchSource = runtimeResult?.matchSource || null;
+            const hasTriggerCard = !!runtimeResult?.triggerCard?.id;
+            const hasUiPath = !!runtimeResult?.errorFallbackUiPath || !!runtimeResult?.uiPath;
+            
+            const isUiOwned = hasTriggerCard || 
+                              UI_DRIVEN_SOURCES.has(matchSource) || 
+                              hasUiPath;
+            
+            // Determine uiPath for Call Review linking
+            let uiPath = null;
+            if (hasTriggerCard) {
+              uiPath = 'triggers';
+            } else if (runtimeResult?.errorFallbackUiPath) {
+              uiPath = runtimeResult.errorFallbackUiPath;
+            } else if (matchSource === 'AGENT2_DISCOVERY') {
+              uiPath = 'aiAgentSettings.agent2.discovery';
+            } else if (matchSource === 'UI_ERROR_FALLBACK') {
+              uiPath = 'aiAgentSettings.llm0Controls.recoveryMessages';
+            }
+            
+            return {
+              type: isUiOwned ? 'UI_OWNED' : 'HARDCODED',
+              uiPath,
+              matchSource,
+              voiceProviderUsed: localVoiceProviderUsed,
+              audioUrl: audioUrl || null
+            };
+          })()
         } : null
       };
     })();

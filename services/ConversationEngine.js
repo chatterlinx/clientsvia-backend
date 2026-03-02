@@ -8992,8 +8992,8 @@ async function processTurn({
         const hadScenarioMatch = scenarioContext && scenarioContext.scenarioId;
         
         if (userTextIsEmpty) {
-            // STT was empty/garbled — asking to repeat is appropriate
-            fallbackReply = "I'm sorry, I didn't catch that. Could you repeat that?";
+            // STT was empty/garbled — gentle prompt (not "repeat that" frustration)
+            fallbackReply = "I didn't quite hear that — could you say it again?";
             fallbackMatchSource = 'SYSTEM_ERROR_FALLBACK_EMPTY_STT';
         } else if (hadScenarioMatch) {
             // We had a scenario match but render failed — give empathetic fallback with funnel
@@ -9006,8 +9006,8 @@ async function processTurn({
                 error: error.message
             });
         } else {
-            // Unknown error state — generic but still helpful
-            fallbackReply = "I'm here to help. Could you tell me a bit more about what's going on?";
+            // Unknown error state — acknowledge and offer help (no blame on caller)
+            fallbackReply = "I can help you with that. What would you like to do?";
             fallbackMatchSource = 'SYSTEM_ERROR_FALLBACK_GENERIC';
         }
         
