@@ -53,13 +53,13 @@ async function quickFix() {
     await mongoose.connect(MONGODB_URI);
     console.log('✅ Connected to MongoDB\n');
     
-    // Get all active companies
-    const companies = await Company.find({ status: 'active' })
+    // Get ALL companies (regardless of status)
+    const companies = await Company.find({})
       .select('_id companyName businessName')
-      .limit(50)
+      .limit(100)
       .lean();
     
-    console.log(`Found ${companies.length} active companies\n`);
+    console.log(`Found ${companies.length} companies\n`);
     console.log('───────────────────────────────────────────────────────────────\n');
     
     const issues = [];
