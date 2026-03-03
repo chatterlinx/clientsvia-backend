@@ -102,6 +102,8 @@ const connectDB = async () => {
         
         const connectionTime = Date.now() - connectionStartTime;
         const dbName = mongoose.connection.name;
+        const dbHost = mongoose.connection.host;
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
         
         // 🚨 CRITICAL: NEVER allow "test" database - even in development
         // User requirement: "we test live as we go like a customer would"
@@ -141,7 +143,7 @@ const connectDB = async () => {
         console.log('║                    🎯 RUNTIME TRUTH - DATABASE CONNECTION                ║');
         console.log('╠═══════════════════════════════════════════════════════════════════════════╣');
         console.log(`║  Environment:     ${(process.env.NODE_ENV || 'undefined').toUpperCase().padEnd(56)} ║`);
-        console.log(`║  Mongo Host:      ${mongoose.connection.host.padEnd(56)} ║`);
+        console.log(`║  Mongo Host:      ${dbHost.padEnd(56)} ║`);
         console.log(`║  Database Name:   ${dbName.padEnd(56)} ║`);
         console.log(`║  Connect Time:    ${(connectionTime + 'ms').padEnd(56)} ║`);
         console.log(`║  Ready State:     ${mongoose.connection.readyState === 1 ? 'CONNECTED'.padEnd(56) : 'ERROR'.padEnd(56)} ║`);
@@ -150,7 +152,7 @@ const connectDB = async () => {
         
         logger.info('✅ [DB] MongoDB connected', {
             connectionTimeMs: connectionTime,
-            host: mongoose.connection.host,
+            host: dbHost,
             database: dbName,
             environment: process.env.NODE_ENV,
             isProduction
