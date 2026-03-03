@@ -686,6 +686,46 @@ class Agent2DiscoveryRunner {
       entities: scrabResult.entities,
       handoffEntities: scrabResult.handoffEntities || scrabResult.entities
     };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SCRABENGINE → TRIGGER HANDOFF REPORT
+    // Shows EXACTLY what ScrabEngine delivers to the trigger matching system
+    // ═══════════════════════════════════════════════════════════════════════════
+    emit('SCRABENGINE_HANDOFF_TO_TRIGGERS', {
+      handoffStep: 'ScrabEngine → Trigger Matching',
+      
+      // WHAT TRIGGERS WILL RECEIVE
+      normalizedInput: normalizedInput,
+      expandedTokens: expandedTokens,
+      originalTokenCount: originalTokens.length,
+      expandedTokenCount: expandedTokens.length,
+      tokensAdded: expandedTokens.length - originalTokens.length,
+      
+      // QUALITY CHECK RESULTS
+      qualityPassed: scrabResult.quality.passed,
+      qualityReason: scrabResult.quality.reason,
+      qualityConfidence: scrabResult.quality.confidence,
+      
+      // TRANSFORMATIONS APPLIED
+      transformationCount: scrabResult.transformations.length,
+      transformationSummary: scrabResult.transformations.map(t => ({
+        stage: t.stage,
+        type: t.type,
+        detail: t.value || t.pattern?.join('+') || t.addedTokens?.slice(0, 3).join(', ')
+      })),
+      
+      // SAMPLE OF EXPANDED TOKENS FOR MATCHING
+      sampleExpandedTokens: expandedTokens.slice(0, 15),
+      
+      // ENTITIES EXTRACTED
+      entitiesFound: Object.keys(scrabResult.entities || {}).filter(k => scrabResult.entities[k]).length,
+      entities: scrabResult.entities,
+      
+      turn,
+      callSid,
+      
+      note: 'This normalized text + expanded tokens will now be matched against trigger keywords/phrases'
+    });
     
     // ══════════════════════════════════════════════════════════════════════════
     // ENTITY EXTRACTION - Use ScrabEngine extracted entities
@@ -1866,8 +1906,44 @@ class Agent2DiscoveryRunner {
     // This event surfaces in Call Console transcript so admins can see EXACTLY
     // why every turn falls through to LLM. Previously this failed silently.
     // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DATABASE CONNECTION & TRIGGER LOADING REPORT
+    // Shows EXACTLY what database we're connected to and what triggers we got
+    // ═══════════════════════════════════════════════════════════════════════════
+    const mongoose = require('mongoose');
+    emit('DATABASE_CONNECTION_INFO', {
+      mongoDbName: mongoose.connection.name,
+      mongoHost: mongoose.connection.host,
+      mongoReadyState: mongoose.connection.readyState,
+      readyStateText: mongoose.connection.readyState === 1 ? 'connected' : 
+                      mongoose.connection.readyState === 0 ? 'disconnected' : 'connecting',
+      companyId,
+      callSid,
+      turn
+    });
+
+    emit('TRIGGER_LOADING_REPORT', {
+      totalTriggersLoaded: triggerCards.length,
+      loadSource: loadMetadata.source,
+      strictMode: loadMetadata.strictMode,
+      activeGroupId: loadMetadata.activeGroupId,
+      isGroupPublished: loadMetadata.isGroupPublished,
+      globalSkippedReason: loadMetadata.globalSkippedReason,
+      companyId,
+      callSid,
+      turn,
+      sampleTriggers: triggerCards.slice(0, 3).map(t => ({
+        ruleId: t.ruleId,
+        label: t.label,
+        scope: t._scope,
+        keywords: (t.match?.keywords || []).slice(0, 5)
+      }))
+    });
+
     if (triggerCards.length === 0) {
       const isStrictEmpty = loadMetadata.source === 'EMPTY_STRICT';
+      
+      // Enhanced diagnostic information
       emit('TRIGGER_POOL_EMPTY', {
         companyId,
         callSid,
@@ -1875,15 +1951,37 @@ class Agent2DiscoveryRunner {
         strictMode: loadMetadata.strictMode,
         source: loadMetadata.source,
         severity: 'CRITICAL',
+        
+        // DATABASE INFO
+        mongoDbName: mongoose.connection.name,
+        mongoHost: mongoose.connection.host,
+        
+        // LOADING DETAILS
+        activeGroupId: loadMetadata.activeGroupId,
+        isGroupPublished: loadMetadata.isGroupPublished,
+        globalSkippedReason: loadMetadata.globalSkippedReason,
+        
+        // USER-FRIENDLY MESSAGE
         message: isStrictEmpty 
           ? 'STRICT MODE: No triggers loaded — legacy fallback blocked' 
           : 'No trigger cards loaded — all turns will fall through to LLM fallback',
+        
+        // SPECIFIC DIAGNOSTICS
+        possibleCauses: [
+          !loadMetadata.activeGroupId ? '❌ No global trigger group assigned to company' : null,
+          loadMetadata.activeGroupId && !loadMetadata.isGroupPublished ? '❌ Global trigger group not published' : null,
+          mongoose.connection.name === 'test' ? '❌ CRITICAL: Connected to "test" database instead of production' : null,
+          'Check local triggers: enabled=true, isDeleted=false, state=published',
+          'Verify companyId matches between call routing and database query'
+        ].filter(Boolean),
+        
         action: isStrictEmpty
           ? 'Create local triggers OR assign a global trigger group. Legacy is disabled in strict mode.'
           : 'Go to Admin → Triggers → Verify group is assigned and published, then click Refresh Cache'
       });
+      
       logger.warn('[Agent2] ⚠️ TRIGGER_POOL_EMPTY — no cards to evaluate', {
-        companyId, callSid, turn
+        companyId, callSid, turn, mongoDbName: mongoose.connection.name
       });
     }
 
@@ -1935,6 +2033,55 @@ class Agent2DiscoveryRunner {
     if (triggerResult.intentGateResult) {
       nextState.agent2.discovery.lastIntentGateResult = triggerResult.intentGateResult;
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TRIGGER MATCHING EXPECTATIONS vs REALITY
+    // Shows what triggers NEED vs what they HAVE
+    // ═══════════════════════════════════════════════════════════════════════════
+    emit('TRIGGER_MATCHING_ANALYSIS', {
+      // WHAT WE HAVE (Input from ScrabEngine)
+      inputProvided: {
+        normalizedText: normalizedInput,
+        expandedTokenCount: expandedTokens.length,
+        sampleTokens: expandedTokens.slice(0, 10)
+      },
+      
+      // WHAT WE NEED (Triggers available to match against)
+      triggersAvailable: {
+        totalCount: triggerCards.length,
+        enabledCount: cardPoolStats.enabled,
+        disabledCount: cardPoolStats.disabled,
+        scopes: {
+          global: triggerCards.filter(t => t._scope === 'GLOBAL').length,
+          local: triggerCards.filter(t => t._scope === 'LOCAL').length
+        },
+        sampleTriggerKeywords: triggerCards.slice(0, 3).map(t => ({
+          label: t.label,
+          keywords: t.match?.keywords || [],
+          phrases: t.match?.phrases || []
+        }))
+      },
+      
+      // MATCHING ATTEMPT RESULT
+      matchingResult: {
+        matched: triggerResult.matched,
+        matchType: triggerResult.matchType,
+        matchedOn: triggerResult.matchedOn,
+        cardLabel: triggerResult.cardLabel,
+        candidatesEvaluated: triggerResult.totalCards,
+        blockedByNegatives: triggerResult.negativeBlocked
+      },
+      
+      // DIAGNOSIS
+      diagnosis: triggerCards.length === 0 
+        ? '❌ NO TRIGGERS AVAILABLE - Cannot match with empty pool'
+        : !triggerResult.matched
+        ? '⚠️ TRIGGERS AVAILABLE BUT NO MATCH - Input tokens did not match any trigger keywords'
+        : '✅ MATCH SUCCESSFUL',
+      
+      turn,
+      callSid
+    });
 
     // Emit detailed trigger evaluation for debugging
     emit('A2_TRIGGER_EVAL', {
