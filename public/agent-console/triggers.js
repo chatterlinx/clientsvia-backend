@@ -82,6 +82,7 @@
     headerCompanyId: document.getElementById('header-company-id'),
     btnBack: document.getElementById('btn-back'),
     btnBackToAgent2: document.getElementById('btn-back-to-agent2'),
+    btnManageBuckets: document.getElementById('btn-manage-buckets'),  // NEW
     btnAddTrigger: document.getElementById('btn-add-trigger'),
     btnClearAllAudio: document.getElementById('btn-clear-all-audio'),
     btnBulkGenerateAudio: document.getElementById('btn-bulk-generate-audio'),
