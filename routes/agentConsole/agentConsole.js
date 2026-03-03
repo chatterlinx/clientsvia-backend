@@ -262,6 +262,225 @@ router.post('/:companyId/triggers/refresh', authenticateJWT, async (req, res) =>
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// GET /:companyId/triggers/diagnostics — Full Trigger Loading Diagnostics
+// ════════════════════════════════════════════════════════════════════════════
+// Provides comprehensive debugging information about why triggers are or aren't
+// loading for a company at runtime. Mirrors the exact loading logic from
+// TriggerService to show what the call runtime would see.
+router.get('/:companyId/triggers/diagnostics', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    const diagnostics = {
+      companyId,
+      timestamp: new Date().toISOString(),
+      steps: []
+    };
+    
+    // STEP 1: Check company exists
+    const company = await v2Company.findById(companyId);
+    diagnostics.steps.push({
+      step: 1,
+      name: 'Company Lookup',
+      success: Boolean(company),
+      companyName: company?.name || null,
+      businessType: company?.businessType || null
+    });
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found',
+        diagnostics
+      });
+    }
+    
+    // STEP 2: Check CompanyTriggerSettings
+    const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+    diagnostics.steps.push({
+      step: 2,
+      name: 'CompanyTriggerSettings',
+      success: Boolean(settings),
+      activeGroupId: settings?.activeGroupId || null,
+      strictMode: settings?.strictMode,
+      hiddenTriggerCount: settings?.hiddenTriggerIds?.length || 0
+    });
+    
+    // STEP 3: Check Global Trigger Group (if assigned)
+    let groupInfo = null;
+    let isGroupPublished = false;
+    if (settings?.activeGroupId) {
+      const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+      isGroupPublished = group && group.publishedVersion > 0;
+      groupInfo = {
+        found: Boolean(group),
+        groupId: group?.groupId || settings.activeGroupId,
+        name: group?.name || null,
+        publishedVersion: group?.publishedVersion || 0,
+        isDraft: group?.isDraft,
+        isPublished: isGroupPublished
+      };
+      diagnostics.steps.push({
+        step: 3,
+        name: 'Global Trigger Group',
+        success: Boolean(group),
+        ...groupInfo
+      });
+    } else {
+      diagnostics.steps.push({
+        step: 3,
+        name: 'Global Trigger Group',
+        skipped: true,
+        reason: 'No activeGroupId in settings'
+      });
+    }
+    
+    // STEP 4: Query Global Triggers (same query as runtime)
+    let globalTriggers = [];
+    if (settings?.activeGroupId && isGroupPublished) {
+      globalTriggers = await GlobalTrigger.findPublishedByGroupId(settings.activeGroupId);
+      diagnostics.steps.push({
+        step: 4,
+        name: 'Global Triggers Query',
+        query: {
+          groupId: settings.activeGroupId.toLowerCase(),
+          state: 'published',
+          enabled: true,
+          isDeleted: { $ne: true }
+        },
+        count: globalTriggers.length,
+        first5: globalTriggers.slice(0, 5).map(t => ({
+          ruleId: t.ruleId,
+          label: t.label,
+          priority: t.priority,
+          enabled: t.enabled,
+          state: t.state,
+          keywordCount: (t.keywords || []).length
+        }))
+      });
+    } else {
+      diagnostics.steps.push({
+        step: 4,
+        name: 'Global Triggers Query',
+        skipped: true,
+        reason: !settings?.activeGroupId 
+          ? 'No activeGroupId' 
+          : 'Group not published (publishedVersion = 0)'
+      });
+    }
+    
+    // STEP 5: Query Local Triggers (same query as runtime)
+    const localTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
+    const allLocalTriggers = await CompanyLocalTrigger.find({ companyId });
+    
+    diagnostics.steps.push({
+      step: 5,
+      name: 'Local Triggers Query',
+      query: {
+        companyId,
+        enabled: true,
+        isDeleted: { $ne: true }
+      },
+      count: localTriggers.length,
+      first5: localTriggers.slice(0, 5).map(t => ({
+        ruleId: t.ruleId,
+        label: t.label,
+        priority: t.priority,
+        enabled: t.enabled,
+        keywordCount: (t.keywords || []).length
+      })),
+      totalInDatabase: allLocalTriggers.length,
+      disabled: allLocalTriggers.filter(t => !t.enabled).length,
+      deleted: allLocalTriggers.filter(t => t.isDeleted).length
+    });
+    
+    // STEP 6: Final Assessment
+    const totalAtRuntime = globalTriggers.length + localTriggers.length;
+    diagnostics.summary = {
+      totalTriggersAtRuntime: totalAtRuntime,
+      globalTriggers: globalTriggers.length,
+      localTriggers: localTriggers.length,
+      success: totalAtRuntime > 0
+    };
+    
+    if (totalAtRuntime === 0) {
+      diagnostics.problem = {
+        identified: true,
+        message: 'ZERO triggers will be loaded at runtime',
+        causes: []
+      };
+      
+      if (!settings?.activeGroupId) {
+        diagnostics.problem.causes.push({
+          issue: 'No global trigger group assigned',
+          fix: 'Assign a group in CompanyTriggerSettings.activeGroupId'
+        });
+      } else if (!groupInfo?.found) {
+        diagnostics.problem.causes.push({
+          issue: `Global group assigned but does NOT exist: ${settings.activeGroupId}`,
+          fix: 'Fix the activeGroupId or create the missing group'
+        });
+      } else if (!isGroupPublished) {
+        diagnostics.problem.causes.push({
+          issue: 'Global group exists but is NOT published',
+          fix: 'Publish the group to activate global triggers'
+        });
+      } else if (globalTriggers.length === 0) {
+        diagnostics.problem.causes.push({
+          issue: 'Global group is published but contains 0 enabled triggers',
+          fix: 'Add triggers to the group or enable existing ones'
+        });
+      }
+      
+      if (localTriggers.length === 0) {
+        if (allLocalTriggers.length > 0) {
+          diagnostics.problem.causes.push({
+            issue: 'Local triggers exist but are disabled or deleted',
+            fix: `Re-enable triggers (${allLocalTriggers.filter(t => !t.enabled).length} disabled, ${allLocalTriggers.filter(t => t.isDeleted).length} deleted)`,
+            data: {
+              total: allLocalTriggers.length,
+              disabled: allLocalTriggers.filter(t => !t.enabled).length,
+              deleted: allLocalTriggers.filter(t => t.isDeleted).length
+            }
+          });
+        } else {
+          diagnostics.problem.causes.push({
+            issue: 'No local triggers found in database',
+            fix: 'Create local triggers for this company'
+          });
+        }
+      }
+    } else {
+      diagnostics.problem = {
+        identified: false,
+        message: `${totalAtRuntime} trigger(s) will be loaded at runtime - SYSTEM IS WORKING`
+      };
+    }
+    
+    logger.info('[AgentConsole] Trigger diagnostics run', { 
+      companyId, 
+      totalAtRuntime,
+      problemIdentified: diagnostics.problem.identified
+    });
+    
+    res.json({
+      success: true,
+      diagnostics
+    });
+    
+  } catch (error) {
+    logger.error('[AgentConsole] Trigger diagnostics error:', { 
+      error: error.message,
+      stack: error.stack 
+    });
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
 /* ============================================================================
    TRUTH CACHE — Short TTL to prevent Mongo hammering
    ============================================================================ */

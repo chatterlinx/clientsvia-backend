@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trigger Loading Diagnostics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background: #2563eb;
+        }
+        
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+        
+        .spinner {
+            border: 3px solid #334155;
+            border-top: 3px solid #60a5fa;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .summary {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .summary.success {
+            border-left-color: #10b981;
+        }
+        
+        .summary.error {
+            border-left-color: #ef4444;
+        }
+        
+        .summary h2 {
+            color: #60a5fa;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .summary.success h2 {
+            color: #34d399;
+        }
+        
+        .summary.error h2 {
+            color: #f87171;
+        }
+        
+        .stat {
+            display: inline-block;
+            margin-right: 24px;
+            margin-top: 8px;
+        }
+        
+        .stat-label {
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            color: #e2e8f0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        .step {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            border-left: 4px solid #475569;
+        }
+        
+        .step.success {
+            border-left-color: #10b981;
+        }
+        
+        .step.error {
+            border-left-color: #ef4444;
+        }
+        
+        .step.skipped {
+            border-left-color: #f59e0b;
+        }
+        
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        
+        .step-badge {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .step-badge.success {
+            background: #064e3b;
+            color: #34d399;
+        }
+        
+        .step-badge.error {
+            background: #7f1d1d;
+            color: #f87171;
+        }
+        
+        .step-badge.skipped {
+            background: #78350f;
+            color: #fbbf24;
+        }
+        
+        .step-details {
+            color: #94a3b8;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        
+        .step-details code {
+            background: #1e293b;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: #60a5fa;
+        }
+        
+        .problem {
+            background: #7f1d1d;
+            padding: 16px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        
+        .problem h3 {
+            color: #fca5a5;
+            margin-bottom: 12px;
+        }
+        
+        .cause {
+            background: #450a0a;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .cause-issue {
+            color: #f87171;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .cause-fix {
+            color: #fca5a5;
+            font-size: 13px;
+        }
+        
+        .trigger-list {
+            margin-top: 12px;
+        }
+        
+        .trigger-item {
+            background: #1e293b;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .trigger-label {
+            color: #e2e8f0;
+        }
+        
+        .trigger-meta {
+            color: #64748b;
+            font-size: 11px;
+        }
+        
+        pre {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin-top: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Trigger Loading Diagnostics</h1>
+        <p class="subtitle">Debug why triggers are or aren't loading for a company at runtime</p>
+        
+        <div class="input-group">
+            <label for="companyId">Company ID</label>
+            <input type="text" id="companyId" placeholder="68e3f77a9d623b8058c700c4" value="68e3f77a9d623b8058c700c4">
+            <button onclick="runDiagnostics()">Run Diagnostics</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing trigger loading...</p>
+        </div>
+        
+        <div id="results" style="display: none;"></div>
+    </div>
+    
+    <script>
+        async function runDiagnostics() {
+            const companyId = document.getElementById('companyId').value.trim();
+            if (!companyId) {
+                alert('Please enter a company ID');
+                return;
+            }
+            
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            results.innerHTML = '';
+            
+            try {
+                // Use current domain (works for both local and production)
+                const response = await fetch(`/api/agent-console/${companyId}/triggers/diagnostics`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Diagnostics failed');
+                }
+                
+                renderResults(data.diagnostics);
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="summary error">
+                        <h2>Error</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                loading.style.display = 'none';
+                results.style.display = 'block';
+            }
+        }
+        
+        function renderResults(diag) {
+            const results = document.getElementById('results');
+            const { summary, steps, problem } = diag;
+            
+            let html = `
+                <div class="summary ${summary.success ? 'success' : 'error'}">
+                    <h2>${summary.success ? '✅ Triggers Loading Successfully' : '❌ No Triggers Loading'}</h2>
+                    <div>
+                        <div class="stat">
+                            <div class="stat-label">Total at Runtime</div>
+                            <div class="stat-value">${summary.totalTriggersAtRuntime}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Global</div>
+                            <div class="stat-value">${summary.globalTriggers}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Local</div>
+                            <div class="stat-value">${summary.localTriggers}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Render each step
+            html += '<h2 style="margin-top: 24px; margin-bottom: 12px; color: #94a3b8; font-size: 14px; text-transform: uppercase;">Loading Steps</h2>';
+            
+            steps.forEach(step => {
+                const status = step.skipped ? 'skipped' : (step.success ? 'success' : 'error');
+                const badge = step.skipped ? 'SKIPPED' : (step.success ? 'OK' : 'FAILED');
+                
+                html += `
+                    <div class="step ${status}">
+                        <div class="step-header">
+                            <span class="step-title">Step ${step.step}: ${step.name}</span>
+                            <span class="step-badge ${status}">${badge}</span>
+                        </div>
+                        <div class="step-details">
+                            ${renderStepDetails(step)}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // Render problem analysis if any
+            if (problem && problem.identified) {
+                html += `
+                    <div class="problem">
+                        <h3>🚨 Problem Analysis</h3>
+                        <p style="color: #fca5a5; margin-bottom: 16px;">${problem.message}</p>
+                        ${problem.causes.map(cause => `
+                            <div class="cause">
+                                <div class="cause-issue">❌ ${cause.issue}</div>
+                                <div class="cause-fix">→ ${cause.fix}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            results.innerHTML = html;
+        }
+        
+        function renderStepDetails(step) {
+            if (step.skipped) {
+                return `<p>⏭️ ${step.reason}</p>`;
+            }
+            
+            let details = [];
+            
+            // Step 1: Company
+            if (step.step === 1) {
+                if (step.success) {
+                    details.push(`Company: <code>${step.companyName}</code>`);
+                    if (step.businessType) details.push(`Business Type: <code>${step.businessType}</code>`);
+                }
+            }
+            
+            // Step 2: Settings
+            if (step.step === 2) {
+                if (step.success) {
+                    details.push(`Active Group: <code>${step.activeGroupId || 'NONE'}</code>`);
+                    details.push(`Strict Mode: <code>${step.strictMode}</code>`);
+                    if (step.hiddenTriggerCount > 0) {
+                        details.push(`Hidden Triggers: <code>${step.hiddenTriggerCount}</code>`);
+                    }
+                } else {
+                    details.push('No CompanyTriggerSettings found - using defaults');
+                }
+            }
+            
+            // Step 3: Global Group
+            if (step.step === 3) {
+                if (step.success) {
+                    details.push(`Group: <code>${step.name}</code>`);
+                    details.push(`Published Version: <code>${step.publishedVersion}</code>`);
+                    details.push(`Is Published: <code>${step.isPublished ? 'YES' : 'NO'}</code>`);
+                    if (!step.isPublished) {
+                        details.push('<p style="color: #f59e0b; margin-top: 8px;">⚠️ Group is NOT published - global triggers will not load!</p>');
+                    }
+                }
+            }
+            
+            // Step 4: Global Triggers
+            if (step.step === 4) {
+                if (step.count !== undefined) {
+                    details.push(`Found: <code>${step.count}</code> triggers`);
+                    if (step.first5 && step.first5.length > 0) {
+                        details.push('<div class="trigger-list">');
+                        step.first5.forEach(t => {
+                            details.push(`
+                                <div class="trigger-item">
+                                    <span class="trigger-label">${t.label}</span>
+                                    <span class="trigger-meta">Priority: ${t.priority} | Keywords: ${t.keywordCount}</span>
+                                </div>
+                            `);
+                        });
+                        if (step.count > 5) {
+                            details.push(`<p style="color: #64748b; font-size: 12px; margin-top: 8px;">... and ${step.count - 5} more</p>`);
+                        }
+                        details.push('</div>');
+                    }
+                }
+            }
+            
+            // Step 5: Local Triggers
+            if (step.step === 5) {
+                details.push(`Active: <code>${step.count}</code> triggers`);
+                details.push(`Total in DB: <code>${step.totalInDatabase}</code> (${step.disabled} disabled, ${step.deleted} deleted)`);
+                if (step.first5 && step.first5.length > 0) {
+                    details.push('<div class="trigger-list">');
+                    step.first5.forEach(t => {
+                        details.push(`
+                            <div class="trigger-item">
+                                <span class="trigger-label">${t.label}</span>
+                                <span class="trigger-meta">Priority: ${t.priority} | Keywords: ${t.keywordCount}</span>
+                            </div>
+                        `);
+                    });
+                    if (step.count > 5) {
+                        details.push(`<p style="color: #64748b; font-size: 12px; margin-top: 8px;">... and ${step.count - 5} more</p>`);
+                    }
+                    details.push('</div>');
+                }
+            }
+            
+            return details.join('<br>');
+        }
+    </script>
+</body>
+</html>
