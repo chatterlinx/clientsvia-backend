@@ -895,36 +895,24 @@
       const healthResponse = await apiFetch(`${CONFIG.API_BASE_AGENT2}/trigger-buckets/${state.companyId}/health`);
       if (healthResponse && healthResponse.data) {
         state.bucketHealth = healthResponse.data;
+        renderBucketHealthBar();
       }
       
     } catch (error) {
       console.error('[Buckets] Failed to load:', error);
       state.buckets = [];
       state.bucketHealth = null;
-    } finally {
-      // Always render the health bar (even if no data)
-      renderBucketHealthBar();
     }
   }
   
   function renderBucketHealthBar() {
+    if (!state.bucketHealth) return;
+    
     const healthBar = document.getElementById('bucket-health-bar');
     if (!healthBar) return;
     
     // Show the health bar
     healthBar.style.display = 'flex';
-    
-    if (!state.bucketHealth) {
-      // No health data - show simple bucket manager link
-      healthBar.className = 'bucket-health-bar health-bar-info';
-      healthBar.innerHTML = `
-        <span>🗂️ Trigger Buckets — Organize triggers for faster AI classification</span>
-        <button class="btn btn-sm" onclick="BucketManager.openBucketModal()">
-          Manage Buckets
-        </button>
-      `;
-      return;
-    }
     
     // Use BucketManager to render it
     if (window.BucketManager) {
