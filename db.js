@@ -51,6 +51,28 @@ const connectDB = async () => {
         throw new Error('MONGODB_URI is not defined.');
     }
 
+    // 🚨 CRITICAL: Validate URI includes explicit database name
+    // We NEVER use default "test" database - always explicit production DB
+    const uriMatch = uri.match(/mongodb(?:\+srv)?:\/\/[^/]+\/([^?]+)/);
+    const dbNameFromUri = uriMatch ? uriMatch[1] : null;
+    
+    if (!dbNameFromUri || dbNameFromUri === '') {
+        const errorMsg = '🔴 FATAL: MONGODB_URI missing database name - would default to "test"';
+        console.error('[MongoDB Connection]', errorMsg);
+        console.error('[MongoDB Connection] Current URI pattern: mongodb://...@host/?options');
+        console.error('[MongoDB Connection] Required URI pattern: mongodb://...@host/clientsvia?options');
+        console.error('[MongoDB Connection]                                          ^^^^^^^^^^');
+        console.error('[MongoDB Connection] Add database name after host, before "?"');
+        
+        throw new Error('MONGODB_URI must include explicit database name (e.g., /clientsvia). We do not use "test" database.');
+    }
+    
+    if (dbNameFromUri === 'test') {
+        throw new Error('MONGODB_URI explicitly set to "test" database. Change to /clientsvia');
+    }
+    
+    console.log('[MongoDB Connection] URI validation: ✅ Database name present:', dbNameFromUri);
+
     const connectionStartTime = Date.now();
 
     try {
@@ -71,27 +93,30 @@ const connectDB = async () => {
         const connectionTime = Date.now() - connectionStartTime;
         const dbName = mongoose.connection.name;
         
-        // 🚨 CRITICAL: Prevent production from using "test" database
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
-        if (isProduction && dbName === 'test') {
-            const errorMsg = '🔴 FATAL: Production server connected to "test" database! This is a critical configuration error.';
+        // 🚨 CRITICAL: NEVER allow "test" database - even in development
+        // User requirement: "we test live as we go like a customer would"
+        // NO test mode switches, NO accidental test database usage
+        if (dbName === 'test') {
+            const errorMsg = '🔴 FATAL: Server connected to "test" database! This is NEVER allowed.';
             console.error('[MongoDB Connection]', errorMsg);
-            console.error('[MongoDB Connection] URI must include database name: mongodb://.../<database_name>?...');
+            console.error('[MongoDB Connection] We do not use "test" mode or "test" database.');
+            console.error('[MongoDB Connection] URI must include explicit database name: mongodb://.../<database_name>?...');
+            console.error('[MongoDB Connection] Expected: mongodb://...@cluster.../clientsvia?...');
             console.error('[MongoDB Connection] Current DB:', dbName);
             
             if (AdminNotificationService) {
                 await AdminNotificationService.sendAlert({
-                    code: 'DB_CONNECTION_TEST_IN_PROD',
+                    code: 'DB_CONNECTION_TEST_BLOCKED',
                     severity: 'CRITICAL',
                     companyId: null,
                     companyName: 'Platform',
-                    message: '🔴 FATAL: Production connected to "test" database',
-                    details: `Production server is connected to MongoDB database "test" instead of production database. This causes data isolation issues. Fix MONGODB_URI to include explicit database name.`,
+                    message: '🔴 FATAL: Attempted to connect to "test" database',
+                    details: `Server tried to connect to MongoDB "test" database. This is never allowed - we test live with production database. Fix MONGODB_URI to include explicit database name (/clientsvia).`,
                     stackTrace: new Error().stack
                 }).catch(notifErr => logger.error('Failed to send DB test alert:', notifErr));
             }
             
-            throw new Error('Production cannot connect to "test" database. Update MONGODB_URI to include explicit database name.');
+            throw new Error('NEVER use "test" database. Update MONGODB_URI to: mongodb://...@cluster.../clientsvia?...');
         }
         
         console.log('[Mongoose Connection] [OK] Successfully connected to MongoDB via Mongoose!');
