@@ -1301,6 +1301,38 @@
     
     // Build answer format badges
     const hasFollowUp = !!(trigger.followUp?.question || '').trim();
+    
+    // PUBLISH STATUS: Check if trigger is published (for LOCAL triggers only)
+    const isLocalTrigger = trigger.scope === 'LOCAL';
+    const isPublished = trigger.state === 'published';
+    const isDraft = trigger.state === 'draft';
+    const isUnpublished = !trigger.state || trigger.state === null;
+    
+    let publishStatusHtml = '';
+    if (isLocalTrigger) {
+      if (isPublished) {
+        publishStatusHtml = `
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 4px; flex-shrink: 0;" title="Published - Visible to agent runtime">
+            <circle cx="7" cy="7" r="6.5" fill="#10b981" stroke="#059669" stroke-width="1"/>
+            <path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `;
+      } else if (isDraft) {
+        publishStatusHtml = `
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 4px; flex-shrink: 0;" title="Draft - Not visible to agent">
+            <circle cx="7" cy="7" r="6.5" fill="#f59e0b" stroke="#d97706" stroke-width="1"/>
+            <path d="M7 4v3M7 10h.01" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        `;
+      } else {
+        publishStatusHtml = `
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 4px; flex-shrink: 0;" title="⚠️ UNPUBLISHED - Agent CANNOT see this trigger!">
+            <circle cx="7" cy="7" r="6.5" fill="#ef4444" stroke="#dc2626" stroke-width="1"/>
+            <path d="M7 4v3M7 10h.01" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        `;
+      }
+    }
     let answerBadges = '';
     if (isLlmMode) {
       answerBadges = '<span class="answer-badge llm" title="LLM Fact Pack - AI-generated responses">LLM</span>';
@@ -1322,6 +1354,9 @@
                  data-trigger-id="${trigger.triggerId}"
                  ${isSelected ? 'checked' : ''}
                  title="Select for bulk action">
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center;">
+          ${publishStatusHtml}
         </div>
         <div>
           <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>

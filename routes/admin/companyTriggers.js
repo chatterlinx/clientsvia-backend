@@ -254,6 +254,9 @@ async function buildMergedTriggerList(companyId) {
       ruleId: lt.ruleId,
       label: lt.label,
       scope: 'LOCAL',
+      state: lt.state || null,  // PUBLISH STATUS: null, "draft", or "published"
+      publishedAt: lt.publishedAt || null,
+      publishedBy: lt.publishedBy || null,
       originGroupId: lt.overrideOfGroupId || null,
       originGroupName: null,
       isEnabled: lt.enabled,
