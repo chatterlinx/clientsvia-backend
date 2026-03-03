@@ -132,13 +132,28 @@ const connectDB = async () => {
             throw new Error('NEVER use "test" database. Update MONGODB_URI to: mongodb://...@cluster.../clientsvia?...');
         }
         
-        console.log('[Mongoose Connection] [OK] Successfully connected to MongoDB via Mongoose!');
+        // ═══════════════════════════════════════════════════════════════════════════
+        // STARTUP TRUTH BANNER - LOUD, VISIBLE, CANNOT BE IGNORED
+        // Shows EXACTLY where production data lives - no guessing, no defaults
+        // ═══════════════════════════════════════════════════════════════════════════
+        console.log('\n');
+        console.log('╔═══════════════════════════════════════════════════════════════════════════╗');
+        console.log('║                    🎯 RUNTIME TRUTH - DATABASE CONNECTION                ║');
+        console.log('╠═══════════════════════════════════════════════════════════════════════════╣');
+        console.log(`║  Environment:     ${(process.env.NODE_ENV || 'undefined').toUpperCase().padEnd(56)} ║`);
+        console.log(`║  Mongo Host:      ${mongoose.connection.host.padEnd(56)} ║`);
+        console.log(`║  Database Name:   ${dbName.padEnd(56)} ║`);
+        console.log(`║  Connect Time:    ${(connectionTime + 'ms').padEnd(56)} ║`);
+        console.log(`║  Ready State:     ${mongoose.connection.readyState === 1 ? 'CONNECTED'.padEnd(56) : 'ERROR'.padEnd(56)} ║`);
+        console.log('╚═══════════════════════════════════════════════════════════════════════════╝');
+        console.log('');
+        
         logger.info('✅ [DB] MongoDB connected', {
             connectionTimeMs: connectionTime,
             host: mongoose.connection.host,
             database: dbName,
-            isProduction,
-            warningTestDb: dbName === 'test' ? 'Using "test" database - should only happen in development' : null
+            environment: process.env.NODE_ENV,
+            isProduction
         });
 
         // ⚠️ WARNING: Slow database connection

@@ -339,6 +339,38 @@ companyLocalTriggerSchema.index(
 companyLocalTriggerSchema.index({ companyId: 1, overrideOfRuleId: 1 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PRE-SAVE HOOKS - ENFORCE HARD RULES (NO HIDDEN DEFAULTS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+companyLocalTriggerSchema.pre('save', function(next) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HARD RULE: Local triggers are ALWAYS published
+  // We do not use draft mode for local triggers - they go live immediately
+  // This prevents the "state:null" trap that caused 12-hour debugging session
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (!this.state || this.state === null || this.state === undefined) {
+    this.state = 'published';
+  }
+  
+  // If being published, record timestamp
+  if (this.state === 'published' && !this.publishedAt) {
+    this.publishedAt = new Date();
+  }
+  
+  // Ensure booleans are actually booleans (prevent string "true"/"false")
+  this.enabled = Boolean(this.enabled);
+  this.isDeleted = Boolean(this.isDeleted);
+  this.isOverride = Boolean(this.isOverride);
+  
+  // Ensure companyId is always a string (never ObjectId)
+  if (this.companyId && typeof this.companyId !== 'string') {
+    this.companyId = this.companyId.toString();
+  }
+  
+  next();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STATICS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -350,11 +382,19 @@ companyLocalTriggerSchema.statics.generateTriggerId = function(companyId, ruleId
 };
 
 // RUNTIME: Load ONLY enabled, non-deleted triggers
+// BACKWARD COMPATIBLE: Treats state:null as published (prevents ghost data trap)
 companyLocalTriggerSchema.statics.findActiveByCompanyId = function(companyId) {
   return this.find({
     companyId,
     enabled: true,
-    isDeleted: { $ne: true }
+    isDeleted: { $ne: true },
+    // Accept BOTH published and null state (backward compatibility for old data)
+    // Pre-save hook ensures new writes always have state:published
+    $or: [
+      { state: 'published' },
+      { state: null },
+      { state: { $exists: false } }
+    ]
   })
     .sort({ priority: 1 })
     .lean();

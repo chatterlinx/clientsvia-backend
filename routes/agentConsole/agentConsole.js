@@ -236,6 +236,322 @@ router.post('/:companyId/triggers/clear-legacy', authenticateJWT, async (req, re
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// GET /:companyId/truth-panel — Live runtime truth (cannot be cached lies)
+// ════════════════════════════════════════════════════════════════════════════
+// Shows EXACTLY what the runtime sees RIGHT NOW - no cache, no guessing
+// This is the "one truth" dashboard that prevents ghost reality scenarios
+router.get('/:companyId/truth-panel', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const mongoose = require('mongoose');
+    
+    const truth = {
+      timestamp: new Date().toISOString(),
+      companyId,
+      
+      // DATABASE TRUTH
+      database: {
+        name: mongoose.connection.name,
+        host: mongoose.connection.host,
+        readyState: mongoose.connection.readyState,
+        readyStateText: mongoose.connection.readyState === 1 ? 'CONNECTED' : 
+                        mongoose.connection.readyState === 0 ? 'DISCONNECTED' : 'OTHER',
+        environment: process.env.NODE_ENV
+      },
+      
+      // TRIGGER COUNTS (LIVE QUERY - NO CACHE)
+      triggers: {},
+      
+      // SETTINGS
+      settings: {}
+    };
+    
+    // Query CompanyTriggerSettings
+    const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+    truth.settings = {
+      exists: Boolean(settings),
+      activeGroupId: settings?.activeGroupId || null,
+      strictMode: settings?.strictMode || false,
+      hiddenTriggerCount: settings?.hiddenTriggerIds?.length || 0
+    };
+    
+    // Query Global Triggers (if group assigned)
+    let globalPublished = 0;
+    let globalDraft = 0;
+    let groupPublishedVersion = 0;
+    
+    if (settings?.activeGroupId) {
+      const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+      groupPublishedVersion = group?.publishedVersion || 0;
+      
+      const allGlobal = await GlobalTrigger.find({
+        groupId: settings.activeGroupId.toLowerCase(),
+        enabled: true,
+        isDeleted: { $ne: true }
+      });
+      
+      globalPublished = allGlobal.filter(t => t.state === 'published').length;
+      globalDraft = allGlobal.filter(t => t.state === 'draft').length;
+    }
+    
+    // Query Local Triggers (ALL states)
+    const allLocal = await CompanyLocalTrigger.find({ companyId });
+    const localPublished = allLocal.filter(t => t.state === 'published' && t.enabled && !t.isDeleted).length;
+    const localDraft = allLocal.filter(t => t.state === 'draft').length;
+    const localNullState = allLocal.filter(t => !t.state || t.state === null).length;
+    const localDisabled = allLocal.filter(t => !t.enabled).length;
+    const localDeleted = allLocal.filter(t => t.isDeleted).length;
+    
+    truth.triggers = {
+      global: {
+        published: globalPublished,
+        draft: globalDraft,
+        total: globalPublished + globalDraft,
+        groupId: settings?.activeGroupId || null,
+        groupPublishedVersion
+      },
+      local: {
+        published: localPublished,
+        draft: localDraft,
+        nullState: localNullState,
+        disabled: localDisabled,
+        deleted: localDeleted,
+        total: allLocal.length,
+        activeAtRuntime: localPublished  // What runtime will actually load
+      },
+      runtimeTotal: globalPublished + localPublished,
+      
+      // PROBLEMS
+      problems: []
+    };
+    
+    // Identify problems
+    if (truth.triggers.runtimeTotal === 0) {
+      truth.triggers.problems.push({
+        severity: 'CRITICAL',
+        issue: 'Zero triggers will load at runtime',
+        causes: []
+      });
+      
+      if (!settings?.activeGroupId) {
+        truth.triggers.problems[0].causes.push('No global trigger group assigned');
+      } else if (groupPublishedVersion === 0) {
+        truth.triggers.problems[0].causes.push('Global group not published');
+      } else if (globalPublished === 0) {
+        truth.triggers.problems[0].causes.push('Global group published but contains 0 published triggers');
+      }
+      
+      if (localPublished === 0) {
+        if (localNullState > 0) {
+          truth.triggers.problems[0].causes.push(`${localNullState} local triggers have state:null (need state:"published")`);
+        }
+        if (localDisabled > 0) {
+          truth.triggers.problems[0].causes.push(`${localDisabled} local triggers disabled`);
+        }
+        if (localDraft > 0) {
+          truth.triggers.problems[0].causes.push(`${localDraft} local triggers in draft state`);
+        }
+        if (allLocal.length === 0) {
+          truth.triggers.problems[0].causes.push('No local triggers exist in database');
+        }
+      }
+    }
+    
+    if (truth.database.name === 'test') {
+      truth.triggers.problems.push({
+        severity: 'CRITICAL',
+        issue: 'Connected to "test" database',
+        causes: ['MONGODB_URI missing database name - defaulting to "test"'],
+        fix: 'Update MONGODB_URI to include /clientsvia'
+      });
+    }
+    
+    if (localNullState > 0) {
+      truth.triggers.problems.push({
+        severity: 'WARNING',
+        issue: `${localNullState} triggers have state:null`,
+        fix: 'Run: db.companyLocalTriggers.updateMany({companyId,state:null},{$set:{state:"published"}})'
+      });
+    }
+    
+    res.json({
+      success: true,
+      truth
+    });
+    
+  } catch (error) {
+    logger.error('[AgentConsole] Truth panel error:', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/admin/cleanup — Dangerous operations with audit logging
+// ════════════════════════════════════════════════════════════════════════════
+// One endpoint for all destructive operations - logs who/when/what
+// Operations: delete-ghost-groups, normalize-trigger-states, force-publish-locals
+router.post('/:companyId/admin/cleanup', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { operation, confirm } = req.body;
+    const userId = req.user?.id || 'unknown';
+    const userEmail = req.user?.email || 'unknown';
+    
+    if (confirm !== 'YES_I_UNDERSTAND_THIS_IS_DANGEROUS') {
+      return res.status(400).json({
+        success: false,
+        error: 'Confirmation required',
+        requiredConfirm: 'YES_I_UNDERSTAND_THIS_IS_DANGEROUS'
+      });
+    }
+    
+    const auditLog = {
+      timestamp: new Date().toISOString(),
+      operation,
+      companyId,
+      userId,
+      userEmail,
+      result: null,
+      error: null
+    };
+    
+    logger.warn('[AdminCleanup] 🚨 DANGEROUS OPERATION REQUESTED', {
+      operation,
+      companyId,
+      userId,
+      userEmail
+    });
+    
+    let result;
+    
+    switch (operation) {
+      // ════════════════════════════════════════════════════════════════════
+      // DELETE GHOST TRIGGER GROUPS
+      // ════════════════════════════════════════════════════════════════════
+      case 'delete-ghost-groups': {
+        const ghostGroupIds = req.body.groupIds || [];
+        
+        if (!Array.isArray(ghostGroupIds) || ghostGroupIds.length === 0) {
+          return res.status(400).json({ error: 'groupIds array required' });
+        }
+        
+        // Check if any company is using these groups
+        const companiesUsing = await CompanyTriggerSettings.find({
+          activeGroupId: { $in: ghostGroupIds }
+        });
+        
+        if (companiesUsing.length > 0) {
+          return res.status(400).json({
+            error: 'Cannot delete - groups are in use',
+            companiesUsing: companiesUsing.map(c => ({ companyId: c.companyId, groupId: c.activeGroupId }))
+          });
+        }
+        
+        // Safe to delete
+        const deleted = await GlobalTriggerGroup.deleteMany({
+          groupId: { $in: ghostGroupIds }
+        });
+        
+        result = {
+          operation: 'delete-ghost-groups',
+          groupIds: ghostGroupIds,
+          deletedCount: deleted.deletedCount
+        };
+        break;
+      }
+      
+      // ════════════════════════════════════════════════════════════════════
+      // NORMALIZE LOCAL TRIGGER STATES (Fix state:null → state:published)
+      // ════════════════════════════════════════════════════════════════════
+      case 'normalize-local-trigger-states': {
+        const updated = await CompanyLocalTrigger.updateMany(
+          { 
+            companyId,
+            $or: [
+              { state: null },
+              { state: { $exists: false } }
+            ]
+          },
+          { 
+            $set: { 
+              state: 'published',
+              publishedAt: new Date(),
+              updatedAt: new Date()
+            } 
+          }
+        );
+        
+        result = {
+          operation: 'normalize-local-trigger-states',
+          modifiedCount: updated.modifiedCount
+        };
+        break;
+      }
+      
+      // ════════════════════════════════════════════════════════════════════
+      // FORCE PUBLISH ALL LOCAL TRIGGERS
+      // ════════════════════════════════════════════════════════════════════
+      case 'force-publish-all-locals': {
+        const updated = await CompanyLocalTrigger.updateMany(
+          { companyId },
+          { 
+            $set: { 
+              state: 'published',
+              enabled: true,
+              publishedAt: new Date(),
+              updatedAt: new Date()
+            } 
+          }
+        );
+        
+        const TriggerService = require('../../services/engine/agent2/TriggerService');
+        TriggerService.invalidateCacheForCompany(companyId);
+        
+        result = {
+          operation: 'force-publish-all-locals',
+          modifiedCount: updated.modifiedCount,
+          cacheCleared: true
+        };
+        break;
+      }
+      
+      default:
+        return res.status(400).json({ error: 'Unknown operation', validOperations: [
+          'delete-ghost-groups',
+          'normalize-local-trigger-states',
+          'force-publish-all-locals'
+        ]});
+    }
+    
+    auditLog.result = result;
+    
+    logger.warn('[AdminCleanup] ✅ OPERATION COMPLETE', {
+      operation,
+      companyId,
+      userId,
+      userEmail,
+      result
+    });
+    
+    res.json({
+      success: true,
+      audit: auditLog,
+      result
+    });
+    
+  } catch (error) {
+    logger.error('[AdminCleanup] ❌ OPERATION FAILED', { 
+      error: error.message,
+      stack: error.stack 
+    });
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/triggers/refresh — Flush runtime trigger cache
 // ════════════════════════════════════════════════════════════════════════════
 // The runtime caches compiled triggers for 60 seconds to avoid DB hits on
