@@ -151,9 +151,11 @@
      -------------------------------------------------------------------------- */
   function createTruthButton(companyId) {
     const button = document.createElement('button');
-    button.className = 'btn btn-primary';
+    button.className = 'btn btn-primary btn-sm';
     button.id = CONFIG.BUTTON_ID;
     button.disabled = !companyId;
+    button.style.fontSize = '13px';
+    button.style.padding = '6px 12px';
     button.innerHTML = `
       ${CONFIG.ICON_SVG}
       Master Download Truth JSON
