@@ -275,7 +275,8 @@ router.get('/health', async (req, res) => {
                 health.systems.mongodb = 'ok';
                 health.details.mongodb = {
                     status: 'connected',
-                    // Public endpoint: never leak infra details
+                    database: mongoose.connection.name,  // SHOW DATABASE NAME
+                    host: mongoose.connection.host
                 };
                 logger.info('✅ [HEALTH CHECK] MongoDB: Connected');
             } else {
