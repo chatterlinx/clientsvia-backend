@@ -114,18 +114,8 @@ const globalTriggerSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BUCKET SYSTEM - Intent-based trigger organization (V2026.03)
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Global triggers can also be assigned to buckets.
-  // Note: Bucket IDs are company-specific (defined in TriggerBucket collection).
-  // Global triggers use generic bucket names that match common company buckets.
-  
-  /**
-   * Bucket assignment (references common bucket patterns).
-   * Examples: "cooling_service", "billing_payment", "emergency"
-   * If null, trigger is not bucketed (evaluated on every call).
-   */
+  // Trigger bucket key (company-scoped at runtime via overrides).
+  // Used by bucket classifier to pre-filter trigger pool.
   bucket: {
     type: String,
     default: null,
@@ -133,17 +123,6 @@ const globalTriggerSchema = new mongoose.Schema({
     lowercase: true,
     index: true
   },
-  
-  /**
-   * If true, this trigger ALWAYS evaluates (bypasses bucket filtering).
-   * Use for emergency/safety triggers in global library.
-   */
-  alwaysEvaluate: {
-    type: Boolean,
-    default: false,
-    index: true
-  },
-  
   // Conversational card guard: if set, card only fires when input has <= N words.
   // Prevents goodbye/thank-you/robot cards from stealing long service utterances.
   maxInputWords: {
@@ -451,6 +430,10 @@ globalTriggerSchema.pre('save', function(next) {
   if (this.negativePhrases && this.negativePhrases.length > 0) {
     this.negativePhrases = this.negativePhrases.map(p => p.toLowerCase().trim()).filter(Boolean);
   }
+  if (typeof this.bucket === 'string') {
+    const normalizedBucket = this.bucket.toLowerCase().trim();
+    this.bucket = normalizedBucket || null;
+  }
 
   next();
 });
@@ -468,7 +451,6 @@ globalTriggerSchema.methods.toMatcherFormat = function() {
     priority: this.priority ?? 50,  // Default priority if missing
     label: this.label,
     bucket: this.bucket || null,
-    alwaysEvaluate: this.alwaysEvaluate || false,
     maxInputWords: this.maxInputWords || null,
     match: {
       keywords: this.keywords || [],

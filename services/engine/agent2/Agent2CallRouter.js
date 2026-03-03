@@ -264,6 +264,8 @@ const DEFAULT_ONTOLOGIES = {
   }
 };
 
+const ROUTER_BUCKET_KEYS = new Set(Object.keys(DEFAULT_ONTOLOGIES));
+
 // Calibration max score for confidence normalization
 // Based on: 5 strong primary tokens (×3 each) = 15 points
 const CALIBRATION_MAX = 15;
@@ -514,7 +516,8 @@ class Agent2CallRouter {
     const excluded   = [];
 
     for (const card of cards) {
-      const cardBucket = card.bucket || null;
+      const rawBucket = card.bucket || null;
+      const cardBucket = rawBucket && ROUTER_BUCKET_KEYS.has(rawBucket) ? rawBucket : null;
       // Include: card bucket matches, or card is untagged (null bucket)
       if (cardBucket === null || cardBucket === bucket) {
         filtered.push(card);

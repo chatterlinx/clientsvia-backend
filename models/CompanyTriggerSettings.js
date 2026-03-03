@@ -37,6 +37,13 @@ const partialOverrideValueSchema = new mongoose.Schema({
     default: null,
     maxlength: 500
   },
+  bucket: {
+    type: String,
+    default: null,
+    trim: true,
+    lowercase: true,
+    maxlength: 80
+  },
   createdAt: {
     type: Date,
     default: Date.now

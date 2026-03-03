@@ -275,7 +275,6 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
         priority: gt.priority ?? 50,
         label: gt.label,
         bucket: gt.bucket || null,
-        alwaysEvaluate: gt.alwaysEvaluate || false,
         maxInputWords: typeof gt.maxInputWords === 'number' ? gt.maxInputWords : undefined,
         match: {
           keywords: gt.keywords || [],
@@ -375,7 +374,6 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
       priority: lt.priority ?? 50,
       label: lt.label,
       bucket: lt.bucket || null,
-      alwaysEvaluate: lt.alwaysEvaluate || false,
       maxInputWords: typeof lt.maxInputWords === 'number' ? lt.maxInputWords : undefined,
       match: {
         keywords: lt.keywords || [],
@@ -465,10 +463,14 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
       _isPartiallyOverridden: Boolean(partialOverride)
     };
 
-    // Apply partial override (text only - audio is always company-specific)
+    // Apply partial override (text + bucket only - audio is always company-specific)
     if (partialOverride) {
       if (partialOverride.answerText) {
         trigger.answer = { ...trigger.answer, answerText: partialOverride.answerText };
+      }
+      if (Object.prototype.hasOwnProperty.call(partialOverride, 'bucket')) {
+        const overrideBucket = `${partialOverride.bucket || ''}`.trim().toLowerCase();
+        trigger.bucket = overrideBucket || null;
       }
     }
     

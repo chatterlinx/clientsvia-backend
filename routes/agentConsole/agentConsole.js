@@ -44,9 +44,9 @@ router.use('/truth', truthExportRouter);
 const scrabEngineRouter = require('./scrabEngine');
 router.use('/', scrabEngineRouter);
 
-// Trigger Buckets routes (Bucket Management System)
+// Trigger Bucket routes (company-scoped)
 const triggerBucketsRouter = require('./triggerBuckets');
-router.use('/trigger-buckets', triggerBucketsRouter);
+router.use('/', triggerBucketsRouter);
 
 // ════════════════════════════════════════════════════════════════════════════
 // GET /:companyId/triggers/router-config — Serve Call Router ontologies + IntentGate

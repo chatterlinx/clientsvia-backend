@@ -154,79 +154,13 @@ class AdminNotificationService {
             const settings = await AdminSettings.findOne({});
             
             if (!settings) {
-                logger.warn(`⚠️ [ADMIN NOTIFICATION] AdminSettings not found - logging only for ${code}`);
-                // Create log entry but don't send notifications
-                const notificationLog = await NotificationLog.create({
-                    code: code.toUpperCase(),
-                    severity,
-                    companyId,
-                    companyName,
-                    message,
-                    details,
-                    stackTrace,
-                    status: 'warning',
-                    intelligence: {},
-                    deliveryAttempts: [{
-                        attemptNumber: 1,
-                        timestamp: new Date(),
-                        sms: [],
-                        email: [],
-                        call: [],
-                        status: 'config-missing',
-                        note: 'AdminSettings not found - initialize first'
-                    }],
-                    escalation: {
-                        isEnabled: false,
-                        currentLevel: 0,
-                        maxLevel: 0
-                    }
-                });
-                
-                return { 
-                    success: true, 
-                    alertId: notificationLog.alertId, 
-                    policyAction: 'log-only',
-                    warning: 'AdminSettings not found - initialize first'
-                };
+                throw new Error('AdminSettings not found - initialize first');
             }
             
             const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                logger.warn(`⚠️ [ADMIN NOTIFICATION] No admin contacts configured - logging only for ${code}`);
-                // Create log entry but don't send notifications
-                const notificationLog = await NotificationLog.create({
-                    code: code.toUpperCase(),
-                    severity,
-                    companyId,
-                    companyName,
-                    message,
-                    details,
-                    stackTrace,
-                    status: 'warning',
-                    intelligence: {},
-                    deliveryAttempts: [{
-                        attemptNumber: 1,
-                        timestamp: new Date(),
-                        sms: [],
-                        email: [],
-                        call: [],
-                        status: 'config-missing',
-                        note: 'No admin contacts configured in Settings tab'
-                    }],
-                    escalation: {
-                        isEnabled: false,
-                        currentLevel: 0,
-                        maxLevel: 0
-                    }
-                });
-                
-                return { 
-                    success: true, 
-                    alertId: notificationLog.alertId, 
-                    policyAction: 'log-only',
-                    warning: 'No admin contacts configured in Settings tab'
-                };
+                throw new Error('No admin contacts configured in Settings tab');
             }
             
             logger.debug(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
@@ -950,7 +884,8 @@ View full details: https://clientsvia-backend.onrender.com/admin-notification-ce
             const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                checks.warnings.push('No admin contacts configured (add in Settings tab)');
+                checks.isValid = false;
+                checks.errors.push('No admin contacts configured (add in Settings tab)');
             }
             
             // Check 3: At least one contact has SMS enabled

@@ -1,412 +1,251 @@
 /**
  * ============================================================================
- * TRIGGER BUCKET ROUTES - Enterprise API for bucket management
+ * TRIGGER BUCKETS — Agent Console API (Company-scoped)
  * ============================================================================
- * 
- * RESTful API for creating, reading, updating, and deleting trigger buckets.
- * All routes are company-scoped for multi-tenant isolation.
- * 
- * ENDPOINTS:
- * - GET    /api/agent-console/trigger-buckets/:companyId           - List all buckets
- * - GET    /api/agent-console/trigger-buckets/:companyId/:bucketId - Get single bucket
- * - POST   /api/agent-console/trigger-buckets/:companyId           - Create bucket
- * - PUT    /api/agent-console/trigger-buckets/:companyId/:bucketId - Update bucket
- * - DELETE /api/agent-console/trigger-buckets/:companyId/:bucketId - Delete bucket
- * - GET    /api/agent-console/trigger-buckets/:companyId/health    - Health summary
- * 
- * SECURITY:
- * - All routes verify companyId matches authenticated user
- * - No cross-tenant data access possible
- * - Input validation on all mutations
- * 
+ *
+ * Buckets are company-specific intent groupings for trigger pre-filtering.
+ * These routes manage bucket CRUD and enforce tenant isolation.
  * ============================================================================
  */
 
+'use strict';
+
 const express = require('express');
-const router = express.Router();
-const TriggerBucket = require('../../models/TriggerBucket');
-const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
+const mongoose = require('mongoose');
+const router = express.Router({ mergeParams: true });
 const logger = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 
-// ══════════════════════════════════════════════════════════════════════════
-// GET /api/agent-console/trigger-buckets/:companyId/health
-// ══════════════════════════════════════════════════════════════════════════
-// Get bucket system health summary for a company
+const TriggerBucket = require('../../models/TriggerBucket');
+const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
+const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+const { TriggerBucketClassifier } = require('../../services/engine/agent2/TriggerBucketClassifier');
+const TriggerService = require('../../services/engine/agent2/TriggerService');
 
-router.get('/:companyId/health', authenticateJWT, async (req, res) => {
-  const { companyId } = req.params;
-  
-  try {
-    const healthSummary = await TriggerBucket.getHealthSummary(companyId);
-    
-    res.json({
-      success: true,
-      data: healthSummary
-    });
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] Health check failed', {
-      companyId,
-      error: error.message
-    });
-    
-    res.status(500).json({
-      error: 'Failed to get health summary',
-      message: error.message
-    });
+function normalizeKeywords(input) {
+  if (Array.isArray(input)) {
+    return input;
   }
-});
-
-// ══════════════════════════════════════════════════════════════════════════
-// GET /api/agent-console/trigger-buckets/:companyId
-// ══════════════════════════════════════════════════════════════════════════
-// List all buckets for a company
-
-router.get('/:companyId', authenticateJWT, async (req, res) => {
-  const { companyId } = req.params;
-  const { includeDeleted } = req.query;
-  
-  try {
-    const buckets = await TriggerBucket.findByCompanyId(
-      companyId,
-      includeDeleted === 'true'
-    );
-    
-    res.json({
-      success: true,
-      data: buckets,
-      count: buckets.length
-    });
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] List failed', {
-      companyId,
-      error: error.message
-    });
-    
-    res.status(500).json({
-      error: 'Failed to list buckets',
-      message: error.message
-    });
+  if (typeof input === 'string') {
+    return input.split(',').map(s => s.trim()).filter(Boolean);
   }
-});
+  return [];
+}
 
-// ══════════════════════════════════════════════════════════════════════════
-// GET /api/agent-console/trigger-buckets/:companyId/:bucketId
-// ══════════════════════════════════════════════════════════════════════════
-// Get a single bucket by ID
+function normalizeBucketPayload(payload = {}) {
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  const keywords = normalizeKeywords(payload.keywords)
+    .map(k => `${k || ''}`.toLowerCase().trim())
+    .filter(Boolean);
+  const priority = typeof payload.priority === 'number' ? payload.priority : 50;
+  const enabled = payload.enabled !== false;
 
-router.get('/:companyId/:bucketId', authenticateJWT, async (req, res) => {
-  const { companyId, bucketId } = req.params;
-  
-  try {
-    const bucket = await TriggerBucket.findByBucketId(companyId, bucketId);
-    
-    if (!bucket) {
-      return res.status(404).json({
-        error: 'Bucket not found',
-        companyId,
-        bucketId
+  return { name, keywords, priority, enabled };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GET /:companyId/trigger-buckets — list buckets
+// ════════════════════════════════════════════════════════════════════════════
+router.get('/:companyId/trigger-buckets',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const buckets = await TriggerBucket.findByCompanyId(companyId);
+      const cacheInfo = TriggerBucketClassifier.getCacheInfo(companyId);
+
+      res.json({
+        success: true,
+        data: {
+          buckets: (buckets || []).map(b => ({
+            id: b._id?.toString(),
+            name: b.name,
+            key: b.key,
+            keywords: b.keywords || [],
+            priority: b.priority ?? 50,
+            enabled: b.enabled !== false,
+            createdAt: b.createdAt || null,
+            updatedAt: b.updatedAt || null
+          })),
+          cacheInfo: cacheInfo || null
+        }
       });
+    } catch (error) {
+      logger.error('[TriggerBuckets] List error', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
     }
-    
-    res.json({
-      success: true,
-      data: bucket
-    });
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] Get bucket failed', {
-      companyId,
-      bucketId,
-      error: error.message
-    });
-    
-    res.status(500).json({
-      error: 'Failed to get bucket',
-      message: error.message
-    });
   }
-});
+);
 
-// ══════════════════════════════════════════════════════════════════════════
-// POST /api/agent-console/trigger-buckets/:companyId
-// ══════════════════════════════════════════════════════════════════════════
-// Create a new bucket
+// ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/trigger-buckets — create bucket
+// ════════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/trigger-buckets',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+      const { name, keywords, priority, enabled } = normalizeBucketPayload(req.body);
 
-router.post('/:companyId', authenticateJWT, async (req, res) => {
-  const { companyId } = req.params;
-  const {
-    bucketId,
-    name,
-    description,
-    icon,
-    classificationKeywords,
-    confidenceThreshold,
-    priority,
-    isActive,
-    alwaysEvaluate
-  } = req.body;
-  
-  try {
-    // Validation
-    if (!name || name.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Bucket name is required'
-      });
-    }
-    
-    if (!classificationKeywords || classificationKeywords.length === 0) {
-      return res.status(400).json({
-        error: 'At least one classification keyword is required'
-      });
-    }
-    
-    // Check for duplicate bucketId
-    if (bucketId) {
-      const existing = await TriggerBucket.findByBucketId(companyId, bucketId);
+      if (!name) {
+        return res.status(400).json({ success: false, error: 'Bucket name is required' });
+      }
+
+      const key = TriggerBucket.buildKey(name);
+      if (!key) {
+        return res.status(400).json({ success: false, error: 'Invalid bucket name' });
+      }
+
+      const existing = await TriggerBucket.findOne({ companyId, $or: [{ key }, { name }] });
       if (existing) {
         return res.status(409).json({
-          error: 'Bucket with this ID already exists',
-          bucketId
+          success: false,
+          error: 'Bucket already exists',
+          message: `Bucket "${existing.name}" already exists`
         });
       }
-    }
-    
-    // Create bucket
-    const bucket = new TriggerBucket({
-      companyId,
-      bucketId,  // Will auto-generate from name if not provided
-      name,
-      description,
-      icon,
-      classificationKeywords,
-      confidenceThreshold,
-      priority,
-      isActive,
-      alwaysEvaluate,
-      createdBy: req.user?.username || 'admin'
-    });
-    
-    await bucket.save();
-    
-    logger.info('[TriggerBuckets] Bucket created', {
-      companyId,
-      bucketId: bucket.bucketId,
-      name: bucket.name
-    });
-    
-    res.status(201).json({
-      success: true,
-      data: bucket,
-      message: 'Bucket created successfully'
-    });
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] Create failed', {
-      companyId,
-      error: error.message,
-      stack: error.stack
-    });
-    
-    // Handle duplicate key error
-    if (error.code === 11000) {
-      return res.status(409).json({
-        error: 'Bucket ID already exists for this company'
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Failed to create bucket',
-      message: error.message
-    });
-  }
-});
 
-// ══════════════════════════════════════════════════════════════════════════
-// PUT /api/agent-console/trigger-buckets/:companyId/:bucketId
-// ══════════════════════════════════════════════════════════════════════════
-// Update an existing bucket
-
-router.put('/:companyId/:bucketId', authenticateJWT, async (req, res) => {
-  const { companyId, bucketId } = req.params;
-  const {
-    name,
-    description,
-    icon,
-    classificationKeywords,
-    confidenceThreshold,
-    priority,
-    isActive,
-    alwaysEvaluate
-  } = req.body;
-  
-  try {
-    const bucket = await TriggerBucket.findOne({ companyId, bucketId });
-    
-    if (!bucket) {
-      return res.status(404).json({
-        error: 'Bucket not found',
+      const bucket = await TriggerBucket.create({
         companyId,
-        bucketId
+        name,
+        key,
+        keywords,
+        priority,
+        enabled,
+        createdBy: userId,
+        updatedBy: userId
       });
+
+      TriggerBucketClassifier.invalidateCache(companyId);
+
+      res.json({
+        success: true,
+        data: {
+          id: bucket._id?.toString(),
+          name: bucket.name,
+          key: bucket.key,
+          keywords: bucket.keywords || [],
+          priority: bucket.priority ?? 50,
+          enabled: bucket.enabled !== false
+        }
+      });
+    } catch (error) {
+      logger.error('[TriggerBuckets] Create error', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
     }
-    
-    // Update fields (only if provided)
-    if (name !== undefined) bucket.name = name;
-    if (description !== undefined) bucket.description = description;
-    if (icon !== undefined) bucket.icon = icon;
-    if (classificationKeywords !== undefined) bucket.classificationKeywords = classificationKeywords;
-    if (confidenceThreshold !== undefined) bucket.confidenceThreshold = confidenceThreshold;
-    if (priority !== undefined) bucket.priority = priority;
-    if (isActive !== undefined) bucket.isActive = isActive;
-    if (alwaysEvaluate !== undefined) bucket.alwaysEvaluate = alwaysEvaluate;
-    
-    await bucket.save();
-    
-    logger.info('[TriggerBuckets] Bucket updated', {
-      companyId,
-      bucketId,
-      updatedFields: Object.keys(req.body)
-    });
-    
-    res.json({
-      success: true,
-      data: bucket,
-      message: 'Bucket updated successfully'
-    });
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] Update failed', {
-      companyId,
-      bucketId,
-      error: error.message
-    });
-    
-    res.status(500).json({
-      error: 'Failed to update bucket',
-      message: error.message
-    });
   }
-});
+);
 
-// ══════════════════════════════════════════════════════════════════════════
-// DELETE /api/agent-console/trigger-buckets/:companyId/:bucketId
-// ══════════════════════════════════════════════════════════════════════════
-// Soft-delete a bucket
+// ════════════════════════════════════════════════════════════════════════════
+// PATCH /:companyId/trigger-buckets/:bucketId — update bucket
+// ════════════════════════════════════════════════════════════════════════════
+router.patch('/:companyId/trigger-buckets/:bucketId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, bucketId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
 
-router.delete('/:companyId/:bucketId', authenticateJWT, async (req, res) => {
-  const { companyId, bucketId } = req.params;
-  const { force } = req.query; // ?force=true for hard delete
-  
-  try {
-    const bucket = await TriggerBucket.findOne({ companyId, bucketId });
-    
-    if (!bucket) {
-      return res.status(404).json({
-        error: 'Bucket not found',
-        companyId,
-        bucketId
+      if (!mongoose.Types.ObjectId.isValid(bucketId)) {
+        return res.status(400).json({ success: false, error: 'Invalid bucket id' });
+      }
+
+      const bucket = await TriggerBucket.findOne({ _id: bucketId, companyId });
+      if (!bucket) {
+        return res.status(404).json({ success: false, error: 'Bucket not found' });
+      }
+
+      const { name, keywords, priority, enabled } = normalizeBucketPayload(req.body);
+      if (name) bucket.name = name;
+      if (Array.isArray(keywords)) bucket.keywords = keywords;
+      if (typeof priority === 'number') bucket.priority = priority;
+      bucket.enabled = enabled;
+      bucket.updatedBy = userId;
+
+      await bucket.save();
+      TriggerBucketClassifier.invalidateCache(companyId);
+
+      res.json({
+        success: true,
+        data: {
+          id: bucket._id?.toString(),
+          name: bucket.name,
+          key: bucket.key,
+          keywords: bucket.keywords || [],
+          priority: bucket.priority ?? 50,
+          enabled: bucket.enabled !== false
+        }
       });
+    } catch (error) {
+      logger.error('[TriggerBuckets] Update error', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
     }
-    
-    // Check if triggers are using this bucket
-    const triggerCount = await CompanyLocalTrigger.countDocuments({
-      companyId,
-      bucket: bucketId,
-      isDeleted: { $ne: true }
-    });
-    
-    if (triggerCount > 0 && force !== 'true') {
-      return res.status(409).json({
-        error: 'Cannot delete bucket - triggers are assigned to it',
-        bucketId,
-        triggerCount,
-        message: 'Reassign triggers first or use ?force=true to unassign'
-      });
-    }
-    
-    if (force === 'true') {
-      // Hard delete: Remove bucket and clear bucket assignment from triggers
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════
+// DELETE /:companyId/trigger-buckets/:bucketId — delete bucket
+// ════════════════════════════════════════════════════════════════════════════
+router.delete('/:companyId/trigger-buckets/:bucketId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, bucketId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!mongoose.Types.ObjectId.isValid(bucketId)) {
+        return res.status(400).json({ success: false, error: 'Invalid bucket id' });
+      }
+
+      const bucket = await TriggerBucket.findOne({ _id: bucketId, companyId });
+      if (!bucket) {
+        return res.status(404).json({ success: false, error: 'Bucket not found' });
+      }
+
+      const bucketKey = bucket.key;
+
       await CompanyLocalTrigger.updateMany(
-        { companyId, bucket: bucketId },
-        { $set: { bucket: null, bucketValidatedAt: null } }
+        { companyId, bucket: bucketKey },
+        { $set: { bucket: null, bucketValidatedAt: null, updatedAt: new Date() } }
       );
-      
-      await TriggerBucket.deleteOne({ companyId, bucketId });
-      
-      logger.warn('[TriggerBuckets] Bucket force deleted', {
-        companyId,
-        bucketId,
-        triggersUnassigned: triggerCount
-      });
-      
+
+      const settings = await CompanyTriggerSettings.findOne({ companyId });
+      if (settings?.partialOverrides) {
+        const overrides = settings.partialOverrides instanceof Map
+          ? settings.partialOverrides
+          : new Map(Object.entries(settings.partialOverrides || {}));
+
+        overrides.forEach((value, key) => {
+          if (value && typeof value === 'object' && value.bucket === bucketKey) {
+            overrides.set(key, { ...value, bucket: null, updatedAt: new Date(), updatedBy: userId });
+          }
+        });
+
+        settings.partialOverrides = overrides;
+        settings.updatedAt = new Date();
+        await settings.save();
+      }
+
+      await bucket.deleteOne();
+
+      TriggerBucketClassifier.invalidateCache(companyId);
+      TriggerService.invalidateCacheForCompany(companyId);
+
       res.json({
         success: true,
-        message: 'Bucket deleted and triggers unassigned',
-        triggersUnassigned: triggerCount
+        message: `Bucket "${bucket.name}" deleted`
       });
-      
-    } else {
-      // Soft delete: Mark as deleted
-      await TriggerBucket.softDelete(companyId, bucketId);
-      
-      logger.info('[TriggerBuckets] Bucket soft deleted', {
-        companyId,
-        bucketId
-      });
-      
-      res.json({
-        success: true,
-        message: 'Bucket deleted successfully'
-      });
+    } catch (error) {
+      logger.error('[TriggerBuckets] Delete error', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
     }
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] Delete failed', {
-      companyId,
-      bucketId,
-      error: error.message
-    });
-    
-    res.status(500).json({
-      error: 'Failed to delete bucket',
-      message: error.message
-    });
   }
-});
-
-// ══════════════════════════════════════════════════════════════════════════
-// POST /api/agent-console/trigger-buckets/:companyId/:bucketId/usage
-// ══════════════════════════════════════════════════════════════════════════
-// Record bucket usage (called by runtime after classification)
-
-router.post('/:companyId/:bucketId/usage', async (req, res) => {
-  const { companyId, bucketId } = req.params;
-  const { confidence } = req.body;
-  
-  try {
-    await TriggerBucket.recordUsage(companyId, bucketId, confidence || 0.5);
-    
-    res.json({
-      success: true,
-      message: 'Usage recorded'
-    });
-    
-  } catch (error) {
-    logger.error('[TriggerBuckets] Record usage failed', {
-      companyId,
-      bucketId,
-      error: error.message
-    });
-    
-    // Don't fail the call if usage tracking fails
-    res.json({
-      success: false,
-      message: 'Usage tracking failed (non-critical)'
-    });
-  }
-});
+);
 
 module.exports = router;

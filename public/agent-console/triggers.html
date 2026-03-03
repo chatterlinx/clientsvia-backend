@@ -33,227 +33,6 @@
        TRIGGER CONSOLE SPECIFIC STYLES
        ════════════════════════════════════════════════════════════════════════ */
     
-    /* ──────────────────────────────────────────────────────────────────────
-       BUCKET SYSTEM STYLES (V2026.03)
-       ────────────────────────────────────────────────────────────────────── */
-    
-    /* Health Summary Bar */
-    .bucket-health-bar {
-      padding: 12px 20px;
-      margin-bottom: 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    
-    .health-bar-healthy {
-      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-      border: 1px solid #86efac;
-      color: #166534;
-    }
-    
-    .health-bar-info {
-      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-      border: 1px solid #93c5fd;
-      color: #1e40af;
-    }
-    
-    .health-bar-warning {
-      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-      border: 1px solid #fde047;
-      color: #92400e;
-    }
-    
-    .health-bar-critical {
-      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-      border: 2px solid #dc2626;
-      color: #991b1b;
-      font-weight: 600;
-    }
-    
-    /* Bucket Status Icons (✓/✗/🚨) */
-    .status-icon {
-      font-size: 16px;
-      font-weight: 600;
-      display: inline-block;
-      width: 24px;
-      height: 24px;
-      line-height: 24px;
-      text-align: center;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-    
-    .status-icon.cursor-pointer {
-      cursor: pointer;
-      opacity: 0.7;
-    }
-    
-    .status-icon.cursor-pointer:hover {
-      opacity: 1;
-      transform: scale(1.1);
-    }
-    
-    .status-bucketed {
-      color: #10b981;
-      background: #d1fae5;
-    }
-    
-    .status-unbucketed,
-    .status-invalid {
-      color: #ef4444;
-      background: #fee2e2;
-    }
-    
-    .status-emergency {
-      color: #f59e0b;
-      background: #fef3c7;
-    }
-    
-    /* Bucket Cards (in modal) */
-    .bucket-card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 12px;
-      transition: all 0.2s;
-    }
-    
-    .bucket-card:hover {
-      border-color: #3b82f6;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
-    }
-    
-    .bucket-card-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    
-    .bucket-icon-large {
-      font-size: 32px;
-    }
-    
-    .bucket-info h3 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-    }
-    
-    .bucket-keywords {
-      margin: 12px 0;
-      font-size: 13px;
-    }
-    
-    .keyword-chip {
-      display: inline-block;
-      background: #eff6ff;
-      color: #1e40af;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      margin: 2px;
-    }
-    
-    .bucket-stats {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: #6b7280;
-      margin: 8px 0;
-    }
-    
-    .bucket-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    
-    /* Icon Picker */
-    .icon-picker {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 12px;
-      background: #f9fafb;
-      border-radius: 8px;
-    }
-    
-    .icon-option {
-      font-size: 24px;
-      width: 44px;
-      height: 44px;
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      background: white;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .icon-option:hover {
-      border-color: #3b82f6;
-      transform: scale(1.05);
-    }
-    
-    .icon-option.selected {
-      border-color: #3b82f6;
-      background: #eff6ff;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-    
-    /* Keyword Input Container */
-    .keyword-input-container {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    
-    .chips-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      min-height: 36px;
-      padding: 8px;
-      background: #f9fafb;
-      border-radius: 6px;
-    }
-    
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: #3b82f6;
-      color: white;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 13px;
-      font-weight: 500;
-    }
-    
-    .chip-remove {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      padding: 0;
-      width: 16px;
-      height: 16px;
-      line-height: 1;
-      opacity: 0.8;
-    }
-    
-    .chip-remove:hover {
-      opacity: 1;
-    }
-    
     /* Group Selector Header */
     .group-console {
       background: var(--bg-secondary);
@@ -362,6 +141,88 @@
     .stat-value-muted {
       color: #9ca3af;
     }
+
+    /* Bucket Builder Panel */
+    .bucket-builder {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .bucket-builder-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .bucket-builder-title {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text-primary);
+      margin: 0;
+    }
+    
+    .bucket-builder-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    
+    .bucket-health {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+    
+    .bucket-health-badge {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      border: 1px solid #c7d2fe;
+    }
+    
+    .bucket-builder-body {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .bucket-builder-row {
+      display: grid;
+      grid-template-columns: 1.1fr 2fr 120px;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    .bucket-row {
+      display: grid;
+      grid-template-columns: 1.1fr 2fr 120px;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 0;
+      border-top: 1px solid var(--border-light);
+    }
+    
+    .bucket-key {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    
+    .bucket-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
     
     /* Trigger Table */
     .trigger-table {
@@ -371,7 +232,7 @@
     
     .trigger-table-header {
       display: grid;
-      grid-template-columns: 40px 28px 28px 40px 1.4fr 1.4fr 130px 1fr 100px 90px 90px;
+      grid-template-columns: 40px 24px 24px 40px 1.4fr 1.4fr 130px 1fr 100px 90px 90px;
       align-items: center;
       gap: 12px;
       padding: 10px 16px;
@@ -398,7 +259,7 @@
     
     .trigger-row {
       display: grid;
-      grid-template-columns: 40px 28px 28px 40px 1.4fr 1.4fr 130px 1fr 100px 90px 90px;
+      grid-template-columns: 40px 24px 24px 40px 1.4fr 1.4fr 130px 1fr 100px 90px 90px;
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
@@ -1175,15 +1036,10 @@
           </div>
         </div>
         
-        <!-- Primary Actions -->
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" id="btn-manage-buckets">
-            🗂️ Manage Buckets
-          </button>
-          <button class="btn btn-primary" id="btn-add-trigger">
-            + Add Trigger
-          </button>
-        </div>
+        <!-- Primary Action -->
+        <button class="btn btn-primary" id="btn-add-trigger">
+          + Add Trigger
+        </button>
       </div>
     </header>
 
@@ -1206,9 +1062,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Bucket Health Summary Bar (NEW) -->
-      <div id="bucket-health-bar" class="bucket-health-bar" style="display: none;"></div>
 
       <!-- Architecture Explanation (collapsed by default, click to expand) -->
       <div id="architecture-banner" style="margin-bottom: 20px;">
@@ -1316,6 +1169,43 @@
           <div class="trigger-stat">
             <span class="trigger-stat-value stat-value-muted" id="stat-disabled">0</span>
             <span class="trigger-stat-label">Disabled</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bucket Builder (always visible, top of page) -->
+      <div class="bucket-builder" id="bucket-builder">
+        <div class="bucket-builder-header">
+          <div>
+            <h2 class="bucket-builder-title">Bucket Builder</h2>
+            <div class="bucket-builder-subtitle">Buckets are company-specific intent groups used by ScrabEngine to pre-filter triggers.</div>
+          </div>
+          <div class="bucket-health" id="bucket-health">
+            <span class="bucket-health-badge" id="bucket-health-buckets">Buckets: 0</span>
+            <span class="bucket-health-badge" id="bucket-health-keywords">Keywords: 0%</span>
+            <span class="bucket-health-badge" id="bucket-health-coverage">Tagged: 0%</span>
+            <span class="bucket-health-badge" id="bucket-health-runtime">ScrabEngine: —</span>
+          </div>
+        </div>
+        <div class="bucket-builder-body">
+          <div class="bucket-builder-row">
+            <div>
+              <label class="form-label">Bucket Name</label>
+              <input type="text" class="form-input" id="bucket-name-input" placeholder="e.g., cooling">
+            </div>
+            <div>
+              <label class="form-label">Classification Keywords</label>
+              <input type="text" class="form-input" id="bucket-keywords-input" placeholder="no cool, warm air, not cooling, weak airflow">
+              <p class="form-hint">Comma-separated keywords or phrases.</p>
+            </div>
+            <div class="bucket-actions" style="align-items: flex-end;">
+              <button class="btn btn-primary btn-sm" id="btn-add-bucket">Add Bucket</button>
+            </div>
+          </div>
+
+          <div id="bucket-list"></div>
+          <div id="bucket-empty" style="display: none; padding: 12px 0; color: var(--text-muted); font-size: 0.875rem;">
+            No buckets yet — add one to enable intent classification.
           </div>
         </div>
       </div>
@@ -1499,14 +1389,14 @@
             <div style="display: flex; align-items: center; justify-content: center;">
               <input type="checkbox" id="select-all-triggers" title="Select All">
             </div>
-            <div style="display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Bucket Status: ✓ = Bucketed, ✗ = Not bucketed, 🚨 = Emergency">
-              🗂️
-            </div>
             <div style="display: flex; align-items: center; justify-content: center;" title="Publish Status">
               <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
                 <circle cx="7" cy="7" r="6.5" stroke="currentColor" stroke-width="1" fill="none"/>
                 <path d="M4 7l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: center;" title="Bucket Assigned">
+              🪣
             </div>
             <div><strong>PRI</strong></div>
             <div><strong>LABEL</strong></div>
@@ -1829,32 +1719,6 @@ Only toggle to GLOBAL if this trigger should be shared across all HVAC companies
             </div>
           </div>
           
-          <!-- Bucket Assignment (NEW) -->
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">
-                Trigger Bucket
-                <span class="help-text">Organize triggers for faster classification</span>
-              </label>
-              <select class="form-input" id="input-trigger-bucket">
-                <option value="">-- No Bucket (Always Evaluated) --</option>
-                <!-- Populated dynamically from state.buckets -->
-              </select>
-              <p class="form-hint">
-                Assign to bucket for faster responses. ScrabEngine will filter triggers by detected intent.
-              </p>
-            </div>
-            <div class="form-group">
-              <label class="form-label">
-                <input type="checkbox" id="input-trigger-always-evaluate" style="width: auto; margin-right: 6px;">
-                Emergency Trigger
-              </label>
-              <p class="form-hint">
-                Always evaluate this trigger regardless of bucket classification (use for safety/emergency triggers)
-              </p>
-            </div>
-          </div>
-          
           <!-- Matching -->
           <div class="form-section">
             <div class="form-section-title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -2042,14 +1906,9 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
               <div>
                 <label class="form-label">Intent Bucket</label>
                 <select id="input-trigger-bucket" class="form-select" style="width:100%;">
-                  <option value="">— Untagged (always included) —</option>
-                  <option value="booking_service">booking_service</option>
-                  <option value="billing_payment">billing_payment</option>
-                  <option value="membership_plan">membership_plan</option>
-                  <option value="existing_appointment">existing_appointment</option>
-                  <option value="other_operator">other_operator</option>
+                  <option value="">— Unassigned —</option>
                 </select>
-                <p class="form-hint">Pre-filters trigger pool when CallRouter classifies this bucket.</p>
+                <p class="form-hint">Assigned bucket used for company-specific intent filtering.</p>
               </div>
             </div>
 
@@ -2541,8 +2400,8 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
   </div>
 
   <script src="/agent-console/lib/auth.js"></script>
-  <script src="/agent-console/shared/truthButton.js"></script>
   <script src="/agent-console/shared/bucketManager.js"></script>
+  <script src="/agent-console/shared/truthButton.js"></script>
   <script src="/agent-console/triggers.js"></script>
 </body>
 </html>

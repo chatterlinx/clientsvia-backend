@@ -47,6 +47,7 @@ const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
 const GlobalTrigger = require('../../models/GlobalTrigger');
 const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+const TriggerBucket = require('../../models/TriggerBucket');
 const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
 const { resolveAudioUrl } = require('../../services/engine/agent2/TriggerService');
@@ -188,6 +189,10 @@ async function buildMergedTriggerList(companyId) {
     // STRICT TRIGGER SYSTEM - ISOMORPHIC OUTPUT FOR GLOBAL TRIGGERS
     // All fields must be sent to UI. Missing fields = broken editor.
     // ═══════════════════════════════════════════════════════════════════════
+    const overrideBucket = typeof partialOverride?.bucket === 'string'
+      ? partialOverride.bucket.trim().toLowerCase()
+      : null;
+
     const triggerData = {
       triggerId: gt.triggerId,
       ruleId: gt.ruleId,
@@ -200,7 +205,7 @@ async function buildMergedTriggerList(companyId) {
       overrideType: partialOverride ? 'PARTIAL' : null,
       priority: gt.priority,
       // ISOMORPHIC: bucket + maxInputWords at top level
-      bucket: gt.bucket || null,
+      bucket: (overrideBucket || gt.bucket || null),
       maxInputWords: typeof gt.maxInputWords === 'number' ? gt.maxInputWords : null,
       responseMode: gt.responseMode || 'standard',
       match: {
@@ -330,6 +335,8 @@ async function buildMergedTriggerList(companyId) {
   const totalTriggerCount = triggers.length;
   const totalActiveCount = triggers.filter(t => t.isEnabled !== false).length;
   const totalDisabledCount = totalTriggerCount - totalActiveCount;
+  const bucketedCount = triggers.filter(t => t.bucket).length;
+  const untaggedCount = totalTriggerCount - bucketedCount;
 
   return {
     companyId,
@@ -352,7 +359,9 @@ async function buildMergedTriggerList(companyId) {
       overrideCount,
       totalTriggerCount,
       totalActiveCount,
-      totalDisabledCount
+      totalDisabledCount,
+      bucketedCount,
+      untaggedCount
     }
   };
 }
@@ -707,6 +716,19 @@ router.post('/:companyId/local-triggers',
         return res.status(404).json({ success: false, error: 'Company not found' });
       }
 
+      // Validate bucket (company-scoped)
+      const normalizedBucket = typeof bucket === 'string' ? bucket.trim().toLowerCase() : null;
+      if (normalizedBucket) {
+        const bucketExists = await TriggerBucket.existsForCompany(companyId, normalizedBucket);
+        if (!bucketExists) {
+          return res.status(400).json({
+            success: false,
+            error: 'INVALID_BUCKET',
+            message: `Bucket "${normalizedBucket}" not found for this company`
+          });
+        }
+      }
+
       // ═══════════════════════════════════════════════════════════════════════
       // OVERRIDE VALIDATION: Enforce strict rules for overrides
       // ═══════════════════════════════════════════════════════════════════════
@@ -796,7 +818,7 @@ router.post('/:companyId/local-triggers',
         deletedTrigger.negativeKeywords = negativeKeywords || [];
         // ISOMORPHIC: Added V131 - ensure these fields survive revival
         deletedTrigger.negativePhrases = negativePhrases || [];
-        deletedTrigger.bucket = bucket || null;
+        deletedTrigger.bucket = normalizedBucket || null;
         deletedTrigger.maxInputWords = typeof maxInputWords === 'number' ? maxInputWords : null;
         deletedTrigger.answerText = answerText;
         deletedTrigger.audioUrl = audioUrl || '';
@@ -858,7 +880,7 @@ router.post('/:companyId/local-triggers',
         negativeKeywords: negativeKeywords || [],
         // ISOMORPHIC: Added V131 - these fields MUST be persisted
         negativePhrases: negativePhrases || [],
-        bucket: bucket || null,
+        bucket: normalizedBucket || null,
         maxInputWords: typeof maxInputWords === 'number' ? maxInputWords : null,
         responseMode: responseMode || 'standard',
         answerText: answerText || (isLlmMode ? '[LLM-generated response]' : ''),
@@ -1020,6 +1042,23 @@ router.patch('/:companyId/local-triggers/:ruleId',
         if (updates[field] !== undefined) {
           cleanUpdates[field] = updates[field];
         }
+      }
+
+      if (cleanUpdates.bucket !== undefined) {
+        const normalizedBucket = typeof cleanUpdates.bucket === 'string'
+          ? cleanUpdates.bucket.trim().toLowerCase()
+          : null;
+        if (normalizedBucket) {
+          const bucketExists = await TriggerBucket.existsForCompany(companyId, normalizedBucket);
+          if (!bucketExists) {
+            return res.status(400).json({
+              success: false,
+              error: 'INVALID_BUCKET',
+              message: `Bucket "${normalizedBucket}" not found for this company`
+            });
+          }
+        }
+        cleanUpdates.bucket = normalizedBucket || null;
       }
       
       // Check if answer text changed - invalidate audio if it did
@@ -1187,7 +1226,7 @@ router.put('/:companyId/trigger-visibility',
 
 /**
  * PUT /:companyId/trigger-override
- * Set a partial override on a global trigger (just answer text/audio)
+ * Set a partial override on a global trigger (answer text/audio/bucket)
  */
 router.put('/:companyId/trigger-override',
   authenticateJWT,
@@ -1195,7 +1234,7 @@ router.put('/:companyId/trigger-override',
   async (req, res) => {
     try {
       const { companyId } = req.params;
-      const { globalTriggerId, answerText, audioUrl } = req.body;
+      const { globalTriggerId, answerText, audioUrl, bucket } = req.body;
       const userId = req.user.id || req.user._id?.toString() || 'unknown';
 
       if (!globalTriggerId) {
@@ -1205,10 +1244,11 @@ router.put('/:companyId/trigger-override',
         });
       }
 
-      if (!answerText && !audioUrl) {
+      const hasBucketUpdate = bucket !== undefined;
+      if (!answerText && !audioUrl && !hasBucketUpdate) {
         return res.status(400).json({
           success: false,
-          error: 'At least one of answerText or audioUrl is required'
+          error: 'At least one of answerText, audioUrl, or bucket is required'
         });
       }
 
@@ -1227,6 +1267,20 @@ router.put('/:companyId/trigger-override',
       if (audioUrl !== undefined) {
         overrideData.audioUrl = audioUrl;
       }
+      if (hasBucketUpdate) {
+        const normalizedBucket = typeof bucket === 'string' ? bucket.trim().toLowerCase() : null;
+        if (normalizedBucket) {
+          const bucketExists = await TriggerBucket.existsForCompany(companyId, normalizedBucket);
+          if (!bucketExists) {
+            return res.status(400).json({
+              success: false,
+              error: 'INVALID_BUCKET',
+              message: `Bucket "${normalizedBucket}" not found for this company`
+            });
+          }
+        }
+        overrideData.bucket = normalizedBucket || null;
+      }
 
       const settings = await CompanyTriggerSettings.setPartialOverride(
         companyId,
@@ -1234,6 +1288,10 @@ router.put('/:companyId/trigger-override',
         overrideData,
         userId
       );
+
+      // Invalidate runtime trigger cache (bucket/answer overrides affect matching)
+      const TriggerService = require('../../services/engine/agent2/TriggerService');
+      TriggerService.invalidateCacheForCompany(companyId);
 
       logger.info('[CompanyTriggers] Partial override set', {
         companyId,
@@ -1281,6 +1339,9 @@ router.delete('/:companyId/trigger-override/:triggerId',
       const userId = req.user.id || req.user._id?.toString() || 'unknown';
 
       await CompanyTriggerSettings.removePartialOverride(companyId, triggerId);
+
+      const TriggerService = require('../../services/engine/agent2/TriggerService');
+      TriggerService.invalidateCacheForCompany(companyId);
 
       logger.info('[CompanyTriggers] Partial override removed', {
         companyId,
@@ -1384,7 +1445,7 @@ router.put('/:companyId/trigger-scope',
         phrases:          localTrigger.phrases  || [],
         negativeKeywords: localTrigger.negativeKeywords || [],
         negativePhrases:  localTrigger.negativePhrases  || [],
-        bucket:           localTrigger.bucket  || null,
+        bucket:           null, // Bucket is company-scoped; set via partial override if needed
         maxInputWords:    typeof localTrigger.maxInputWords === 'number' ? localTrigger.maxInputWords : null,
         scenarioTypeAllowlist: localTrigger.scenarioTypeAllowlist || [],
         responseMode:     localTrigger.responseMode || 'standard',
@@ -1430,6 +1491,16 @@ router.put('/:companyId/trigger-scope',
         logger.warn('[CompanyTriggers] Draft copy upsert failed on promote (non-critical)', {
           companyId, ruleId: localTrigger.ruleId, error: draftErr.message
         });
+      }
+
+      // Preserve company-specific bucket assignment via partial override
+      if (localTrigger.bucket) {
+        await CompanyTriggerSettings.setPartialOverride(
+          companyId,
+          publishedTriggerId,
+          { bucket: localTrigger.bucket },
+          userId
+        );
       }
 
       // ── Step 3: Soft-delete the local trigger (only after global is live) ──

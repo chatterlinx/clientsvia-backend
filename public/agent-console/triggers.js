@@ -34,10 +34,11 @@
     availableGroups: [],
     
     triggers: [],
-    buckets: [],  // NEW: Trigger buckets for classification
-    bucketHealth: null,  // NEW: Health summary
     stats: null,
     permissions: null,
+    buckets: [],
+    bucketIndex: new Map(),
+    bucketCacheInfo: null,
     
     editingTrigger: null,
     pendingApproval: null,
@@ -82,7 +83,6 @@
     headerCompanyId: document.getElementById('header-company-id'),
     btnBack: document.getElementById('btn-back'),
     btnBackToAgent2: document.getElementById('btn-back-to-agent2'),
-    btnManageBuckets: document.getElementById('btn-manage-buckets'),  // NEW
     btnAddTrigger: document.getElementById('btn-add-trigger'),
     btnClearAllAudio: document.getElementById('btn-clear-all-audio'),
     btnBulkGenerateAudio: document.getElementById('btn-bulk-generate-audio'),
@@ -154,6 +154,16 @@
     statOverrides: document.getElementById('stat-overrides'),
     statTotal: document.getElementById('stat-total'),
     statDisabled: document.getElementById('stat-disabled'),
+
+    bucketNameInput: document.getElementById('bucket-name-input'),
+    bucketKeywordsInput: document.getElementById('bucket-keywords-input'),
+    btnAddBucket: document.getElementById('btn-add-bucket'),
+    bucketList: document.getElementById('bucket-list'),
+    bucketEmpty: document.getElementById('bucket-empty'),
+    bucketHealthBuckets: document.getElementById('bucket-health-buckets'),
+    bucketHealthKeywords: document.getElementById('bucket-health-keywords'),
+    bucketHealthCoverage: document.getElementById('bucket-health-coverage'),
+    bucketHealthRuntime: document.getElementById('bucket-health-runtime'),
     
     triggerList: document.getElementById('trigger-list'),
     triggerTableHeader: document.getElementById('trigger-table-header'),
@@ -257,17 +267,15 @@
     }
     
     setupEventListeners();
-    
-    // Initialize Bucket Manager
-    if (window.BucketManager) {
-      BucketManager.init(state.companyId, CONFIG.API_BASE_AGENT2, async () => {
-        // Callback when buckets change - reload triggers to update status
-        await loadBuckets();
-        await loadTriggers();
+    if (window.BucketManager && typeof window.BucketManager.init === 'function') {
+      window.BucketManager.init({
+        companyId: state.companyId,
+        onBucketsUpdated: updateBuckets,
+        showToast
       });
+    } else {
+      console.warn('[BucketManager] Not available — bucket UI disabled');
     }
-    
-    loadBuckets();  // NEW: Load buckets first
     loadTriggers();
   }
 
@@ -876,51 +884,6 @@
   /* --------------------------------------------------------------------------
      DATA LOADING
      -------------------------------------------------------------------------- */
-  
-  /**
-   * Load trigger buckets for company.
-   * Buckets are used for classification and faster trigger filtering.
-   */
-  async function loadBuckets() {
-    try {
-      const response = await apiFetch(`${CONFIG.API_BASE_AGENT2}/trigger-buckets/${state.companyId}`);
-      
-      if (response && response.data) {
-        state.buckets = response.data;
-        console.log(`[Buckets] Loaded ${state.buckets.length} buckets`);
-      } else {
-        state.buckets = [];
-      }
-      
-      // Load health summary
-      const healthResponse = await apiFetch(`${CONFIG.API_BASE_AGENT2}/trigger-buckets/${state.companyId}/health`);
-      if (healthResponse && healthResponse.data) {
-        state.bucketHealth = healthResponse.data;
-        renderBucketHealthBar();
-      }
-      
-    } catch (error) {
-      console.error('[Buckets] Failed to load:', error);
-      state.buckets = [];
-      state.bucketHealth = null;
-    }
-  }
-  
-  function renderBucketHealthBar() {
-    if (!state.bucketHealth) return;
-    
-    const healthBar = document.getElementById('bucket-health-bar');
-    if (!healthBar) return;
-    
-    // Show the health bar
-    healthBar.style.display = 'flex';
-    
-    // Use BucketManager to render it
-    if (window.BucketManager) {
-      BucketManager.renderHealthBar(state.bucketHealth);
-    }
-  }
-  
   async function loadTriggers() {
     try {
       const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers`);
@@ -956,6 +919,7 @@
       
       renderGroupSelector();
       renderStats();
+      renderBucketHealth();
       renderTriggers();
 
       // Load agent2 config for Follow-up Consent Cards
@@ -1124,6 +1088,88 @@
     }
     
     console.log('[Triggers] Stats updated:', state.stats);
+  }
+
+  function updateBuckets(buckets, cacheInfo) {
+    state.buckets = Array.isArray(buckets) ? buckets : [];
+    state.bucketCacheInfo = cacheInfo || null;
+    state.bucketIndex = new Map();
+    state.buckets.forEach(b => {
+      if (b && b.key) {
+        state.bucketIndex.set(b.key, b.name || b.key);
+      }
+    });
+    buildSearchIndex(state.triggers || []);
+    renderBucketHealth();
+    if (DOM.modalTriggerEdit?.classList.contains('active')) {
+      populateBucketDropdown(state.editingTrigger?.bucket || '');
+    }
+    renderTriggers();
+  }
+
+  function renderBucketHealth() {
+    if (!DOM.bucketHealthBuckets) return;
+
+    const totalBuckets = state.buckets.length;
+    const bucketsWithKeywords = state.buckets.filter(b => (b.keywords || []).length > 0).length;
+    const totalTriggers = (state.triggers || []).length;
+    const taggedTriggers = (state.triggers || []).filter(t => {
+      const key = `${t.bucket || ''}`.trim();
+      return key && state.bucketIndex.has(key);
+    }).length;
+
+    const keywordPct = totalBuckets ? Math.round((bucketsWithKeywords / totalBuckets) * 100) : 0;
+    const coveragePct = totalTriggers ? Math.round((taggedTriggers / totalTriggers) * 100) : 0;
+
+    DOM.bucketHealthBuckets.textContent = `Buckets: ${totalBuckets}`;
+    DOM.bucketHealthKeywords.textContent = `Keywords: ${keywordPct}%`;
+    DOM.bucketHealthCoverage.textContent = `Tagged: ${coveragePct}%`;
+
+    if (DOM.bucketHealthRuntime) {
+      const cacheInfo = state.bucketCacheInfo;
+      if (cacheInfo?.lastLoadedAt) {
+        const minutesAgo = Math.max(0, Math.floor((Date.now() - new Date(cacheInfo.lastLoadedAt).getTime()) / 60000));
+        const loadedCount = cacheInfo.bucketCount ?? totalBuckets;
+        DOM.bucketHealthRuntime.textContent = `ScrabEngine: ${loadedCount} loaded • ${minutesAgo}m ago`;
+      } else if (totalBuckets > 0) {
+        DOM.bucketHealthRuntime.textContent = 'ScrabEngine: ready (awaiting first load)';
+      } else {
+        DOM.bucketHealthRuntime.textContent = 'ScrabEngine: idle';
+      }
+    }
+  }
+
+  function getBucketLabel(bucketKey) {
+    if (!bucketKey) return '';
+    return state.bucketIndex.get(bucketKey) || bucketKey;
+  }
+
+  function populateBucketDropdown(selectedKey) {
+    const bucketEl = document.getElementById('input-trigger-bucket');
+    if (!bucketEl) return;
+
+    const buckets = state.buckets || [];
+    bucketEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = buckets.length > 0 ? '— Unassigned —' : '— No buckets yet —';
+    bucketEl.appendChild(placeholder);
+
+    buckets.forEach(b => {
+      const option = document.createElement('option');
+      option.value = b.key;
+      option.textContent = b.name || b.key;
+      bucketEl.appendChild(option);
+    });
+
+    if (selectedKey && !state.bucketIndex.has(selectedKey)) {
+      const option = document.createElement('option');
+      option.value = selectedKey;
+      option.textContent = `${selectedKey} (missing)`;
+      bucketEl.appendChild(option);
+    }
+
+    bucketEl.value = selectedKey || '';
   }
 
   function renderTriggers() {
@@ -1476,6 +1522,9 @@
     const isPublished = trigger.state === 'published';
     const isDraft = trigger.state === 'draft';
     const isUnpublished = !trigger.state || trigger.state === null;
+    const bucketKey = `${trigger.bucket || ''}`.trim();
+    const hasBucket = !!(bucketKey && state.bucketIndex.has(bucketKey));
+    const bucketLabel = hasBucket ? getBucketLabel(bucketKey) : (bucketKey || 'Unassigned');
     
     let publishStatusHtml = '';
     if (isLocalTrigger) {
@@ -1502,6 +1551,22 @@
         `;
       }
     }
+    const bucketTitle = hasBucket
+      ? `Bucketed: ${bucketLabel}`
+      : (bucketKey ? `Missing bucket: ${bucketLabel}` : 'Unassigned bucket');
+    const bucketStatusHtml = hasBucket
+      ? `
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 4px; flex-shrink: 0;" title="${escapeHtml(bucketTitle)}">
+            <circle cx="7" cy="7" r="6.5" fill="#10b981" stroke="#059669" stroke-width="1"/>
+            <path d="M4 7l2 2 4-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `
+      : `
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 4px; flex-shrink: 0;" title="${escapeHtml(bucketTitle)}">
+            <circle cx="7" cy="7" r="6.5" fill="#ef4444" stroke="#dc2626" stroke-width="1"/>
+            <path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        `;
     let answerBadges = '';
     if (isLlmMode) {
       answerBadges = '<span class="answer-badge llm" title="LLM Fact Pack - AI-generated responses">LLM</span>';
@@ -1515,12 +1580,6 @@
     
     const isSelected = state.selectedTriggerIds.has(trigger.triggerId);
     
-    // Bucket status icon (NEW)
-    let bucketStatusHtml = '';
-    if (window.BucketManager) {
-      bucketStatusHtml = BucketManager.renderBucketStatusCell(trigger, state.buckets, trigger.ruleId);
-    }
-    
     return `
       <div class="trigger-row ${isEnabled ? '' : 'disabled'} ${isSelected ? 'selected' : ''}" id="trigger-${escapeHtml(trigger.triggerId)}" data-trigger-id="${escapeHtml(trigger.triggerId)}">
         <div style="display: flex; align-items: center; justify-content: center;">
@@ -1531,10 +1590,10 @@
                  title="Select for bulk action">
         </div>
         <div style="display: flex; align-items: center; justify-content: center;">
-          ${bucketStatusHtml}
+          ${publishStatusHtml}
         </div>
         <div style="display: flex; align-items: center; justify-content: center;">
-          ${publishStatusHtml}
+          ${bucketStatusHtml}
         </div>
         <div>
           <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>
@@ -1734,116 +1793,6 @@
   }
 
   /* --------------------------------------------------------------------------
-     BUCKET INTEGRATION
-     -------------------------------------------------------------------------- */
-  
-  function populateBucketDropdown() {
-    const bucketSelect = document.getElementById('input-trigger-bucket');
-    if (!bucketSelect) return;
-    
-    // Clear existing options except first (No Bucket)
-    while (bucketSelect.options.length > 1) {
-      bucketSelect.remove(1);
-    }
-    
-    // Add bucket options
-    state.buckets.forEach(bucket => {
-      const option = document.createElement('option');
-      option.value = bucket.bucketId;
-      option.textContent = `${bucket.icon} ${bucket.name} (${bucket.triggerCount} triggers)`;
-      bucketSelect.appendChild(option);
-    });
-  }
-  
-  /**
-   * Expose apiFetch for bucket manager module.
-   * Bucket manager needs auth token for API calls.
-   */
-  window.apiFetch = apiFetch;
-  
-  /**
-   * Quick assign bucket from trigger list (clicking red X icon).
-   * Opens minimal modal with bucket dropdown.
-   */
-  window.quickAssignBucket = async function(ruleId) {
-    const trigger = state.triggers.find(t => t.ruleId === ruleId);
-    if (!trigger) return;
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal active';
-    modal.id = 'quick-assign-modal';
-    modal.innerHTML = `
-      <div class="modal-backdrop" onclick="this.parentElement.remove()"></div>
-      <div class="modal-content" style="max-width: 480px;">
-        <div class="modal-header">
-          <h3>Assign Bucket</h3>
-          <button class="btn-close" onclick="this.closest('.modal').remove()">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p><strong>${escapeHtml(trigger.label)}</strong></p>
-          <p style="color: #6b7280; font-size: 13px; margin-bottom: 16px;">
-            Choose a bucket for faster classification
-          </p>
-          
-          <div class="form-group">
-            <label>Bucket</label>
-            <select id="quick-bucket-select" class="form-input">
-              <option value="">-- No Bucket (Always Evaluated) --</option>
-              ${state.buckets.map(b => 
-                `<option value="${b.bucketId}">${b.icon} ${b.name} (${b.triggerCount} triggers)</option>`
-              ).join('')}
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="quick-always-evaluate" style="width: auto; margin-right: 6px;">
-              Emergency Trigger (Always Evaluate)
-            </label>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn" onclick="this.closest('.modal').remove()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveQuickBucketAssignment('${ruleId}')">Save</button>
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-  };
-  
-  /**
-   * Save bucket assignment from quick assign modal.
-   */
-  window.saveQuickBucketAssignment = async function(ruleId) {
-    const bucketSelect = document.getElementById('quick-bucket-select');
-    const alwaysEval = document.getElementById('quick-always-evaluate');
-    
-    const bucket = bucketSelect.value || null;
-    const alwaysEvaluate = alwaysEval.checked;
-    
-    try {
-      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${ruleId}`, {
-        method: 'PATCH',
-        body: { bucket, alwaysEvaluate }
-      });
-      
-      // Close modal
-      document.getElementById('quick-assign-modal')?.remove();
-      
-      // Reload triggers
-      await loadBuckets();
-      await loadTriggers();
-      
-      showToast('success', 'Saved', 'Bucket assigned successfully.');
-      
-    } catch (error) {
-      console.error('[Triggers] Quick assign failed:', error);
-      showToast('error', 'Save Failed', error.message || 'Could not assign bucket.');
-    }
-  };
-  
-  /* --------------------------------------------------------------------------
      TRIGGER MANAGEMENT
      -------------------------------------------------------------------------- */
   function openTriggerModal(trigger) {
@@ -1864,13 +1813,8 @@
       // Populate followUpNextAction
       const followupActionEl = document.getElementById('input-trigger-followup-action');
       if (followupActionEl) followupActionEl.value = trigger.followUp?.nextAction || 'CONTINUE';
-      // Populate bucket dropdown and value
-      populateBucketDropdown();
-      const bucketEl = document.getElementById('input-trigger-bucket');
-      if (bucketEl) bucketEl.value = trigger.bucket || '';
-      // Populate alwaysEvaluate checkbox
-      const alwaysEvalEl = document.getElementById('input-trigger-always-evaluate');
-      if (alwaysEvalEl) alwaysEvalEl.checked = trigger.alwaysEvaluate || false;
+      // Populate bucket
+      populateBucketDropdown(trigger.bucket || '');
       // Populate maxInputWords
       const maxWordsEl = document.getElementById('input-trigger-max-words');
       if (maxWordsEl) maxWordsEl.value = trigger.maxInputWords || '';
@@ -1929,14 +1873,6 @@
       DOM.inputTriggerAnswer.value = '';
       DOM.inputTriggerAudio.value = '';
       DOM.inputTriggerFollowup.value = '';
-      
-      // Populate bucket dropdown for new trigger
-      populateBucketDropdown();
-      const bucketEl = document.getElementById('input-trigger-bucket');
-      if (bucketEl) bucketEl.value = '';
-      const alwaysEvalEl = document.getElementById('input-trigger-always-evaluate');
-      if (alwaysEvalEl) alwaysEvalEl.checked = false;
-      
       updateFollowupActionVisibility();
       DOM.inputTriggerLocal.checked = true;
       DOM.scopeSection.style.display = 'block';
@@ -1946,8 +1882,7 @@
       // All fields that exist in schema MUST be cleared for new triggers.
       // ═══════════════════════════════════════════════════════════════════════
       // Clear bucket, maxInputWords, negativePhrases (Added V131)
-      const bucketElNew = document.getElementById('input-trigger-bucket');
-      if (bucketElNew) bucketElNew.value = '';
+      populateBucketDropdown('');
       const maxWordsElNew = document.getElementById('input-trigger-max-words');
       if (maxWordsElNew) maxWordsElNew.value = '';
       const negPhrasesElNew = document.getElementById('input-trigger-negative-phrases');
@@ -2052,6 +1987,12 @@
     const followUpNextActionEl = document.getElementById('input-trigger-followup-action');
     const followUpNextAction = followUpNextActionEl ? (followUpNextActionEl.value || 'CONTINUE') : 'CONTINUE';
 
+    const bucketKey = document.getElementById('input-trigger-bucket')?.value || null;
+    if (bucketKey && !state.bucketIndex.has(bucketKey)) {
+      showToast('error', 'Invalid Bucket', 'Selected bucket no longer exists. Refresh the bucket list.');
+      return;
+    }
+
     const payload = {
       ruleId,
       label,
@@ -2062,8 +2003,7 @@
       negativePhrases: (document.getElementById('input-trigger-negative-phrases')?.value || '')
         .split('\n').map(s => s.trim().toLowerCase()).filter(Boolean),
       maxInputWords: parseInt(document.getElementById('input-trigger-max-words')?.value || '0') || null,
-      bucket: document.getElementById('input-trigger-bucket')?.value || null,
-      alwaysEvaluate: document.getElementById('input-trigger-always-evaluate')?.checked || false,
+      bucket: bucketKey || null,
       responseMode,
       answerText,
       audioUrl,
@@ -2087,10 +2027,16 @@
           }
           
           const groupId = state.editingTrigger.originGroupId;
+          const bucketChanged = (state.editingTrigger.bucket || null) !== (bucketKey || null);
+          const { bucket, ...globalPayload } = payload;
           const result = await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups/${groupId}/triggers/${ruleId}`, {
             method: 'PATCH',
-            body: payload
+            body: globalPayload
           });
+
+          if (bucketChanged) {
+            await saveGlobalBucketOverride(state.editingTrigger.triggerId, bucketKey);
+          }
           
           // Check if audio was invalidated due to text change (affects all companies)
           if (result.audioInvalidated) {
@@ -2129,6 +2075,17 @@
       console.error('[Triggers] Save failed:', error);
       showToast('error', 'Save Failed', error.message || 'Could not save trigger.');
     }
+  }
+
+  async function saveGlobalBucketOverride(globalTriggerId, bucketKey) {
+    if (!globalTriggerId) return null;
+    return apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/trigger-override`, {
+      method: 'PUT',
+      body: {
+        globalTriggerId,
+        bucket: bucketKey || null
+      }
+    });
   }
 
   function confirmDeleteTrigger(trigger) {
@@ -3128,10 +3085,9 @@
         errors.push(`[${i}] Invalid ruleId "${t.ruleId}" — use lowercase, dots, underscores`);
         return;
       }
-      // Validate bucket enum if provided
-      const validBuckets = ['booking_service', 'billing_payment', 'membership_plan', 'existing_appointment', 'other_operator', null];
-      if (t.bucket && !validBuckets.includes(t.bucket)) {
-        errors.push(`[${i}] Invalid bucket "${t.bucket}"`);
+      const normalizedBucket = typeof t.bucket === 'string' ? t.bucket.trim().toLowerCase() : null;
+      if (normalizedBucket && !state.bucketIndex.has(normalizedBucket)) {
+        errors.push(`[${i}] Invalid bucket "${normalizedBucket}"`);
         return;
       }
       valid.push({
@@ -3139,7 +3095,7 @@
         label: t.label,
         priority: t.priority || 50,
         // ISOMORPHIC: bucket + maxInputWords (Added V131)
-        bucket: t.bucket || null,
+        bucket: normalizedBucket || null,
         maxInputWords: typeof t.maxInputWords === 'number' ? t.maxInputWords : null,
         keywords: Array.isArray(t.keywords) ? t.keywords : [],
         phrases: Array.isArray(t.phrases) ? t.phrases : [],
@@ -3256,6 +3212,7 @@
     // All fields must be searchable. Missing = users can't find triggers.
     // ═══════════════════════════════════════════════════════════════════════
     pushText(trigger.bucket);
+    pushText(getBucketLabel(trigger.bucket));
     pushText(trigger.maxInputWords);
     pushText(trigger.match?.keywords);
     pushText(trigger.match?.phrases);
