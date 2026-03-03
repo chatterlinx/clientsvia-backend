@@ -11,7 +11,7 @@
  * If companyId not provided, will show stats for all companies
  */
 
-require('../config/db-connection');
+require('dotenv').config();
 const mongoose = require('mongoose');
 const CompanyLocalTrigger = require('../models/CompanyLocalTrigger');
 
@@ -115,6 +115,9 @@ async function main() {
   }
   
   try {
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('✅ Connected to MongoDB\n');
     // Check current state
     const problematic = await checkTriggerStates(companyId);
     

@@ -210,19 +210,36 @@ node scripts/fix-trigger-state.js <companyId> --fix
 
 ## Next Steps
 
-1. **Run diagnostic** to confirm this is the issue:
+1. **Get your company ID** (if you don't know it):
    ```bash
-   node scripts/diagnose-trigger-issue.js <companyId>
+   # List all companies
+   node scripts/get-company-id.js
+   
+   # Or search for a specific company
+   node scripts/get-company-id.js "Penguin"
    ```
 
-2. **Apply fix**:
+2. **Run diagnostic** to confirm this is the issue:
    ```bash
-   node scripts/fix-trigger-state.js <companyId> --fix
+   # Replace YOUR_COMPANY_ID with the actual ID from step 1
+   node scripts/diagnose-trigger-issue.js YOUR_COMPANY_ID
+   
+   # Example:
+   node scripts/diagnose-trigger-issue.js 68e3f77a9d623b8058c700c4
    ```
 
-3. **Test call** and verify triggers now match
+3. **Apply fix**:
+   ```bash
+   # Replace YOUR_COMPANY_ID with the actual ID
+   node scripts/fix-trigger-state.js YOUR_COMPANY_ID --fix
+   
+   # Example:
+   node scripts/fix-trigger-state.js 68e3f77a9d623b8058c700c4 --fix
+   ```
 
-4. **Check Call Console** for trigger events
+4. **Test call** and verify triggers now match
+
+5. **Check Call Console** for trigger events
 
 ---
 

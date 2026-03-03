@@ -13,7 +13,7 @@
  *   node scripts/diagnose-trigger-issue.js <companyId>
  */
 
-require('../config/db-connection');
+require('dotenv').config();
 const mongoose = require('mongoose');
 const CompanyLocalTrigger = require('../models/CompanyLocalTrigger');
 const CompanyTriggerSettings = require('../models/CompanyTriggerSettings');
@@ -386,6 +386,10 @@ async function main() {
   }
   
   try {
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('✅ Connected to MongoDB\n');
+    
     await diagnose(companyId);
     process.exit(0);
   } catch (error) {
