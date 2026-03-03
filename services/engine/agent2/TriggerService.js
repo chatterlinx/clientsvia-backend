@@ -139,6 +139,7 @@ function invalidateAllCache() {
 function resolveAudioUrl(companyAudio, effectiveAnswerText) {
   if (!companyAudio || !companyAudio.isValid) return '';
   if (!companyAudio.hasAudioData) return '';  // V130: Binary must exist (from findByCompanyId)
+  if (!effectiveAnswerText || typeof effectiveAnswerText !== 'string') return '';  // Safety: null/undefined check
   if (companyAudio.textHash !== TriggerAudio.hashText(effectiveAnswerText)) return '';
   return companyAudio.audioUrl || '';
 }
