@@ -797,6 +797,10 @@ router.post('/:companyId/local-triggers',
         deletedTrigger.overrideOfTriggerId = isOverride ? overrideOfTriggerId : null;
         deletedTrigger.overrideType = isOverride ? 'FULL' : null;
         deletedTrigger.tags = tags || [];
+        // AUTO-PUBLISH: Revived triggers are automatically published
+        deletedTrigger.state = 'published';
+        deletedTrigger.publishedAt = new Date();
+        deletedTrigger.publishedBy = userId;
         deletedTrigger.updatedAt = new Date();
         deletedTrigger.updatedBy = userId;
 
@@ -826,6 +830,9 @@ router.post('/:companyId/local-triggers',
       // ═══════════════════════════════════════════════════════════════════════
       // STRICT TRIGGER SYSTEM - ISOMORPHIC CREATE
       // All schema fields MUST be explicitly set. No implicit defaults that hide bugs.
+      // 
+      // AUTO-PUBLISH: New triggers are published by default (state: "published")
+      // This prevents the invisible trigger bug where triggers exist but agent can't see them.
       // ═══════════════════════════════════════════════════════════════════════
       const trigger = await CompanyLocalTrigger.create({
         companyId,
@@ -858,6 +865,10 @@ router.post('/:companyId/local-triggers',
         overrideOfTriggerId: isOverride ? overrideOfTriggerId : null,
         overrideType: isOverride ? 'FULL' : null,
         tags: tags || [],
+        // AUTO-PUBLISH: Set state to "published" so trigger is immediately visible to runtime
+        state: 'published',
+        publishedAt: new Date(),
+        publishedBy: userId,
         createdBy: userId,
         updatedBy: userId
       });
