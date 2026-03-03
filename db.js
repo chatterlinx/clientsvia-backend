@@ -69,11 +69,38 @@ const connectDB = async () => {
         });
         
         const connectionTime = Date.now() - connectionStartTime;
+        const dbName = mongoose.connection.name;
+        
+        // 🚨 CRITICAL: Prevent production from using "test" database
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+        if (isProduction && dbName === 'test') {
+            const errorMsg = '🔴 FATAL: Production server connected to "test" database! This is a critical configuration error.';
+            console.error('[MongoDB Connection]', errorMsg);
+            console.error('[MongoDB Connection] URI must include database name: mongodb://.../<database_name>?...');
+            console.error('[MongoDB Connection] Current DB:', dbName);
+            
+            if (AdminNotificationService) {
+                await AdminNotificationService.sendAlert({
+                    code: 'DB_CONNECTION_TEST_IN_PROD',
+                    severity: 'CRITICAL',
+                    companyId: null,
+                    companyName: 'Platform',
+                    message: '🔴 FATAL: Production connected to "test" database',
+                    details: `Production server is connected to MongoDB database "test" instead of production database. This causes data isolation issues. Fix MONGODB_URI to include explicit database name.`,
+                    stackTrace: new Error().stack
+                }).catch(notifErr => logger.error('Failed to send DB test alert:', notifErr));
+            }
+            
+            throw new Error('Production cannot connect to "test" database. Update MONGODB_URI to include explicit database name.');
+        }
+        
         console.log('[Mongoose Connection] [OK] Successfully connected to MongoDB via Mongoose!');
         logger.info('✅ [DB] MongoDB connected', {
             connectionTimeMs: connectionTime,
             host: mongoose.connection.host,
-            database: mongoose.connection.name
+            database: dbName,
+            isProduction,
+            warningTestDb: dbName === 'test' ? 'Using "test" database - should only happen in development' : null
         });
 
         // ⚠️ WARNING: Slow database connection

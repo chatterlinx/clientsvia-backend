@@ -303,15 +303,25 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
   // Load ONLY active local triggers (enabled=true, isDeleted!=true)
   const rawLocalTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
   
-  // 🔍 DIAGNOSTIC: Log what we actually loaded
+  // 🔍 CRITICAL DIAGNOSTIC: Log database connection details and query results
+  const mongoose = require('mongoose');
   logger.info('[TriggerService] 🔍 LOCAL_LOADED', {
     callSid: ctx.callSid,
     companyId,
     toPhone: ctx.toPhone,
+    // DATABASE CONNECTION INFO
+    mongoDbName: mongoose.connection.name,
+    mongoHost: mongoose.connection.host,
+    mongoReadyState: mongoose.connection.readyState,
+    // QUERY RESULTS
     localCount: rawLocalTriggers.length,
     globalCount: globalTriggers.length,
     firstLocalRuleId: rawLocalTriggers[0]?.ruleId || null,
     firstLocalLabel: rawLocalTriggers[0]?.label || null,
+    firstLocalState: rawLocalTriggers[0]?.state || null,
+    firstLocalEnabled: rawLocalTriggers[0]?.enabled || null,
+    firstLocalIsDeleted: rawLocalTriggers[0]?.isDeleted || null,
+    // QUERY METADATA
     queryMethod: 'CompanyLocalTrigger.findActiveByCompanyId',
     queryFilters: { companyId, enabled: true, isDeleted: { $ne: true } },
     collectionQueried: 'companyLocalTriggers'
