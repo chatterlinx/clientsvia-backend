@@ -274,6 +274,8 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
         enabled: gt.enabled,
         priority: gt.priority ?? 50,
         label: gt.label,
+        bucket: gt.bucket || null,
+        alwaysEvaluate: gt.alwaysEvaluate || false,
         maxInputWords: typeof gt.maxInputWords === 'number' ? gt.maxInputWords : undefined,
         match: {
           keywords: gt.keywords || [],
@@ -372,6 +374,8 @@ async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = 
       enabled: lt.enabled,
       priority: lt.priority ?? 50,
       label: lt.label,
+      bucket: lt.bucket || null,
+      alwaysEvaluate: lt.alwaysEvaluate || false,
       maxInputWords: typeof lt.maxInputWords === 'number' ? lt.maxInputWords : undefined,
       match: {
         keywords: lt.keywords || [],

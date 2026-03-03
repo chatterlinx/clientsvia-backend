@@ -27,36 +27,14 @@ const router = express.Router();
 const TriggerBucket = require('../../models/TriggerBucket');
 const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
 const logger = require('../../utils/logger');
-
-// ══════════════════════════════════════════════════════════════════════════
-// MIDDLEWARE - Company Access Validation
-// ══════════════════════════════════════════════════════════════════════════
-
-/**
- * Verify user has access to this company.
- * TODO: Implement actual auth middleware when available.
- */
-function verifyCompanyAccess(req, res, next) {
-  const { companyId } = req.params;
-  
-  if (!companyId || companyId.length !== 24) {
-    return res.status(400).json({
-      error: 'Invalid companyId format'
-    });
-  }
-  
-  // TODO: Check if req.user has access to this company
-  // For now, allow all access (assuming auth is handled upstream)
-  
-  next();
-}
+const { authenticateJWT } = require('../../middleware/auth');
 
 // ══════════════════════════════════════════════════════════════════════════
 // GET /api/agent-console/trigger-buckets/:companyId/health
 // ══════════════════════════════════════════════════════════════════════════
 // Get bucket system health summary for a company
 
-router.get('/:companyId/health', verifyCompanyAccess, async (req, res) => {
+router.get('/:companyId/health', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   
   try {
@@ -85,7 +63,7 @@ router.get('/:companyId/health', verifyCompanyAccess, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 // List all buckets for a company
 
-router.get('/:companyId', verifyCompanyAccess, async (req, res) => {
+router.get('/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   const { includeDeleted } = req.query;
   
@@ -119,7 +97,7 @@ router.get('/:companyId', verifyCompanyAccess, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 // Get a single bucket by ID
 
-router.get('/:companyId/:bucketId', verifyCompanyAccess, async (req, res) => {
+router.get('/:companyId/:bucketId', authenticateJWT, async (req, res) => {
   const { companyId, bucketId } = req.params;
   
   try {
@@ -157,7 +135,7 @@ router.get('/:companyId/:bucketId', verifyCompanyAccess, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 // Create a new bucket
 
-router.post('/:companyId', verifyCompanyAccess, async (req, res) => {
+router.post('/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   const {
     bucketId,
@@ -251,7 +229,7 @@ router.post('/:companyId', verifyCompanyAccess, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 // Update an existing bucket
 
-router.put('/:companyId/:bucketId', verifyCompanyAccess, async (req, res) => {
+router.put('/:companyId/:bucketId', authenticateJWT, async (req, res) => {
   const { companyId, bucketId } = req.params;
   const {
     name,
@@ -318,7 +296,7 @@ router.put('/:companyId/:bucketId', verifyCompanyAccess, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 // Soft-delete a bucket
 
-router.delete('/:companyId/:bucketId', verifyCompanyAccess, async (req, res) => {
+router.delete('/:companyId/:bucketId', authenticateJWT, async (req, res) => {
   const { companyId, bucketId } = req.params;
   const { force } = req.query; // ?force=true for hard delete
   

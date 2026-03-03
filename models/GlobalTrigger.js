@@ -114,14 +114,36 @@ const globalTriggerSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-  // Top-Level Intent Gate bucket — used by Agent2CallRouter to pre-filter trigger pool.
-  // When Agent2CallRouter classifies a call with confidence >= 0.70, only cards whose
-  // bucket matches (or bucket is null) are evaluated. Dramatically reduces false positives.
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUCKET SYSTEM - Intent-based trigger organization (V2026.03)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Global triggers can also be assigned to buckets.
+  // Note: Bucket IDs are company-specific (defined in TriggerBucket collection).
+  // Global triggers use generic bucket names that match common company buckets.
+  
+  /**
+   * Bucket assignment (references common bucket patterns).
+   * Examples: "cooling_service", "billing_payment", "emergency"
+   * If null, trigger is not bucketed (evaluated on every call).
+   */
   bucket: {
     type: String,
-    enum: ['booking_service', 'billing_payment', 'membership_plan', 'existing_appointment', 'other_operator', null],
-    default: null
+    default: null,
+    trim: true,
+    lowercase: true,
+    index: true
   },
+  
+  /**
+   * If true, this trigger ALWAYS evaluates (bypasses bucket filtering).
+   * Use for emergency/safety triggers in global library.
+   */
+  alwaysEvaluate: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  
   // Conversational card guard: if set, card only fires when input has <= N words.
   // Prevents goodbye/thank-you/robot cards from stealing long service utterances.
   maxInputWords: {
@@ -446,6 +468,7 @@ globalTriggerSchema.methods.toMatcherFormat = function() {
     priority: this.priority ?? 50,  // Default priority if missing
     label: this.label,
     bucket: this.bucket || null,
+    alwaysEvaluate: this.alwaysEvaluate || false,
     maxInputWords: this.maxInputWords || null,
     match: {
       keywords: this.keywords || [],
