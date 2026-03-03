@@ -298,14 +298,6 @@
     if (state.companyId) {
       DOM.headerCompanyId.textContent = truncateId(state.companyId);
       DOM.headerCompanyId.title = state.companyId;
-      
-      // Also update second row company ID
-      const headerCompanyId2 = document.getElementById('header-company-id-2');
-      if (headerCompanyId2) {
-        headerCompanyId2.textContent = truncateId(state.companyId);
-        headerCompanyId2.title = state.companyId;
-      }
-      
       DOM.btnBack.href = `/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}`;
       
       const logoLink = document.getElementById('header-logo-link');
@@ -955,12 +947,6 @@
       buildSearchIndex(state.triggers);
       
       DOM.headerCompanyName.textContent = state.companyName;
-      
-      // Also update second row company name
-      const headerCompanyName2 = document.getElementById('header-company-name-2');
-      if (headerCompanyName2) {
-        headerCompanyName2.textContent = state.companyName;
-      }
       
       // V131: Render health banner if needed
       renderHealthBanner();
