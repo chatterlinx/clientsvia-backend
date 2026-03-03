@@ -44,6 +44,10 @@ router.use('/truth', truthExportRouter);
 const scrabEngineRouter = require('./scrabEngine');
 router.use('/', scrabEngineRouter);
 
+// Call Review routes (Real call data viewer)
+const callReviewRouter = require('./callReview');
+router.use('/', callReviewRouter);
+
 // ════════════════════════════════════════════════════════════════════════════
 // GET /:companyId/triggers/router-config — Serve Call Router ontologies + IntentGate
 // ════════════════════════════════════════════════════════════════════════════

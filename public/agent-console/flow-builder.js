@@ -17,6 +17,7 @@
   function initDOM() {
     DOM = {
       btnBack: document.getElementById('btn-back'),
+      btnCallViewer: document.getElementById('btn-call-viewer'),
       btnExpandPanel: document.getElementById('btn-expand-panel'),
       expandIcon: document.getElementById('expand-icon'),
       expandLabel: document.getElementById('expand-label'),
@@ -61,6 +62,10 @@
   function bindEvents() {
     if (DOM.btnBack) DOM.btnBack.addEventListener('click', () => {
       window.location.href = `/agent-console/callconsole.html?companyId=${state.companyId}`;
+    });
+
+    if (DOM.btnCallViewer) DOM.btnCallViewer.addEventListener('click', () => {
+      window.open('/call-report-viewer.html', 'CallReportViewer', 'width=1400,height=900,menubar=no,toolbar=no,location=no');
     });
 
     if (DOM.btnExpandPanel) DOM.btnExpandPanel.addEventListener('click', togglePanelWidth);
