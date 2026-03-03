@@ -40,12 +40,6 @@ window.BucketManager = (function() {
     companyId = compId;
     apiBase = apiBasePath || '/api/agent-console';
     onBucketsChanged = changeCallback;
-    
-    // Setup manage buckets button
-    const btnManageBuckets = document.getElementById('btn-manage-buckets');
-    if (btnManageBuckets) {
-      btnManageBuckets.addEventListener('click', openBucketModal);
-    }
   }
   
   /* ══════════════════════════════════════════════════════════════════════
@@ -123,9 +117,14 @@ window.BucketManager = (function() {
           ❌ CRITICAL: ${invalidBucket} trigger${invalidBucket > 1 ? 's' : ''} 
           ${invalidBucket > 1 ? 'have' : 'has'} invalid bucket assignments
         </span>
-        <button class="btn btn-sm btn-danger" onclick="BucketManager.fixInvalidBuckets()">
-          Fix Now
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm btn-danger" onclick="BucketManager.fixInvalidBuckets()">
+            Fix Now
+          </button>
+          <button class="btn btn-sm" onclick="BucketManager.openBucketModal()">
+            🗂️ Manage Buckets
+          </button>
+        </div>
       `;
     }
     // Warning - low bucket coverage
@@ -135,9 +134,14 @@ window.BucketManager = (function() {
         <span>
           ⚠️ Only ${bucketedPercent}% bucketed — ${unbucketed} trigger${unbucketed > 1 ? 's' : ''} need assignment
         </span>
-        <button class="btn btn-sm btn-warning" onclick="BucketManager.showUnbucketed()">
-          Review
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm btn-warning" onclick="BucketManager.showUnbucketed()">
+            Review
+          </button>
+          <button class="btn btn-sm" onclick="BucketManager.openBucketModal()">
+            🗂️ Manage Buckets
+          </button>
+        </div>
       `;
     }
     // Info - some unbucketed
@@ -149,9 +153,14 @@ window.BucketManager = (function() {
           ${unbucketed} unbucketed (${unbucketedPercent}%) 🔴 | 
           ${emergency} emergency (${emergencyPercent}%) 🟡
         </span>
-        <button class="btn btn-sm" onclick="BucketManager.showUnbucketed()">
-          Assign Remaining
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" onclick="BucketManager.showUnbucketed()">
+            Assign Remaining
+          </button>
+          <button class="btn btn-sm" onclick="BucketManager.openBucketModal()">
+            🗂️ Manage Buckets
+          </button>
+        </div>
       `;
     }
     // All good
@@ -163,6 +172,9 @@ window.BucketManager = (function() {
           ${emergency} emergency (${emergencyPercent}%) 🟡 | 
           All triggers healthy!
         </span>
+        <button class="btn btn-sm" onclick="BucketManager.openBucketModal()">
+          🗂️ Manage Buckets
+        </button>
       `;
     }
     
