@@ -381,20 +381,16 @@ companyLocalTriggerSchema.statics.generateTriggerId = function(companyId, ruleId
   return `${companyId}::${ruleId}`;
 };
 
-// RUNTIME: Load ONLY enabled, non-deleted triggers
-// BACKWARD COMPATIBLE: Treats state:null as published (prevents ghost data trap)
+// RUNTIME: Load ONLY enabled, non-deleted, PUBLISHED triggers
+// NO backward compatibility - state MUST be "published" explicitly
+// Pre-save hook ensures all new writes have state:published
+// For old data with state:null, use cleanup endpoint to normalize
 companyLocalTriggerSchema.statics.findActiveByCompanyId = function(companyId) {
   return this.find({
     companyId,
     enabled: true,
     isDeleted: { $ne: true },
-    // Accept BOTH published and null state (backward compatibility for old data)
-    // Pre-save hook ensures new writes always have state:published
-    $or: [
-      { state: 'published' },
-      { state: null },
-      { state: { $exists: false } }
-    ]
+    state: 'published'  // STRICT: Only published triggers load
   })
     .sort({ priority: 1 })
     .lean();

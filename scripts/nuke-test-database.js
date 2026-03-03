@@ -77,6 +77,18 @@ async function safeNuke() {
       let insertedCount = 0;
       
       if (docs.length > 0) {
+        // CRITICAL FIX: Ensure all migrated triggers have state:"published"
+        // The "test" DB had state:null which caused the 12-hour debug session
+        if (collectionName === 'companyLocalTriggers') {
+          docs.forEach(doc => {
+            if (!doc.state || doc.state === null) {
+              doc.state = 'published';
+              doc.publishedAt = doc.publishedAt || new Date();
+            }
+          });
+          console.log(`  🔧 Fixed ${docs.filter(d => d.state === 'published').length} triggers to state:published`);
+        }
+        
         try {
           const result = await targetDb.collection(collectionName).insertMany(docs, { ordered: false });
           insertedCount = result.insertedCount;
