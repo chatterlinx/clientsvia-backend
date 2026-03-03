@@ -318,6 +318,11 @@ async function buildMergedTriggerList(companyId) {
   const localEnabledCount = localNonOverride.filter(lt => lt.enabled !== false).length;
   const localDisabledCount = localCount - localEnabledCount;
   
+  // PUBLISH STATUS COUNTS (for health visibility)
+  const localPublishedCount = localNonOverride.filter(lt => lt.state === 'published').length;
+  const localUnpublishedCount = localNonOverride.filter(lt => !lt.state || lt.state === null).length;
+  const localDraftCount = localNonOverride.filter(lt => lt.state === 'draft').length;
+  
   const fullOverrideCount = localTriggers.filter(lt => lt.isOverride && lt.isDeleted !== true).length;
   const partialOverrideCount = partialOverrideMap.size;
   const overrideCount = fullOverrideCount + partialOverrideCount;
@@ -341,6 +346,9 @@ async function buildMergedTriggerList(companyId) {
       localCount,
       localEnabledCount,
       localDisabledCount,
+      localPublishedCount,      // NEW: How many local triggers are published
+      localUnpublishedCount,    // NEW: How many local triggers are unpublished
+      localDraftCount,          // NEW: How many local triggers are drafts
       overrideCount,
       totalTriggerCount,
       totalActiveCount,

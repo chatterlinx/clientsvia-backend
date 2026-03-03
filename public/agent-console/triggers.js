@@ -147,6 +147,7 @@
     
     statGlobal: document.getElementById('stat-global'),
     statLocal: document.getElementById('stat-local'),
+    statPublished: document.getElementById('stat-published'),
     statOverrides: document.getElementById('stat-overrides'),
     statTotal: document.getElementById('stat-total'),
     statDisabled: document.getElementById('stat-disabled'),
@@ -1033,6 +1034,29 @@
     
     DOM.statGlobal.textContent = state.stats.globalEnabledCount || 0;
     DOM.statLocal.textContent = state.stats.localEnabledCount || 0;
+    
+    // PUBLISHED COUNT: Show how many local triggers are published
+    if (DOM.statPublished) {
+      const publishedCount = state.stats.localPublishedCount || 0;
+      const totalLocal = state.stats.localCount || 0;
+      DOM.statPublished.textContent = publishedCount;
+      
+      // Color code based on health
+      if (publishedCount === totalLocal && totalLocal > 0) {
+        // All published - green
+        DOM.statPublished.style.color = '#10b981';
+      } else if (publishedCount === 0 && totalLocal > 0) {
+        // None published - red
+        DOM.statPublished.style.color = '#ef4444';
+      } else if (publishedCount < totalLocal) {
+        // Some unpublished - orange
+        DOM.statPublished.style.color = '#f59e0b';
+      } else {
+        // Default
+        DOM.statPublished.style.color = '';
+      }
+    }
+    
     DOM.statOverrides.textContent = state.stats.overrideCount || 0;
     DOM.statTotal.textContent = state.stats.totalActiveCount || 0;
     
