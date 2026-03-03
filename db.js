@@ -53,25 +53,35 @@ const connectDB = async () => {
 
     // 🚨 CRITICAL: Validate URI includes explicit database name
     // We NEVER use default "test" database - always explicit production DB
-    const uriMatch = uri.match(/mongodb(?:\+srv)?:\/\/[^/]+\/([^?]+)/);
-    const dbNameFromUri = uriMatch ? uriMatch[1] : null;
+    let dbNameFromUri = null;
+    try {
+        // Try to extract database name from URI
+        // Handles both mongodb:// and mongodb+srv:// formats
+        const uriMatch = uri.match(/mongodb(?:\+srv)?:\/\/[^/]+\/([^?&]+)/);
+        dbNameFromUri = uriMatch && uriMatch[1] ? uriMatch[1].trim() : null;
+    } catch (parseError) {
+        console.warn('[MongoDB Connection] Could not parse database name from URI:', parseError.message);
+    }
     
     if (!dbNameFromUri || dbNameFromUri === '') {
         const errorMsg = '🔴 FATAL: MONGODB_URI missing database name - would default to "test"';
         console.error('[MongoDB Connection]', errorMsg);
-        console.error('[MongoDB Connection] Current URI pattern: mongodb://...@host/?options');
-        console.error('[MongoDB Connection] Required URI pattern: mongodb://...@host/clientsvia?options');
-        console.error('[MongoDB Connection]                                          ^^^^^^^^^^');
-        console.error('[MongoDB Connection] Add database name after host, before "?"');
+        console.error('[MongoDB Connection] Current URI sample: mongodb://...@host/?options');
+        console.error('[MongoDB Connection] Required pattern:  mongodb://...@host/clientsvia?options');
+        console.error('[MongoDB Connection]                                        ^^^^^^^^^^');
+        console.error('[MongoDB Connection] Add "/clientsvia" after host, before "?"');
+        console.error('[MongoDB Connection] Your URI starts with:', uri.substring(0, 50) + '...');
         
         throw new Error('MONGODB_URI must include explicit database name (e.g., /clientsvia). We do not use "test" database.');
     }
     
     if (dbNameFromUri === 'test') {
-        throw new Error('MONGODB_URI explicitly set to "test" database. Change to /clientsvia');
+        console.error('[MongoDB Connection] 🔴 FATAL: URI explicitly set to "test" database');
+        console.error('[MongoDB Connection] We do not use "test" database - change to /clientsvia');
+        throw new Error('MONGODB_URI set to "test" database. Change to /clientsvia');
     }
     
-    console.log('[MongoDB Connection] URI validation: ✅ Database name present:', dbNameFromUri);
+    console.log('[MongoDB Connection] ✅ URI validation passed - Database name:', dbNameFromUri);
 
     const connectionStartTime = Date.now();
 
@@ -103,6 +113,9 @@ const connectDB = async () => {
             console.error('[MongoDB Connection] URI must include explicit database name: mongodb://.../<database_name>?...');
             console.error('[MongoDB Connection] Expected: mongodb://...@cluster.../clientsvia?...');
             console.error('[MongoDB Connection] Current DB:', dbName);
+            console.error('[MongoDB Connection] Connection host:', mongoose.connection.host);
+            console.error('[MongoDB Connection] This happened despite URI validation passing.');
+            console.error('[MongoDB Connection] Check if URI was changed after validation or if Mongoose defaulted to "test"');
             
             if (AdminNotificationService) {
                 await AdminNotificationService.sendAlert({
@@ -111,7 +124,7 @@ const connectDB = async () => {
                     companyId: null,
                     companyName: 'Platform',
                     message: '🔴 FATAL: Attempted to connect to "test" database',
-                    details: `Server tried to connect to MongoDB "test" database. This is never allowed - we test live with production database. Fix MONGODB_URI to include explicit database name (/clientsvia).`,
+                    details: `Server connected to MongoDB "test" database despite URI validation. This is never allowed - we test live with production database. Fix MONGODB_URI to include explicit database name (/clientsvia). Host: ${mongoose.connection.host}`,
                     stackTrace: new Error().stack
                 }).catch(notifErr => logger.error('Failed to send DB test alert:', notifErr));
             }
