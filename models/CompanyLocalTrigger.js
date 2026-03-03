@@ -93,6 +93,25 @@ const companyLocalTriggerSchema = new mongoose.Schema({
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // PUBLISH STATUS (CRITICAL FOR RUNTIME VISIBILITY)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Triggers must be published to be visible to the agent runtime.
+  // Default: published (auto-publish on create).
+  state: {
+    type: String,
+    enum: ['published', 'draft'],
+    default: 'published'
+  },
+  publishedAt: {
+    type: Date,
+    default: null
+  },
+  publishedBy: {
+    type: String,
+    default: null
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // MATCHING RULES
   // ─────────────────────────────────────────────────────────────────────────
   enabled: {
