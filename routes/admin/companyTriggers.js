@@ -2266,4 +2266,98 @@ router.post('/:companyId/fix-duplicates',
   }
 );
 
+// ════════════════════════════════════════════════════════════════════════════════
+// TRIGGER HEALTH CHECK - Detect unpublished triggers
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/triggers/health
+ * Check for unpublished triggers and runtime pool health
+ */
+router.get('/:companyId/triggers/health',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+
+    try {
+      // Count unpublished local triggers
+      const unpublishedCount = await CompanyLocalTrigger.countDocuments({
+        companyId,
+        state: null,
+        isDeleted: { $ne: true }
+      });
+
+      // Get runtime cache size (if available)
+      let runtimePoolSize = null;
+      try {
+        const TriggerService = require('../../services/engine/agent2/TriggerService');
+        const cacheStats = await TriggerService.getCacheStats(companyId);
+        runtimePoolSize = cacheStats?.triggerCount || 0;
+      } catch (err) {
+        logger.warn('[TriggerHealth] Could not get runtime stats:', err.message);
+      }
+
+      return res.json({
+        success: true,
+        unpublishedCount,
+        runtimePoolSize,
+        hasIssues: unpublishedCount > 0 || (runtimePoolSize === 0),
+        timestamp: new Date()
+      });
+    } catch (error) {
+      logger.error('[TriggerHealth] Health check error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/triggers/fix-unpublished
+ * Publish all local triggers with state=null
+ */
+router.post('/:companyId/triggers/fix-unpublished',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const userId = req.user?._id;
+
+    try {
+      // Update all unpublished triggers
+      const result = await CompanyLocalTrigger.updateMany(
+        {
+          companyId,
+          state: null,
+          isDeleted: { $ne: true }
+        },
+        {
+          $set: {
+            state: 'published',
+            publishedAt: new Date(),
+            publishedBy: userId,
+            updatedAt: new Date()
+          }
+        }
+      );
+
+      logger.info('[TriggerHealth] Auto-published unpublished triggers', {
+        companyId,
+        count: result.modifiedCount,
+        userId
+      });
+
+      return res.json({
+        success: true,
+        publishedCount: result.modifiedCount,
+        message: `Published ${result.modifiedCount} trigger(s)`,
+        timestamp: new Date()
+      });
+    } catch (error) {
+      logger.error('[TriggerHealth] Fix unpublished error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 module.exports = router;

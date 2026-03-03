@@ -84,6 +84,31 @@
       gap: 8px;
     }
     
+    /* Health Warning Alerts */
+    .alert-critical {
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+      border: 2px solid #dc2626;
+      border-left-width: 6px;
+      border-radius: 8px;
+      padding: 20px;
+      color: #991b1b;
+      animation: pulse-border 2s infinite;
+    }
+    
+    @keyframes pulse-border {
+      0%, 100% { border-color: #dc2626; }
+      50% { border-color: #ef4444; }
+    }
+    
+    .alert-critical code {
+      background: rgba(220, 38, 38, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
     /* Trigger Stats Bar */
     .trigger-stats-bar {
       display: flex;
@@ -1058,6 +1083,64 @@
           <div class="trigger-stat">
             <span class="trigger-stat-value stat-value-muted" id="stat-disabled">0</span>
             <span class="trigger-stat-label">Disabled</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- HEALTH WARNING BANNER (shows when unpublished triggers detected) -->
+      <div class="alert alert-critical" id="health-warning-unpublished" style="display: none; margin-bottom: 20px;">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0; margin-top: 2px;">
+            <path d="M12 2L2 22h20L12 2z" fill="currentColor" opacity="0.2"/>
+            <path d="M12 2L2 22h20L12 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M12 9v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <div style="flex: 1;">
+            <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700;">⚠️ CRITICAL: Unpublished Triggers Detected</h4>
+            <p style="margin: 0 0 12px 0; font-size: 14px; line-height: 1.6;">
+              <strong id="unpublished-count">0</strong> local trigger(s) have <code>state: null</code> and are <strong>INVISIBLE to the agent runtime</strong>. 
+              Your beautiful triggers exist in the database but the agent can't see them!
+            </p>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-danger" id="btn-fix-unpublished" style="background: #dc2626;">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 6px;">
+                  <path d="M7 1v6m0 0v6m0-6h6M7 7H1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Auto-Publish All Unpublished Triggers
+              </button>
+              <span style="font-size: 13px; color: rgba(0,0,0,0.6);">
+                This will set <code>state: "published"</code> for all null-state triggers
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HEALTH WARNING: Empty Pool (shows when agent runtime has 0 triggers) -->
+      <div class="alert alert-critical" id="health-warning-empty-pool" style="display: none; margin-bottom: 20px;">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0; margin-top: 2px;">
+            <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.2"/>
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <div style="flex: 1;">
+            <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700;">🚨 AGENT RUNTIME: TRIGGER POOL EMPTY</h4>
+            <p style="margin: 0 0 12px 0; font-size: 14px; line-height: 1.6;">
+              The agent runtime cache shows <strong>0 triggers loaded</strong>. Every call will fall through to LLM fallback.
+            </p>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-primary" id="btn-refresh-cache-warning">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 6px;">
+                  <path d="M13 7A6 6 0 1 1 1 7a6 6 0 0 1 12 0z" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M10 4h2.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Refresh Cache Now
+              </button>
+              <span style="font-size: 13px; color: rgba(0,0,0,0.6);">
+                Cache refresh may take 5-10 seconds
+              </span>
+            </div>
           </div>
         </div>
       </div>

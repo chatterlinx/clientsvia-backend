@@ -389,6 +389,57 @@
         }
       });
     }
+    
+    // Health Warning: Fix Unpublished Triggers
+    const btnFixUnpublished = document.getElementById('btn-fix-unpublished');
+    if (btnFixUnpublished) {
+      btnFixUnpublished.addEventListener('click', async () => {
+        if (!confirm('This will set state="published" for all local triggers with state=null. Continue?')) {
+          return;
+        }
+        
+        const btn = btnFixUnpublished;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Publishing...';
+        
+        try {
+          const res = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`, {
+            method: 'POST'
+          });
+          
+          if (res.success) {
+            showToast('success', 'Published', `${res.publishedCount} trigger(s) published. Refreshing...`);
+            
+            // Auto-refresh cache
+            await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/refresh`, { method: 'POST' });
+            
+            // Reload page
+            await loadTriggers();
+            
+            showToast('success', 'Complete', 'All triggers published and cache refreshed!');
+          } else {
+            showToast('error', 'Failed', res.error || 'Could not publish triggers.');
+            btn.textContent = originalText;
+            btn.disabled = false;
+          }
+        } catch (err) {
+          console.error('[Triggers] Fix unpublished failed:', err);
+          showToast('error', 'Error', 'Could not publish triggers.');
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      });
+    }
+    
+    // Health Warning: Refresh Cache (from warning banner)
+    const btnRefreshCacheWarning = document.getElementById('btn-refresh-cache-warning');
+    if (btnRefreshCacheWarning) {
+      btnRefreshCacheWarning.addEventListener('click', () => {
+        if (DOM.btnRefreshCache) DOM.btnRefreshCache.click();
+      });
+    }
+    
     if (DOM.btnNameGreeting) DOM.btnNameGreeting.addEventListener('click', openNameGreetingModal);
     
     // Bulk selection
@@ -754,6 +805,9 @@
       // V131: Render health banner if needed
       renderHealthBanner();
       
+      // Check for unpublished triggers
+      checkTriggerHealth();
+      
       renderGroupSelector();
       renderStats();
       renderTriggers();
@@ -785,6 +839,39 @@
   /* --------------------------------------------------------------------------
      RENDERING
      -------------------------------------------------------------------------- */
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRIGGER HEALTH CHECK - Detects unpublished triggers and empty runtime pool
+  // ═══════════════════════════════════════════════════════════════════════════
+  async function checkTriggerHealth() {
+    const unpublishedBanner = document.getElementById('health-warning-unpublished');
+    const emptyPoolBanner = document.getElementById('health-warning-empty-pool');
+    
+    try {
+      // Check for unpublished local triggers
+      const healthData = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/health`);
+      
+      // Show unpublished warning if any local triggers have state: null
+      if (healthData.unpublishedCount > 0) {
+        document.getElementById('unpublished-count').textContent = healthData.unpublishedCount;
+        unpublishedBanner.style.display = 'block';
+      } else {
+        unpublishedBanner.style.display = 'none';
+      }
+      
+      // Show empty pool warning if runtime has 0 triggers
+      if (healthData.runtimePoolSize === 0 && state.stats?.local > 0) {
+        emptyPoolBanner.style.display = 'block';
+      } else {
+        emptyPoolBanner.style.display = 'none';
+      }
+    } catch (error) {
+      console.warn('[TriggerHealth] Health check failed:', error);
+      // Hide banners if health check fails
+      unpublishedBanner.style.display = 'none';
+      emptyPoolBanner.style.display = 'none';
+    }
+  }
   
   // ═══════════════════════════════════════════════════════════════════════════
   // V131: STRICT TRIGGER SYSTEM - HEALTH BANNER
