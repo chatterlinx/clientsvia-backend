@@ -394,45 +394,126 @@
     const btnFixUnpublished = document.getElementById('btn-fix-unpublished');
     if (btnFixUnpublished) {
       btnFixUnpublished.addEventListener('click', async () => {
+        console.log('');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #3b82f6; font-weight: bold');
+        console.log('%c🚀 AUTO-PUBLISH TRIGGERS - CHECKPOINT LOG', 'color: #3b82f6; font-weight: bold; font-size: 14px');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #3b82f6; font-weight: bold');
+        console.log('');
+        
+        console.log('%c✓ [CHECKPOINT 1/6] Button clicked', 'color: #10b981; font-weight: bold');
+        console.log('  Timestamp:', new Date().toISOString());
+        console.log('  Company ID:', state.companyId);
+        
         if (!confirm('This will set state="published" for all local triggers with state=null. Continue?')) {
+          console.log('%c❌ Operation cancelled by user', 'color: #94a3b8');
           return;
         }
         
         const btn = btnFixUnpublished;
-        const originalText = btn.textContent;
+        const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.textContent = 'Publishing...';
         
         try {
+          // CHECKPOINT 2
+          console.log('%c✓ [CHECKPOINT 2/6] User confirmed action', 'color: #10b981; font-weight: bold');
+          console.log('  API Base:', CONFIG.API_BASE_COMPANY);
+          console.log('  Full URL:', `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`);
+          
+          btn.innerHTML = '📡 Calling API...';
+          
+          // CHECKPOINT 3
+          console.log('%c🌐 [CHECKPOINT 3/6] Sending POST request...', 'color: #3b82f6; font-weight: bold');
+          const startTime = performance.now();
+          
           const res = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`, {
             method: 'POST'
           });
           
+          const apiDuration = Math.round(performance.now() - startTime);
+          
+          // CHECKPOINT 4
+          console.log('%c✓ [CHECKPOINT 4/6] API Response received', 'color: #10b981; font-weight: bold');
+          console.log('  Duration:', apiDuration + 'ms');
+          console.log('  Success:', res.success);
+          console.log('  Published Count:', res.publishedCount);
+          console.log('  Full Response:', res);
+          
           if (res.success) {
-            showToast('success', 'Published', `${res.publishedCount} trigger(s) published. Refreshing...`);
+            btn.innerHTML = `✓ ${res.publishedCount} published`;
+            showToast('success', 'Published', `${res.publishedCount} trigger(s) published`);
             
-            // Auto-refresh cache
-            await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/refresh`, { method: 'POST' });
+            // CHECKPOINT 5
+            btn.innerHTML = '🔄 Refreshing cache...';
+            console.log('%c🔄 [CHECKPOINT 5/6] Refreshing runtime cache...', 'color: #f59e0b; font-weight: bold');
             
-            // Reload page
+            try {
+              const cacheStart = performance.now();
+              const cacheRes = await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/refresh`, { method: 'POST' });
+              const cacheDuration = Math.round(performance.now() - cacheStart);
+              console.log('  ✓ Cache refreshed (' + cacheDuration + 'ms)');
+              console.log('  Response:', cacheRes);
+            } catch (cacheErr) {
+              console.warn('%c⚠️  Cache refresh failed (non-critical)', 'color: #f59e0b');
+              console.warn('  Error:', cacheErr.message);
+            }
+            
+            // CHECKPOINT 6
+            btn.innerHTML = '📥 Reloading data...';
+            console.log('%c📥 [CHECKPOINT 6/6] Reloading trigger list from server...', 'color: #8b5cf6; font-weight: bold');
+            
+            const reloadStart = performance.now();
             await loadTriggers();
+            const reloadDuration = Math.round(performance.now() - reloadStart);
             
-            showToast('success', 'Complete', 'All triggers published and cache refreshed!');
+            console.log('  ✓ Data reloaded (' + reloadDuration + 'ms)');
+            console.log('');
+            console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #10b981; font-weight: bold');
+            console.log('%c🎉 SUCCESS! Auto-Publish Complete', 'color: #10b981; font-weight: bold; font-size: 14px');
+            console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #10b981; font-weight: bold');
+            console.log('  Total Duration:', Math.round(performance.now() - startTime) + 'ms');
+            console.log('  Triggers Published:', res.publishedCount);
+            console.log('  Status: All triggers now visible to agent runtime ✅');
+            console.log('');
+            
+            btn.innerHTML = '✅ Complete!';
+            showToast('success', 'Complete', 'All done! Check console for details.');
+            
+            setTimeout(() => {
+              btn.innerHTML = originalText;
+              btn.disabled = false;
+            }, 3000);
           } else {
-            showToast('error', 'Failed', res.error || 'Could not publish triggers.');
-            btn.textContent = originalText;
-            btn.disabled = false;
+            console.error('%c❌ API Error', 'color: #ef4444; font-weight: bold');
+            console.error('  Error:', res.error);
+            console.error('  Full Response:', res);
+            showToast('error', 'Failed', res.error || 'API returned error');
+            btn.innerHTML = '❌ Failed';
+            setTimeout(() => {
+              btn.innerHTML = originalText;
+              btn.disabled = false;
+            }, 3000);
           }
         } catch (err) {
-          console.error('[TriggerHealth] Fix unpublished FAILED:', err);
-          console.error('[TriggerHealth] Error details:', {
-            message: err.message,
-            stack: err.stack,
-            apiUrl: `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`
-          });
-          showToast('error', 'Error', `Failed: ${err.message || 'Unknown error'}`);
-          btn.innerHTML = originalText;
-          btn.disabled = false;
+          console.log('');
+          console.error('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ef4444; font-weight: bold');
+          console.error('%c💥 CRITICAL ERROR - Auto-Publish Failed', 'color: #ef4444; font-weight: bold; font-size: 14px');
+          console.error('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ef4444; font-weight: bold');
+          console.error('');
+          console.error('Error Type:', err.constructor.name);
+          console.error('Error Message:', err.message);
+          console.error('');
+          console.error('Full Error Object:', err);
+          console.error('Stack Trace:', err.stack);
+          console.error('');
+          console.error('Attempted URL:', `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`);
+          console.error('');
+          
+          showToast('error', 'Error', `Failed: ${err.message || 'Check console for details'}`);
+          btn.innerHTML = '❌ Error - Check Console';
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }, 5000);
         }
       });
     }
