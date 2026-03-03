@@ -3760,14 +3760,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
   });
   
+  // Emit STT confidence and audio quality info to call console
+  const confidencePercent = sttConfidence ? (sttConfidence * 100).toFixed(1) : 'N/A';
+  const confidenceQuality = !sttConfidence ? 'unknown' :
+                            sttConfidence >= 0.9 ? 'excellent' :
+                            sttConfidence >= 0.7 ? 'good' :
+                            sttConfidence >= 0.5 ? 'fair' : 'poor';
+  
   emitFlowCheckpoint(CallLogger, callSid, companyID, turnCountFromBody + 1, {
     ...FLOW_STEPS.SPEECHRESULT,
     status: 'FIRED',
-    details: `Webhook received from Twilio with SpeechResult (confidence: ${sttConfidence ? (sttConfidence * 100).toFixed(0) + '%' : 'N/A'})`,
+    details: `Twilio STT: ${confidencePercent}% confidence (${confidenceQuality}) - "${speechResult?.substring(0, 60) || 'empty'}"`,
     data: {
       speechResultLength: speechResult?.length || 0,
       confidence: sttConfidence,
-      fromNumber: fromNumber?.slice(-4) || 'unknown'
+      confidencePercent: confidencePercent,
+      confidenceQuality: confidenceQuality,
+      fromNumber: fromNumber?.slice(-4) || 'unknown',
+      transcriptPreview: speechResult?.substring(0, 100) || '',
+      audioQualityWarning: sttConfidence < 0.5 ? 'Poor audio quality or unclear speech detected' : null
     }
   });
   

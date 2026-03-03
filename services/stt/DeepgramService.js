@@ -187,18 +187,45 @@ class DeepgramService {
             interim_results: 'true',
             endpointing: options.endpointing || '800',  // 800ms = natural conversation pauses
             vad_events: 'true',
-            // Phone call specific
+            // Phone call specific - CRITICAL for quality
             encoding: options.encoding || 'mulaw',
             sample_rate: options.sample_rate || '8000',
             channels: options.channels || '1'
         });
         
-        // Add keywords/hints if provided
-        if (options.keywords && options.keywords.length > 0) {
-            options.keywords.forEach(kw => {
-                params.append('keywords', kw);
-            });
-        }
+        // Add HVAC vocabulary hints if no custom keywords provided
+        // Format: "phrase:boost_value" where boost is 0-4 (higher = stronger hint)
+        const hvacKeywords = [
+            'air conditioning:3',
+            'HVAC:3', 
+            'AC:3',
+            'heating:2',
+            'cooling:2',
+            'thermostat:2',
+            'furnace:2',
+            'air conditioner:3',
+            'AC unit:3',
+            'not working:2',
+            'broken:2',
+            'not cooling:3',
+            'not heating:3',
+            'repair:2',
+            'service:2',
+            'appointment:2',
+            'gas leak:3',
+            'gas smell:3',
+            'carbon monoxide:3',
+            'emergency:2'
+        ];
+        
+        // Use custom keywords if provided, otherwise use HVAC defaults
+        const keywordsToUse = options.keywords && options.keywords.length > 0 
+            ? options.keywords 
+            : hvacKeywords;
+            
+        keywordsToUse.forEach(kw => {
+            params.append('keywords', kw);
+        });
         
         return {
             url: `wss://api.deepgram.com/v1/listen?${params.toString()}`,
