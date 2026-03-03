@@ -424,9 +424,14 @@
             btn.disabled = false;
           }
         } catch (err) {
-          console.error('[Triggers] Fix unpublished failed:', err);
-          showToast('error', 'Error', 'Could not publish triggers.');
-          btn.textContent = originalText;
+          console.error('[TriggerHealth] Fix unpublished FAILED:', err);
+          console.error('[TriggerHealth] Error details:', {
+            message: err.message,
+            stack: err.stack,
+            apiUrl: `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`
+          });
+          showToast('error', 'Error', `Failed: ${err.message || 'Unknown error'}`);
+          btn.innerHTML = originalText;
           btn.disabled = false;
         }
       });
