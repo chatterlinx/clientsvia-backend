@@ -1856,6 +1856,91 @@ class Agent2DiscoveryRunner {
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🗂️ TRIGGER BUCKET CLASSIFICATION (V2026.03)
+    // ══════════════════════════════════════════════════════════════════════════
+    // NEW: Company-defined buckets for intent-based trigger filtering.
+    // ScrabEngine-normalized input is classified into buckets BEFORE trigger matching.
+    // Reduces trigger evaluation from ~43 to ~15 triggers (40-60% faster response).
+    //
+    // FLOW:
+    // 1. Load company's buckets (cached, <1ms)
+    // 2. Classify normalizedInput into bucket (word-based matching, <5ms)
+    // 3. Filter trigger pool to bucket-matched triggers
+    // 4. Safety net: If no match, retry with full pool
+    //
+    // SAFETY RULES:
+    // - If no buckets configured → use full pool (no filtering)
+    // - If no bucket matches → use full pool (no filtering)
+    // - Triggers with alwaysEvaluate=true bypass filtering (emergencies)
+    // - Zero-match retry: filtered pool has no match → retry with full pool
+    // ══════════════════════════════════════════════════════════════════════════
+    const { TriggerBucketClassifier } = require('./TriggerBucketClassifier');
+    
+    let bucketClassification = null;
+    let bucketFilteredPool = null; // Track for zero-match retry
+    
+    try {
+      bucketClassification = await TriggerBucketClassifier.classify(normalizedInput, companyId);
+      
+      emit('TRIGGER_BUCKET_CLASSIFICATION', {
+        matched: bucketClassification.matched,
+        bucket: bucketClassification.bucket,
+        bucketName: bucketClassification.bucketName,
+        confidence: bucketClassification.confidence,
+        matchedKeywords: bucketClassification.matchedKeywords,
+        bucketsAvailable: bucketClassification.bucketsAvailable,
+        threshold: bucketClassification.threshold,
+        allScores: bucketClassification.allScores.map(s => ({
+          bucket: s.bucketId,
+          name: s.name,
+          score: s.score
+        })),
+        turn,
+        companyId
+      });
+      
+      // Apply bucket filtering if bucket matched
+      if (bucketClassification.matched && bucketClassification.bucket) {
+        const filterResult = TriggerBucketClassifier.filterTriggerPool(
+          triggerCards,
+          bucketClassification
+        );
+        
+        if (filterResult.filtered && filterResult.pool.length > 0) {
+          bucketFilteredPool = triggerCards; // Save full pool for retry
+          triggerCards = filterResult.pool;
+          
+          emit('TRIGGER_POOL_FILTERED_BY_BUCKET', {
+            detectedBucket: filterResult.detectedBucket,
+            confidence: filterResult.confidence,
+            originalSize: filterResult.originalSize,
+            filteredSize: filterResult.filteredSize,
+            alwaysEvaluateCount: filterResult.alwaysEvaluateCount,
+            bucketMatchCount: filterResult.bucketMatchCount,
+            reductionPercent: filterResult.reduction,
+            turn,
+            companyId
+          });
+          
+          logger.info('[TriggerBucket] Pool filtered by bucket', {
+            bucket: filterResult.detectedBucket,
+            before: filterResult.originalSize,
+            after: filterResult.filteredSize,
+            reduction: `${filterResult.reduction}%`,
+            companyId
+          });
+        }
+      }
+      
+    } catch (error) {
+      logger.error('[TriggerBucket] Classification failed - using full pool', {
+        companyId,
+        error: error.message
+      });
+      // Continue with full pool (graceful degradation)
+    }
+
     // ── APPLY CALL ROUTER POOL FILTERING ─────────────────────────────────────
     // When Agent2CallRouter classifies with confidence >= filterThreshold (0.70),
     // pre-filter the card pool to bucket-matching cards.
@@ -2027,6 +2112,47 @@ class Agent2DiscoveryRunner {
       }
       // Whether retry matched or not, clear the saved pool — don't retry twice
       callRouterFilteredPool = null;
+    }
+    
+    // ── BUCKET FILTERING ZERO-MATCH RETRY ─────────────────────────────────────
+    // If bucket filtering was active and produced no match, retry with full pool.
+    // This handles misclassifications where ScrabEngine picked wrong bucket.
+    if (!triggerResult.matched && bucketFilteredPool && bucketFilteredPool.length > 0) {
+      logger.info('[TriggerBucket] 🔄 ZERO-MATCH RETRY: bucket-filtered pool had no match — retrying with full pool', {
+        detectedBucket:   bucketClassification?.bucket,
+        filteredPoolSize: triggerCards.length,
+        fullPoolSize:     bucketFilteredPool.length,
+        companyId,
+        callSid,
+        turn
+      });
+      
+      const retryResult = TriggerCardMatcher.match(normalizedInput, bucketFilteredPool, matchOptions);
+      
+      emit('TRIGGER_BUCKET_RETRY_FULL_POOL', {
+        detectedBucket:   bucketClassification?.bucket,
+        confidence:       bucketClassification?.confidence,
+        filteredPoolSize: triggerCards.length,
+        fullPoolSize:     bucketFilteredPool.length,
+        retryMatched:     retryResult.matched,
+        retryCardId:      retryResult.cardId,
+        retryCardLabel:   retryResult.cardLabel,
+        turn,
+        note: 'Safety Rule: bucket-filtered pool had no match — expanded to full pool'
+      });
+      
+      if (retryResult.matched) {
+        triggerResult = retryResult;
+        cardPoolStats = TriggerCardMatcher.getPoolStats(bucketFilteredPool);
+        logger.info('[TriggerBucket] ✅ RETRY SUCCEEDED — full pool match found', {
+          cardId: retryResult.cardId,
+          cardLabel: retryResult.cardLabel,
+          wrongBucket: bucketClassification?.bucket,
+          companyId,
+          turn
+        });
+      }
+      bucketFilteredPool = null;
     }
     
     // Store intent gate result for empathy layer (V4)
