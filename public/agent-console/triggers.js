@@ -1756,6 +1756,12 @@
   }
   
   /**
+   * Expose apiFetch for bucket manager module.
+   * Bucket manager needs auth token for API calls.
+   */
+  window.apiFetch = apiFetch;
+  
+  /**
    * Quick assign bucket from trigger list (clicking red X icon).
    * Opens minimal modal with bucket dropdown.
    */

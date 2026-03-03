@@ -54,7 +54,9 @@ window.BucketManager = (function() {
   
   async function loadBuckets() {
     try {
-      const response = await fetch(`${apiBase}/trigger-buckets/${companyId}`);
+      // Use parent page's apiFetch if available (includes auth token)
+      const fetchFn = window.apiFetch || fetch;
+      const response = await fetchFn(`${apiBase}/trigger-buckets/${companyId}`);
       const result = await response.json();
       
       if (result.success) {
@@ -72,7 +74,8 @@ window.BucketManager = (function() {
   
   async function loadHealth() {
     try {
-      const response = await fetch(`${apiBase}/trigger-buckets/${companyId}/health`);
+      const fetchFn = window.apiFetch || fetch;
+      const response = await fetchFn(`${apiBase}/trigger-buckets/${companyId}/health`);
       const result = await response.json();
       
       if (result.success) {
@@ -613,10 +616,10 @@ window.BucketManager = (function() {
       
       const method = bucketId ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
+      const fetchFn = window.apiFetch || fetch;
+      const response = await fetchFn(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: payload
       });
       
       const result = await response.json();
@@ -665,7 +668,8 @@ window.BucketManager = (function() {
         bucket.triggerCount > 0 ? '?force=true' : ''
       }`;
       
-      const response = await fetch(url, { method: 'DELETE' });
+      const fetchFn = window.apiFetch || fetch;
+      const response = await fetchFn(url, { method: 'DELETE' });
       const result = await response.json();
       
       if (!result.success) {
