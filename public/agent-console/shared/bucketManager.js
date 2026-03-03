@@ -54,17 +54,17 @@ window.BucketManager = (function() {
   
   async function loadBuckets() {
     try {
-      // Use parent page's apiFetch if available (includes auth token)
-      const fetchFn = window.apiFetch || fetch;
-      const response = await fetchFn(`${apiBase}/trigger-buckets/${companyId}`);
-      const result = await response.json();
-      
-      if (result.success) {
-        buckets = result.data || [];
+      // Use parent page's apiFetch if available (includes auth token and unwraps data)
+      if (window.apiFetch) {
+        const data = await window.apiFetch(`${apiBase}/trigger-buckets/${companyId}`);
+        buckets = Array.isArray(data) ? data : (data.data || []);
         return buckets;
       } else {
-        console.error('[BucketManager] Load failed:', result.error);
-        return [];
+        // Fallback to plain fetch (for standalone use)
+        const response = await fetch(`${apiBase}/trigger-buckets/${companyId}`);
+        const result = await response.json();
+        buckets = result.data || [];
+        return buckets;
       }
     } catch (error) {
       console.error('[BucketManager] Load error:', error);
@@ -74,14 +74,13 @@ window.BucketManager = (function() {
   
   async function loadHealth() {
     try {
-      const fetchFn = window.apiFetch || fetch;
-      const response = await fetchFn(`${apiBase}/trigger-buckets/${companyId}/health`);
-      const result = await response.json();
-      
-      if (result.success) {
-        return result.data;
+      if (window.apiFetch) {
+        const data = await window.apiFetch(`${apiBase}/trigger-buckets/${companyId}/health`);
+        return data;
       } else {
-        return null;
+        const response = await fetch(`${apiBase}/trigger-buckets/${companyId}/health`);
+        const result = await response.json();
+        return result.data;
       }
     } catch (error) {
       console.error('[BucketManager] Health check error:', error);
@@ -616,16 +615,18 @@ window.BucketManager = (function() {
       
       const method = bucketId ? 'PUT' : 'POST';
       
-      const fetchFn = window.apiFetch || fetch;
-      const response = await fetchFn(url, {
-        method,
-        body: payload
-      });
-      
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Save failed');
+      if (window.apiFetch) {
+        await window.apiFetch(url, { method, body: payload });
+      } else {
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Save failed');
+        }
       }
       
       // Success
@@ -668,12 +669,14 @@ window.BucketManager = (function() {
         bucket.triggerCount > 0 ? '?force=true' : ''
       }`;
       
-      const fetchFn = window.apiFetch || fetch;
-      const response = await fetchFn(url, { method: 'DELETE' });
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Delete failed');
+      if (window.apiFetch) {
+        await window.apiFetch(url, { method: 'DELETE' });
+      } else {
+        const response = await fetch(url, { method: 'DELETE' });
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Delete failed');
+        }
       }
       
       showToast('Bucket deleted successfully', 'success');
