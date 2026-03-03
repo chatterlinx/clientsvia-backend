@@ -185,7 +185,7 @@ class DeepgramService {
             smart_format: 'true',
             punctuate: 'true',
             interim_results: 'true',
-            endpointing: options.endpointing || '300',
+            endpointing: options.endpointing || '800',  // 800ms = natural conversation pauses
             vad_events: 'true',
             // Phone call specific
             encoding: options.encoding || 'mulaw',
