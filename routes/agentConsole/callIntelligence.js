@@ -105,9 +105,12 @@ function buildResponseContext(trace = []) {
 }
 
 function buildCallContext(turns = [], trace = []) {
+  const scrabHandoff = findLastTrace(trace, 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
+  
   return {
     transcript: buildTranscript(turns),
-    response: buildResponseContext(trace)
+    response: buildResponseContext(trace),
+    scrabEngineHandoff: scrabHandoff?.payload || null
   };
 }
 

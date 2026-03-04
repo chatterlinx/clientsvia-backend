@@ -416,6 +416,7 @@
       ${renderExecutiveSummary(intelligence)}
       ${renderResponseContext(intelligence)}
       ${renderTranscriptSection(intelligence)}
+      ${renderScrabEngineHandoff(intelligence)}
       ${renderTriggerAnalysis(intelligence)}
       ${renderIssues(intelligence)}
       ${renderScrabEnginePerformance(intelligence)}
@@ -544,6 +545,89 @@
             </div>
           `).join('')}
         </div>
+      </section>
+    `;
+  }
+
+  function renderScrabEngineHandoff(intel) {
+    const scrabHandoff = intel.callContext?.scrabEngineHandoff;
+    if (!scrabHandoff) return '';
+
+    return `
+      <section class="analysis-section scrabengine-handoff-section">
+        <h2 class="section-title">🚀 SCRABENGINE → TRIGGER HANDOFF</h2>
+        <p class="section-description">This is exactly what ScrabEngine delivered to the trigger matching system.</p>
+        
+        <div class="handoff-grid">
+          <div class="handoff-item">
+            <span class="handoff-label">Original Tokens:</span>
+            <span class="handoff-value">${scrabHandoff.originalTokenCount || 0}</span>
+          </div>
+          <div class="handoff-item">
+            <span class="handoff-label">Expanded Tokens:</span>
+            <span class="handoff-value">${scrabHandoff.expandedTokenCount || 0}</span>
+          </div>
+          <div class="handoff-item">
+            <span class="handoff-label">Tokens Added:</span>
+            <span class="handoff-value">+${scrabHandoff.tokensAdded || 0}</span>
+          </div>
+          <div class="handoff-item">
+            <span class="handoff-label">Quality Passed:</span>
+            <span class="handoff-value">${scrabHandoff.qualityPassed ? '✅ Yes' : '❌ No'}</span>
+          </div>
+          <div class="handoff-item">
+            <span class="handoff-label">Quality Reason:</span>
+            <span class="handoff-value">${scrabHandoff.qualityReason || 'N/A'}</span>
+          </div>
+          <div class="handoff-item">
+            <span class="handoff-label">Confidence:</span>
+            <span class="handoff-value">${scrabHandoff.qualityConfidence ? Math.round(scrabHandoff.qualityConfidence * 100) + '%' : 'N/A'}</span>
+          </div>
+        </div>
+
+        ${scrabHandoff.normalizedInput ? `
+          <div class="subsection">
+            <h3>Normalized Input (What Triggers See):</h3>
+            <pre class="code-block">${scrabHandoff.normalizedInput}</pre>
+          </div>
+        ` : ''}
+
+        ${scrabHandoff.expandedTokens && scrabHandoff.expandedTokens.length > 0 ? `
+          <div class="subsection">
+            <h3>Expanded Tokens (${scrabHandoff.expandedTokens.length} tokens):</h3>
+            <div class="token-list">
+              ${scrabHandoff.expandedTokens.map(t => `<span class="token">${t}</span>`).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${scrabHandoff.transformationSummary && scrabHandoff.transformationSummary.length > 0 ? `
+          <div class="subsection">
+            <h3>Transformations Applied (${scrabHandoff.transformationSummary.length}):</h3>
+            <ul class="transformation-list">
+              ${scrabHandoff.transformationSummary.map(t => `
+                <li>
+                  <strong>${t.stage}:</strong> ${t.type} 
+                  ${t.detail ? `(${t.detail})` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${scrabHandoff.entitiesFound && scrabHandoff.entitiesFound > 0 && scrabHandoff.entities ? `
+          <div class="subsection">
+            <h3>Entities Extracted:</h3>
+            <div class="entities-grid">
+              ${Object.entries(scrabHandoff.entities).filter(([k, v]) => v).map(([key, value]) => `
+                <div class="entity-item">
+                  <span class="entity-label">${key}:</span>
+                  <span class="entity-value">${value}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
       </section>
     `;
   }
