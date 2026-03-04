@@ -1591,6 +1591,7 @@
         <div>
           <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>
         </div>
+        <div class="trigger-ruleid" title="${escapeHtml(ruleId)}" style="font-family: monospace; font-size: 11px; color: #6b21a8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ruleId)}</div>
         <div class="trigger-label" title="${escapeHtml(trigger.label || 'Untitled')}">${escapeHtml(trigger.label || 'Untitled')}</div>
         <div class="trigger-keywords" title="${escapeHtml((trigger.match?.keywords || []).join(', '))}">${escapeHtml(keywords) || '—'}</div>
         <div class="answer-format">${answerBadges}</div>
