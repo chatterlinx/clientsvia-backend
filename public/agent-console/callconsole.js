@@ -185,6 +185,7 @@
     btnBack: document.getElementById('btn-back'),
     btnRefreshCalls: document.getElementById('btn-refresh-calls'),
     btnFlowBuilder: document.getElementById('btn-flow-builder'),
+    btnCallIntelligence: document.getElementById('btn-call-intelligence'),
 
     // Filters
     filterSearch: document.getElementById('filter-search'),
@@ -301,6 +302,12 @@
     if (DOM.btnFlowBuilder) {
       DOM.btnFlowBuilder.addEventListener('click', () => {
         window.location.href = `/agent-console/flow-builder.html?companyId=${state.companyId}`;
+      });
+    }
+
+    if (DOM.btnCallIntelligence) {
+      DOM.btnCallIntelligence.addEventListener('click', () => {
+        window.location.href = `/agent-console/call-intelligence.html?companyId=${state.companyId}`;
       });
     }
 
