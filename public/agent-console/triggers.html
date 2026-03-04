@@ -198,30 +198,35 @@
     
     .bucket-builder-row {
       display: grid;
-      grid-template-columns: 1.1fr 2fr 120px;
+      grid-template-columns: 1fr 2fr auto;
       gap: 12px;
-      align-items: center;
+      align-items: end;
     }
     
     .bucket-row {
       display: grid;
-      grid-template-columns: 1.1fr 2fr 120px;
+      grid-template-columns: 1fr 2fr auto;
       gap: 12px;
       align-items: center;
-      padding: 8px 0;
+      padding: 10px 0;
       border-top: 1px solid var(--border-light);
+    }
+    
+    .bucket-row .form-input {
+      width: 100%;
     }
     
     .bucket-key {
       font-size: 0.7rem;
       color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 2px;
     }
     
     .bucket-actions {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       justify-content: flex-end;
+      white-space: nowrap;
     }
     
     /* Trigger Table */
@@ -1188,17 +1193,19 @@
           </div>
         </div>
         <div class="bucket-builder-body">
+          <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; padding-bottom: 2px;">
+            <div>Bucket Name</div>
+            <div>Classification Keywords</div>
+            <div></div>
+          </div>
           <div class="bucket-builder-row">
             <div>
-              <label class="form-label">Bucket Name</label>
               <input type="text" class="form-input" id="bucket-name-input" placeholder="e.g., cooling">
             </div>
             <div>
-              <label class="form-label">Classification Keywords</label>
               <input type="text" class="form-input" id="bucket-keywords-input" placeholder="no cool, warm air, not cooling, weak airflow">
-              <p class="form-hint">Comma-separated keywords or phrases.</p>
             </div>
-            <div class="bucket-actions" style="align-items: flex-end;">
+            <div class="bucket-actions">
               <button class="btn btn-primary btn-sm" id="btn-add-bucket">Add Bucket</button>
             </div>
           </div>
