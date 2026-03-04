@@ -92,9 +92,9 @@
       const keywords = (bucket.keywords || []).join(', ');
       return `
         <div class="bucket-row" data-bucket-id="${escapeHtml(bucket.id)}" data-bucket-key="${escapeHtml(bucket.key)}">
-          <div>
-            <input type="text" class="form-input bucket-name" value="${escapeHtml(bucket.name || '')}">
-            <div class="bucket-key">Key: ${escapeHtml(bucket.key)}</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="text" class="form-input bucket-name" value="${escapeHtml(bucket.name || '')}" style="flex:1;">
+            <span class="bucket-key" style="margin:0;white-space:nowrap;">${escapeHtml(bucket.key)}</span>
           </div>
           <div>
             <input type="text" class="form-input bucket-keywords" value="${escapeHtml(keywords)}" placeholder="keywords, phrases">
