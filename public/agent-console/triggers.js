@@ -1124,6 +1124,7 @@
       const key = `${t.bucket || ''}`.trim();
       return key && state.bucketIndex.has(key);
     }).length;
+    const untaggedTriggers = totalTriggers - taggedTriggers;
 
     const keywordPct = totalBuckets ? Math.round((bucketsWithKeywords / totalBuckets) * 100) : 0;
     const coveragePct = totalTriggers ? Math.round((taggedTriggers / totalTriggers) * 100) : 0;
@@ -1133,16 +1134,7 @@
     DOM.bucketHealthCoverage.textContent = `Tagged: ${coveragePct}%`;
 
     if (DOM.bucketHealthRuntime) {
-      const cacheInfo = state.bucketCacheInfo;
-      if (cacheInfo?.lastLoadedAt) {
-        const minutesAgo = Math.max(0, Math.floor((Date.now() - new Date(cacheInfo.lastLoadedAt).getTime()) / 60000));
-        const loadedCount = cacheInfo.bucketCount ?? totalBuckets;
-        DOM.bucketHealthRuntime.textContent = `ScrabEngine: ${loadedCount} loaded • ${minutesAgo}m ago`;
-      } else if (totalBuckets > 0) {
-        DOM.bucketHealthRuntime.textContent = 'ScrabEngine: ready (awaiting first load)';
-      } else {
-        DOM.bucketHealthRuntime.textContent = 'ScrabEngine: idle';
-      }
+      DOM.bucketHealthRuntime.textContent = `${untaggedTriggers} untagged / ${totalBuckets} buckets`;
     }
   }
 
