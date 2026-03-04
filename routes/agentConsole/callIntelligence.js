@@ -489,4 +489,66 @@ router.get('/estimate-cost', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/call-intelligence/debug/:companyId
+ * Debug endpoint to check data availability
+ */
+router.get('/debug/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    const [summaryCount, transcriptV2Count, intelligenceCount] = await Promise.all([
+      CallSummary.countDocuments({ companyId }),
+      CallTranscriptV2.countDocuments({ companyId }),
+      require('../../models/CallIntelligence').countDocuments({ companyId })
+    ]);
+
+    const recentSummaries = await CallSummary.find({ companyId })
+      .sort({ callTime: -1 })
+      .limit(5)
+      .select('callSid callTime fromPhone events turns')
+      .lean();
+
+    const recentTranscripts = await CallTranscriptV2.find({ companyId })
+      .sort({ firstTurnTs: -1 })
+      .limit(5)
+      .select('callSid firstTurnTs turns trace')
+      .lean();
+
+    res.json({
+      success: true,
+      debug: {
+        companyId,
+        counts: {
+          callSummary: summaryCount,
+          callTranscriptV2: transcriptV2Count,
+          callIntelligence: intelligenceCount
+        },
+        recentSummaries: recentSummaries.map(s => ({
+          callSid: s.callSid,
+          callTime: s.callTime,
+          hasEvents: !!(s.events && s.events.length > 0),
+          eventsCount: s.events?.length || 0,
+          hasTurns: !!(s.turns && s.turns.length > 0),
+          turnsCount: s.turns?.length || 0
+        })),
+        recentTranscripts: recentTranscripts.map(t => ({
+          callSid: t.callSid,
+          firstTurnTs: t.firstTurnTs,
+          hasTurns: !!(t.turns && t.turns.length > 0),
+          turnsCount: t.turns?.length || 0,
+          hasTrace: !!(t.trace && t.trace.length > 0),
+          traceCount: t.trace?.length || 0
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
