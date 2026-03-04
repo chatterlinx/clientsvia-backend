@@ -235,6 +235,8 @@ router.get('/company/:companyId/list', async (req, res) => {
     const { companyId } = req.params;
     const { page, limit, status, sortBy, autoAnalyze = 'true' } = req.query;
 
+    console.log('[CallIntelligence] Fetching list for company:', companyId);
+
     let result = await CallIntelligenceService.getIntelligenceList(companyId, {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 50,
@@ -242,12 +244,17 @@ router.get('/company/:companyId/list', async (req, res) => {
       sortBy
     });
 
+    console.log('[CallIntelligence] Found', result.items.length, 'analyzed calls');
+
     if (result.items.length === 0 && autoAnalyze === 'true') {
+      console.log('[CallIntelligence] No analyzed calls found, fetching recent calls for auto-analysis...');
       const recentCalls = await CallSummary.find({ companyId })
         .sort({ callTime: -1 })
         .limit(50)
         .select('callSid fromPhone toPhone callTime')
         .lean();
+
+      console.log('[CallIntelligence] Found', recentCalls.length, 'recent calls in CallSummary');
 
       if (recentCalls.length > 0) {
         const callSidsToAnalyze = recentCalls.map(c => c.callSid);
@@ -255,6 +262,8 @@ router.get('/company/:companyId/list', async (req, res) => {
         const transcripts = await CallTranscriptV2.find({
           callSid: { $in: callSidsToAnalyze }
         }).lean();
+
+        console.log('[CallIntelligence] Found', transcripts.length, 'transcripts in CallTranscriptV2');
 
         const summaryMap = new Map(recentCalls.map(s => [s.callSid, s]));
 
@@ -286,7 +295,10 @@ router.get('/company/:companyId/list', async (req, res) => {
           }
         });
 
-        await Promise.allSettled(analysisPromises);
+        const results = await Promise.allSettled(analysisPromises);
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        
+        console.log('[CallIntelligence] Auto-analyzed', successful, 'out of', results.length, 'calls');
 
         result = await CallIntelligenceService.getIntelligenceList(companyId, {
           page: parseInt(page) || 1,
@@ -294,8 +306,14 @@ router.get('/company/:companyId/list', async (req, res) => {
           status,
           sortBy
         });
+        
+        console.log('[CallIntelligence] After auto-analysis, found', result.items.length, 'intelligence records');
+      } else {
+        console.log('[CallIntelligence] No recent calls found in CallSummary');
       }
     }
+
+    console.log('[CallIntelligence] Returning', result.items.length, 'items to frontend');
 
     res.json({
       success: true,

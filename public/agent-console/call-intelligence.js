@@ -178,6 +178,7 @@
 
   async function loadCalls() {
     try {
+      console.log('[CallIntelligence UI] Loading calls for company:', state.companyId);
       showLoading();
 
       const params = new URLSearchParams({
@@ -186,18 +187,22 @@
         ...(state.filters.status && { status: state.filters.status })
       });
 
+      console.log('[CallIntelligence UI] Calling API:', `/api/call-intelligence/company/${state.companyId}/list?${params}`);
+
       const data = await apiCall(
         `/api/call-intelligence/company/${state.companyId}/list?${params}`
       );
 
-      state.calls = data.items;
-      state.totalPages = data.pages;
+      console.log('[CallIntelligence UI] Received', data.items?.length || 0, 'calls');
+
+      state.calls = data.items || [];
+      state.totalPages = data.pages || 1;
 
       renderCalls();
       updatePagination();
     } catch (error) {
-      console.error('Failed to load calls:', error);
-      showError();
+      console.error('[CallIntelligence UI] Failed to load calls:', error);
+      showError(error.message);
     }
   }
 
@@ -837,11 +842,12 @@
     `;
   }
 
-  function showError() {
+  function showError(message = 'Failed to load calls. Please try again.') {
     DOM.callsTbody.innerHTML = `
       <tr class="error-row">
         <td colspan="8" class="error-cell">
-          <p>⚠️ Failed to load calls. Please try again.</p>
+          <p>⚠️ ${message}</p>
+          <button class="btn btn-primary" onclick="location.reload()">Retry</button>
         </td>
       </tr>
     `;
