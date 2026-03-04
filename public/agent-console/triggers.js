@@ -921,6 +921,9 @@
       renderGroupSelector();
       renderStats();
       renderBucketHealth();
+      if (window.BucketManager && typeof BucketManager.setTriggers === 'function') {
+        BucketManager.setTriggers(state.triggers);
+      }
       renderTriggers();
 
       // Load agent2 config for Follow-up Consent Cards
@@ -1102,6 +1105,9 @@
     });
     buildSearchIndex(state.triggers || []);
     renderBucketHealth();
+    if (window.BucketManager && typeof BucketManager.setTriggers === 'function') {
+      BucketManager.setTriggers(state.triggers);
+    }
     if (DOM.modalTriggerEdit?.classList.contains('active')) {
       populateBucketDropdown(state.editingTrigger?.bucket || '');
     }

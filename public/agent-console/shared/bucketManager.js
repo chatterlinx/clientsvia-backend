@@ -14,6 +14,7 @@
   const state = {
     companyId: null,
     buckets: [],
+    triggers: [],
     cacheInfo: null,
     onBucketsUpdated: null,
     showToast: null,
@@ -88,11 +89,20 @@
     }
     if (DOM.bucketEmpty) DOM.bucketEmpty.style.display = 'none';
 
+    const triggerCountByBucket = new Map();
+    (state.triggers || []).forEach(t => {
+      const key = `${t.bucket || ''}`.trim().toLowerCase();
+      if (key) triggerCountByBucket.set(key, (triggerCountByBucket.get(key) || 0) + 1);
+    });
+
     DOM.bucketList.innerHTML = state.buckets.map(bucket => {
       const keywords = (bucket.keywords || []).join(', ');
+      const count = triggerCountByBucket.get(bucket.key) || 0;
+      const countColor = count > 0 ? '#10b981' : '#9ca3af';
       return `
         <div class="bucket-row" data-bucket-id="${escapeHtml(bucket.id)}" data-bucket-key="${escapeHtml(bucket.key)}">
           <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;padding:0 6px;border-radius:999px;background:${countColor};color:#fff;font-size:11px;font-weight:700;">${count}</span>
             <input type="text" class="form-input bucket-name" value="${escapeHtml(bucket.name || '')}" style="flex:1;">
             <span class="bucket-key" style="margin:0;white-space:nowrap;">${escapeHtml(bucket.key)}</span>
           </div>
@@ -246,6 +256,10 @@
 
   window.BucketManager = {
     init,
-    reload: loadBuckets
+    reload: loadBuckets,
+    setTriggers(triggers) {
+      state.triggers = Array.isArray(triggers) ? triggers : [];
+      renderBuckets();
+    }
   };
 })();
