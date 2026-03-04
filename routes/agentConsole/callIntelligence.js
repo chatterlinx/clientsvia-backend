@@ -104,13 +104,97 @@ function buildResponseContext(trace = []) {
   };
 }
 
+function buildTurnByTurnFlow(turns = [], trace = []) {
+  const flowSteps = [];
+  const turnNumbers = [...new Set(turns.map(t => t.turnNumber))].sort((a, b) => a - b);
+
+  for (const turnNum of turnNumbers) {
+    const turnData = {
+      turnNumber: turnNum,
+      callerInput: null,
+      scrabEngineOutput: null,
+      triggerEvaluation: null,
+      agentResponse: null,
+      pathSelected: null
+    };
+
+    const callerTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'caller');
+    if (callerTurn) {
+      turnData.callerInput = {
+        raw: callerTurn.text,
+        timestamp: callerTurn.ts
+      };
+    }
+
+    const scrabProcessed = trace.find(t => t.turnNumber === turnNum && t.kind === 'SCRABENGINE_PROCESSED');
+    if (scrabProcessed?.payload) {
+      turnData.scrabEngineOutput = {
+        raw: scrabProcessed.payload.rawPreview,
+        normalized: scrabProcessed.payload.normalizedPreview,
+        tokensOriginal: scrabProcessed.payload.tokensOriginal,
+        tokensExpanded: scrabProcessed.payload.tokensExpanded,
+        qualityPassed: scrabProcessed.payload.quality?.passed,
+        qualityReason: scrabProcessed.payload.quality?.reason,
+        transformations: scrabProcessed.payload.transformations || []
+      };
+    }
+
+    const scrabHandoff = trace.find(t => t.turnNumber === turnNum && t.kind === 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
+    if (scrabHandoff?.payload) {
+      turnData.scrabHandoff = {
+        normalizedInput: scrabHandoff.payload.normalizedInput,
+        expandedTokens: scrabHandoff.payload.expandedTokens,
+        tokensAdded: scrabHandoff.payload.tokensAdded
+      };
+    }
+
+    const triggerEval = trace.find(t => t.turnNumber === turnNum && t.kind === 'A2_TRIGGER_EVAL');
+    if (triggerEval?.payload) {
+      turnData.triggerEvaluation = {
+        matched: triggerEval.payload.matched,
+        matchType: triggerEval.payload.matchType,
+        matchedOn: triggerEval.payload.matchedOn,
+        cardLabel: triggerEval.payload.cardLabel,
+        cardId: triggerEval.payload.cardId,
+        totalCards: triggerEval.payload.totalCards,
+        enabledCards: triggerEval.payload.enabledCards
+      };
+    }
+
+    const pathSelected = trace.find(t => t.turnNumber === turnNum && t.kind === 'A2_PATH_SELECTED');
+    if (pathSelected?.payload) {
+      turnData.pathSelected = {
+        path: pathSelected.payload.path,
+        reason: pathSelected.payload.reason
+      };
+    }
+
+    const responseReady = trace.find(t => t.turnNumber === turnNum && t.kind === 'A2_RESPONSE_READY');
+    const agentTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
+    if (responseReady?.payload || agentTurn) {
+      turnData.agentResponse = {
+        text: agentTurn?.text || responseReady?.payload?.responsePreview,
+        source: responseReady?.payload?.source,
+        path: responseReady?.payload?.path,
+        usedCallerName: responseReady?.payload?.usedCallerName,
+        hasAudio: responseReady?.payload?.hasAudio
+      };
+    }
+
+    flowSteps.push(turnData);
+  }
+
+  return flowSteps;
+}
+
 function buildCallContext(turns = [], trace = []) {
   const scrabHandoff = findLastTrace(trace, 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
   
   return {
     transcript: buildTranscript(turns),
     response: buildResponseContext(trace),
-    scrabEngineHandoff: scrabHandoff?.payload || null
+    scrabEngineHandoff: scrabHandoff?.payload || null,
+    turnByTurnFlow: buildTurnByTurnFlow(turns, trace)
   };
 }
 

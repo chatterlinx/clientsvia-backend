@@ -414,6 +414,7 @@
     DOM.modalBody.innerHTML = `
       ${renderCallOverview(intelligence)}
       ${renderExecutiveSummary(intelligence)}
+      ${renderTurnByTurnFlow(intelligence)}
       ${renderResponseContext(intelligence)}
       ${renderTranscriptSection(intelligence)}
       ${renderScrabEngineHandoff(intelligence)}
@@ -545,6 +546,172 @@
             </div>
           `).join('')}
         </div>
+      </section>
+    `;
+  }
+
+  function renderTurnByTurnFlow(intel) {
+    const flow = intel.callContext?.turnByTurnFlow || [];
+    if (flow.length === 0) return '';
+
+    return `
+      <section class="analysis-section flow-section">
+        <h2 class="section-title">📋 TURN-BY-TURN DECISION FLOW</h2>
+        <p class="section-description">Step-by-step breakdown of every caller input and system decision.</p>
+        
+        ${flow.map(turn => `
+          <div class="turn-flow-card">
+            <div class="turn-flow-header">
+              <h3>Turn ${turn.turnNumber}</h3>
+            </div>
+
+            ${turn.callerInput ? `
+              <div class="flow-step caller-step">
+                <div class="step-label">
+                  <span class="step-icon">🎤</span>
+                  <strong>1. CALLER SPOKE</strong>
+                </div>
+                <div class="step-content">
+                  <pre class="code-block">${turn.callerInput.raw}</pre>
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.scrabEngineOutput ? `
+              <div class="flow-step scrabengine-step">
+                <div class="step-label">
+                  <span class="step-icon">🧹</span>
+                  <strong>2. SCRABENGINE PROCESSED</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Raw Input:</span>
+                    <span class="detail-value">${turn.scrabEngineOutput.raw || 'N/A'}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Normalized:</span>
+                    <span class="detail-value">${turn.scrabEngineOutput.normalized || 'N/A'}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Tokens:</span>
+                    <span class="detail-value">${turn.scrabEngineOutput.tokensOriginal} → ${turn.scrabEngineOutput.tokensExpanded}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Quality:</span>
+                    <span class="detail-value ${turn.scrabEngineOutput.qualityPassed ? 'quality-pass' : 'quality-fail'}">
+                      ${turn.scrabEngineOutput.qualityPassed ? '✅ Passed' : '❌ Failed'} 
+                      (${turn.scrabEngineOutput.qualityReason})
+                    </span>
+                  </div>
+                  ${turn.scrabEngineOutput.transformations && turn.scrabEngineOutput.transformations.length > 0 ? `
+                    <div class="step-detail">
+                      <span class="detail-label">Transformations:</span>
+                      <span class="detail-value">${turn.scrabEngineOutput.transformations.length} applied</span>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.scrabHandoff ? `
+              <div class="flow-step handoff-step">
+                <div class="step-label">
+                  <span class="step-icon">🚀</span>
+                  <strong>3. DELIVERED TO TRIGGERS</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Normalized Input:</span>
+                    <pre class="code-block-inline">${turn.scrabHandoff.normalizedInput || 'N/A'}</pre>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Expanded Tokens:</span>
+                    <div class="token-list-small">
+                      ${(turn.scrabHandoff.expandedTokens || []).map(t => `<span class="token-small">${t}</span>`).join('')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.triggerEvaluation ? `
+              <div class="flow-step trigger-step">
+                <div class="step-label">
+                  <span class="step-icon">🎯</span>
+                  <strong>4. TRIGGER MATCHING</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Triggers Evaluated:</span>
+                    <span class="detail-value">${turn.triggerEvaluation.enabledCards} / ${turn.triggerEvaluation.totalCards}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Match Result:</span>
+                    <span class="detail-value ${turn.triggerEvaluation.matched ? 'match-success' : 'match-fail'}">
+                      ${turn.triggerEvaluation.matched ? '✅ MATCHED' : '❌ NO MATCH'}
+                    </span>
+                  </div>
+                  ${turn.triggerEvaluation.matched && turn.triggerEvaluation.cardLabel ? `
+                    <div class="step-detail">
+                      <span class="detail-label">Matched Trigger:</span>
+                      <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
+                    </div>
+                    <div class="step-detail">
+                      <span class="detail-label">Matched On:</span>
+                      <span class="detail-value">${turn.triggerEvaluation.matchedOn || 'keyword'}</span>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.pathSelected ? `
+              <div class="flow-step path-step">
+                <div class="step-label">
+                  <span class="step-icon">🔀</span>
+                  <strong>5. PATH DECISION</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Path:</span>
+                    <span class="detail-value path-${turn.pathSelected.path?.toLowerCase().includes('fallback') ? 'fallback' : 'normal'}">
+                      ${turn.pathSelected.path || 'Unknown'}
+                    </span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Reason:</span>
+                    <span class="detail-value">${turn.pathSelected.reason || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.agentResponse ? `
+              <div class="flow-step response-step">
+                <div class="step-label">
+                  <span class="step-icon">💬</span>
+                  <strong>6. AGENT RESPONSE</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Response Source:</span>
+                    <span class="detail-value source-${turn.agentResponse.source?.toLowerCase().includes('fallback') ? 'fallback' : 'trigger'}">
+                      ${turn.agentResponse.source || 'Unknown'}
+                    </span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Used Caller Name:</span>
+                    <span class="detail-value">${turn.agentResponse.usedCallerName === true ? '✅ Yes' : (turn.agentResponse.usedCallerName === false ? '❌ No' : 'Unknown')}</span>
+                  </div>
+                  <div class="step-detail full-width">
+                    <span class="detail-label">Response Text:</span>
+                    <pre class="code-block">${turn.agentResponse.text || 'N/A'}</pre>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
       </section>
     `;
   }
