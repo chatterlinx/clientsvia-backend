@@ -160,7 +160,84 @@ class AdminNotificationService {
             const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                throw new Error('No admin contacts configured in Settings tab');
+                logger.error('❌ [ADMIN NOTIFICATION] No admin contacts configured - logging only', {
+                    code,
+                    severity,
+                    companyId,
+                    companyName
+                });
+                
+                // Dedup within 30 minutes to avoid log storms
+                const DEDUP_WINDOW_MINUTES = 30;
+                const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_MINUTES * 60 * 1000);
+                
+                const recentLog = await NotificationLog.findOne({
+                    code: code.toUpperCase(),
+                    companyId: companyId,
+                    severity: severity,
+                    'acknowledgment.isAcknowledged': false,
+                    'resolution.isResolved': false,
+                    createdAt: { $gte: dedupCutoff }
+                }).sort({ createdAt: -1 });
+                
+                let notificationLog;
+                if (recentLog) {
+                    notificationLog = await NotificationLog.findByIdAndUpdate(
+                        recentLog._id,
+                        {
+                            $set: {
+                                lastOccurredAt: new Date(),
+                                updatedAt: new Date(),
+                                message,
+                                details: `${details || ''}\n\n⚠️ Admin contacts missing - configure in Settings tab.`,
+                                stackTrace
+                            },
+                            $inc: { occurrenceCount: 1 },
+                            $push: {
+                                occurrences: {
+                                    timestamp: new Date(),
+                                    message,
+                                    details: `${details || ''}\n\n⚠️ Admin contacts missing - configure in Settings tab.`,
+                                    stackTrace,
+                                    meta: { dedupWindowMinutes: DEDUP_WINDOW_MINUTES }
+                                },
+                                deliveryAttempts: {
+                                    attemptNumber: (recentLog.occurrenceCount || 1) + 1,
+                                    timestamp: new Date(),
+                                    sms: [{ status: 'skipped', error: 'No admin contacts configured' }],
+                                    email: [{ status: 'skipped', error: 'No admin contacts configured' }],
+                                    call: []
+                                }
+                            }
+                        },
+                        { new: true }
+                    );
+                } else {
+                    notificationLog = await NotificationLog.create({
+                        code: code.toUpperCase(),
+                        severity,
+                        companyId,
+                        companyName,
+                        message,
+                        details: `${details || ''}\n\n⚠️ Admin contacts missing - configure in Settings tab.`,
+                        stackTrace,
+                        deliveryAttempts: [{
+                            attemptNumber: 1,
+                            timestamp: new Date(),
+                            sms: [{ status: 'skipped', error: 'No admin contacts configured' }],
+                            email: [{ status: 'skipped', error: 'No admin contacts configured' }],
+                            call: []
+                        }],
+                        escalation: { isEnabled: false }
+                    });
+                }
+                
+                return {
+                    success: false,
+                    alertId: notificationLog.alertId,
+                    policyAction: 'no-admin-contacts',
+                    notificationSent: false
+                };
             }
             
             logger.debug(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
