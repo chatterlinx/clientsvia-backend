@@ -91,6 +91,11 @@
       return;
     }
 
+    const backLink = document.getElementById('back-link');
+    if (backLink) {
+      backLink.href = `/agent-console/?companyId=${state.companyId}`;
+    }
+
     attachEventListeners();
     loadGPT4Status();
     loadSummary();
