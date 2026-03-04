@@ -1501,7 +1501,7 @@
     const priorityLabel = getPriorityLabel(priority);
     const priorityClass = getPriorityClass(priority);
     
-    const ruleId = trigger.ruleId || '—';
+    const displayId = trigger.displayId ? `#${String(trigger.displayId).padStart(2, '0')}` : '—';
     
     const followUpAction = trigger.followUp?.nextAction || trigger.followUp?.question;
     const followUpDisplay = followUpAction ? formatFollowUpAction(followUpAction) : 'None';
@@ -1591,7 +1591,7 @@
         <div>
           <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>
         </div>
-        <div class="trigger-ruleid" title="${escapeHtml(ruleId)}" style="font-family: monospace; font-size: 11px; color: #6b21a8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ruleId)}</div>
+        <div class="trigger-displayid" title="Trigger ${displayId} (${escapeHtml(trigger.ruleId || '')})" style="font-family: monospace; font-size: 12px; font-weight: 600; color: #6b21a8;">${displayId}</div>
         <div class="trigger-label" title="${escapeHtml(trigger.label || 'Untitled')}">${escapeHtml(trigger.label || 'Untitled')}</div>
         <div class="trigger-keywords" title="${escapeHtml((trigger.match?.keywords || []).join(', '))}">${escapeHtml(keywords) || '—'}</div>
         <div class="answer-format">${answerBadges}</div>

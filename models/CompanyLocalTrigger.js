@@ -45,6 +45,13 @@ const companyLocalTriggerSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  
+  // Auto-incrementing display ID per company (e.g., 1, 2, 3...)
+  // This is the simple numeric ID shown in the UI as "#01", "#02", etc.
+  displayId: {
+    type: Number,
+    default: null
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // OVERRIDE REFERENCE (if this is overriding a global trigger)
@@ -491,13 +498,20 @@ companyLocalTriggerSchema.statics.findDuplicatesForCompany = async function(comp
 // PRE-SAVE HOOKS
 // ─────────────────────────────────────────────────────────────────────────────
 
-companyLocalTriggerSchema.pre('save', function(next) {
+companyLocalTriggerSchema.pre('save', async function(next) {
   if (!this.triggerId) {
     if (this.isOverride && this.overrideOfTriggerId) {
       this.triggerId = `${this.companyId}::override::${this.overrideOfTriggerId}`;
     } else {
       this.triggerId = `${this.companyId}::${this.ruleId}`;
     }
+  }
+  
+  // Auto-generate displayId for new triggers
+  if (this.isNew && !this.displayId) {
+    const Counter = require('./Counter');
+    const counterKey = `trigger_displayId_${this.companyId}`;
+    this.displayId = await Counter.getNextSequence(counterKey);
   }
 
   this.updatedAt = new Date();

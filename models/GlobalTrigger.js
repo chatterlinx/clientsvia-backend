@@ -48,6 +48,13 @@ const globalTriggerSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  
+  // Auto-incrementing display ID per group (e.g., 1, 2, 3...)
+  // This is the simple numeric ID shown in the UI as "#01", "#02", etc.
+  displayId: {
+    type: Number,
+    default: null
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // DRAFT/PUBLISHED STATE
@@ -409,12 +416,19 @@ globalTriggerSchema.statics.findDuplicatesInGroup = async function(groupId, stat
 // PRE-SAVE HOOKS
 // ─────────────────────────────────────────────────────────────────────────────
 
-globalTriggerSchema.pre('save', function(next) {
+globalTriggerSchema.pre('save', async function(next) {
   if (!this.triggerId) {
     this.triggerId = `${this.groupId}::${this.ruleId}`;
   }
 
   this.groupId = this.groupId.toLowerCase();
+  
+  // Auto-generate displayId for new triggers (only for draft state to avoid duplication)
+  if (this.isNew && !this.displayId && this.state === 'draft') {
+    const Counter = require('./Counter');
+    const counterKey = `trigger_displayId_global_${this.groupId}`;
+    this.displayId = await Counter.getNextSequence(counterKey);
+  }
 
   this.updatedAt = new Date();
 

@@ -196,6 +196,7 @@ async function buildMergedTriggerList(companyId) {
     const triggerData = {
       triggerId: gt.triggerId,
       ruleId: gt.ruleId,
+      displayId: gt.displayId || null,
       label: gt.label,
       scope: 'GLOBAL',
       originGroupId: gt.groupId,
@@ -257,6 +258,7 @@ async function buildMergedTriggerList(companyId) {
     const localTriggerData = {
       triggerId: lt.triggerId,
       ruleId: lt.ruleId,
+      displayId: lt.displayId || null,
       label: lt.label,
       scope: 'LOCAL',
       state: lt.state || null,  // PUBLISH STATUS: null, "draft", or "published"
