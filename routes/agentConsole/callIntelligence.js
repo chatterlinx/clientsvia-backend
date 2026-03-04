@@ -66,6 +66,14 @@ function buildTranscript(turns = [], limit = 12) {
   return normalized.slice(Math.max(0, normalized.length - limit));
 }
 
+function extractRuleId(cardId) {
+  if (!cardId) return null;
+  if (cardId.includes('::')) {
+    return cardId.split('::')[1] || cardId;
+  }
+  return cardId;
+}
+
 function buildResponseContext(trace = []) {
   const responseReady = findLastTrace(trace, 'A2_RESPONSE_READY');
   const speechSelected = findLastTrace(trace, 'SPEECH_SOURCE_SELECTED');
@@ -88,6 +96,9 @@ function buildResponseContext(trace = []) {
     ? 'fallback'
     : (responseSource ? 'configured' : 'unknown');
 
+  const rawCardId = triggerEval?.payload?.cardId;
+  const ruleId = extractRuleId(rawCardId);
+
   return {
     responseType,
     responseSource,
@@ -100,7 +111,8 @@ function buildResponseContext(trace = []) {
     callerNameConfidence,
     triggerMatched: triggerEval?.payload?.matched ?? null,
     matchedTriggerLabel: triggerEval?.payload?.cardLabel || null,
-    matchedTriggerId: triggerEval?.payload?.cardId || null
+    matchedTriggerId: rawCardId,
+    matchedTriggerRuleId: ruleId
   };
 }
 
@@ -152,9 +164,15 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     const triggerEval = traceByKind.get(`${turnNum}:A2_TRIGGER_EVAL`);
     if (triggerEval?.payload) {
       const p = triggerEval.payload;
+      const cardId = p.cardId || '';
+      const ruleId = cardId.includes('::') ? cardId.split('::')[1] : cardId;
+      
       turnData.triggerEvaluation = {
         matched: p.matched,
         cardLabel: p.cardLabel,
+        cardId: p.cardId,
+        ruleId: ruleId,
+        matchedOn: p.matchedOn,
         totalCards: p.totalCards,
         enabledCards: p.enabledCards
       };
