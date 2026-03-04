@@ -29,6 +29,18 @@ const GlobalAIBehaviorTemplate = require('../models/GlobalAIBehaviorTemplate');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const Company = require('../models/v2Company');
 
+// Gate: only fire each alert code once per health-check cycle (prevents cascading retries)
+const recentAlerts = new Map();
+const ALERT_COOLDOWN_MS = 25 * 60 * 1000; // 25 minutes (interval is 30)
+
+function shouldAlert(code) {
+    const now = Date.now();
+    const last = recentAlerts.get(code) || 0;
+    if (now - last < ALERT_COOLDOWN_MS) return false;
+    recentAlerts.set(code, now);
+    return true;
+}
+
 class CriticalDataHealthCheck {
     
     /**
@@ -75,27 +87,28 @@ class CriticalDataHealthCheck {
                     impact: 'Categories and scenarios cannot select behaviors - AI Brain is non-functional'
                 });
                 
-                // Send immediate alert
-                await AdminNotificationService.sendAlert({
-                    code: 'CRITICAL_DATA_BEHAVIORS_EMPTY',
-                    severity: 'CRITICAL',
-                    companyId: null,
-                    companyName: 'Platform',
-                    message: '🔴 CRITICAL: Behaviors database is empty',
-                    details: {
-                        check: 'CriticalDataHealthCheck',
-                        table: 'GlobalAIBehaviorTemplate',
-                        expectedMinimum: 6,
-                        actualCount: 0,
-                        issue: 'No active behaviors found in database',
-                        impact: 'All AI templates cannot function - categories and scenarios have no behaviors to inherit',
-                        action: 'Create behaviors in Admin UI immediately',
-                        suggestedFix: 'Admin UI → Behaviors: add at least 6 behavior templates',
-                        urgency: 'IMMEDIATE - Platform is non-functional',
-                        detectedBy: 'Automated health check (not user-triggered)',
-                        timestamp: new Date().toISOString()
-                    }
-                });
+                if (shouldAlert('CRITICAL_DATA_BEHAVIORS_EMPTY')) {
+                    await AdminNotificationService.sendAlert({
+                        code: 'CRITICAL_DATA_BEHAVIORS_EMPTY',
+                        severity: 'CRITICAL',
+                        companyId: null,
+                        companyName: 'Platform',
+                        message: '🔴 CRITICAL: Behaviors database is empty',
+                        details: {
+                            check: 'CriticalDataHealthCheck',
+                            table: 'GlobalAIBehaviorTemplate',
+                            expectedMinimum: 6,
+                            actualCount: 0,
+                            issue: 'No active behaviors found in database',
+                            impact: 'All AI templates cannot function - categories and scenarios have no behaviors to inherit',
+                            action: 'Create behaviors in Admin UI immediately',
+                            suggestedFix: 'Admin UI → Behaviors: add at least 6 behavior templates',
+                            urgency: 'IMMEDIATE - Platform is non-functional',
+                            detectedBy: 'Automated health check (not user-triggered)',
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
                 
                 logger.error('🔴 [HEALTH CHECK] CRITICAL: Behaviors table is empty');
                 
@@ -109,23 +122,25 @@ class CriticalDataHealthCheck {
                     impact: 'Limited behavior options for AI configuration'
                 });
                 
-                await AdminNotificationService.sendAlert({
-                    code: 'CRITICAL_DATA_BEHAVIORS_LOW',
-                    severity: 'WARNING',
-                    companyId: null,
-                    companyName: 'Platform',
-                    message: `⚠️ WARNING: Only ${count} behaviors in database`,
-                    details: {
-                        check: 'CriticalDataHealthCheck',
-                        table: 'GlobalAIBehaviorTemplate',
-                        expectedMinimum: 6,
-                        actualCount: count,
-                        issue: 'Fewer behaviors than expected',
-                        impact: 'Limited behavior options for AI templates',
-                        action: 'Review behaviors configuration and add missing behaviors',
-                        timestamp: new Date().toISOString()
-                    }
-                });
+                if (shouldAlert('CRITICAL_DATA_BEHAVIORS_LOW')) {
+                    await AdminNotificationService.sendAlert({
+                        code: 'CRITICAL_DATA_BEHAVIORS_LOW',
+                        severity: 'WARNING',
+                        companyId: null,
+                        companyName: 'Platform',
+                        message: `⚠️ WARNING: Only ${count} behaviors in database`,
+                        details: {
+                            check: 'CriticalDataHealthCheck',
+                            table: 'GlobalAIBehaviorTemplate',
+                            expectedMinimum: 6,
+                            actualCount: count,
+                            issue: 'Fewer behaviors than expected',
+                            impact: 'Limited behavior options for AI templates',
+                            action: 'Review behaviors configuration and add missing behaviors',
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
                 
                 logger.warn(`⚠️ [HEALTH CHECK] WARNING: Only ${count} behaviors in database`);
                 
@@ -148,22 +163,24 @@ class CriticalDataHealthCheck {
                 error: error.message
             });
             
-            await AdminNotificationService.sendAlert({
-                code: 'CRITICAL_DATA_CHECK_FAILED',
-                severity: 'CRITICAL',
-                companyId: null,
-                companyName: 'Platform',
-                message: '🔴 CRITICAL: Health check failed for Behaviors table',
-                details: {
-                    check: 'CriticalDataHealthCheck',
-                    table: 'GlobalAIBehaviorTemplate',
-                    error: error.message,
-                    stack: error.stack,
-                    impact: 'Cannot verify behaviors table status - potential database connectivity issue',
-                    action: 'Check MongoDB connection, verify database health',
-                    timestamp: new Date().toISOString()
-                }
-            });
+            if (shouldAlert('CRITICAL_DATA_CHECK_FAILED')) {
+                await AdminNotificationService.sendAlert({
+                    code: 'CRITICAL_DATA_CHECK_FAILED',
+                    severity: 'CRITICAL',
+                    companyId: null,
+                    companyName: 'Platform',
+                    message: '🔴 CRITICAL: Health check failed for Behaviors table',
+                    details: {
+                        check: 'CriticalDataHealthCheck',
+                        table: 'GlobalAIBehaviorTemplate',
+                        error: error.message,
+                        stack: error.stack,
+                        impact: 'Cannot verify behaviors table status - potential database connectivity issue',
+                        action: 'Check MongoDB connection, verify database health',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
             
             logger.error('🔴 [HEALTH CHECK] Failed to check behaviors:', error);
         }
@@ -185,22 +202,24 @@ class CriticalDataHealthCheck {
                     impact: 'Companies cannot use AI agent'
                 });
                 
-                await AdminNotificationService.sendAlert({
-                    code: 'CRITICAL_DATA_TEMPLATES_EMPTY',
-                    severity: 'WARNING',
-                    companyId: null,
-                    companyName: 'Platform',
-                    message: '⚠️ WARNING: No active AI templates in database',
-                    details: {
-                        check: 'CriticalDataHealthCheck',
-                        table: 'GlobalInstantResponseTemplate',
-                        actualCount: 0,
-                        issue: 'No active templates found',
-                        impact: 'Companies cannot configure AI agents',
-                        action: 'Create templates in Global AI Brain',
-                        timestamp: new Date().toISOString()
-                    }
-                });
+                if (shouldAlert('CRITICAL_DATA_TEMPLATES_EMPTY')) {
+                    await AdminNotificationService.sendAlert({
+                        code: 'CRITICAL_DATA_TEMPLATES_EMPTY',
+                        severity: 'WARNING',
+                        companyId: null,
+                        companyName: 'Platform',
+                        message: '⚠️ WARNING: No active AI templates in database',
+                        details: {
+                            check: 'CriticalDataHealthCheck',
+                            table: 'GlobalInstantResponseTemplate',
+                            actualCount: 0,
+                            issue: 'No active templates found',
+                            impact: 'Companies cannot configure AI agents',
+                            action: 'Create templates in Global AI Brain',
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
                 
                 logger.warn('⚠️ [HEALTH CHECK] WARNING: No active templates');
                 
@@ -292,27 +311,29 @@ class CriticalDataHealthCheck {
                     impact: 'All database operations will fail'
                 });
                 
-                await AdminNotificationService.sendAlert({
-                    code: 'DATABASE_CONNECTION_LOST',
-                    severity: 'CRITICAL',
-                    companyId: null,
-                    companyName: 'Platform',
-                    message: '🔴 CRITICAL: MongoDB connection lost',
-                    details: {
-                        check: 'CriticalDataHealthCheck',
-                        readyState: readyState,
-                        readyStateMap: {
-                            0: 'disconnected',
-                            1: 'connected',
-                            2: 'connecting',
-                            3: 'disconnecting'
-                        },
-                        currentState: ['disconnected', 'connected', 'connecting', 'disconnecting'][readyState],
-                        impact: 'All database operations failing - platform is down',
-                        action: 'Check MongoDB Atlas status, verify connection string, restart backend',
-                        timestamp: new Date().toISOString()
-                    }
-                });
+                if (shouldAlert('DATABASE_CONNECTION_LOST')) {
+                    await AdminNotificationService.sendAlert({
+                        code: 'DATABASE_CONNECTION_LOST',
+                        severity: 'CRITICAL',
+                        companyId: null,
+                        companyName: 'Platform',
+                        message: '🔴 CRITICAL: MongoDB connection lost',
+                        details: {
+                            check: 'CriticalDataHealthCheck',
+                            readyState: readyState,
+                            readyStateMap: {
+                                0: 'disconnected',
+                                1: 'connected',
+                                2: 'connecting',
+                                3: 'disconnecting'
+                            },
+                            currentState: ['disconnected', 'connected', 'connecting', 'disconnecting'][readyState],
+                            impact: 'All database operations failing - platform is down',
+                            action: 'Check MongoDB Atlas status, verify connection string, restart backend',
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
                 
                 logger.error(`🔴 [HEALTH CHECK] CRITICAL: Database not connected (state: ${readyState})`);
             }

@@ -155,10 +155,9 @@ class AdminNotificationService {
             const validationResult = await this.validateNotificationSystem();
             
             if (!validationResult.isValid) {
-                logger.error(`❌ [ADMIN NOTIFICATION] Validation failed for ${code}:`, validationResult.errors);
-                // Continue anyway - we want the alert logged even if delivery fails
+                logger.warn(`⚠️ [ADMIN NOTIFICATION] Validation issues for ${code}:`, validationResult.errors);
             } else if (Array.isArray(validationResult.warnings) && validationResult.warnings.length > 0) {
-                logger.warn(`⚠️ [ADMIN NOTIFICATION] Validation warnings for ${code}:`, validationResult.warnings);
+                logger.debug(`[ADMIN NOTIFICATION] Validation warnings for ${code}:`, validationResult.warnings);
             }
             
             // ================================================================
