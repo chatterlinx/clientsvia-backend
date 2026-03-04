@@ -271,7 +271,8 @@
       window.BucketManager.init({
         companyId: state.companyId,
         onBucketsUpdated: updateBuckets,
-        showToast
+        showToast,
+        apiFetch
       });
     } else {
       console.warn('[BucketManager] Not available — bucket UI disabled');

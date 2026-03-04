@@ -17,6 +17,7 @@
     cacheInfo: null,
     onBucketsUpdated: null,
     showToast: null,
+    apiFetch: null,
     initialized: false
   };
 
@@ -56,6 +57,9 @@
   }
 
   async function apiFetch(url, options = {}) {
+    if (typeof state.apiFetch === 'function') {
+      return state.apiFetch(url, options);
+    }
     if (!window.AgentConsoleAuth || typeof AgentConsoleAuth.apiFetch !== 'function') {
       throw new Error('AgentConsoleAuth not available');
     }
@@ -234,7 +238,8 @@
     }
 
     loadBuckets().catch(error => {
-      showToast('error', 'Bucket Load Failed', error.message || 'Could not load buckets.');
+      const detailedMessage = error?.data?.error || error?.data?.message || error?.message || 'Could not load buckets.';
+      showToast('error', 'Bucket Load Failed', detailedMessage);
     });
   }
 
