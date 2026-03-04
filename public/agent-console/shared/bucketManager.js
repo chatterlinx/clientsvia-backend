@@ -153,7 +153,8 @@
       showToast('success', 'Bucket Added', `"${name}" is now available.`);
       await loadBuckets();
     } catch (error) {
-      showToast('error', 'Add Failed', error.message || 'Could not add bucket.');
+      const msg = error?.data?.message || error?.data?.error || error?.message || 'Could not add bucket.';
+      showToast('error', 'Add Failed', msg);
     } finally {
       DOM.btnAddBucket.disabled = false;
       DOM.btnAddBucket.textContent = 'Add Bucket';
