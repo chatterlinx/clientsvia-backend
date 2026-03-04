@@ -414,68 +414,72 @@ router.get('/company/:companyId/list', async (req, res) => {
         const missingSummaries = summaries
           .filter(s => !intelligenceMap.has(s.twilioSid || s.callId))
           .slice(0, 10);
+
         if (missingSummaries.length > 0) {
-          console.log('[CallIntelligence] Auto-analyzing', missingSummaries.length, 'recent calls');
+          console.log('[CallIntelligence] Queuing auto-analysis for', missingSummaries.length, 'recent calls');
           const callSidsToAnalyze = missingSummaries.map(s => s.twilioSid || s.callId).filter(Boolean);
 
-          const transcripts = await CallTranscriptV2.find({
-            callSid: { $in: callSidsToAnalyze }
-          }).lean();
+          void (async () => {
+            try {
+              const transcripts = await CallTranscriptV2.find({
+                callSid: { $in: callSidsToAnalyze }
+              }).lean();
 
-          const transcriptMap = new Map(transcripts.map(t => [t.callSid, t]));
+              const transcriptMap = new Map(transcripts.map(t => [t.callSid, t]));
+              const callTracesToAnalyze = [];
 
-          const callTracesToAnalyze = [];
+              for (const summary of missingSummaries) {
+                const callSid = summary.twilioSid || summary.callId;
+                const transcript = transcriptMap.get(callSid);
+                if (transcript) {
+                  callTracesToAnalyze.push({
+                    callSid: transcript.callSid,
+                    companyId: transcript.companyId,
+                    call: {
+                      callSid: transcript.callSid,
+                      fromPhone: summary.phone,
+                      toPhone: summary.toPhone,
+                      startTime: transcript.firstTurnTs || summary.startedAt,
+                      durationSeconds: transcript.callMeta?.twilioDurationSeconds
+                    },
+                    turns: transcript.turns || [],
+                    events: transcript.trace || [],
+                    trace: transcript.trace || []
+                  });
+                } else if (summary.events && summary.events.length > 0) {
+                  callTracesToAnalyze.push({
+                    callSid,
+                    companyId,
+                    call: {
+                      callSid,
+                      fromPhone: summary.phone,
+                      toPhone: summary.toPhone,
+                      startTime: summary.startedAt,
+                      durationSeconds: summary.durationSeconds || 0
+                    },
+                    turns: summary.turns || [],
+                    events: summary.events || [],
+                    trace: summary.events || []
+                  });
+                }
+              }
 
-          for (const summary of missingSummaries) {
-            const callSid = summary.twilioSid || summary.callId;
-            const transcript = transcriptMap.get(callSid);
-            if (transcript) {
-              callTracesToAnalyze.push({
-                callSid: transcript.callSid,
-                companyId: transcript.companyId,
-                call: {
-                  callSid: transcript.callSid,
-                  fromPhone: summary.phone,
-                  toPhone: summary.toPhone,
-                  startTime: transcript.firstTurnTs || summary.startedAt,
-                  durationSeconds: transcript.callMeta?.twilioDurationSeconds
-                },
-                turns: transcript.turns || [],
-                events: transcript.trace || [],
-                trace: transcript.trace || []
-              });
-            } else if (summary.events && summary.events.length > 0) {
-              callTracesToAnalyze.push({
-                callSid,
-                companyId,
-                call: {
-                  callSid,
-                  fromPhone: summary.phone,
-                  toPhone: summary.toPhone,
-                  startTime: summary.startedAt,
-                  durationSeconds: summary.durationSeconds || 0
-                },
-                turns: summary.turns || [],
-                events: summary.events || [],
-                trace: summary.events || []
-              });
+              const analysisPromises = callTracesToAnalyze.map(callTrace =>
+                CallIntelligenceService.analyzeCall(callTrace, {
+                  useGPT4: settings.gpt4Enabled,
+                  mode: settings.analysisMode || 'quick'
+                }).catch(err => {
+                  console.error(`[CallIntelligence] Failed to analyze ${callTrace.callSid}:`, err.message);
+                  return null;
+                })
+              );
+
+              await Promise.allSettled(analysisPromises);
+              console.log('[CallIntelligence] Auto-analysis completed for queued calls');
+            } catch (error) {
+              console.error('[CallIntelligence] Auto-analysis background job failed:', error.message);
             }
-          }
-
-          const analysisPromises = callTracesToAnalyze.map(callTrace =>
-            CallIntelligenceService.analyzeCall(callTrace, {
-              useGPT4: settings.gpt4Enabled,
-              mode: settings.analysisMode || 'quick'
-            }).catch(err => {
-              console.error(`[CallIntelligence] Failed to analyze ${callTrace.callSid}:`, err.message);
-              return null;
-            })
-          );
-
-          await Promise.allSettled(analysisPromises);
-
-          const refreshedDocs = await CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean();
-          refreshedDocs.forEach(doc => intelligenceMap.set(doc.callSid, doc));
+          })();
         }
       }
     }
