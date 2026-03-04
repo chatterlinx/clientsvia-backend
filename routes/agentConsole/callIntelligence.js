@@ -14,6 +14,7 @@ const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const CallSummary = require('../../models/CallSummary');
 const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
 const CallIntelligence = require('../../models/CallIntelligence');
+const mongoose = require('mongoose');
 
 function buildCallSummaryDateRange(timeRange) {
   const now = new Date();
@@ -291,9 +292,12 @@ router.get('/company/:companyId/list', async (req, res) => {
 
     console.log('[CallIntelligence] Fetching list for company:', companyId);
     const dateFilter = buildCallSummaryDateRange(timeRange);
-    const summaryQuery = { companyId, ...dateFilter };
+    const companyObjectId = mongoose.Types.ObjectId.isValid(companyId)
+      ? new mongoose.Types.ObjectId(companyId)
+      : companyId;
+    const summaryQuery = { companyId: companyObjectId, ...dateFilter };
 
-    const [summaries, totalSummaries] = await Promise.all([
+    let [summaries, totalSummaries] = await Promise.all([
       CallSummary.find(summaryQuery)
         .sort({ startedAt: -1 })
         .skip((pageNum - 1) * limitNum)
@@ -302,6 +306,20 @@ router.get('/company/:companyId/list', async (req, res) => {
         .lean(),
       CallSummary.countDocuments(summaryQuery)
     ]);
+
+    if (summaries.length === 0 && timeRange) {
+      console.log('[CallIntelligence] No calls found for timeRange, retrying without date filter');
+      const fallbackQuery = { companyId: companyObjectId };
+      [summaries, totalSummaries] = await Promise.all([
+        CallSummary.find(fallbackQuery)
+          .sort({ startedAt: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount events turns')
+          .lean(),
+        CallSummary.countDocuments(fallbackQuery)
+      ]);
+    }
 
     const callSids = summaries.map(c => c.twilioSid || c.callId).filter(Boolean);
     const intelligenceDocs = callSids.length > 0
@@ -562,14 +580,17 @@ router.get('/estimate-cost', async (req, res) => {
 router.get('/debug/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
+    const companyObjectId = mongoose.Types.ObjectId.isValid(companyId)
+      ? new mongoose.Types.ObjectId(companyId)
+      : companyId;
 
     const [summaryCount, transcriptV2Count, intelligenceCount] = await Promise.all([
-      CallSummary.countDocuments({ companyId }),
-      CallTranscriptV2.countDocuments({ companyId }),
+      CallSummary.countDocuments({ companyId: companyObjectId }),
+      CallTranscriptV2.countDocuments({ companyId: companyObjectId }),
       require('../../models/CallIntelligence').countDocuments({ companyId })
     ]);
 
-    const recentSummaries = await CallSummary.find({ companyId })
+    const recentSummaries = await CallSummary.find({ companyId: companyObjectId })
       .sort({ startedAt: -1 })
       .limit(5)
       .select('callId twilioSid startedAt phone events turns')
