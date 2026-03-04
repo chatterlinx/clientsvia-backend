@@ -251,10 +251,21 @@ router.get('/company/:companyId/list', async (req, res) => {
       const recentCalls = await CallSummary.find({ companyId })
         .sort({ callTime: -1 })
         .limit(50)
-        .select('callSid fromPhone toPhone callTime')
+        .select('callSid fromPhone toPhone callTime events turns')
         .lean();
 
       console.log('[CallIntelligence] Found', recentCalls.length, 'recent calls in CallSummary');
+      
+      if (recentCalls.length > 0) {
+        const sampleCall = recentCalls[0];
+        console.log('[CallIntelligence] Sample call structure:', {
+          callSid: sampleCall.callSid,
+          hasEvents: !!(sampleCall.events && sampleCall.events.length > 0),
+          eventsCount: sampleCall.events?.length || 0,
+          hasTurns: !!(sampleCall.turns && sampleCall.turns.length > 0),
+          turnsCount: sampleCall.turns?.length || 0
+        });
+      }
 
       if (recentCalls.length > 0) {
         const callSidsToAnalyze = recentCalls.map(c => c.callSid);
