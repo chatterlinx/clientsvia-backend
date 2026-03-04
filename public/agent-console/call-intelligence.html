@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Call Intelligence Console</title>
+  <link rel="stylesheet" href="/agent-console/call-intelligence.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="intelligence-header">
+    <div class="header-left">
+      <a href="/agent-console" class="back-link">← Back to Dashboard</a>
+      <div class="header-title">
+        <h1>Call Intelligence Console</h1>
+        <p class="subtitle">Analyze calls, detect gaps, improve trigger coverage</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <button id="refresh-btn" class="btn btn-secondary">
+        <span class="icon">🔄</span> Refresh
+      </button>
+      <button id="settings-btn" class="btn btn-secondary">
+        <span class="icon">⚙️</span> Settings
+      </button>
+    </div>
+  </header>
+
+  <!-- Stats Banner -->
+  <section class="stats-banner" id="stats-banner">
+    <div class="stat-card">
+      <span class="stat-label">Today</span>
+      <span class="stat-value" id="stat-today">-</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">This Week</span>
+      <span class="stat-value" id="stat-week">-</span>
+    </div>
+    <div class="stat-card critical">
+      <span class="stat-label">🔴 Critical</span>
+      <span class="stat-value" id="stat-critical">-</span>
+    </div>
+    <div class="stat-card warning">
+      <span class="stat-label">🟡 Needs Work</span>
+      <span class="stat-value" id="stat-needs-work">-</span>
+    </div>
+    <div class="stat-card success">
+      <span class="stat-label">✅ Good</span>
+      <span class="stat-value" id="stat-good">-</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Match Rate</span>
+      <span class="stat-value" id="stat-match-rate">-%</span>
+    </div>
+  </section>
+
+  <!-- Filters -->
+  <section class="filters-section">
+    <div class="filters-row">
+      <input 
+        type="text" 
+        id="search-input" 
+        class="search-input" 
+        placeholder="Search by phone, CallSid..."
+      >
+      <select id="filter-status" class="filter-select">
+        <option value="">All Calls</option>
+        <option value="critical">🔴 Critical Issues</option>
+        <option value="needs_improvement">🟡 Needs Improvement</option>
+        <option value="performing_well">✅ Performing Well</option>
+      </select>
+      <select id="filter-time" class="filter-select">
+        <option value="today">Today</option>
+        <option value="week">This Week</option>
+        <option value="month">This Month</option>
+      </select>
+      <button id="clear-filters-btn" class="btn btn-text">Clear Filters</button>
+    </div>
+  </section>
+
+  <!-- Main Table -->
+  <section class="table-section">
+    <div class="table-header">
+      <h2>Recent Calls</h2>
+      <span class="call-count" id="call-count">0 calls</span>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="intelligence-table">
+        <thead>
+          <tr>
+            <th class="col-checkbox"><input type="checkbox" id="select-all"></th>
+            <th class="col-time">TIME</th>
+            <th class="col-from">FROM</th>
+            <th class="col-duration">DURATION</th>
+            <th class="col-turns">TURNS</th>
+            <th class="col-provenance">PROVENANCE</th>
+            <th class="col-intelligence">INTELLIGENCE</th>
+            <th class="col-callsid">CALLSID</th>
+          </tr>
+        </thead>
+        <tbody id="calls-tbody">
+          <!-- Rows populated by JavaScript -->
+          <tr class="loading-row">
+            <td colspan="8" class="loading-cell">
+              <div class="loading-spinner"></div>
+              <p>Loading call intelligence...</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination">
+      <button id="prev-page" class="btn btn-secondary" disabled>← Previous</button>
+      <span id="page-info">Page 1 of 1</span>
+      <button id="next-page" class="btn btn-secondary" disabled>Next →</button>
+    </div>
+  </section>
+
+  <!-- Analysis Modal (Full Page) -->
+  <div id="analysis-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button id="close-modal" class="close-btn">✕ Close</button>
+        <h2>Call Intelligence Report</h2>
+        <div class="modal-actions">
+          <button id="copy-all-btn" class="btn btn-secondary">📋 Copy All</button>
+          <button id="export-pdf-btn" class="btn btn-secondary">🔖 Save as PDF</button>
+        </div>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Analysis content populated by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content settings-modal">
+      <div class="modal-header">
+        <button class="close-btn" id="close-settings">✕ Close</button>
+        <h2>Intelligence Settings</h2>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h3>GPT-4 Analysis</h3>
+          <div class="setting-item">
+            <div class="setting-info">
+              <strong>Enable GPT-4 Analysis</strong>
+              <p>Use AI-powered analysis for detailed call insights. Costs approximately $0.01-0.05 per call.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="gpt4-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <strong>Analysis Mode</strong>
+              <p>Quick mode: Faster, less detailed. Full mode: Comprehensive analysis.</p>
+            </div>
+            <select id="analysis-mode" class="filter-select">
+              <option value="quick">Quick Analysis</option>
+              <option value="full">Full Analysis</option>
+            </select>
+          </div>
+          <div class="setting-status" id="gpt4-status">
+            <span class="status-indicator">●</span>
+            <span id="status-text">Checking status...</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Auto-Analysis</h3>
+          <div class="setting-item">
+            <div class="setting-info">
+              <strong>Auto-analyze new calls</strong>
+              <p>Automatically analyze calls as they come in (requires GPT-4 enabled)</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-analyze-toggle" disabled>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/agent-console/call-intelligence.js"></script>
+</body>
+</html>

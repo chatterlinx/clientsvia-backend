@@ -1,0 +1,289 @@
+/**
+ * Call Intelligence Routes
+ * 
+ * API endpoints for AI-powered call analysis and recommendations.
+ * 
+ * @module routes/agentConsole/callIntelligence
+ */
+
+const express = require('express');
+const router = express.Router();
+const CallIntelligenceService = require('../../services/CallIntelligenceService');
+const GPT4AnalysisService = require('../../services/GPT4AnalysisService');
+const Call = require('../../models/Call');
+
+/**
+ * GET /api/call-intelligence/status
+ * Get GPT-4 analysis service status
+ */
+router.get('/status', async (req, res) => {
+  try {
+    const status = GPT4AnalysisService.getStatus();
+    res.json({
+      success: true,
+      status
+    });
+  } catch (error) {
+    console.error('Error getting GPT-4 status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/call-intelligence/toggle
+ * Enable/disable GPT-4 analysis
+ */
+router.post('/toggle', async (req, res) => {
+  try {
+    const { enabled } = req.body;
+
+    if (enabled) {
+      GPT4AnalysisService.enable();
+    } else {
+      GPT4AnalysisService.disable();
+    }
+
+    const status = GPT4AnalysisService.getStatus();
+    
+    res.json({
+      success: true,
+      status,
+      message: enabled ? 'GPT-4 analysis enabled' : 'GPT-4 analysis disabled'
+    });
+  } catch (error) {
+    console.error('Error toggling GPT-4:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/call-intelligence/analyze/:callSid
+ * Analyze a specific call
+ */
+router.post('/analyze/:callSid', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    const { useGPT4 = false, mode = 'full', forceReanalyze = false } = req.body;
+
+    const call = await Call.findOne({ 'call.callSid': callSid });
+    if (!call) {
+      return res.status(404).json({
+        success: false,
+        error: 'Call not found'
+      });
+    }
+
+    const intelligence = await CallIntelligenceService.analyzeCall(call, {
+      useGPT4,
+      mode,
+      forceReanalyze
+    });
+
+    res.json({
+      success: true,
+      intelligence
+    });
+  } catch (error) {
+    console.error('Error analyzing call:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/call-intelligence/:callSid
+ * Get intelligence for a specific call
+ */
+router.get('/:callSid', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    
+    const intelligence = await CallIntelligenceService.getCallIntelligence(callSid);
+    
+    if (!intelligence) {
+      return res.status(404).json({
+        success: false,
+        error: 'Intelligence not found for this call'
+      });
+    }
+
+    res.json({
+      success: true,
+      intelligence
+    });
+  } catch (error) {
+    console.error('Error getting intelligence:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/call-intelligence/company/:companyId/summary
+ * Get intelligence summary for company
+ */
+router.get('/company/:companyId/summary', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { timeRange } = req.query;
+
+    const summary = await CallIntelligenceService.getCompanySummary(companyId, {
+      timeRange
+    });
+
+    res.json({
+      success: true,
+      summary
+    });
+  } catch (error) {
+    console.error('Error getting company summary:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/call-intelligence/company/:companyId/list
+ * Get paginated intelligence list for company
+ */
+router.get('/company/:companyId/list', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { page, limit, status, sortBy } = req.query;
+
+    const result = await CallIntelligenceService.getIntelligenceList(companyId, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 50,
+      status,
+      sortBy
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error getting intelligence list:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/call-intelligence/:callSid/recommendation/:recommendationId/implement
+ * Mark recommendation as implemented
+ */
+router.post('/:callSid/recommendation/:recommendationId/implement', async (req, res) => {
+  try {
+    const { callSid, recommendationId } = req.params;
+    const { implementedBy } = req.body;
+
+    const intelligence = await CallIntelligenceService.markRecommendationImplemented(
+      callSid,
+      recommendationId,
+      implementedBy || 'admin'
+    );
+
+    res.json({
+      success: true,
+      intelligence
+    });
+  } catch (error) {
+    console.error('Error marking recommendation:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/call-intelligence/batch-analyze
+ * Batch analyze multiple calls
+ */
+router.post('/batch-analyze', async (req, res) => {
+  try {
+    const { callSids, useGPT4 = false, mode = 'quick' } = req.body;
+
+    if (!Array.isArray(callSids) || callSids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'callSids must be a non-empty array'
+      });
+    }
+
+    const calls = await Call.find({
+      'call.callSid': { $in: callSids }
+    });
+
+    const results = await Promise.allSettled(
+      calls.map(call => 
+        CallIntelligenceService.analyzeCall(call, { useGPT4, mode })
+      )
+    );
+
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    res.json({
+      success: true,
+      total: callSids.length,
+      successful,
+      failed,
+      results: results.map((r, i) => ({
+        callSid: callSids[i],
+        status: r.status,
+        data: r.status === 'fulfilled' ? r.value : null,
+        error: r.status === 'rejected' ? r.reason.message : null
+      }))
+    });
+  } catch (error) {
+    console.error('Error batch analyzing:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/call-intelligence/estimate-cost
+ * Estimate GPT-4 analysis cost
+ */
+router.get('/estimate-cost', async (req, res) => {
+  try {
+    const { callCount = 1, mode = 'full' } = req.query;
+
+    const estimate = GPT4AnalysisService.estimateCost(
+      parseInt(callCount),
+      mode
+    );
+
+    res.json({
+      success: true,
+      estimate
+    });
+  } catch (error) {
+    console.error('Error estimating cost:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;
