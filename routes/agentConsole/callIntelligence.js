@@ -175,18 +175,74 @@ router.get('/company/:companyId/summary', async (req, res) => {
 /**
  * GET /api/call-intelligence/company/:companyId/list
  * Get paginated intelligence list for company
+ * Auto-analyzes recent calls if not yet analyzed
  */
 router.get('/company/:companyId/list', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { page, limit, status, sortBy } = req.query;
+    const { page, limit, status, sortBy, autoAnalyze = 'true' } = req.query;
 
-    const result = await CallIntelligenceService.getIntelligenceList(companyId, {
+    let result = await CallIntelligenceService.getIntelligenceList(companyId, {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 50,
       status,
       sortBy
     });
+
+    if (result.items.length === 0 && autoAnalyze === 'true') {
+      const recentCalls = await CallSummary.find({ companyId })
+        .sort({ callTime: -1 })
+        .limit(50)
+        .select('callSid fromPhone toPhone callTime')
+        .lean();
+
+      if (recentCalls.length > 0) {
+        const callSidsToAnalyze = recentCalls.map(c => c.callSid);
+        
+        const transcripts = await CallTranscriptV2.find({
+          callSid: { $in: callSidsToAnalyze }
+        }).lean();
+
+        const summaryMap = new Map(recentCalls.map(s => [s.callSid, s]));
+
+        const analysisPromises = transcripts.slice(0, 20).map(async (transcript) => {
+          const summary = summaryMap.get(transcript.callSid);
+          const callTrace = {
+            callSid: transcript.callSid,
+            companyId: transcript.companyId,
+            call: {
+              callSid: transcript.callSid,
+              fromPhone: summary?.fromPhone,
+              toPhone: summary?.toPhone,
+              startTime: transcript.firstTurnTs || summary?.callTime,
+              durationSeconds: transcript.callMeta?.twilioDurationSeconds
+            },
+            turns: transcript.turns || [],
+            events: transcript.trace || [],
+            trace: transcript.trace || []
+          };
+
+          try {
+            return await CallIntelligenceService.analyzeCall(callTrace, {
+              useGPT4: false,
+              mode: 'quick'
+            });
+          } catch (err) {
+            console.error(`Failed to analyze ${transcript.callSid}:`, err.message);
+            return null;
+          }
+        });
+
+        await Promise.allSettled(analysisPromises);
+
+        result = await CallIntelligenceService.getIntelligenceList(companyId, {
+          page: parseInt(page) || 1,
+          limit: parseInt(limit) || 50,
+          status,
+          sortBy
+        });
+      }
+    }
 
     res.json({
       success: true,
