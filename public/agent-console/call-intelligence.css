@@ -290,6 +290,11 @@ body {
   border-left-color: #10B981;
 }
 
+.intelligence-cell.status-unknown {
+  background: #F3F4F6;
+  border-left-color: #9CA3AF;
+}
+
 .intelligence-status {
   display: flex;
   align-items: center;
@@ -308,6 +313,10 @@ body {
 
 .status-success .status-text {
   color: #065F46;
+}
+
+.status-unknown .status-text {
+  color: #4B5563;
 }
 
 .intelligence-summary {

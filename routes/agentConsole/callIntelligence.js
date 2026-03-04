@@ -34,7 +34,7 @@ function buildCallSummaryDateRange(timeRange) {
   }
 
   return {
-    callTime: {
+    startedAt: {
       $gte: start,
       $lte: new Date()
     }
@@ -153,7 +153,9 @@ router.post('/analyze/:callSid', async (req, res) => {
     const { useGPT4 = false, mode = 'full', forceReanalyze = false } = req.body;
 
     const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
-    const callSummary = await CallSummary.findOne({ callSid }).lean();
+    const callSummary = await CallSummary.findOne({
+      $or: [{ twilioSid: callSid }, { callId: callSid }]
+    }).lean();
     if (!transcript && !callSummary) {
       return res.status(404).json({
         success: false,
@@ -169,9 +171,9 @@ router.post('/analyze/:callSid', async (req, res) => {
         companyId: transcript.companyId,
         call: {
           callSid: transcript.callSid,
-          fromPhone: callSummary?.fromPhone,
+        fromPhone: callSummary?.phone,
           toPhone: callSummary?.toPhone,
-          startTime: transcript.firstTurnTs || callSummary?.callTime,
+        startTime: transcript.firstTurnTs || callSummary?.startedAt,
           durationSeconds: transcript.callMeta?.twilioDurationSeconds
         },
         turns: transcript.turns || [],
@@ -180,13 +182,13 @@ router.post('/analyze/:callSid', async (req, res) => {
       };
     } else if (callSummary?.events && callSummary.events.length > 0) {
       callTrace = {
-        callSid: callSummary.callSid,
+        callSid,
         companyId: callSummary.companyId,
         call: {
-          callSid: callSummary.callSid,
-          fromPhone: callSummary.fromPhone,
+          callSid,
+          fromPhone: callSummary.phone,
           toPhone: callSummary.toPhone,
-          startTime: callSummary.callTime,
+          startTime: callSummary.startedAt,
           durationSeconds: callSummary.durationSeconds || 0
         },
         turns: callSummary.turns || [],
@@ -293,15 +295,15 @@ router.get('/company/:companyId/list', async (req, res) => {
 
     const [summaries, totalSummaries] = await Promise.all([
       CallSummary.find(summaryQuery)
-        .sort({ callTime: -1 })
+        .sort({ startedAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
-        .select('callSid callTime fromPhone toPhone durationSeconds turnCount events turns')
+        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount events turns')
         .lean(),
       CallSummary.countDocuments(summaryQuery)
     ]);
 
-    const callSids = summaries.map(c => c.callSid).filter(Boolean);
+    const callSids = summaries.map(c => c.twilioSid || c.callId).filter(Boolean);
     const intelligenceDocs = callSids.length > 0
       ? await CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean()
       : [];
@@ -310,10 +312,12 @@ router.get('/company/:companyId/list', async (req, res) => {
     if (autoAnalyze === 'true') {
       const settings = await CallIntelligenceSettings.getSettings(companyId);
       if (settings.autoAnalyzeEnabled) {
-        const missingSummaries = summaries.filter(s => !intelligenceMap.has(s.callSid)).slice(0, 10);
+        const missingSummaries = summaries
+          .filter(s => !intelligenceMap.has(s.twilioSid || s.callId))
+          .slice(0, 10);
         if (missingSummaries.length > 0) {
           console.log('[CallIntelligence] Auto-analyzing', missingSummaries.length, 'recent calls');
-          const callSidsToAnalyze = missingSummaries.map(s => s.callSid);
+          const callSidsToAnalyze = missingSummaries.map(s => s.twilioSid || s.callId).filter(Boolean);
 
           const transcripts = await CallTranscriptV2.find({
             callSid: { $in: callSidsToAnalyze }
@@ -324,16 +328,17 @@ router.get('/company/:companyId/list', async (req, res) => {
           const callTracesToAnalyze = [];
 
           for (const summary of missingSummaries) {
-            const transcript = transcriptMap.get(summary.callSid);
+            const callSid = summary.twilioSid || summary.callId;
+            const transcript = transcriptMap.get(callSid);
             if (transcript) {
               callTracesToAnalyze.push({
                 callSid: transcript.callSid,
                 companyId: transcript.companyId,
                 call: {
                   callSid: transcript.callSid,
-                  fromPhone: summary.fromPhone,
+                  fromPhone: summary.phone,
                   toPhone: summary.toPhone,
-                  startTime: transcript.firstTurnTs || summary.callTime,
+                  startTime: transcript.firstTurnTs || summary.startedAt,
                   durationSeconds: transcript.callMeta?.twilioDurationSeconds
                 },
                 turns: transcript.turns || [],
@@ -342,13 +347,13 @@ router.get('/company/:companyId/list', async (req, res) => {
               });
             } else if (summary.events && summary.events.length > 0) {
               callTracesToAnalyze.push({
-                callSid: summary.callSid,
+                callSid,
                 companyId,
                 call: {
-                  callSid: summary.callSid,
-                  fromPhone: summary.fromPhone,
+                  callSid,
+                  fromPhone: summary.phone,
                   toPhone: summary.toPhone,
-                  startTime: summary.callTime,
+                  startTime: summary.startedAt,
                   durationSeconds: summary.durationSeconds || 0
                 },
                 turns: summary.turns || [],
@@ -377,13 +382,14 @@ router.get('/company/:companyId/list', async (req, res) => {
     }
 
     let items = summaries.map(summary => {
-      const intel = intelligenceMap.get(summary.callSid);
+      const callSid = summary.twilioSid || summary.callId;
+      const intel = intelligenceMap.get(callSid);
       if (intel) return intel;
 
       return {
-        callSid: summary.callSid,
+        callSid,
         companyId,
-        analyzedAt: summary.callTime,
+        analyzedAt: summary.startedAt,
         status: 'not_analyzed',
         issueCount: 0,
         criticalIssueCount: 0,
@@ -396,8 +402,8 @@ router.get('/company/:companyId/list', async (req, res) => {
         callMetadata: {
           duration: summary.durationSeconds || 0,
           turns: summary.turnCount || 0,
-          fromPhone: summary.fromPhone,
-          startTime: summary.callTime
+          fromPhone: summary.phone,
+          startTime: summary.startedAt
         }
       };
     });
@@ -564,9 +570,9 @@ router.get('/debug/:companyId', async (req, res) => {
     ]);
 
     const recentSummaries = await CallSummary.find({ companyId })
-      .sort({ callTime: -1 })
+      .sort({ startedAt: -1 })
       .limit(5)
-      .select('callSid callTime fromPhone events turns')
+      .select('callId twilioSid startedAt phone events turns')
       .lean();
 
     const recentTranscripts = await CallTranscriptV2.find({ companyId })
@@ -585,8 +591,9 @@ router.get('/debug/:companyId', async (req, res) => {
           callIntelligence: intelligenceCount
         },
         recentSummaries: recentSummaries.map(s => ({
-          callSid: s.callSid,
-          callTime: s.callTime,
+          callSid: s.twilioSid || s.callId,
+          callTime: s.startedAt,
+          fromPhone: s.phone,
           hasEvents: !!(s.events && s.events.length > 0),
           eventsCount: s.events?.length || 0,
           hasTurns: !!(s.turns && s.turns.length > 0),
