@@ -1163,14 +1163,8 @@
       bucketEl.appendChild(option);
     });
 
-    if (selectedKey && !state.bucketIndex.has(selectedKey)) {
-      const option = document.createElement('option');
-      option.value = selectedKey;
-      option.textContent = `${selectedKey} (missing)`;
-      bucketEl.appendChild(option);
-    }
-
-    bucketEl.value = selectedKey || '';
+    const effectiveKey = selectedKey && state.bucketIndex.has(selectedKey) ? selectedKey : '';
+    bucketEl.value = effectiveKey;
   }
 
   function renderTriggers() {
@@ -1988,10 +1982,9 @@
     const followUpNextActionEl = document.getElementById('input-trigger-followup-action');
     const followUpNextAction = followUpNextActionEl ? (followUpNextActionEl.value || 'CONTINUE') : 'CONTINUE';
 
-    const bucketKey = document.getElementById('input-trigger-bucket')?.value || null;
+    let bucketKey = document.getElementById('input-trigger-bucket')?.value || null;
     if (bucketKey && !state.bucketIndex.has(bucketKey)) {
-      showToast('error', 'Invalid Bucket', 'Selected bucket no longer exists. Refresh the bucket list.');
-      return;
+      bucketKey = null;
     }
 
     const payload = {
