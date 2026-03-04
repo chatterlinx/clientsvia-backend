@@ -112,11 +112,6 @@
     DOM.filterStatus.addEventListener('change', handleFilterChange);
     DOM.filterTime.addEventListener('change', handleFilterChange);
     DOM.clearFiltersBtn.addEventListener('click', clearFilters);
-    
-    const forceAnalyzeBtn = document.getElementById('force-analyze-btn');
-    if (forceAnalyzeBtn) {
-      forceAnalyzeBtn.addEventListener('click', forceAnalyzeRecentCalls);
-    }
 
     // Pagination
     DOM.prevPage.addEventListener('click', () => changePage(state.currentPage - 1));
@@ -189,7 +184,8 @@
       const params = new URLSearchParams({
         page: state.currentPage,
         limit: 50,
-        ...(state.filters.status && { status: state.filters.status })
+        ...(state.filters.status && { status: state.filters.status }),
+        ...(state.filters.timeRange && { timeRange: state.filters.timeRange })
       });
 
       console.log('[CallIntelligence UI] Calling API:', `/api/call-intelligence/company/${state.companyId}/list?${params}`);
@@ -745,6 +741,13 @@
           fullLabel: 'PERFORMING WELL',
           className: 'status-success'
         };
+      case 'not_analyzed':
+        return {
+          icon: '⚪',
+          label: 'NOT ANALYZED',
+          fullLabel: 'NOT ANALYZED',
+          className: 'status-unknown'
+        };
       default:
         return {
           icon: '⚪',
@@ -904,40 +907,7 @@
     showNotification('Refreshed!', 'success');
   }
 
-  async function forceAnalyzeRecentCalls() {
-    try {
-      showNotification('Fetching recent calls to analyze...', 'info');
-      
-      const summaryResponse = await fetch(`/api/agent-console/calls/list?companyId=${state.companyId}&limit=20`);
-      const summaryData = await summaryResponse.json();
-      
-      if (!summaryData.calls || summaryData.calls.length === 0) {
-        showNotification('No recent calls found', 'warning');
-        return;
-      }
-
-      const callSids = summaryData.calls.map(c => c.twilioSid || c.callId).filter(Boolean);
-      
-      showNotification(`Analyzing ${callSids.length} calls... This may take 10-30 seconds`, 'info');
-
-      const batchResponse = await apiCall('/api/call-intelligence/batch-analyze', {
-        method: 'POST',
-        body: JSON.stringify({
-          callSids: callSids.slice(0, 20),
-          useGPT4: state.gpt4Enabled,
-          mode: state.analysisMode
-        })
-      });
-
-      showNotification(`Analysis complete! ${batchResponse.successful} successful`, 'success');
-      
-      await loadCalls();
-      await loadSummary();
-    } catch (error) {
-      console.error('Force analyze failed:', error);
-      showNotification('Failed to analyze calls: ' + error.message, 'error');
-    }
-  }
+  
 
   // =============================================================================
   // GLOBAL FUNCTIONS (called from HTML)

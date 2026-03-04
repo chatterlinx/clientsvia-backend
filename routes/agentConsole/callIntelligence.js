@@ -13,6 +13,33 @@ const GPT4AnalysisService = require('../../services/GPT4AnalysisService');
 const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const CallSummary = require('../../models/CallSummary');
 const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
+const CallIntelligence = require('../../models/CallIntelligence');
+
+function buildCallSummaryDateRange(timeRange) {
+  const now = new Date();
+  let start;
+
+  switch (timeRange) {
+    case 'today':
+      start = new Date(now.setHours(0, 0, 0, 0));
+      break;
+    case 'week':
+      start = new Date(now.setDate(now.getDate() - 7));
+      break;
+    case 'month':
+      start = new Date(now.setMonth(now.getMonth() - 1));
+      break;
+    default:
+      return {};
+  }
+
+  return {
+    callTime: {
+      $gte: start,
+      $lte: new Date()
+    }
+  };
+}
 
 /**
  * GET /api/call-intelligence/status
@@ -126,29 +153,52 @@ router.post('/analyze/:callSid', async (req, res) => {
     const { useGPT4 = false, mode = 'full', forceReanalyze = false } = req.body;
 
     const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
-    if (!transcript) {
+    const callSummary = await CallSummary.findOne({ callSid }).lean();
+    if (!transcript && !callSummary) {
       return res.status(404).json({
         success: false,
-        error: 'Call transcript not found'
+        error: 'Call not found'
       });
     }
 
-    const callSummary = await CallSummary.findOne({ callSid }).lean();
+    let callTrace;
 
-    const callTrace = {
-      callSid: transcript.callSid,
-      companyId: transcript.companyId,
-      call: {
+    if (transcript) {
+      callTrace = {
         callSid: transcript.callSid,
-        fromPhone: callSummary?.fromPhone,
-        toPhone: callSummary?.toPhone,
-        startTime: transcript.firstTurnTs || callSummary?.callTime,
-        durationSeconds: transcript.callMeta?.twilioDurationSeconds
-      },
-      turns: transcript.turns || [],
-      events: transcript.trace || [],
-      trace: transcript.trace || []
-    };
+        companyId: transcript.companyId,
+        call: {
+          callSid: transcript.callSid,
+          fromPhone: callSummary?.fromPhone,
+          toPhone: callSummary?.toPhone,
+          startTime: transcript.firstTurnTs || callSummary?.callTime,
+          durationSeconds: transcript.callMeta?.twilioDurationSeconds
+        },
+        turns: transcript.turns || [],
+        events: transcript.trace || [],
+        trace: transcript.trace || []
+      };
+    } else if (callSummary?.events && callSummary.events.length > 0) {
+      callTrace = {
+        callSid: callSummary.callSid,
+        companyId: callSummary.companyId,
+        call: {
+          callSid: callSummary.callSid,
+          fromPhone: callSummary.fromPhone,
+          toPhone: callSummary.toPhone,
+          startTime: callSummary.callTime,
+          durationSeconds: callSummary.durationSeconds || 0
+        },
+        turns: callSummary.turns || [],
+        events: callSummary.events || [],
+        trace: callSummary.events || []
+      };
+    } else {
+      return res.status(404).json({
+        success: false,
+        error: 'No transcript or events available for analysis'
+      });
+    }
 
     const intelligence = await CallIntelligenceService.analyzeCall(callTrace, {
       useGPT4,
@@ -233,81 +283,64 @@ router.get('/company/:companyId/summary', async (req, res) => {
 router.get('/company/:companyId/list', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { page, limit, status, sortBy, autoAnalyze = 'true' } = req.query;
+    const { page, limit, status, autoAnalyze = 'true', timeRange } = req.query;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 50;
 
     console.log('[CallIntelligence] Fetching list for company:', companyId);
+    const dateFilter = buildCallSummaryDateRange(timeRange);
+    const summaryQuery = { companyId, ...dateFilter };
 
-    let result = await CallIntelligenceService.getIntelligenceList(companyId, {
-      page: parseInt(page) || 1,
-      limit: parseInt(limit) || 50,
-      status,
-      sortBy
-    });
-
-    console.log('[CallIntelligence] Found', result.items.length, 'analyzed calls');
-
-    if (result.items.length === 0 && autoAnalyze === 'true') {
-      console.log('[CallIntelligence] No analyzed calls found, fetching recent calls for auto-analysis...');
-      const recentCalls = await CallSummary.find({ companyId })
+    const [summaries, totalSummaries] = await Promise.all([
+      CallSummary.find(summaryQuery)
         .sort({ callTime: -1 })
-        .limit(50)
-        .select('callSid fromPhone toPhone callTime events turns')
-        .lean();
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .select('callSid callTime fromPhone toPhone durationSeconds turnCount events turns')
+        .lean(),
+      CallSummary.countDocuments(summaryQuery)
+    ]);
 
-      console.log('[CallIntelligence] Found', recentCalls.length, 'recent calls in CallSummary');
-      
-      if (recentCalls.length > 0) {
-        const sampleCall = recentCalls[0];
-        console.log('[CallIntelligence] Sample call structure:', {
-          callSid: sampleCall.callSid,
-          hasEvents: !!(sampleCall.events && sampleCall.events.length > 0),
-          eventsCount: sampleCall.events?.length || 0,
-          hasTurns: !!(sampleCall.turns && sampleCall.turns.length > 0),
-          turnsCount: sampleCall.turns?.length || 0
-        });
-      }
+    const callSids = summaries.map(c => c.callSid).filter(Boolean);
+    const intelligenceDocs = callSids.length > 0
+      ? await CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean()
+      : [];
+    const intelligenceMap = new Map(intelligenceDocs.map(doc => [doc.callSid, doc]));
 
-      if (recentCalls.length > 0) {
-        const callSidsToAnalyze = recentCalls.map(c => c.callSid);
-        
-        const transcripts = await CallTranscriptV2.find({
-          callSid: { $in: callSidsToAnalyze }
-        }).lean();
+    if (autoAnalyze === 'true') {
+      const settings = await CallIntelligenceSettings.getSettings(companyId);
+      if (settings.autoAnalyzeEnabled) {
+        const missingSummaries = summaries.filter(s => !intelligenceMap.has(s.callSid)).slice(0, 10);
+        if (missingSummaries.length > 0) {
+          console.log('[CallIntelligence] Auto-analyzing', missingSummaries.length, 'recent calls');
+          const callSidsToAnalyze = missingSummaries.map(s => s.callSid);
 
-        console.log('[CallIntelligence] Found', transcripts.length, 'transcripts in CallTranscriptV2');
+          const transcripts = await CallTranscriptV2.find({
+            callSid: { $in: callSidsToAnalyze }
+          }).lean();
 
-        const fullSummaries = await CallSummary.find({
-          callSid: { $in: callSidsToAnalyze }
-        })
-        .select('callSid fromPhone toPhone callTime events turns')
-        .lean();
+          const transcriptMap = new Map(transcripts.map(t => [t.callSid, t]));
 
-        const summaryMap = new Map(fullSummaries.map(s => [s.callSid, s]));
+          const callTracesToAnalyze = [];
 
-        const callTracesToAnalyze = [];
-
-        if (transcripts.length > 0) {
-          for (const transcript of transcripts) {
-            const summary = summaryMap.get(transcript.callSid);
-            callTracesToAnalyze.push({
-              callSid: transcript.callSid,
-              companyId: transcript.companyId,
-              call: {
+          for (const summary of missingSummaries) {
+            const transcript = transcriptMap.get(summary.callSid);
+            if (transcript) {
+              callTracesToAnalyze.push({
                 callSid: transcript.callSid,
-                fromPhone: summary?.fromPhone,
-                toPhone: summary?.toPhone,
-                startTime: transcript.firstTurnTs || summary?.callTime,
-                durationSeconds: transcript.callMeta?.twilioDurationSeconds
-              },
-              turns: transcript.turns || [],
-              events: transcript.trace || [],
-              trace: transcript.trace || []
-            });
-          }
-        } else {
-          console.log('[CallIntelligence] No CallTranscriptV2 found, using CallSummary events as fallback');
-          for (const summary of fullSummaries) {
-            if (summary.events && summary.events.length > 0) {
+                companyId: transcript.companyId,
+                call: {
+                  callSid: transcript.callSid,
+                  fromPhone: summary.fromPhone,
+                  toPhone: summary.toPhone,
+                  startTime: transcript.firstTurnTs || summary.callTime,
+                  durationSeconds: transcript.callMeta?.twilioDurationSeconds
+                },
+                turns: transcript.turns || [],
+                events: transcript.trace || [],
+                trace: transcript.trace || []
+              });
+            } else if (summary.events && summary.events.length > 0) {
               callTracesToAnalyze.push({
                 callSid: summary.callSid,
                 companyId,
@@ -316,7 +349,7 @@ router.get('/company/:companyId/list', async (req, res) => {
                   fromPhone: summary.fromPhone,
                   toPhone: summary.toPhone,
                   startTime: summary.callTime,
-                  durationSeconds: 0
+                  durationSeconds: summary.durationSeconds || 0
                 },
                 turns: summary.turns || [],
                 events: summary.events || [],
@@ -324,45 +357,61 @@ router.get('/company/:companyId/list', async (req, res) => {
               });
             }
           }
+
+          const analysisPromises = callTracesToAnalyze.map(callTrace =>
+            CallIntelligenceService.analyzeCall(callTrace, {
+              useGPT4: settings.gpt4Enabled,
+              mode: settings.analysisMode || 'quick'
+            }).catch(err => {
+              console.error(`[CallIntelligence] Failed to analyze ${callTrace.callSid}:`, err.message);
+              return null;
+            })
+          );
+
+          await Promise.allSettled(analysisPromises);
+
+          const refreshedDocs = await CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean();
+          refreshedDocs.forEach(doc => intelligenceMap.set(doc.callSid, doc));
         }
-
-        console.log('[CallIntelligence] Prepared', callTracesToAnalyze.length, 'calls for analysis');
-
-        const analysisPromises = callTracesToAnalyze.slice(0, 20).map(async (callTrace) => {
-          try {
-            return await CallIntelligenceService.analyzeCall(callTrace, {
-              useGPT4: false,
-              mode: 'quick'
-            });
-          } catch (err) {
-            console.error(`[CallIntelligence] Failed to analyze ${callTrace.callSid}:`, err.message);
-            return null;
-          }
-        });
-
-        const results = await Promise.allSettled(analysisPromises);
-        const successful = results.filter(r => r.status === 'fulfilled').length;
-        
-        console.log('[CallIntelligence] Auto-analyzed', successful, 'out of', results.length, 'calls');
-
-        result = await CallIntelligenceService.getIntelligenceList(companyId, {
-          page: parseInt(page) || 1,
-          limit: parseInt(limit) || 50,
-          status,
-          sortBy
-        });
-        
-        console.log('[CallIntelligence] After auto-analysis, found', result.items.length, 'intelligence records');
-      } else {
-        console.log('[CallIntelligence] No recent calls found in CallSummary');
       }
     }
 
-    console.log('[CallIntelligence] Returning', result.items.length, 'items to frontend');
+    let items = summaries.map(summary => {
+      const intel = intelligenceMap.get(summary.callSid);
+      if (intel) return intel;
+
+      return {
+        callSid: summary.callSid,
+        companyId,
+        analyzedAt: summary.callTime,
+        status: 'not_analyzed',
+        issueCount: 0,
+        criticalIssueCount: 0,
+        executiveSummary: 'Not analyzed yet.',
+        topIssue: 'Not analyzed yet',
+        issues: [],
+        recommendations: [],
+        analysis: {},
+        gpt4Analysis: { enabled: false },
+        callMetadata: {
+          duration: summary.durationSeconds || 0,
+          turns: summary.turnCount || 0,
+          fromPhone: summary.fromPhone,
+          startTime: summary.callTime
+        }
+      };
+    });
+
+    if (status) {
+      items = items.filter(item => item.status === status);
+    }
 
     res.json({
       success: true,
-      ...result
+      items,
+      total: totalSummaries,
+      page: pageNum,
+      pages: Math.ceil(totalSummaries / limitNum)
     });
   } catch (error) {
     console.error('Error getting intelligence list:', error);
