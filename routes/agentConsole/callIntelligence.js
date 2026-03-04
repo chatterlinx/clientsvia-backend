@@ -105,79 +105,76 @@ function buildResponseContext(trace = []) {
 }
 
 function buildTurnByTurnFlow(turns = [], trace = []) {
+  if (!Array.isArray(turns) || turns.length === 0) return [];
+  if (!Array.isArray(trace)) return [];
+  
   const flowSteps = [];
-  const turnNumbers = [...new Set(turns.map(t => t.turnNumber))].sort((a, b) => a - b);
+  const maxTurns = 10;
+  const turnNumbers = [...new Set(turns.map(t => t.turnNumber).filter(n => Number.isFinite(n)))].sort((a, b) => a - b).slice(0, maxTurns);
+
+  const traceByKind = new Map();
+  for (const t of trace) {
+    if (!t.kind) continue;
+    const key = `${t.turnNumber || 0}:${t.kind}`;
+    traceByKind.set(key, t);
+  }
 
   for (const turnNum of turnNumbers) {
-    const turnData = {
-      turnNumber: turnNum,
-      callerInput: null,
-      scrabEngineOutput: null,
-      triggerEvaluation: null,
-      agentResponse: null,
-      pathSelected: null
-    };
+    const turnData = { turnNumber: turnNum };
 
     const callerTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'caller');
     if (callerTurn) {
-      turnData.callerInput = {
-        raw: callerTurn.text,
-        timestamp: callerTurn.ts
-      };
+      turnData.callerInput = { raw: callerTurn.text?.substring(0, 500) };
     }
 
-    const scrabProcessed = trace.find(t => t.turnNumber === turnNum && t.kind === 'SCRABENGINE_PROCESSED');
+    const scrabProcessed = traceByKind.get(`${turnNum}:SCRABENGINE_PROCESSED`);
     if (scrabProcessed?.payload) {
+      const p = scrabProcessed.payload;
       turnData.scrabEngineOutput = {
-        raw: scrabProcessed.payload.rawPreview,
-        normalized: scrabProcessed.payload.normalizedPreview,
-        tokensOriginal: scrabProcessed.payload.tokensOriginal,
-        tokensExpanded: scrabProcessed.payload.tokensExpanded,
-        qualityPassed: scrabProcessed.payload.quality?.passed,
-        qualityReason: scrabProcessed.payload.quality?.reason,
-        transformations: scrabProcessed.payload.transformations || []
+        normalized: p.normalizedPreview?.substring(0, 300),
+        tokensOriginal: p.tokensOriginal,
+        tokensExpanded: p.tokensExpanded,
+        qualityPassed: p.quality?.passed,
+        qualityReason: p.quality?.reason
       };
     }
 
-    const scrabHandoff = trace.find(t => t.turnNumber === turnNum && t.kind === 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
+    const scrabHandoff = traceByKind.get(`${turnNum}:SCRABENGINE_HANDOFF_TO_TRIGGERS`);
     if (scrabHandoff?.payload) {
+      const p = scrabHandoff.payload;
       turnData.scrabHandoff = {
-        normalizedInput: scrabHandoff.payload.normalizedInput,
-        expandedTokens: scrabHandoff.payload.expandedTokens,
-        tokensAdded: scrabHandoff.payload.tokensAdded
+        normalizedInput: p.normalizedInput?.substring(0, 300),
+        expandedTokens: (p.expandedTokens || []).slice(0, 30),
+        tokensAdded: p.tokensAdded
       };
     }
 
-    const triggerEval = trace.find(t => t.turnNumber === turnNum && t.kind === 'A2_TRIGGER_EVAL');
+    const triggerEval = traceByKind.get(`${turnNum}:A2_TRIGGER_EVAL`);
     if (triggerEval?.payload) {
+      const p = triggerEval.payload;
       turnData.triggerEvaluation = {
-        matched: triggerEval.payload.matched,
-        matchType: triggerEval.payload.matchType,
-        matchedOn: triggerEval.payload.matchedOn,
-        cardLabel: triggerEval.payload.cardLabel,
-        cardId: triggerEval.payload.cardId,
-        totalCards: triggerEval.payload.totalCards,
-        enabledCards: triggerEval.payload.enabledCards
+        matched: p.matched,
+        cardLabel: p.cardLabel,
+        totalCards: p.totalCards,
+        enabledCards: p.enabledCards
       };
     }
 
-    const pathSelected = trace.find(t => t.turnNumber === turnNum && t.kind === 'A2_PATH_SELECTED');
+    const pathSelected = traceByKind.get(`${turnNum}:A2_PATH_SELECTED`);
     if (pathSelected?.payload) {
       turnData.pathSelected = {
         path: pathSelected.payload.path,
-        reason: pathSelected.payload.reason
+        reason: pathSelected.payload.reason?.substring(0, 200)
       };
     }
 
-    const responseReady = trace.find(t => t.turnNumber === turnNum && t.kind === 'A2_RESPONSE_READY');
+    const responseReady = traceByKind.get(`${turnNum}:A2_RESPONSE_READY`);
     const agentTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
     if (responseReady?.payload || agentTurn) {
       turnData.agentResponse = {
-        text: agentTurn?.text || responseReady?.payload?.responsePreview,
+        text: (agentTurn?.text || responseReady?.payload?.responsePreview || '').substring(0, 500),
         source: responseReady?.payload?.source,
-        path: responseReady?.payload?.path,
-        usedCallerName: responseReady?.payload?.usedCallerName,
-        hasAudio: responseReady?.payload?.hasAudio
+        usedCallerName: responseReady?.payload?.usedCallerName
       };
     }
 
