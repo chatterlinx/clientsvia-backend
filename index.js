@@ -190,6 +190,7 @@ async function loadAllRoutes() {
         // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
         routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
         routes.agentConsoleRoutes = await loadRouteWithTimeout('./routes/agentConsole/agentConsole', 'agentConsoleRoutes'); // 🎛️ Agent Console (standalone admin platform)
+        routes.callIntelligenceRoutes = await loadRouteWithTimeout('./routes/agentConsole/callIntelligence', 'callIntelligenceRoutes'); // 🧠 Call Intelligence (AI-powered call analysis)
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.templateDebugExportRoutes = await loadRouteWithTimeout('./routes/admin/templateDebugExport', 'templateDebugExportRoutes'); // 🔍 Template Debug Export (Read-Only)
         routes.goldenAutofillRoutes = await loadRouteWithTimeout('./routes/admin/goldenAutofill', 'goldenAutofillRoutes'); // ✨ Golden Autofill (Apply Best-Practice Defaults)
@@ -694,6 +695,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/debug', require('./routes/debug')); // 🐛 Debug endpoints (force reload, diagnostics)
     app.use('/api/agent-console', routes.agentConsoleRoutes); // 🎛️ Agent Console (Clean enterprise dashboard + Truth API)
+    app.use('/api/call-intelligence', routes.callIntelligenceRoutes); // 🧠 Call Intelligence (AI-powered call analysis)
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/trade-knowledge/templates', routes.templateDebugExportRoutes); // 🔍 Template Debug Export (Read-Only)
     app.use('/api/trade-knowledge/templates', routes.goldenAutofillRoutes); // ✨ Golden Autofill (Apply Best-Practice Defaults)

@@ -10,7 +10,8 @@ const express = require('express');
 const router = express.Router();
 const CallIntelligenceService = require('../../services/CallIntelligenceService');
 const GPT4AnalysisService = require('../../services/GPT4AnalysisService');
-const Call = require('../../models/Call');
+const CallTranscriptV2 = require('../../models/CallTranscriptV2');
+const CallSummary = require('../../models/CallSummary');
 
 /**
  * GET /api/call-intelligence/status
@@ -71,15 +72,32 @@ router.post('/analyze/:callSid', async (req, res) => {
     const { callSid } = req.params;
     const { useGPT4 = false, mode = 'full', forceReanalyze = false } = req.body;
 
-    const call = await Call.findOne({ 'call.callSid': callSid });
-    if (!call) {
+    const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
+    if (!transcript) {
       return res.status(404).json({
         success: false,
-        error: 'Call not found'
+        error: 'Call transcript not found'
       });
     }
 
-    const intelligence = await CallIntelligenceService.analyzeCall(call, {
+    const callSummary = await CallSummary.findOne({ callSid }).lean();
+
+    const callTrace = {
+      callSid: transcript.callSid,
+      companyId: transcript.companyId,
+      call: {
+        callSid: transcript.callSid,
+        fromPhone: callSummary?.fromPhone,
+        toPhone: callSummary?.toPhone,
+        startTime: transcript.firstTurnTs || callSummary?.callTime,
+        durationSeconds: transcript.callMeta?.twilioDurationSeconds
+      },
+      turns: transcript.turns || [],
+      events: transcript.trace || [],
+      trace: transcript.trace || []
+    };
+
+    const intelligence = await CallIntelligenceService.analyzeCall(callTrace, {
       useGPT4,
       mode,
       forceReanalyze
@@ -226,13 +244,37 @@ router.post('/batch-analyze', async (req, res) => {
       });
     }
 
-    const calls = await Call.find({
-      'call.callSid': { $in: callSids }
+    const transcripts = await CallTranscriptV2.find({
+      callSid: { $in: callSids }
+    }).lean();
+
+    const summaries = await CallSummary.find({
+      callSid: { $in: callSids }
+    }).lean();
+
+    const summaryMap = new Map(summaries.map(s => [s.callSid, s]));
+
+    const callTraces = transcripts.map(transcript => {
+      const summary = summaryMap.get(transcript.callSid);
+      return {
+        callSid: transcript.callSid,
+        companyId: transcript.companyId,
+        call: {
+          callSid: transcript.callSid,
+          fromPhone: summary?.fromPhone,
+          toPhone: summary?.toPhone,
+          startTime: transcript.firstTurnTs || summary?.callTime,
+          durationSeconds: transcript.callMeta?.twilioDurationSeconds
+        },
+        turns: transcript.turns || [],
+        events: transcript.trace || [],
+        trace: transcript.trace || []
+      };
     });
 
     const results = await Promise.allSettled(
-      calls.map(call => 
-        CallIntelligenceService.analyzeCall(call, { useGPT4, mode })
+      callTraces.map(callTrace => 
+        CallIntelligenceService.analyzeCall(callTrace, { useGPT4, mode })
       )
     );
 
