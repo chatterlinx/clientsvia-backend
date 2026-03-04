@@ -265,32 +265,66 @@ router.get('/company/:companyId/list', async (req, res) => {
 
         console.log('[CallIntelligence] Found', transcripts.length, 'transcripts in CallTranscriptV2');
 
-        const summaryMap = new Map(recentCalls.map(s => [s.callSid, s]));
+        const fullSummaries = await CallSummary.find({
+          callSid: { $in: callSidsToAnalyze }
+        })
+        .select('callSid fromPhone toPhone callTime events turns')
+        .lean();
 
-        const analysisPromises = transcripts.slice(0, 20).map(async (transcript) => {
-          const summary = summaryMap.get(transcript.callSid);
-          const callTrace = {
-            callSid: transcript.callSid,
-            companyId: transcript.companyId,
-            call: {
+        const summaryMap = new Map(fullSummaries.map(s => [s.callSid, s]));
+
+        const callTracesToAnalyze = [];
+
+        if (transcripts.length > 0) {
+          for (const transcript of transcripts) {
+            const summary = summaryMap.get(transcript.callSid);
+            callTracesToAnalyze.push({
               callSid: transcript.callSid,
-              fromPhone: summary?.fromPhone,
-              toPhone: summary?.toPhone,
-              startTime: transcript.firstTurnTs || summary?.callTime,
-              durationSeconds: transcript.callMeta?.twilioDurationSeconds
-            },
-            turns: transcript.turns || [],
-            events: transcript.trace || [],
-            trace: transcript.trace || []
-          };
+              companyId: transcript.companyId,
+              call: {
+                callSid: transcript.callSid,
+                fromPhone: summary?.fromPhone,
+                toPhone: summary?.toPhone,
+                startTime: transcript.firstTurnTs || summary?.callTime,
+                durationSeconds: transcript.callMeta?.twilioDurationSeconds
+              },
+              turns: transcript.turns || [],
+              events: transcript.trace || [],
+              trace: transcript.trace || []
+            });
+          }
+        } else {
+          console.log('[CallIntelligence] No CallTranscriptV2 found, using CallSummary events as fallback');
+          for (const summary of fullSummaries) {
+            if (summary.events && summary.events.length > 0) {
+              callTracesToAnalyze.push({
+                callSid: summary.callSid,
+                companyId,
+                call: {
+                  callSid: summary.callSid,
+                  fromPhone: summary.fromPhone,
+                  toPhone: summary.toPhone,
+                  startTime: summary.callTime,
+                  durationSeconds: 0
+                },
+                turns: summary.turns || [],
+                events: summary.events || [],
+                trace: summary.events || []
+              });
+            }
+          }
+        }
 
+        console.log('[CallIntelligence] Prepared', callTracesToAnalyze.length, 'calls for analysis');
+
+        const analysisPromises = callTracesToAnalyze.slice(0, 20).map(async (callTrace) => {
           try {
             return await CallIntelligenceService.analyzeCall(callTrace, {
               useGPT4: false,
               mode: 'quick'
             });
           } catch (err) {
-            console.error(`Failed to analyze ${transcript.callSid}:`, err.message);
+            console.error(`[CallIntelligence] Failed to analyze ${callTrace.callSid}:`, err.message);
             return null;
           }
         });
