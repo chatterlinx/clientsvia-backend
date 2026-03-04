@@ -493,6 +493,10 @@
       ? `${Math.round(response.callerNameConfidence * 100)}%`
       : 'Unknown';
 
+    const extractedRuleId = response.matchedTriggerRuleId || (response.responseSource && response.responseSource.includes('::') 
+      ? response.responseSource.split('::')[1] 
+      : null);
+
     return `
       <section class="analysis-section">
         <h2 class="section-title">🧭 RESPONSE SOURCE & OWNERSHIP</h2>
@@ -505,21 +509,21 @@
             <span class="overview-label">Response Path:</span>
             <span class="overview-value">${response.responsePath || 'Unknown'}</span>
           </div>
-          ${response.triggerMatched && response.matchedTriggerRuleId ? `
+          ${extractedRuleId ? `
             <div class="overview-item">
-              <span class="overview-label">Matched Trigger ID:</span>
-              <span class="overview-value"><code class="trigger-id-display">${response.matchedTriggerRuleId}</code></span>
+              <span class="overview-label">✨ Trigger ID:</span>
+              <span class="overview-value"><code class="trigger-id-display">${extractedRuleId}</code></span>
             </div>
           ` : ''}
-          ${response.triggerMatched && response.matchedTriggerLabel ? `
+          ${response.matchedTriggerLabel ? `
             <div class="overview-item">
-              <span class="overview-label">Matched Trigger Name:</span>
+              <span class="overview-label">Trigger Name:</span>
               <span class="overview-value trigger-name">${response.matchedTriggerLabel}</span>
             </div>
           ` : ''}
           <div class="overview-item">
             <span class="overview-label">Response Source:</span>
-            <span class="overview-value"><code>${response.responseSource || 'Unknown'}</code></span>
+            <span class="overview-value"><code style="font-size: 0.75rem;">${response.responseSource || 'Unknown'}</code></span>
           </div>
           <div class="overview-item">
             <span class="overview-label">Owner:</span>
