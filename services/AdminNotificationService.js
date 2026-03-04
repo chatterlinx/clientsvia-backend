@@ -49,6 +49,20 @@ const emailClient = require('../clients/emailClient');
 const errorIntelligence = require('./ErrorIntelligenceService');
 const SmartGroupingService = require('./SmartGroupingService');
 
+const MISSING_CONTACTS_LOG_TTL_MS = 5 * 60 * 1000;
+const missingContactsLogCache = new Map();
+
+function shouldLogMissingContacts(code) {
+    const key = String(code || 'UNKNOWN').toUpperCase();
+    const last = missingContactsLogCache.get(key) || 0;
+    const now = Date.now();
+    if (now - last > MISSING_CONTACTS_LOG_TTL_MS) {
+        missingContactsLogCache.set(key, now);
+        return true;
+    }
+    return false;
+}
+
 class AdminNotificationService {
     
     /**
@@ -160,12 +174,14 @@ class AdminNotificationService {
             const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                logger.error('❌ [ADMIN NOTIFICATION] No admin contacts configured - logging only', {
-                    code,
-                    severity,
-                    companyId,
-                    companyName
-                });
+                if (shouldLogMissingContacts(code)) {
+                    logger.warn('⚠️ [ADMIN NOTIFICATION] No admin contacts configured - logging only', {
+                        code,
+                        severity,
+                        companyId,
+                        companyName
+                    });
+                }
                 
                 // Dedup within 30 minutes to avoid log storms
                 const DEDUP_WINDOW_MINUTES = 30;
@@ -961,8 +977,7 @@ View full details: https://clientsvia-backend.onrender.com/admin-notification-ce
             const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                checks.isValid = false;
-                checks.errors.push('No admin contacts configured (add in Settings tab)');
+                checks.warnings.push('No admin contacts configured (add in Settings tab)');
             }
             
             // Check 3: At least one contact has SMS enabled
