@@ -12,6 +12,7 @@ const CallIntelligenceService = require('../../services/CallIntelligenceService'
 const GPT4AnalysisService = require('../../services/GPT4AnalysisService');
 const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const CallSummary = require('../../models/CallSummary');
+const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
 
 /**
  * GET /api/call-intelligence/status
@@ -26,6 +27,58 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting GPT-4 status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/call-intelligence/settings/:companyId
+ * Get company-specific intelligence settings
+ */
+router.get('/settings/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const settings = await CallIntelligenceSettings.getSettings(companyId);
+    
+    res.json({
+      success: true,
+      settings
+    });
+  } catch (error) {
+    console.error('Error getting settings:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/call-intelligence/settings/:companyId
+ * Update company-specific intelligence settings
+ */
+router.post('/settings/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { gpt4Enabled, analysisMode, autoAnalyzeEnabled } = req.body;
+
+    const updates = {};
+    if (typeof gpt4Enabled === 'boolean') updates.gpt4Enabled = gpt4Enabled;
+    if (analysisMode) updates.analysisMode = analysisMode;
+    if (typeof autoAnalyzeEnabled === 'boolean') updates.autoAnalyzeEnabled = autoAnalyzeEnabled;
+
+    const settings = await CallIntelligenceSettings.updateSettings(companyId, updates);
+    
+    res.json({
+      success: true,
+      settings,
+      message: 'Settings saved successfully'
+    });
+  } catch (error) {
+    console.error('Error updating settings:', error);
     res.status(500).json({
       success: false,
       error: error.message

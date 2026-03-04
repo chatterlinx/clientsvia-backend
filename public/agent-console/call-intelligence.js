@@ -233,10 +233,19 @@
 
   async function loadGPT4Status() {
     try {
-      const data = await apiCall('/api/call-intelligence/status');
-      state.gpt4Enabled = data.status.enabled;
+      const [statusData, settingsData] = await Promise.all([
+        apiCall('/api/call-intelligence/status'),
+        apiCall(`/api/call-intelligence/settings/${state.companyId}`)
+      ]);
       
-      updateGPT4StatusUI(data.status);
+      state.gpt4Enabled = statusData.status.enabled;
+      
+      if (settingsData.settings) {
+        state.analysisMode = settingsData.settings.analysisMode || 'full';
+        DOM.autoAnalyzeToggle.checked = settingsData.settings.autoAnalyzeEnabled || false;
+      }
+      
+      updateGPT4StatusUI(statusData.status);
     } catch (error) {
       console.error('Failed to load GPT-4 status:', error);
     }
@@ -672,14 +681,31 @@
 
   async function saveSettings() {
     const gpt4Enabled = DOM.gpt4Toggle.checked;
-    state.analysisMode = DOM.analysisMode.value;
+    const analysisMode = DOM.analysisMode.value;
+    const autoAnalyzeEnabled = DOM.autoAnalyzeToggle.checked;
 
-    if (gpt4Enabled !== state.gpt4Enabled) {
-      await toggleGPT4(gpt4Enabled);
+    try {
+      if (gpt4Enabled !== state.gpt4Enabled) {
+        await toggleGPT4(gpt4Enabled);
+      }
+
+      await apiCall(`/api/call-intelligence/settings/${state.companyId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          gpt4Enabled,
+          analysisMode,
+          autoAnalyzeEnabled
+        })
+      });
+
+      state.analysisMode = analysisMode;
+      
+      showNotification('Settings saved successfully!', 'success');
+      closeSettingsModal();
+    } catch (error) {
+      showNotification('Failed to save settings', 'error');
+      console.error('Save settings error:', error);
     }
-
-    showNotification('Settings saved!', 'success');
-    closeSettingsModal();
   }
 
   // =============================================================================
