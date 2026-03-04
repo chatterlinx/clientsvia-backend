@@ -42,6 +42,75 @@ function buildCallSummaryDateRange(timeRange) {
   };
 }
 
+function findLastTrace(trace = [], kind) {
+  for (let i = trace.length - 1; i >= 0; i -= 1) {
+    if (trace[i]?.kind === kind) return trace[i];
+  }
+  return null;
+}
+
+function normalizeTurn(turn) {
+  if (!turn) return null;
+  return {
+    speaker: turn.speaker || 'unknown',
+    text: turn.text || '',
+    kind: turn.kind || null,
+    source: turn.sourceKey || turn.source || null,
+    timestamp: turn.ts || turn.timestamp || null
+  };
+}
+
+function buildTranscript(turns = [], limit = 12) {
+  const normalized = turns.map(normalizeTurn).filter(t => t && t.text);
+  if (normalized.length === 0) return [];
+  return normalized.slice(Math.max(0, normalized.length - limit));
+}
+
+function buildResponseContext(trace = []) {
+  const responseReady = findLastTrace(trace, 'A2_RESPONSE_READY');
+  const speechSelected = findLastTrace(trace, 'SPEECH_SOURCE_SELECTED');
+  const pathSelected = findLastTrace(trace, 'A2_PATH_SELECTED');
+  const micProof = findLastTrace(trace, 'A2_MIC_OWNER_PROOF');
+  const micConfirmed = findLastTrace(trace, 'A2_MIC_OWNER_CONFIRMED');
+  const triggerEval = findLastTrace(trace, 'A2_TRIGGER_EVAL');
+  const callerName = findLastTrace(trace, 'CALLER_NAME_EXTRACTED');
+  const traceSummary = findLastTrace(trace, 'TURN_TRACE_SUMMARY');
+
+  const responseSource = responseReady?.payload?.source || speechSelected?.payload?.sourceId || null;
+  const responsePath = responseReady?.payload?.path || pathSelected?.payload?.path || null;
+  const responseOwner = micProof?.payload?.finalResponder || micConfirmed?.payload?.owner || null;
+  const usedCallerName = responseReady?.payload?.usedCallerName;
+  const callerNameExtracted = callerName?.payload?.firstName || null;
+  const callerNameConfidence = callerName?.payload?.confidence ?? null;
+  const responsePreview = responseReady?.payload?.responsePreview || speechSelected?.payload?.textPreview || null;
+  const matchSource = traceSummary?.payload?.responseSource?.matchSource || traceSummary?.payload?.matchSource || null;
+  const responseType = responseSource && responseSource.toLowerCase().includes('fallback')
+    ? 'fallback'
+    : (responseSource ? 'configured' : 'unknown');
+
+  return {
+    responseType,
+    responseSource,
+    responsePath,
+    responseOwner,
+    matchSource,
+    responsePreview,
+    usedCallerName,
+    callerNameExtracted,
+    callerNameConfidence,
+    triggerMatched: triggerEval?.payload?.matched ?? null,
+    matchedTriggerLabel: triggerEval?.payload?.cardLabel || null,
+    matchedTriggerId: triggerEval?.payload?.cardId || null
+  };
+}
+
+function buildCallContext(turns = [], trace = []) {
+  return {
+    transcript: buildTranscript(turns),
+    response: buildResponseContext(trace)
+  };
+}
+
 /**
  * GET /api/call-intelligence/status
  * Get GPT-4 analysis service status
@@ -239,9 +308,21 @@ router.get('/:callSid', async (req, res) => {
       });
     }
 
+    const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
+    const summary = await CallSummary.findOne({
+      $or: [{ twilioSid: callSid }, { callId: callSid }]
+    }).lean();
+
+    const turns = transcript?.turns || summary?.turns || [];
+    const trace = transcript?.trace || summary?.events || [];
+    const callContext = buildCallContext(turns, trace);
+
+    const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
+    payload.callContext = callContext;
+
     res.json({
       success: true,
-      intelligence
+      intelligence: payload
     });
   } catch (error) {
     console.error('Error getting intelligence:', error);

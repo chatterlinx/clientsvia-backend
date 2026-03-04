@@ -414,6 +414,8 @@
     DOM.modalBody.innerHTML = `
       ${renderCallOverview(intelligence)}
       ${renderExecutiveSummary(intelligence)}
+      ${renderResponseContext(intelligence)}
+      ${renderTranscriptSection(intelligence)}
       ${renderTriggerAnalysis(intelligence)}
       ${renderIssues(intelligence)}
       ${renderScrabEnginePerformance(intelligence)}
@@ -470,6 +472,78 @@
             <strong>Top Issue:</strong> ${intel.topIssue}
           </div>
         ` : ''}
+      </section>
+    `;
+  }
+
+  function renderResponseContext(intel) {
+    const response = intel.callContext?.response;
+    if (!response) return '';
+
+    const usedName = response.usedCallerName === true ? 'Yes' : (response.usedCallerName === false ? 'No' : 'Unknown');
+    const callerName = response.callerNameExtracted || 'Not detected';
+    const callerConfidence = response.callerNameConfidence !== null && response.callerNameConfidence !== undefined
+      ? `${Math.round(response.callerNameConfidence * 100)}%`
+      : 'Unknown';
+
+    return `
+      <section class="analysis-section">
+        <h2 class="section-title">🧭 RESPONSE SOURCE & OWNERSHIP</h2>
+        <div class="overview-grid">
+          <div class="overview-item">
+            <span class="overview-label">Response Type:</span>
+            <span class="overview-value">${response.responseType || 'Unknown'}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Response Path:</span>
+            <span class="overview-value">${response.responsePath || 'Unknown'}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Response Source:</span>
+            <span class="overview-value">${response.responseSource || 'Unknown'}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Owner:</span>
+            <span class="overview-value">${response.responseOwner || 'Unknown'}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Used Caller Name:</span>
+            <span class="overview-value">${usedName}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Caller Name Detected:</span>
+            <span class="overview-value">${callerName} (${callerConfidence})</span>
+          </div>
+        </div>
+        ${response.responsePreview ? `
+          <div class="subsection">
+            <h3>Response Preview:</h3>
+            <pre class="code-block">${response.responsePreview}</pre>
+          </div>
+        ` : ''}
+      </section>
+    `;
+  }
+
+  function renderTranscriptSection(intel) {
+    const transcript = intel.callContext?.transcript || [];
+    if (transcript.length === 0) return '';
+
+    return `
+      <section class="analysis-section">
+        <h2 class="section-title">📝 TRANSCRIPT (LAST ${transcript.length} TURNS)</h2>
+        <div class="transcript-list">
+          ${transcript.map(turn => `
+            <div class="transcript-row transcript-${turn.speaker}">
+              <div class="transcript-meta">
+                <span class="transcript-speaker">${turn.speaker}</span>
+                ${turn.kind ? `<span class="transcript-kind">${turn.kind}</span>` : ''}
+                ${turn.source ? `<span class="transcript-source">${turn.source}</span>` : ''}
+              </div>
+              <div class="transcript-text">${turn.text}</div>
+            </div>
+          `).join('')}
+        </div>
       </section>
     `;
   }
