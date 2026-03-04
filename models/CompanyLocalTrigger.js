@@ -507,10 +507,10 @@ companyLocalTriggerSchema.pre('save', async function(next) {
     }
   }
   
-  // Auto-generate displayId for new triggers
+  // Auto-generate displayId for new triggers (GLOBAL counter - unique across ALL companies)
   if (this.isNew && !this.displayId) {
     const Counter = require('./Counter');
-    const counterKey = `trigger_displayId_${this.companyId}`;
+    const counterKey = 'trigger_displayId_global';
     this.displayId = await Counter.getNextSequence(counterKey);
   }
 

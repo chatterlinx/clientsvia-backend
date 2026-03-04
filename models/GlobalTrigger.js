@@ -423,10 +423,11 @@ globalTriggerSchema.pre('save', async function(next) {
 
   this.groupId = this.groupId.toLowerCase();
   
-  // Auto-generate displayId for new triggers (only for draft state to avoid duplication)
+  // Auto-generate displayId for new triggers (GLOBAL counter - unique across ALL groups/companies)
+  // Only for draft state to avoid duplication when publishing
   if (this.isNew && !this.displayId && this.state === 'draft') {
     const Counter = require('./Counter');
-    const counterKey = `trigger_displayId_global_${this.groupId}`;
+    const counterKey = 'trigger_displayId_global';
     this.displayId = await Counter.getNextSequence(counterKey);
   }
 
