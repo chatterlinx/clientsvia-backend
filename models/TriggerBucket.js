@@ -143,7 +143,13 @@ triggerBucketSchema.pre('save', function(next) {
 
 const TriggerBucketModel = mongoose.model('TriggerBucket', triggerBucketSchema);
 
-// Drop legacy unique index on { companyId, name } if it exists (was created in earlier version)
-TriggerBucketModel.collection.dropIndex('companyId_1_name_1').catch(() => {});
+// Drop stale indexes from previous bucket system iterations
+const STALE_INDEXES = [
+  'companyId_1_name_1',
+  'companyId_1_bucketId_1'
+];
+for (const idx of STALE_INDEXES) {
+  TriggerBucketModel.collection.dropIndex(idx).catch(() => {});
+}
 
 module.exports = TriggerBucketModel;
