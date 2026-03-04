@@ -60,10 +60,10 @@
     if (typeof state.apiFetch === 'function') {
       return state.apiFetch(url, options);
     }
-    if (!window.AgentConsoleAuth || typeof AgentConsoleAuth.apiFetch !== 'function') {
-      throw new Error('AgentConsoleAuth not available');
+    if (typeof AgentConsoleAuth !== 'undefined' && typeof AgentConsoleAuth.apiFetch === 'function') {
+      return AgentConsoleAuth.apiFetch(url, options);
     }
-    return AgentConsoleAuth.apiFetch(url, options);
+    throw new Error('No authenticated fetch available — ensure auth.js loads before bucketManager.js');
   }
 
   async function loadBuckets() {
@@ -221,6 +221,7 @@
     state.companyId = options.companyId || null;
     state.onBucketsUpdated = options.onBucketsUpdated || null;
     state.showToast = options.showToast || null;
+    state.apiFetch = options.apiFetch || null;
     state.initialized = true;
 
     if (DOM.btnAddBucket) {
