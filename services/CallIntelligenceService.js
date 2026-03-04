@@ -128,7 +128,8 @@ class CallIntelligenceService {
           triggersEvaluated: totalTriggers,
           triggersMatched: 0,
           normalizedInput: scrabProcessed.payload?.normalizedPreview
-        }
+        },
+        affectedComponent: 'Trigger System (No specific trigger - need to add keywords)'
       });
 
       recommendations.push({
@@ -137,7 +138,20 @@ class CallIntelligenceService {
         priority: 'immediate',
         title: 'Add Conversational Keywords',
         description: 'Review caller input and add common conversational patterns to relevant triggers.',
-        copyableContent: this.extractMissingKeywords(scrabProcessed.payload)
+        copyableContent: this.extractMissingKeywords(scrabProcessed.payload),
+        targetTrigger: 'Check normalized input to identify which trigger should match'
+      });
+    } else if (triggerMatched) {
+      const matchedCardId = triggerEval.payload?.cardId;
+      const matchedCardLabel = triggerEval.payload?.cardLabel;
+      
+      issues.push({
+        id: 'trigger_matched_successfully',
+        severity: 'low',
+        category: 'trigger_match',
+        title: 'Trigger Matched Successfully',
+        description: `Trigger "${matchedCardLabel}" matched correctly.`,
+        affectedComponent: matchedCardId || matchedCardLabel
       });
     }
 

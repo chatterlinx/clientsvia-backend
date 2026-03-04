@@ -653,7 +653,11 @@
                   </div>
                   ${turn.triggerEvaluation.matched && turn.triggerEvaluation.cardLabel ? `
                     <div class="step-detail">
-                      <span class="detail-label">Matched Trigger:</span>
+                      <span class="detail-label">Matched Trigger ID:</span>
+                      <span class="detail-value trigger-id"><code>${turn.triggerEvaluation.cardId || 'Unknown'}</code></span>
+                    </div>
+                    <div class="step-detail">
+                      <span class="detail-label">Matched Trigger Name:</span>
                       <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
                     </div>
                     <div class="step-detail">
@@ -861,7 +865,7 @@
             <p class="issue-description">${issue.description}</p>
             ${issue.affectedComponent ? `
               <div class="issue-meta">
-                <strong>Affected:</strong> <code>${issue.affectedComponent}</code>
+                <strong>Affected Component:</strong> <code class="component-id">${issue.affectedComponent}</code>
               </div>
             ` : ''}
           </div>
@@ -913,7 +917,12 @@
             ` : ''}
             ${rec.targetTrigger ? `
               <div class="rec-meta">
-                <strong>Target Trigger:</strong> <code>${rec.targetTrigger}</code>
+                <strong>Target Trigger ID:</strong> <code class="trigger-id-display">${rec.targetTrigger}</code>
+              </div>
+            ` : ''}
+            ${rec.targetBucket ? `
+              <div class="rec-meta">
+                <strong>Target Bucket:</strong> <code>${rec.targetBucket}</code>
               </div>
             ` : ''}
           </div>

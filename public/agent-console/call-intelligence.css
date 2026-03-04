@@ -999,6 +999,27 @@ body {
   font-weight: 600;
 }
 
+.trigger-id {
+  background: #EDE9FE;
+  color: #6B21A8;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.25rem;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.trigger-id-display,
+.component-id {
+  background: #EDE9FE;
+  color: #6B21A8;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .path-fallback {
   color: #DC2626;
   font-weight: 600;
