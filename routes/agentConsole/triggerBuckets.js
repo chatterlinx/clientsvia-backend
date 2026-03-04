@@ -134,7 +134,10 @@ router.post('/:companyId/trigger-buckets',
         }
       });
     } catch (error) {
-      logger.error('[TriggerBuckets] Create error', { error: error.message });
+      logger.error('[TriggerBuckets] Create error', { error: error.message, stack: error.stack, companyId: req.params.companyId });
+      if (error.code === 11000) {
+        return res.status(409).json({ success: false, error: 'Bucket with this name or key already exists' });
+      }
       res.status(500).json({ success: false, error: error.message });
     }
   }
@@ -182,7 +185,10 @@ router.patch('/:companyId/trigger-buckets/:bucketId',
         }
       });
     } catch (error) {
-      logger.error('[TriggerBuckets] Update error', { error: error.message });
+      logger.error('[TriggerBuckets] Update error', { error: error.message, stack: error.stack, companyId: req.params.companyId });
+      if (error.code === 11000) {
+        return res.status(409).json({ success: false, error: 'Bucket with this name or key already exists' });
+      }
       res.status(500).json({ success: false, error: error.message });
     }
   }

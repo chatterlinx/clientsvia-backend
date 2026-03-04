@@ -85,7 +85,7 @@ const triggerBucketSchema = new mongoose.Schema({
 // INDEXES (multi-tenant isolation)
 // ─────────────────────────────────────────────────────────────────────────────
 triggerBucketSchema.index({ companyId: 1, key: 1 }, { unique: true });
-triggerBucketSchema.index({ companyId: 1, name: 1 }, { unique: true });
+triggerBucketSchema.index({ companyId: 1, name: 1 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -141,4 +141,9 @@ triggerBucketSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('TriggerBucket', triggerBucketSchema);
+const TriggerBucketModel = mongoose.model('TriggerBucket', triggerBucketSchema);
+
+// Drop legacy unique index on { companyId, name } if it exists (was created in earlier version)
+TriggerBucketModel.collection.dropIndex('companyId_1_name_1').catch(() => {});
+
+module.exports = TriggerBucketModel;
