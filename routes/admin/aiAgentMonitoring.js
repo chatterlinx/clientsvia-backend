@@ -115,28 +115,23 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
             if (healthStatus.overall === 'healthy') {healthStatus.overall = 'degraded';}
         }
 
-        // 3. Knowledge Sources Health
+        // 3. Knowledge Sources Health (☢️ NUKED Mar 2026: CompanyKnowledgeQnA removed - AI Brain only)
         try {
-            const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
-            const company = await Company.findById(companyId).select('aiAgentSettings.knowledgeManagement');
-            
-            const tradeQnACount = company?.aiAgentSettings?.knowledgeManagement?.tradeQnA?.length || 0;
-            const templatesCount = company?.aiAgentSettings?.knowledgeManagement?.templates?.length || 0;
-            
+            const company = await Company.findById(companyId).select('knowledgeSettings');
+            const hasKnowledgeSettings = Boolean(company?.knowledgeSettings);
+
             healthStatus.components.knowledgeSources = {
-                status: companyQnACount > 0 || tradeQnACount > 0 ? 'healthy' : 'warning',
-                message: `Knowledge sources available`,
+                status: hasKnowledgeSettings ? 'healthy' : 'warning',
+                message: 'AI Brain knowledge system active',
                 details: {
-                    companyQnA: companyQnACount,
-                    tradeQnA: tradeQnACount,
-                    templates: templatesCount,
-                    totalEntries: companyQnACount + tradeQnACount + templatesCount
+                    knowledgeSettings: hasKnowledgeSettings,
+                    system: 'AI Brain (LLM-based)'
                 }
             };
 
-            if (companyQnACount === 0 && tradeQnACount === 0) {
-                healthStatus.issues.push('No Q&A entries found - AI agent may not provide specific answers');
-                healthStatus.recommendations.push('Add Company Q&A entries in Knowledge Management tab');
+            if (!hasKnowledgeSettings) {
+                healthStatus.issues.push('No knowledge settings configured - AI agent using defaults');
+                healthStatus.recommendations.push('Configure knowledge settings in Company Profile');
                 if (healthStatus.overall === 'healthy') {healthStatus.overall = 'degraded';}
             }
         } catch (error) {
@@ -267,28 +262,23 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
         }
         
         if (!metrics) {
-            // Generate fresh metrics
-            const company = await Company.findById(companyId).select('aiAgentSettings');
-            const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
-            
+            // Generate fresh metrics (☢️ NUKED Mar 2026: CompanyKnowledgeQnA removed)
+            const company = await Company.findById(companyId).select('aiAgentSettings knowledgeSettings');
+
             metrics = {
                 companyId,
                 timestamp: new Date().toISOString(),
                 performance: {
-                    avgResponseTime: 0, // Would be populated from actual usage logs
+                    avgResponseTime: 0,
                     successRate: 0,
                     totalQueries: 0,
                     cacheHitRate: 0
                 },
                 knowledgeBase: {
-                    companyQnA: companyQnACount,
-                    tradeQnA: company?.aiAgentSettings?.knowledgeManagement?.tradeQnA?.length || 0,
-                    templates: company?.aiAgentSettings?.knowledgeManagement?.templates?.length || 0
+                    system: 'AI Brain (LLM-based)',
+                    knowledgeSettings: Boolean(company?.knowledgeSettings)
                 },
                 routing: {
-                    companyQnAHits: 0,
-                    tradeQnAHits: 0,
-                    templateHits: 0,
                     fallbackHits: 0
                 },
                 thresholds: company?.aiAgentSettings?.thresholds || {},
@@ -371,18 +361,16 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
             diagnostics.summary.failed++;
         }
 
-        // Test 2: Knowledge Sources Connectivity
+        // Test 2: Knowledge Sources Connectivity (☢️ NUKED Mar 2026: CompanyKnowledgeQnA removed)
         try {
-            const companyQnAs = await CompanyKnowledgeQnA.find({ companyId }).limit(1);
-            const company = await Company.findById(companyId).select('aiAgentSettings.knowledgeManagement');
-            
+            const company = await Company.findById(companyId).select('knowledgeSettings');
+
             diagnostics.tests.knowledgeConnectivity = {
                 name: 'Knowledge Sources Connectivity',
                 status: 'pass',
                 details: {
-                    companyQnACollection: companyQnAs.length > 0,
-                    embeddedKnowledge: Boolean(company?.aiAgentSettings?.knowledgeManagement),
-                    totalSources: companyQnAs.length + (company?.aiAgentSettings?.knowledgeManagement?.tradeQnA?.length || 0)
+                    system: 'AI Brain (LLM-based)',
+                    knowledgeSettings: Boolean(company?.knowledgeSettings)
                 }
             };
             diagnostics.summary.totalTests++;

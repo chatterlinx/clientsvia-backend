@@ -2899,21 +2899,8 @@ router.post('/handle-speech', async (req, res) => {
     if (redisClient) await redisClient.del(repeatKey);
     logger.debug(`[LOW CONFIDENCE] ✅ Confidence ${confidencePercent.toFixed(1)}% passed threshold - proceeding with normal flow`);
 
-    // Process QA matching using new Company Q&A system
-    // companyId already declared above in Low Confidence Handler
-    const qnaEntries = await CompanyQnA.find({ companyId, isActive: true });
-    logger.debug(`[Q&A] Loaded ${qnaEntries.length} Company Q&A entries for company ${companyId}`);
-    logger.debug(`[Q&A DEBUG] Loaded Company Q&A entries for company ${companyId}:`, qnaEntries.map(e => ({
-      question: e.question,
-      keywords: e.keywords,
-      answer: e.answer
-    })));
-    logger.debug(`[Q&A DEBUG] Incoming Speech: "${speechText}"`);
-    
-    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
-    logger.debug(`[Q&A MATCHING] [SEARCH] Searching ${qnaEntries.length} Q&A entries with fuzzy threshold: ${fuzzyThreshold}`);
-    
-    // V2 SYSTEM: Use Priority-Driven Knowledge Router instead of legacy findCachedAnswer
+    // ☢️ NUKED Mar 2026: Legacy CompanyQnA.find() removed - V2 AI Agent Runtime handles all knowledge
+    // V2 SYSTEM: Use Priority-Driven Knowledge Router instead of legacy Q&A lookup
     logger.debug(`[V2 MIGRATION] Legacy Q&A matching disabled - use V2 AI Agent Runtime`);
     const cachedAnswer = null; // Force V2 system usage
     
