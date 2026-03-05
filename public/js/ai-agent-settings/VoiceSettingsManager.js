@@ -199,7 +199,7 @@ class VoiceSettingsManager {
                 </p>
                 ${desc ? `<p class="text-xs text-gray-400 mt-1">${this._esc(desc)}</p>` : ''}
             </div>`;
-        this._previewUrl = voice.preview_url || null;
+        this._previewUrl = voice.preview_url || voice.previewUrl || voice.preview || (voice.samples && voice.samples[0] && (voice.samples[0].url || voice.samples[0].audio_url)) || null;
         previewSection.classList.remove('hidden');
     }
 
