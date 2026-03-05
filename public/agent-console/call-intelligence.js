@@ -399,15 +399,30 @@
     let intelligence = await loadCallAnalysis(callSid);
     
     if (!intelligence) {
+      console.log('[INFO] No existing analysis found, triggering analysis...');
       DOM.modalBody.innerHTML = `
-        <div class="error-container">
-          <p>⚠️ No analysis available for this call.</p>
-          <button class="btn btn-primary" onclick="analyzeCallNow('${callSid}')">
-            Analyze Now
-          </button>
+        <div class="loading-container">
+          <div class="loading-spinner"></div>
+          <p>No analysis found. Analyzing call now...</p>
         </div>
       `;
-      return;
+      
+      intelligence = await analyzeCall(callSid);
+      
+      if (!intelligence) {
+        DOM.modalBody.innerHTML = `
+          <div class="error-container">
+            <p>⚠️ Failed to analyze this call.</p>
+            <button class="btn btn-primary" onclick="window.analyzeCallNow('${callSid}')">
+              Try Again
+            </button>
+            <button class="btn btn-secondary" onclick="document.getElementById('analysisModal').classList.remove('active'); document.body.style.overflow = '';">
+              Close
+            </button>
+          </div>
+        `;
+        return;
+      }
     }
 
     renderAnalysisModal(intelligence);
