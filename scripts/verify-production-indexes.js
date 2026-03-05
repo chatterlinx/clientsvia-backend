@@ -40,11 +40,8 @@ const REQUIRED_INDEXES = {
     { name: 'status_1', keys: { status: 1 } }
   ],
   
-  companyqnacategories: [
-    { name: '_id_', keys: { _id: 1 }, unique: true },
-    { name: 'companyId_1_isActive_1', keys: { companyId: 1, isActive: 1 } },
-    { name: 'companyId_1_name_1', keys: { companyId: 1, name: 1 } }
-  ],
+  
+  // V2 LEGACY REMOVED: companyqnacategories collection
   
   v2aiagentcalllogs: [
     { name: '_id_', keys: { _id: 1 }, unique: true },

@@ -4157,15 +4157,15 @@ class CompanyProfileManager {
     /**
      * ⚡ REAL-TIME: Live AI agent testing and confidence scoring
      */
-    initializeEmbeddedCompanyQnAManager() {
-        
-        // Initialize the embedded interface
-        this.loadCompanyQnAEntries();
-        this.setupQnAEventListeners();
-        this.initializeRealTimeTestingFeatures();
-        
-    }
-
+    // V2 LEGACY REMOVED:     initializeEmbeddedCompanyQnAManager() {
+    // V2 LEGACY REMOVED:         
+    // V2 LEGACY REMOVED:         // Initialize the embedded interface
+    // V2 LEGACY REMOVED:         this.loadCompanyQnAEntries();
+    // V2 LEGACY REMOVED:         this.setupQnAEventListeners();
+    // V2 LEGACY REMOVED:         this.initializeRealTimeTestingFeatures();
+    // V2 LEGACY REMOVED:         
+    // V2 LEGACY REMOVED:     }
+    // V2 LEGACY REMOVED: 
 
     // Legacy sub-tab system completely removed - using modern AI Agent Logic 4-tab system
     // Old switchKnowledgeSubTab() function eliminated - functionality moved to new system
@@ -4281,13 +4281,13 @@ class CompanyProfileManager {
     /**
      * Initialize Company Q&A Manager
      */
-    initializeCompanyQnAManager() {
-        if (this.companyQnAManager) {
-            return;
-        }
-
-        try {
-            
+    // V2 LEGACY REMOVED:     initializeCompanyQnAManager() {
+    // V2 LEGACY REMOVED:         if (this.companyQnAManager) {
+    // V2 LEGACY REMOVED:             return;
+    // V2 LEGACY REMOVED:         }
+    // V2 LEGACY REMOVED: 
+    // V2 LEGACY REMOVED:         try {
+    // V2 LEGACY REMOVED:             
             // Create a simple API client for the CompanyQnAManager
             const apiClient = {
                 baseUrl: this.apiBaseUrl,
@@ -4363,15 +4363,15 @@ class CompanyProfileManager {
                 }
             };
 
-            // Initialize CompanyQnAManager if the class is available
-            if (typeof CompanyQnAManager !== 'undefined') {
-                this.companyQnAManager = new CompanyQnAManager('company-qna-manager-container', apiClient);
-                
-                // Set the current company ID
-                if (this.companyId) {
-                    this.companyQnAManager.setCompanyId(this.companyId);
-                }
-                
+            // V2 LEGACY REMOVED:             // Initialize CompanyQnAManager if the class is available
+            // V2 LEGACY REMOVED:             if (typeof CompanyQnAManager !== 'undefined') {
+            // V2 LEGACY REMOVED:                 this.companyQnAManager = new CompanyQnAManager('company-qna-manager-container', apiClient);
+            // V2 LEGACY REMOVED:                 
+            // V2 LEGACY REMOVED:                 // Set the current company ID
+            // V2 LEGACY REMOVED:                 if (this.companyId) {
+            // V2 LEGACY REMOVED:                     this.companyQnAManager.setCompanyId(this.companyId);
+            // V2 LEGACY REMOVED:                 }
+            // V2 LEGACY REMOVED:                 
             } else {
                 this.showNotification('Failed to load Company Q&A Manager', 'error');
             }

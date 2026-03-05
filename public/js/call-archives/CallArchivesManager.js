@@ -330,9 +330,8 @@ class CallArchivesManager {
      */
     getSourceColor(source) {
         const colors = {
-            'companyQnA': 'bg-blue-100 text-blue-800',
-            'tradeQnA': 'bg-green-100 text-green-800',
-            'templates': 'bg-purple-100 text-purple-800',
+            // V2 LEGACY REMOVED: companyQnA, tradeQnA, templates
+            'llm': 'bg-blue-100 text-blue-800',
             'inHouseFallback': 'bg-gray-100 text-gray-800'
         };
         return colors[source] || 'bg-gray-100 text-gray-800';

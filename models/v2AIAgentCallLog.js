@@ -124,7 +124,7 @@ const aiAgentCallLogSchema = new mongoose.Schema({
     routingFlow: [{
         source: {
             type: String,
-            enum: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback'],
+            enum: ['llm', 'inHouseFallback'], // V2 LEGACY REMOVED: companyQnA, tradeQnA, templates
             required: true
         },
         priority: {
@@ -158,7 +158,7 @@ const aiAgentCallLogSchema = new mongoose.Schema({
     // Final Result
     finalMatchedSource: {
         type: String,
-        enum: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback', 'none'],
+        enum: ['llm', 'inHouseFallback', 'none'], // V2 LEGACY REMOVED: companyQnA, tradeQnA, templates
         required: true,
         index: true
     },

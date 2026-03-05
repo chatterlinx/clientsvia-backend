@@ -113,7 +113,7 @@ async function cleanSlate() {
             { name: 'v2contacts', field: 'companyId' },
             { name: 'v2notificationlogs', field: 'companyId' },
             { name: 'conversationlogs', field: 'companyId' },
-            { name: 'companyqnas', field: 'companyId' },
+            // V2 LEGACY REMOVED: { name: 'companyqnas', field: 'companyId' },
             { name: 'bookings', field: 'companyId' }
         ];
 

@@ -4541,6 +4541,9 @@ const companySchema = new mongoose.Schema({
         
         // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
                 thresholds: {
+                    companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
+                    tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
+                    templates: { type: Number, min: 0, max: 1, default: 0.7 },
                     inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 },
                     
                     // V92: SCENARIO MATCHING THRESHOLDS
@@ -4703,7 +4706,7 @@ const companySchema = new mongoose.Schema({
             priorityFlow: [{
                 source: { 
                     type: String, 
-                    enum: ['llm'], // V2 LEGACY REMOVED: companyQnA, tradeQnA, templates
+                    enum: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback'],
                     required: true 
                 },
                 priority: { type: Number, min: 1, max: 4, required: true },
@@ -4726,9 +4729,10 @@ const companySchema = new mongoose.Schema({
                     fallbackBehavior: String
                 }],
                 default: [
-                    // V2 LEGACY REMOVED: Default flow with companyQnA, tradeQnA, templates
-                    // Modern LLM system uses knowledgeSettings instead
-                    { source: 'llm', priority: 1, threshold: 0.5, enabled: true, fallbackBehavior: 'continue' }
+                    { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true, fallbackBehavior: 'continue' },
+                    { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true, fallbackBehavior: 'continue' },
+                    { source: 'templates', priority: 3, threshold: 0.7, enabled: true, fallbackBehavior: 'continue' },
+                    { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true, fallbackBehavior: 'always_respond' }
                 ]
             },
             
@@ -4768,9 +4772,152 @@ const companySchema = new mongoose.Schema({
         },
 
         // 📚 KNOWLEDGE MANAGEMENT SYSTEM - THE DATA
-        // V2 LEGACY REMOVED: knowledgeManagement (companyQnA, tradeQnA, templates, inHouseFallback)
-        // All knowledge now LLM-driven via knowledgeSettings
-        // See knowledgeSettings schema for modern configuration
+        knowledgeManagement: {
+            version: { type: Number, default: 1 },
+            lastUpdated: { type: Date, default: Date.now },
+            
+            // Company Q&A (Priority #1)
+            companyQnA: [{
+                id: { type: String, required: true },
+                question: { type: String, required: true, trim: true },
+                answer: { type: String, required: true, trim: true },
+                keywords: [{ type: String, trim: true }],
+                confidence: { type: Number, min: 0, max: 1, default: 0.8 },
+                status: { type: String, enum: ['active', 'inactive', 'draft'], default: 'active' },
+                category: { type: String, trim: true, default: 'general' },
+                
+                // Performance Tracking
+                performance: {
+                    responseTime: { type: Number, default: 0 },
+                    accuracy: { type: Number, default: 0 },
+                    usageCount: { type: Number, default: 0 },
+                    lastUsed: { type: Date }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' }
+            }],
+            
+            // Trade Q&A (Priority #2)
+            tradeQnA: [{
+                id: { type: String, required: true },
+                question: { type: String, required: true, trim: true },
+                answer: { type: String, required: true, trim: true },
+                tradeCategory: { type: String, required: true, trim: true },
+                keywords: [{ type: String, trim: true }],
+                confidence: { type: Number, min: 0, max: 1, default: 0.75 },
+                status: { type: String, enum: ['active', 'inactive', 'draft'], default: 'active' },
+                isGlobal: { type: Boolean, default: false }, // global vs company-specific
+                
+                // Performance Tracking
+                performance: {
+                    responseTime: { type: Number, default: 0 },
+                    accuracy: { type: Number, default: 0 },
+                    usageCount: { type: Number, default: 0 },
+                    lastUsed: { type: Date }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now },
+                source: { type: String, enum: ['company', 'global', 'imported'], default: 'company' }
+            }],
+            
+            // Templates & Keywords (Priority #3)
+            templates: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true, trim: true },
+                template: { type: String, required: true, trim: true },
+                keywords: [{ type: String, trim: true }],
+                category: { 
+                    type: String, 
+                    enum: ['greeting', 'service', 'booking', 'emergency', 'hours', 'closing'], 
+                    required: true 
+                },
+                confidence: { type: Number, min: 0, max: 1, default: 0.7 },
+                status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+                
+                // Template Variables
+                variables: [{
+                    name: { type: String, required: true },
+                    description: { type: String, default: '' },
+                    required: { type: Boolean, default: false }
+                }],
+                
+                // Performance Tracking
+                performance: {
+                    usageCount: { type: Number, default: 0 },
+                    lastUsed: { type: Date }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now }
+            }],
+            
+            // In-House Fallback System (Priority #4)
+            inHouseFallback: {
+                enabled: { type: Boolean, default: true },
+                
+                // Intent Detection Keywords
+                serviceKeywords: {
+                    type: [String],
+                    default: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help', 'maintenance']
+                },
+                bookingKeywords: {
+                    type: [String],
+                    default: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you', 'available']
+                },
+                emergencyKeywords: {
+                    type: [String],
+                    default: ['emergency', 'urgent', 'asap', 'right now', 'immediately', 'broken down']
+                },
+                hoursKeywords: {
+                    type: [String],
+                    default: ['hours', 'open', 'closed', 'when do you', 'what time', 'available']
+                },
+                
+                // Fallback Responses
+                responses: {
+                    service: {
+                        type: String,
+                        default: 'I understand you need service. Let me connect you with one of our technicians who can help you right away.'
+                    },
+                    booking: {
+                        type: String,
+                        default: 'I\'d be happy to help you schedule an appointment. Let me connect you with our scheduling team.'
+                    },
+                    emergency: {
+                        type: String,
+                        default: 'This sounds urgent. Let me connect you with our emergency team immediately.'
+                    },
+                    hours: {
+                        type: String,
+                        default: 'We\'re available during business hours. I can help you with our schedule right now.'
+                    },
+                    general: {
+                        type: String,
+                        default: 'I want to make sure you get the best help possible. Let me get you to the right person.'
+                    }
+                },
+                
+                // Performance Tracking
+                performance: {
+                    totalFallbacks: { type: Number, default: 0 },
+                    successRate: { type: Number, default: 0 },
+                    avgConfidence: { type: Number, default: 0.5 }
+                }
+            },
+            
+            // Knowledge Management Statistics
+            statistics: {
+                totalEntries: { type: Number, default: 0 },
+                activeEntries: { type: Number, default: 0 },
+                avgConfidence: { type: Number, default: 0 },
+                lastOptimized: { type: Date, default: Date.now }
+            }
         },
 
         // 🎭 WORLD-CLASS AI AGENT PERSONALITY SYSTEM - THE STYLE

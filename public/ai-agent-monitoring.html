@@ -337,17 +337,11 @@
                 const performanceMetrics = document.getElementById('performance-metrics');
                 performanceMetrics.innerHTML = `
                     <div class="space-y-3">
+                        <!-- V2 LEGACY REMOVED: Company Q&A, Trade Q&A, Templates -->
                         <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm font-medium text-gray-900">Company Q&A Entries</span>
-                            <span class="text-sm font-bold text-blue-600">${metrics.knowledgeBase.companyQnA}</span>
+                            <span class="text-sm font-medium text-gray-900">Knowledge System</span>
+                            <span class="text-sm font-bold text-blue-600">LLM-Driven</span>
                         </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm font-medium text-gray-900">Trade Q&A Entries</span>
-                            <span class="text-sm font-bold text-green-600">${metrics.knowledgeBase.tradeQnA}</span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm font-medium text-gray-900">Templates</span>
-                            <span class="text-sm font-bold text-purple-600">${metrics.knowledgeBase.templates}</span>
                         </div>
                         <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                             <span class="text-sm font-medium text-gray-900">Response Time</span>
