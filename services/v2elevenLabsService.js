@@ -80,7 +80,8 @@ async function getAvailableVoices({ apiKey, company } = {}) {
   
   try {
     const client = createClient({ apiKey, company });
-    const response = await client.voices.getAll();
+    // ✅ FIX: Include show_legacy parameter to get preview audio URLs
+    const response = await client.voices.getAll({ show_legacy: true });
     
     logger.info('✅ ElevenLabs API response received:', {
       voicesCount: response.voices?.length || 0,
@@ -110,13 +111,20 @@ async function getAvailableVoices({ apiKey, company } = {}) {
         previewUrl = firstSample.audio_url || firstSample.preview_url || null;
       }
       
+      // ✅ FALLBACK: Construct preview URL if not provided by API
+      // ElevenLabs hosts preview samples at predictable URLs
+      if (!previewUrl && voiceId) {
+        previewUrl = `https://storage.googleapis.com/eleven-public-prod/premade/voices/${voiceId}/preview.mp3`;
+      }
+      
       if (index < 3) {
         logger.debug(`🎙️ Processing voice ${index}: ${voice.name}, preview extraction:`, {
           voice_id: voice.voice_id,
           finalId: voiceId,
           directPreviewUrl: voice.preview_url,
           hasSamples: Boolean(voice.samples),
-          extractedPreviewUrl: previewUrl
+          extractedPreviewUrl: previewUrl,
+          constructedFallback: !voice.preview_url && !voice.samples
         });
       }
       
