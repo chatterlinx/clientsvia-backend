@@ -6,6 +6,8 @@
  * 
  * DELETION SCOPE:
  * - Primary Company document
+ * - All CompanyQnA knowledge entries
+ * - All Workflow and WorkflowExecution records
  * - All Contact records
  * - All User accounts associated with company
  * - All Redis cache entries
@@ -13,8 +15,6 @@
  * - All analytics and performance data
  * - All notification logs
  * - All booking and conversation history
- * 
- * V2 LEGACY REMOVED: CompanyQnA, Workflow models (LLM-only knowledge system)
  * 
  * SAFETY MECHANISMS:
  * - Multi-step confirmation process
@@ -38,6 +38,10 @@ const { createIORedisClient, isRedisConfigured } = require('./redisClientFactory
 
 // Import all models that reference companyId
 const Company = require('../models/v2Company');
+// V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
+// V2 DELETED: Workflow models not in V2 system
+// const Workflow = require('../models/Workflow');
+// const WorkflowExecution = require('../models/WorkflowExecution');
 const Contact = require('../models/v2Contact');
 const User = require('../models/v2User');
 const NotificationLog = require('../models/v2NotificationLog');
@@ -110,8 +114,23 @@ class AccountDeletionService {
                 lastUpdated: company.updatedAt
             };
 
+            // Analyze CompanyQnA entries
+            // V2 DELETED: Legacy CompanyQnA model - using CompanyKnowledgeQnA only
+            const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
+            const knowledgeQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
+            analysis.dataScope.knowledge = {
+                companyQnA: companyQnACount,
+                knowledgeQnA: knowledgeQnACount,
+                total: companyQnACount + knowledgeQnACount
             };
 
+            // Analyze Workflows and Executions
+            const workflowCount = await Workflow.countDocuments({ companyId });
+            const executionCount = await WorkflowExecution.countDocuments({ companyId });
+            analysis.dataScope.workflows = {
+                workflows: workflowCount,
+                executions: executionCount,
+                total: workflowCount + executionCount
             };
 
             // Analyze Contacts
@@ -179,6 +198,20 @@ class AccountDeletionService {
             const company = await Company.findById(companyId);
             backup.data.company = company.toObject();
 
+            // Backup all CompanyQnA entries
+            // V2 DELETED: Legacy CompanyQnA model - using CompanyKnowledgeQnA only
+            const companyQnAs = await CompanyKnowledgeQnA.find({ companyId });
+            backup.data.companyQnA = companyQnAs.map(q => q.toObject());
+
+            const knowledgeQnAs = await CompanyKnowledgeQnA.find({ companyId });
+            backup.data.knowledgeQnA = knowledgeQnAs.map(q => q.toObject());
+
+            // Backup Workflows and Executions
+            const workflows = await Workflow.find({ companyId });
+            backup.data.workflows = workflows.map(w => w.toObject());
+
+            const executions = await WorkflowExecution.find({ companyId });
+            backup.data.workflowExecutions = executions.map(e => e.toObject());
 
             // Backup Contacts
             const contacts = await Contact.find({ companyId });
@@ -277,8 +310,12 @@ class AccountDeletionService {
      */
     async deleteMongoDBData(companyId, status) {
         const mongoSteps = [
+            { name: 'WorkflowExecutions', model: WorkflowExecution },
+            { name: 'Workflows', model: Workflow },
             { name: 'NotificationLogs', model: NotificationLog },
             { name: 'Contacts', model: Contact },
+            { name: 'CompanyQnA', model: CompanyQnA },
+            { name: 'KnowledgeQnA', model: CompanyKnowledgeQnA },
             { name: 'Users', model: User },
             { name: 'Company', model: Company }
         ];
