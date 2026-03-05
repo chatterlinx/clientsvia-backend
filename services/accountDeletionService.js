@@ -110,10 +110,6 @@ class AccountDeletionService {
                 lastUpdated: company.updatedAt
             };
 
-            };
-
-            };
-
             // Analyze Contacts
             const contactCount = await Contact.countDocuments({ companyId });
             analysis.dataScope.contacts = contactCount;
