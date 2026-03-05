@@ -199,7 +199,12 @@ class VoiceSettingsManager {
                 </p>
                 ${desc ? `<p class="text-xs text-gray-400 mt-1">${this._esc(desc)}</p>` : ''}
             </div>`;
-        this._previewUrl = voice.preview_url || voice.previewUrl || voice.previewUrl || voice.preview || (voice.samples && voice.samples[0] && (voice.samples[0].url || voice.samples[0].audio_url)) || null;
+        // DEBUG CHECKPOINT: Log what preview fields are actually present
+        console.warn('[VOICE-DEBUG] Voice object keys:', Object.keys(voice));
+        console.warn('[VOICE-DEBUG] preview_url:', voice.preview_url);
+        console.warn('[VOICE-DEBUG] previewUrl:', voice.previewUrl);
+        console.warn('[VOICE-DEBUG] samples:', voice.samples);
+                this._previewUrl = voice.preview_url || voice.previewUrl || voice.previewUrl || voice.preview || (voice.samples && voice.samples[0] && (voice.samples[0].url || voice.samples[0].audio_url)) || null;
         previewSection.classList.remove('hidden');
     }
 
