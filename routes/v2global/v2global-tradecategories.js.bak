@@ -617,13 +617,14 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             const companiesUsingCategory = await Company.find({ 
                 tradeCategories: categoryId 
             }).select('_id').lean();
-            // V2 LEGACY REMOVED: tradeQnA keyword cache invalidation
-            // Trade categories no longer use keyword-based Q&A system
-            // All knowledge now LLM-driven via knowledgeSettings
             
-            logger.info(`✅ Trade category updated (legacy cache invalidation removed)`);
+            companiesUsingCategory.forEach(company => {
+                router.invalidateKeywordCache(company._id.toString(), 'tradeQnA');
+            });
+            
+            logger.info(`🚀 Invalidated tradeQnA keyword cache for ${companiesUsingCategory.length} companies`);
         } catch (cacheError) {
-            logger.warn('⚠️ Failed to process cache:', cacheError.message);            logger.warn('⚠️ Failed to invalidate keyword cache:', cacheError.message);
+            logger.warn('⚠️ Failed to invalidate keyword cache:', cacheError.message);
         }
 
         // 🗑️ Clear related caches

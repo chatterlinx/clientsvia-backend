@@ -62,3 +62,63 @@ grep -r "CompanyQnA\|CompanyKnowledgeQnA\|Workflow" services/accountDeletionServ
 ---
 **Last Updated**: March 5, 2026
 **Status**: Backend services cleanup complete, moving to routes
+
+## ✅ COMPLETED - Routes Cleanup
+
+### Files Modified:
+
+#### 1. **routes/v2company.js** ✅
+- **Changes**:
+  - Removed `companyQnA` and `tradeQnA` Redis cache keys
+  - Added legacy removal note
+- **Test**: No syntax errors
+
+#### 2. **routes/company/runtimeTruth.js** ✅
+- **Changes**:
+  - Removed legacy `companyQnAThreshold` fallback
+  - Removed legacy `tradeQnAThreshold` fallback
+  - Added legacy removal notes
+- **Test**: No syntax errors
+
+#### 3. **routes/v2global/v2global-tradecategories.js** ✅
+- **Changes**:
+  - Removed tradeQnA keyword cache invalidation logic
+  - Replaced with legacy removal note
+- **Test**: No syntax errors
+
+#### 4. **routes/admin/aiAgentMonitoring.js** ✅
+- **Changes**:
+  - Replaced legacy CompanyKnowledgeQnA health checks
+  - Now checks modern `knowledgeSettings` instead
+  - Updated health monitoring for LLM-only system
+- **Test**: No syntax errors
+
+#### 5. **routes/admin/callArchives.js** ✅
+- **Changes**:
+  - Updated comment noting legacy source types
+- **Test**: No syntax errors
+
+#### 6. **routes/v2twilio.js** ✅
+- **Changes**:
+  - Removed dead `CompanyQnA.find()` code
+  - Cleaned up legacy Q&A matching logic
+  - Added legacy removal note
+- **Test**: No syntax errors
+
+#### 7. **routes/admin/dataCenter.js** ✅
+- **Changes**:
+  - Removed `companyqnas` collection cleanup
+  - Removed `localcompanyqnas` collection cleanup
+  - Removed `v2templates` collection cleanup
+  - Added legacy removal note
+- **Test**: No syntax errors
+
+### Summary:
+- **7 route files cleaned**
+- **All syntax verified**
+- **No broken references**
+- **Legacy knowledge structures fully removed from routes layer**
+
+---
+**Last Updated**: March 5, 2026  
+**Status**: Routes cleanup complete, ready for frontend/UI cleanup

@@ -517,9 +517,8 @@ router.delete('/company/:id', async (req, res) => {
         try {
             const cacheKeys = [
                 `company:${companyId}`,
-                `companyQnA:${companyId}`,
-                `tradeQnA:${companyId}`
-            ];
+                `company:${companyId}`
+                // V2 LEGACY REMOVED: companyQnA, tradeQnA cache keys (LLM-only system)
             
             // Add phone-based cache keys (Twilio uses these)
             if (company.twilioConfig?.phoneNumber) {
