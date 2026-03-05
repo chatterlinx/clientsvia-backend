@@ -82,7 +82,7 @@ class VoiceSettingsManager {
     }
 
     _authHeaders() {
-        const token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || '';
         return {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
