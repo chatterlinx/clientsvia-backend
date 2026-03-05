@@ -1034,10 +1034,12 @@
 
   function attachModalEventListeners() {
     document.querySelectorAll('.copy-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const content = btn.dataset.content;
-        copyToClipboard(content);
-        showNotification('Copied to clipboard!', 'success');
+        const success = await copyToClipboard(content);
+        if (success) {
+          showNotification('Copied to clipboard!', 'success');
+        }
       });
     });
   }
@@ -1183,16 +1185,23 @@
     return div.innerHTML;
   }
 
-  function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).catch(err => {
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
       console.error('Failed to copy:', err);
-    });
+      showNotification('Failed to copy to clipboard', 'error');
+      return false;
+    }
   }
 
-  function copyAnalysisToClipboard() {
+  async function copyAnalysisToClipboard() {
     const text = DOM.modalBody.innerText;
-    copyToClipboard(text);
-    showNotification('Analysis copied to clipboard!', 'success');
+    const success = await copyToClipboard(text);
+    if (success) {
+      showNotification('Analysis copied to clipboard!', 'success');
+    }
   }
 
   function debounce(func, wait) {
