@@ -23,7 +23,7 @@ class VoiceSettingsManager {
     async initialize() {
         if (this.initialized) return;
         this.initialized = true;
-        console.log('[VoiceSettingsManager] Initializing for company:', this.companyId);
+        console.debug('[VoiceSettingsManager] Initializing for company:', this.companyId);
         this._bindElements();
         this._bindEvents();
         await Promise.all([this._loadSettings(), this._loadVoices()]);
@@ -96,7 +96,7 @@ class VoiceSettingsManager {
             const data = await res.json();
             this.currentSettings = data.settings || {};
             this._populateAdvancedSettings(this.currentSettings);
-            console.log('[VoiceSettingsManager] Settings loaded:', this.currentSettings);
+            console.debug('[VoiceSettingsManager] Settings loaded:', this.currentSettings);
         } catch (err) {
             console.warn('[VoiceSettingsManager] Could not load settings:', err.message);
             this.currentSettings = {};
@@ -118,7 +118,7 @@ class VoiceSettingsManager {
             }
             const data = await res.json();
             this.voices = Array.isArray(data) ? data : (data.voices || []);
-            console.log(`[VoiceSettingsManager] Loaded ${this.voices.length} voices`);
+            console.debug(`[VoiceSettingsManager] Loaded ${this.voices.length} voices`);
             this._applyFilters();
             this._restoreSavedVoice();
         } catch (err) {
@@ -273,7 +273,7 @@ class VoiceSettingsManager {
                 if (this.els.currentName) this.els.currentName.textContent = name;
             }
             this._flashSaved();
-            console.log('[VoiceSettingsManager] Saved:', payload);
+            console.debug('[VoiceSettingsManager] Saved:', payload);
         } catch (err) {
             console.error('[VoiceSettingsManager] Save failed:', err.message);
         }

@@ -4637,7 +4637,12 @@
         // Backend: POST /api/company/:companyId/v2-voice-settings
         //          POST /api/company/:companyId/v2-tts/generate
         // ════════════════════════════════════════════════════════════════════
-        function getVoiceCompanyId() {
+                // ENTERPRISE HARDENING (Mar 2026): If VoiceSettingsManager is present, it owns voice wiring.
+        // This prevents duplicate event listeners, inconsistent payload shapes, and drift between UI and runtime.
+        if (window.VoiceSettingsManager) {
+            console.log("[AI-VOICE] VoiceSettingsManager present skipping legacy inline voice wiring");
+        } else {
+function getVoiceCompanyId() {
             return window.currentCompanyId || window.companyId || 
                    new URLSearchParams(window.location.search).get('companyId') ||
                    new URLSearchParams(window.location.search).get('id') ||
@@ -4857,6 +4862,7 @@
                 btn.disabled = false;
             }
         });
+        }
     </script>
     
     <!-- =========================================================
