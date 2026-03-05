@@ -15,8 +15,10 @@ class VoiceSettingsManager {
         this.currentSettings = null;
         this.initialized = false;
         this._previewUrl = null;
+        this._previewBlobUrl = null; // track for cleanup
         this._debounceTimer = null;
         this._saveTimer = null;
+        this._saveErrorTimer = null;
         this.els = {};
     }
 
@@ -27,6 +29,18 @@ class VoiceSettingsManager {
         this._bindElements();
         this._bindEvents();
         await Promise.all([this._loadSettings(), this._loadVoices()]);
+    }
+
+    // Fetch with timeout and abort support
+    async _fetch(url, options = {}, timeoutMs = 15000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, { ...options, signal: controller.signal });
+            return res;
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     _bindElements() {
@@ -91,7 +105,7 @@ class VoiceSettingsManager {
 
     async _loadSettings() {
         try {
-            const res = await fetch(`/api/company/${this.companyId}/v2-voice-settings`, { headers: this._authHeaders() });
+            const res = await this._fetch(`/api/company/${this.companyId}/v2-voice-settings`, { headers: this._authHeaders() });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             this.currentSettings = data.settings || {};
@@ -103,30 +117,36 @@ class VoiceSettingsManager {
         }
     }
 
-    async _loadVoices(forceRefresh = false) {
+    async _loadVoices(forceRefresh = false, attempt = 1) {
         const { selector, refreshBtn } = this.els;
         if (!selector) return;
         selector.innerHTML = '<option value="">Loading voices\u2026</option>';
         selector.disabled = true;
-        if (refreshBtn) refreshBtn.disabled = true;
+        if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading'; }
         try {
             const url = `/api/company/${this.companyId}/v2-voice-settings/voices${forceRefresh ? '?refresh=1' : ''}`;
-            const res = await fetch(url, { headers: this._authHeaders() });
+            const res = await this._fetch(url, { headers: this._authHeaders() }, 20000);
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.message || `HTTP ${res.status}`);
             }
             const data = await res.json();
             this.voices = Array.isArray(data) ? data : (data.voices || []);
-            console.debug(`[VoiceSettingsManager] Loaded ${this.voices.length} voices`);
+            console.debug(`[VoiceSettingsManager] Loaded ${this.voices.length} voices${data.cached ? ' (cached)' : ''}`);
             this._applyFilters();
             this._restoreSavedVoice();
         } catch (err) {
-            console.error('[VoiceSettingsManager] Failed to load voices:', err.message);
-            selector.innerHTML = `<option value="">\u26a0\ufe0f ${err.message || 'Failed to load voices'}</option>`;
+            console.error(`[VoiceSettingsManager] Failed to load voices (attempt ${attempt}):`, err.message);
+            if (attempt < 2) {
+                // Auto-retry once after 3 seconds
+                selector.innerHTML = '<option value="">Retrying\u2026</option>';
+                setTimeout(() => this._loadVoices(forceRefresh, attempt + 1), 3000);
+                return;
+            }
+            selector.innerHTML = `<option value="">\u26a0\ufe0f Failed to load \u2014 click Refresh</option>`;
         } finally {
             selector.disabled = false;
-            if (refreshBtn) refreshBtn.disabled = false;
+            if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i>Refresh'; }
         }
     }
 
@@ -218,6 +238,18 @@ class VoiceSettingsManager {
             return;
         }
 
+        // Stop any currently playing audio
+        if (!previewAudio.paused) {
+            previewAudio.pause();
+            previewAudio.currentTime = 0;
+        }
+
+        // Revoke previous blob URL to free memory
+        if (this._previewBlobUrl) {
+            URL.revokeObjectURL(this._previewBlobUrl);
+            this._previewBlobUrl = null;
+        }
+
         if (playBtn) {
             playBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading\u2026';
             playBtn.disabled = true;
@@ -228,13 +260,15 @@ class VoiceSettingsManager {
 
             if (src.startsWith('tts-preview:')) {
                 const voiceId = src.replace('tts-preview:', '');
-                const res = await fetch(
+                const res = await this._fetch(
                     `/api/company/${this.companyId}/v2-voice-settings/voices/${voiceId}/preview`,
-                    { headers: this._authHeaders() }
+                    { headers: this._authHeaders() },
+                    30000
                 );
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (!res.ok) throw new Error(`Preview generation failed (HTTP ${res.status})`);
                 const blob = await res.blob();
                 src = URL.createObjectURL(blob);
+                this._previewBlobUrl = src;
             }
 
             previewAudio.src = src;
@@ -249,10 +283,13 @@ class VoiceSettingsManager {
                 };
             }
         } catch (err) {
-            console.warn('[VoiceSettingsManager] Audio error:', err);
+            console.error('[VoiceSettingsManager] Preview error:', err);
             if (playBtn) {
-                playBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Play Sample';
+                playBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Preview failed';
                 playBtn.disabled = false;
+                setTimeout(() => {
+                    playBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Play Sample';
+                }, 3000);
             }
         }
     }
@@ -289,11 +326,11 @@ class VoiceSettingsManager {
     async _saveSettings(overrides = {}) {
         const payload = { ...this._buildPayload(), ...overrides };
         try {
-            const res = await fetch(`/api/company/${this.companyId}/v2-voice-settings`, {
+            const res = await this._fetch(`/api/company/${this.companyId}/v2-voice-settings`, {
                 method: 'POST',
                 headers: this._authHeaders(),
                 body: JSON.stringify(payload)
-            });
+            }, 10000);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             this.currentSettings = data.settings || payload;
@@ -302,16 +339,20 @@ class VoiceSettingsManager {
                 const name = voice ? (voice.name || voice.displayName) : payload.voiceId;
                 if (this.els.currentName) this.els.currentName.textContent = name;
             }
-            this._flashSaved();
+            this._flashSaved(false);
             console.debug('[VoiceSettingsManager] Saved:', payload);
         } catch (err) {
             console.error('[VoiceSettingsManager] Save failed:', err.message);
+            this._flashSaved(true);
         }
     }
 
-    _flashSaved() {
+    _flashSaved(isError = false) {
         const { saveIndicator } = this.els;
         if (!saveIndicator) return;
+        saveIndicator.textContent = isError ? '\u26a0\ufe0f Save failed' : '\u2713 Saved';
+        saveIndicator.className = saveIndicator.className.replace(/text-\w+-\d+/g, '');
+        saveIndicator.classList.add(isError ? 'text-red-600' : 'text-green-600');
         saveIndicator.classList.remove('hidden');
         clearTimeout(this._saveTimer);
         this._saveTimer = setTimeout(() => saveIndicator.classList.add('hidden'), 2500);

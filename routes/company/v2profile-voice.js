@@ -263,43 +263,53 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
 router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
     try {
         const { companyId } = req.params;
-        
+        const forceRefresh = req.query.refresh === '1';
+
         if (!ObjectId.isValid(companyId)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid company ID format'
-            });
+            return res.status(400).json({ success: false, message: 'Invalid company ID format' });
         }
 
         const company = await Company.findById(companyId);
         if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
+            return res.status(404).json({ success: false, message: 'Company not found' });
         }
 
-        logger.debug(`🎤 [VOICES] Loading ElevenLabs voices for ${company.companyName}`);
+        // Determine cache key: global key users share cache, own-key users get isolated cache
+        const apiSource = company.aiAgentSettings?.voiceSettings?.apiSource || 'clientsvia';
+        const cacheKey = apiSource === 'own'
+            ? `voices:company:${companyId}`
+            : `voices:global`;
+        const CACHE_TTL = 3600; // 1 hour — voices rarely change
 
-        // Get voices from ElevenLabs API
-        // Uses company's own API key if configured, otherwise uses global ClientsVia key
+        // Try Redis cache first (skip on force-refresh)
+        if (!forceRefresh && redisClient) {
+            try {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    const voices = JSON.parse(cached);
+                    logger.debug(`⚡ [VOICES] Cache HIT (${voices.length} voices) key=${cacheKey}`);
+                    return res.json({ success: true, voices, count: voices.length, cached: true });
+                }
+            } catch (cacheErr) {
+                logger.warn(`⚠️ [VOICES] Redis cache read failed: ${cacheErr.message}`);
+            }
+        }
+
+        logger.debug(`🎤 [VOICES] Cache MISS — fetching from ElevenLabs for ${company.companyName}`);
         const voices = await getAvailableVoices({ company });
+        logger.info(`✅ [VOICES] Loaded ${voices.length} voices from ElevenLabs`);
 
-        logger.info(`✅ [VOICES] Loaded ${voices.length} voices`);
+        // Write to cache (non-blocking)
+        if (redisClient) {
+            redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(voices))
+                .catch(err => logger.warn(`⚠️ [VOICES] Redis cache write failed: ${err.message}`));
+        }
 
-        res.json({
-            success: true,
-            voices,
-            count: voices.length
-        });
+        res.json({ success: true, voices, count: voices.length, cached: false });
 
     } catch (error) {
         logger.error('❌ [VOICES] Error loading voices:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to load voices',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Failed to load voices', error: error.message });
     }
 });
 
