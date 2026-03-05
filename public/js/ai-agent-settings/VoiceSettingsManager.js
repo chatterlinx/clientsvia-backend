@@ -199,12 +199,10 @@ class VoiceSettingsManager {
                 </p>
                 ${desc ? `<p class="text-xs text-gray-400 mt-1">${this._esc(desc)}</p>` : ''}
             </div>`;
-        // DEBUG CHECKPOINT: Log what preview fields are actually present
-        console.warn('[VOICE-DEBUG] Voice object keys:', Object.keys(voice));
-        console.warn('[VOICE-DEBUG] preview_url:', voice.preview_url);
-        console.warn('[VOICE-DEBUG] previewUrl:', voice.previewUrl);
-        console.warn('[VOICE-DEBUG] samples:', voice.samples);
-                this._previewUrl = voice.preview_url || voice.previewUrl || voice.previewUrl || voice.preview || (voice.samples && voice.samples[0] && (voice.samples[0].url || voice.samples[0].audio_url)) || null;
+        const voiceId = voice.voice_id || voice.id || '';
+        this._previewUrl = voice.preview_url || voice.previewUrl || voice.preview ||
+            (voice.samples && voice.samples[0] && (voice.samples[0].url || voice.samples[0].audio_url)) ||
+            (voiceId ? `tts-preview:${voiceId}` : null);
         previewSection.classList.remove('hidden');
     }
 
@@ -213,22 +211,49 @@ class VoiceSettingsManager {
         this._previewUrl = null;
     }
 
-    _playPreview() {
+    async _playPreview() {
         const { previewAudio, playBtn } = this.els;
         if (!previewAudio || !this._previewUrl) {
             console.warn('[VoiceSettingsManager] No preview URL available');
             return;
         }
-        previewAudio.src = this._previewUrl;
-        previewAudio.classList.remove('hidden');
-        previewAudio.play().catch(err => console.warn('[VoiceSettingsManager] Audio error:', err));
+
         if (playBtn) {
-            playBtn.innerHTML = '<i class="fas fa-pause mr-1"></i>Playing\u2026';
+            playBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading\u2026';
             playBtn.disabled = true;
-            previewAudio.onended = () => {
+        }
+
+        try {
+            let src = this._previewUrl;
+
+            if (src.startsWith('tts-preview:')) {
+                const voiceId = src.replace('tts-preview:', '');
+                const res = await fetch(
+                    `/api/company/${this.companyId}/v2-voice-settings/voices/${voiceId}/preview`,
+                    { headers: this._authHeaders() }
+                );
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const blob = await res.blob();
+                src = URL.createObjectURL(blob);
+            }
+
+            previewAudio.src = src;
+            previewAudio.classList.remove('hidden');
+            await previewAudio.play();
+
+            if (playBtn) {
+                playBtn.innerHTML = '<i class="fas fa-pause mr-1"></i>Playing\u2026';
+                previewAudio.onended = () => {
+                    playBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Play Sample';
+                    playBtn.disabled = false;
+                };
+            }
+        } catch (err) {
+            console.warn('[VoiceSettingsManager] Audio error:', err);
+            if (playBtn) {
                 playBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Play Sample';
                 playBtn.disabled = false;
-            };
+            }
         }
     }
 

@@ -26,7 +26,7 @@ const mongoose = require('mongoose');
 const { ObjectId } = require('mongodb');
 const Company = require('../../models/v2Company');
 const { redisClient } = require('../../clients');
-const { getAvailableVoices, getUserInfo } = require('../../services/v2elevenLabsService');
+const { getAvailableVoices, getUserInfo, synthesizeSpeech } = require('../../services/v2elevenLabsService');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 
 // 🔒 SECURITY: Require authentication AND multi-tenant access control
@@ -300,6 +300,44 @@ router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
             message: 'Failed to load voices',
             error: error.message
         });
+    }
+});
+
+/**
+ * @route   GET /api/company/:companyId/v2-voice-settings/voices/:voiceId/preview
+ * @desc    Generate a live TTS preview for a voice (used when preview_url is null)
+ */
+router.get('/:companyId/v2-voice-settings/voices/:voiceId/preview', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId, voiceId } = req.params;
+
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ success: false, message: 'Invalid company ID' });
+        }
+
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+
+        logger.debug(`🎤 [VOICE PREVIEW] Generating TTS preview for voice ${voiceId}`);
+
+        const audioBuffer = await synthesizeSpeech({
+            text: "Hello! I'm your AI assistant. How can I help you today?",
+            voiceId,
+            stability: 0.5,
+            similarity_boost: 0.7,
+            model_id: 'eleven_turbo_v2_5',
+            company
+        });
+
+        res.set('Content-Type', 'audio/mpeg');
+        res.set('Cache-Control', 'public, max-age=3600');
+        res.send(audioBuffer);
+
+    } catch (error) {
+        logger.error('❌ [VOICE PREVIEW] Error generating preview:', error);
+        res.status(500).json({ success: false, message: 'Failed to generate voice preview', error: error.message });
     }
 });
 

@@ -111,12 +111,6 @@ async function getAvailableVoices({ apiKey, company } = {}) {
         previewUrl = firstSample.audio_url || firstSample.preview_url || null;
       }
       
-      // ✅ FALLBACK: Construct preview URL if not provided by API
-      // ElevenLabs hosts preview samples at predictable URLs
-      if (!previewUrl && voiceId) {
-        previewUrl = `https://storage.googleapis.com/eleven-public-prod/premade/voices/${voiceId}/preview.mp3`;
-      }
-      
       if (index < 3) {
         logger.debug(`🎙️ Processing voice ${index}: ${voice.name}, preview extraction:`, {
           voice_id: voice.voice_id,
