@@ -40,7 +40,7 @@ async function debugConsentGate(callSid) {
   
   console.log(`📞 Loading call data for: ${callSid}\n`);
   
-  const callSummary = await CallSummary.findOne({ callSid }).lean();
+  const callSummary = await CallSummary.findOne({ twilioSid: callSid }).lean();
   if (!callSummary) {
     console.error('❌ Call not found in CallSummary');
     process.exit(1);
