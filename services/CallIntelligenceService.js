@@ -200,7 +200,7 @@ class CallIntelligenceService {
           triggersMatched: triggerMatched ? 1 : 0,
           matchRate: triggerMatched ? 100 : 0,
           topIssue: triggerMatched ? null : 'No conversational keywords',
-          tokensDelivered: scrabProcessed.payload?.transformations || [],
+          tokensDelivered: (scrabProcessed.payload?.transformations || []).map(t => t.value || String(t)),
           normalizedInput: scrabProcessed.payload?.normalizedPreview || ''
         },
         scrabEnginePerformance: this.analyzeScrabEngine(scrabProcessed.payload),
