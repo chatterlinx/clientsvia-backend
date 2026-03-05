@@ -88,7 +88,11 @@ async function getAvailableVoices({ apiKey, company } = {}) {
         name: response.voices[0].name,
         voice_id: response.voices[0].voice_id,
         id: response.voices[0].id,
-        keys: Object.keys(response.voices[0])
+        keys: Object.keys(response.voices[0]),
+        hasSamples: Boolean(response.voices[0].samples),
+        samplesCount: response.voices[0].samples?.length || 0,
+        preview_url: response.voices[0].preview_url,
+        samplePreviewUrl: response.voices[0].samples?.[0]?.audio_url
       } : null
     });
     
@@ -97,12 +101,22 @@ async function getAvailableVoices({ apiKey, company } = {}) {
       // Handle different possible field names for voice ID
       const voiceId = voice.voice_id || voice.id || voice.voiceId || `${voice.name}-generated-id-${index}`;
       
+      // Extract preview URL from samples array (ElevenLabs API structure)
+      let previewUrl = voice.preview_url; // Try direct field first
+      
+      if (!previewUrl && voice.samples && voice.samples.length > 0) {
+        // Check first sample's audio_url field
+        const firstSample = voice.samples[0];
+        previewUrl = firstSample.audio_url || firstSample.preview_url || null;
+      }
+      
       if (index < 3) {
-        logger.debug(`🎙️ Processing voice ${index}: ${voice.name}, ID fields:`, {
+        logger.debug(`🎙️ Processing voice ${index}: ${voice.name}, preview extraction:`, {
           voice_id: voice.voice_id,
-          id: voice.id,
-          voiceId: voice.voiceId,
-          finalId: voiceId
+          finalId: voiceId,
+          directPreviewUrl: voice.preview_url,
+          hasSamples: Boolean(voice.samples),
+          extractedPreviewUrl: previewUrl
         });
       }
       
@@ -118,7 +132,7 @@ async function getAvailableVoices({ apiKey, company } = {}) {
           category: voice.labels?.['use case'] || voice.category || 'general',
           description: voice.description || `${voice.name} voice`
         },
-        preview_url: voice.preview_url,
+        preview_url: previewUrl,
         available_for_tiers: voice.available_for_tiers || [],
         settings: voice.settings || {
           stability: 0.5,
@@ -520,7 +534,7 @@ function getMockVoices() {
         category: 'conversational',
         description: 'Natural and friendly female voice'
       },
-      preview_url: null
+      preview_url: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/21m00Tcm4TlvDq8ikWAM/preview.mp3'
     },
     {
       voice_id: 'Mark-mock-id',
@@ -531,7 +545,7 @@ function getMockVoices() {
         category: 'professional',
         description: 'Clear and professional male voice'
       },
-      preview_url: null
+      preview_url: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/N2lVS1w4EtoT3dr4eOWO/preview.mp3'
     },
     {
       voice_id: 'Sarah-mock-id',
@@ -542,7 +556,7 @@ function getMockVoices() {
         category: 'narration',
         description: 'Calm and articulate female voice'
       },
-      preview_url: null
+      preview_url: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/EXAVITQu4vr4xnSDxMaL/preview.mp3'
     },
     {
       voice_id: 'David-mock-id',
@@ -553,7 +567,7 @@ function getMockVoices() {
         category: 'conversational',
         description: 'Warm and engaging male voice'
       },
-      preview_url: null
+      preview_url: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/onwK4e9ZLuTAKqWW03F9/preview.mp3'
     },
     {
       voice_id: 'Emma-mock-id',
@@ -564,7 +578,7 @@ function getMockVoices() {
         category: 'energetic',
         description: 'Enthusiastic and vibrant female voice'
       },
-      preview_url: null
+      preview_url: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/XB0fDUnXU5powFXDhCwa/preview.mp3'
     }
   ];
 }
