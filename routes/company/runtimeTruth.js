@@ -361,8 +361,8 @@ router.get('/', async (req, res) => {
             source: PROVIDER_VERSIONS.matchingPolicy,
             tierOrder: ['RULE_BASED', 'SEMANTIC', 'LLM_FALLBACK'],
             thresholds: {
-                tier1: thresholds.tier1Threshold || 0.8 // V2 LEGACY REMOVED: companyQnAThreshold,
-                tier2: thresholds.tier2Threshold || 0.6 // V2 LEGACY REMOVED: tradeQnAThreshold,
+                tier1: thresholds.tier1Threshold || 0.8, // V2 LEGACY REMOVED: companyQnAThreshold
+                tier2: thresholds.tier2Threshold || 0.6, // V2 LEGACY REMOVED: tradeQnAThreshold
                 tier3: 'LLM_FALLBACK'
             },
             priorityRules: {
