@@ -13,7 +13,7 @@ const DEFAULT_LLM_AGENT_SETTINGS = {
   // ── Model & Persona ──────────────────────────────────────────────────────
   model: {
     provider: 'anthropic',
-    modelId: 'claude-3-5-haiku-20241022',   // Haiku 3.5 — fast, cheap, good for receptionist work
+    modelId: 'claude-haiku-4-5-20251001',   // Haiku 4.5 — fast, affordable, ideal for receptionist work
     temperature: 0.7,
     maxTokens: 300                            // Keep voice responses short
   },
@@ -110,9 +110,9 @@ const CHANNEL_INSTRUCTIONS = {
 
 // ── Available Models ──────────────────────────────────────────────────────
 const AVAILABLE_MODELS = [
-  { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', description: 'Fast & affordable — ideal for receptionist work', tier: 'default' },
-  { id: 'claude-sonnet-4-20250514',  label: 'Claude Sonnet 4',  description: 'Smarter — for complex industries (dental, legal)', tier: 'advanced' },
-  { id: 'claude-opus-4-20250514',    label: 'Claude Opus 4',    description: 'Most capable — rarely needed', tier: 'premium' }
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  description: 'Fast & affordable — ideal for receptionist work', tier: 'default' },
+  { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', description: 'Smarter — for complex industries (dental, legal)', tier: 'advanced' },
+  { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   description: 'Most capable — for highest accuracy needs', tier: 'premium' }
 ];
 
 /**
