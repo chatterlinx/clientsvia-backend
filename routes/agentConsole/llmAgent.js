@@ -304,23 +304,34 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
     const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
     const GlobalTrigger = require('../../models/GlobalTrigger');
 
-    // Get company-specific triggers
-    const localTriggers = await CompanyLocalTrigger.find({ companyId, isActive: true }).lean();
+    // Get company-specific triggers (enabled, published, not deleted)
+    const localTriggers = await CompanyLocalTrigger.find({
+      companyId,
+      enabled: true,
+      isDeleted: { $ne: true },
+      state: 'published'
+    }).lean();
 
-    // Get global triggers from active group
+    // Get global triggers from active group (enabled, published, not deleted)
     let globalTriggers = [];
     if (activeGroupId) {
-      globalTriggers = await GlobalTrigger.find({ groupId: activeGroupId, isActive: true }).lean();
+      globalTriggers = await GlobalTrigger.find({
+        groupId: activeGroupId,
+        enabled: true,
+        isDeleted: { $ne: true },
+        state: 'published'
+      }).lean();
     }
 
     // Combine and format as card drafts
     const cardDrafts = [];
 
     for (const t of localTriggers) {
+      const name = t.label || t.displayName || t.name || 'Local Trigger';
       cardDrafts.push({
         triggerId: t._id.toString(),
-        triggerName: t.displayName || t.name || 'Local Trigger',
-        title: t.displayName || t.name || 'Local Trigger',
+        triggerName: name,
+        title: name,
         content: formatTriggerAsKnowledge(t),
         type: 'trigger',
         source: 'local',
@@ -329,10 +340,11 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
     }
 
     for (const t of globalTriggers) {
+      const name = t.label || t.displayName || t.name || 'Global Trigger';
       cardDrafts.push({
         triggerId: t._id.toString(),
-        triggerName: t.displayName || t.name || 'Global Trigger',
-        title: t.displayName || t.name || 'Global Trigger',
+        triggerName: name,
+        title: name,
         content: formatTriggerAsKnowledge(t),
         type: 'trigger',
         source: 'global',
@@ -357,15 +369,16 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
  */
 function formatTriggerAsKnowledge(trigger) {
   const parts = [];
+  const name = trigger.label || trigger.displayName || trigger.name;
 
-  if (trigger.displayName || trigger.name) {
-    parts.push(`Service: ${trigger.displayName || trigger.name}`);
+  if (name) {
+    parts.push(`Service: ${name}`);
   }
   if (trigger.description) {
     parts.push(`Description: ${trigger.description}`);
   }
-  if (trigger.aiResponse) {
-    parts.push(`Standard Response: ${trigger.aiResponse}`);
+  if (trigger.answerText) {
+    parts.push(`Standard Response: ${trigger.answerText}`);
   }
   if (trigger.keywords && trigger.keywords.length > 0) {
     parts.push(`Keywords: ${trigger.keywords.join(', ')}`);
