@@ -34,19 +34,37 @@ const state = {
 // ════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[LLMAgent] ✅ DOMContentLoaded fired');
+
   const urlParams = new URLSearchParams(window.location.search);
   state.companyId = urlParams.get('companyId');
+  console.log('[LLMAgent] companyId:', state.companyId);
 
   if (!state.companyId) {
     showToast('error', 'Missing companyId parameter');
+    console.error('[LLMAgent] ❌ No companyId — aborting init');
     return;
   }
 
-  setupConfigTabs();
-  setupFilterChips();
-  setupChannelTabs();
-  setupEventListeners();
-  await loadSettings();
+  try {
+    console.log('[LLMAgent] Setting up tabs...');
+    setupConfigTabs();
+    setupFilterChips();
+    setupChannelTabs();
+    console.log('[LLMAgent] Setting up event listeners...');
+    setupEventListeners();
+    console.log('[LLMAgent] ✅ Event listeners wired');
+    console.log('[LLMAgent] Loading settings...');
+    await loadSettings();
+    console.log('[LLMAgent] ✅ Settings loaded, config:', state.config ? 'EXISTS' : 'NULL');
+
+    // Auto-sync triggers as knowledge cards after settings load
+    console.log('[LLMAgent] Starting trigger auto-sync...');
+    await autoSyncTriggers();
+    console.log('[LLMAgent] ✅ Init complete');
+  } catch (error) {
+    console.error('[LLMAgent] ❌ Init failed:', error);
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -99,6 +117,88 @@ async function saveSettings() {
     console.error('[LLMAgent] Save error:', error);
     showToast('error', `Failed to save: ${error.message}`);
     hideLoadingState();
+  }
+}
+
+/**
+ * Auto-sync active triggers as knowledge cards.
+ * Runs on page load — pulls all active triggers from the trigger system
+ * and adds/updates them as knowledge cards automatically.
+ * Existing trigger cards are updated, new triggers are added, removed triggers are cleaned up.
+ */
+async function autoSyncTriggers() {
+  if (!state.config) return;
+
+  try {
+    const data = await AgentConsoleAuth.apiFetch(
+      `/api/agent-console/${state.companyId}/llm-agent/sync-triggers`
+    );
+
+    const triggers = data.triggers || [];
+    if (!state.config.knowledgeCards) state.config.knowledgeCards = [];
+
+    // Get existing trigger cards
+    const existingTriggerCards = state.config.knowledgeCards.filter(c => c.type === 'trigger');
+    const existingTriggerIds = new Set(existingTriggerCards.map(c => c.triggerId));
+    const remoteTriggerIds = new Set(triggers.map(t => t.triggerId));
+
+    let added = 0;
+    let updated = 0;
+    let removed = 0;
+
+    // Add new triggers that don't exist yet
+    for (const t of triggers) {
+      if (!existingTriggerIds.has(t.triggerId)) {
+        state.config.knowledgeCards.push({
+          id: generateId(),
+          type: 'trigger',
+          title: t.title || t.triggerName,
+          content: t.content || `Trigger: ${t.triggerName}`,
+          enabled: true,
+          priority: state.config.knowledgeCards.length,
+          triggerId: t.triggerId,
+          triggerName: t.triggerName,
+          source: t.source,
+          autoSynced: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        added++;
+      } else {
+        // Update existing trigger card content (trigger may have changed)
+        const existing = existingTriggerCards.find(c => c.triggerId === t.triggerId);
+        if (existing && t.content && existing.content !== t.content) {
+          existing.title = t.title || t.triggerName;
+          existing.content = t.content;
+          existing.triggerName = t.triggerName;
+          existing.updatedAt = new Date().toISOString();
+          updated++;
+        }
+      }
+    }
+
+    // Remove trigger cards whose triggers no longer exist (were deleted/deactivated)
+    const before = state.config.knowledgeCards.length;
+    state.config.knowledgeCards = state.config.knowledgeCards.filter(c => {
+      if (c.type !== 'trigger') return true; // keep non-trigger cards
+      return remoteTriggerIds.has(c.triggerId); // only keep triggers that still exist
+    });
+    removed = before - state.config.knowledgeCards.length;
+
+    // If anything changed, save and re-render
+    if (added > 0 || updated > 0 || removed > 0) {
+      console.log(`[LLMAgent] Trigger sync: +${added} added, ~${updated} updated, -${removed} removed`);
+      markDirty();
+      renderKnowledgeCards();
+      renderPromptPreview();
+      // Auto-save the synced triggers
+      await saveSettings();
+    } else {
+      console.log('[LLMAgent] Trigger sync: already up to date');
+    }
+  } catch (error) {
+    console.warn('[LLMAgent] Trigger auto-sync failed (non-critical):', error.message);
+    // Non-critical — page works fine without trigger sync
   }
 }
 
@@ -249,7 +349,7 @@ function renderKnowledgeCards() {
       <div class="cards-empty">
         <div class="cards-empty-icon">📚</div>
         <div class="cards-empty-text">${cards.length === 0 ? 'No knowledge cards yet. Add some to make your agent smarter!' : 'No cards match this filter.'}</div>
-        ${cards.length === 0 ? '<button class="btn btn-primary btn-sm" onclick="openAddCardModal()">+ Add Your First Card</button>' : ''}
+        ${cards.length === 0 ? '<button class="btn btn-primary btn-sm" data-action="add-card">+ Add Your First Card</button>' : ''}
       </div>
     `;
     return;
@@ -269,15 +369,15 @@ function renderKnowledgeCards() {
             <h4 class="kc-title">${escapeHtml(card.title || 'Untitled')}</h4>
             <span class="badge ${badgeColors[card.type] || 'badge-neutral'}">${card.type}</span>
             <label class="toggle-switch" style="margin-left: auto;">
-              <input type="checkbox" ${card.enabled !== false ? 'checked' : ''} onchange="toggleCard('${card.id}', this.checked)">
+              <input type="checkbox" data-action="toggle-card" data-card-id="${card.id}" ${card.enabled !== false ? 'checked' : ''}>
               <span class="toggle-slider"></span>
             </label>
           </div>
           <p class="kc-content">${escapeHtml((card.content || '').substring(0, 200))}</p>
         </div>
         <div class="kc-actions">
-          <button class="btn-icon-sm" onclick="editCard('${card.id}')" title="Edit">&#9998;</button>
-          <button class="btn-icon-sm" onclick="deleteCard('${card.id}')" title="Delete">&#128465;</button>
+          <button class="btn-icon-sm" data-action="edit-card" data-card-id="${card.id}" title="Edit">&#9998;</button>
+          <button class="btn-icon-sm" data-action="delete-card" data-card-id="${card.id}" title="Delete">&#128465;</button>
         </div>
       </div>
     `;
@@ -605,7 +705,35 @@ function setupEventListeners() {
   });
 
   // ── Knowledge card buttons ──
-  document.getElementById('btn-add-card')?.addEventListener('click', openAddCardModal);
+  const addCardBtn = document.getElementById('btn-add-card');
+  console.log('[LLMAgent] btn-add-card element:', addCardBtn ? 'FOUND' : 'NOT FOUND');
+  if (addCardBtn) {
+    addCardBtn.addEventListener('click', () => {
+      console.log('[LLMAgent] 🔘 btn-add-card CLICKED');
+      openAddCardModal();
+    });
+  }
+
+  // Event delegation for ALL dynamically-rendered card buttons
+  const cardsList = document.getElementById('cards-list');
+  console.log('[LLMAgent] cards-list element:', cardsList ? 'FOUND' : 'NOT FOUND');
+  if (cardsList) {
+    cardsList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      console.log('[LLMAgent] 🔘 cards-list delegation:', action, btn.dataset.cardId || '');
+      if (action === 'add-card') openAddCardModal();
+      if (action === 'edit-card') editCard(btn.dataset.cardId);
+      if (action === 'delete-card') deleteCard(btn.dataset.cardId);
+    });
+    cardsList.addEventListener('change', (e) => {
+      const el = e.target.closest('[data-action="toggle-card"]');
+      if (!el) return;
+      console.log('[LLMAgent] 🔘 toggle card:', el.dataset.cardId, el.checked);
+      toggleCard(el.dataset.cardId, el.checked);
+    });
+  }
 
   // ── Modal ──
   document.getElementById('modal-close')?.addEventListener('click', closeModal);
@@ -709,14 +837,22 @@ function addCustomRule() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function openAddCardModal() {
+  console.log('[LLMAgent] 📦 openAddCardModal() called');
   state.editingCardId = null;
   state.modalCardType = null;
   state.scrapedContent = null;
 
   const modal = document.getElementById('modal-add-card');
   const titleEl = document.getElementById('modal-title');
+  console.log('[LLMAgent] modal element:', modal ? 'FOUND' : 'NOT FOUND');
+  console.log('[LLMAgent] modal hidden before:', modal?.hasAttribute('hidden'));
   if (titleEl) titleEl.textContent = 'Add Knowledge Card';
-  if (modal) modal.removeAttribute('hidden');
+  if (modal) {
+    modal.removeAttribute('hidden');
+    modal.style.display = 'flex'; // Force display in case CSS conflict
+  }
+  console.log('[LLMAgent] modal hidden after:', modal?.hasAttribute('hidden'));
+  console.log('[LLMAgent] modal computed display:', modal ? getComputedStyle(modal).display : 'N/A');
 
   // Show type selection step
   document.getElementById('modal-step-type')?.removeAttribute('hidden');
@@ -735,7 +871,12 @@ function openAddCardModal() {
 }
 
 function closeModal() {
-  document.getElementById('modal-add-card')?.setAttribute('hidden', '');
+  console.log('[LLMAgent] closeModal() called');
+  const modal = document.getElementById('modal-add-card');
+  if (modal) {
+    modal.setAttribute('hidden', '');
+    modal.style.display = ''; // Clear inline style
+  }
   state.editingCardId = null;
   state.modalCardType = null;
   state.scrapedContent = null;
