@@ -10,6 +10,8 @@
  * ============================================================================
  */
 
+console.log('[LLM] ── llm.js loaded ──');
+
 // ════════════════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════════════════
@@ -29,17 +31,40 @@ const state = {
 // ════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[LLM] ── DOMContentLoaded fired ──');
+
   const urlParams = new URLSearchParams(window.location.search);
   state.companyId = urlParams.get('companyId');
+  console.log('[LLM] companyId:', state.companyId);
 
   if (!state.companyId) {
     showToast('error', 'Missing companyId parameter');
     return;
   }
 
-  setupTabNavigation();
-  setupEventListeners();
-  await loadSettings();
+  try {
+    console.log('[LLM] setupTabNavigation…');
+    setupTabNavigation();
+    console.log('[LLM] setupTabNavigation ✓');
+  } catch (err) {
+    console.error('[LLM] setupTabNavigation FAILED:', err);
+  }
+
+  try {
+    console.log('[LLM] setupEventListeners…');
+    setupEventListeners();
+    console.log('[LLM] setupEventListeners ✓');
+  } catch (err) {
+    console.error('[LLM] setupEventListeners FAILED:', err);
+  }
+
+  try {
+    console.log('[LLM] loadSettings…');
+    await loadSettings();
+    console.log('[LLM] loadSettings ✓');
+  } catch (err) {
+    console.error('[LLM] loadSettings FAILED:', err);
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -50,7 +75,10 @@ async function loadSettings() {
   try {
     showLoadingState();
     const scope = `company:${state.companyId}`;
+    console.log('[LLM] Fetching settings for scope:', scope);
+
     const data = await AgentConsoleAuth.apiFetch(`/api/admin/llm-settings?scope=${encodeURIComponent(scope)}`);
+    console.log('[LLM] Settings API response received:', { hasSettings: !!data?.settings, hasProfiles: !!data?.profiles, hasPromptParts: !!data?.promptParts });
 
     state.settings = data.settings;
     state.profiles = data.profiles;
@@ -58,16 +86,27 @@ async function loadSettings() {
 
     // Fetch company name
     try {
+      console.log('[LLM] Fetching truth data…');
       const truthData = await AgentConsoleAuth.apiFetch(`/api/agent-console/${state.companyId}/truth`);
       state.companyName = truthData?.companyProfile?.businessName ||
                           truthData?.companyProfile?.companyName || '';
-    } catch (_) { /* non-critical */ }
+      console.log('[LLM] Company name:', state.companyName || '(empty)');
+    } catch (err) {
+      console.warn('[LLM] Truth fetch failed (non-critical):', err.message);
+    }
 
+    console.log('[LLM] renderAllSections…');
     renderAllSections();
+    console.log('[LLM] renderAllSections ✓');
+
+    console.log('[LLM] updatePreview…');
     updatePreview();
+    console.log('[LLM] updatePreview ✓');
+
     hideLoadingState();
+    console.log('[LLM] ── Page fully loaded ──');
   } catch (error) {
-    console.error('[LLM Settings] Load error:', error);
+    console.error('[LLM] Load error:', error);
     showToast('error', `Failed to load settings: ${error.message}`);
     hideLoadingState();
   }
@@ -105,11 +144,20 @@ async function saveSettings() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function renderAllSections() {
-  updateCompanyHeader();
-  renderOverviewTab();
-  renderModelTab();
-  renderPromptsSafetyTab();
-  renderCallHandlingTab();
+  try { console.log('[LLM]   updateCompanyHeader…'); updateCompanyHeader(); console.log('[LLM]   updateCompanyHeader ✓'); }
+  catch (e) { console.error('[LLM]   updateCompanyHeader FAILED:', e); }
+
+  try { console.log('[LLM]   renderOverviewTab…'); renderOverviewTab(); console.log('[LLM]   renderOverviewTab ✓'); }
+  catch (e) { console.error('[LLM]   renderOverviewTab FAILED:', e); }
+
+  try { console.log('[LLM]   renderModelTab…'); renderModelTab(); console.log('[LLM]   renderModelTab ✓'); }
+  catch (e) { console.error('[LLM]   renderModelTab FAILED:', e); }
+
+  try { console.log('[LLM]   renderPromptsSafetyTab…'); renderPromptsSafetyTab(); console.log('[LLM]   renderPromptsSafetyTab ✓'); }
+  catch (e) { console.error('[LLM]   renderPromptsSafetyTab FAILED:', e); }
+
+  try { console.log('[LLM]   renderCallHandlingTab…'); renderCallHandlingTab(); console.log('[LLM]   renderCallHandlingTab ✓'); }
+  catch (e) { console.error('[LLM]   renderCallHandlingTab FAILED:', e); }
 }
 
 function updateCompanyHeader() {
@@ -428,50 +476,52 @@ function updatePreview() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function setupEventListeners() {
+  console.log('[LLM] Wiring event listeners…');
+
   // Navigation
-  document.getElementById('btn-back').addEventListener('click', navigateBack);
-  document.getElementById('header-logo-link').addEventListener('click', (e) => {
+  document.getElementById('btn-back')?.addEventListener('click', navigateBack);
+  document.getElementById('header-logo-link')?.addEventListener('click', (e) => {
     e.preventDefault();
     navigateBack();
   });
 
   // Save / Export / Import
-  document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-  document.getElementById('btn-export-settings').addEventListener('click', exportSettings);
-  document.getElementById('btn-import-settings').addEventListener('click', () => {
-    document.getElementById('import-file-input').click();
+  document.getElementById('btn-save-settings')?.addEventListener('click', saveSettings);
+  document.getElementById('btn-export-settings')?.addEventListener('click', exportSettings);
+  document.getElementById('btn-import-settings')?.addEventListener('click', () => {
+    document.getElementById('import-file-input')?.click();
   });
-  document.getElementById('import-file-input').addEventListener('change', handleImportFile);
-  document.getElementById('btn-copy-preview').addEventListener('click', copyPreviewToClipboard);
+  document.getElementById('import-file-input')?.addEventListener('change', handleImportFile);
+  document.getElementById('btn-copy-preview')?.addEventListener('click', copyPreviewToClipboard);
 
   // ── AI Model tab ──
-  document.getElementById('model-override').addEventListener('change', (e) => {
+  document.getElementById('model-override')?.addEventListener('change', (e) => {
     updateSetting('defaults.modelOverride', e.target.value || null);
   });
 
   // Temperature
-  document.getElementById('temperature-override').addEventListener('input', (e) => {
+  document.getElementById('temperature-override')?.addEventListener('input', (e) => {
     setText('temperature-value', e.target.value);
   });
-  document.getElementById('temperature-override').addEventListener('change', (e) => {
+  document.getElementById('temperature-override')?.addEventListener('change', (e) => {
     const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
     updateSetting(`overrides.${ap}.temperature`, parseFloat(e.target.value));
   });
 
   // Top P
-  document.getElementById('topp-override').addEventListener('input', (e) => {
+  document.getElementById('topp-override')?.addEventListener('input', (e) => {
     setText('topp-value', e.target.value);
   });
-  document.getElementById('topp-override').addEventListener('change', (e) => {
+  document.getElementById('topp-override')?.addEventListener('change', (e) => {
     const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
     updateSetting(`overrides.${ap}.topP`, parseFloat(e.target.value));
   });
 
   // Max Tokens
-  document.getElementById('max-tokens-override').addEventListener('input', (e) => {
+  document.getElementById('max-tokens-override')?.addEventListener('input', (e) => {
     setText('max-tokens-value', e.target.value);
   });
-  document.getElementById('max-tokens-override').addEventListener('change', (e) => {
+  document.getElementById('max-tokens-override')?.addEventListener('change', (e) => {
     const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
     updateSetting(`overrides.${ap}.maxTokens`, parseInt(e.target.value));
   });
@@ -484,49 +534,50 @@ function setupEventListeners() {
       if (vcGroup) vcGroup.hidden = e.target.value !== 'multi';
     });
   });
-  document.getElementById('variant-count').addEventListener('input', (e) => {
+  document.getElementById('variant-count')?.addEventListener('input', (e) => {
     setText('variant-count-value', e.target.value);
   });
-  document.getElementById('variant-count').addEventListener('change', (e) => {
+  document.getElementById('variant-count')?.addEventListener('change', (e) => {
     updateSetting('defaults.defaultVariantCount', parseInt(e.target.value));
   });
 
   // ── Prompts & Safety tab ──
-  document.getElementById('company-context').addEventListener('change', (e) => {
+  document.getElementById('company-context')?.addEventListener('change', (e) => {
     updateSetting('companyContext', e.target.value);
     updatePreview();
   });
 
-  document.getElementById('prompt-base').addEventListener('change', (e) => {
+  document.getElementById('prompt-base')?.addEventListener('change', (e) => {
     updateSetting('promptText.base', e.target.value);
     updatePreview();
   });
 
-  document.getElementById('prompt-profile').addEventListener('change', (e) => {
+  document.getElementById('prompt-profile')?.addEventListener('change', (e) => {
     const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
     updateSetting(`promptText.profiles.${ap}`, e.target.value);
     updatePreview();
   });
 
   // Strict compliance toggle
-  document.getElementById('strict-compliance-toggle').addEventListener('change', (e) => {
+  document.getElementById('strict-compliance-toggle')?.addEventListener('change', (e) => {
     updateSetting('compliance.strictComplianceMode', e.target.checked);
     toggleFieldset('strict-compliance-fields', e.target.checked);
     updatePreview();
   });
 
-  document.getElementById('prompt-strict-compliance').addEventListener('change', (e) => {
+  document.getElementById('prompt-strict-compliance')?.addEventListener('change', (e) => {
     updateSetting('promptText.strictCompliance', e.target.value);
     updatePreview();
   });
 
   // Reset buttons (prompts)
-  document.getElementById('btn-reset-base-prompt').addEventListener('click', () => resetPromptSection('base prompt'));
-  document.getElementById('btn-reset-profile-prompt').addEventListener('click', () => resetPromptSection('profile prompt'));
-  document.getElementById('btn-reset-strict-compliance').addEventListener('click', () => resetPromptSection('strict compliance prompt'));
+  document.getElementById('btn-reset-base-prompt')?.addEventListener('click', () => resetPromptSection('base prompt'));
+  document.getElementById('btn-reset-profile-prompt')?.addEventListener('click', () => resetPromptSection('profile prompt'));
+  document.getElementById('btn-reset-strict-compliance')?.addEventListener('click', () => resetPromptSection('strict compliance prompt'));
 
   // ── Call Handling tab ──
   setupCallHandlingListeners();
+  console.log('[LLM] All event listeners wired ✓');
 }
 
 function setupCallHandlingListeners() {
@@ -623,7 +674,9 @@ function setupCallHandlingListeners() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function setupTabNavigation() {
-  document.querySelectorAll('.llm-tab').forEach(tab => {
+  const tabs = document.querySelectorAll('.llm-tab');
+  console.log('[LLM] Found', tabs.length, 'tab buttons');
+  tabs.forEach(tab => {
     tab.addEventListener('click', () => switchToTab(tab.dataset.tab));
   });
 }
@@ -825,8 +878,9 @@ function hideLoadingState() {
 }
 
 function showToast(type, message) {
+  console.log(`[LLM] Toast [${type}]:`, message);
   const container = document.getElementById('toast-container');
-  if (!container) return;
+  if (!container) { console.warn('[LLM] toast-container element not found!'); return; }
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.innerHTML = `
