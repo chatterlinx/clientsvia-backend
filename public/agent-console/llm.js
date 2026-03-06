@@ -58,7 +58,7 @@ async function loadSettings() {
 
     // Fetch company name
     try {
-      const truthData = await AgentConsoleAuth.apiFetch(`/api/admin/companies/${state.companyId}/truth`);
+      const truthData = await AgentConsoleAuth.apiFetch(`/api/agent-console/${state.companyId}/truth`);
       state.companyName = truthData?.companyProfile?.businessName ||
                           truthData?.companyProfile?.companyName || '';
     } catch (_) { /* non-critical */ }
