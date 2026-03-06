@@ -60,6 +60,13 @@ router.get('/:companyId/llm-agent/config', authenticateJWT, async (req, res) => 
     const saved = company.aiAgentSettings?.llmAgent || {};
     const merged = deepMerge(DEFAULT_LLM_AGENT_SETTINGS, saved);
 
+    // Sanitize modelId — if saved value is no longer a valid model, reset to default
+    const validModelIds = AVAILABLE_MODELS.map(m => m.id);
+    if (merged.model?.modelId && !validModelIds.includes(merged.model.modelId)) {
+      logger.warn(`[${MODULE_ID}] Invalid modelId in saved config, resetting to default`, { bad: merged.model.modelId });
+      merged.model.modelId = DEFAULT_LLM_AGENT_SETTINGS.model.modelId;
+    }
+
     res.json({
       companyId,
       companyName: company.companyName || company.name || '',
@@ -143,7 +150,11 @@ router.post('/:companyId/llm-agent/test-conversation', authenticateJWT, async (r
       return res.status(503).json({ error: 'Anthropic API key not configured. Set ANTHROPIC_API_KEY env variable.' });
     }
 
-    const modelId = config.model?.modelId || 'claude-3-5-haiku-20241022';
+    const validModelIds = AVAILABLE_MODELS.map(m => m.id);
+    const rawModelId = config.model?.modelId;
+    const modelId = (rawModelId && validModelIds.includes(rawModelId))
+      ? rawModelId
+      : DEFAULT_LLM_AGENT_SETTINGS.model.modelId;
     const temperature = config.model?.temperature ?? 0.7;
     const maxTokens = config.model?.maxTokens || 300;
 
