@@ -951,6 +951,278 @@
         --red-border: #7f1d1d;
       }
     }
+
+    /* ══════════════════════════════════════════════════════════════
+       FOLLOW-UP CONSENT CARDS
+       ══════════════════════════════════════════════════════════════ */
+
+    /* Flow description banner */
+    .fuc-flow-banner {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      background: #f8fafc;
+      border: 1px solid var(--color-gray-200, #e5e7eb);
+      border-radius: 10px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .fuc-flow-step {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px 16px;
+      position: relative;
+    }
+    .fuc-flow-step + .fuc-flow-step {
+      border-left: 1px solid var(--color-gray-200, #e5e7eb);
+    }
+    .fuc-flow-step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--color-primary-600, #2563eb);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .fuc-flow-step-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 2px;
+    }
+    .fuc-flow-step-desc {
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.4;
+    }
+
+    /* Missing response row */
+    .fuc-missing-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .fuc-missing-row label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #92400e;
+      white-space: nowrap;
+      margin: 0;
+    }
+    .fuc-missing-row select {
+      flex: 1;
+      font-size: 12px;
+    }
+
+    /* Section labels */
+    .fuc-section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 10px;
+      margin-top: 4px;
+    }
+    .fuc-section-label-line {
+      flex: 1;
+      height: 1px;
+      background: #f3f4f6;
+    }
+
+    /* Card grids */
+    .fuc-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .fuc-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 900px) {
+      .fuc-grid-2, .fuc-grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* Consent card base */
+    .consent-card {
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      transition: box-shadow 0.15s ease;
+    }
+    .consent-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+
+    /* Left accent bar approach via top border */
+    .consent-card.fuc-yes    { border-top: 3px solid #22c55e; }
+    .consent-card.fuc-no     { border-top: 3px solid #ef4444; }
+    .consent-card.fuc-maint  { border-top: 3px solid #0ea5e9; }
+    .consent-card.fuc-svc    { border-top: 3px solid #f97316; }
+    .consent-card.fuc-reprompt { border-top: 3px solid #f59e0b; }
+    .consent-card.fuc-hesitant { border-top: 3px solid #8b5cf6; }
+    .consent-card.fuc-complex  { border-top: 3px solid #64748b; }
+
+    /* Card header */
+    .fuc-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      background: #fafafa;
+    }
+    .fuc-card-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .fuc-yes    .fuc-card-icon { background: #f0fdf4; color: #16a34a; }
+    .fuc-no     .fuc-card-icon { background: #fef2f2; color: #dc2626; }
+    .fuc-maint  .fuc-card-icon { background: #f0f9ff; color: #0284c7; }
+    .fuc-svc    .fuc-card-icon { background: #fff7ed; color: #ea580c; }
+    .fuc-reprompt .fuc-card-icon { background: #fffbeb; color: #d97706; }
+    .fuc-hesitant .fuc-card-icon { background: #f5f3ff; color: #7c3aed; }
+    .fuc-complex  .fuc-card-icon { background: #f8fafc; color: #475569; }
+
+    .fuc-card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: 0.03em;
+      flex: 1;
+    }
+    .fuc-card-subtitle {
+      font-size: 10px;
+      font-weight: 500;
+      color: #9ca3af;
+      white-space: nowrap;
+    }
+
+    /* Card body */
+    .fuc-card-body {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    /* Phrase tags */
+    .phrase-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px 2px 8px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #374151;
+      margin: 2px;
+    }
+    .phrase-remove {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      transition: color 0.1s;
+    }
+    .phrase-remove:hover { color: #ef4444; }
+
+    /* Phrase input row */
+    .fuc-add-row {
+      display: flex;
+      gap: 6px;
+    }
+    .fuc-add-row input {
+      flex: 1;
+      font-size: 12px;
+      padding: 5px 10px;
+    }
+    .fuc-add-row button {
+      font-size: 11px;
+      padding: 4px 10px;
+      white-space: nowrap;
+    }
+
+    /* Field rows (response / direction) */
+    .fuc-field-row {
+      display: grid;
+      grid-template-columns: 68px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+    .fuc-field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      text-align: right;
+    }
+    .fuc-field-row input,
+    .fuc-field-row select {
+      font-size: 12px;
+    }
+
+    /* Complex — LLM agent info banner */
+    .fuc-llm-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 7px;
+      font-size: 11px;
+      color: #1d4ed8;
+      line-height: 1.45;
+    }
+    .fuc-llm-banner svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* Save bar */
+    .fuc-save-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0 0;
+      border-top: 1px solid #f3f4f6;
+      margin-top: 8px;
+    }
+    .fuc-save-hint {
+      font-size: 11px;
+      color: #9ca3af;
+    }
   </style>
 </head>
 <body>
@@ -1483,197 +1755,274 @@ Only toggle to GLOBAL if this trigger should be shared across all HVAC companies
            ════════════════════════════════════════════════════════════════════ -->
       <div class="card" id="followup-consent-section">
         <div class="card-header">
-          <h2 class="card-title">Follow-up Consent Cards</h2>
+          <div>
+            <h2 class="card-title">Follow-up Consent Cards</h2>
+            <p class="form-hint" style="margin: 4px 0 0;">Classifies caller responses to trigger follow-up questions. Active only when a trigger has follow-up text set.</p>
+          </div>
         </div>
         <div class="card-body">
-          <p class="form-hint mb-4">Configures how the agent classifies caller responses to trigger card follow-up questions. Only active when a trigger has follow-up text.</p>
 
-          <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center;">
-            <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Missing response behavior:</label>
-            <select class="form-select" id="fuc-missing-response-action" style="flex:1; font-size: 13px;">
+          <!-- 3-step flow explanation -->
+          <div class="fuc-flow-banner">
+            <div class="fuc-flow-step">
+              <div class="fuc-flow-step-num">1</div>
+              <div>
+                <div class="fuc-flow-step-title">Trigger fires</div>
+                <div class="fuc-flow-step-desc">Agent plays the answer, then asks the follow-up question.</div>
+              </div>
+            </div>
+            <div class="fuc-flow-step">
+              <div class="fuc-flow-step-num">2</div>
+              <div>
+                <div class="fuc-flow-step-title">Caller responds</div>
+                <div class="fuc-flow-step-desc">Response is classified into one of the buckets below.</div>
+              </div>
+            </div>
+            <div class="fuc-flow-step">
+              <div class="fuc-flow-step-num">3</div>
+              <div>
+                <div class="fuc-flow-step-title">Route executes</div>
+                <div class="fuc-flow-step-desc">Agent plays the card's response and follows the direction.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Missing response behavior -->
+          <div class="fuc-missing-row">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5l5.5 9.5H1.5L7 1.5z" fill="#fcd34d" stroke="#d97706" stroke-width="0.8" stroke-linejoin="round"/><path d="M7 6v2.5M7 10h.01" stroke="#92400e" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <label for="fuc-missing-response-action">If no response matches any bucket:</label>
+            <select class="form-select" id="fuc-missing-response-action">
               <option value="REASK_FOLLOWUP">Re-ask follow-up question</option>
               <option value="BACK_TO_AGENT">Back to Agent (restart discovery)</option>
             </select>
           </div>
 
-          <div id="consent-cards-container" style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- PRIMARY DECISION -->
+          <div class="fuc-section-label">
+            <span>Primary Decision</span>
+            <div class="fuc-section-label-line"></div>
+          </div>
+          <div class="fuc-grid-2">
 
             <!-- YES -->
-            <div class="consent-card" data-bucket="yes" style="border: 1px solid #22c55e; border-radius: 8px; padding: 16px; background: rgba(34,197,94,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">✅</span>
-                <strong>YES</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller confirms</span>
+            <div class="consent-card fuc-yes" data-bucket="yes">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <span class="fuc-card-title">YES</span>
+                <span class="fuc-card-subtitle">Caller confirms</span>
               </div>
-              <div class="tag-list" id="fuc-yes-phrases"></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <input type="text" class="form-input" id="fuc-yes-input" placeholder="Add yes phrases (comma-separated)..." style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('yes')">Add</button>
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-yes-response" placeholder="Got it — one moment." style="flex:1; font-size: 13px;">
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
-                <select class="form-select" id="fuc-yes-direction" style="flex:1; font-size: 13px;">
-                  <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
-                  <option value="CONTINUE">Continue Conversation</option>
-                  <option value="TRANSFER">Transfer to Human</option>
-                </select>
+              <div class="fuc-card-body">
+                <div class="tag-list" id="fuc-yes-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-yes-input" placeholder="Add yes phrases (comma-separated)…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('yes')">Add</button>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Response</span>
+                  <input type="text" class="form-input" id="fuc-yes-response" placeholder="Got it — one moment.">
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Direction</span>
+                  <select class="form-select" id="fuc-yes-direction">
+                    <option value="HANDOFF_BOOKING">Hand off to Booking</option>
+                    <option value="CONTINUE">Continue Conversation</option>
+                    <option value="TRANSFER">Transfer to Human</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             <!-- NO -->
-            <div class="consent-card" data-bucket="no" style="border: 1px solid #ef4444; border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">❌</span>
-                <strong>NO</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller declines</span>
+            <div class="consent-card fuc-no" data-bucket="no">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 3L3 11M3 3l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </div>
+                <span class="fuc-card-title">NO</span>
+                <span class="fuc-card-subtitle">Caller declines</span>
               </div>
-              <div class="tag-list" id="fuc-no-phrases"></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <input type="text" class="form-input" id="fuc-no-input" placeholder="Add no phrases (comma-separated)..." style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('no')">Add</button>
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-no-response" placeholder="No problem. Is there anything else I can help you with?" style="flex:1; font-size: 13px;">
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
-                <select class="form-select" id="fuc-no-direction" style="flex:1; font-size: 13px;">
-                  <option value="CONTINUE">Continue Conversation</option>
-                  <option value="TRANSFER">Transfer to Human</option>
-                </select>
+              <div class="fuc-card-body">
+                <div class="tag-list" id="fuc-no-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-no-input" placeholder="Add no phrases (comma-separated)…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('no')">Add</button>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Response</span>
+                  <input type="text" class="form-input" id="fuc-no-response" placeholder="No problem. Anything else I can help with?">
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Direction</span>
+                  <select class="form-select" id="fuc-no-direction">
+                    <option value="CONTINUE">Continue Conversation</option>
+                    <option value="TRANSFER">Transfer to Human</option>
+                  </select>
+                </div>
               </div>
             </div>
+          </div>
+
+          <!-- SERVICE ROUTING -->
+          <div class="fuc-section-label">
+            <span>Service Routing</span>
+            <div class="fuc-section-label-line"></div>
+          </div>
+          <div class="fuc-grid-2">
 
             <!-- MAINTENANCE -->
-            <div class="consent-card" data-bucket="maintenance" style="border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; background: rgba(14,165,233,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">🧰</span>
-                <strong>MAINTENANCE</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller chooses tune-up</span>
+            <div class="consent-card fuc-maint" data-bucket="maintenance">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2a3.5 3.5 0 0 1 .5 5.1L5.5 11.5A1.5 1.5 0 0 1 3.4 9.4L7.9 4.9A3.5 3.5 0 0 1 9.5 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="4.5" cy="10.5" r="0.8" fill="currentColor"/></svg>
+                </div>
+                <span class="fuc-card-title">MAINTENANCE</span>
+                <span class="fuc-card-subtitle">Tune-up / check-up</span>
               </div>
-              <div class="tag-list" id="fuc-maintenance-phrases"></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <input type="text" class="form-input" id="fuc-maintenance-input" placeholder="Add maintenance phrases (comma-separated)..." style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('maintenance')">Add</button>
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-maintenance-response" placeholder="Got it — one moment." style="flex:1; font-size: 13px;">
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
-                <select class="form-select" id="fuc-maintenance-direction" style="flex:1; font-size: 13px;">
-                  <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
-                  <option value="CONTINUE">Continue Conversation</option>
-                  <option value="TRANSFER">Transfer to Human</option>
-                </select>
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Booking mode:</label>
-                <select class="form-select" id="fuc-maintenance-booking-mode" style="flex:1; font-size: 13px;">
-                  <option value="maintenance" selected>maintenance</option>
-                  <option value="service_call">service_call</option>
-                </select>
+              <div class="fuc-card-body">
+                <div class="tag-list" id="fuc-maintenance-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-maintenance-input" placeholder="Add maintenance phrases (comma-separated)…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('maintenance')">Add</button>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Response</span>
+                  <input type="text" class="form-input" id="fuc-maintenance-response" placeholder="Got it — one moment.">
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Direction</span>
+                  <select class="form-select" id="fuc-maintenance-direction">
+                    <option value="HANDOFF_BOOKING">Hand off to Booking</option>
+                    <option value="CONTINUE">Continue Conversation</option>
+                    <option value="TRANSFER">Transfer to Human</option>
+                  </select>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Book as</span>
+                  <select class="form-select" id="fuc-maintenance-booking-mode">
+                    <option value="maintenance" selected>maintenance</option>
+                    <option value="service_call">service_call</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             <!-- SERVICE CALL -->
-            <div class="consent-card" data-bucket="service_call" style="border: 1px solid #f97316; border-radius: 8px; padding: 16px; background: rgba(249,115,22,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">🛠️</span>
-                <strong>SERVICE CALL</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Caller needs repair/diagnostic</span>
+            <div class="consent-card fuc-svc" data-bucket="service_call">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
+                </div>
+                <span class="fuc-card-title">SERVICE CALL</span>
+                <span class="fuc-card-subtitle">Repair / diagnostic</span>
               </div>
-              <div class="tag-list" id="fuc-service_call-phrases"></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <input type="text" class="form-input" id="fuc-service_call-input" placeholder="Add service call phrases (comma-separated)..." style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('service_call')">Add</button>
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-service_call-response" placeholder="Got it — one moment." style="flex:1; font-size: 13px;">
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
-                <select class="form-select" id="fuc-service_call-direction" style="flex:1; font-size: 13px;">
-                  <option value="HANDOFF_BOOKING">Hand off to Booking Logic</option>
-                  <option value="CONTINUE">Continue Conversation</option>
-                  <option value="TRANSFER">Transfer to Human</option>
-                </select>
-              </div>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Booking mode:</label>
-                <select class="form-select" id="fuc-service_call-booking-mode" style="flex:1; font-size: 13px;">
-                  <option value="maintenance">maintenance</option>
-                  <option value="service_call" selected>service_call</option>
-                </select>
+              <div class="fuc-card-body">
+                <div class="tag-list" id="fuc-service_call-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-service_call-input" placeholder="Add service call phrases (comma-separated)…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('service_call')">Add</button>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Response</span>
+                  <input type="text" class="form-input" id="fuc-service_call-response" placeholder="Got it — one moment.">
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Direction</span>
+                  <select class="form-select" id="fuc-service_call-direction">
+                    <option value="HANDOFF_BOOKING">Hand off to Booking</option>
+                    <option value="CONTINUE">Continue Conversation</option>
+                    <option value="TRANSFER">Transfer to Human</option>
+                  </select>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Book as</span>
+                  <select class="form-select" id="fuc-service_call-booking-mode">
+                    <option value="maintenance">maintenance</option>
+                    <option value="service_call" selected>service_call</option>
+                  </select>
+                </div>
               </div>
             </div>
+          </div>
+
+          <!-- FALLBACKS -->
+          <div class="fuc-section-label">
+            <span>Fallbacks &amp; Catch-alls</span>
+            <div class="fuc-section-label-line"></div>
+          </div>
+          <div class="fuc-grid-3">
 
             <!-- REPROMPT -->
-            <div class="consent-card" data-bucket="reprompt" style="border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; background: rgba(245,158,11,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">🔄</span>
-                <strong>REPROMPT</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Unclear / didn't hear</span>
+            <div class="consent-card fuc-reprompt" data-bucket="reprompt">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7A6 6 0 0 1 12 4M12 4V1M12 4H9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 7a6 6 0 0 1-11 3M2 10v3M2 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <span class="fuc-card-title">REPROMPT</span>
+                <span class="fuc-card-subtitle">Unclear / no match</span>
               </div>
-              <div class="tag-list" id="fuc-reprompt-phrases"></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <input type="text" class="form-input" id="fuc-reprompt-input" placeholder="Add reprompt phrases (comma-separated)..." style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('reprompt')">Add</button>
+              <div class="fuc-card-body">
+                <div class="tag-list" id="fuc-reprompt-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-reprompt-input" placeholder="Add reprompt phrases…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('reprompt')">Add</button>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Response</span>
+                  <input type="text" class="form-input" id="fuc-reprompt-response" placeholder="Sorry — could you say yes or no?">
+                </div>
+                <p class="form-hint" style="margin: 0; font-size: 10.5px;">Re-asks the original question after this response.</p>
               </div>
-              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-reprompt-response" placeholder="Sorry, I missed that. Could you say yes or no?" style="flex:1; font-size: 13px;">
-              </div>
-              <p class="form-hint" style="margin-top: 4px;">Re-asks the original follow-up question after this response.</p>
             </div>
 
             <!-- HESITANT -->
-            <div class="consent-card" data-bucket="hesitant" style="border: 1px solid #8b5cf6; border-radius: 8px; padding: 16px; background: rgba(139,92,246,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">🤔</span>
-                <strong>HESITANT</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Unsure / needs reassurance</span>
+            <div class="consent-card fuc-hesitant" data-bucket="hesitant">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M7 4v3.5M7 9.5h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                </div>
+                <span class="fuc-card-title">HESITANT</span>
+                <span class="fuc-card-subtitle">Unsure / needs guidance</span>
               </div>
-              <div class="tag-list" id="fuc-hesitant-phrases"></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <input type="text" class="form-input" id="fuc-hesitant-input" placeholder="Add hesitant phrases (comma-separated)..." style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('hesitant')">Add</button>
+              <div class="fuc-card-body">
+                <div class="tag-list" id="fuc-hesitant-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-hesitant-input" placeholder="Add hesitant phrases…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('hesitant')">Add</button>
+                </div>
+                <div class="fuc-field-row">
+                  <span class="fuc-field-label">Response</span>
+                  <input type="text" class="form-input" id="fuc-hesitant-response" placeholder="No worries — if the system isn't cooling, pick service call. For a tune-up, pick maintenance. Which one?">
+                </div>
+                <p class="form-hint" style="margin: 0; font-size: 10.5px;">Clarifies the options, then re-asks.</p>
               </div>
-              <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Response:</label>
-                <input type="text" class="form-input" id="fuc-hesitant-response" placeholder="No worries - quick rule: if the system isn't cooling or acting up, pick service call so we can diagnose it. If everything is working and you just want a tune-up, pick maintenance. Which one should I book?" style="flex:1; font-size: 13px;">
-              </div>
-              <p class="form-hint" style="margin-top: 4px;">Gently clarifies, then re-asks the follow-up question.</p>
             </div>
 
             <!-- COMPLEX -->
-            <div class="consent-card" data-bucket="complex" style="border: 1px solid #64748b; border-radius: 8px; padding: 16px; background: rgba(100,116,139,0.04);">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">💬</span>
-                <strong>COMPLEX</strong>
-                <span style="color: #64748b; font-size: 12px; margin-left: auto;">Substantive response (catch-all)</span>
+            <div class="consent-card fuc-complex" data-bucket="complex">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3.5h12M1 7h12M1 10.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                </div>
+                <span class="fuc-card-title">COMPLEX</span>
+                <span class="fuc-card-subtitle">Catch-all / substantive</span>
               </div>
-              <p class="form-hint">Anything that doesn't match the above buckets. The caller said something meaningful but not a simple yes/no. Routes back to the agent to handle naturally.</p>
-              <div style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                <label class="form-label" style="margin:0; white-space: nowrap; font-size: 13px;">Direction:</label>
-                <select class="form-select" id="fuc-complex-direction" style="flex:1; font-size: 13px;">
-                  <option value="AGENT">Back to Agent</option>
-                  <option value="CONTINUE">Continue Conversation</option>
-                </select>
+              <div class="fuc-card-body">
+                <div class="fuc-llm-banner">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0;margin-top:1px"><circle cx="7" cy="7" r="6" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1"/><path d="M7 4.5v3M7 9.5h.01" stroke="#1d4ed8" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <span><strong>LLM Agent handles this automatically.</strong> When the caller says something complex (not a simple yes/no), the conversation routes to the LLM Agent to respond naturally. No configuration needed here.</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div style="margin-top: 16px; text-align: right;">
+          <!-- Save bar -->
+          <div class="fuc-save-bar">
+            <span class="fuc-save-hint">Changes apply to all triggers with a follow-up question set.</span>
             <button class="btn btn-primary" id="btn-save-followup-consent">Save Consent Cards</button>
           </div>
+
         </div>
       </div>
 
