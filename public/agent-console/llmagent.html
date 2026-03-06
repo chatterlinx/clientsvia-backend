@@ -37,6 +37,16 @@
         gap: var(--space-5);
         position: static !important;
         max-height: none !important;
+        overflow: visible !important;
+      }
+      /* In the 2-up grid layout, system prompt panel needs an explicit height */
+      .preview-panel.dark-header {
+        flex: none;
+        min-height: 420px;
+      }
+      .prompt-preview {
+        flex: 1;
+        min-height: 320px;
       }
     }
 
@@ -680,6 +690,7 @@
       display: flex;
       flex-direction: column;
       gap: var(--space-4);
+      overflow: hidden;
     }
 
     .preview-panel {
@@ -688,6 +699,16 @@
       border-radius: var(--radius-lg);
       overflow: hidden;
       box-shadow: var(--shadow-sm);
+      flex-shrink: 0;
+    }
+
+    /* System prompt panel grows to fill remaining column space */
+    .preview-panel.dark-header {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .preview-panel-header {
@@ -715,7 +736,8 @@
       color: #a5b4c8;
       white-space: pre-wrap;
       word-break: break-word;
-      max-height: 260px;
+      flex: 1;
+      min-height: 0;
       overflow-y: auto;
       background: #0d1117;
       scrollbar-width: thin;
