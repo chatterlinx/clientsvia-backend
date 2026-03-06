@@ -92,12 +92,162 @@ const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
 const { ScrabEngine } = require('../../ScrabEngine');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
+const { DEFAULT_LLM_AGENT_SETTINGS, composeSystemPrompt } = require('../../../config/llmAgentDefaults');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
 
 // Cache for company trigger variables (per call, keyed by companyId)
 const triggerVariablesCache = new Map();
+
+// ────────────────────────────────────────────────────────────────────────────
+// LLM AGENT — Follow-Up Consent Handler
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Deep merge two objects (source overrides target).
+ */
+function deepMergeLLMAgent(target, source) {
+  if (!source || typeof source !== 'object') return target;
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] === null || source[key] === undefined) continue;
+    if (Array.isArray(source[key])) {
+      result[key] = source[key];
+    } else if (typeof source[key] === 'object' && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+      result[key] = deepMergeLLMAgent(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+
+/**
+ * Call the LLM Agent (Claude) to handle a non-YES/NO follow-up response.
+ * Returns { response, tokensUsed, latencyMs } or null if disabled/failed.
+ *
+ * @param {Object} params
+ * @param {Object} params.company       - Full company doc (or lean object)
+ * @param {string} params.input         - Caller's raw input
+ * @param {string} params.followUpQuestion - The question that was asked
+ * @param {string} params.triggerSource - Which trigger card asked the question
+ * @param {string} params.bucket        - Classifier bucket (REPROMPT/HESITANT/COMPLEX)
+ * @param {string} params.channel       - 'call' | 'sms' | 'webchat'
+ * @param {Function} params.emit        - Event emitter
+ * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
+ */
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit }) {
+  try {
+    // Load company LLM Agent config, merge with defaults
+    const saved = company?.aiAgentSettings?.llmAgent || {};
+    const config = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, saved);
+
+    // Gate: LLM Agent must be enabled for this company
+    if (!config.enabled) return null;
+
+    // Gate: Anthropic API key must exist
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      logger.warn('[LLM_AGENT] ANTHROPIC_API_KEY not set — skipping LLM Agent for follow-up');
+      return null;
+    }
+
+    // Build system prompt with follow-up context appended
+    const basePrompt = composeSystemPrompt(config, channel || 'call');
+    const followUpContext = [
+      '\n=== FOLLOW-UP CONTEXT ===',
+      `The caller was asked: "${followUpQuestion}"`,
+      triggerSource ? `(This was asked because trigger "${triggerSource}" matched.)` : '',
+      `The caller responded: "${input}"`,
+      `This was classified as: ${bucket} (not a clear yes or no)`,
+      '',
+      'Your job: Understand what the caller is saying. If they are confirming with conditions,',
+      'acknowledge the conditions and guide them. If they have a question, answer it using',
+      'your knowledge base. Then smoothly guide the conversation forward.',
+      '=== END FOLLOW-UP CONTEXT ==='
+    ].filter(Boolean).join('\n');
+
+    const systemPrompt = basePrompt + followUpContext;
+
+    const modelId = config.model?.modelId || 'claude-3-5-haiku-20241022';
+    const temperature = config.model?.temperature ?? 0.7;
+    const maxTokens = config.model?.maxTokens || 300;
+
+    emit('A2_LLM_AGENT_CALLED', {
+      bucket,
+      model: modelId,
+      followUpQuestion: followUpQuestion?.substring(0, 80),
+      inputPreview: input?.substring(0, 80),
+      triggerSource
+    });
+
+    const startMs = Date.now();
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: maxTokens,
+        temperature,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: input }]
+      }),
+      signal: AbortSignal.timeout(6000) // 6s timeout — must not block calls
+    });
+
+    const latencyMs = Date.now() - startMs;
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => 'unknown');
+      logger.error('[LLM_AGENT] Anthropic API error', { status: res.status, body: errText?.substring(0, 200) });
+      emit('A2_LLM_AGENT_ERROR', { status: res.status, latencyMs });
+      return null;
+    }
+
+    const data = await res.json();
+    const responseText = data.content?.[0]?.text || '';
+    const tokensUsed = {
+      input: data.usage?.input_tokens || 0,
+      output: data.usage?.output_tokens || 0
+    };
+
+    if (!responseText) {
+      logger.warn('[LLM_AGENT] Empty response from Anthropic');
+      return null;
+    }
+
+    emit('A2_LLM_AGENT_RESPONSE', {
+      latencyMs,
+      model: modelId,
+      tokensInput: tokensUsed.input,
+      tokensOutput: tokensUsed.output,
+      responsePreview: responseText.substring(0, 120)
+    });
+
+    return { response: responseText, tokensUsed, latencyMs };
+
+  } catch (error) {
+    logger.error('[LLM_AGENT] Follow-up call failed', { error: error.message });
+    emit('A2_LLM_AGENT_ERROR', { error: error.message });
+    return null; // Graceful fallback — existing canned behavior will handle it
+  }
+}
+
+/**
+ * Clear pending follow-up question state.
+ */
+function clearPendingFollowUp(nextState) {
+  nextState.agent2.discovery.pendingFollowUpQuestion = null;
+  nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
+  nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
+  nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -708,10 +858,7 @@ class Agent2DiscoveryRunner {
 
         if (fallbackAction === 'BACK_TO_AGENT') {
           // Clear pending follow-up and fall through to normal discovery processing
-          nextState.agent2.discovery.pendingFollowUpQuestion = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+          clearPendingFollowUp(nextState);
           fallthroughMissingConfig = true;
         } else {
           emit('A2_RESPONSE_READY', {
@@ -727,6 +874,20 @@ class Agent2DiscoveryRunner {
       if (!fallthroughMissingConfig) {
         // ── REPROMPT: re-ask the question ──
         if (bucket === 'REPROMPT') {
+          // Try LLM Agent first — if enabled, let Claude handle the ambiguous response
+          const llmAgentResult = await callLLMAgentForFollowUp({
+            company, input, followUpQuestion: pfuq,
+            triggerSource: pfuqSource?.replace('card:', '') || null,
+            bucket, channel: 'call', emit
+          });
+          if (llmAgentResult) {
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+            clearPendingFollowUp(nextState);
+            const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
+            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState };
+          }
+          // Fallback: existing canned behavior if LLM Agent disabled/failed
           const repromptText = bucketResponse || `${pfuq}`;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
           const repromptResponse = `${fuqAck} ${repromptText}`.trim();
@@ -737,6 +898,20 @@ class Agent2DiscoveryRunner {
 
         // ── HESITANT: gentle clarification, keep question pending ──
         if (bucket === 'HESITANT') {
+          // Try LLM Agent first — if enabled, let Claude handle the hesitant response
+          const llmAgentResult = await callLLMAgentForFollowUp({
+            company, input, followUpQuestion: pfuq,
+            triggerSource: pfuqSource?.replace('card:', '') || null,
+            bucket, channel: 'call', emit
+          });
+          if (llmAgentResult) {
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+            clearPendingFollowUp(nextState);
+            const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
+            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState };
+          }
+          // Fallback: existing canned behavior if LLM Agent disabled/failed
           const hesitantText = bucketResponse || `${pfuq}`;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
           const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
@@ -747,10 +922,7 @@ class Agent2DiscoveryRunner {
 
         // Clear the pending follow-up for resolved buckets
         if (bucket !== 'REPROMPT' && bucket !== 'HESITANT') {
-          nextState.agent2.discovery.pendingFollowUpQuestion = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+          clearPendingFollowUp(nextState);
           if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
           nextState.agent2.discovery.bookingMode = null;
         }
@@ -837,10 +1009,26 @@ class Agent2DiscoveryRunner {
           return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
         }
 
-        // ── COMPLEX: clear pending, fall through to normal agent ──
+        // ── COMPLEX: try LLM Agent, then fall through to normal agent ──
+        {
+          const llmAgentResult = await callLLMAgentForFollowUp({
+            company, input, followUpQuestion: pfuq,
+            triggerSource: pfuqSource?.replace('card:', '') || null,
+            bucket, channel: 'call', emit
+          });
+          if (llmAgentResult) {
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+            clearPendingFollowUp(nextState);
+            const { ack: complexAck } = buildAck(ack, callerName, state, nameGreetingConfig);
+            const agentResponse = `${complexAck} ${llmAgentResult.response}`.trim();
+            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState };
+          }
+        }
+        // LLM Agent disabled or failed — fall through to normal discovery
         nextState.agent2.discovery.lastPath = 'FOLLOWUP_COMPLEX';
         emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
-          reason: 'Caller gave substantive non-yes/no response to follow-up — routing through normal discovery',
+          reason: 'Caller gave substantive non-yes/no response — LLM Agent unavailable, routing through normal discovery',
           inputPreview: clip(inputLowerCleanFUQ, 80)
         });
         // Fall through — ScrabEngine + normal trigger matching will handle this turn
