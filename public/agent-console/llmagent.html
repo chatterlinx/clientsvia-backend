@@ -30,6 +30,17 @@
 
     @media (max-width: 1400px) {
       .llmagent-layout {
+        grid-template-columns: 1fr 1fr;
+      }
+      .preview-column {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 960px) {
+      .llmagent-layout {
         grid-template-columns: 1fr;
       }
     }
@@ -584,55 +595,10 @@
 
     /* ── Modal ────────────────────────────────────────────────────────────── */
 
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    .modal-overlay[hidden] { display: none; }
-
-    .modal {
-      background: var(--color-white);
-      border-radius: var(--radius-lg);
-      width: 90%;
-      max-width: 600px;
-      max-height: 80vh;
+    /* Modal base styles come from styles.css (.modal-overlay + .open class) */
+    /* Override max-height for scrollable card form */
+    .modal-overlay .modal {
       overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-    }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--space-5);
-      border-bottom: 1px solid var(--color-gray-200);
-    }
-    .modal-header h3 {
-      font-size: var(--font-size-lg);
-      font-weight: 600;
-      color: var(--color-gray-800);
-      margin: 0;
-    }
-    .modal-close {
-      background: none;
-      border: none;
-      font-size: 20px;
-      color: var(--color-gray-400);
-      cursor: pointer;
-      padding: 4px;
-    }
-    .modal-close:hover { color: var(--color-gray-700); }
-    .modal-body { padding: var(--space-5); }
-    .modal-footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-3);
-      padding: var(--space-4) var(--space-5);
-      border-top: 1px solid var(--color-gray-200);
     }
 
     /* Card type selector in modal */
