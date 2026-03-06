@@ -794,28 +794,59 @@
     }
     .preview-panel.dark-header .preview-panel-title { color: rgba(255,255,255,0.4); }
 
-    /* ── Test Chat ─────────────────────────────────────────────────────── */
+    /* ── Agent Test Console (full-width bar above 3-column layout) ─────── */
 
+    .test-console {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: var(--space-5);
+      overflow: hidden;
+    }
+
+    /* Top bar: label + channel tabs + meta + clear */
+    .test-console-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 8px 16px;
+      background: #0f1117;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .test-console-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      white-space: nowrap;
+    }
+    .test-console-divider {
+      width: 1px;
+      height: 16px;
+      background: rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+
+    /* Channel tabs — inline in the bar */
     .channel-tabs {
       display: flex;
-      gap: var(--space-1);
-      padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-gray-100);
-      background: var(--color-gray-50);
+      gap: 4px;
     }
     .channel-tab {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      padding: 4px 10px;
-      border: 1px solid var(--color-gray-200);
+      padding: 3px 10px;
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: var(--radius-full);
-      background: var(--color-white);
+      background: transparent;
       font-size: 11px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.15s ease;
-      color: var(--color-gray-600);
+      color: rgba(255,255,255,0.45);
       font-family: inherit;
     }
     .channel-tab.active {
@@ -823,11 +854,54 @@
       border-color: var(--color-primary-600);
       color: white;
     }
+    .channel-tab:not(.active):hover {
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.7);
+    }
+
+    .test-console-spacer { flex: 1; }
+
+    /* Meta — model/latency/tokens shown inline when a response arrives */
+    .test-meta {
+      font-size: 10.5px;
+      color: rgba(255,255,255,0.3);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      white-space: nowrap;
+      display: flex;
+      gap: 8px;
+    }
+    .test-meta span { color: rgba(255,255,255,0.45); }
+
+    .btn-clear-test {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius-sm);
+      color: rgba(255,255,255,0.35);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-clear-test:hover {
+      border-color: rgba(255,255,255,0.25);
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* Body: messages + input row side-by-side */
+    .test-console-body {
+      display: flex;
+      flex-direction: column;
+    }
 
     .test-messages {
-      padding: var(--space-4);
-      min-height: 180px;
-      max-height: 280px;
+      padding: var(--space-3) var(--space-5);
+      height: 150px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -840,18 +914,18 @@
     .test-messages::-webkit-scrollbar-thumb { background: var(--color-gray-200); border-radius: 2px; }
 
     .test-messages-empty {
-      text-align: center;
-      color: var(--color-gray-400);
-      font-size: var(--font-size-xs);
-      padding: var(--space-8) 0;
+      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       gap: var(--space-2);
+      color: var(--color-gray-400);
+      font-size: var(--font-size-xs);
     }
 
     .test-msg {
-      max-width: 82%;
+      max-width: 60%;
       padding: var(--space-2) var(--space-3);
       font-size: var(--font-size-sm);
       line-height: 1.5;
@@ -882,17 +956,18 @@
 
     .test-input-row {
       display: flex;
+      align-items: center;
       gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
+      padding: 10px 20px;
       border-top: 1px solid var(--color-gray-100);
       background: var(--color-white);
     }
     .test-input-row input {
       flex: 1;
-      padding: var(--space-2) var(--space-3);
+      padding: 8px 16px;
       border: 1px solid var(--color-gray-200);
       border-radius: var(--radius-full);
-      font-size: var(--font-size-sm);
+      font-size: 13px;
       font-family: inherit;
       background: var(--color-gray-50);
       transition: all 0.15s ease;
@@ -904,8 +979,8 @@
       box-shadow: 0 0 0 3px var(--color-primary-100);
     }
     .btn-send {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       background: var(--color-primary-600);
       color: white;
@@ -915,42 +990,10 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: all 0.15s ease;
+      transition: background 0.15s ease;
       font-family: inherit;
     }
     .btn-send:hover { background: var(--color-primary-700); }
-
-    .test-meta {
-      padding: var(--space-2) var(--space-4);
-      font-size: 10px;
-      color: var(--color-gray-400);
-      border-top: 1px solid var(--color-gray-100);
-      display: flex;
-      justify-content: space-between;
-      background: var(--color-gray-50);
-      font-family: 'SF Mono', monospace;
-    }
-
-    .btn-clear-test {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      background: transparent;
-      border: 1px solid var(--color-gray-200);
-      border-radius: var(--radius-sm);
-      color: var(--color-gray-500);
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-      font-family: inherit;
-    }
-    .btn-clear-test:hover {
-      border-color: var(--color-gray-300);
-      color: var(--color-gray-700);
-      background: var(--color-gray-50);
-    }
 
     /* ── MODAL ─────────────────────────────────────────────────────────── */
 
@@ -1180,6 +1223,75 @@
        MAIN — 3-Column Layout
        ════════════════════════════════════════════════════════════════ -->
   <main class="main-content">
+
+    <!-- ════════════════════════════════════════════════════════════════
+         AGENT TEST CONSOLE — Full-width bar above 3-column layout
+         ════════════════════════════════════════════════════════════════ -->
+    <div class="test-console">
+      <div class="test-console-bar">
+        <span class="test-console-label">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="opacity:0.7;">
+            <rect x="1" y="1" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4 4.5l2.5 2-2.5 2M7.5 8.5h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Agent Test Console
+        </span>
+        <div class="test-console-divider"></div>
+        <div class="channel-tabs">
+          <button class="channel-tab active" data-channel="call" type="button">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <path d="M9.5 7.5c-.5.5-1.5 1-2.5.5S4.5 6 4 5 3 2.5 3.5 2L4.5 1 6.5 4 5.5 5c.5 1 1.5 1.5 2 2l1-1 3 2-1.5 1.5h.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Phone
+          </button>
+          <button class="channel-tab" data-channel="sms" type="button">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <rect x="1" y="1.5" width="9" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M3.5 9.5L5.5 8h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            SMS
+          </button>
+          <button class="channel-tab" data-channel="webchat" type="button">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M1.5 5.5h8M5.5 1.5c-1.5 1.5-1.5 5 0 8M5.5 1.5c1.5 1.5 1.5 5 0 8" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+            Web
+          </button>
+        </div>
+        <div class="test-console-spacer"></div>
+        <div class="test-meta" id="test-meta" hidden>
+          <span id="test-model"></span>
+          <span id="test-latency"></span>
+        </div>
+        <button class="btn-clear-test" id="btn-clear-test" type="button">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+            <path d="M1 1l7 7M8 1L1 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          Clear
+        </button>
+      </div>
+      <div class="test-console-body">
+        <div class="test-messages" id="test-messages">
+          <div class="test-messages-empty">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="opacity:0.3;">
+              <circle cx="16" cy="16" r="13" stroke="#9ca3af" stroke-width="1.5"/>
+              <path d="M10 16h12M16 10v12" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Send a message to test the agent
+          </div>
+        </div>
+        <div class="test-input-row">
+          <input type="text" id="test-input" placeholder="Type a test message and press Enter or →">
+          <button class="btn-send" id="btn-send-test" type="button" title="Send">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 7l11-5-5 11V8.5L1 7z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="llmagent-layout">
 
       <!-- ═══════════════════════════════════════════════════════════
@@ -1562,7 +1674,7 @@
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════
-           RIGHT COLUMN: System Prompt Preview + Test Chat
+           RIGHT COLUMN: System Prompt Preview
            ═══════════════════════════════════════════════════════════ -->
       <div class="preview-column">
 
@@ -1582,66 +1694,6 @@
           <div class="token-bar">
             <span class="token-label">Estimated tokens</span>
             <span class="token-count-val">~<span id="token-count">0</span></span>
-          </div>
-        </div>
-
-        <!-- Test Conversation -->
-        <div class="preview-panel">
-          <div class="preview-panel-header">
-            <span class="preview-panel-title">Test Conversation</span>
-            <button class="btn-clear-test" id="btn-clear-test" type="button">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-              </svg>
-              Clear
-            </button>
-          </div>
-
-          <div class="channel-tabs">
-            <button class="channel-tab active" data-channel="call" type="button">
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <path d="M9.5 7.5c-.5.5-1.5 1-2.5.5S4.5 6 4 5 3 2.5 3.5 2L4.5 1 6.5 4 5.5 5c.5 1 1.5 1.5 2 2l1-1 3 2-1.5 1.5h.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Phone
-            </button>
-            <button class="channel-tab" data-channel="sms" type="button">
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <rect x="1" y="1.5" width="9" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
-                <path d="M3.5 9.5L5.5 8h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-              </svg>
-              SMS
-            </button>
-            <button class="channel-tab" data-channel="webchat" type="button">
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.2"/>
-                <path d="M1.5 5.5h8M5.5 1.5c-1.5 1.5-1.5 5 0 8M5.5 1.5c1.5 1.5 1.5 5 0 8" stroke="currentColor" stroke-width="1.2"/>
-              </svg>
-              Web
-            </button>
-          </div>
-
-          <div class="test-messages" id="test-messages">
-            <div class="test-messages-empty">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="opacity:0.3;">
-                <circle cx="16" cy="16" r="13" stroke="#9ca3af" stroke-width="1.5"/>
-                <path d="M10 16h12M16 10v12" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              Send a message to test the agent
-            </div>
-          </div>
-
-          <div class="test-input-row">
-            <input type="text" id="test-input" placeholder="Type a test message...">
-            <button class="btn-send" id="btn-send-test" type="button" title="Send">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M1 7l11-5-5 11V8.5L1 7z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-
-          <div class="test-meta" id="test-meta" hidden>
-            <span id="test-model"></span>
-            <span id="test-latency"></span>
           </div>
         </div>
 
