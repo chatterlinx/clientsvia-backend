@@ -1762,7 +1762,28 @@ Only toggle to GLOBAL if this trigger should be shared across all HVAC companies
             <div class="form-group">
               <label class="form-label">Negative Keywords</label>
               <textarea class="form-textarea" id="input-trigger-negative" rows="2" placeholder="cancel, refund"></textarea>
-              <p class="form-hint">Comma-separated. If matched, trigger won't fire.</p>
+              <p class="form-hint">Comma-separated. Single words that block this trigger.</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Negative Phrases</label>
+              <textarea id="input-trigger-negative-phrases" class="form-textarea" rows="2" placeholder="cancel my appointment, calling to cancel, need to cancel"></textarea>
+              <p class="form-hint">Comma-separated. Multi-word phrases that block this trigger.</p>
+            </div>
+
+            <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="form-label">Max Input Words</label>
+                <input type="number" id="input-trigger-max-words" class="form-input" min="0" max="100" placeholder="e.g. 8 for goodbye cards">
+                <p class="form-hint">Skip if caller says more than N words. Leave blank for no limit.</p>
+              </div>
+              <div>
+                <label class="form-label">Intent Bucket</label>
+                <select id="input-trigger-bucket" class="form-select" style="width:100%;">
+                  <option value="">— Unassigned —</option>
+                </select>
+                <p class="form-hint">Company-specific intent filtering.</p>
+              </div>
             </div>
           </div>
           
@@ -1890,36 +1911,15 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
           <!-- Follow-up -->
           <div class="form-section">
             <div class="form-section-title">Follow-up</div>
-            
+
             <div class="form-group">
               <label class="form-label">Follow-up Question</label>
-              <textarea class="form-textarea" id="input-trigger-followup" rows="2" placeholder="Just to confirm — this is a routine request, right?"></textarea>
+              <textarea class="form-textarea" id="input-trigger-followup" rows="2" placeholder="Do you want me to get that scheduled?"></textarea>
               <p class="form-hint" id="followup-hint">If set, asked after the Answer Text. Waits for caller to respond.</p>
               <div id="followup-consent-hint" style="display: none; margin-top: 8px; padding: 10px 14px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; font-size: 0.8rem; line-height: 1.5; color: #94a3b8;">
                 <strong style="color: #e2e8f0;">Consent Card Flow Active</strong><br>
                 The caller's response to this question is classified by the <strong style="color: #3b82f6;">Follow-up Consent Cards</strong> below the trigger list.
                 YES/NO routing, direction, phrases, and responses are all configured there.
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Intent Bucket</label>
-              <select id="input-trigger-bucket" class="form-select" style="width:100%;">
-                <option value="">— Unassigned —</option>
-              </select>
-              <p class="form-hint">Assigned bucket used for company-specific intent filtering.</p>
-            </div>
-
-            <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0;">
-              <div>
-                <label class="form-label">Negative Phrases <span style="font-weight:400;color:#94a3b8;">(one per line)</span></label>
-                <textarea id="input-trigger-negative-phrases" class="form-textarea" rows="3" placeholder="cancel my appointment&#10;calling to cancel&#10;need to cancel"></textarea>
-                <p class="form-hint">Exact phrase blocks this card (context-aware vs single-word negatives).</p>
-              </div>
-              <div>
-                <label class="form-label">Max Input Words</label>
-                <input type="number" id="input-trigger-max-words" class="form-input" min="0" max="100" placeholder="e.g. 8 for goodbye cards">
-                <p class="form-hint">Card skipped if caller utterance exceeds this word count. Leave blank for no limit.</p>
               </div>
             </div>
           </div>

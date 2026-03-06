@@ -1811,7 +1811,7 @@
       if (maxWordsEl) maxWordsEl.value = trigger.maxInputWords || '';
       // Populate negativePhrases
       const negPhrasesEl = document.getElementById('input-trigger-negative-phrases');
-      if (negPhrasesEl) negPhrasesEl.value = (trigger.match?.negativePhrases || trigger.negativePhrases || []).join('\n');
+      if (negPhrasesEl) negPhrasesEl.value = (trigger.match?.negativePhrases || trigger.negativePhrases || []).join(', ');
       updateFollowupActionVisibility();
       DOM.scopeSection.style.display = 'none';
       
@@ -1984,7 +1984,7 @@
       phrases,
       negativeKeywords,
       negativePhrases: (document.getElementById('input-trigger-negative-phrases')?.value || '')
-        .split('\n').map(s => s.trim().toLowerCase()).filter(Boolean),
+        .split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
       maxInputWords: parseInt(document.getElementById('input-trigger-max-words')?.value || '0') || null,
       bucket: bucketKey || null,
       responseMode,
