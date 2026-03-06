@@ -123,6 +123,45 @@ router.patch('/:companyId/llm-agent/config', authenticateJWT, async (req, res) =
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/llm-agent/ping — Verify Anthropic API is live
+// Sends a minimal 1-token request so the round-trip is fast & cheap.
+// ════════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/llm-agent/ping', authenticateJWT, async (req, res) => {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ ok: false, error: 'ANTHROPIC_API_KEY not set on server' });
+    }
+
+    const startMs = Date.now();
+    const pingRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: DEFAULT_LLM_AGENT_SETTINGS.model.modelId,
+        max_tokens: 5,
+        messages: [{ role: 'user', content: 'ping' }]
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const latencyMs = Date.now() - startMs;
+
+    if (!pingRes.ok) {
+      const errBody = await pingRes.text().catch(() => '');
+      return res.status(502).json({ ok: false, error: `Anthropic ${pingRes.status}`, details: errBody, latencyMs });
+    }
+
+    res.json({ ok: true, latencyMs, model: DEFAULT_LLM_AGENT_SETTINGS.model.modelId });
+  } catch (error) {
+    res.status(502).json({ ok: false, error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/llm-agent/test-conversation — Test message via Claude
 // ════════════════════════════════════════════════════════════════════════════
 router.post('/:companyId/llm-agent/test-conversation', authenticateJWT, async (req, res) => {

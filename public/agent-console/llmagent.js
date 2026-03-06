@@ -91,6 +91,45 @@ async function loadSettings() {
   }
 }
 
+// ── API Health Ping ──────────────────────────────────────────────────────────
+async function pingAnthropicAPI() {
+  const btn   = document.getElementById('btn-api-ping');
+  const label = document.getElementById('api-health-label');
+  if (!btn || !label) return;
+
+  // Checking state
+  btn.className = 'api-health-btn checking';
+  btn.disabled  = true;
+  label.textContent = 'Checking…';
+
+  try {
+    const data = await AgentConsoleAuth.apiFetch(
+      `/api/agent-console/${state.companyId}/llm-agent/ping`,
+      { method: 'POST' }
+    );
+
+    if (data.ok) {
+      btn.className     = 'api-health-btn ok';
+      label.textContent = `Connected · ${data.latencyMs}ms`;
+    } else {
+      btn.className     = 'api-health-btn error';
+      label.textContent = `Error: ${data.error || 'Unknown'}`;
+    }
+  } catch (err) {
+    btn.className     = 'api-health-btn error';
+    label.textContent = `Error: ${err.message || 'Request failed'}`;
+  } finally {
+    btn.disabled = false;
+    // Reset label back to "Test API" after 8 seconds
+    setTimeout(() => {
+      if (btn.classList.contains('ok') || btn.classList.contains('error')) {
+        btn.className     = 'api-health-btn';
+        label.textContent = 'Test API';
+      }
+    }, 8000);
+  }
+}
+
 async function saveSettings() {
   try {
     showLoadingState();
@@ -556,6 +595,9 @@ function setupChannelTabs() {
 }
 
 function setupEventListeners() {
+  // API health ping
+  document.getElementById('btn-api-ping')?.addEventListener('click', pingAnthropicAPI);
+
   // Back button
   document.getElementById('btn-back')?.addEventListener('click', () => {
     if (state.dirty && !confirm('You have unsaved changes. Leave without saving?')) return;
