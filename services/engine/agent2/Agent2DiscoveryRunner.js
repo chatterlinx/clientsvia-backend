@@ -256,7 +256,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0 }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -268,6 +268,13 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     // Gate: triggerFallback activation must be enabled
     if (config.activation?.triggerFallback === false) {
       logger.info('[LLM_AGENT] triggerFallback activation is disabled — skipping no-match agent');
+      return null;
+    }
+
+    // Gate: max turns per session (prevents runaway LLM usage on repeated no-matches)
+    const maxTurnsPerSession = config.activation?.maxTurnsPerSession ?? 10;
+    if (llmTurnsThisCall >= maxTurnsPerSession) {
+      logger.info('[LLM_AGENT] maxTurnsPerSession reached — skipping no-match agent', { llmTurnsThisCall, maxTurnsPerSession });
       return null;
     }
 
@@ -3239,7 +3246,8 @@ class Agent2DiscoveryRunner {
         capturedReason,
         channel: 'call',
         turn,
-        emit
+        emit,
+        llmTurnsThisCall
       });
 
       if (llmAgentResult) {
