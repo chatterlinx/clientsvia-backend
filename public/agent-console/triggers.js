@@ -937,6 +937,16 @@
         if (configData?.agent2) {
           state.config = configData.agent2;
           loadFollowUpConsent(state.config);
+
+          // Load persisted GPT Prefill settings
+          const savedGpt = configData.agent2?.discovery?.gptPrefillSettings;
+          if (savedGpt) {
+            if (savedGpt.businessType) state.gptSettings.businessType = savedGpt.businessType;
+            if (typeof savedGpt.defaultPriority === 'number') state.gptSettings.defaultPriority = savedGpt.defaultPriority;
+            if (savedGpt.tone) state.gptSettings.tone = savedGpt.tone;
+            if (savedGpt.instructions) state.gptSettings.instructions = savedGpt.instructions;
+            if (typeof savedGpt.includeFollowup === 'boolean') state.gptSettings.includeFollowup = savedGpt.includeFollowup;
+          }
         } else {
           console.warn('[Consent Cards] CONFIG_LOAD — No agent2 object in response, consent cards will be empty');
         }
@@ -2637,15 +2647,27 @@
     }
   }
 
-  function saveGptSettings() {
+  async function saveGptSettings() {
     state.gptSettings.businessType = DOM.gptBusinessType?.value || 'hvac';
     state.gptSettings.defaultPriority = parseInt(DOM.gptDefaultPriority?.value, 10) || 50;
     state.gptSettings.tone = DOM.gptTone?.value || 'friendly';
     state.gptSettings.instructions = DOM.gptInstructions?.value || '';
     state.gptSettings.includeFollowup = DOM.gptIncludeFollowup?.checked !== false;
-    
+
     closeGptSettingsModal();
-    showToast('success', 'Settings Saved', 'GPT prefill settings updated.');
+
+    // Persist to company config so settings survive page reloads
+    try {
+      const saveUrl = `${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`;
+      await AgentConsoleAuth.apiFetch(saveUrl, {
+        method: 'PATCH',
+        body: { discovery: { gptPrefillSettings: state.gptSettings } }
+      });
+      showToast('success', 'Settings Saved', 'GPT prefill settings saved to company config.');
+    } catch (err) {
+      console.warn('[GPT Settings] Failed to persist settings:', err.message);
+      showToast('warning', 'Settings Saved Locally', 'Settings applied but could not save to server.');
+    }
   }
 
   async function gptPrefill() {
