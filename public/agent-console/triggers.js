@@ -2672,18 +2672,6 @@
       if (response.label && DOM.inputTriggerLabel) {
         DOM.inputTriggerLabel.value = response.label;
       }
-      if (response.phrases && Array.isArray(response.phrases) && DOM.inputTriggerPhrases) {
-        DOM.inputTriggerPhrases.value = response.phrases.join(', ');
-      }
-      if (response.negativeKeywords && Array.isArray(response.negativeKeywords) && DOM.inputTriggerNegative) {
-        DOM.inputTriggerNegative.value = response.negativeKeywords.join(', ');
-      }
-      if (response.answerText && DOM.inputTriggerAnswer) {
-        DOM.inputTriggerAnswer.value = response.answerText;
-      }
-      if (response.followUpQuestion && DOM.inputTriggerFollowup && state.gptSettings.includeFollowup) {
-        DOM.inputTriggerFollowup.value = response.followUpQuestion;
-      }
       if (response.ruleId && DOM.inputTriggerRuleId) {
         const existingRuleId = DOM.inputTriggerRuleId.value.trim();
         if (!existingRuleId) {
@@ -2691,7 +2679,28 @@
         }
       }
       if (DOM.inputTriggerPriority && !state.editingTrigger) {
-        DOM.inputTriggerPriority.value = state.gptSettings.defaultPriority;
+        DOM.inputTriggerPriority.value = response.priority || state.gptSettings.defaultPriority;
+      }
+      if (response.phrases && Array.isArray(response.phrases) && DOM.inputTriggerPhrases) {
+        DOM.inputTriggerPhrases.value = response.phrases.join(', ');
+      }
+      if (response.negativeKeywords && Array.isArray(response.negativeKeywords) && DOM.inputTriggerNegative) {
+        DOM.inputTriggerNegative.value = response.negativeKeywords.join(', ');
+      }
+      const negPhrasesEl = document.getElementById('input-trigger-negative-phrases');
+      if (response.negativePhrases && Array.isArray(response.negativePhrases) && negPhrasesEl) {
+        negPhrasesEl.value = response.negativePhrases.join(', ');
+      }
+      const maxWordsEl = document.getElementById('input-trigger-max-words');
+      if (maxWordsEl && response.maxInputWords != null) {
+        maxWordsEl.value = response.maxInputWords;
+      }
+      if (response.answerText && DOM.inputTriggerAnswer) {
+        DOM.inputTriggerAnswer.value = response.answerText;
+      }
+      if (response.followUpQuestion && DOM.inputTriggerFollowup && state.gptSettings.includeFollowup) {
+        DOM.inputTriggerFollowup.value = response.followUpQuestion;
+        updateFollowupActionVisibility();
       }
       
       if (btn) {

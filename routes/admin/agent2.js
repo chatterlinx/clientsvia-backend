@@ -1399,27 +1399,34 @@ BUSINESS CONTEXT:
 - Tone: ${tone}
 ${additionalInstructions ? `- Additional Instructions: ${additionalInstructions}` : ''}
 
-Given a set of keywords that represent a caller's intent, generate:
+Given a set of keywords that represent a caller's intent, generate a COMPLETE trigger card:
 
 1. label: A short, clear display name (2-4 words) that describes what the caller is asking about
-2. ruleId: A lowercase, dot-separated identifier (e.g., "pricing.service_call", "hours.weekend") - NO spaces, only letters, numbers, dots, underscores
-3. phrases: 3-5 natural language phrases callers commonly say when asking about this topic
-4. negativeKeywords: 2-3 words that would indicate a DIFFERENT intent (to avoid false matches)
-5. answerText: A helpful, ${tone} answer (2-4 sentences). Be specific to ${businessLabel}. Include realistic pricing/details if relevant.
-${includeFollowup ? '6. followUpQuestion: A natural question to continue the conversation and guide the caller toward booking/next steps' : ''}
+2. ruleId: A lowercase, dot-separated identifier (e.g., "pricing.service_call", "hours.weekend") - NO spaces, only letters, numbers, dots, underscores, hyphens
+3. priority: A number 1-100 where lower = higher priority. Use 90-100 for emergencies, 50-70 for common intents, 30-50 for general/misc intents
+4. phrases: 3-5 natural language phrases callers commonly say when asking about this topic
+5. negativeKeywords: 2-3 single words that would indicate a DIFFERENT intent (to avoid false matches)
+6. negativePhrases: 1-3 multi-word phrases that should block this trigger (e.g., "cancel my appointment", "calling to cancel")
+7. answerText: A helpful, ${tone} answer (2-4 sentences). Be specific to ${businessLabel}. Include realistic pricing/details if relevant. Use {name} token for personalization (e.g., "Great{name}! I can help with that.")
+8. maxInputWords: Maximum word count for caller utterance to match this trigger. Use null for most triggers. Use 4-8 for short-intent triggers like greetings or goodbyes.
+${includeFollowup ? '9. followUpQuestion: A natural question to continue the conversation and guide the caller toward booking/next steps' : ''}
 
 IMPORTANT:
 - The answerText should sound natural and helpful, like a real person answering the phone
 - Include specific details relevant to ${businessLabel} (realistic prices, common services, etc.)
 - The tone should be ${tone}
+- negativePhrases should be context-aware multi-word phrases, NOT single words (those go in negativeKeywords)
 
 Respond ONLY with valid JSON, no markdown, no explanation:
 {
   "label": "...",
   "ruleId": "...",
+  "priority": 50,
   "phrases": ["...", "...", "..."],
   "negativeKeywords": ["...", "..."],
-  "answerText": "..."${includeFollowup ? ',\n  "followUpQuestion": "..."' : ''}
+  "negativePhrases": ["...", "..."],
+  "answerText": "...",
+  "maxInputWords": null${includeFollowup ? ',\n  "followUpQuestion": "..."' : ''}
 }`;
 
     const userPrompt = `Keywords: ${trimmedKeywords}`;
@@ -1438,7 +1445,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
         { role: 'user', content: userPrompt }
       ],
       temperature: 0.7,
-      max_tokens: 600
+      max_tokens: 800
     });
 
     const content = response.choices?.[0]?.message?.content || '';
@@ -1467,9 +1474,12 @@ Respond ONLY with valid JSON, no markdown, no explanation:
       data: {
         label: parsed.label || '',
         ruleId: (parsed.ruleId || '').toLowerCase().replace(/[^a-z0-9._-]/g, '_'),
+        priority: typeof parsed.priority === 'number' ? Math.max(1, Math.min(1000, parsed.priority)) : 50,
         phrases: Array.isArray(parsed.phrases) ? parsed.phrases : [],
         negativeKeywords: Array.isArray(parsed.negativeKeywords) ? parsed.negativeKeywords : [],
+        negativePhrases: Array.isArray(parsed.negativePhrases) ? parsed.negativePhrases : [],
         answerText: parsed.answerText || '',
+        maxInputWords: typeof parsed.maxInputWords === 'number' ? parsed.maxInputWords : null,
         followUpQuestion: includeFollowup ? (parsed.followUpQuestion || '') : ''
       }
     });
