@@ -1300,7 +1300,7 @@
             <div class="toggle-row">
               <div>
                 <div class="toggle-row-label">Trigger Fallback</div>
-                <div class="toggle-row-desc">Step in when trigger matching fails</div>
+                <div class="toggle-row-desc">Responds once when no trigger matches, then returns caller to trigger matching. Does not take over the conversation.</div>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="activation-trigger-fallback" checked>
@@ -1310,7 +1310,7 @@
             <div class="toggle-row">
               <div>
                 <div class="toggle-row-label">Follow-up Rescue</div>
-                <div class="toggle-row-desc">Recover broken conversation context</div>
+                <div class="toggle-row-desc">Handles complex/substantive responses to follow-up questions when the caller says more than a simple yes or no.</div>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="activation-followup-rescue" checked>
@@ -1340,6 +1340,7 @@
               </div>
               <input type="range" class="range-slider" id="max-turns-slider" min="3" max="20" step="1" value="10">
               <div class="range-labels"><span>3</span><span>20</span></div>
+              <p class="form-hint" style="margin-top:var(--space-1);">Maximum number of times the LLM Agent can respond per call. After this limit, unmatched turns fall through to the default fallback response.</p>
             </div>
 
             <div class="range-group">
