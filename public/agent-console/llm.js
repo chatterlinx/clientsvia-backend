@@ -2,22 +2,16 @@
  * ============================================================================
  * LLM SETTINGS UI — Company-Scoped AI Configuration
  * ============================================================================
- * 
- * PURPOSE:
- * - Configure LLM behavior per company (profiles, guardrails, prompts)
- * - Prevent settings bleed between different business types
- * - Export/Import JSON templates (HVAC → another HVAC company)
- * 
- * SCOPE:
- * - Settings are company-specific: /api/admin/llm-settings?scope=company:ID
- * - Each company has independent configuration
- * - No global defaults (start from scratch or import template)
- * 
+ *
+ * 4 tabs: Overview | AI Model | Prompts & Safety | Call Handling
+ *
+ * Settings are company-specific: /api/admin/llm-settings?scope=company:ID
+ * Each company has independent configuration stored in the LLMSettings collection.
  * ============================================================================
  */
 
 // ════════════════════════════════════════════════════════════════════════════
-// STATE MANAGEMENT
+// STATE
 // ════════════════════════════════════════════════════════════════════════════
 
 const state = {
@@ -31,60 +25,47 @@ const state = {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// INITIALIZATION
+// INIT
 // ════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[LLM Settings] Initializing...');
-  
-  // Extract companyId from URL
   const urlParams = new URLSearchParams(window.location.search);
   state.companyId = urlParams.get('companyId');
-  
+
   if (!state.companyId) {
     showToast('error', 'Missing companyId parameter');
     return;
   }
-  
-  console.log('[LLM Settings] Company ID:', state.companyId);
-  
-  // Initialize UI
-  setupEventListeners();
+
   setupTabNavigation();
-  
-  // Load settings
+  setupEventListeners();
   await loadSettings();
-  
-  console.log('[LLM Settings] Initialized successfully');
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// API CALLS
+// API
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Load LLM settings for the current company
- */
 async function loadSettings() {
   try {
     showLoadingState();
-    
     const scope = `company:${state.companyId}`;
-    
     const data = await AgentConsoleAuth.apiFetch(`/api/admin/llm-settings?scope=${encodeURIComponent(scope)}`);
-    
+
     state.settings = data.settings;
     state.profiles = data.profiles;
     state.promptParts = data.promptParts;
-    
-    console.log('[LLM Settings] Loaded settings:', state.settings);
-    
-    // Update UI
+
+    // Fetch company name
+    try {
+      const truthData = await AgentConsoleAuth.apiFetch(`/api/admin/companies/${state.companyId}/truth`);
+      state.companyName = truthData?.companyProfile?.businessName ||
+                          truthData?.companyProfile?.companyName || '';
+    } catch (_) { /* non-critical */ }
+
     renderAllSections();
     updatePreview();
-    
     hideLoadingState();
-    
   } catch (error) {
     console.error('[LLM Settings] Load error:', error);
     showToast('error', `Failed to load settings: ${error.message}`);
@@ -92,383 +73,232 @@ async function loadSettings() {
   }
 }
 
-/**
- * Save current settings to backend
- */
 async function saveSettings() {
   try {
     const scope = `company:${state.companyId}`;
-    
     const data = await AgentConsoleAuth.apiFetch('/api/admin/llm-settings', {
       method: 'PUT',
-      body: JSON.stringify({
-        scope,
-        settings: state.settings
-      })
+      body: JSON.stringify({ scope, settings: state.settings })
     });
-    
+
     state.settings = data.settings;
     state.promptParts = data.promptParts;
     state.unsavedChanges = false;
-    
+
     updateSaveButtonState();
     updateFooter();
     updatePreview();
-    
+
+    // Update last-saved timestamp
+    const ts = document.getElementById('footer-last-saved');
+    if (ts) ts.textContent = `Last saved: ${new Date().toLocaleTimeString()}`;
+
     showToast('success', 'Settings saved successfully');
-    
   } catch (error) {
     console.error('[LLM Settings] Save error:', error);
-    showToast('error', `Failed to save settings: ${error.message}`);
+    showToast('error', `Failed to save: ${error.message}`);
   }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// UI RENDERING
+// RENDERING
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Render all sections after loading settings
- */
 function renderAllSections() {
-  renderOverviewTab();
-  renderProfilesTab();
-  renderGuardrailsTab();
-  renderDomainsTab();
-  renderPromptsTab();
-  renderGenerationTab();
-  renderCallHandlingTab();
   updateCompanyHeader();
+  renderOverviewTab();
+  renderModelTab();
+  renderPromptsSafetyTab();
+  renderCallHandlingTab();
 }
 
-/**
- * Update company name in header
- */
 function updateCompanyHeader() {
-  // TODO: Fetch company name from API or pass via URL
-  document.getElementById('header-company-name').textContent = state.companyName || `Company ${state.companyId}`;
+  const name = state.companyName || `Company ${state.companyId}`;
+  document.getElementById('header-company-name').textContent = name;
   document.getElementById('header-company-id').textContent = state.companyId;
-  document.getElementById('overview-company-name').textContent = state.companyName || `Company ${state.companyId}`;
+  document.getElementById('overview-company-name').textContent = name;
 }
 
-/**
- * Render Overview Tab
- */
+// ── Overview Tab ──────────────────────────────────────────────────────────
+
 function renderOverviewTab() {
   if (!state.settings) return;
-  
-  // Update company context textarea
-  const companyContextField = document.getElementById('company-context');
-  if (companyContextField) {
-    companyContextField.value = state.settings.companyContext || '';
-  }
-  
+
+  // Company context
+  setVal('company-context', state.settings.companyContext);
+
   const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
-  const profileInfo = state.profiles[activeProfile];
-  
-  // Active Profile Card
-  const profileCard = document.getElementById('overview-active-profile');
-  profileCard.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+  const profileInfo = state.profiles?.[activeProfile];
+  if (!profileInfo) return;
+
+  // Active profile card
+  document.getElementById('overview-active-profile').innerHTML = `
+    <div class="overview-profile-top">
       <div>
-        <div style="font-weight: 600; font-size: 1rem; margin-bottom: 4px;">
-          ${profileInfo.label}
-        </div>
-        <div style="font-size: 0.875rem; color: var(--color-gray-600);">
-          ${profileInfo.description}
-        </div>
-        <div style="margin-top: 8px; font-size: 0.875rem; color: var(--color-gray-500);">
-          Model: <strong>${profileInfo.model}</strong> • 
-          Temp: <strong>${profileInfo.temperature}</strong> • 
+        <div class="overview-profile-name">${profileInfo.label}</div>
+        <div class="overview-profile-desc">${profileInfo.description}</div>
+        <div class="overview-profile-meta">
+          Model: <strong>${profileInfo.model}</strong> &bull;
+          Temp: <strong>${profileInfo.temperature}</strong> &bull;
           Max Tokens: <strong>${profileInfo.maxTokens}</strong>
         </div>
       </div>
-      <button class="btn btn-sm btn-primary" onclick="switchToTab('profiles')">
-        Change Profile
-      </button>
+      <button class="btn btn-sm btn-primary" onclick="switchToTab('model')">Change Profile</button>
     </div>
   `;
-  
-  // Domain Modes
-  const domainModes = [];
-  if (state.settings.compliance?.medicalOfficeMode) domainModes.push('Medical');
-  if (state.settings.compliance?.financialMode) domainModes.push('Financial');
-  if (state.settings.compliance?.emergencyServicesMode) domainModes.push('Emergency');
-  
-  const domainContainer = document.getElementById('overview-domain-modes');
-  if (domainModes.length === 0) {
-    domainContainer.innerHTML = '<span class="badge badge-secondary">None Active</span>';
-  } else {
-    domainContainer.innerHTML = domainModes.map(mode => 
-      `<span class="badge badge-warning">${mode} Mode</span>`
-    ).join('');
-  }
-  
+
+  // Domain mode badges
+  const modes = [];
+  if (state.settings.compliance?.medicalOfficeMode) modes.push('Medical');
+  if (state.settings.compliance?.financialMode) modes.push('Financial');
+  if (state.settings.compliance?.emergencyServicesMode) modes.push('Emergency');
+
+  const domainEl = document.getElementById('overview-domain-modes');
+  domainEl.innerHTML = modes.length
+    ? modes.map(m => `<span class="badge badge-warning">${m} Mode</span>`).join('')
+    : '<span class="badge">None Active</span>';
+
   // Stats
-  const statsContainer = document.getElementById('overview-stats');
-  statsContainer.innerHTML = `
-    <div style="padding: 16px; background: var(--color-gray-50); border-radius: 8px;">
-      <div style="font-size: 0.75rem; color: var(--color-gray-600); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Active Profile
-      </div>
-      <div style="font-size: 1.25rem; font-weight: 600; color: var(--color-gray-900);">
-        ${profileInfo.label}
-      </div>
+  document.getElementById('overview-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card-label">Active Profile</div>
+      <div class="stat-card-value">${profileInfo.label}</div>
     </div>
-    <div style="padding: 16px; background: var(--color-gray-50); border-radius: 8px;">
-      <div style="font-size: 0.75rem; color: var(--color-gray-600); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Domain Modes
-      </div>
-      <div style="font-size: 1.25rem; font-weight: 600; color: var(--color-gray-900);">
-        ${domainModes.length} Active
-      </div>
+    <div class="stat-card">
+      <div class="stat-card-label">Domain Modes</div>
+      <div class="stat-card-value">${modes.length} Active</div>
     </div>
-    <div style="padding: 16px; background: var(--color-gray-50); border-radius: 8px;">
-      <div style="font-size: 0.75rem; color: var(--color-gray-600); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Generation Mode
-      </div>
-      <div style="font-size: 1.25rem; font-weight: 600; color: var(--color-gray-900);">
-        ${state.settings.defaults?.generationMode === 'multi' ? 'Multi-Variant' : 'Single'}
-      </div>
+    <div class="stat-card">
+      <div class="stat-card-label">Generation Mode</div>
+      <div class="stat-card-value">${state.settings.defaults?.generationMode === 'multi' ? 'Multi-Variant' : 'Single'}</div>
     </div>
   `;
 }
 
-/**
- * Render Profiles Tab
- */
-function renderProfilesTab() {
+// ── AI Model Tab ──────────────────────────────────────────────────────────
+
+function renderModelTab() {
   if (!state.profiles) return;
-  
+
   const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
+
+  // Profile cards
   const profileGrid = document.getElementById('profile-grid');
-  
-  const profileCards = Object.values(state.profiles).map(profile => {
-    const isActive = profile.key === activeProfile;
+  profileGrid.innerHTML = Object.values(state.profiles).map(p => `
+    <div class="profile-card ${p.key === activeProfile ? 'active' : ''}" onclick="selectProfile('${p.key}')">
+      <div class="profile-card-header">
+        <h3 class="profile-card-title">${p.label}</h3>
+        ${p.key === activeProfile ? '<span class="profile-card-badge">Active</span>' : ''}
+      </div>
+      <p class="profile-card-description">${p.description}</p>
+      <div class="profile-card-meta">
+        <div class="profile-card-meta-item"><span class="profile-card-meta-label">Model:</span><span>${p.model}</span></div>
+        <div class="profile-card-meta-item"><span class="profile-card-meta-label">Temperature:</span><span>${p.temperature}</span></div>
+        <div class="profile-card-meta-item"><span class="profile-card-meta-label">Max Tokens:</span><span>${p.maxTokens}</span></div>
+        <div class="profile-card-meta-item"><span class="profile-card-meta-label">Safety:</span><span>${p.safetyMode}</span></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Model override
+  const currentProfile = state.profiles[activeProfile];
+  setVal('model-override', state.settings.defaults?.modelOverride || '');
+
+  // Temperature
+  const temp = state.settings.overrides?.[activeProfile]?.temperature ?? currentProfile.temperature;
+  setVal('temperature-override', temp);
+  setText('temperature-value', temp);
+
+  // Top P
+  const topP = state.settings.overrides?.[activeProfile]?.topP ?? currentProfile.topP;
+  setVal('topp-override', topP);
+  setText('topp-value', topP);
+
+  // Max Tokens
+  const maxTokens = state.settings.overrides?.[activeProfile]?.maxTokens ?? currentProfile.maxTokens;
+  setVal('max-tokens-override', maxTokens);
+  setText('max-tokens-value', maxTokens);
+
+  // Generation mode
+  const mode = state.settings.defaults?.generationMode || 'single';
+  const radio = document.querySelector(`input[name="generation-mode"][value="${mode}"]`);
+  if (radio) radio.checked = true;
+
+  const variantCount = state.settings.defaults?.defaultVariantCount || 3;
+  setVal('variant-count', variantCount);
+  setText('variant-count-value', variantCount);
+
+  const vcGroup = document.getElementById('variant-count-group');
+  if (vcGroup) vcGroup.hidden = mode !== 'multi';
+}
+
+// ── Prompts & Safety Tab ──────────────────────────────────────────────────
+
+function renderPromptsSafetyTab() {
+  if (!state.settings?.promptText) return;
+
+  // Base prompt
+  setVal('prompt-base', state.settings.promptText.base || '');
+
+  // Profile prompt
+  const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
+  setVal('prompt-profile', state.settings.promptText.profiles?.[activeProfile] || '');
+
+  // Domain safety (toggle + prompt together)
+  renderDomainSafetySection();
+
+  // Strict compliance
+  const strictEnabled = state.settings.compliance?.strictComplianceMode !== false;
+  setChecked('strict-compliance-toggle', strictEnabled);
+  setVal('prompt-strict-compliance', state.settings.promptText.strictCompliance || '');
+  toggleFieldset('strict-compliance-fields', strictEnabled);
+}
+
+function renderDomainSafetySection() {
+  const container = document.getElementById('domain-safety-container');
+  const domains = [
+    { id: 'medicalOfficeMode', promptId: 'medicalOffice', title: 'Medical Office Mode',
+      description: 'Enable for medical, dental, or healthcare businesses. Enforces HIPAA compliance.',
+      promptLabel: 'Medical Office Safety Prompt' },
+    { id: 'financialMode', promptId: 'financial', title: 'Financial & Billing Mode',
+      description: 'Enable for billing, payment, or financial services. Prohibits investment/tax advice.',
+      promptLabel: 'Financial Safety Prompt' },
+    { id: 'emergencyServicesMode', promptId: 'emergency', title: 'Emergency Services Mode',
+      description: 'Enable for contexts where callers may be in danger. Enforces immediate escalation.',
+      promptLabel: 'Emergency Services Prompt' }
+  ];
+
+  container.innerHTML = domains.map(d => {
+    const enabled = state.settings.compliance?.[d.id] || false;
+    const promptValue = state.settings.promptText?.domainSafety?.[d.promptId] || '';
     return `
-      <div class="profile-card ${isActive ? 'active' : ''}" onclick="selectProfile('${profile.key}')">
-        <div class="profile-card-header">
-          <h3 class="profile-card-title">${profile.label}</h3>
-          ${isActive ? '<span class="profile-card-badge">Active</span>' : ''}
+      <div class="domain-safety-group">
+        <div class="domain-safety-header">
+          <div>
+            <div class="domain-safety-title">${d.title}</div>
+            <div class="domain-safety-description">${d.description}</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleDomainMode('${d.id}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <p class="profile-card-description">${profile.description}</p>
-        <div class="profile-card-meta">
-          <div class="profile-card-meta-item">
-            <span class="profile-card-meta-label">Model:</span>
-            <span>${profile.model}</span>
+        ${enabled ? `
+          <div class="domain-safety-prompt">
+            <div class="prompt-section-header">
+              <label class="prompt-section-label">${d.promptLabel}</label>
+              <button class="btn btn-sm btn-ghost" onclick="resetDomainPrompt('${d.promptId}')">Reset to Default</button>
+            </div>
+            <textarea id="prompt-domain-${d.promptId}" class="prompt-editor" style="min-height: 120px;"
+                      onchange="updateDomainPrompt('${d.promptId}', this.value)">${escapeHtml(promptValue)}</textarea>
           </div>
-          <div class="profile-card-meta-item">
-            <span class="profile-card-meta-label">Temperature:</span>
-            <span>${profile.temperature}</span>
-          </div>
-          <div class="profile-card-meta-item">
-            <span class="profile-card-meta-label">Max Tokens:</span>
-            <span>${profile.maxTokens}</span>
-          </div>
-          <div class="profile-card-meta-item">
-            <span class="profile-card-meta-label">Safety:</span>
-            <span>${profile.safetyMode}</span>
-          </div>
-        </div>
+        ` : ''}
       </div>
     `;
   }).join('');
-  
-  profileGrid.innerHTML = profileCards;
-  
-  // Update model override dropdown
-  const modelOverride = state.settings.defaults?.modelOverride || '';
-  document.getElementById('model-override').value = modelOverride;
-  
-  // Update temperature slider (TODO: implement overrides)
-  const currentProfile = state.profiles[activeProfile];
-  const temperature = state.settings.overrides?.[activeProfile]?.temperature || currentProfile.temperature;
-  document.getElementById('temperature-override').value = temperature;
-  document.getElementById('temperature-value').textContent = temperature;
-  
-  // Update max tokens slider
-  const maxTokens = state.settings.overrides?.[activeProfile]?.maxTokens || currentProfile.maxTokens;
-  document.getElementById('max-tokens-override').value = maxTokens;
-  document.getElementById('max-tokens-value').textContent = maxTokens;
 }
 
-/**
- * Render Guardrails Tab
- */
-function renderGuardrailsTab() {
-  const guardrailList = document.getElementById('guardrail-list');
-  
-  // Hardcoded guardrails for V1 (will be dynamic later)
-  const guardrails = [
-    {
-      id: 'booking-restriction',
-      title: 'Booking Appointments',
-      description: 'LLM cannot book, modify, or cancel appointments. It can only answer questions and route to booking flow.',
-      enabled: true,
-      locked: true // Cannot be disabled
-    },
-    {
-      id: 'pricing-restriction',
-      title: 'Pricing & Fees',
-      description: 'LLM cannot quote exact prices or make guarantees. Use generic language and route to sales team.',
-      enabled: true,
-      locked: true
-    },
-    {
-      id: 'emergency-escalation',
-      title: 'Emergency Handling',
-      description: 'LLM must immediately escalate emergencies to 911 or human. No triage or severity assessment.',
-      enabled: true,
-      locked: true
-    },
-    {
-      id: 'sensitive-data',
-      title: 'Sensitive Data Collection',
-      description: 'LLM cannot collect SSN, credit cards, or medical info unless domain mode explicitly allows.',
-      enabled: true,
-      locked: false
-    }
-  ];
-  
-  guardrailList.innerHTML = guardrails.map(g => `
-    <div class="guardrail-item">
-      <div class="guardrail-header">
-        <h4 class="guardrail-title">${g.title}</h4>
-        <label class="toggle-switch">
-          <input type="checkbox" ${g.enabled ? 'checked' : ''} ${g.locked ? 'disabled' : ''} 
-                 onchange="toggleGuardrail('${g.id}', this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <p class="guardrail-description">
-        ${g.description}
-        ${g.locked ? ' <strong>(Required - Cannot be disabled)</strong>' : ''}
-      </p>
-    </div>
-  `).join('');
-}
-
-/**
- * Render Domain Safety Tab
- */
-function renderDomainsTab() {
-  const domainList = document.getElementById('domain-list');
-  
-  const domains = [
-    {
-      id: 'medicalOfficeMode',
-      title: 'Medical Office Mode',
-      description: 'Enable for medical, dental, or healthcare businesses. Enforces HIPAA compliance and prohibits diagnosis/treatment advice.',
-      enabled: state.settings.compliance?.medicalOfficeMode || false
-    },
-    {
-      id: 'financialMode',
-      title: 'Financial & Billing Mode',
-      description: 'Enable for billing, payment, or financial services. Prohibits investment/tax advice and exact price quotes.',
-      enabled: state.settings.compliance?.financialMode || false
-    },
-    {
-      id: 'emergencyServicesMode',
-      title: 'Emergency Services Mode',
-      description: 'Enable for contexts where callers may be in danger. Enforces immediate escalation without triage.',
-      enabled: state.settings.compliance?.emergencyServicesMode || false
-    }
-  ];
-  
-  domainList.innerHTML = domains.map(d => `
-    <div class="guardrail-item">
-      <div class="guardrail-header">
-        <h4 class="guardrail-title">${d.title}</h4>
-        <label class="toggle-switch">
-          <input type="checkbox" ${d.enabled ? 'checked' : ''} 
-                 onchange="toggleDomainMode('${d.id}', this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <p class="guardrail-description">${d.description}</p>
-    </div>
-  `).join('');
-}
-
-/**
- * Render Prompts Tab
- */
-function renderPromptsTab() {
-  if (!state.settings.promptText) return;
-  
-  // Base prompt
-  document.getElementById('prompt-base').value = state.settings.promptText.base || '';
-  
-  // Profile prompt
-  const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
-  const profilePrompt = state.settings.promptText.profiles?.[activeProfile] || '';
-  document.getElementById('prompt-profile').value = profilePrompt;
-  
-  // Domain prompts (show only if enabled)
-  renderDomainPrompts();
-}
-
-/**
- * Render domain prompt editors based on enabled modes
- */
-function renderDomainPrompts() {
-  const container = document.getElementById('domain-prompts-container');
-  const domainPrompts = [];
-  
-  if (state.settings.compliance?.medicalOfficeMode) {
-    domainPrompts.push({
-      id: 'medicalOffice',
-      label: 'Medical Office Safety Prompt',
-      value: state.settings.promptText.domainSafety?.medicalOffice || ''
-    });
-  }
-  
-  if (state.settings.compliance?.financialMode) {
-    domainPrompts.push({
-      id: 'financial',
-      label: 'Financial Safety Prompt',
-      value: state.settings.promptText.domainSafety?.financial || ''
-    });
-  }
-  
-  if (state.settings.compliance?.emergencyServicesMode) {
-    domainPrompts.push({
-      id: 'emergency',
-      label: 'Emergency Services Prompt',
-      value: state.settings.promptText.domainSafety?.emergency || ''
-    });
-  }
-  
-  container.innerHTML = domainPrompts.map(p => `
-    <div style="margin-bottom: 24px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <label style="font-weight: 600;">${p.label}</label>
-        <button class="btn btn-sm btn-ghost" onclick="resetDomainPrompt('${p.id}')">Reset to Default</button>
-      </div>
-      <textarea id="prompt-domain-${p.id}" class="prompt-editor" 
-                onchange="updateDomainPrompt('${p.id}', this.value)">${p.value}</textarea>
-    </div>
-  `).join('');
-}
-
-/**
- * Render Generation Tab
- */
-function renderGenerationTab() {
-  const mode = state.settings.defaults?.generationMode || 'single';
-  document.querySelector(`input[name="generation-mode"][value="${mode}"]`).checked = true;
-  
-  const variantCount = state.settings.defaults?.defaultVariantCount || 3;
-  document.getElementById('variant-count').value = variantCount;
-  document.getElementById('variant-count-value').textContent = variantCount;
-  
-  // Show/hide variant count based on mode
-  document.getElementById('variant-count-group').style.display = mode === 'multi' ? 'block' : 'none';
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// CALL HANDLING TAB (consolidated from LLM-0 Controls)
-// ════════════════════════════════════════════════════════════════════════════
+// ── Call Handling Tab ──────────────────────────────────────────────────────
 
 function renderCallHandlingTab() {
   const ch = state.settings?.callHandling;
@@ -507,8 +337,7 @@ function renderCallHandlingTab() {
   const lc = ch.lowConfidenceHandling || {};
   setChecked('ch-lowconf-enabled', lc.enabled !== false);
   setVal('ch-lowconf-threshold', lc.threshold);
-  const thresholdLabel = document.getElementById('ch-lowconf-threshold-value');
-  if (thresholdLabel) thresholdLabel.textContent = (lc.threshold || 60) + '%';
+  setText('ch-lowconf-threshold-value', (lc.threshold || 60) + '%');
   setVal('ch-lowconf-action', lc.action);
   setVal('ch-lowconf-repeat-phrase', lc.repeatPhrase);
   setVal('ch-lowconf-max-repeats', lc.maxRepeatsBeforeEscalation);
@@ -521,236 +350,193 @@ function renderCallHandlingTab() {
   toggleFieldset('lowconf-fields', lc.enabled !== false);
 }
 
-// Helpers for Call Handling render
-function setVal(id, value) {
-  const el = document.getElementById(id);
-  if (el && value != null) el.value = value;
-}
-function setChecked(id, checked) {
-  const el = document.getElementById(id);
-  if (el) el.checked = checked;
-}
-function toggleFieldset(id, show) {
-  const el = document.getElementById(id);
-  if (el) el.style.opacity = show ? '1' : '0.4';
-}
-
 // ════════════════════════════════════════════════════════════════════════════
-// PREVIEW PANEL
+// PREVIEW
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Update live preview sidebar
- */
 function updatePreview() {
-  if (!state.promptParts) return;
-  
+  if (!state.settings?.promptText) return;
+
+  const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
   const previewContainer = document.getElementById('preview-content');
   let html = '';
-  
+
   // Base prompt
-  html += `
-    <div class="preview-section">
-      <div class="preview-section-label base">Base Prompt</div>
-      <div class="preview-text">${escapeHtml(state.promptParts.base)}</div>
-    </div>
-  `;
-  
-  // Company context (if provided)
-  if (state.promptParts.companyContext) {
-    html += `
-      <div class="preview-section">
-        <div class="preview-section-label" style="background: var(--color-success-900); color: var(--color-success-200);">Company Context</div>
-        <div class="preview-text">${escapeHtml(state.promptParts.companyContext)}</div>
-      </div>
-    `;
+  const baseText = state.settings.promptText.base || '';
+  html += `<div class="preview-section">
+    <div class="preview-section-label base">Base Prompt</div>
+    <div class="preview-text">${escapeHtml(baseText)}</div>
+  </div>`;
+
+  // Company context
+  const ctxText = state.settings.companyContext || '';
+  if (ctxText) {
+    html += `<div class="preview-section">
+      <div class="preview-section-label context">Company Context</div>
+      <div class="preview-text">${escapeHtml(ctxText)}</div>
+    </div>`;
   }
-  
+
   // Profile prompt
-  if (state.promptParts.profile) {
-    html += `
-      <div class="preview-section">
-        <div class="preview-section-label profile">Profile: ${state.promptParts.profileKey}</div>
-        <div class="preview-text">${escapeHtml(state.promptParts.profile)}</div>
-      </div>
-    `;
+  const profileText = state.settings.promptText.profiles?.[activeProfile] || '';
+  if (profileText) {
+    html += `<div class="preview-section">
+      <div class="preview-section-label profile">Profile: ${activeProfile}</div>
+      <div class="preview-text">${escapeHtml(profileText)}</div>
+    </div>`;
   }
-  
+
   // Domain prompts
-  if (state.promptParts.domains) {
-    if (state.promptParts.domains.medicalOfficeMode) {
-      html += `
-        <div class="preview-section">
-          <div class="preview-section-label domain">Medical Mode</div>
-          <div class="preview-text">${escapeHtml(state.promptParts.domains.medicalOfficeMode)}</div>
-        </div>
-      `;
-    }
-    if (state.promptParts.domains.financialMode) {
-      html += `
-        <div class="preview-section">
-          <div class="preview-section-label domain">Financial Mode</div>
-          <div class="preview-text">${escapeHtml(state.promptParts.domains.financialMode)}</div>
-        </div>
-      `;
-    }
-    if (state.promptParts.domains.emergencyServicesMode) {
-      html += `
-        <div class="preview-section">
-          <div class="preview-section-label domain">Emergency Mode</div>
-          <div class="preview-text">${escapeHtml(state.promptParts.domains.emergencyServicesMode)}</div>
-        </div>
-      `;
-    }
+  const ds = state.settings.promptText.domainSafety || {};
+  const comp = state.settings.compliance || {};
+  if (comp.medicalOfficeMode && ds.medicalOffice) {
+    html += `<div class="preview-section"><div class="preview-section-label domain">Medical Mode</div><div class="preview-text">${escapeHtml(ds.medicalOffice)}</div></div>`;
   }
-  
+  if (comp.financialMode && ds.financial) {
+    html += `<div class="preview-section"><div class="preview-section-label domain">Financial Mode</div><div class="preview-text">${escapeHtml(ds.financial)}</div></div>`;
+  }
+  if (comp.emergencyServicesMode && ds.emergency) {
+    html += `<div class="preview-section"><div class="preview-section-label domain">Emergency Mode</div><div class="preview-text">${escapeHtml(ds.emergency)}</div></div>`;
+  }
+
   // Strict compliance
-  if (state.promptParts.strictCompliance) {
-    html += `
-      <div class="preview-section">
-        <div class="preview-section-label guardrail">Strict Compliance</div>
-        <div class="preview-text">${escapeHtml(state.promptParts.strictCompliance)}</div>
-      </div>
-    `;
+  const strictText = state.settings.promptText.strictCompliance || '';
+  if (comp.strictComplianceMode && activeProfile !== 'compliance_safe' && strictText) {
+    html += `<div class="preview-section"><div class="preview-section-label strict">Strict Compliance</div><div class="preview-text">${escapeHtml(strictText)}</div></div>`;
   }
-  
+
   previewContainer.innerHTML = html;
-  
-  // Update character and token counts
-  const fullPrompt = Object.values(state.promptParts)
-    .filter(v => typeof v === 'string')
-    .join('\n\n');
-  
+
+  // Token count — include all active parts
+  const parts = [
+    baseText, ctxText, profileText,
+    comp.medicalOfficeMode ? (ds.medicalOffice || '') : '',
+    comp.financialMode ? (ds.financial || '') : '',
+    comp.emergencyServicesMode ? (ds.emergency || '') : '',
+    (comp.strictComplianceMode && activeProfile !== 'compliance_safe') ? strictText : ''
+  ].filter(Boolean);
+
+  const fullPrompt = parts.join('\n\n');
   const charCount = fullPrompt.length;
-  const tokenCount = Math.ceil(charCount / 4); // Rough estimate: 1 token ≈ 4 chars
-  
-  document.getElementById('preview-char-count').textContent = `${charCount.toLocaleString()} chars`;
-  document.getElementById('preview-token-count').textContent = `~${tokenCount.toLocaleString()} tokens`;
+  const tokenCount = Math.ceil(charCount / 4);
+  setText('preview-char-count', `${charCount.toLocaleString()} chars`);
+  setText('preview-token-count', `~${tokenCount.toLocaleString()} tokens`);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // EVENT HANDLERS
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Setup all event listeners
- */
 function setupEventListeners() {
-  // Back button
-  document.getElementById('btn-back').addEventListener('click', () => {
-    const backUrl = `/agent-console/?companyId=${encodeURIComponent(state.companyId)}`;
-    if (state.unsavedChanges) {
-      if (confirm('You have unsaved changes. Are you sure you want to leave?')) {
-        window.location.href = backUrl;
-      }
-    } else {
-      window.location.href = backUrl;
-    }
-  });
-  
-  // Logo link (same as back button)
+  // Navigation
+  document.getElementById('btn-back').addEventListener('click', navigateBack);
   document.getElementById('header-logo-link').addEventListener('click', (e) => {
     e.preventDefault();
-    const backUrl = `/agent-console/?companyId=${encodeURIComponent(state.companyId)}`;
-    if (state.unsavedChanges) {
-      if (confirm('You have unsaved changes. Are you sure you want to leave?')) {
-        window.location.href = backUrl;
-      }
-    } else {
-      window.location.href = backUrl;
-    }
+    navigateBack();
   });
-  
-  // Save button
+
+  // Save / Export / Import
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-  
-  // Export button
   document.getElementById('btn-export-settings').addEventListener('click', exportSettings);
-  
-  // Import button
   document.getElementById('btn-import-settings').addEventListener('click', () => {
     document.getElementById('import-file-input').click();
   });
-  
-  // Import file input
   document.getElementById('import-file-input').addEventListener('change', handleImportFile);
-  
-  // Copy preview button
   document.getElementById('btn-copy-preview').addEventListener('click', copyPreviewToClipboard);
-  
-  // Model override
+
+  // ── AI Model tab ──
   document.getElementById('model-override').addEventListener('change', (e) => {
     updateSetting('defaults.modelOverride', e.target.value || null);
   });
-  
-  // Temperature slider
+
+  // Temperature
   document.getElementById('temperature-override').addEventListener('input', (e) => {
-    document.getElementById('temperature-value').textContent = e.target.value;
+    setText('temperature-value', e.target.value);
   });
   document.getElementById('temperature-override').addEventListener('change', (e) => {
-    const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
-    updateSetting(`overrides.${activeProfile}.temperature`, parseFloat(e.target.value));
+    const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
+    updateSetting(`overrides.${ap}.temperature`, parseFloat(e.target.value));
   });
-  
-  // Max tokens slider
+
+  // Top P
+  document.getElementById('topp-override').addEventListener('input', (e) => {
+    setText('topp-value', e.target.value);
+  });
+  document.getElementById('topp-override').addEventListener('change', (e) => {
+    const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
+    updateSetting(`overrides.${ap}.topP`, parseFloat(e.target.value));
+  });
+
+  // Max Tokens
   document.getElementById('max-tokens-override').addEventListener('input', (e) => {
-    document.getElementById('max-tokens-value').textContent = e.target.value;
+    setText('max-tokens-value', e.target.value);
   });
   document.getElementById('max-tokens-override').addEventListener('change', (e) => {
-    const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
-    updateSetting(`overrides.${activeProfile}.maxTokens`, parseInt(e.target.value));
+    const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
+    updateSetting(`overrides.${ap}.maxTokens`, parseInt(e.target.value));
   });
-  
+
   // Generation mode
   document.querySelectorAll('input[name="generation-mode"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
       updateSetting('defaults.generationMode', e.target.value);
-      document.getElementById('variant-count-group').style.display = e.target.value === 'multi' ? 'block' : 'none';
+      const vcGroup = document.getElementById('variant-count-group');
+      if (vcGroup) vcGroup.hidden = e.target.value !== 'multi';
     });
   });
-  
-  // Variant count slider
   document.getElementById('variant-count').addEventListener('input', (e) => {
-    document.getElementById('variant-count-value').textContent = e.target.value;
+    setText('variant-count-value', e.target.value);
   });
   document.getElementById('variant-count').addEventListener('change', (e) => {
     updateSetting('defaults.defaultVariantCount', parseInt(e.target.value));
   });
-  
-  // Company context
-  const companyContextField = document.getElementById('company-context');
-  if (companyContextField) {
-    companyContextField.addEventListener('change', (e) => {
-      updateSetting('companyContext', e.target.value);
-      updatePreview();
-    });
-  }
-  
-  // Prompt editors
-  document.getElementById('prompt-base').addEventListener('change', (e) => {
-    updateSetting('promptText.base', e.target.value);
-  });
-  
-  document.getElementById('prompt-profile').addEventListener('change', (e) => {
-    const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
-    updateSetting(`promptText.profiles.${activeProfile}`, e.target.value);
+
+  // ── Prompts & Safety tab ──
+  document.getElementById('company-context').addEventListener('change', (e) => {
+    updateSetting('companyContext', e.target.value);
+    updatePreview();
   });
 
-  // ── Call Handling event listeners ──────────────────────────────────────
+  document.getElementById('prompt-base').addEventListener('change', (e) => {
+    updateSetting('promptText.base', e.target.value);
+    updatePreview();
+  });
+
+  document.getElementById('prompt-profile').addEventListener('change', (e) => {
+    const ap = state.settings.defaults?.activeProfile || 'compliance_safe';
+    updateSetting(`promptText.profiles.${ap}`, e.target.value);
+    updatePreview();
+  });
+
+  // Strict compliance toggle
+  document.getElementById('strict-compliance-toggle').addEventListener('change', (e) => {
+    updateSetting('compliance.strictComplianceMode', e.target.checked);
+    toggleFieldset('strict-compliance-fields', e.target.checked);
+    updatePreview();
+  });
+
+  document.getElementById('prompt-strict-compliance').addEventListener('change', (e) => {
+    updateSetting('promptText.strictCompliance', e.target.value);
+    updatePreview();
+  });
+
+  // Reset buttons (prompts)
+  document.getElementById('btn-reset-base-prompt').addEventListener('click', () => resetPromptSection('base prompt'));
+  document.getElementById('btn-reset-profile-prompt').addEventListener('click', () => resetPromptSection('profile prompt'));
+  document.getElementById('btn-reset-strict-compliance').addEventListener('click', () => resetPromptSection('strict compliance prompt'));
+
+  // ── Call Handling tab ──
   setupCallHandlingListeners();
 }
 
 function setupCallHandlingListeners() {
-  // Helper: wire a text/number input to a callHandling setting path
   function bindInput(id, path, parse) {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('change', (e) => {
-      const val = parse ? parse(e.target.value) : e.target.value;
-      updateSetting(`callHandling.${path}`, val);
+      updateSetting(`callHandling.${path}`, parse ? parse(e.target.value) : e.target.value);
     });
   }
-  // Helper: wire a checkbox to a callHandling setting path
   function bindCheck(id, path) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -797,7 +583,7 @@ function setupCallHandlingListeners() {
   const thresholdSlider = document.getElementById('ch-lowconf-threshold');
   if (thresholdSlider) {
     thresholdSlider.addEventListener('input', (e) => {
-      document.getElementById('ch-lowconf-threshold-value').textContent = e.target.value + '%';
+      setText('ch-lowconf-threshold-value', e.target.value + '%');
     });
     thresholdSlider.addEventListener('change', (e) => {
       updateSetting('callHandling.lowConfidenceHandling.threshold', parseInt(e.target.value, 10));
@@ -813,11 +599,11 @@ function setupCallHandlingListeners() {
   bindInput('ch-lowconf-dg-fallback-threshold', 'lowConfidenceHandling.deepgramFallbackThreshold', v => parseInt(v, 10));
   bindInput('ch-lowconf-dg-accept-threshold', 'lowConfidenceHandling.deepgramAcceptThreshold', v => parseInt(v, 10));
 
-  // Reset button
+  // Reset Call Handling
   document.getElementById('btn-reset-callhandling')?.addEventListener('click', async () => {
     if (!confirm('Reset all Call Handling settings to defaults?')) return;
     try {
-      const data = await AgentConsoleAuth.apiFetch(`/api/admin/llm-settings/reset`, {
+      const data = await AgentConsoleAuth.apiFetch('/api/admin/llm-settings/reset', {
         method: 'POST',
         body: JSON.stringify({ scope: `company:${state.companyId}`, section: 'callHandling' })
       });
@@ -832,95 +618,79 @@ function setupCallHandlingListeners() {
   });
 }
 
-/**
- * Setup tab navigation
- */
+// ════════════════════════════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ════════════════════════════════════════════════════════════════════════════
+
 function setupTabNavigation() {
   document.querySelectorAll('.llm-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabName = tab.dataset.tab;
-      switchToTab(tabName);
-    });
+    tab.addEventListener('click', () => switchToTab(tab.dataset.tab));
   });
 }
 
-/**
- * Switch to a specific tab
- */
 function switchToTab(tabName) {
   state.activeTab = tabName;
-  
-  // Update tab buttons
-  document.querySelectorAll('.llm-tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === tabName);
-  });
-  
-  // Update tab panels
-  document.querySelectorAll('.llm-tab-panel').forEach(panel => {
-    panel.classList.toggle('active', panel.id === `panel-${tabName}`);
-  });
+  document.querySelectorAll('.llm-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.llm-tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabName}`));
 }
 
-/**
- * Select a profile
- */
+// ════════════════════════════════════════════════════════════════════════════
+// ACTIONS
+// ════════════════════════════════════════════════════════════════════════════
+
 function selectProfile(profileKey) {
   updateSetting('defaults.activeProfile', profileKey);
-  renderProfilesTab();
-  renderPromptsTab();
+  renderModelTab();
+  renderPromptsSafetyTab();
   updatePreview();
 }
 
-/**
- * Toggle guardrail
- */
-function toggleGuardrail(guardrailId, enabled) {
-  console.log('[LLM Settings] Toggle guardrail:', guardrailId, enabled);
-  // TODO: Implement guardrail state management
-  markUnsavedChanges();
-}
-
-/**
- * Toggle domain mode
- */
 function toggleDomainMode(domainId, enabled) {
   updateSetting(`compliance.${domainId}`, enabled);
-  renderPromptsTab(); // Re-render to show/hide domain prompt editors
+  renderPromptsSafetyTab();
   updatePreview();
 }
 
-/**
- * Update domain prompt
- */
 function updateDomainPrompt(domainId, value) {
   updateSetting(`promptText.domainSafety.${domainId}`, value);
+  updatePreview();
 }
 
-/**
- * Reset domain prompt to default
- */
 function resetDomainPrompt(domainId) {
-  if (confirm('Reset this prompt to default?')) {
-    // TODO: Fetch default from backend
-    showToast('info', 'Reset to default (not implemented yet)');
+  resetPromptSection(`${domainId} domain prompt`);
+}
+
+async function resetPromptSection(label) {
+  if (!confirm(`Reset all prompts to their defaults? (This resets the entire prompt section.)`)) return;
+  try {
+    const data = await AgentConsoleAuth.apiFetch('/api/admin/llm-settings/reset', {
+      method: 'POST',
+      body: JSON.stringify({ scope: `company:${state.companyId}`, section: 'promptText' })
+    });
+    if (data.settings) {
+      state.settings = data.settings;
+      state.promptParts = data.promptParts;
+      renderPromptsSafetyTab();
+      updatePreview();
+      showToast('success', 'Prompts reset to defaults');
+    }
+  } catch (err) {
+    showToast('error', 'Failed to reset: ' + err.message);
   }
 }
 
-/**
- * Update company context
- */
-function updateCompanyContext(value) {
-  updateSetting('companyContext', value);
-  updatePreview();
+function navigateBack() {
+  const backUrl = `/agent-console/?companyId=${encodeURIComponent(state.companyId)}`;
+  if (state.unsavedChanges) {
+    if (!confirm('You have unsaved changes. Are you sure you want to leave?')) return;
+  }
+  window.location.href = backUrl;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // EXPORT / IMPORT
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Export settings as JSON file
- */
 function exportSettings() {
   const exportData = {
     version: '1.0.0',
@@ -929,7 +699,6 @@ function exportSettings() {
     companyName: state.companyName,
     settings: state.settings
   };
-  
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -939,54 +708,46 @@ function exportSettings() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  
-  showToast('success', 'Settings exported successfully');
+  showToast('success', 'Settings exported');
 }
 
-/**
- * Handle import file selection
- */
 function handleImportFile(event) {
   const file = event.target.files[0];
   if (!file) return;
-  
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const importData = JSON.parse(e.target.result);
-      
-      if (!importData.settings) {
-        throw new Error('Invalid settings file');
-      }
-      
-      if (confirm(`Import settings from ${importData.companyName || 'Unknown Company'}?\n\nThis will replace all current settings.`)) {
-        state.settings = importData.settings;
-        renderAllSections();
-        updatePreview();
-        markUnsavedChanges();
-        showToast('success', 'Settings imported successfully. Click Save to persist.');
-      }
+      if (!importData.settings) throw new Error('Invalid settings file');
+      if (!confirm(`Import settings from ${importData.companyName || 'Unknown Company'}?\n\nThis will replace all current settings.`)) return;
+      state.settings = importData.settings;
+      renderAllSections();
+      updatePreview();
+      markUnsavedChanges();
+      showToast('success', 'Settings imported. Click Save to persist.');
     } catch (error) {
-      console.error('[LLM Settings] Import error:', error);
       showToast('error', `Failed to import: ${error.message}`);
     }
   };
-  
   reader.readAsText(file);
-  
-  // Reset file input
   event.target.value = '';
 }
 
-/**
- * Copy preview to clipboard
- */
 function copyPreviewToClipboard() {
-  const fullPrompt = Object.values(state.promptParts)
-    .filter(v => typeof v === 'string')
-    .join('\n\n');
-  
-  navigator.clipboard.writeText(fullPrompt)
+  const parts = [];
+  if (state.settings?.promptText?.base) parts.push(state.settings.promptText.base);
+  if (state.settings?.companyContext) parts.push(state.settings.companyContext);
+  const ap = state.settings?.defaults?.activeProfile || 'compliance_safe';
+  if (state.settings?.promptText?.profiles?.[ap]) parts.push(state.settings.promptText.profiles[ap]);
+  const ds = state.settings?.promptText?.domainSafety || {};
+  const comp = state.settings?.compliance || {};
+  if (comp.medicalOfficeMode && ds.medicalOffice) parts.push(ds.medicalOffice);
+  if (comp.financialMode && ds.financial) parts.push(ds.financial);
+  if (comp.emergencyServicesMode && ds.emergency) parts.push(ds.emergency);
+  if (comp.strictComplianceMode && ap !== 'compliance_safe' && state.settings?.promptText?.strictCompliance) {
+    parts.push(state.settings.promptText.strictCompliance);
+  }
+  navigator.clipboard.writeText(parts.join('\n\n'))
     .then(() => showToast('success', 'Copied to clipboard'))
     .catch(() => showToast('error', 'Failed to copy'));
 }
@@ -995,74 +756,106 @@ function copyPreviewToClipboard() {
 // STATE MANAGEMENT
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Update a setting value (supports nested paths with dot notation)
- */
 function updateSetting(path, value) {
   const keys = path.split('.');
   let obj = state.settings;
-  
   for (let i = 0; i < keys.length - 1; i++) {
-    if (!obj[keys[i]]) {
-      obj[keys[i]] = {};
-    }
+    if (!obj[keys[i]]) obj[keys[i]] = {};
     obj = obj[keys[i]];
   }
-  
   obj[keys[keys.length - 1]] = value;
-  
   markUnsavedChanges();
 }
 
-/**
- * Mark that there are unsaved changes
- */
 function markUnsavedChanges() {
   state.unsavedChanges = true;
   updateSaveButtonState();
   updateFooter();
-  
-  // Show alert
-  document.getElementById('unsaved-changes-alert').style.display = 'block';
+  const alert = document.getElementById('unsaved-changes-alert');
+  if (alert) alert.hidden = false;
 }
 
-/**
- * Update save button state
- */
 function updateSaveButtonState() {
-  const saveButton = document.getElementById('btn-save-settings');
-  saveButton.disabled = !state.unsavedChanges;
+  document.getElementById('btn-save-settings').disabled = !state.unsavedChanges;
 }
 
-/**
- * Update footer status
- */
 function updateFooter() {
-  const statusEl = document.getElementById('footer-save-status');
-  statusEl.textContent = state.unsavedChanges ? 'Unsaved changes' : 'All changes saved';
-  statusEl.style.color = state.unsavedChanges ? 'var(--color-warning-600)' : 'var(--color-success-600)';
+  const el = document.getElementById('footer-save-status');
+  el.textContent = state.unsavedChanges ? 'Unsaved changes' : 'All changes saved';
+  el.style.color = state.unsavedChanges ? 'var(--color-warning-600)' : 'var(--color-success-600)';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // UI HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 
+function setVal(id, value) {
+  const el = document.getElementById(id);
+  if (el && value != null) el.value = value;
+}
+
+function setChecked(id, checked) {
+  const el = document.getElementById(id);
+  if (el) el.checked = checked;
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function toggleFieldset(id, show) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.opacity = show ? '1' : '0.4';
+  el.style.pointerEvents = show ? 'auto' : 'none';
+  el.querySelectorAll('input, textarea, select, button').forEach(input => {
+    input.disabled = !show;
+  });
+}
+
 function showLoadingState() {
-  // TODO: Implement loading spinner
-  console.log('[LLM Settings] Loading...');
+  const el = document.getElementById('loading-overlay');
+  if (el) el.hidden = false;
 }
 
 function hideLoadingState() {
-  console.log('[LLM Settings] Load complete');
+  const el = document.getElementById('loading-overlay');
+  if (el) el.hidden = true;
 }
 
 function showToast(type, message) {
-  console.log(`[Toast] ${type}:`, message);
-  // TODO: Implement toast notifications
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon">${getToastIcon(type)}</div>
+    <div class="toast-content">
+      <div class="toast-message">${escapeHtml(message)}</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => { if (toast.parentElement) toast.remove(); }, 5000);
+}
+
+function getToastIcon(type) {
+  const icons = {
+    success: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#22c55e" stroke-width="1.5"/><path d="M6 10L9 13L14 7" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    error: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#ef4444" stroke-width="1.5"/><path d="M7 7L13 13M13 7L7 13" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    warning: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3L18 17H2L10 3Z" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8V11M10 14V14.5" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    info: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#3b82f6" stroke-width="1.5"/><path d="M10 6V6.5M10 9V14" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/></svg>'
+  };
+  return icons[type] || icons.info;
 }
 
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text || '';
   return div.innerHTML;
 }

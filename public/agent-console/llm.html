@@ -4,40 +4,58 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LLM Settings — Agent Console</title>
-  
+
   <!-- Inter Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
+
   <!-- Styles -->
   <link rel="stylesheet" href="/agent-console/styles.css">
-  
+
   <style>
     /* ════════════════════════════════════════════════════════════════════════
-       LLM SETTINGS PAGE SPECIFIC STYLES
+       LLM SETTINGS — PAGE STYLES
        ════════════════════════════════════════════════════════════════════════ */
-    
+
+    /* Extended color tokens (supplement styles.css) */
+    :root {
+      --color-purple-200: #e9d5ff;
+      --color-purple-900: #581c87;
+      --color-warning-200: #fde68a;
+      --color-warning-800: #92400e;
+      --color-warning-900: #78350f;
+      --color-success-200: #bbf7d0;
+      --color-success-800: #166534;
+      --color-success-900: #14532d;
+      --color-error-200: #fecaca;
+      --color-error-900: #7f1d1d;
+      --text-secondary: var(--color-gray-600);
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+
     .llm-settings-layout {
       display: grid;
       grid-template-columns: 1fr 400px;
       gap: 24px;
       margin-top: 24px;
+      position: relative;
     }
-    
+
     @media (max-width: 1400px) {
       .llm-settings-layout {
         grid-template-columns: 1fr;
       }
-      
       .llm-preview-sidebar {
         position: sticky;
         top: 80px;
         max-height: calc(100vh - 100px);
       }
     }
-    
-    /* Tabs Navigation */
+
+    /* ── Tabs ────────────────────────────────────────────────────────────── */
+
     .llm-tabs {
       display: flex;
       gap: 4px;
@@ -47,7 +65,7 @@
       margin-bottom: 24px;
       overflow-x: auto;
     }
-    
+
     .llm-tab {
       padding: 10px 16px;
       border: none;
@@ -58,523 +76,541 @@
       border-radius: var(--radius-md);
       cursor: pointer;
       white-space: nowrap;
-      transition: var(--transition-base);
+      transition: all var(--transition-base);
     }
-    
+
     .llm-tab:hover {
       background: var(--color-gray-200);
       color: var(--color-gray-900);
     }
-    
+
     .llm-tab.active {
       background: var(--color-white);
       color: var(--color-primary-600);
       box-shadow: var(--shadow-sm);
     }
-    
-    /* Tab Panels */
-    .llm-tab-panel {
-      display: none;
-    }
-    
-    .llm-tab-panel.active {
-      display: block;
-    }
-    
-    /* Settings Sections */
+
+    .llm-tab-panel { display: none; }
+    .llm-tab-panel.active { display: block; }
+
+    /* ── Settings Section (card) ─────────────────────────────────────────── */
+
     .settings-section {
       background: var(--color-white);
       border: 1px solid var(--color-gray-200);
       border-radius: var(--radius-lg);
-      padding: 24px;
-      margin-bottom: 20px;
+      padding: var(--space-6);
+      margin-bottom: var(--space-5);
     }
-    
+
     .settings-section-header {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      align-items: flex-start;
+      margin-bottom: var(--space-5);
     }
-    
+
     .settings-section-title {
       font-size: var(--font-size-lg);
       font-weight: var(--font-weight-semibold);
       color: var(--color-gray-900);
-      margin: 0;
     }
-    
+
     .settings-section-description {
       font-size: var(--font-size-sm);
       color: var(--color-gray-600);
-      margin: 8px 0 0 0;
+      margin-top: var(--space-1);
     }
-    
-    /* Profile Cards */
+
+    /* ── Profile Cards ───────────────────────────────────────────────────── */
+
     .profile-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 16px;
     }
-    
+
     .profile-card {
       border: 2px solid var(--color-gray-200);
       border-radius: var(--radius-lg);
-      padding: 20px;
+      padding: var(--space-5);
       cursor: pointer;
-      transition: var(--transition-base);
+      transition: all var(--transition-base);
     }
-    
     .profile-card:hover {
       border-color: var(--color-primary-300);
       box-shadow: var(--shadow-md);
     }
-    
     .profile-card.active {
       border-color: var(--color-primary-500);
       background: var(--color-primary-50);
     }
-    
-    .profile-card-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    
-    .profile-card-title {
-      font-size: var(--font-size-base);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-gray-900);
-      margin: 0;
-    }
-    
+    .profile-card-header { display: flex; justify-content: space-between; align-items: center; }
+    .profile-card-title { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); }
     .profile-card-badge {
       padding: 4px 8px;
       background: var(--color-primary-100);
       color: var(--color-primary-700);
+      border-radius: var(--radius-sm);
       font-size: var(--font-size-xs);
       font-weight: var(--font-weight-medium);
-      border-radius: var(--radius-sm);
     }
-    
     .profile-card-description {
       font-size: var(--font-size-sm);
       color: var(--color-gray-600);
-      margin-bottom: 16px;
-      line-height: 1.5;
+      margin: var(--space-3) 0;
     }
-    
-    .profile-card-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: var(--font-size-sm);
-      color: var(--color-gray-500);
-    }
-    
-    .profile-card-meta-item {
-      display: flex;
-      justify-content: space-between;
-    }
-    
-    .profile-card-meta-label {
-      font-weight: var(--font-weight-medium);
-    }
-    
-    /* Guardrail Toggles */
-    .guardrail-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    
-    .guardrail-item {
-      padding: 16px;
-      background: var(--color-gray-50);
-      border: 1px solid var(--color-gray-200);
-      border-radius: var(--radius-md);
-    }
-    
-    .guardrail-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-    
-    .guardrail-title {
-      font-size: var(--font-size-base);
-      font-weight: var(--font-weight-medium);
-      color: var(--color-gray-900);
-    }
-    
-    .guardrail-description {
-      font-size: var(--font-size-sm);
-      color: var(--color-gray-600);
-      line-height: 1.5;
-    }
-    
-    /* Toggle Switch */
+    .profile-card-meta { display: flex; flex-direction: column; gap: 6px; }
+    .profile-card-meta-item { display: flex; justify-content: space-between; font-size: var(--font-size-sm); }
+    .profile-card-meta-label { font-weight: var(--font-weight-medium); }
+
+    /* ── Toggle Switch ───────────────────────────────────────────────────── */
+
     .toggle-switch {
       position: relative;
       display: inline-block;
       width: 48px;
       height: 24px;
+      flex-shrink: 0;
     }
-    
-    .toggle-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
     .toggle-slider {
       position: absolute;
       cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: var(--color-gray-300);
-      transition: var(--transition-base);
+      inset: 0;
+      background: var(--color-gray-300);
       border-radius: 24px;
+      transition: all var(--transition-base);
     }
-    
     .toggle-slider:before {
-      position: absolute;
       content: "";
+      position: absolute;
       height: 18px;
       width: 18px;
       left: 3px;
       bottom: 3px;
-      background-color: white;
-      transition: var(--transition-base);
+      background: white;
       border-radius: 50%;
+      transition: all var(--transition-base);
     }
-    
-    input:checked + .toggle-slider {
-      background-color: var(--color-primary-500);
+    input:checked + .toggle-slider { background: var(--color-primary-500); }
+    input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+    /* ── Utility Classes ─────────────────────────────────────────────────── */
+
+    .form-grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-4);
     }
-    
-    input:checked + .toggle-slider:before {
-      transform: translateX(24px);
-    }
-    
-    /* Preview Sidebar */
-    .llm-preview-sidebar {
-      position: sticky;
-      top: 80px;
-      height: fit-content;
-      max-height: calc(100vh - 100px);
-      overflow-y: auto;
-    }
-    
-    .preview-card {
-      background: var(--color-gray-900);
-      border-radius: var(--radius-lg);
-      padding: 20px;
-      color: var(--color-gray-100);
-    }
-    
-    .preview-header {
+
+    .toggle-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--color-gray-700);
+      gap: var(--space-2);
+      margin-top: var(--space-5);
     }
-    
-    .preview-title {
-      font-size: var(--font-size-base);
+    .toggle-row-label {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
       font-weight: var(--font-weight-semibold);
-      color: var(--color-white);
+      margin-bottom: var(--space-3);
     }
-    
-    .preview-stats {
+
+    .subsection { margin-top: var(--space-6); }
+
+    .range-labels {
       display: flex;
-      gap: 16px;
+      justify-content: space-between;
       font-size: var(--font-size-xs);
-      color: var(--color-gray-400);
+      color: var(--color-gray-500);
+      margin-top: var(--space-1);
     }
-    
-    .preview-content {
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      word-wrap: break-word;
+
+    .prompt-section { margin-bottom: var(--space-6); }
+    .prompt-section:last-child { margin-bottom: 0; }
+    .prompt-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-2);
     }
-    
-    .preview-section {
-      margin-bottom: 20px;
+    .prompt-section-label { font-weight: var(--font-weight-semibold); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-4);
     }
-    
-    .preview-section-label {
-      display: inline-block;
-      padding: 4px 8px;
-      background: var(--color-gray-800);
-      color: var(--color-gray-300);
-      font-size: 10px;
-      font-weight: var(--font-weight-semibold);
+    .stat-card {
+      padding: var(--space-4);
+      background: var(--color-gray-50);
+      border-radius: var(--radius-md);
+    }
+    .stat-card-label {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-600);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      border-radius: var(--radius-sm);
-      margin-bottom: 8px;
+      margin-bottom: var(--space-1);
     }
-    
-    .preview-section-label.base { background: var(--color-primary-900); color: var(--color-primary-200); }
-    .preview-section-label.profile { background: var(--color-purple-900); color: var(--color-purple-200); }
-    .preview-section-label.domain { background: var(--color-warning-900); color: var(--color-warning-200); }
-    .preview-section-label.guardrail { background: var(--color-error-900); color: var(--color-error-200); }
-    
-    .preview-text {
-      color: var(--color-gray-300);
+    .stat-card-value {
+      font-size: 1.25rem;
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
     }
-    
-    /* Export/Import Buttons */
-    .export-import-actions {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-    
-    /* Alert Boxes */
-    .alert {
-      padding: 12px 16px;
+
+    .domain-safety-group {
+      padding: var(--space-4);
+      background: var(--color-gray-50);
+      border: 1px solid var(--color-gray-200);
       border-radius: var(--radius-md);
-      margin-bottom: 16px;
+      margin-bottom: var(--space-4);
+    }
+    .domain-safety-group:last-child { margin-bottom: 0; }
+    .domain-safety-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+    .domain-safety-title {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+    }
+    .domain-safety-description {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+      margin-top: var(--space-1);
+    }
+    .domain-safety-prompt {
+      margin-top: var(--space-3);
+    }
+
+    .section-divider {
+      margin-top: var(--space-4);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--color-gray-200);
+    }
+
+    .radio-group { display: flex; gap: var(--space-4); }
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
       font-size: var(--font-size-sm);
     }
-    
-    .alert-warning {
-      background: var(--color-warning-50);
-      border: 1px solid var(--color-warning-200);
-      color: var(--color-warning-800);
+
+    .form-range {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--color-gray-200);
+      border-radius: 3px;
+      outline: none;
+      margin: var(--space-2) 0;
     }
-    
-    .alert-info {
-      background: var(--color-primary-50);
-      border: 1px solid var(--color-primary-200);
-      color: var(--color-primary-800);
+    .form-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      background: var(--color-primary-500);
+      border-radius: 50%;
+      cursor: pointer;
     }
-    
-    .alert-success {
-      background: var(--color-success-50);
-      border: 1px solid var(--color-success-200);
-      color: var(--color-success-800);
-    }
-    
-    /* Prompt Editor */
+
     .prompt-editor {
       width: 100%;
       min-height: 200px;
-      padding: 12px;
+      padding: var(--space-3);
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
       font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
       font-size: 13px;
       line-height: 1.6;
-      border: 1px solid var(--color-gray-300);
-      border-radius: var(--radius-md);
       resize: vertical;
+      transition: border-color var(--transition-base), box-shadow var(--transition-base);
     }
-    
     .prompt-editor:focus {
       outline: none;
       border-color: var(--color-primary-500);
       box-shadow: 0 0 0 3px var(--color-primary-100);
     }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--color-gray-200);
+      border-top-color: var(--color-primary-500);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ── Preview Sidebar ─────────────────────────────────────────────────── */
+
+    .llm-preview-sidebar {
+      position: sticky;
+      top: 80px;
+      height: fit-content;
+    }
+
+    .preview-card {
+      background: var(--color-gray-900);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      color: var(--color-gray-100);
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid var(--color-gray-700);
+      margin-bottom: var(--space-4);
+    }
+    .preview-title {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+      color: white;
+    }
+    .preview-stats {
+      display: flex;
+      gap: var(--space-4);
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-400);
+    }
+
+    .preview-content {
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .preview-section { margin-bottom: var(--space-5); }
+    .preview-section:last-child { margin-bottom: 0; }
+    .preview-section-label {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 10px;
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: var(--space-2);
+    }
+    .preview-section-label.base { background: var(--color-primary-900); color: var(--color-primary-200); }
+    .preview-section-label.context { background: var(--color-success-900); color: var(--color-success-200); }
+    .preview-section-label.profile { background: var(--color-purple-900); color: var(--color-purple-200); }
+    .preview-section-label.domain { background: var(--color-warning-900); color: var(--color-warning-200); }
+    .preview-section-label.strict { background: var(--color-error-900); color: var(--color-error-200); }
+    .preview-text { color: var(--color-gray-300); }
+
+    /* ── Alerts ───────────────────────────────────────────────────────────── */
+
+    .alert {
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-4);
+      font-size: var(--font-size-sm);
+    }
+    .alert-warning {
+      background: var(--color-warning-50);
+      border: 1px solid var(--color-warning-500);
+      color: var(--color-warning-800);
+    }
+    .alert-info {
+      background: var(--color-primary-50);
+      border: 1px solid var(--color-primary-200);
+      color: var(--color-primary-800);
+    }
+
+    /* ── Overview Profile Card ────────────────────────────────────────────── */
+
+    .overview-profile-card {
+      padding: var(--space-4);
+      background: var(--color-gray-50);
+      border-radius: var(--radius-md);
+    }
+    .overview-profile-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .overview-profile-name {
+      font-weight: var(--font-weight-semibold);
+      font-size: 1rem;
+      margin-bottom: var(--space-1);
+    }
+    .overview-profile-desc {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+    }
+    .overview-profile-meta {
+      margin-top: var(--space-2);
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-500);
+    }
+
+    .domain-badges {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
   <div class="app-container">
-    <!-- ================================================================
-         HEADER — STICKY TOP BAR
-         ================================================================ -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════════════════ -->
     <header class="header">
-      <!-- Left: Back Button + Logo + Title -->
       <div class="header-left">
-        <button class="btn btn-ghost btn-icon" id="btn-back" title="Back to Agent Console">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <a href="#" id="header-logo-link" class="header-logo">
-          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
-            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-          </svg>
+        <a href="/agent-console/" class="header-logo" id="header-logo-link">
           <span class="header-logo-text">ClientVia</span>
         </a>
         <div class="header-divider"></div>
-        <span class="header-title">🧠 LLM Settings</span>
+        <h1 class="header-title">LLM Settings</h1>
       </div>
-      
-      <!-- Center: Company Info -->
       <div class="header-center">
-        <span class="company-name" id="header-company-name">Loading...</span>
-        <span class="company-id-pill" id="header-company-id">—</span>
+        <span class="company-name" id="header-company-name"></span>
+        <span class="company-id-pill" id="header-company-id"></span>
       </div>
-      
-      <!-- Right: Actions -->
       <div class="header-right">
-        <button class="btn btn-secondary btn-sm" id="btn-export-settings">
+        <button class="btn btn-ghost btn-sm btn-icon" id="btn-back" title="Back to Dashboard">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 10V2M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          Export JSON
+          Back
         </button>
-        <button class="btn btn-secondary btn-sm" id="btn-import-settings">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 2V10M8 2L5 5M8 2L11 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Import JSON
-        </button>
-        <button class="btn btn-primary" id="btn-save-settings" disabled>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M13 2L14 3L7 10L3 6L4 5L7 8L13 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Save Changes
-        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-export-settings">Export JSON</button>
+        <button class="btn btn-secondary btn-sm" id="btn-import-settings">Import JSON</button>
+        <input type="file" id="import-file-input" accept=".json" hidden>
+        <button class="btn btn-primary" id="btn-save-settings" disabled>Save Changes</button>
       </div>
     </header>
 
-    <!-- ================================================================
+    <!-- ═══════════════════════════════════════════════════════════════════
          MAIN CONTENT
-         ================================================================ -->
+         ═══════════════════════════════════════════════════════════════════ -->
     <main class="main-content">
-      <div class="container-fluid">
-        
-        <!-- Alert: Unsaved Changes -->
-        <div class="alert alert-warning" id="unsaved-changes-alert" style="display: none;">
-          ⚠️ You have unsaved changes. Click "Save Changes" to persist your settings.
+      <div>
+
+        <!-- Unsaved Changes Alert -->
+        <div class="alert alert-warning" id="unsaved-changes-alert" hidden>
+          You have unsaved changes. Click "Save Changes" to persist your settings.
         </div>
-        
-        <!-- Export/Import Actions (Hidden File Input) -->
-        <input type="file" id="import-file-input" accept=".json" style="display: none;">
-        
-        <!-- Tabs Navigation -->
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loading-overlay" hidden>
+          <div class="spinner"></div>
+        </div>
+
+        <!-- Overview header -->
+        <div>
+          <h2 id="overview-company-name"></h2>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             TABS
+             ═══════════════════════════════════════════════════════════════ -->
         <div class="llm-tabs" role="tablist">
           <button class="llm-tab active" data-tab="overview" role="tab">Overview</button>
-          <button class="llm-tab" data-tab="profiles" role="tab">Profiles</button>
-          <button class="llm-tab" data-tab="guardrails" role="tab">Guardrails</button>
-          <button class="llm-tab" data-tab="domains" role="tab">Domain Safety</button>
-          <button class="llm-tab" data-tab="prompts" role="tab">Prompts</button>
-          <button class="llm-tab" data-tab="generation" role="tab">Generation</button>
+          <button class="llm-tab" data-tab="model" role="tab">AI Model</button>
+          <button class="llm-tab" data-tab="prompts" role="tab">Prompts &amp; Safety</button>
           <button class="llm-tab" data-tab="callhandling" role="tab">Call Handling</button>
         </div>
-        
-        <!-- Layout: Main Content + Preview Sidebar -->
+
         <div class="llm-settings-layout">
-          
-          <!-- Main Content Area -->
-          <div class="llm-content-main">
-            
-            <!-- ═══════════════════════════════════════════════════════════
-                 TAB: OVERVIEW
-                 ═══════════════════════════════════════════════════════════ -->
+          <div>
+
+            <!-- ═════════════════════════════════════════════════════════════
+                 TAB 1: OVERVIEW
+                 ═════════════════════════════════════════════════════════════ -->
             <div class="llm-tab-panel active" id="panel-overview">
-              
+
+              <!-- Company Context -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div>
-                    <h2 class="settings-section-title">LLM Configuration Overview</h2>
+                    <h2 class="settings-section-title">Company Context</h2>
                     <p class="settings-section-description">
-                      Configure how the AI behaves for this company. Settings are company-specific and don't affect other businesses.
+                      Describe what this business does. The LLM uses this to generate relevant call scenarios.
                     </p>
                   </div>
                 </div>
-                
-                <div class="alert alert-info">
-                  <strong>Company-Scoped Settings:</strong> These settings only apply to <strong id="overview-company-name">this company</strong>. 
-                  Each company has independent LLM configuration to prevent behavior bleeding between different business types 
-                  (e.g., dentist office vs HVAC company).
-                </div>
-                
-                <!-- Company Context / Business Description -->
-                <div style="margin-top: 24px;">
-                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 8px;">
-                    🏢 Company Context & Business Description
-                  </h3>
-                  <p style="font-size: 0.875rem; color: var(--color-gray-600); margin-bottom: 12px;">
-                    Tell the LLM what type of business this is. This context is automatically included in all AI-generated scenarios.
-                  </p>
-                  <textarea 
-                    id="company-context" 
-                    class="prompt-editor" 
-                    style="min-height: 120px;"
-                    placeholder="Example for HVAC company:&#10;&#10;You are helping configure scenarios for Bob's HVAC, a residential heating and cooling service company in Phoenix, Arizona. We provide AC installation, repair, and maintenance. Our busy seasons are summer (AC) and winter (heating). Common customer needs: emergency repairs, seasonal tune-ups, new system installations, filter replacements. Tone: Professional but friendly, service-focused, helpful."></textarea>
-                  <div style="margin-top: 8px; font-size: 0.75rem; color: var(--color-gray-500);">
-                    💡 Tip: Include industry type, services offered, seasonal patterns, and desired tone. The LLM will use this context to generate appropriate scenarios.
+                <textarea id="company-context" class="prompt-editor" placeholder="e.g. We are a residential HVAC company serving the Dallas-Fort Worth area. We offer AC repair, heating installation, and 24/7 emergency service..."></textarea>
+                <p class="form-hint">Tip: Include services offered, service area, and anything the AI should know about this business.</p>
+              </div>
+
+              <!-- Active Profile (read-only) -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Active Profile</h2>
+                    <p class="settings-section-description">Current behavior profile for this company.</p>
                   </div>
                 </div>
-                
-                <!-- Current Active Profile -->
-                <div style="margin-top: 24px;">
-                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Active Profile</h3>
-                  <div id="overview-active-profile" style="padding: 16px; background: var(--color-gray-50); border-radius: 8px;">
-                    Loading...
+                <div class="overview-profile-card" id="overview-active-profile"></div>
+              </div>
+
+              <!-- Quick Stats -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Configuration Summary</h2>
                   </div>
                 </div>
-                
-                <!-- Enabled Domain Modes -->
-                <div style="margin-top: 24px;">
-                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Active Domain Safety Modes</h3>
-                  <div id="overview-domain-modes" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <span class="badge badge-secondary">None Active</span>
-                  </div>
+                <div class="subsection">
+                  <h3 class="section-subtitle">Domain Safety Modes</h3>
+                  <div class="domain-badges" id="overview-domain-modes"></div>
                 </div>
-                
-                <!-- Quick Stats -->
-                <div style="margin-top: 24px;">
-                  <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Configuration Summary</h3>
-                  <div id="overview-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-                    <!-- Stats will be populated by JS -->
-                  </div>
+                <div class="subsection">
+                  <div class="stats-grid" id="overview-stats"></div>
                 </div>
               </div>
-              
             </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════
-                 TAB: PROFILES
-                 ═══════════════════════════════════════════════════════════ -->
-            <div class="llm-tab-panel" id="panel-profiles">
-              
+
+            <!-- ═════════════════════════════════════════════════════════════
+                 TAB 2: AI MODEL
+                 ═════════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-model">
+
+              <!-- Behavior Profiles -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Behavior Profiles</h2>
-                    <p class="settings-section-description">
-                      Select the profile that best matches your business needs. Each profile has different creativity, safety, and tone settings.
-                    </p>
+                    <p class="settings-section-description">Select the profile that best matches your business needs.</p>
                   </div>
                 </div>
-                
-                <div class="profile-grid" id="profile-grid">
-                  <!-- Profiles will be populated by JS -->
-                </div>
+                <div class="profile-grid" id="profile-grid"></div>
               </div>
-              
-              <!-- Model Override Section -->
+
+              <!-- Advanced Model Settings -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Advanced Model Settings</h2>
-                    <p class="settings-section-description">
-                      Override the default model and parameters for the active profile.
-                    </p>
+                    <p class="settings-section-description">Override the default model and parameters for the active profile.</p>
                   </div>
                 </div>
-                
+
                 <div class="form-group">
-                  <label for="model-override">Model Override</label>
-                  <select id="model-override" class="form-control">
+                  <label class="form-label" for="model-override">Model Override</label>
+                  <select id="model-override" class="form-select">
                     <option value="">Use Profile Default</option>
                     <option value="gpt-4o-mini">GPT-4o Mini (Fast, Cost-Effective)</option>
                     <option value="gpt-4o">GPT-4o (Balanced)</option>
@@ -583,144 +619,50 @@
                     <option value="o1-preview">O1 Preview (Advanced Reasoning)</option>
                   </select>
                 </div>
-                
+
                 <div class="form-group">
-                  <label for="temperature-override">Temperature (Creativity)</label>
+                  <label class="form-label" for="temperature-override">Temperature (Creativity)</label>
                   <input type="range" id="temperature-override" min="0" max="1" step="0.05" class="form-range">
-                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
+                  <div class="range-labels">
                     <span>Conservative (0.0)</span>
                     <span id="temperature-value">0.2</span>
                     <span>Creative (1.0)</span>
                   </div>
                 </div>
-                
+
                 <div class="form-group">
-                  <label for="max-tokens-override">Max Tokens (Response Length)</label>
+                  <label class="form-label" for="topp-override">Top P (Nucleus Sampling)</label>
+                  <input type="range" id="topp-override" min="0.1" max="1" step="0.05" class="form-range">
+                  <div class="range-labels">
+                    <span>Focused (0.1)</span>
+                    <span id="topp-value">0.9</span>
+                    <span>Diverse (1.0)</span>
+                  </div>
+                </div>
+
+                <div class="form-group mb-0">
+                  <label class="form-label" for="max-tokens-override">Max Tokens (Response Length)</label>
                   <input type="range" id="max-tokens-override" min="500" max="4000" step="100" class="form-range">
-                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
-                    <span>Short</span>
+                  <div class="range-labels">
+                    <span>Short (500)</span>
                     <span id="max-tokens-value">2200</span>
-                    <span>Long</span>
+                    <span>Long (4000)</span>
                   </div>
                 </div>
               </div>
-              
-            </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════
-                 TAB: GUARDRAILS
-                 ═══════════════════════════════════════════════════════════ -->
-            <div class="llm-tab-panel" id="panel-guardrails">
-              
-              <div class="settings-section">
-                <div class="settings-section-header">
-                  <div>
-                    <h2 class="settings-section-title">Behavioral Guardrails</h2>
-                    <p class="settings-section-description">
-                      Define hard boundaries for what the LLM can and cannot do. These are critical safety controls.
-                    </p>
-                  </div>
-                </div>
-                
-                <div class="alert alert-warning">
-                  <strong>⚠️ Critical Settings:</strong> Guardrails prevent the LLM from taking dangerous actions. 
-                  Only modify these if you understand the implications.
-                </div>
-                
-                <div class="guardrail-list" id="guardrail-list">
-                  <!-- Guardrails will be populated by JS -->
-                </div>
-              </div>
-              
-            </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════
-                 TAB: DOMAIN SAFETY
-                 ═══════════════════════════════════════════════════════════ -->
-            <div class="llm-tab-panel" id="panel-domains">
-              
-              <div class="settings-section">
-                <div class="settings-section-header">
-                  <div>
-                    <h2 class="settings-section-title">Domain Safety Modes</h2>
-                    <p class="settings-section-description">
-                      Enable industry-specific safety rules (medical, financial, legal, emergency).
-                    </p>
-                  </div>
-                </div>
-                
-                <div class="guardrail-list" id="domain-list">
-                  <!-- Domain modes will be populated by JS -->
-                </div>
-              </div>
-              
-            </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════
-                 TAB: PROMPTS
-                 ═══════════════════════════════════════════════════════════ -->
-            <div class="llm-tab-panel" id="panel-prompts">
-              
-              <div class="settings-section">
-                <div class="settings-section-header">
-                  <div>
-                    <h2 class="settings-section-title">System Prompts</h2>
-                    <p class="settings-section-description">
-                      Edit the text instructions sent to the LLM. Changes here directly affect behavior.
-                    </p>
-                  </div>
-                </div>
-                
-                <div class="alert alert-info">
-                  <strong>Live Preview:</strong> The right sidebar shows exactly what the LLM receives. 
-                  Edit prompts here and see real-time updates.
-                </div>
-                
-                <!-- Base Prompt -->
-                <div style="margin-bottom: 24px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label style="font-weight: 600;">Base System Prompt (Always Applied)</label>
-                    <button class="btn btn-sm btn-ghost" id="btn-reset-base-prompt">Reset to Default</button>
-                  </div>
-                  <textarea id="prompt-base" class="prompt-editor"></textarea>
-                </div>
-                
-                <!-- Profile Prompt -->
-                <div style="margin-bottom: 24px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label style="font-weight: 600;">Active Profile Prompt</label>
-                    <button class="btn btn-sm btn-ghost" id="btn-reset-profile-prompt">Reset to Default</button>
-                  </div>
-                  <textarea id="prompt-profile" class="prompt-editor"></textarea>
-                </div>
-                
-                <!-- Domain Safety Prompts -->
-                <div id="domain-prompts-container">
-                  <!-- Will be populated dynamically based on enabled domains -->
-                </div>
-                
-              </div>
-              
-            </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════
-                 TAB: GENERATION
-                 ═══════════════════════════════════════════════════════════ -->
-            <div class="llm-tab-panel" id="panel-generation">
-              
+
+              <!-- Generation Settings -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Generation Settings</h2>
-                    <p class="settings-section-description">
-                      Control how the LLM generates scenario drafts (variants, output format, etc.).
-                    </p>
+                    <p class="settings-section-description">Control how the LLM generates scenario drafts.</p>
                   </div>
                 </div>
-                
+
                 <div class="form-group">
-                  <label>Generation Mode</label>
-                  <div style="display: flex; gap: 16px;">
+                  <label class="form-label">Generation Mode</label>
+                  <div class="radio-group">
                     <label class="radio-label">
                       <input type="radio" name="generation-mode" value="single" checked>
                       <span>Single (1 version)</span>
@@ -731,24 +673,96 @@
                     </label>
                   </div>
                 </div>
-                
-                <div class="form-group" id="variant-count-group" style="display: none;">
-                  <label for="variant-count">Number of Variants</label>
+
+                <div class="form-group mb-0" id="variant-count-group" hidden>
+                  <label class="form-label" for="variant-count">Number of Variants</label>
                   <input type="range" id="variant-count" min="1" max="15" value="3" class="form-range">
-                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
+                  <div class="range-labels">
                     <span>1</span>
                     <span id="variant-count-value">3</span>
                     <span>15</span>
                   </div>
                 </div>
-                
               </div>
-              
             </div>
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 CALL HANDLING TAB (consolidated from LLM-0 Controls)
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- ═════════════════════════════════════════════════════════════
+                 TAB 3: PROMPTS & SAFETY
+                 ═════════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-prompts">
+
+              <!-- System Prompts -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">System Prompts</h2>
+                    <p class="settings-section-description">Edit the text instructions sent to the LLM. Changes here directly affect behavior.</p>
+                  </div>
+                </div>
+
+                <div class="alert alert-info">
+                  <strong>Live Preview:</strong> The right sidebar shows exactly what the LLM receives. Edits update the preview instantly.
+                </div>
+
+                <!-- Base Prompt -->
+                <div class="prompt-section">
+                  <div class="prompt-section-header">
+                    <label class="prompt-section-label">Base System Prompt (Always Applied)</label>
+                    <button class="btn btn-sm btn-ghost" id="btn-reset-base-prompt">Reset to Default</button>
+                  </div>
+                  <textarea id="prompt-base" class="prompt-editor"></textarea>
+                </div>
+
+                <!-- Profile Prompt -->
+                <div class="prompt-section">
+                  <div class="prompt-section-header">
+                    <label class="prompt-section-label">Active Profile Prompt</label>
+                    <button class="btn btn-sm btn-ghost" id="btn-reset-profile-prompt">Reset to Default</button>
+                  </div>
+                  <textarea id="prompt-profile" class="prompt-editor"></textarea>
+                </div>
+              </div>
+
+              <!-- Domain Safety Modes -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Domain Safety Modes</h2>
+                    <p class="settings-section-description">Enable industry-specific safety rules. Each mode adds safety prompts to the LLM.</p>
+                  </div>
+                </div>
+                <div id="domain-safety-container">
+                  <!-- Populated by JS: each domain gets toggle + conditional prompt editor -->
+                </div>
+              </div>
+
+              <!-- Strict Compliance -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Strict Compliance</h2>
+                    <p class="settings-section-description">Global safety override. Adds extra compliance rules to all non-Compliance-Safe profiles.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="strict-compliance-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div id="strict-compliance-fields">
+                  <div class="prompt-section">
+                    <div class="prompt-section-header">
+                      <label class="prompt-section-label">Strict Compliance Prompt</label>
+                      <button class="btn btn-sm btn-ghost" id="btn-reset-strict-compliance">Reset to Default</button>
+                    </div>
+                    <textarea id="prompt-strict-compliance" class="prompt-editor"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═════════════════════════════════════════════════════════════
+                 TAB 4: CALL HANDLING
+                 ═════════════════════════════════════════════════════════════ -->
             <div class="llm-tab-panel" id="panel-callhandling">
 
               <!-- Recovery Messages -->
@@ -756,36 +770,28 @@
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Recovery Messages</h2>
-                    <p class="settings-section-description">
-                      What the agent says when it can't understand the caller. Each type handles a different scenario.
-                    </p>
+                    <p class="settings-section-description">Custom phrases the AI uses when speech recognition has trouble. Leave blank for randomized defaults.</p>
                   </div>
                 </div>
-
                 <div class="form-group">
-                  <label for="ch-recovery-audio-unclear">Audio Unclear</label>
-                  <textarea class="form-textarea" id="ch-recovery-audio-unclear" rows="2" placeholder="I can hear you, just not clearly. Mind saying that again?"></textarea>
-                  <p class="form-hint">STT returned garbled or low-confidence text. Ask the caller to repeat.</p>
+                  <label class="form-label" for="ch-recovery-audio-unclear">Audio Unclear</label>
+                  <textarea id="ch-recovery-audio-unclear" class="form-textarea" rows="2" placeholder="e.g. Sorry, I didn't catch that. Could you repeat?"></textarea>
                 </div>
                 <div class="form-group">
-                  <label for="ch-recovery-silence">Silence / No Speech</label>
-                  <textarea class="form-textarea" id="ch-recovery-silence" rows="2" placeholder="I'm here — go ahead, I'm listening."></textarea>
-                  <p class="form-hint">Caller went silent. Gently prompt them to continue.</p>
+                  <label class="form-label" for="ch-recovery-silence">Silence / No Speech</label>
+                  <textarea id="ch-recovery-silence" class="form-textarea" rows="2" placeholder="e.g. I'm still here if you'd like to continue."></textarea>
                 </div>
                 <div class="form-group">
-                  <label for="ch-recovery-connection-cutout">Connection Cut Out</label>
-                  <textarea class="form-textarea" id="ch-recovery-connection-cutout" rows="2" placeholder="Sorry, the connection cut out for a second. What can I help you with?"></textarea>
-                  <p class="form-hint">Audio dropped briefly then returned. Re-engage the caller.</p>
+                  <label class="form-label" for="ch-recovery-connection-cutout">Connection Cut Out</label>
+                  <textarea id="ch-recovery-connection-cutout" class="form-textarea" rows="2" placeholder="e.g. It sounds like the call cut out for a moment."></textarea>
                 </div>
                 <div class="form-group">
-                  <label for="ch-recovery-general-error">General Error</label>
-                  <textarea class="form-textarea" id="ch-recovery-general-error" rows="2" placeholder="I missed that. Could you say that again?"></textarea>
-                  <p class="form-hint">Catch-all when something unexpected happens. Keep it simple and natural.</p>
+                  <label class="form-label" for="ch-recovery-general-error">General Error</label>
+                  <textarea id="ch-recovery-general-error" class="form-textarea" rows="2" placeholder="e.g. I'm sorry, I'm having a little trouble. Let me try again."></textarea>
                 </div>
-                <div class="form-group">
-                  <label for="ch-recovery-technical-transfer">Technical Transfer</label>
-                  <textarea class="form-textarea" id="ch-recovery-technical-transfer" rows="2" placeholder="I'm having some technical difficulties. Let me connect you to our team."></textarea>
-                  <p class="form-hint">Spoken before transferring to a human due to repeated technical failures.</p>
+                <div class="form-group mb-0">
+                  <label class="form-label" for="ch-recovery-technical-transfer">Technical Transfer</label>
+                  <textarea id="ch-recovery-technical-transfer" class="form-textarea" rows="2" placeholder="e.g. Let me connect you with someone who can help."></textarea>
                 </div>
               </div>
 
@@ -794,55 +800,46 @@
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Silence Handling</h2>
-                    <p class="settings-section-description">
-                      Progressive prompts when the caller goes silent. The agent speaks these in order before offering a callback.
-                    </p>
+                    <p class="settings-section-description">How the AI responds when the caller goes silent during a call.</p>
                   </div>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="ch-silence-enabled" checked>
+                    <input type="checkbox" id="ch-silence-enabled">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
-
                 <div id="silence-handling-fields">
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <div class="form-grid-2col">
                     <div class="form-group">
-                      <label for="ch-silence-threshold">Silence Threshold (seconds)</label>
-                      <input type="number" class="form-input" id="ch-silence-threshold" value="5" min="2" max="30">
-                      <p class="form-hint">How long to wait before first prompt.</p>
+                      <label class="form-label" for="ch-silence-threshold">Threshold (seconds)</label>
+                      <input type="number" id="ch-silence-threshold" class="form-input" min="2" max="30">
                     </div>
                     <div class="form-group">
-                      <label for="ch-silence-max-prompts">Max Prompts</label>
-                      <input type="number" class="form-input" id="ch-silence-max-prompts" value="3" min="1" max="5">
-                      <p class="form-hint">How many times to prompt before callback offer.</p>
+                      <label class="form-label" for="ch-silence-max-prompts">Max Prompts</label>
+                      <input type="number" id="ch-silence-max-prompts" class="form-input" min="1" max="5">
                     </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label for="ch-silence-first">1st Prompt</label>
-                    <input type="text" class="form-input" id="ch-silence-first" placeholder="I'm still here. Take your time.">
                   </div>
                   <div class="form-group">
-                    <label for="ch-silence-second">2nd Prompt</label>
-                    <input type="text" class="form-input" id="ch-silence-second" placeholder="Are you still there? I'm happy to wait.">
+                    <label class="form-label" for="ch-silence-first">1st Silence Prompt</label>
+                    <input type="text" id="ch-silence-first" class="form-input">
                   </div>
                   <div class="form-group">
-                    <label for="ch-silence-third">3rd Prompt</label>
-                    <input type="text" class="form-input" id="ch-silence-third" placeholder="If you need a moment, I can call you back. Just let me know.">
+                    <label class="form-label" for="ch-silence-second">2nd Silence Prompt</label>
+                    <input type="text" id="ch-silence-second" class="form-input">
                   </div>
-
-                  <div style="display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start;">
-                    <div class="form-group">
-                      <label class="toggle-switch" style="margin-top: 24px;">
-                        <input type="checkbox" id="ch-silence-offer-callback" checked>
-                        <span class="toggle-slider"></span>
-                      </label>
-                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Offer Callback</span>
-                    </div>
-                    <div class="form-group">
-                      <label for="ch-silence-callback-msg">Callback Message</label>
-                      <input type="text" class="form-input" id="ch-silence-callback-msg" placeholder="Would you like me to have someone call you back at this number?">
-                    </div>
+                  <div class="form-group">
+                    <label class="form-label" for="ch-silence-third">3rd Silence Prompt</label>
+                    <input type="text" id="ch-silence-third" class="form-input">
+                  </div>
+                  <div class="toggle-row">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="ch-silence-offer-callback">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-row-label">Offer Callback</span>
+                  </div>
+                  <div class="form-group" id="silence-callback-group">
+                    <label class="form-label" for="ch-silence-callback-msg">Callback Message</label>
+                    <input type="text" id="ch-silence-callback-msg" class="form-input">
                   </div>
                 </div>
               </div>
@@ -852,194 +849,176 @@
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Customer Patience</h2>
-                    <p class="settings-section-description">
-                      Controls how patient the agent is with callers who need extra time.
-                    </p>
+                    <p class="settings-section-description">Controls for how the AI handles long pauses and slow callers.</p>
                   </div>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="ch-patience-enabled" checked>
+                    <input type="checkbox" id="ch-patience-enabled">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
-
                 <div id="patience-fields">
-                  <div class="form-group">
+                  <div class="toggle-row">
                     <label class="toggle-switch">
-                      <input type="checkbox" id="ch-patience-never-hangup" checked>
+                      <input type="checkbox" id="ch-patience-never-hangup">
                       <span class="toggle-slider"></span>
                     </label>
-                    <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Never Auto-Hangup</span>
-                    <p class="form-hint">Agent will never hang up on a silent caller — always waits or offers callback.</p>
+                    <span class="toggle-row-label">Never Auto-Hangup</span>
                   </div>
-
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <div class="form-grid-2col" style="margin-top: var(--space-4);">
                     <div class="form-group">
-                      <label for="ch-patience-max-prompts">Max Patience Prompts</label>
-                      <input type="number" class="form-input" id="ch-patience-max-prompts" value="5" min="2" max="10">
+                      <label class="form-label" for="ch-patience-max-prompts">Max Patience Prompts</label>
+                      <input type="number" id="ch-patience-max-prompts" class="form-input" min="2" max="10">
                     </div>
                     <div class="form-group">
-                      <label class="toggle-switch" style="margin-top: 24px;">
-                        <input type="checkbox" id="ch-patience-always-callback" checked>
-                        <span class="toggle-slider"></span>
-                      </label>
-                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Always Offer Callback</span>
+                      <div class="toggle-row">
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="ch-patience-always-callback">
+                          <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-row-label">Always Offer Callback</span>
+                      </div>
                     </div>
                   </div>
-
-                  <div class="form-group">
-                    <label for="ch-patience-message">Patience Message</label>
-                    <input type="text" class="form-input" id="ch-patience-message" placeholder="No rush at all. I'm here whenever you're ready.">
-                    <p class="form-hint">Spoken when the caller is taking extra time.</p>
+                  <div class="form-group mb-0">
+                    <label class="form-label" for="ch-patience-message">Patience Message</label>
+                    <input type="text" id="ch-patience-message" class="form-input">
                   </div>
                 </div>
               </div>
 
-              <!-- Low Confidence / STT Guard -->
+              <!-- Low Confidence (STT Guard) -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div>
                     <h2 class="settings-section-title">Low Confidence (STT Guard)</h2>
-                    <p class="settings-section-description">
-                      When speech-to-text confidence is low, the agent can ask the caller to repeat instead of guessing wrong.
-                    </p>
+                    <p class="settings-section-description">When speech-to-text confidence is low, ask the caller to repeat instead of guessing.</p>
                   </div>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="ch-lowconf-enabled" checked>
+                    <input type="checkbox" id="ch-lowconf-enabled">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
-
                 <div id="lowconf-fields">
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <div class="form-group">
+                    <label class="form-label" for="ch-lowconf-threshold">Confidence Threshold</label>
+                    <input type="range" id="ch-lowconf-threshold" class="form-range" min="30" max="90" step="5">
+                    <div class="range-labels">
+                      <span>Lenient (30%)</span>
+                      <span id="ch-lowconf-threshold-value">60%</span>
+                      <span>Strict (90%)</span>
+                    </div>
+                  </div>
+                  <div class="form-grid-2col">
                     <div class="form-group">
-                      <label for="ch-lowconf-threshold">Confidence Threshold (%)</label>
-                      <input type="range" id="ch-lowconf-threshold" min="30" max="90" value="60" class="form-range">
-                      <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
-                        <span>30%</span>
-                        <span id="ch-lowconf-threshold-value">60%</span>
-                        <span>90%</span>
+                      <label class="form-label" for="ch-lowconf-action">Action</label>
+                      <select id="ch-lowconf-action" class="form-select">
+                        <option value="repeat">Ask to Repeat (Safest)</option>
+                        <option value="guess_with_context">Guess with Context</option>
+                        <option value="accept">Accept Anyway (Risky)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="ch-lowconf-max-repeats">Max Repeats Before Escalation</label>
+                      <input type="number" id="ch-lowconf-max-repeats" class="form-input" min="1" max="5">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="ch-lowconf-repeat-phrase">Repeat Phrase</label>
+                    <input type="text" id="ch-lowconf-repeat-phrase" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="ch-lowconf-escalate-phrase">Escalation Phrase</label>
+                    <input type="text" id="ch-lowconf-escalate-phrase" class="form-input">
+                  </div>
+                  <div class="form-grid-2col">
+                    <div class="form-group">
+                      <div class="toggle-row">
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="ch-lowconf-preserve-booking">
+                          <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-row-label">Preserve Booking on Low Confidence</span>
                       </div>
                     </div>
                     <div class="form-group">
-                      <label for="ch-lowconf-action">Action</label>
-                      <select class="form-select" id="ch-lowconf-action">
-                        <option value="repeat">Ask to Repeat</option>
-                        <option value="guess_with_context">Guess with Context</option>
-                        <option value="accept">Accept As-Is</option>
-                      </select>
+                      <label class="form-label" for="ch-lowconf-booking-phrase">Booking Repeat Phrase</label>
+                      <input type="text" id="ch-lowconf-booking-phrase" class="form-input">
                     </div>
                   </div>
 
-                  <div class="form-group">
-                    <label for="ch-lowconf-repeat-phrase">Repeat Phrase</label>
-                    <input type="text" class="form-input" id="ch-lowconf-repeat-phrase" placeholder="Sorry, there's some background noise — could you say that again?">
-                  </div>
-
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="form-group">
-                      <label for="ch-lowconf-max-repeats">Max Repeats Before Escalation</label>
-                      <input type="number" class="form-input" id="ch-lowconf-max-repeats" value="2" min="1" max="5">
-                    </div>
-                    <div class="form-group">
-                      <label class="toggle-switch" style="margin-top: 24px;">
-                        <input type="checkbox" id="ch-lowconf-preserve-booking" checked>
+                  <!-- Deepgram Fallback -->
+                  <div class="section-divider">
+                    <div class="toggle-row">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="ch-lowconf-deepgram">
                         <span class="toggle-slider"></span>
                       </label>
-                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Preserve Booking on Low Confidence</span>
+                      <span class="toggle-row-label">Deepgram Fallback (Hybrid STT)</span>
                     </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label for="ch-lowconf-escalate-phrase">Escalation Phrase</label>
-                    <input type="text" class="form-input" id="ch-lowconf-escalate-phrase" placeholder="I'm having trouble hearing you clearly. Let me get someone to help you.">
-                  </div>
-                  <div class="form-group">
-                    <label for="ch-lowconf-booking-phrase">Booking Repeat Phrase</label>
-                    <input type="text" class="form-input" id="ch-lowconf-booking-phrase" placeholder="Sorry — could you say that again so I can get this right?">
-                  </div>
-
-                  <div style="display: grid; grid-template-columns: auto 1fr 1fr; gap: 16px; align-items: start; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-gray-700);">
-                    <div class="form-group">
-                      <label class="toggle-switch" style="margin-top: 24px;">
-                        <input type="checkbox" id="ch-lowconf-deepgram" checked>
-                        <span class="toggle-slider"></span>
-                      </label>
-                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Deepgram Fallback</span>
-                    </div>
-                    <div class="form-group">
-                      <label for="ch-lowconf-dg-fallback-threshold">Fallback Threshold (%)</label>
-                      <input type="number" class="form-input" id="ch-lowconf-dg-fallback-threshold" value="60" min="30" max="90">
-                    </div>
-                    <div class="form-group">
-                      <label for="ch-lowconf-dg-accept-threshold">Accept Threshold (%)</label>
-                      <input type="number" class="form-input" id="ch-lowconf-dg-accept-threshold" value="80" min="50" max="100">
+                    <div class="form-grid-2col" style="margin-top: var(--space-3);">
+                      <div class="form-group">
+                        <label class="form-label" for="ch-lowconf-dg-fallback-threshold">Fallback Threshold (%)</label>
+                        <input type="number" id="ch-lowconf-dg-fallback-threshold" class="form-input" min="30" max="90">
+                      </div>
+                      <div class="form-group mb-0">
+                        <label class="form-label" for="ch-lowconf-dg-accept-threshold">Accept Threshold (%)</label>
+                        <input type="number" id="ch-lowconf-dg-accept-threshold" class="form-input" min="50" max="100">
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div style="text-align: right; margin-top: 16px;">
+              <!-- Reset Call Handling -->
+              <div style="text-align: right;">
                 <button class="btn btn-sm btn-ghost" id="btn-reset-callhandling" style="color: var(--color-gray-400);">Reset Call Handling to Defaults</button>
               </div>
-
             </div>
 
           </div>
 
-          <!-- ═══════════════════════════════════════════════════════════
+          <!-- ═════════════════════════════════════════════════════════════
                PREVIEW SIDEBAR
-               ═══════════════════════════════════════════════════════════ -->
+               ═════════════════════════════════════════════════════════════ -->
           <div class="llm-preview-sidebar">
             <div class="preview-card">
               <div class="preview-header">
-                <h3 class="preview-title">Live Prompt Preview</h3>
-                <button class="btn btn-sm btn-ghost" id="btn-copy-preview" style="color: var(--color-gray-400); border-color: var(--color-gray-700);">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M2 10V3C2 2.44772 2.44772 2 3 2H10" stroke="currentColor" stroke-width="1.5"/>
-                  </svg>
-                </button>
+                <div class="preview-title">Live Preview</div>
+                <div class="preview-stats">
+                  <span id="preview-char-count">0 chars</span>
+                  <span id="preview-token-count">~0 tokens</span>
+                </div>
               </div>
-              
-              <div class="preview-stats">
-                <span id="preview-char-count">0 chars</span>
-                <span>•</span>
-                <span id="preview-token-count">~0 tokens</span>
-              </div>
-              
               <div class="preview-content" id="preview-content">
                 <div class="preview-section">
                   <div class="preview-section-label base">Base Prompt</div>
-                  <div class="preview-text" id="preview-base">Loading...</div>
+                  <div class="preview-text">Loading...</div>
                 </div>
+              </div>
+              <div style="margin-top: var(--space-4); text-align: right;">
+                <button class="btn btn-sm btn-ghost" id="btn-copy-preview" style="color: var(--color-gray-400); border-color: var(--color-gray-700);">Copy Full Prompt</button>
               </div>
             </div>
           </div>
-          
         </div>
-        
       </div>
     </main>
 
-    <!-- ================================================================
+    <!-- ═══════════════════════════════════════════════════════════════════
          FOOTER
-         ================================================================ -->
+         ═══════════════════════════════════════════════════════════════════ -->
     <footer class="footer">
-      <span>LLM Settings v1.0.0</span>
-      <span> · </span>
-      <span id="footer-save-status">No changes</span>
-      <span> · </span>
-      <span id="footer-last-saved">Never saved</span>
+      <span id="footer-save-status">All changes saved</span>
+      <span id="footer-last-saved"></span>
     </footer>
 
-    <!-- ================================================================
-         TOAST CONTAINER
-         ================================================================ -->
+    <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
+
   </div>
 
-  <!-- JavaScript -->
-  <script src="/agent-console/lib/auth.js"></script>
+  <!-- Scripts -->
+  <script src="/agent-console/auth.js"></script>
   <script src="/agent-console/llm.js"></script>
 </body>
 </html>
