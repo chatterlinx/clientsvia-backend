@@ -797,12 +797,14 @@ function editCard(cardId) {
   const modal = document.getElementById('modal-add-card');
   const titleEl = document.getElementById('modal-title');
   if (titleEl) titleEl.textContent = 'Edit Knowledge Card';
-  if (modal) modal.removeAttribute('hidden');
+  if (modal) {
+    modal.removeAttribute('hidden');
+    modal.classList.add('open');
+  }
 
   // Go directly to form step
-  document.getElementById('modal-step-type')?.setAttribute('hidden', '');
-  const formStep = document.getElementById('modal-step-form');
-  if (formStep) formStep.removeAttribute('hidden');
+  hideEl('modal-step-type');
+  showEl('modal-step-form');
 
   showModalForm(card.type);
 
@@ -812,10 +814,10 @@ function editCard(cardId) {
     setValue('card-content', card.content || '');
   }
 
-  document.getElementById('modal-btn-save')?.removeAttribute('hidden');
+  showEl('modal-btn-save');
   const saveBtn = document.getElementById('modal-btn-save');
   if (saveBtn) saveBtn.textContent = 'Save Changes';
-  document.getElementById('modal-btn-back')?.removeAttribute('hidden');
+  showEl('modal-btn-back');
 }
 
 function addCustomRule() {
@@ -844,21 +846,17 @@ function openAddCardModal() {
 
   const modal = document.getElementById('modal-add-card');
   const titleEl = document.getElementById('modal-title');
-  console.log('[LLMAgent] modal element:', modal ? 'FOUND' : 'NOT FOUND');
-  console.log('[LLMAgent] modal hidden before:', modal?.hasAttribute('hidden'));
   if (titleEl) titleEl.textContent = 'Add Knowledge Card';
   if (modal) {
     modal.removeAttribute('hidden');
-    modal.style.display = 'flex'; // Force display in case CSS conflict
+    modal.classList.add('open');
   }
-  console.log('[LLMAgent] modal hidden after:', modal?.hasAttribute('hidden'));
-  console.log('[LLMAgent] modal computed display:', modal ? getComputedStyle(modal).display : 'N/A');
 
-  // Show type selection step
-  document.getElementById('modal-step-type')?.removeAttribute('hidden');
-  document.getElementById('modal-step-form')?.setAttribute('hidden', '');
-  document.getElementById('modal-btn-save')?.setAttribute('hidden', '');
-  document.getElementById('modal-btn-back')?.setAttribute('hidden', '');
+  // Show type selection step, hide form step
+  showEl('modal-step-type');
+  hideEl('modal-step-form');
+  hideEl('modal-btn-save');
+  hideEl('modal-btn-back');
 
   // Clear selections
   document.querySelectorAll('.card-type-option').forEach(o => o.classList.remove('selected'));
@@ -867,15 +865,14 @@ function openAddCardModal() {
   setValue('card-title', '');
   setValue('card-content', '');
   setValue('scrape-url', '');
-  document.getElementById('scrape-result')?.setAttribute('hidden', '');
+  hideEl('scrape-result');
 }
 
 function closeModal() {
-  console.log('[LLMAgent] closeModal() called');
   const modal = document.getElementById('modal-add-card');
   if (modal) {
+    modal.classList.remove('open');
     modal.setAttribute('hidden', '');
-    modal.style.display = ''; // Clear inline style
   }
   state.editingCardId = null;
   state.modalCardType = null;
@@ -884,10 +881,10 @@ function closeModal() {
 
 function modalGoBack() {
   state.modalCardType = null;
-  document.getElementById('modal-step-type')?.removeAttribute('hidden');
-  document.getElementById('modal-step-form')?.setAttribute('hidden', '');
-  document.getElementById('modal-btn-save')?.setAttribute('hidden', '');
-  document.getElementById('modal-btn-back')?.setAttribute('hidden', '');
+  showEl('modal-step-type');
+  hideEl('modal-step-form');
+  hideEl('modal-btn-save');
+  hideEl('modal-btn-back');
 }
 
 function selectCardType(type) {
@@ -897,38 +894,32 @@ function selectCardType(type) {
   document.querySelectorAll('.card-type-option').forEach(o => o.classList.remove('selected'));
   document.querySelector(`[data-card-type="${type}"]`)?.classList.add('selected');
 
+  hideEl('modal-step-type');
+  showEl('modal-step-form');
+  showModalForm(type);
+  showEl('modal-btn-save');
+  showEl('modal-btn-back');
+
+  const saveBtn = document.getElementById('modal-btn-save');
   if (type === 'trigger') {
-    // Load triggers and show sync UI
-    document.getElementById('modal-step-type')?.setAttribute('hidden', '');
-    document.getElementById('modal-step-form')?.removeAttribute('hidden');
-    showModalForm('trigger');
-    document.getElementById('modal-btn-save')?.removeAttribute('hidden');
-    document.getElementById('modal-btn-back')?.removeAttribute('hidden');
-    const saveBtn = document.getElementById('modal-btn-save');
     if (saveBtn) saveBtn.textContent = 'Import Selected';
     loadTriggerSync();
   } else {
-    document.getElementById('modal-step-type')?.setAttribute('hidden', '');
-    document.getElementById('modal-step-form')?.removeAttribute('hidden');
-    showModalForm(type);
-    document.getElementById('modal-btn-save')?.removeAttribute('hidden');
-    document.getElementById('modal-btn-back')?.removeAttribute('hidden');
-    const saveBtn = document.getElementById('modal-btn-save');
     if (saveBtn) saveBtn.textContent = 'Add Card';
   }
 }
 
 function showModalForm(type) {
-  document.getElementById('modal-form-content')?.setAttribute('hidden', '');
-  document.getElementById('modal-form-website')?.setAttribute('hidden', '');
-  document.getElementById('modal-form-trigger')?.setAttribute('hidden', '');
+  hideEl('modal-form-content');
+  hideEl('modal-form-website');
+  hideEl('modal-form-trigger');
 
   if (type === 'company' || type === 'custom') {
-    document.getElementById('modal-form-content')?.removeAttribute('hidden');
+    showEl('modal-form-content');
   } else if (type === 'website') {
-    document.getElementById('modal-form-website')?.removeAttribute('hidden');
+    showEl('modal-form-website');
   } else if (type === 'trigger') {
-    document.getElementById('modal-form-trigger')?.removeAttribute('hidden');
+    showEl('modal-form-trigger');
   }
 }
 
@@ -953,7 +944,7 @@ async function handleScrape() {
     state.scrapedContent = data;
 
     // Show result
-    document.getElementById('scrape-result')?.removeAttribute('hidden');
+    showEl('scrape-result');
     setValue('scrape-title', data.title || '');
     const previewEl = document.getElementById('scrape-preview');
     if (previewEl) previewEl.textContent = data.content?.substring(0, 2000) || '';
@@ -1229,6 +1220,16 @@ function listenSlider(sliderId, valueId, handler, formatter) {
     handler(v);
     markDirty();
   });
+}
+
+function showEl(id) {
+  const el = document.getElementById(id);
+  if (el) el.removeAttribute('hidden');
+}
+
+function hideEl(id) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute('hidden', '');
 }
 
 function setChecked(id, value) {
