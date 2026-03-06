@@ -201,6 +201,8 @@ const globalTriggerSchema = new mongoose.Schema({
     default: '',
     maxlength: 500
   },
+  // DEPRECATED: consent card direction (followUpConsent.yes.direction) is now the
+  // single source of truth. This field is kept for backward compatibility only.
   followUpNextAction: {
     type: String,
     default: '',
@@ -481,7 +483,7 @@ globalTriggerSchema.methods.toMatcherFormat = function() {
     },
     followUp: {
       question: this.followUpQuestion || '',
-      nextAction: this.followUpNextAction || ''
+      nextAction: this.followUpNextAction || ''  // DEPRECATED: consent card owns direction
     },
     _scope: 'GLOBAL',
     _originGroupId: this.groupId,

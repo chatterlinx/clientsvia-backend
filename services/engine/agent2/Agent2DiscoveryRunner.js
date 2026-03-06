@@ -556,7 +556,299 @@ class Agent2DiscoveryRunner {
     const nameGreetingConfig = safeObj(discoveryCfg.nameGreeting, null);
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 🔍 SCRABENGINE - UNIFIED TEXT PROCESSING PIPELINE (RUNS FIRST)
+    // PENDING FOLLOW-UP QUESTION — EARLY EXIT (before ScrabEngine)
+    // ══════════════════════════════════════════════════════════════════════════
+    // If the agent asked a follow-up question last turn (e.g., "Do you want me
+    // to get that scheduled?"), the caller's response is a simple yes/no/choice.
+    // Route DIRECTLY to the Follow-up Consent Card classifier — skip ScrabEngine
+    // entirely. ScrabEngine normalization is unnecessary for consent classification
+    // and its quality gate generates false INPUT_TOO_SHORT warnings on short
+    // answers like "yes".
+    //
+    // The consent classifier uses raw inputLower (not normalized text), so
+    // bypassing ScrabEngine is safe and correct.
+    // ══════════════════════════════════════════════════════════════════════════
+    const pfuq = nextState.agent2?.discovery?.pendingFollowUpQuestion || null;
+    const pfuqTurn = nextState.agent2?.discovery?.pendingFollowUpQuestionTurn;
+    const pfuqSource = nextState.agent2?.discovery?.pendingFollowUpQuestionSource || null;
+    const hasPFUQ = pfuq && typeof pfuqTurn === 'number';
+    const isRespondingToPFUQ = hasPFUQ && pfuqTurn === (turn - 1);
+
+    if (isRespondingToPFUQ) {
+      emit('PFUQ_SCRABENGINE_BYPASSED', {
+        reason: 'Pending follow-up question active — skipping ScrabEngine, routing to Consent Card classifier',
+        question: clip(pfuq, 60),
+        cardId: pfuqSource?.replace('card:', '') || null,
+        inputPreview: clip(input, 60),
+        turn
+      });
+
+      const inputLowerCleanFUQ = inputLower.replace(/[^a-z\s]/g, '').trim();
+      const inputWordsFUQ = inputLowerCleanFUQ.split(/\s+/).filter(Boolean);
+      const inputLenFUQ = input.trim().length;
+
+      // Load configurable keywords from followUpConsent (company-level)
+      const fuc = safeObj(discoveryCfg?.followUpConsent, {});
+      const yesPhrases = safeArr(fuc.yes?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const noPhrases = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const maintenancePhrases = safeArr(fuc.maintenance?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const serviceCallPhrases = safeArr(fuc.service_call?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const repromptPhrases = safeArr(fuc.reprompt?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const hesitantPhrases = safeArr(fuc.hesitant?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
+      // Classify: check exact word matches and phrase containment
+      const matchesList = (list) => {
+        for (const phrase of list) {
+          if (phrase.includes(' ')) {
+            if (inputLowerCleanFUQ.includes(phrase)) return true;
+          } else {
+            if (inputWordsFUQ.includes(phrase)) return true;
+          }
+        }
+        return false;
+      };
+      const matchedPhrasesFor = (list) => {
+        const matches = [];
+        for (const phrase of list) {
+          if (phrase.includes(' ')) {
+            if (inputLowerCleanFUQ.includes(phrase)) matches.push(phrase);
+          } else if (inputWordsFUQ.includes(phrase)) {
+            matches.push(phrase);
+          }
+        }
+        return matches;
+      };
+
+      const isMaintenanceFUQ = matchesList(maintenancePhrases);
+      const isServiceCallFUQ = matchesList(serviceCallPhrases);
+      const isYesFUQ = matchesList(yesPhrases);
+      const isNoFUQ = matchesList(noPhrases);
+      const isHesitantFUQ = matchesList(hesitantPhrases);
+      const hasServiceChoiceConflict = isMaintenanceFUQ && isServiceCallFUQ;
+      const isRepromptFUQ = matchesList(repromptPhrases) || (
+        inputLenFUQ <= 8 &&
+        !isYesFUQ &&
+        !isNoFUQ &&
+        !isHesitantFUQ &&
+        !isMaintenanceFUQ &&
+        !isServiceCallFUQ
+      );
+
+      // Priority: SERVICE_CALL > MAINTENANCE > YES > NO > HESITANT > REPROMPT > COMPLEX
+      let bucket;
+      if (hasServiceChoiceConflict) bucket = 'HESITANT';
+      else if (isServiceCallFUQ && !isMaintenanceFUQ) bucket = 'SERVICE_CALL';
+      else if (isMaintenanceFUQ && !isServiceCallFUQ) bucket = 'MAINTENANCE';
+      else if (isYesFUQ && !isNoFUQ) bucket = 'YES';
+      else if (isNoFUQ && !isYesFUQ) bucket = 'NO';
+      else if (isHesitantFUQ) bucket = 'HESITANT';
+      else if (isRepromptFUQ) bucket = 'REPROMPT';
+      else bucket = 'COMPLEX';
+
+      const bucketKey = bucket.toLowerCase();
+      const bucketConfig = safeObj(fuc[bucketKey], {});
+      const inferredBookingMode = bucket === 'MAINTENANCE'
+        ? 'maintenance'
+        : bucket === 'SERVICE_CALL'
+          ? 'service_call'
+          : '';
+      const bookingMode = `${bucketConfig.bookingMode || inferredBookingMode || ''}`.trim().toLowerCase();
+      const defaultDirection = (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL')
+        ? 'HANDOFF_BOOKING'
+        : 'CONTINUE';
+      const direction = `${bucketConfig.direction || defaultDirection}`.toUpperCase();
+      const matchedByBucket = {
+        yes: matchedPhrasesFor(yesPhrases),
+        no: matchedPhrasesFor(noPhrases),
+        maintenance: matchedPhrasesFor(maintenancePhrases),
+        service_call: matchedPhrasesFor(serviceCallPhrases),
+        reprompt: matchedPhrasesFor(repromptPhrases),
+        hesitant: matchedPhrasesFor(hesitantPhrases)
+      };
+      const matchedPhrases = hasServiceChoiceConflict
+        ? [...new Set([...matchedByBucket.maintenance, ...matchedByBucket.service_call])]
+        : (matchedByBucket[bucketKey] || []);
+      const missingResponseAction = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
+      const responseRequiredBuckets = new Set(['YES', 'NO', 'MAINTENANCE', 'SERVICE_CALL', 'REPROMPT', 'HESITANT']);
+      const bucketResponse = `${bucketConfig.response || ''}`.trim();
+
+      emit('A2_FOLLOWUP_CONSENT_CLASSIFIED', {
+        bucket,
+        direction,
+        inputPreview: clip(inputLowerCleanFUQ, 60),
+        cardId: pfuqSource?.replace('card:', '') || null,
+        question: clip(pfuq, 60),
+        bookingMode: bookingMode || null,
+        matchedPhrases,
+        scrabEngineSkipped: true,
+        markers: { isMaintenanceFUQ, isServiceCallFUQ, isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, hasServiceChoiceConflict }
+      });
+
+      const { ack: fuqAck, usedName: fuqUsedName, usedGreeting: fuqUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
+      nextState.agent2.discovery.usedNameThisTurn = fuqUsedName;
+      if (fuqUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+
+      // ── Missing response config: re-ask follow-up (UI-owned) or fall through ──
+      let fallthroughMissingConfig = false;
+      if (responseRequiredBuckets.has(bucket) && !bucketResponse) {
+        const missingFields = [`followUpConsent.${bucketKey}.response`];
+        const fallbackAction = missingResponseAction === 'BACK_TO_AGENT' ? 'BACK_TO_AGENT' : 'REASK_FOLLOWUP';
+        const missingResponse = `${fuqAck} ${pfuq}`.trim();
+        nextState.agent2.discovery.lastPath = fallbackAction === 'BACK_TO_AGENT'
+          ? 'FOLLOWUP_MISSING_CONFIG_AGENT'
+          : 'FOLLOWUP_MISSING_CONFIG_REASK';
+
+        emit('A2_FOLLOWUP_CONSENT_CONFIG_MISSING', {
+          bucket,
+          cardId: pfuqSource?.replace('card:', '') || null,
+          missingFields,
+          fallbackAction,
+          matchedPhrases
+        });
+
+        if (fallbackAction === 'BACK_TO_AGENT') {
+          // Clear pending follow-up and fall through to normal discovery processing
+          nextState.agent2.discovery.pendingFollowUpQuestion = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+          fallthroughMissingConfig = true;
+        } else {
+          emit('A2_RESPONSE_READY', {
+            path: nextState.agent2.discovery.lastPath,
+            responsePreview: clip(missingResponse, 120),
+            fallbackAction
+          });
+
+          return { response: missingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+      }
+
+      if (!fallthroughMissingConfig) {
+        // ── REPROMPT: re-ask the question ──
+        if (bucket === 'REPROMPT') {
+          const repromptText = bucketResponse || `${pfuq}`;
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
+          const repromptResponse = `${fuqAck} ${repromptText}`.trim();
+
+          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_REPROMPT', responsePreview: clip(repromptResponse, 120) });
+          return { response: repromptResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+
+        // ── HESITANT: gentle clarification, keep question pending ──
+        if (bucket === 'HESITANT') {
+          const hesitantText = bucketResponse || `${pfuq}`;
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
+          const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
+
+          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_HESITANT', responsePreview: clip(hesitantResponse, 120) });
+          return { response: hesitantResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+
+        // Clear the pending follow-up for resolved buckets
+        if (bucket !== 'REPROMPT' && bucket !== 'HESITANT') {
+          nextState.agent2.discovery.pendingFollowUpQuestion = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
+          nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+          if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
+          nextState.agent2.discovery.bookingMode = null;
+        }
+
+        // ── MAINTENANCE / SERVICE CALL: handoff with booking mode ──
+        if (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL') {
+          const choiceText = bucketResponse;
+
+          if (direction === 'HANDOFF_BOOKING') {
+            nextState.sessionMode = 'BOOKING';
+            nextState.consent = {
+              pending: false,
+              given: true,
+              turn,
+              source: 'followup_consent_gate',
+              bookingMode: bookingMode || null,
+              bucket: bucketKey,
+              matchedPhrases,
+              grantedAt: new Date().toISOString()
+            };
+            if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
+            nextState.agent2.discovery.bookingMode = bookingMode || null;
+            nextState.agent2.discovery.lastPath = `FOLLOWUP_${bucket}_HANDOFF_BOOKING`;
+
+            emit('A2_CONSENT_GATE_BOOKING', {
+              reason: `Caller chose ${bookingMode || bucketKey} via follow-up consent → booking handoff`,
+              cardId: pfuqSource?.replace('card:', '') || null,
+              inputPreview: clip(inputLowerCleanFUQ, 60),
+              bookingMode: bookingMode || null
+            });
+          } else {
+            nextState.agent2.discovery.lastPath = `FOLLOWUP_${bucket}`;
+          }
+
+          const choiceResponse = `${fuqAck} ${choiceText}`.trim();
+          emit('A2_RESPONSE_READY', {
+            path: nextState.agent2.discovery.lastPath,
+            responsePreview: clip(choiceResponse, 120),
+            direction,
+            bookingMode: bookingMode || null
+          });
+          return { response: choiceResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+
+        // ── YES: execute the consent card direction (single source of truth) ──
+        if (bucket === 'YES') {
+          const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
+          const yesText = bucketResponse;
+
+          if (yesDirection === 'HANDOFF_BOOKING') {
+            nextState.sessionMode = 'BOOKING';
+            nextState.consent = {
+              pending: false,
+              given: true,
+              turn,
+              source: 'followup_consent_gate',
+              bucket: bucketKey,
+              matchedPhrases,
+              grantedAt: new Date().toISOString()
+            };
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
+
+            emit('A2_CONSENT_GATE_BOOKING', {
+              reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
+              cardId: pfuqSource?.replace('card:', '') || null,
+              inputPreview: clip(inputLowerCleanFUQ, 60)
+            });
+          } else {
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
+          }
+
+          const yesResponse = `${fuqAck} ${yesText}`.trim();
+          emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
+          return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+
+        // ── NO: acknowledge and continue ──
+        if (bucket === 'NO') {
+          const noText = bucketResponse;
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
+          const noResponse = `${fuqAck} ${noText}`.trim();
+
+          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_NO', responsePreview: clip(noResponse, 120) });
+          return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        }
+
+        // ── COMPLEX: clear pending, fall through to normal agent ──
+        nextState.agent2.discovery.lastPath = 'FOLLOWUP_COMPLEX';
+        emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
+          reason: 'Caller gave substantive non-yes/no response to follow-up — routing through normal discovery',
+          inputPreview: clip(inputLowerCleanFUQ, 80)
+        });
+        // Fall through — ScrabEngine + normal trigger matching will handle this turn
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔍 SCRABENGINE - UNIFIED TEXT PROCESSING PIPELINE
     // ══════════════════════════════════════════════════════════════════════════
     // ✅ V125 SEQUENCE FIX: ScrabEngine moved BEFORE greeting interceptor
     // 
@@ -891,287 +1183,6 @@ class Agent2DiscoveryRunner {
           inputPreview: clip(normalizedInput, 40),
           action: 'FALL_THROUGH'
         });
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // PENDING FOLLOW-UP QUESTION (Trigger Card Consent Gate)
-    // ══════════════════════════════════════════════════════════════════════════
-    // Separate from pendingQuestion. Only fires when a trigger card had a
-    // follow-up question with text. Uses configurable 7-bucket classification
-    // from discovery.followUpConsent (UI: Follow-up Consent Cards).
-    // ══════════════════════════════════════════════════════════════════════════
-    const pfuq = nextState.agent2?.discovery?.pendingFollowUpQuestion || null;
-    const pfuqTurn = nextState.agent2?.discovery?.pendingFollowUpQuestionTurn;
-    const pfuqSource = nextState.agent2?.discovery?.pendingFollowUpQuestionSource || null;
-    const pfuqNextAction = nextState.agent2?.discovery?.pendingFollowUpQuestionNextAction || 'CONTINUE';
-    const hasPFUQ = pfuq && typeof pfuqTurn === 'number';
-    const isRespondingToPFUQ = hasPFUQ && pfuqTurn === (turn - 1);
-
-    if (isRespondingToPFUQ) {
-      const inputLowerCleanFUQ = inputLower.replace(/[^a-z\s]/g, '').trim();
-      const inputWordsFUQ = inputLowerCleanFUQ.split(/\s+/).filter(Boolean);
-      const inputLenFUQ = input.trim().length;
-
-      // Load configurable keywords from followUpConsent (company-level)
-      const fuc = safeObj(discoveryCfg?.followUpConsent, {});
-      const yesPhrases = safeArr(fuc.yes?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const noPhrases = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const maintenancePhrases = safeArr(fuc.maintenance?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const serviceCallPhrases = safeArr(fuc.service_call?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const repromptPhrases = safeArr(fuc.reprompt?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const hesitantPhrases = safeArr(fuc.hesitant?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-
-      // Classify: check exact word matches and phrase containment
-      const matchesList = (list) => {
-        for (const phrase of list) {
-          if (phrase.includes(' ')) {
-            if (inputLowerCleanFUQ.includes(phrase)) return true;
-          } else {
-            if (inputWordsFUQ.includes(phrase)) return true;
-          }
-        }
-        return false;
-      };
-      const matchedPhrasesFor = (list) => {
-        const matches = [];
-        for (const phrase of list) {
-          if (phrase.includes(' ')) {
-            if (inputLowerCleanFUQ.includes(phrase)) matches.push(phrase);
-          } else if (inputWordsFUQ.includes(phrase)) {
-            matches.push(phrase);
-          }
-        }
-        return matches;
-      };
-
-      const isMaintenanceFUQ = matchesList(maintenancePhrases);
-      const isServiceCallFUQ = matchesList(serviceCallPhrases);
-      const isYesFUQ = matchesList(yesPhrases);
-      const isNoFUQ = matchesList(noPhrases);
-      const isHesitantFUQ = matchesList(hesitantPhrases);
-      const hasServiceChoiceConflict = isMaintenanceFUQ && isServiceCallFUQ;
-      const isRepromptFUQ = matchesList(repromptPhrases) || (
-        inputLenFUQ <= 8 &&
-        !isYesFUQ &&
-        !isNoFUQ &&
-        !isHesitantFUQ &&
-        !isMaintenanceFUQ &&
-        !isServiceCallFUQ
-      );
-
-      // Priority: SERVICE_CALL > MAINTENANCE > YES > NO > HESITANT > REPROMPT > COMPLEX
-      let bucket;
-      if (hasServiceChoiceConflict) bucket = 'HESITANT';
-      else if (isServiceCallFUQ && !isMaintenanceFUQ) bucket = 'SERVICE_CALL';
-      else if (isMaintenanceFUQ && !isServiceCallFUQ) bucket = 'MAINTENANCE';
-      else if (isYesFUQ && !isNoFUQ) bucket = 'YES';
-      else if (isNoFUQ && !isYesFUQ) bucket = 'NO';
-      else if (isHesitantFUQ) bucket = 'HESITANT';
-      else if (isRepromptFUQ) bucket = 'REPROMPT';
-      else bucket = 'COMPLEX';
-
-      const bucketKey = bucket.toLowerCase();
-      const bucketConfig = safeObj(fuc[bucketKey], {});
-      const inferredBookingMode = bucket === 'MAINTENANCE'
-        ? 'maintenance'
-        : bucket === 'SERVICE_CALL'
-          ? 'service_call'
-          : '';
-      const bookingMode = `${bucketConfig.bookingMode || inferredBookingMode || ''}`.trim().toLowerCase();
-      const defaultDirection = (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL')
-        ? 'HANDOFF_BOOKING'
-        : 'CONTINUE';
-      const direction = `${bucketConfig.direction || defaultDirection}`.toUpperCase();
-      const matchedByBucket = {
-        yes: matchedPhrasesFor(yesPhrases),
-        no: matchedPhrasesFor(noPhrases),
-        maintenance: matchedPhrasesFor(maintenancePhrases),
-        service_call: matchedPhrasesFor(serviceCallPhrases),
-        reprompt: matchedPhrasesFor(repromptPhrases),
-        hesitant: matchedPhrasesFor(hesitantPhrases)
-      };
-      const matchedPhrases = hasServiceChoiceConflict
-        ? [...new Set([...matchedByBucket.maintenance, ...matchedByBucket.service_call])]
-        : (matchedByBucket[bucketKey] || []);
-      const missingResponseAction = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
-      const responseRequiredBuckets = new Set(['YES', 'NO', 'MAINTENANCE', 'SERVICE_CALL', 'REPROMPT', 'HESITANT']);
-      const bucketResponse = `${bucketConfig.response || ''}`.trim();
-
-      emit('A2_FOLLOWUP_CONSENT_CLASSIFIED', {
-        bucket,
-        direction,
-        inputPreview: clip(inputLowerCleanFUQ, 60),
-        cardId: pfuqSource?.replace('card:', '') || null,
-        question: clip(pfuq, 60),
-        nextAction: pfuqNextAction,
-        bookingMode: bookingMode || null,
-        matchedPhrases,
-        markers: { isMaintenanceFUQ, isServiceCallFUQ, isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, hasServiceChoiceConflict }
-      });
-
-      const { ack: fuqAck, usedName: fuqUsedName, usedGreeting: fuqUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-      nextState.agent2.discovery.usedNameThisTurn = fuqUsedName;
-      if (fuqUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
-
-      let fallthroughMissingConfig = false;
-      // ── Missing response config: re-ask follow-up (UI-owned) or fall through ──
-      if (responseRequiredBuckets.has(bucket) && !bucketResponse) {
-        const missingFields = [`followUpConsent.${bucketKey}.response`];
-        const fallbackAction = missingResponseAction === 'BACK_TO_AGENT' ? 'BACK_TO_AGENT' : 'REASK_FOLLOWUP';
-        const missingResponse = `${fuqAck} ${pfuq}`.trim();
-        nextState.agent2.discovery.lastPath = fallbackAction === 'BACK_TO_AGENT'
-          ? 'FOLLOWUP_MISSING_CONFIG_AGENT'
-          : 'FOLLOWUP_MISSING_CONFIG_REASK';
-
-        emit('A2_FOLLOWUP_CONSENT_CONFIG_MISSING', {
-          bucket,
-          cardId: pfuqSource?.replace('card:', '') || null,
-          missingFields,
-          fallbackAction,
-          matchedPhrases
-        });
-
-        if (fallbackAction === 'BACK_TO_AGENT') {
-          // Clear pending follow-up and fall through to normal discovery processing
-          nextState.agent2.discovery.pendingFollowUpQuestion = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
-          nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
-          fallthroughMissingConfig = true;
-        } else {
-          emit('A2_RESPONSE_READY', {
-            path: nextState.agent2.discovery.lastPath,
-            responsePreview: clip(missingResponse, 120),
-            fallbackAction
-          });
-
-          return { response: missingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-        }
-      }
-
-      if (fallthroughMissingConfig) {
-        // Fall through — normal trigger matching / LLM will handle this turn
-      } else {
-      // ── REPROMPT: re-ask the question ──
-      if (bucket === 'REPROMPT') {
-        const repromptText = bucketResponse || `${pfuq}`;
-        nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
-        const repromptResponse = `${fuqAck} ${repromptText}`.trim();
-
-        emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_REPROMPT', responsePreview: clip(repromptResponse, 120) });
-        return { response: repromptResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-      }
-
-      // ── HESITANT: gentle clarification, keep question pending ──
-      if (bucket === 'HESITANT') {
-        const hesitantText = bucketResponse || `${pfuq}`;
-        nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
-        const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
-
-        emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_HESITANT', responsePreview: clip(hesitantResponse, 120) });
-        return { response: hesitantResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-      }
-
-      // Clear the pending follow-up for resolved buckets
-      if (bucket !== 'REPROMPT' && bucket !== 'HESITANT') {
-        nextState.agent2.discovery.pendingFollowUpQuestion = null;
-        nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
-        nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
-        nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
-        if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
-        nextState.agent2.discovery.bookingMode = null;
-      }
-
-      // ── MAINTENANCE / SERVICE CALL: handoff with booking mode ──
-      if (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL') {
-        const choiceText = bucketResponse;
-
-        if (direction === 'HANDOFF_BOOKING') {
-          nextState.sessionMode = 'BOOKING';
-          nextState.consent = {
-            pending: false,
-            given: true,
-            turn,
-            source: 'followup_consent_gate',
-            bookingMode: bookingMode || null,
-            bucket: bucketKey,
-            matchedPhrases,
-            grantedAt: new Date().toISOString()
-          };
-          if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
-          nextState.agent2.discovery.bookingMode = bookingMode || null;
-          nextState.agent2.discovery.lastPath = `FOLLOWUP_${bucket}_HANDOFF_BOOKING`;
-
-          emit('A2_CONSENT_GATE_BOOKING', {
-            reason: `Caller chose ${bookingMode || bucketKey} via follow-up consent → booking handoff`,
-            cardId: pfuqSource?.replace('card:', '') || null,
-            inputPreview: clip(inputLowerCleanFUQ, 60),
-            bookingMode: bookingMode || null
-          });
-        } else {
-          nextState.agent2.discovery.lastPath = `FOLLOWUP_${bucket}`;
-        }
-
-        const choiceResponse = `${fuqAck} ${choiceText}`.trim();
-        emit('A2_RESPONSE_READY', {
-          path: nextState.agent2.discovery.lastPath,
-          responsePreview: clip(choiceResponse, 120),
-          direction,
-          bookingMode: bookingMode || null
-        });
-        return { response: choiceResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-      }
-
-      // ── YES: execute the configured direction ──
-      if (bucket === 'YES') {
-        const yesDirection = `${fuc.yes?.direction || pfuqNextAction || 'CONTINUE'}`.toUpperCase();
-        const yesText = bucketResponse;
-
-        if (yesDirection === 'HANDOFF_BOOKING') {
-          nextState.sessionMode = 'BOOKING';
-          nextState.consent = {
-            pending: false,
-            given: true,
-            turn,
-            source: 'followup_consent_gate',
-            bucket: bucketKey,
-            matchedPhrases,
-            grantedAt: new Date().toISOString()
-          };
-          nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
-
-          emit('A2_CONSENT_GATE_BOOKING', {
-            reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
-            cardId: pfuqSource?.replace('card:', '') || null,
-            inputPreview: clip(inputLowerCleanFUQ, 60)
-          });
-        } else {
-          nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
-        }
-
-        const yesResponse = `${fuqAck} ${yesText}`.trim();
-        emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
-        return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-      }
-
-      // ── NO: acknowledge and continue ──
-      if (bucket === 'NO') {
-        const noText = bucketResponse;
-        nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
-        const noResponse = `${fuqAck} ${noText}`.trim();
-
-        emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_NO', responsePreview: clip(noResponse, 120) });
-        return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-      }
-
-      // ── COMPLEX: clear pending, fall through to normal agent ──
-      nextState.agent2.discovery.lastPath = 'FOLLOWUP_COMPLEX';
-      emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
-        reason: 'Caller gave substantive non-yes/no response to follow-up — routing through normal discovery',
-        inputPreview: clip(inputLowerCleanFUQ, 80)
-      });
-      // Fall through — normal trigger matching / LLM will handle this turn
       }
     }
 
@@ -2302,6 +2313,7 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingFollowUpQuestion = followUpQuestion;
         nextState.agent2.discovery.pendingFollowUpQuestionTurn = typeof turn === 'number' ? turn : null;
         nextState.agent2.discovery.pendingFollowUpQuestionSource = `card:${card.id}`;
+        // DEPRECATED: kept for call review tools; consent card direction is source of truth
         nextState.agent2.discovery.pendingFollowUpQuestionNextAction = nextAction;
       } else if (afterQuestion) {
         nextState.agent2.discovery.pendingQuestion = afterQuestion;

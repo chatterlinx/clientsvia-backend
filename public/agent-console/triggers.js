@@ -1804,9 +1804,6 @@
       DOM.inputTriggerAnswer.value = trigger.answer?.answerText || '';
       DOM.inputTriggerAudio.value = trigger.answer?.audioUrl || '';
       DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
-      // Populate followUpNextAction
-      const followupActionEl = document.getElementById('input-trigger-followup-action');
-      if (followupActionEl) followupActionEl.value = trigger.followUp?.nextAction || 'CONTINUE';
       // Populate bucket
       populateBucketDropdown(trigger.bucket || '');
       // Populate maxInputWords
@@ -1881,9 +1878,6 @@
       if (maxWordsElNew) maxWordsElNew.value = '';
       const negPhrasesElNew = document.getElementById('input-trigger-negative-phrases');
       if (negPhrasesElNew) negPhrasesElNew.value = '';
-      const followupActionElNew = document.getElementById('input-trigger-followup-action');
-      if (followupActionElNew) followupActionElNew.value = 'CONTINUE';
-      
       // Default to standard mode for new triggers
       setResponseMode('standard');
       
@@ -1977,10 +1971,6 @@
       return;
     }
     
-    // Read followUpNextAction from modal if present
-    const followUpNextActionEl = document.getElementById('input-trigger-followup-action');
-    const followUpNextAction = followUpNextActionEl ? (followUpNextActionEl.value || 'CONTINUE') : 'CONTINUE';
-
     let bucketKey = document.getElementById('input-trigger-bucket')?.value || null;
     if (bucketKey && !state.bucketIndex.has(bucketKey)) {
       bucketKey = null;
@@ -2000,8 +1990,7 @@
       responseMode,
       answerText,
       audioUrl,
-      followUpQuestion,
-      followUpNextAction
+      followUpQuestion
     };
     
     // Include LLM fact pack if in LLM mode
@@ -3003,7 +2992,7 @@
       responseMode: t.responseMode || 'standard',
       answerText: t.answer?.answerText || '',
       followUpQuestion: t.followUp?.question || '',
-      followUpNextAction: t.followUp?.nextAction || '',
+      followUpNextAction: t.followUp?.nextAction || '',  // DEPRECATED: kept for backward-compat export
       // Include LLM fact pack if present
       ...(t.llmFactPack ? { llmFactPack: t.llmFactPack } : {})
     }));
@@ -3098,7 +3087,7 @@
         answerText: t.answerText || '',
         audioUrl: '',
         followUpQuestion: t.followUpQuestion || '',
-        followUpNextAction: t.followUpNextAction || '',
+        followUpNextAction: t.followUpNextAction || '',  // DEPRECATED: kept for backward-compat import
         // Include LLM fact pack if present
         ...(t.llmFactPack ? { llmFactPack: t.llmFactPack } : {})
       });

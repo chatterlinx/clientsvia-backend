@@ -1897,27 +1897,17 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
               <p class="form-hint" id="followup-hint">If set, asked after the Answer Text. Waits for caller to respond.</p>
               <div id="followup-consent-hint" style="display: none; margin-top: 8px; padding: 10px 14px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; font-size: 0.8rem; line-height: 1.5; color: #94a3b8;">
                 <strong style="color: #e2e8f0;">Consent Card Flow Active</strong><br>
-                The caller's response to this question is classified by the <strong style="color: #3b82f6;">Follow-up Consent Cards</strong> below the trigger list. 
-                YES/NO routing, phrases, and responses are all configured there.
+                The caller's response to this question is classified by the <strong style="color: #3b82f6;">Follow-up Consent Cards</strong> below the trigger list.
+                YES/NO routing, direction, phrases, and responses are all configured there.
               </div>
             </div>
 
-            <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-              <div>
-                <label class="form-label">Follow-Up Action</label>
-                <select id="input-trigger-followup-action" class="form-select" style="width:100%;">
-                  <option value="CONTINUE">CONTINUE (stay in discovery)</option>
-                  <option value="HANDOFF_BOOKING">HANDOFF_BOOKING (go to booking)</option>
-                </select>
-                <p class="form-hint">What happens when caller says YES to the follow-up.</p>
-              </div>
-              <div>
-                <label class="form-label">Intent Bucket</label>
-                <select id="input-trigger-bucket" class="form-select" style="width:100%;">
-                  <option value="">— Unassigned —</option>
-                </select>
-                <p class="form-hint">Assigned bucket used for company-specific intent filtering.</p>
-              </div>
+            <div class="form-group">
+              <label class="form-label">Intent Bucket</label>
+              <select id="input-trigger-bucket" class="form-select" style="width:100%;">
+                <option value="">— Unassigned —</option>
+              </select>
+              <p class="form-hint">Assigned bucket used for company-specific intent filtering.</p>
             </div>
 
             <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0;">
