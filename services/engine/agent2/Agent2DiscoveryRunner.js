@@ -34,8 +34,8 @@
  * │ 4. GREETING FALLBACK (if detected but no trigger matched)              │
  * │    - Uses greeting response from step 2                                │
  * │                                                                         │
- * │ 5. LLM FALLBACK (if nothing matched)                                   │
- * │    - GPT-4 dynamic response (max 1-2 per call)                         │
+ * │ 5. LLM AGENT FALLBACK (if nothing matched)                              │
+ * │    - Claude-powered intelligent response (per-company config)          │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * HARD RULES (V119):
@@ -53,8 +53,8 @@
  * 5. Greeting fallback (V125 - if greeting detected but no trigger)
  * 6. Scenario engine fallback (ONLY if playbook.useScenarioFallback=true)
  * 7. Captured reason acknowledgment (if reason extracted but no match)
- * 8. LLM fallback (GPT-4 assist-only, max 1-2 per call)
- * 9. Generic fallback (last resort — different text if reason exists)
+ * 8. LLM Agent fallback (Claude — per-company config, one-shot per turn)
+ * 9. Generic fallback (last resort if LLM Agent disabled/failed)
  *
  * Raw Events Emitted (MANDATORY - proof trail):
  * - A2_GATE               : Entry proof (enabled, uiBuild, configHash, legacyBlocked)
@@ -77,7 +77,7 @@ const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
 const { Agent2CallRouter }         = require('./Agent2CallRouter');
 const { TriggerBucketClassifier }  = require('./TriggerBucketClassifier');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
-const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
+const { computeComplexityScore } = require('./Agent2LLMFallbackService');
 const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
 // Agent2SpeechPreprocessor was removed: ScrabEngine (V125) fully replaces it.
 // The preprocessor ran duplicate filler/greeting stripping that ScrabEngine already handles,
@@ -236,6 +236,134 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
     logger.error('[LLM_AGENT] Follow-up call failed', { error: error.message });
     emit('A2_LLM_AGENT_ERROR', { error: error.message });
     return null; // Graceful fallback — existing canned behavior will handle it
+  }
+}
+
+/**
+ * Call LLM Agent for no-trigger-match fallback.
+ * When no trigger card matches the caller's input, the LLM Agent steps in
+ * to understand what the caller needs and provide an intelligent response.
+ * After responding, control returns to the normal discovery pipeline — the
+ * LLM Agent does NOT persist across turns. It only fires again if the NEXT
+ * response also fails trigger matching.
+ *
+ * @param {Object} params
+ * @param {Object} params.company          - Full company doc (or lean object)
+ * @param {string} params.input            - Caller's cleaned input
+ * @param {string} params.capturedReason   - Extracted call reason (if any)
+ * @param {string} params.channel          - 'call' | 'sms' | 'webchat'
+ * @param {number} params.turn             - Current turn number
+ * @param {Function} params.emit           - Event emitter
+ * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
+ */
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit }) {
+  try {
+    // Load company LLM Agent config, merge with defaults
+    const saved = company?.aiAgentSettings?.llmAgent || {};
+    const config = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, saved);
+
+    // Gate: LLM Agent must be enabled for this company
+    if (!config.enabled) return null;
+
+    // Gate: triggerFallback activation must be enabled
+    if (config.activation?.triggerFallback === false) {
+      logger.info('[LLM_AGENT] triggerFallback activation is disabled — skipping no-match agent');
+      return null;
+    }
+
+    // Gate: Anthropic API key must exist
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      logger.warn('[LLM_AGENT] ANTHROPIC_API_KEY not set — skipping LLM Agent for no-match');
+      return null;
+    }
+
+    // Build system prompt with no-match context appended
+    const basePrompt = composeSystemPrompt(config, channel || 'call');
+    const noMatchContext = [
+      '\n=== NO-MATCH CONTEXT ===',
+      'No trigger card matched the caller\'s input. You are stepping in as the intelligent fallback.',
+      `The caller said: "${input}"`,
+      capturedReason ? `Detected intent/reason: "${capturedReason}"` : 'No specific call reason was detected.',
+      `This is turn ${turn || 'unknown'} of the conversation.`,
+      '',
+      'Your job: Understand what the caller needs. Answer their question using your knowledge base.',
+      'If you can identify their intent, acknowledge it and guide them toward the right service.',
+      'Keep your response concise and natural — this is a phone call.',
+      'After you respond, the caller\'s next message will go back through normal trigger matching.',
+      'You are handling THIS turn only — do not try to drive a multi-turn conversation.',
+      '=== END NO-MATCH CONTEXT ==='
+    ].join('\n');
+
+    const systemPrompt = basePrompt + noMatchContext;
+
+    const modelId = config.model?.modelId || 'claude-3-5-haiku-20241022';
+    const temperature = config.model?.temperature ?? 0.7;
+    const maxTokens = config.model?.maxTokens || 300;
+
+    emit('A2_LLM_AGENT_CALLED', {
+      mode: 'NO_MATCH_FALLBACK',
+      model: modelId,
+      inputPreview: input?.substring(0, 80),
+      capturedReason: capturedReason?.substring(0, 80) || null,
+      turn
+    });
+
+    const startMs = Date.now();
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: maxTokens,
+        temperature,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: input }]
+      }),
+      signal: AbortSignal.timeout(6000) // 6s timeout — must not block calls
+    });
+
+    const latencyMs = Date.now() - startMs;
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => 'unknown');
+      logger.error('[LLM_AGENT] Anthropic API error (no-match)', { status: res.status, body: errText?.substring(0, 200) });
+      emit('A2_LLM_AGENT_ERROR', { mode: 'NO_MATCH_FALLBACK', status: res.status, latencyMs });
+      return null;
+    }
+
+    const data = await res.json();
+    const responseText = data.content?.[0]?.text || '';
+    const tokensUsed = {
+      input: data.usage?.input_tokens || 0,
+      output: data.usage?.output_tokens || 0
+    };
+
+    if (!responseText) {
+      logger.warn('[LLM_AGENT] Empty response from Anthropic (no-match)');
+      return null;
+    }
+
+    emit('A2_LLM_AGENT_RESPONSE', {
+      mode: 'NO_MATCH_FALLBACK',
+      latencyMs,
+      model: modelId,
+      tokensInput: tokensUsed.input,
+      tokensOutput: tokensUsed.output,
+      responsePreview: responseText.substring(0, 120)
+    });
+
+    return { response: responseText, tokensUsed, latencyMs };
+
+  } catch (error) {
+    logger.error('[LLM_AGENT] No-match call failed', { error: error.message });
+    emit('A2_LLM_AGENT_ERROR', { mode: 'NO_MATCH_FALLBACK', error: error.message });
+    return null; // Graceful fallback — deterministic paths will handle it
   }
 }
 
@@ -3040,10 +3168,11 @@ class Agent2DiscoveryRunner {
       }
       
       // ──────────────────────────────────────────────────────────────────────
-      // PATH 4+: LLM FALLBACK (ASSIST-ONLY - UI-Controlled)
+      // PATH 4+: LLM AGENT FALLBACK (Claude — Per-Company Config)
       // ──────────────────────────────────────────────────────────────────────
-      // LLM is NOT a responder — it's a helper. Gets ONE shot, then funnels.
-      // LLM NEVER offers time slots — only confirms service intent + hands off.
+      // When no trigger matches, the LLM Agent (Claude) steps in for ONE turn.
+      // After responding, control returns to normal discovery pipeline.
+      // The agent does NOT persist — triggers are tried again on the next turn.
       
       // Track no-match count for this call
       const noMatchCount = (nextState.agent2.discovery.noMatchCount || 0) + 1;
@@ -3096,122 +3225,73 @@ class Agent2DiscoveryRunner {
         nextState.transfer?.active
       );
       
-      // Try LLM fallback (passes all blocking conditions)
-      // By definition, if we reached this point, no trigger card matched
-      // V5: Pass llmAssist state for Answer+Return mode tracking
-      const llmResult = await runLLMFallback({
-        config: agent2,
+      // ────────────────────────────────────────────────────────────────
+      // LLM AGENT — Primary no-match fallback (replaces old OpenAI LLM)
+      // ────────────────────────────────────────────────────────────────
+      // The LLM Agent (Claude) steps in when no trigger card matches.
+      // It responds ONE time, then control returns to normal discovery.
+      // It does NOT persist — only fires again if NEXT turn also misses.
+      // If disabled/failed → falls through to deterministic fallback.
+      // ────────────────────────────────────────────────────────────────
+      const llmAgentResult = await callLLMAgentForNoMatch({
+        company,
         input,
-        noMatchCount,
-        inBookingFlow,
-        inDiscoveryCriticalStep,
-        llmTurnsThisCall,
-        llmAssistState: nextState.agent2.llmAssist, // V5: Pass state for cooldown/uses tracking
-        hasPendingQuestion,
-        hasCapturedReasonFlow,
-        hasAfterHoursFlow,
-        hasTransferFlow,
-        hasSpeakSourceSelected: false, // At this point, no source selected yet
-        callContext: {
-          callSid,
-          companyId: companyId || company?._id?.toString?.() || null,
-          turn,
-          capturedReason,
-          sessionMode: nextState.sessionMode || 'DISCOVERY',
-          triggerCardMatched: false, // By definition - we only reach here if no card matched
-          bookingModeLocked: !!nextState.bookingModeLocked
-        },
+        capturedReason,
+        channel: 'call',
+        turn,
         emit
       });
-      
-      if (llmResult) {
-        // LLM fallback provided a response — increment turn counter
+
+      if (llmAgentResult) {
+        // LLM Agent handled this turn — set state and return
+        nextState.agent2.discovery.lastPath = 'LLM_AGENT_NO_MATCH';
         nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
-        nextState.agent2.discovery.lastPath = 'LLM_FALLBACK';
-        nextState.agent2.discovery.lastLLMMode = llmResult.mode || 'guided';
-        
-        // V5: Apply state updates from Answer+Return mode
-        if (llmResult.stateUpdate) {
-          nextState.agent2.llmAssist = {
-            ...nextState.agent2.llmAssist,
-            ...llmResult.stateUpdate
-          };
-          emit('A2_LLM_ASSIST_STATE_UPDATED', {
-            mode: llmResult.mode,
-            newState: nextState.agent2.llmAssist,
-            reason: 'LLM assist completed - cooldown and uses updated'
-          });
-        }
-        
-        // Store handoff state if awaiting confirmation (Guided mode only)
-        if (llmResult.handoffAction?.awaitingConfirmation) {
-          nextState.agent2.discovery.llmHandoffPending = {
-            mode: llmResult.handoffAction.mode,
-            yesResponse: llmResult.handoffAction.yesResponse,
-            noResponse: llmResult.handoffAction.noResponse,
-            turn: turn
-          };
-        }
-        
-        // Use personalized ack if appropriate  
+
+        // Use personalized ack if appropriate
         const { ack: llmAck, usedName: llmUsedName, usedGreeting: llmUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
         nextState.agent2.discovery.usedNameThisTurn = llmUsedName;
         if (llmUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
-        
-        // Don't double-ack if LLM response already sounds complete
-        const llmStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds|give me)/i.test(llmResult.response);
-        response = llmStartsWithAck 
-          ? llmResult.response 
-          : `${llmAck} ${llmResult.response}`.trim();
-        
-        pathSelected = 'LLM_FALLBACK';
-        pathReason = `LLM assist triggered: ${llmResult.llmMeta?.whyCalledLLM || 'unknown'}`;
-        
+
+        // Don't double-ack if LLM Agent response already sounds natural
+        const agentStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds|sure|absolutely|of course|i can help|i'd be happy)/i.test(llmAgentResult.response);
+        response = agentStartsWithAck
+          ? llmAgentResult.response
+          : `${llmAck} ${llmAgentResult.response}`.trim();
+
+        pathSelected = 'LLM_AGENT_NO_MATCH';
+        pathReason = 'No trigger match — LLM Agent (Claude) handled the turn';
+
         emit('A2_PATH_SELECTED', {
-          path: 'LLM_FALLBACK',
+          path: 'LLM_AGENT_NO_MATCH',
           reason: pathReason,
-          // V5: Include mode for clarity
-          llmMode: llmResult.mode || 'guided',
-          llmModel: llmResult.llmMeta?.model,
-          tokensUsed: llmResult.llmMeta?.tokensInput + llmResult.llmMeta?.tokensOutput,
-          costUsd: llmResult.llmMeta?.costUsd,
-          usedEmergencyFallback: llmResult.llmMeta?.usedEmergencyFallback,
-          constraintViolations: llmResult.llmMeta?.constraintViolations,
-          handoffMode: llmResult.llmMeta?.handoffMode,
-          awaitingConfirmation: llmResult.llmMeta?.awaitingConfirmation,
-          // V5: Answer+Return state info
-          llmAssistState: llmResult.mode === 'answer_return' ? nextState.agent2.llmAssist : null
+          model: llmAgentResult.tokensUsed ? 'claude' : null,
+          latencyMs: llmAgentResult.latencyMs,
+          tokensInput: llmAgentResult.tokensUsed?.input,
+          tokensOutput: llmAgentResult.tokensUsed?.output
         });
-        
-        const llmSourceId = llmResult.llmMeta?.usedEmergencyFallback
-          ? 'agent2.llmFallback.emergencyFallback'
-          : 'agent2.llmFallback.llm';
-        const llmUiPath = llmResult.llmMeta?.usedEmergencyFallback
-          ? 'aiAgentSettings.agent2.llmFallback.emergencyFallbackLine.text'
-          : null;
         emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-          llmSourceId,
-          llmUiPath,
+          'agent2.llmAgent.noMatch',
+          null, // LLM Agent generates dynamic text — no static UI path
           response,
           null,
-          `LLM fallback (${llmResult.mode || 'guided'}): ${llmResult.llmMeta?.usedEmergencyFallback ? 'emergency fallback' : 'validated LLM response'}`
+          'LLM Agent (Claude) — no-match fallback response'
         ));
         emit('A2_RESPONSE_READY', {
-          path: 'LLM_FALLBACK',
+          path: 'LLM_AGENT_NO_MATCH',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: llmResult.llmMeta?.usedEmergencyFallback ? 'llmFallback.emergencyFallback' : 'llmFallback.llm',
+          source: 'llmAgent.noMatch',
           usedCallerName: llmUsedName,
-          isLLMAssist: !llmResult.llmMeta?.usedEmergencyFallback,
-          handoffMode: llmResult.llmMeta?.handoffMode
+          isLLMAgent: true,
+          latencyMs: llmAgentResult.latencyMs
         });
-        
+
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
       }
-      
-      // LLM fallback didn't run or failed - fall through to deterministic fallback paths
-      // (the code continues in the else-if chain below)
+
+      // LLM Agent didn't run (disabled) or failed — fall through to deterministic fallback
+      // This preserves existing behavior for companies without LLM Agent enabled
     }
     
     // ──────────────────────────────────────────────────────────────────────
@@ -3528,7 +3608,8 @@ class Agent2DiscoveryRunner {
     // Determine what fallback was used for TURN_TRACE_SUMMARY
     const lastPath = nextState.agent2?.discovery?.lastPath || 'UNKNOWN';
     let fallbackUsed = null;
-    if (lastPath.includes('LLM')) fallbackUsed = 'LLM_FALLBACK';
+    if (lastPath.includes('LLM_AGENT')) fallbackUsed = 'LLM_AGENT';
+    else if (lastPath.includes('LLM')) fallbackUsed = 'LLM_FALLBACK';
     else if (lastPath.includes('GREETING')) fallbackUsed = 'GREETING';
     else if (lastPath.includes('SCENARIO')) fallbackUsed = 'SCENARIO_ENGINE';
     else if (lastPath.includes('CAPTURED_REASON')) fallbackUsed = 'CAPTURED_REASON_ACK';
