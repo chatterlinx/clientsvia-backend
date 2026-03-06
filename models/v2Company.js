@@ -1412,10 +1412,22 @@ const companySchema = new mongoose.Schema({
         // 
         // KEPT (actually used):
         // - silenceHandling: EdgeCaseHandler.js uses for silence prompts
-        // - customerPatience: EdgeCaseHandler.js uses for never-hangup mode
-        // - lowConfidenceHandling: v2twilio.js uses for STT quality guard
-        // - recoveryMessages: v2twilio.js uses for audio unclear/cutout messages
-        // - frustrationDetection: Escalation trigger keywords
+        // -------------------------------------------------------------------
+        // DEPRECATED (March 2026) — DO NOT ADD NEW CODE THAT READS FROM HERE
+        // -------------------------------------------------------------------
+        // All active controls have been migrated to the LLMSettings collection
+        // under scope "company:{companyId}" → callHandling section.
+        //
+        // Source of truth:  LLMSettings.callHandling  (edited via llm.html)
+        // Runtime loader:   LLM0ControlsLoader.js     (reads LLMSettings first,
+        //                   falls back here for transition safety only)
+        //
+        // This schema is kept temporarily so existing company docs remain valid
+        // and the LLM0ControlsLoader fallback can read legacy data. Once all
+        // companies have been migrated, this block can be removed entirely.
+        //
+        // Dead sub-objects (zero runtime consumers, safe to ignore):
+        //   frustrationDetection, responseTiming, smartConfirmation
         // -------------------------------------------------------------------
         llm0Controls: {
             // SILENCE HANDLING - Used by EdgeCaseHandler.js

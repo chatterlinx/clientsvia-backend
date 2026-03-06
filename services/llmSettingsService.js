@@ -42,6 +42,26 @@ async function getSettings(scope = GLOBAL_SCOPE) {
         ...DEFAULT_LLM_SETTINGS.promptText.domainSafety,
         ...(doc.settings.promptText?.domainSafety || {})
       }
+    },
+    callHandling: {
+      ...DEFAULT_LLM_SETTINGS.callHandling,
+      ...(doc.settings.callHandling || {}),
+      recoveryMessages: {
+        ...DEFAULT_LLM_SETTINGS.callHandling.recoveryMessages,
+        ...(doc.settings.callHandling?.recoveryMessages || {})
+      },
+      silenceHandling: {
+        ...DEFAULT_LLM_SETTINGS.callHandling.silenceHandling,
+        ...(doc.settings.callHandling?.silenceHandling || {})
+      },
+      customerPatience: {
+        ...DEFAULT_LLM_SETTINGS.callHandling.customerPatience,
+        ...(doc.settings.callHandling?.customerPatience || {})
+      },
+      lowConfidenceHandling: {
+        ...DEFAULT_LLM_SETTINGS.callHandling.lowConfidenceHandling,
+        ...(doc.settings.callHandling?.lowConfidenceHandling || {})
+      }
     }
   };
 }
@@ -77,6 +97,26 @@ async function saveSettings(partialSettings, scope = GLOBAL_SCOPE) {
       domainSafety: {
         ...existing.promptText.domainSafety,
         ...(partialSettings.promptText?.domainSafety || {})
+      }
+    },
+    callHandling: {
+      ...existing.callHandling,
+      ...(partialSettings.callHandling || {}),
+      recoveryMessages: {
+        ...(existing.callHandling?.recoveryMessages || {}),
+        ...(partialSettings.callHandling?.recoveryMessages || {})
+      },
+      silenceHandling: {
+        ...(existing.callHandling?.silenceHandling || {}),
+        ...(partialSettings.callHandling?.silenceHandling || {})
+      },
+      customerPatience: {
+        ...(existing.callHandling?.customerPatience || {}),
+        ...(partialSettings.callHandling?.customerPatience || {})
+      },
+      lowConfidenceHandling: {
+        ...(existing.callHandling?.lowConfidenceHandling || {}),
+        ...(partialSettings.callHandling?.lowConfidenceHandling || {})
       }
     }
   };
@@ -114,6 +154,9 @@ async function resetSettings(scope = GLOBAL_SCOPE, section = 'all') {
     case 'promptText':
       // Reset all prompt text to defaults
       settings.promptText = DEFAULT_LLM_SETTINGS.promptText;
+      break;
+    case 'callHandling':
+      settings.callHandling = DEFAULT_LLM_SETTINGS.callHandling;
       break;
     case 'all':
     default:

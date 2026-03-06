@@ -466,6 +466,7 @@
           <button class="llm-tab" data-tab="domains" role="tab">Domain Safety</button>
           <button class="llm-tab" data-tab="prompts" role="tab">Prompts</button>
           <button class="llm-tab" data-tab="generation" role="tab">Generation</button>
+          <button class="llm-tab" data-tab="callhandling" role="tab">Call Handling</button>
         </div>
         
         <!-- Layout: Main Content + Preview Sidebar -->
@@ -744,9 +745,247 @@
               </div>
               
             </div>
-            
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 CALL HANDLING TAB (consolidated from LLM-0 Controls)
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="llm-tab-panel" id="panel-callhandling">
+
+              <!-- Recovery Messages -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Recovery Messages</h2>
+                    <p class="settings-section-description">
+                      What the agent says when it can't understand the caller. Each type handles a different scenario.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="ch-recovery-audio-unclear">Audio Unclear</label>
+                  <textarea class="form-textarea" id="ch-recovery-audio-unclear" rows="2" placeholder="I can hear you, just not clearly. Mind saying that again?"></textarea>
+                  <p class="form-hint">STT returned garbled or low-confidence text. Ask the caller to repeat.</p>
+                </div>
+                <div class="form-group">
+                  <label for="ch-recovery-silence">Silence / No Speech</label>
+                  <textarea class="form-textarea" id="ch-recovery-silence" rows="2" placeholder="I'm here — go ahead, I'm listening."></textarea>
+                  <p class="form-hint">Caller went silent. Gently prompt them to continue.</p>
+                </div>
+                <div class="form-group">
+                  <label for="ch-recovery-connection-cutout">Connection Cut Out</label>
+                  <textarea class="form-textarea" id="ch-recovery-connection-cutout" rows="2" placeholder="Sorry, the connection cut out for a second. What can I help you with?"></textarea>
+                  <p class="form-hint">Audio dropped briefly then returned. Re-engage the caller.</p>
+                </div>
+                <div class="form-group">
+                  <label for="ch-recovery-general-error">General Error</label>
+                  <textarea class="form-textarea" id="ch-recovery-general-error" rows="2" placeholder="I missed that. Could you say that again?"></textarea>
+                  <p class="form-hint">Catch-all when something unexpected happens. Keep it simple and natural.</p>
+                </div>
+                <div class="form-group">
+                  <label for="ch-recovery-technical-transfer">Technical Transfer</label>
+                  <textarea class="form-textarea" id="ch-recovery-technical-transfer" rows="2" placeholder="I'm having some technical difficulties. Let me connect you to our team."></textarea>
+                  <p class="form-hint">Spoken before transferring to a human due to repeated technical failures.</p>
+                </div>
+              </div>
+
+              <!-- Silence Handling -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Silence Handling</h2>
+                    <p class="settings-section-description">
+                      Progressive prompts when the caller goes silent. The agent speaks these in order before offering a callback.
+                    </p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="ch-silence-enabled" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div id="silence-handling-fields">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                      <label for="ch-silence-threshold">Silence Threshold (seconds)</label>
+                      <input type="number" class="form-input" id="ch-silence-threshold" value="5" min="2" max="30">
+                      <p class="form-hint">How long to wait before first prompt.</p>
+                    </div>
+                    <div class="form-group">
+                      <label for="ch-silence-max-prompts">Max Prompts</label>
+                      <input type="number" class="form-input" id="ch-silence-max-prompts" value="3" min="1" max="5">
+                      <p class="form-hint">How many times to prompt before callback offer.</p>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="ch-silence-first">1st Prompt</label>
+                    <input type="text" class="form-input" id="ch-silence-first" placeholder="I'm still here. Take your time.">
+                  </div>
+                  <div class="form-group">
+                    <label for="ch-silence-second">2nd Prompt</label>
+                    <input type="text" class="form-input" id="ch-silence-second" placeholder="Are you still there? I'm happy to wait.">
+                  </div>
+                  <div class="form-group">
+                    <label for="ch-silence-third">3rd Prompt</label>
+                    <input type="text" class="form-input" id="ch-silence-third" placeholder="If you need a moment, I can call you back. Just let me know.">
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start;">
+                    <div class="form-group">
+                      <label class="toggle-switch" style="margin-top: 24px;">
+                        <input type="checkbox" id="ch-silence-offer-callback" checked>
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Offer Callback</span>
+                    </div>
+                    <div class="form-group">
+                      <label for="ch-silence-callback-msg">Callback Message</label>
+                      <input type="text" class="form-input" id="ch-silence-callback-msg" placeholder="Would you like me to have someone call you back at this number?">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Customer Patience -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Customer Patience</h2>
+                    <p class="settings-section-description">
+                      Controls how patient the agent is with callers who need extra time.
+                    </p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="ch-patience-enabled" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div id="patience-fields">
+                  <div class="form-group">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="ch-patience-never-hangup" checked>
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Never Auto-Hangup</span>
+                    <p class="form-hint">Agent will never hang up on a silent caller — always waits or offers callback.</p>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                      <label for="ch-patience-max-prompts">Max Patience Prompts</label>
+                      <input type="number" class="form-input" id="ch-patience-max-prompts" value="5" min="2" max="10">
+                    </div>
+                    <div class="form-group">
+                      <label class="toggle-switch" style="margin-top: 24px;">
+                        <input type="checkbox" id="ch-patience-always-callback" checked>
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Always Offer Callback</span>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="ch-patience-message">Patience Message</label>
+                    <input type="text" class="form-input" id="ch-patience-message" placeholder="No rush at all. I'm here whenever you're ready.">
+                    <p class="form-hint">Spoken when the caller is taking extra time.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Low Confidence / STT Guard -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div>
+                    <h2 class="settings-section-title">Low Confidence (STT Guard)</h2>
+                    <p class="settings-section-description">
+                      When speech-to-text confidence is low, the agent can ask the caller to repeat instead of guessing wrong.
+                    </p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="ch-lowconf-enabled" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div id="lowconf-fields">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                      <label for="ch-lowconf-threshold">Confidence Threshold (%)</label>
+                      <input type="range" id="ch-lowconf-threshold" min="30" max="90" value="60" class="form-range">
+                      <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">
+                        <span>30%</span>
+                        <span id="ch-lowconf-threshold-value">60%</span>
+                        <span>90%</span>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="ch-lowconf-action">Action</label>
+                      <select class="form-select" id="ch-lowconf-action">
+                        <option value="repeat">Ask to Repeat</option>
+                        <option value="guess_with_context">Guess with Context</option>
+                        <option value="accept">Accept As-Is</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="ch-lowconf-repeat-phrase">Repeat Phrase</label>
+                    <input type="text" class="form-input" id="ch-lowconf-repeat-phrase" placeholder="Sorry, there's some background noise — could you say that again?">
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                      <label for="ch-lowconf-max-repeats">Max Repeats Before Escalation</label>
+                      <input type="number" class="form-input" id="ch-lowconf-max-repeats" value="2" min="1" max="5">
+                    </div>
+                    <div class="form-group">
+                      <label class="toggle-switch" style="margin-top: 24px;">
+                        <input type="checkbox" id="ch-lowconf-preserve-booking" checked>
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Preserve Booking on Low Confidence</span>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="ch-lowconf-escalate-phrase">Escalation Phrase</label>
+                    <input type="text" class="form-input" id="ch-lowconf-escalate-phrase" placeholder="I'm having trouble hearing you clearly. Let me get someone to help you.">
+                  </div>
+                  <div class="form-group">
+                    <label for="ch-lowconf-booking-phrase">Booking Repeat Phrase</label>
+                    <input type="text" class="form-input" id="ch-lowconf-booking-phrase" placeholder="Sorry — could you say that again so I can get this right?">
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: auto 1fr 1fr; gap: 16px; align-items: start; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-gray-700);">
+                    <div class="form-group">
+                      <label class="toggle-switch" style="margin-top: 24px;">
+                        <input type="checkbox" id="ch-lowconf-deepgram" checked>
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;">Deepgram Fallback</span>
+                    </div>
+                    <div class="form-group">
+                      <label for="ch-lowconf-dg-fallback-threshold">Fallback Threshold (%)</label>
+                      <input type="number" class="form-input" id="ch-lowconf-dg-fallback-threshold" value="60" min="30" max="90">
+                    </div>
+                    <div class="form-group">
+                      <label for="ch-lowconf-dg-accept-threshold">Accept Threshold (%)</label>
+                      <input type="number" class="form-input" id="ch-lowconf-dg-accept-threshold" value="80" min="50" max="100">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="text-align: right; margin-top: 16px;">
+                <button class="btn btn-sm btn-ghost" id="btn-reset-callhandling" style="color: var(--color-gray-400);">Reset Call Handling to Defaults</button>
+              </div>
+
+            </div>
+
           </div>
-          
+
           <!-- ═══════════════════════════════════════════════════════════
                PREVIEW SIDEBAR
                ═══════════════════════════════════════════════════════════ -->

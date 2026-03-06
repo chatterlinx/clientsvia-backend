@@ -8,6 +8,7 @@ const {
   ARCHITECT_LLM_PROFILES,
   getScenarioPromptPartsFromSettings
 } = require('../../config/llmScenarioPrompts');
+const LLM0ControlsLoader = require('../../services/LLM0ControlsLoader');
 
 router.use(authenticateJWT);
 router.use(requireRole('admin'));
@@ -43,11 +44,17 @@ router.put('/', async (req, res, next) => {
     const scopeToUse = scope || 'global';
     
     const settings = await saveSettings(partial, scopeToUse);
-    
+
+    // Clear runtime cache if company-scoped callHandling was updated
+    if (scopeToUse.startsWith('company:') && partial?.callHandling) {
+      const companyId = scopeToUse.replace('company:', '');
+      await LLM0ControlsLoader.clearCache(companyId);
+    }
+
     // Return updated prompt parts so UI shows live changes
     const promptParts = getScenarioPromptPartsFromSettings(settings);
-    
-    res.json({ 
+
+    res.json({
       success: true,
       scope: scopeToUse,
       settings,
@@ -68,11 +75,17 @@ router.post('/reset', async (req, res, next) => {
     const sectionToReset = section || 'all';
     
     const settings = await resetSettings(scopeToUse, sectionToReset);
-    
+
+    // Clear runtime cache if company-scoped callHandling was reset
+    if (scopeToUse.startsWith('company:') && (sectionToReset === 'callHandling' || sectionToReset === 'all')) {
+      const companyId = scopeToUse.replace('company:', '');
+      await LLM0ControlsLoader.clearCache(companyId);
+    }
+
     // Return updated prompt parts so UI shows defaults
     const promptParts = getScenarioPromptPartsFromSettings(settings);
-    
-    res.json({ 
+
+    res.json({
       success: true,
       scope: scopeToUse,
       settings,

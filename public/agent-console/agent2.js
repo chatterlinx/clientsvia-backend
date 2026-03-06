@@ -80,8 +80,6 @@
     },
     currentGreetingRule: null,
     currentAudioPlayer: null,
-    llm0Controls: {},
-
     // Unsaved-change guards (config is saved via "Save Changes"; greetings auto-save on blur/change)
     greetingsDirty: false,
     greetingRuleDirty: false
@@ -196,11 +194,7 @@
     inputAckWord: document.getElementById('input-ack-word'),
     inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
     inputRobotChallengeLine: document.getElementById('input-robot-challenge-line'),
-    inputRecoveryAudioUnclear: document.getElementById('input-recovery-audio-unclear'),
-    inputRecoverySilence: document.getElementById('input-recovery-silence'),
-    inputRecoveryConnectionCutout: document.getElementById('input-recovery-connection-cutout'),
-    inputRecoveryGeneralError: document.getElementById('input-recovery-general-error'),
-    inputRecoveryTechnicalTransfer: document.getElementById('input-recovery-technical-transfer'),
+    // Recovery message inputs removed — moved to LLM Settings > Call Handling
     inputDiscoveryConsentQuestion: document.getElementById('input-discovery-consent-question'),
     inputFallbackNoMatchAnswer: document.getElementById('input-fallback-no-match-answer'),
     inputFallbackNoMatchWhenReasonCaptured: document.getElementById('input-fallback-no-match-when-reason-captured'),
@@ -359,11 +353,6 @@
       DOM.inputGreetingReturn,
       DOM.inputAckWord,
       DOM.inputRobotChallengeLine,
-      DOM.inputRecoveryAudioUnclear,
-      DOM.inputRecoverySilence,
-      DOM.inputRecoveryConnectionCutout,
-      DOM.inputRecoveryGeneralError,
-      DOM.inputRecoveryTechnicalTransfer,
       DOM.inputDiscoveryConsentQuestion,
       DOM.inputFallbackNoMatchAnswer,
       DOM.inputFallbackNoMatchWhenReasonCaptured,
@@ -395,7 +384,6 @@
       const response = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`);
       state.companyName = response.companyName;
       state.config = response.agent2 || {};
-      state.llm0Controls = response.llm0Controls || {};
       state.triggerStats = response.triggerStats || {};
       
       DOM.headerCompanyName.textContent = state.companyName;
@@ -407,7 +395,6 @@
       
       // Use defaults
       state.config = {};
-      state.llm0Controls = {};
       state.triggerStats = {};
       renderConfig();
     }
@@ -415,7 +402,11 @@
 
   function renderConfig() {
     const config = state.config;
-    
+
+    // Wire up the LLM Settings redirect link with companyId
+    const llmLink = document.getElementById('link-to-llm-callhandling');
+    if (llmLink) llmLink.href = `llm.html?companyId=${encodeURIComponent(state.companyId)}`;
+
     // Stats
     const triggerCount = state.triggerStats?.totalActiveCount || 0;
     const groupName = state.triggerStats?.activeGroupName || 'No Group Selected';
@@ -462,13 +453,6 @@
     if (DOM.inputBridgeMaxPerCall) DOM.inputBridgeMaxPerCall.value = bridge.maxBridgesPerCall || 2;
     if (DOM.inputBridgeMaxRedirects) DOM.inputBridgeMaxRedirects.value = bridge.maxRedirectAttempts || 2;
     if (DOM.inputBridgeLines) DOM.inputBridgeLines.value = (bridge.lines || []).join('\n');
-    
-    const rm = state.llm0Controls?.recoveryMessages || {};
-    if (DOM.inputRecoveryAudioUnclear) DOM.inputRecoveryAudioUnclear.value = rm.audioUnclear || '';
-    if (DOM.inputRecoverySilence) DOM.inputRecoverySilence.value = rm.silenceRecovery || rm.noSpeech || '';
-    if (DOM.inputRecoveryConnectionCutout) DOM.inputRecoveryConnectionCutout.value = rm.connectionCutOut || '';
-    if (DOM.inputRecoveryGeneralError) DOM.inputRecoveryGeneralError.value = rm.generalError || '';
-    if (DOM.inputRecoveryTechnicalTransfer) DOM.inputRecoveryTechnicalTransfer.value = rm.technicalTransfer || '';
     
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
@@ -618,18 +602,7 @@
         lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean)
       },
       consentPhrases: state.config.consentPhrases,
-      escalationPhrases: state.config.escalationPhrases,
-      llm0Controls: {
-        ...(state.llm0Controls || {}),
-        recoveryMessages: {
-          ...(state.llm0Controls?.recoveryMessages || {}),
-          audioUnclear: DOM.inputRecoveryAudioUnclear?.value?.trim() || '',
-          silenceRecovery: DOM.inputRecoverySilence?.value?.trim() || '',
-          connectionCutOut: DOM.inputRecoveryConnectionCutout?.value?.trim() || '',
-          generalError: DOM.inputRecoveryGeneralError?.value?.trim() || '',
-          technicalTransfer: DOM.inputRecoveryTechnicalTransfer?.value?.trim() || ''
-        }
-      }
+      escalationPhrases: state.config.escalationPhrases
     };
     
     try {
@@ -639,7 +612,6 @@
       });
       
       state.config = data.agent2;
-      state.llm0Controls = data.llm0Controls || state.llm0Controls;
       state.isDirty = false;
       
       showToast('success', 'Saved', 'Agent 2.0 configuration updated successfully.');

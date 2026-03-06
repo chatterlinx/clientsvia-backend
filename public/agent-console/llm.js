@@ -137,6 +137,7 @@ function renderAllSections() {
   renderDomainsTab();
   renderPromptsTab();
   renderGenerationTab();
+  renderCallHandlingTab();
   updateCompanyHeader();
 }
 
@@ -466,6 +467,75 @@ function renderGenerationTab() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// CALL HANDLING TAB (consolidated from LLM-0 Controls)
+// ════════════════════════════════════════════════════════════════════════════
+
+function renderCallHandlingTab() {
+  const ch = state.settings?.callHandling;
+  if (!ch) return;
+
+  // Recovery Messages
+  const rm = ch.recoveryMessages || {};
+  setVal('ch-recovery-audio-unclear', rm.audioUnclear);
+  setVal('ch-recovery-silence', rm.silenceRecovery);
+  setVal('ch-recovery-connection-cutout', rm.connectionCutOut);
+  setVal('ch-recovery-general-error', rm.generalError);
+  setVal('ch-recovery-technical-transfer', rm.technicalTransfer);
+
+  // Silence Handling
+  const sh = ch.silenceHandling || {};
+  setChecked('ch-silence-enabled', sh.enabled !== false);
+  setVal('ch-silence-threshold', sh.thresholdSeconds);
+  setVal('ch-silence-max-prompts', sh.maxPrompts);
+  setVal('ch-silence-first', sh.firstPrompt);
+  setVal('ch-silence-second', sh.secondPrompt);
+  setVal('ch-silence-third', sh.thirdPrompt);
+  setChecked('ch-silence-offer-callback', sh.offerCallback !== false);
+  setVal('ch-silence-callback-msg', sh.callbackMessage);
+  toggleFieldset('silence-handling-fields', sh.enabled !== false);
+
+  // Customer Patience
+  const cp = ch.customerPatience || {};
+  setChecked('ch-patience-enabled', cp.enabled !== false);
+  setChecked('ch-patience-never-hangup', cp.neverAutoHangup !== false);
+  setVal('ch-patience-max-prompts', cp.maxPatiencePrompts);
+  setChecked('ch-patience-always-callback', cp.alwaysOfferCallback !== false);
+  setVal('ch-patience-message', cp.patienceMessage);
+  toggleFieldset('patience-fields', cp.enabled !== false);
+
+  // Low Confidence
+  const lc = ch.lowConfidenceHandling || {};
+  setChecked('ch-lowconf-enabled', lc.enabled !== false);
+  setVal('ch-lowconf-threshold', lc.threshold);
+  const thresholdLabel = document.getElementById('ch-lowconf-threshold-value');
+  if (thresholdLabel) thresholdLabel.textContent = (lc.threshold || 60) + '%';
+  setVal('ch-lowconf-action', lc.action);
+  setVal('ch-lowconf-repeat-phrase', lc.repeatPhrase);
+  setVal('ch-lowconf-max-repeats', lc.maxRepeatsBeforeEscalation);
+  setChecked('ch-lowconf-preserve-booking', lc.preserveBookingOnLowConfidence !== false);
+  setVal('ch-lowconf-escalate-phrase', lc.escalatePhrase);
+  setVal('ch-lowconf-booking-phrase', lc.bookingRepeatPhrase);
+  setChecked('ch-lowconf-deepgram', lc.useDeepgramFallback !== false);
+  setVal('ch-lowconf-dg-fallback-threshold', lc.deepgramFallbackThreshold);
+  setVal('ch-lowconf-dg-accept-threshold', lc.deepgramAcceptThreshold);
+  toggleFieldset('lowconf-fields', lc.enabled !== false);
+}
+
+// Helpers for Call Handling render
+function setVal(id, value) {
+  const el = document.getElementById(id);
+  if (el && value != null) el.value = value;
+}
+function setChecked(id, checked) {
+  const el = document.getElementById(id);
+  if (el) el.checked = checked;
+}
+function toggleFieldset(id, show) {
+  const el = document.getElementById(id);
+  if (el) el.style.opacity = show ? '1' : '0.4';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // PREVIEW PANEL
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -664,6 +734,101 @@ function setupEventListeners() {
   document.getElementById('prompt-profile').addEventListener('change', (e) => {
     const activeProfile = state.settings.defaults?.activeProfile || 'compliance_safe';
     updateSetting(`promptText.profiles.${activeProfile}`, e.target.value);
+  });
+
+  // ── Call Handling event listeners ──────────────────────────────────────
+  setupCallHandlingListeners();
+}
+
+function setupCallHandlingListeners() {
+  // Helper: wire a text/number input to a callHandling setting path
+  function bindInput(id, path, parse) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', (e) => {
+      const val = parse ? parse(e.target.value) : e.target.value;
+      updateSetting(`callHandling.${path}`, val);
+    });
+  }
+  // Helper: wire a checkbox to a callHandling setting path
+  function bindCheck(id, path) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', (e) => {
+      updateSetting(`callHandling.${path}`, e.target.checked);
+    });
+  }
+
+  // Recovery Messages
+  bindInput('ch-recovery-audio-unclear', 'recoveryMessages.audioUnclear');
+  bindInput('ch-recovery-silence', 'recoveryMessages.silenceRecovery');
+  bindInput('ch-recovery-connection-cutout', 'recoveryMessages.connectionCutOut');
+  bindInput('ch-recovery-general-error', 'recoveryMessages.generalError');
+  bindInput('ch-recovery-technical-transfer', 'recoveryMessages.technicalTransfer');
+
+  // Silence Handling
+  bindCheck('ch-silence-enabled', 'silenceHandling.enabled');
+  document.getElementById('ch-silence-enabled')?.addEventListener('change', (e) => {
+    toggleFieldset('silence-handling-fields', e.target.checked);
+  });
+  bindInput('ch-silence-threshold', 'silenceHandling.thresholdSeconds', v => parseInt(v, 10));
+  bindInput('ch-silence-max-prompts', 'silenceHandling.maxPrompts', v => parseInt(v, 10));
+  bindInput('ch-silence-first', 'silenceHandling.firstPrompt');
+  bindInput('ch-silence-second', 'silenceHandling.secondPrompt');
+  bindInput('ch-silence-third', 'silenceHandling.thirdPrompt');
+  bindCheck('ch-silence-offer-callback', 'silenceHandling.offerCallback');
+  bindInput('ch-silence-callback-msg', 'silenceHandling.callbackMessage');
+
+  // Customer Patience
+  bindCheck('ch-patience-enabled', 'customerPatience.enabled');
+  document.getElementById('ch-patience-enabled')?.addEventListener('change', (e) => {
+    toggleFieldset('patience-fields', e.target.checked);
+  });
+  bindCheck('ch-patience-never-hangup', 'customerPatience.neverAutoHangup');
+  bindInput('ch-patience-max-prompts', 'customerPatience.maxPatiencePrompts', v => parseInt(v, 10));
+  bindCheck('ch-patience-always-callback', 'customerPatience.alwaysOfferCallback');
+  bindInput('ch-patience-message', 'customerPatience.patienceMessage');
+
+  // Low Confidence
+  bindCheck('ch-lowconf-enabled', 'lowConfidenceHandling.enabled');
+  document.getElementById('ch-lowconf-enabled')?.addEventListener('change', (e) => {
+    toggleFieldset('lowconf-fields', e.target.checked);
+  });
+  const thresholdSlider = document.getElementById('ch-lowconf-threshold');
+  if (thresholdSlider) {
+    thresholdSlider.addEventListener('input', (e) => {
+      document.getElementById('ch-lowconf-threshold-value').textContent = e.target.value + '%';
+    });
+    thresholdSlider.addEventListener('change', (e) => {
+      updateSetting('callHandling.lowConfidenceHandling.threshold', parseInt(e.target.value, 10));
+    });
+  }
+  bindInput('ch-lowconf-action', 'lowConfidenceHandling.action');
+  bindInput('ch-lowconf-repeat-phrase', 'lowConfidenceHandling.repeatPhrase');
+  bindInput('ch-lowconf-max-repeats', 'lowConfidenceHandling.maxRepeatsBeforeEscalation', v => parseInt(v, 10));
+  bindCheck('ch-lowconf-preserve-booking', 'lowConfidenceHandling.preserveBookingOnLowConfidence');
+  bindInput('ch-lowconf-escalate-phrase', 'lowConfidenceHandling.escalatePhrase');
+  bindInput('ch-lowconf-booking-phrase', 'lowConfidenceHandling.bookingRepeatPhrase');
+  bindCheck('ch-lowconf-deepgram', 'lowConfidenceHandling.useDeepgramFallback');
+  bindInput('ch-lowconf-dg-fallback-threshold', 'lowConfidenceHandling.deepgramFallbackThreshold', v => parseInt(v, 10));
+  bindInput('ch-lowconf-dg-accept-threshold', 'lowConfidenceHandling.deepgramAcceptThreshold', v => parseInt(v, 10));
+
+  // Reset button
+  document.getElementById('btn-reset-callhandling')?.addEventListener('click', async () => {
+    if (!confirm('Reset all Call Handling settings to defaults?')) return;
+    try {
+      const data = await AgentConsoleAuth.apiFetch(`/api/admin/llm-settings/reset`, {
+        method: 'POST',
+        body: JSON.stringify({ scope: `company:${state.companyId}`, section: 'callHandling' })
+      });
+      if (data.settings) {
+        state.settings = data.settings;
+        renderCallHandlingTab();
+        showToast('success', 'Call Handling reset to defaults');
+      }
+    } catch (err) {
+      showToast('error', 'Failed to reset: ' + err.message);
+    }
   });
 }
 

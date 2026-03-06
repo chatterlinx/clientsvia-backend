@@ -29,6 +29,7 @@ const { initializeCall } = require('../services/v2AIAgentRuntime');
 // ☢️ NUKED Feb 2026: FrontDeskCoreRuntime references removed - CallRuntime is the sole runtime
 const { CallRuntime } = require('../services/engine/CallRuntime');
 const { StateStore } = require('../services/engine/StateStore');
+const LLM0ControlsLoader = require('../services/LLM0ControlsLoader');
 // NOTE: processUserInput REMOVED - HybridReceptionistLLM is the only brain now
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
@@ -374,37 +375,39 @@ const FLOW_STEPS = {
 // sees silence rather than unapproved speech. The caller-facing handler
 // should check for null and decide whether to skip or transfer.
 // ============================================================================
-function getRecoveryMessage(company, type = 'audioUnclear') {
-  const recoveryConfig = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
-  
+async function getRecoveryMessage(company, type = 'audioUnclear') {
+  const companyId = company?._id || company?.companyId || 'unknown';
+
+  // Load from LLMSettings via LLM0ControlsLoader (Redis-cached)
+  const recoveryConfig = await LLM0ControlsLoader.loadRecoveryMessages(String(companyId));
+
   // Handle legacy key aliases
   if (type === 'choppyConnection') type = 'audioUnclear';
   if (type === 'noSpeech') type = 'silenceRecovery';
-  
+
   let variants = recoveryConfig[type];
-  
+
   // Legacy compat: choppyConnection alias
   if (!variants && type === 'audioUnclear') {
     variants = recoveryConfig.choppyConnection;
   }
-  
+
   // Legacy compat: noSpeech alias
   if (!variants && type === 'silenceRecovery') {
     variants = recoveryConfig.noSpeech;
   }
-  
+
   // String → array (legacy single-value format)
   if (typeof variants === 'string') {
     variants = variants.trim() ? [variants.trim()] : [];
   }
-  
+
   // No configured message — log warning, return null (not unapproved speech)
   if (!Array.isArray(variants) || variants.length === 0) {
-    const companyId = company?._id || company?.companyId || 'unknown';
-    logger.warn(`[RecoveryMsg] No UI-configured message for type="${type}" companyId=${companyId}. Configure in Agent Console → Recovery Messages.`);
+    logger.warn(`[RecoveryMsg] No UI-configured message for type="${type}" companyId=${companyId}. Configure in LLM Settings → Call Handling.`);
     return null;
   }
-  
+
   // Random selection for natural sound
   const message = variants[Math.floor(Math.random() * variants.length)];
   return message || null;
@@ -2590,24 +2593,13 @@ router.post('/handle-speech', async (req, res) => {
     // ========================================================================
     // When STT confidence is below threshold, ask caller to repeat.
     // This prevents wrong interpretations and protects revenue.
-    // Settings: company.aiAgentSettings.llm0Controls.lowConfidenceHandling
+    // Settings: LLMSettings.callHandling.lowConfidenceHandling
     // ========================================================================
     confidence = parseFloat(req.body.Confidence || '0');
     const companyId = company._id.toString();
-    
-    // Get LLM-0 low confidence settings (fall back to defaults if not configured)
-    const lcSettings = {
-      enabled: true,
-      threshold: 60,  // 0-100%
-      action: 'repeat',
-      repeatPhrase: "Sorry, there's some background noise — could you say that again?",
-      maxRepeatsBeforeEscalation: 2,
-      escalatePhrase: "I'm having trouble hearing you clearly. Let me get someone to help you.",
-      preserveBookingOnLowConfidence: true,
-      bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
-      logToBlackBox: true,
-      ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
-    };
+
+    // Load low confidence settings from LLMSettings (with legacy fallback)
+    const lcSettings = await LLM0ControlsLoader.loadLowConfidenceSettings(companyId);
     
     // Convert 0-1 confidence to 0-100 for comparison
     const confidencePercent = confidence * 100;
@@ -2847,10 +2839,10 @@ router.post('/handle-speech', async (req, res) => {
       let retryMsg;
       let retrySource;
       if (isLikelyUnclear) {
-        retryMsg = getRecoveryMessage(company, 'audioUnclear');
+        retryMsg = await getRecoveryMessage(company, 'audioUnclear');
         retrySource = retryMsg ? 'recovery:audioUnclear' : null;
       } else {
-        retryMsg = getRecoveryMessage(company, 'generalError');
+        retryMsg = await getRecoveryMessage(company, 'generalError');
         retrySource = retryMsg ? 'recovery:generalError' : null;
       }
       // Fallback to lcSettings.repeatPhrase if recovery messages not yet configured
@@ -4524,7 +4516,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Resolve response text - use runtimeResult.response, fallback to UI config (not hardcoded)
       let responseText = runtimeResult.response;
       if (!responseText || !responseText.trim()) {
-        responseText = getRecoveryMessage(company, 'generalError') || 'I can help you with that.';
+        responseText = (await getRecoveryMessage(company, 'generalError')) || 'I can help you with that.';
       }
 
       // ═══════════════════════════════════════════════════════════════════════════
@@ -5066,7 +5058,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             } else if (matchSource === 'AGENT2_DISCOVERY') {
               uiPath = 'aiAgentSettings.agent2.discovery';
             } else if (matchSource === 'UI_ERROR_FALLBACK') {
-              uiPath = 'aiAgentSettings.llm0Controls.recoveryMessages';
+              uiPath = 'LLMSettings.callHandling.recoveryMessages';
             }
             
             return {
@@ -6963,15 +6955,12 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
       logger.error('Failed to get catastrophic config from Redis', { error: redisErr.message });
     }
     
-    // Fallback: load from company settings if Redis failed
+    // Fallback: load from LLMSettings if Redis failed
     if (!config) {
+      const rm = await LLM0ControlsLoader.loadRecoveryMessages(companyId);
       const Company = require('../models/v2Company');
-      const company = await Company.findById(companyId)
-        .select('aiAgentSettings.llm0Controls.recoveryMessages phoneNumber')
-        .lean();
-      const rm = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
-      // ☢️ NUKED Feb 2026: frontDeskBehavior.connectionQualityGate removed
-      
+      const company = await Company.findById(companyId).select('phoneNumber').lean();
+
       config = {
         forwardNumber: rm.catastrophicForwardNumber || company?.phoneNumber || '',
         option2Action: rm.catastrophicOption2Action || 'voicemail',

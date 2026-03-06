@@ -738,7 +738,7 @@ function mergeAgent2Config(saved) {
   return merged;
 }
 
-function validatePublishReadiness(companyDoc) {
+async function validatePublishReadiness(companyDoc) {
   const settings = companyDoc?.aiAgentSettings || {};
   const agent2 = settings.agent2 || {};
   const greetings = agent2.greetings || {};
@@ -747,7 +747,11 @@ function validatePublishReadiness(companyDoc) {
   const returnCallerText = typeof returnCaller === 'string' ? returnCaller : (returnCaller.text || '');
   const discovery = agent2.discovery || {};
   const bookingPrompts = agent2.bookingPrompts || {};
-  const recoveryMessages = settings.llm0Controls?.recoveryMessages || {};
+  // Recovery messages now in LLMSettings.callHandling
+  const companyId = companyDoc?._id || companyDoc?.id;
+  const recoveryMessages = companyId
+    ? await LLM0ControlsLoader.loadRecoveryMessages(String(companyId))
+    : {};
   const fallback = discovery.playbook?.fallback || {};
   const discoveryHandoff = discovery.discoveryHandoff || {};
   const voiceSettings = settings.voiceSettings || {};
@@ -756,8 +760,8 @@ function validatePublishReadiness(companyDoc) {
     { key: 'agent2.greetings.callStart.text', ok: Boolean((callStart.text || '').trim()) },
     { key: 'agent2.bookingPrompts.askName', ok: Boolean((bookingPrompts.askName || '').trim()) },
     { key: 'agent2.bookingPrompts.askPhone', ok: Boolean((bookingPrompts.askPhone || '').trim()) },
-    { key: 'llm0Controls.recoveryMessages.audioUnclear', ok: Boolean((recoveryMessages.audioUnclear || '').trim()) },
-    { key: 'llm0Controls.recoveryMessages.noSpeech', ok: Boolean((recoveryMessages.noSpeech || '').trim()) },
+    { key: 'callHandling.recoveryMessages.audioUnclear', ok: Boolean((recoveryMessages.audioUnclear || '').trim()) },
+    { key: 'callHandling.recoveryMessages.silenceRecovery', ok: Boolean((recoveryMessages.silenceRecovery || '').trim()) },
     { key: 'agent2.greetings.callStart.emergencyFallback', ok: Boolean((callStart.emergencyFallback || '').trim()) },
     { key: 'agent2.greetings.returnCaller.text', ok: Boolean(returnCallerText.trim()) },
     { key: 'agent2.discovery.holdMessage', ok: Boolean((discovery.holdMessage || '').trim()) },
@@ -781,8 +785,8 @@ function validatePublishReadiness(companyDoc) {
     'agent2.greetings.returnCaller.text': 'agent2.html#return-caller-recognition',
     'agent2.bookingPrompts.askName': 'booking.html#booking-prompts',
     'agent2.bookingPrompts.askPhone': 'booking.html#booking-prompts',
-    'llm0Controls.recoveryMessages.audioUnclear': 'agent2.html#recovery-messages',
-    'llm0Controls.recoveryMessages.noSpeech': 'agent2.html#recovery-messages',
+    'callHandling.recoveryMessages.audioUnclear': 'llm.html#call-handling',
+    'callHandling.recoveryMessages.silenceRecovery': 'llm.html#call-handling',
     'agent2.discovery.holdMessage': 'booking.html#booking-prompts',
     'agent2.discovery.discoveryHandoff.consentQuestion': 'agent2.html#discovery-fallback-messages',
     'agent2.discovery.playbook.fallback.noMatchAnswer': 'agent2.html#discovery-fallback-messages',
@@ -1010,7 +1014,7 @@ router.get('/:companyId/publish-readiness', authenticateJWT, requirePermission(P
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
-    const result = validatePublishReadiness(company);
+    const result = await validatePublishReadiness(company);
     return res.json({
       success: true,
       data: {
@@ -1067,12 +1071,13 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
       updates.activate === true;
     if (shouldEnforcePublishGate) {
       const syntheticCompany = {
+        _id: companyId,
         aiAgentSettings: {
           ...(beforeCompany.aiAgentSettings || {}),
           agent2: next
         }
       };
-      const readiness = validatePublishReadiness(syntheticCompany);
+      const readiness = await validatePublishReadiness(syntheticCompany);
       if (!readiness.ready) {
         return res.status(400).json({
           success: false,

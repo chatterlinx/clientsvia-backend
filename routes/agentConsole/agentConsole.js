@@ -1433,7 +1433,7 @@ router.get(
     
     try {
       const company = await v2Company.findById(companyId)
-        .select('aiAgentSettings.agent2 aiAgentSettings.llm0Controls aiAgentSettings.voiceSettings companyName')
+        .select('aiAgentSettings.agent2 aiAgentSettings.voiceSettings companyName')
         .lean();
       
       if (!company) {
@@ -1476,7 +1476,6 @@ router.get(
         companyId,
         companyName: company.companyName,
         agent2: company.aiAgentSettings?.agent2 || {},
-        llm0Controls: company.aiAgentSettings?.llm0Controls || {},
         voiceSettings: company.aiAgentSettings?.voiceSettings || {},
         triggerStats: {
           activeGroupId,
@@ -1562,15 +1561,6 @@ router.patch(
               companyId,
               updatedKeys: Object.keys(value)
             });
-          } else if (key === 'llm0Controls' && value && typeof value === 'object') {
-            company.aiAgentSettings.llm0Controls = {
-              ...(company.aiAgentSettings.llm0Controls || {}),
-              ...value,
-              recoveryMessages: {
-                ...((company.aiAgentSettings.llm0Controls || {}).recoveryMessages || {}),
-                ...(value.recoveryMessages || {})
-              }
-            };
           } else {
             company.aiAgentSettings.agent2[key] = value;
           }
@@ -1589,8 +1579,7 @@ router.patch(
       
       res.json({
         success: true,
-        agent2: company.aiAgentSettings.agent2,
-        llm0Controls: company.aiAgentSettings.llm0Controls || {}
+        agent2: company.aiAgentSettings.agent2
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Update Agent 2 config failed: ${error.message}`);

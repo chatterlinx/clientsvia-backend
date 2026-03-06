@@ -297,6 +297,50 @@ const DEFAULT_LLM_ENTERPRISE_SETTINGS = {
       emergency: DOMAIN_PROMPT_EMERGENCY
     },
     strictCompliance: GLOBAL_STRICT_COMPLIANCE_ADDON
+  },
+
+  // Call Handling — consolidated from legacy LLM-0 Controls (March 2026)
+  // Runtime consumers: EdgeCaseHandler.js, v2twilio.js, LowConfidenceHandler.js
+  callHandling: {
+    recoveryMessages: {
+      audioUnclear: '',
+      silenceRecovery: '',
+      connectionCutOut: '',
+      generalError: '',
+      technicalTransfer: ''
+    },
+    silenceHandling: {
+      enabled: true,
+      thresholdSeconds: 5,
+      firstPrompt: "I'm still here. Take your time.",
+      secondPrompt: "Are you still there? I'm happy to wait.",
+      thirdPrompt: "If you need a moment, I can call you back. Just let me know.",
+      maxPrompts: 3,
+      offerCallback: true,
+      callbackMessage: "Would you like me to have someone call you back at this number?"
+    },
+    customerPatience: {
+      enabled: true,
+      neverAutoHangup: true,
+      maxPatiencePrompts: 5,
+      alwaysOfferCallback: true,
+      patienceMessage: "No rush at all. I'm here whenever you're ready."
+    },
+    lowConfidenceHandling: {
+      enabled: true,
+      threshold: 60,
+      action: 'repeat',
+      repeatPhrase: "Sorry, there's some background noise — could you say that again?",
+      maxRepeatsBeforeEscalation: 2,
+      escalatePhrase: "I'm having trouble hearing you clearly. Let me get someone to help you.",
+      preserveBookingOnLowConfidence: true,
+      bookingRepeatPhrase: "Sorry — could you say that again so I can get this right?",
+      logToBlackBox: true,
+      skipConfirmationOnClearRepeat: true,
+      useDeepgramFallback: true,
+      deepgramFallbackThreshold: 60,
+      deepgramAcceptThreshold: 80
+    }
   }
 };
 
