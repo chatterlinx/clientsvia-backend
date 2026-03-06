@@ -48,6 +48,10 @@ router.use('/', scrabEngineRouter);
 const triggerBucketsRouter = require('./triggerBuckets');
 router.use('/', triggerBucketsRouter);
 
+// LLM Agent routes (Discovery Agent Configuration)
+const llmAgentRouter = require('./llmAgent');
+router.use('/', llmAgentRouter);
+
 // ════════════════════════════════════════════════════════════════════════════
 // GET /:companyId/triggers/router-config — Serve Call Router ontologies + IntentGate
 // ════════════════════════════════════════════════════════════════════════════

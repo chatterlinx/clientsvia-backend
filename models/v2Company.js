@@ -1108,7 +1108,16 @@ const companySchema = new mongoose.Schema({
             lastUpdatedAt: { type: Date, default: null },
             lastUpdatedBy: { type: String, default: null }
         },
-        
+
+        // -------------------------------------------------------------------
+        // LLM AGENT — Claude-powered Discovery Agent Configuration
+        // -------------------------------------------------------------------
+        // PURPOSE: Per-company config for the live conversational agent
+        // UI: llmagent.html — all settings are UI-configurable
+        // RUNTIME: Steps in when triggers fail, handles discovery conversations
+        // DEFAULTS: config/llmAgentDefaults.js (merged at read time)
+        llmAgent: { type: mongoose.Schema.Types.Mixed, default: {} },
+
         // -------------------------------------------------------------------
         // V22 MEMORY OPTIMIZATION - AI Maturity & Performance Tracking
         // -------------------------------------------------------------------

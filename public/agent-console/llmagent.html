@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Agent — Discovery Configuration</title>
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ════════════════════════════════════════════════════════════════════════
+       LLM AGENT — PAGE STYLES
+       ════════════════════════════════════════════════════════════════════════ */
+
+    /* ── 3-Column Layout ──────────────────────────────────────────────────── */
+
+    .llmagent-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr 400px;
+      gap: var(--space-6);
+      margin-top: var(--space-4);
+      min-height: calc(100vh - 200px);
+    }
+
+    @media (max-width: 1400px) {
+      .llmagent-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Config Panel (Left Column) ───────────────────────────────────────── */
+
+    .config-panel {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .config-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--color-gray-200);
+      background: var(--color-gray-50);
+    }
+
+    .config-tab {
+      flex: 1;
+      padding: var(--space-3) var(--space-2);
+      border: none;
+      background: none;
+      font-size: var(--font-size-xs);
+      font-weight: 500;
+      color: var(--color-gray-500);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border-bottom: 2px solid transparent;
+      text-align: center;
+    }
+    .config-tab:hover { color: var(--color-gray-700); background: var(--color-gray-100); }
+    .config-tab.active {
+      color: var(--color-primary-600);
+      border-bottom-color: var(--color-primary-500);
+      background: var(--color-white);
+    }
+
+    .config-content {
+      padding: var(--space-5);
+      max-height: calc(100vh - 260px);
+      overflow-y: auto;
+    }
+
+    .config-section { display: none; }
+    .config-section.active { display: block; }
+
+    /* ── Form Elements ────────────────────────────────────────────────────── */
+
+    .form-group {
+      margin-bottom: var(--space-5);
+    }
+    .form-label {
+      display: block;
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      color: var(--color-gray-700);
+      margin-bottom: var(--space-2);
+    }
+    .form-hint {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+      margin-top: var(--space-1);
+    }
+    .form-input {
+      width: 100%;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-800);
+      background: var(--color-white);
+      transition: border-color 0.15s ease;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px var(--color-primary-100);
+    }
+    .form-textarea {
+      width: 100%;
+      padding: var(--space-3);
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-family: inherit;
+      color: var(--color-gray-800);
+      resize: vertical;
+      min-height: 80px;
+    }
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px var(--color-primary-100);
+    }
+
+    /* ── Toggle Switch ────────────────────────────────────────────────────── */
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--color-gray-300);
+      border-radius: 24px;
+      transition: all 0.15s ease;
+    }
+    .toggle-slider:before {
+      content: "";
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: all 0.15s ease;
+    }
+    input:checked + .toggle-slider { background: var(--color-primary-500); }
+    input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--color-gray-100);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-row-label {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-700);
+    }
+    .toggle-row-desc {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+      margin-top: 2px;
+    }
+
+    /* ── Range Slider ─────────────────────────────────────────────────────── */
+
+    .range-group { margin-bottom: var(--space-5); }
+    .range-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-2);
+    }
+    .range-value {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-primary-600);
+      background: var(--color-primary-50);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+    }
+    .range-slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--color-gray-200);
+      border-radius: 3px;
+      outline: none;
+    }
+    .range-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      background: var(--color-primary-500);
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-400);
+      margin-top: var(--space-1);
+    }
+
+    /* ── Master Toggle ────────────────────────────────────────────────────── */
+
+    .master-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4);
+      background: var(--color-gray-50);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-5);
+      border: 1px solid var(--color-gray-200);
+    }
+    .master-toggle-label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-gray-800);
+    }
+    .master-toggle-desc {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+      margin-top: 2px;
+    }
+    .master-toggle.enabled {
+      background: var(--color-primary-50);
+      border-color: var(--color-primary-200);
+    }
+
+    /* ── Section Headers ──────────────────────────────────────────────────── */
+
+    .section-title {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-gray-800);
+      margin-bottom: var(--space-4);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--color-gray-100);
+    }
+
+    /* ── Custom Rules ─────────────────────────────────────────────────────── */
+
+    .custom-rules-list {
+      margin-bottom: var(--space-3);
+    }
+    .custom-rule-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-gray-50);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-2);
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-700);
+    }
+    .custom-rule-item .btn-remove {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--color-gray-400);
+      cursor: pointer;
+      padding: 2px;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .custom-rule-item .btn-remove:hover { color: var(--color-gray-700); }
+    .add-rule-row {
+      display: flex;
+      gap: var(--space-2);
+    }
+    .add-rule-row .form-input { flex: 1; }
+
+    /* ── Knowledge Cards (Center Column) ──────────────────────────────────── */
+
+    .cards-column {
+      min-width: 0;
+    }
+
+    .cards-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-4);
+    }
+    .cards-header h2 {
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      color: var(--color-gray-800);
+      margin: 0;
+    }
+
+    .cards-filters {
+      display: flex;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .filter-chip {
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-gray-300);
+      border-radius: 20px;
+      background: var(--color-white);
+      font-size: var(--font-size-xs);
+      font-weight: 500;
+      color: var(--color-gray-600);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-chip:hover { border-color: var(--color-primary-400); color: var(--color-primary-600); }
+    .filter-chip.active {
+      background: var(--color-primary-500);
+      border-color: var(--color-primary-500);
+      color: white;
+    }
+
+    .cards-empty {
+      text-align: center;
+      padding: var(--space-12) var(--space-6);
+      color: var(--color-gray-500);
+    }
+    .cards-empty-icon {
+      font-size: 48px;
+      margin-bottom: var(--space-4);
+      opacity: 0.5;
+    }
+    .cards-empty-text {
+      font-size: var(--font-size-sm);
+      margin-bottom: var(--space-4);
+    }
+
+    /* Knowledge Card — vertical full-width (dashboard style) */
+    .knowledge-card {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-4);
+      padding: var(--space-5);
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-3);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .knowledge-card:hover {
+      border-color: var(--color-gray-300);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .knowledge-card.disabled {
+      opacity: 0.5;
+    }
+
+    .kc-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .kc-icon.trigger  { background: var(--color-primary-100); }
+    .kc-icon.company  { background: #fef3c7; }
+    .kc-icon.website  { background: #d1fae5; }
+    .kc-icon.custom   { background: #ede9fe; }
+
+    .kc-body { flex: 1; min-width: 0; }
+
+    .kc-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-2);
+    }
+    .kc-title {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-gray-800);
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kc-content {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-600);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .kc-actions {
+      display: flex;
+      gap: var(--space-1);
+      flex-shrink: 0;
+      align-items: flex-start;
+    }
+    .kc-actions .btn-icon-sm {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: none;
+      color: var(--color-gray-400);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .kc-actions .btn-icon-sm:hover {
+      background: var(--color-gray-100);
+      color: var(--color-gray-700);
+    }
+
+    /* ── Preview (Right Column) ───────────────────────────────────────────── */
+
+    .preview-column {
+      position: sticky;
+      top: 80px;
+      max-height: calc(100vh - 100px);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .preview-panel {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .preview-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-gray-50);
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .preview-panel-header h3 {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-gray-800);
+      margin: 0;
+    }
+
+    .prompt-preview {
+      padding: var(--space-4);
+      font-size: var(--font-size-xs);
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      line-height: 1.6;
+      color: var(--color-gray-700);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+      background: var(--color-gray-50);
+    }
+
+    .token-count {
+      padding: var(--space-2) var(--space-4);
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+      border-top: 1px solid var(--color-gray-100);
+      text-align: right;
+    }
+
+    /* ── Test Conversation ────────────────────────────────────────────────── */
+
+    .channel-tabs {
+      display: flex;
+      gap: var(--space-1);
+      padding: var(--space-2) var(--space-4);
+      border-bottom: 1px solid var(--color-gray-100);
+    }
+    .channel-tab {
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-gray-200);
+      border-radius: 16px;
+      background: var(--color-white);
+      font-size: var(--font-size-xs);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: var(--color-gray-600);
+    }
+    .channel-tab.active {
+      background: var(--color-primary-500);
+      border-color: var(--color-primary-500);
+      color: white;
+    }
+
+    .test-messages {
+      padding: var(--space-4);
+      min-height: 200px;
+      max-height: 350px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .test-messages-empty {
+      text-align: center;
+      color: var(--color-gray-400);
+      font-size: var(--font-size-xs);
+      padding: var(--space-8) 0;
+    }
+
+    .test-msg {
+      max-width: 85%;
+      padding: var(--space-3);
+      border-radius: var(--radius-lg);
+      font-size: var(--font-size-sm);
+      line-height: 1.5;
+    }
+    .test-msg.user {
+      align-self: flex-end;
+      background: var(--color-primary-500);
+      color: white;
+      border-bottom-right-radius: var(--radius-sm);
+    }
+    .test-msg.assistant {
+      align-self: flex-start;
+      background: var(--color-gray-100);
+      color: var(--color-gray-800);
+      border-bottom-left-radius: var(--radius-sm);
+    }
+    .test-msg.loading {
+      color: var(--color-gray-500);
+      font-style: italic;
+    }
+
+    .test-input-row {
+      display: flex;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--color-gray-200);
+    }
+    .test-input-row input {
+      flex: 1;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+    }
+    .test-input-row input:focus {
+      outline: none;
+      border-color: var(--color-primary-500);
+    }
+
+    .test-meta {
+      padding: var(--space-2) var(--space-4);
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-400);
+      border-top: 1px solid var(--color-gray-100);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Modal ────────────────────────────────────────────────────────────── */
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay[hidden] { display: none; }
+
+    .modal {
+      background: var(--color-white);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-5);
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .modal-header h3 {
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      color: var(--color-gray-800);
+      margin: 0;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--color-gray-400);
+      cursor: pointer;
+      padding: 4px;
+    }
+    .modal-close:hover { color: var(--color-gray-700); }
+    .modal-body { padding: var(--space-5); }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      border-top: 1px solid var(--color-gray-200);
+    }
+
+    /* Card type selector in modal */
+    .card-type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-3);
+      margin-bottom: var(--space-5);
+    }
+    .card-type-option {
+      padding: var(--space-4);
+      border: 2px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+    .card-type-option:hover { border-color: var(--color-primary-400); }
+    .card-type-option.selected { border-color: var(--color-primary-500); background: var(--color-primary-50); }
+    .card-type-option-icon { font-size: 28px; margin-bottom: var(--space-2); }
+    .card-type-option-label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-gray-800);
+    }
+    .card-type-option-desc {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+      margin-top: var(--space-1);
+    }
+
+    /* Scrape preview */
+    .scrape-preview {
+      padding: var(--space-4);
+      background: var(--color-gray-50);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-gray-200);
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: var(--font-size-xs);
+      line-height: 1.5;
+      color: var(--color-gray-700);
+      margin-top: var(--space-3);
+    }
+
+    /* Trigger sync list */
+    .trigger-sync-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .trigger-sync-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--color-gray-100);
+      font-size: var(--font-size-sm);
+    }
+    .trigger-sync-item:last-child { border-bottom: none; }
+
+    /* ── Loading Overlay ──────────────────────────────────────────────────── */
+    .loading-overlay { display: none; }
+    .loading-overlay.active { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════════════════ -->
+    <header class="header">
+      <div class="header-left">
+        <a href="/agent-console/" class="header-logo" id="header-logo-link">
+          <span class="header-logo-text">ClientVia</span>
+        </a>
+        <div class="header-divider"></div>
+        <h1 class="header-title">LLM Agent — Discovery</h1>
+      </div>
+      <div class="header-center">
+        <span class="company-name" id="header-company-name"></span>
+        <span class="company-id-pill" id="header-company-id"></span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-ghost btn-sm btn-icon" id="btn-back" title="Back to Dashboard">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Back
+        </button>
+        <button class="btn btn-primary" id="btn-save" disabled>Save Changes</button>
+      </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         MAIN CONTENT — 3-Column Layout
+         ═══════════════════════════════════════════════════════════════════ -->
+    <main class="main-content">
+      <div class="llmagent-layout">
+
+        <!-- ═════════════════════════════════════════════════════════════════
+             LEFT COLUMN: Agent Configuration
+             ═════════════════════════════════════════════════════════════════ -->
+        <div class="config-panel">
+          <div class="config-tabs">
+            <button class="config-tab active" data-config-tab="model">Model & Persona</button>
+            <button class="config-tab" data-config-tab="activation">Activation</button>
+            <button class="config-tab" data-config-tab="guardrails">Guardrails</button>
+          </div>
+
+          <div class="config-content">
+
+            <!-- ── Model & Persona ──────────────────────────────────────── -->
+            <div class="config-section active" id="config-model">
+
+              <!-- Master Enable Toggle -->
+              <div class="master-toggle" id="master-toggle-wrapper">
+                <div>
+                  <div class="master-toggle-label">LLM Agent</div>
+                  <div class="master-toggle-desc">Enable Claude-powered discovery agent</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="agent-enabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="section-title">Model</div>
+
+              <div class="form-group">
+                <label class="form-label">AI Model</label>
+                <select class="form-select" id="model-select">
+                  <!-- Populated by JS -->
+                </select>
+                <p class="form-hint" id="model-description"></p>
+              </div>
+
+              <div class="range-group">
+                <div class="range-header">
+                  <label class="form-label">Temperature</label>
+                  <span class="range-value" id="temperature-value">0.7</span>
+                </div>
+                <input type="range" class="range-slider" id="temperature-slider" min="0" max="1" step="0.1" value="0.7">
+                <div class="range-labels">
+                  <span>Precise</span>
+                  <span>Creative</span>
+                </div>
+              </div>
+
+              <div class="range-group">
+                <div class="range-header">
+                  <label class="form-label">Max Tokens</label>
+                  <span class="range-value" id="max-tokens-value">300</span>
+                </div>
+                <input type="range" class="range-slider" id="max-tokens-slider" min="50" max="1000" step="50" value="300">
+                <div class="range-labels">
+                  <span>50</span>
+                  <span>1000</span>
+                </div>
+              </div>
+
+              <div class="section-title">Persona</div>
+
+              <div class="form-group">
+                <label class="form-label">Agent Name</label>
+                <input type="text" class="form-input" id="persona-name" placeholder="e.g. Sarah (leave empty for no name)">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Role</label>
+                <select class="form-select" id="persona-role">
+                  <option value="receptionist">Receptionist</option>
+                  <option value="assistant">Assistant</option>
+                  <option value="concierge">Concierge</option>
+                </select>
+              </div>
+
+              <div class="range-group">
+                <div class="range-header">
+                  <label class="form-label">Chattiness</label>
+                  <span class="range-value" id="chattiness-value">3</span>
+                </div>
+                <input type="range" class="range-slider" id="chattiness-slider" min="1" max="5" step="1" value="3">
+                <div class="range-labels">
+                  <span>Terse</span>
+                  <span>Balanced</span>
+                  <span>Chatty</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Tone</label>
+                <select class="form-select" id="persona-tone">
+                  <option value="friendly-professional">Friendly Professional</option>
+                  <option value="formal">Formal</option>
+                  <option value="casual">Casual</option>
+                  <option value="warm">Warm & Empathetic</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Language</label>
+                <select class="form-select" id="persona-language">
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="fr">French</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- ── Activation Rules ─────────────────────────────────────── -->
+            <div class="config-section" id="config-activation">
+              <div class="section-title">Channels</div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">Phone Calls</div>
+                  <div class="toggle-row-desc">Agent handles incoming voice calls</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="channel-call" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">SMS</div>
+                  <div class="toggle-row-desc">Agent responds to text messages</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="channel-sms" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">Webchat</div>
+                  <div class="toggle-row-desc">Agent powers the website chat widget</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="channel-webchat" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="section-title" style="margin-top: var(--space-5);">When To Activate</div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">Trigger Fallback</div>
+                  <div class="toggle-row-desc">Step in when trigger matching fails</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="activation-trigger-fallback" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">Follow-up Rescue</div>
+                  <div class="toggle-row-desc">Handle broken follow-up conversation context</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="activation-followup-rescue" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="range-group" style="margin-top: var(--space-4);">
+                <div class="range-header">
+                  <label class="form-label">Low Confidence Threshold</label>
+                  <span class="range-value" id="low-confidence-value">0.4</span>
+                </div>
+                <input type="range" class="range-slider" id="low-confidence-slider" min="0.1" max="0.9" step="0.1" value="0.4">
+                <div class="range-labels">
+                  <span>0.1 (aggressive)</span>
+                  <span>0.9 (conservative)</span>
+                </div>
+                <p class="form-hint">Agent takes over when trigger confidence drops below this threshold</p>
+              </div>
+
+              <div class="range-group">
+                <div class="range-header">
+                  <label class="form-label">Max Turns Per Session</label>
+                  <span class="range-value" id="max-turns-value">10</span>
+                </div>
+                <input type="range" class="range-slider" id="max-turns-slider" min="3" max="20" step="1" value="10">
+                <div class="range-labels">
+                  <span>3</span>
+                  <span>20</span>
+                </div>
+              </div>
+
+              <div class="range-group">
+                <div class="range-header">
+                  <label class="form-label">Silence Timeout</label>
+                  <span class="range-value" id="silence-timeout-value">8s</span>
+                </div>
+                <input type="range" class="range-slider" id="silence-timeout-slider" min="3000" max="15000" step="1000" value="8000">
+                <div class="range-labels">
+                  <span>3s</span>
+                  <span>15s</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Guardrails & Handoff ─────────────────────────────────── -->
+            <div class="config-section" id="config-guardrails">
+              <div class="section-title">Safety Guardrails</div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">No PII Collection</div>
+                  <div class="toggle-row-desc">Agent will not collect personal identifying information</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="guard-no-pii" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">No Scheduling</div>
+                  <div class="toggle-row-desc">Agent will not book or schedule appointments</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="guard-no-scheduling" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">No Pricing</div>
+                  <div class="toggle-row-desc">Agent will not quote prices or fees</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="guard-no-pricing" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">No Medical Advice</div>
+                  <div class="toggle-row-desc">Agent will not provide medical guidance</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="guard-no-medical" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-row-label">No Legal Advice</div>
+                  <div class="toggle-row-desc">Agent will not provide legal guidance</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="guard-no-legal" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="section-title" style="margin-top: var(--space-5);">Custom Rules</div>
+              <div class="custom-rules-list" id="custom-rules-list">
+                <!-- Rendered by JS -->
+              </div>
+              <div class="add-rule-row">
+                <input type="text" class="form-input" id="new-rule-input" placeholder="e.g. Never promise same-day service">
+                <button class="btn btn-secondary btn-sm" id="btn-add-rule">Add</button>
+              </div>
+
+              <div class="section-title" style="margin-top: var(--space-6);">Handoff</div>
+
+              <div class="form-group">
+                <label class="form-label">Handoff Mode</label>
+                <select class="form-select" id="handoff-mode">
+                  <option value="auto">Auto — hand off when intent is clear</option>
+                  <option value="manual">Manual — ask before handing off</option>
+                  <option value="disabled">Disabled — never hand off automatically</option>
+                </select>
+              </div>
+
+              <div class="toggle-row">
+                <div class="toggle-row-label">Pass Intent</div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="handoff-intent" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-row-label">Pass Context</div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="handoff-context" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-row-label">Pass Sentiment</div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="handoff-sentiment" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-row-label">Pass Conversation History</div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="handoff-history" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-top: var(--space-4);">
+                <label class="form-label">Escalation Message</label>
+                <textarea class="form-textarea" id="escalation-message" rows="2" placeholder="What the agent says when handing off..."></textarea>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════════
+             CENTER COLUMN: Knowledge Cards
+             ═════════════════════════════════════════════════════════════════ -->
+        <div class="cards-column">
+          <div class="cards-header">
+            <h2>Knowledge Cards</h2>
+            <button class="btn btn-primary btn-sm" id="btn-add-card">+ Add Card</button>
+          </div>
+          <div class="cards-filters">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="trigger">Trigger</button>
+            <button class="filter-chip" data-filter="company">Company</button>
+            <button class="filter-chip" data-filter="website">Website</button>
+            <button class="filter-chip" data-filter="custom">Custom</button>
+          </div>
+          <div id="cards-list">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════════
+             RIGHT COLUMN: Live Preview & Test Conversation
+             ═════════════════════════════════════════════════════════════════ -->
+        <div class="preview-column">
+
+          <!-- System Prompt Preview -->
+          <div class="preview-panel">
+            <div class="preview-panel-header">
+              <h3>System Prompt Preview</h3>
+              <button class="btn btn-ghost btn-sm" id="btn-copy-prompt" style="font-size: var(--font-size-xs);">Copy</button>
+            </div>
+            <div class="prompt-preview" id="prompt-preview">Loading...</div>
+            <div class="token-count">~<span id="token-count">0</span> tokens</div>
+          </div>
+
+          <!-- Test Conversation -->
+          <div class="preview-panel">
+            <div class="preview-panel-header">
+              <h3>Test Conversation</h3>
+              <button class="btn btn-ghost btn-sm" id="btn-clear-test" style="font-size: var(--font-size-xs);">Clear</button>
+            </div>
+            <div class="channel-tabs">
+              <button class="channel-tab active" data-channel="call">Phone</button>
+              <button class="channel-tab" data-channel="sms">SMS</button>
+              <button class="channel-tab" data-channel="webchat">Web</button>
+            </div>
+            <div class="test-messages" id="test-messages">
+              <div class="test-messages-empty">Send a message to test the agent</div>
+            </div>
+            <div class="test-input-row">
+              <input type="text" id="test-input" placeholder="Type a test message...">
+              <button class="btn btn-primary btn-sm" id="btn-send-test">Send</button>
+            </div>
+            <div class="test-meta" id="test-meta" hidden>
+              <span id="test-model"></span>
+              <span id="test-latency"></span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ -->
+    <footer class="footer">
+      <span id="footer-save-status">All changes saved</span>
+      <span id="footer-last-saved"></span>
+    </footer>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay" hidden>
+      <div class="spinner"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         ADD CARD MODAL
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-add-card" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="modal-title">Add Knowledge Card</h3>
+          <button class="modal-close" id="modal-close">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body">
+          <!-- Step 1: Card type selection -->
+          <div id="modal-step-type">
+            <p style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-bottom: var(--space-4);">Choose the type of knowledge to add:</p>
+            <div class="card-type-grid">
+              <div class="card-type-option" data-card-type="company">
+                <div class="card-type-option-icon">🏢</div>
+                <div class="card-type-option-label">Company Info</div>
+                <div class="card-type-option-desc">Hours, services, policies</div>
+              </div>
+              <div class="card-type-option" data-card-type="website">
+                <div class="card-type-option-icon">🌐</div>
+                <div class="card-type-option-label">Website</div>
+                <div class="card-type-option-desc">Scrape content from URL</div>
+              </div>
+              <div class="card-type-option" data-card-type="custom">
+                <div class="card-type-option-icon">📝</div>
+                <div class="card-type-option-label">Custom</div>
+                <div class="card-type-option-desc">Free-form knowledge</div>
+              </div>
+              <div class="card-type-option" data-card-type="trigger">
+                <div class="card-type-option-icon">🎯</div>
+                <div class="card-type-option-label">Sync Triggers</div>
+                <div class="card-type-option-desc">Import from trigger cards</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Card form (shown after type selection) -->
+          <div id="modal-step-form" hidden>
+            <!-- Content fields (company/custom) -->
+            <div id="modal-form-content" hidden>
+              <div class="form-group">
+                <label class="form-label">Title</label>
+                <input type="text" class="form-input" id="card-title" placeholder="e.g. Business Hours">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Content</label>
+                <textarea class="form-textarea" id="card-content" rows="8" placeholder="Enter the knowledge content..."></textarea>
+              </div>
+            </div>
+
+            <!-- URL scrape (website) -->
+            <div id="modal-form-website" hidden>
+              <div class="form-group">
+                <label class="form-label">Website URL</label>
+                <div class="add-rule-row">
+                  <input type="text" class="form-input" id="scrape-url" placeholder="https://example.com/about">
+                  <button class="btn btn-secondary btn-sm" id="btn-scrape">Scrape</button>
+                </div>
+              </div>
+              <div id="scrape-result" hidden>
+                <div class="form-group">
+                  <label class="form-label">Title</label>
+                  <input type="text" class="form-input" id="scrape-title">
+                </div>
+                <label class="form-label">Extracted Content</label>
+                <div class="scrape-preview" id="scrape-preview"></div>
+                <p class="form-hint" id="scrape-word-count"></p>
+              </div>
+            </div>
+
+            <!-- Trigger sync -->
+            <div id="modal-form-trigger" hidden>
+              <p style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-bottom: var(--space-3);">Select triggers to import as knowledge cards:</p>
+              <div class="trigger-sync-list" id="trigger-sync-list">
+                <div style="text-align: center; padding: var(--space-4); color: var(--color-gray-400);">Loading triggers...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="modal-btn-back" hidden>Back</button>
+          <button class="btn btn-primary btn-sm" id="modal-btn-save" hidden>Add Card</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/llmagent.js"></script>
+</body>
+</html>

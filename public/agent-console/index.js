@@ -302,6 +302,9 @@
       case 'llm':
         window.location.href = `${baseUrl}/llm.html${companyParam}`;
         break;
+      case 'llmagent':
+        window.location.href = `${baseUrl}/llmagent.html${companyParam}`;
+        break;
       case 'booking':
         window.location.href = `${baseUrl}/booking.html${companyParam}`;
         break;
