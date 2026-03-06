@@ -352,7 +352,7 @@ router.post('/analyze/:callSid', async (req, res) => {
         events: transcript.trace || [],
         trace: transcript.trace || []
       };
-    } else if (callSummary?.events && callSummary.events.length > 0) {
+    } else if (callSummary) {
       callTrace = {
         callSid,
         companyId: callSummary.companyId,
@@ -370,7 +370,7 @@ router.post('/analyze/:callSid', async (req, res) => {
     } else {
       return res.status(404).json({
         success: false,
-        error: 'No transcript or events available for analysis'
+        error: 'Call not found'
       });
     }
 
@@ -548,7 +548,7 @@ router.get('/company/:companyId/list', async (req, res) => {
                     events: transcript.trace || [],
                     trace: transcript.trace || []
                   });
-                } else if (summary.events && summary.events.length > 0) {
+                } else {
                   callTracesToAnalyze.push({
                     callSid,
                     companyId,
