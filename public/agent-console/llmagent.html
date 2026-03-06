@@ -261,7 +261,7 @@
       color: var(--color-gray-400);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      flex: 1;
+      flex-shrink: 0;
     }
     .section-header-line {
       height: 1px;
@@ -1596,7 +1596,7 @@
 
   <!-- Loading Overlay -->
   <div class="loading-overlay" id="loading-overlay">
-    <div class="spinner"></div>
+    <div class="loading-spinner"></div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════
@@ -1721,47 +1721,10 @@
 <script src="/agent-console/lib/auth.js"></script>
 <script>
   /* ═════════════════════════════════════════════════════════════════
-     PATCH: sync agent status chip + cards count badges with JS
+     UI ENHANCEMENTS: status chip + card count badges + footer dot
      ═════════════════════════════════════════════════════════════════ */
 
-  // Hook into agent-enabled toggle to update header status chip
-  document.addEventListener('DOMContentLoaded', () => {
-    const agentToggle = document.getElementById('agent-enabled');
-    const chip = document.getElementById('agent-status-chip');
-    const chipLabel = document.getElementById('agent-status-label');
-
-    function syncStatusChip(enabled) {
-      if (!chip || !chipLabel) return;
-      chip.className = 'agent-status-chip ' + (enabled ? 'active' : 'inactive');
-      chipLabel.textContent = enabled ? 'Active' : 'Inactive';
-    }
-
-    if (agentToggle) {
-      agentToggle.addEventListener('change', () => syncStatusChip(agentToggle.checked));
-    }
-
-    // Watch for JS rendering changes to update count badges
-    const cardsList = document.getElementById('cards-list');
-    if (cardsList) {
-      const obs = new MutationObserver(updateCountBadges);
-      obs.observe(cardsList, { childList: true, subtree: false });
-    }
-
-    // Update footer dot on save-status changes
-    const footerStatus = document.getElementById('footer-save-status');
-    const footerDot = document.getElementById('footer-dot');
-    if (footerStatus && footerDot) {
-      const dotObs = new MutationObserver(() => {
-        const unsaved = footerStatus.textContent.includes('Unsaved');
-        footerDot.className = 'footer-dot ' + (unsaved ? 'unsaved' : 'saved');
-      });
-      dotObs.observe(footerStatus, { characterData: true, childList: true });
-    }
-  });
-
   function updateCountBadges() {
-    // Called after renderKnowledgeCards() mutates the DOM
-    // We pull counts from state.config.knowledgeCards via the rendered cards
     const cards = document.querySelectorAll('#cards-list .knowledge-card');
     const counts = { all: 0, trigger: 0, company: 0, website: 0, custom: 0 };
     cards.forEach(card => {
@@ -1778,11 +1741,9 @@
       if (el) el.textContent = count;
     }
 
-    // Also update the header badge
     const badge = document.getElementById('cards-count-badge');
     if (badge) badge.textContent = counts.all + (counts.all === 1 ? ' card' : ' cards');
 
-    // Also sync status chip from checkbox state
     const toggle = document.getElementById('agent-enabled');
     if (toggle) {
       const chip = document.getElementById('agent-status-chip');
@@ -1794,12 +1755,35 @@
     }
   }
 
-  // Intercept renderKnowledgeCards to also update badges
   document.addEventListener('DOMContentLoaded', () => {
-    // Run once initially after JS loads
-    setTimeout(updateCountBadges, 500);
-    // Poll cheaply since state updates are fast
-    setInterval(updateCountBadges, 1500);
+    // Sync status chip on toggle change
+    document.getElementById('agent-enabled')?.addEventListener('change', (e) => {
+      const chip = document.getElementById('agent-status-chip');
+      const label = document.getElementById('agent-status-label');
+      if (chip && label) {
+        chip.className = 'agent-status-chip ' + (e.target.checked ? 'active' : 'inactive');
+        label.textContent = e.target.checked ? 'Active' : 'Inactive';
+      }
+    });
+
+    // MutationObserver on cards-list — updates counts whenever cards are rendered
+    const cardsList = document.getElementById('cards-list');
+    if (cardsList) {
+      new MutationObserver(updateCountBadges).observe(cardsList, { childList: true });
+    }
+
+    // MutationObserver on footer status text — updates the dot indicator
+    const footerStatus = document.getElementById('footer-save-status');
+    const footerDot = document.getElementById('footer-dot');
+    if (footerStatus && footerDot) {
+      new MutationObserver(() => {
+        const unsaved = footerStatus.textContent.includes('Unsaved');
+        footerDot.className = 'footer-dot ' + (unsaved ? 'unsaved' : 'saved');
+      }).observe(footerStatus, { characterData: true, childList: true });
+    }
+
+    // One-time initial sync after llmagent.js finishes loading and rendering
+    setTimeout(updateCountBadges, 600);
   });
 </script>
 <script src="/agent-console/llmagent.js"></script>
