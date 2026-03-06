@@ -104,6 +104,25 @@ async function loadSettings() {
     console.log('[LLM] updatePreview ✓');
 
     hideLoadingState();
+
+    // ── Visibility diagnostic ──
+    const overview = document.getElementById('panel-overview');
+    const mainEl = document.querySelector('.main-content');
+    console.log('[LLM] DIAG panel-overview:', {
+      exists: !!overview,
+      display: overview ? getComputedStyle(overview).display : 'N/A',
+      offsetHeight: overview?.offsetHeight,
+      classList: overview?.className,
+      childCount: overview?.children.length
+    });
+    console.log('[LLM] DIAG main-content:', {
+      exists: !!mainEl,
+      display: mainEl ? getComputedStyle(mainEl).display : 'N/A',
+      offsetHeight: mainEl?.offsetHeight,
+      offsetWidth: mainEl?.offsetWidth
+    });
+    console.log('[LLM] DIAG stylesheets loaded:', document.styleSheets.length);
+
     console.log('[LLM] ── Page fully loaded ──');
   } catch (error) {
     console.error('[LLM] Load error:', error);
