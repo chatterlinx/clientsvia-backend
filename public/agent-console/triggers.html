@@ -1987,23 +1987,13 @@ Example: Our maintenance plan is $179 per year with two visits."></textarea>
       </div>
       <div class="modal-body">
         <p class="form-hint" style="margin-bottom: 16px;">Configure how GPT-4 generates trigger content based on your keywords.</p>
-        
-        <div class="form-group">
-          <label class="form-label">Business Type</label>
-          <select class="form-input" id="gpt-business-type">
-            <option value="hvac">HVAC / Air Conditioning</option>
-            <option value="plumbing">Plumbing</option>
-            <option value="electrical">Electrical</option>
-            <option value="roofing">Roofing</option>
-            <option value="dental">Dental Office</option>
-            <option value="medical">Medical Practice</option>
-            <option value="legal">Law Firm</option>
-            <option value="automotive">Automotive / Mechanic</option>
-            <option value="landscaping">Landscaping</option>
-            <option value="cleaning">Cleaning Services</option>
-            <option value="general">General Service Business</option>
-          </select>
-          <p class="form-hint">GPT will tailor responses to this industry.</p>
+
+        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <p style="margin: 0; font-size: 13px; color: #94a3b8;">
+            Business context is pulled from
+            <a href="llm.html" style="color: #3b82f6; text-decoration: underline;">AI LLM Settings</a> → Company Context.
+            Edit it there so GPT knows your industry, services, and tone.
+          </p>
         </div>
         
         <div class="form-group">

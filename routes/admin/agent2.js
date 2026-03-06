@@ -25,6 +25,7 @@ const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const openaiClient = require('../../config/openai');
 
+const llmSettingsService = require('../../services/llmSettingsService');
 const LLMFallbackUsage = require('../../models/LLMFallbackUsage');
 const CallSummary = require('../../models/CallSummary');
 const CallTranscript = require('../../models/CallTranscript');
@@ -1368,8 +1369,6 @@ router.post('/:companyId/gpt-prefill-advanced', authenticateJWT, requirePermissi
     const { companyId } = req.params;
     const {
       keywords = '',
-      businessType = 'general',
-      businessLabel = 'Service Business',
       tone = 'friendly and conversational',
       additionalInstructions = '',
       includeFollowup = true
@@ -1391,11 +1390,22 @@ router.post('/:companyId/gpt-prefill-advanced', authenticateJWT, requirePermissi
 
     const companyName = company.companyName || 'our company';
 
-    const systemPrompt = `You are an AI assistant helping create trigger cards for an AI phone agent at a ${businessLabel} business called "${companyName}".
+    // Fetch company context from LLM Settings (set via llm.html Company Context page)
+    let companyContext = '';
+    try {
+      const llmSettings = await llmSettingsService.getSettings(`company:${companyId}`);
+      companyContext = (llmSettings.companyContext || '').trim();
+    } catch (err) {
+      logger.warn('[AGENT2] Could not load LLM settings for GPT prefill', { companyId, error: err.message });
+    }
 
-BUSINESS CONTEXT:
-- Business Type: ${businessLabel}
-- Company Name: ${companyName}
+    const businessContextBlock = companyContext
+      ? `BUSINESS CONTEXT (from Company Settings):\n${companyContext}`
+      : `BUSINESS CONTEXT:\n- Company Name: ${companyName}`;
+
+    const systemPrompt = `You are an AI assistant helping create trigger cards for an AI phone agent for "${companyName}".
+
+${businessContextBlock}
 - Tone: ${tone}
 ${additionalInstructions ? `- Additional Instructions: ${additionalInstructions}` : ''}
 
@@ -1407,13 +1417,13 @@ Given a set of keywords that represent a caller's intent, generate a COMPLETE tr
 4. phrases: 3-5 natural language phrases callers commonly say when asking about this topic
 5. negativeKeywords: 2-3 single words that would indicate a DIFFERENT intent (to avoid false matches)
 6. negativePhrases: 1-3 multi-word phrases that should block this trigger (e.g., "cancel my appointment", "calling to cancel")
-7. answerText: A helpful, ${tone} answer (2-4 sentences). Be specific to ${businessLabel}. Include realistic pricing/details if relevant. Use {name} token for personalization (e.g., "Great{name}! I can help with that.")
+7. answerText: A helpful, ${tone} answer (2-4 sentences). Be specific to this business. Include realistic pricing/details if relevant. Use {name} token for personalization (e.g., "Great{name}! I can help with that.")
 8. maxInputWords: Maximum word count for caller utterance to match this trigger. Use null for most triggers. Use 4-8 for short-intent triggers like greetings or goodbyes.
 ${includeFollowup ? '9. followUpQuestion: A natural question to continue the conversation and guide the caller toward booking/next steps' : ''}
 
 IMPORTANT:
 - The answerText should sound natural and helpful, like a real person answering the phone
-- Include specific details relevant to ${businessLabel} (realistic prices, common services, etc.)
+- Include specific details relevant to this business (realistic prices, common services, etc.)
 - The tone should be ${tone}
 - negativePhrases should be context-aware multi-word phrases, NOT single words (those go in negativeKeywords)
 
@@ -1431,11 +1441,11 @@ Respond ONLY with valid JSON, no markdown, no explanation:
 
     const userPrompt = `Keywords: ${trimmedKeywords}`;
 
-    logger.info('[AGENT2] GPT-4 advanced prefill request', { 
-      companyId, 
-      keywords: trimmedKeywords, 
-      businessType, 
-      tone 
+    logger.info('[AGENT2] GPT-4 advanced prefill request', {
+      companyId,
+      keywords: trimmedKeywords,
+      hasCompanyContext: !!companyContext,
+      tone
     });
 
     const response = await openaiClient.chat.completions.create({

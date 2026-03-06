@@ -56,7 +56,6 @@
     
     // GPT Settings
     gptSettings: {
-      businessType: 'hvac',
       defaultPriority: 50,
       tone: 'friendly',
       instructions: '',
@@ -242,7 +241,6 @@
     btnGptPrefill: document.getElementById('btn-gpt-prefill'),
     btnGptSettingsCancel: document.getElementById('btn-gpt-settings-cancel'),
     btnGptSettingsSave: document.getElementById('btn-gpt-settings-save'),
-    gptBusinessType: document.getElementById('gpt-business-type'),
     gptDefaultPriority: document.getElementById('gpt-default-priority'),
     gptTone: document.getElementById('gpt-tone'),
     gptInstructions: document.getElementById('gpt-instructions'),
@@ -941,7 +939,6 @@
           // Load persisted GPT Prefill settings
           const savedGpt = configData.agent2?.discovery?.gptPrefillSettings;
           if (savedGpt) {
-            if (savedGpt.businessType) state.gptSettings.businessType = savedGpt.businessType;
             if (typeof savedGpt.defaultPriority === 'number') state.gptSettings.defaultPriority = savedGpt.defaultPriority;
             if (savedGpt.tone) state.gptSettings.tone = savedGpt.tone;
             if (savedGpt.instructions) state.gptSettings.instructions = savedGpt.instructions;
@@ -2620,9 +2617,6 @@
      GPT-4 PREFILL
      -------------------------------------------------------------------------- */
   function openGptSettingsModal() {
-    if (DOM.gptBusinessType) {
-      DOM.gptBusinessType.value = state.gptSettings.businessType;
-    }
     if (DOM.gptDefaultPriority) {
       DOM.gptDefaultPriority.value = state.gptSettings.defaultPriority;
     }
@@ -2648,7 +2642,6 @@
   }
 
   async function saveGptSettings() {
-    state.gptSettings.businessType = DOM.gptBusinessType?.value || 'hvac';
     state.gptSettings.defaultPriority = parseInt(DOM.gptDefaultPriority?.value, 10) || 50;
     state.gptSettings.tone = DOM.gptTone?.value || 'friendly';
     state.gptSettings.instructions = DOM.gptInstructions?.value || '';
@@ -2751,30 +2744,15 @@
                   localStorage.getItem('token') ||
                   sessionStorage.getItem('token');
     
-    const businessTypeLabels = {
-      hvac: 'HVAC / Air Conditioning',
-      plumbing: 'Plumbing',
-      electrical: 'Electrical',
-      roofing: 'Roofing',
-      dental: 'Dental Office',
-      medical: 'Medical Practice',
-      legal: 'Law Firm',
-      automotive: 'Automotive / Mechanic',
-      landscaping: 'Landscaping',
-      cleaning: 'Cleaning Services',
-      general: 'General Service Business'
-    };
-    
     const toneDescriptions = {
       friendly: 'friendly and conversational',
       professional: 'professional and formal',
       casual: 'casual and relaxed',
       empathetic: 'empathetic and supportive'
     };
-    
-    const businessLabel = businessTypeLabels[state.gptSettings.businessType] || 'Service Business';
+
     const toneDesc = toneDescriptions[state.gptSettings.tone] || 'friendly and conversational';
-    
+
     const response = await fetch(`/api/admin/agent2/${state.companyId}/gpt-prefill-advanced`, {
       method: 'POST',
       headers: {
@@ -2783,8 +2761,6 @@
       },
       body: JSON.stringify({
         keywords: keywords,
-        businessType: state.gptSettings.businessType,
-        businessLabel: businessLabel,
         tone: toneDesc,
         additionalInstructions: state.gptSettings.instructions,
         includeFollowup: state.gptSettings.includeFollowup
