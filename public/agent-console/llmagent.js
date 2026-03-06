@@ -347,37 +347,59 @@ function renderKnowledgeCards() {
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="cards-empty">
-        <div class="cards-empty-icon">📚</div>
-        <div class="cards-empty-text">${cards.length === 0 ? 'No knowledge cards yet. Add some to make your agent smarter!' : 'No cards match this filter.'}</div>
-        ${cards.length === 0 ? '<button class="btn btn-primary btn-sm" data-action="add-card">+ Add Your First Card</button>' : ''}
+        <svg class="cards-empty-svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+          <rect x="8" y="12" width="48" height="40" rx="4" stroke="#d1d5db" stroke-width="2"/>
+          <path d="M20 26h24M20 34h16" stroke="#d1d5db" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="48" cy="48" r="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="2"/>
+          <path d="M44 48h8M48 44v8" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div class="cards-empty-title">${cards.length === 0 ? 'No knowledge cards yet' : 'No cards match this filter'}</div>
+        <div class="cards-empty-text">${cards.length === 0 ? 'Add knowledge cards to give your agent context about the business.' : 'Try selecting a different filter above.'}</div>
+        ${cards.length === 0 ? '<button class="btn-add-card" data-action="add-card" type="button" style="margin:0 auto;"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Add First Card</button>' : ''}
       </div>
     `;
     return;
   }
 
+  const TYPE_ICONS = {
+    trigger: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 2L3 9h5l-1 6 6-8H8l1-5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+    company: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="7" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M5 7V4.5A1 1 0 016 3.5h4a1 1 0 011 1V7" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 11v1.5M9.5 11v1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+    website: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12M8 2c-1.5 2-1.5 8 0 12M8 2c1.5 2 1.5 8 0 12" stroke="currentColor" stroke-width="1.4"/></svg>`,
+    custom:  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="2" width="10" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`
+  };
+  const BADGE_COLORS = { trigger: 'badge-info', company: 'badge-warning', website: 'badge-success', custom: 'badge-neutral' };
+
   container.innerHTML = filtered.map(card => {
-    const typeIcons = { trigger: '🎯', company: '🏢', website: '🌐', custom: '📝' };
-    const icon = typeIcons[card.type] || '📄';
-    const badgeColors = { trigger: 'badge-info', company: 'badge-warning', website: 'badge-success', custom: 'badge-neutral' };
+    const icon = TYPE_ICONS[card.type] || TYPE_ICONS.custom;
+    const badgeColor = BADGE_COLORS[card.type] || 'badge-neutral';
     const disabledClass = card.enabled === false ? 'disabled' : '';
 
     return `
       <div class="knowledge-card ${disabledClass}" data-card-id="${card.id}">
-        <div class="kc-icon ${card.type}">${icon}</div>
-        <div class="kc-body">
-          <div class="kc-header">
-            <h4 class="kc-title">${escapeHtml(card.title || 'Untitled')}</h4>
-            <span class="badge ${badgeColors[card.type] || 'badge-neutral'}">${card.type}</span>
-            <label class="toggle-switch" style="margin-left: auto;">
-              <input type="checkbox" data-action="toggle-card" data-card-id="${card.id}" ${card.enabled !== false ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
+        <div class="kc-accent ${card.type}"></div>
+        <div class="kc-inner">
+          <div class="kc-type-icon ${card.type}">${icon}</div>
+          <div class="kc-body">
+            <div class="kc-header">
+              <h4 class="kc-title">${escapeHtml(card.title || 'Untitled')}</h4>
+              <span class="badge ${badgeColor}">${card.type}</span>
+              <div class="kc-toggle-wrap">
+                <label class="toggle-switch">
+                  <input type="checkbox" data-action="toggle-card" data-card-id="${card.id}" ${card.enabled !== false ? 'checked' : ''}>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <p class="kc-content">${escapeHtml((card.content || '').substring(0, 180))}</p>
           </div>
-          <p class="kc-content">${escapeHtml((card.content || '').substring(0, 200))}</p>
         </div>
         <div class="kc-actions">
-          <button class="btn-icon-sm" data-action="edit-card" data-card-id="${card.id}" title="Edit">&#9998;</button>
-          <button class="btn-icon-sm" data-action="delete-card" data-card-id="${card.id}" title="Delete">&#128465;</button>
+          <button class="kc-action-btn" type="button" data-action="edit-card" data-card-id="${card.id}" title="Edit">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M9 2l2 2-7 7H2V9l7-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="kc-action-btn delete" type="button" data-action="delete-card" data-card-id="${card.id}" title="Delete">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 3.5h9M5 3.5V2.5h3v1M5.5 5.5v4M7.5 5.5v4M3 3.5l.5 7h6l.5-7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
         </div>
       </div>
     `;
