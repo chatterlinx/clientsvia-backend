@@ -10,8 +10,6 @@
  * ============================================================================
  */
 
-console.log('[LLM] ── llm.js loaded ──');
-
 // ════════════════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════════════════
@@ -31,40 +29,17 @@ const state = {
 // ════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[LLM] ── DOMContentLoaded fired ──');
-
   const urlParams = new URLSearchParams(window.location.search);
   state.companyId = urlParams.get('companyId');
-  console.log('[LLM] companyId:', state.companyId);
 
   if (!state.companyId) {
     showToast('error', 'Missing companyId parameter');
     return;
   }
 
-  try {
-    console.log('[LLM] setupTabNavigation…');
-    setupTabNavigation();
-    console.log('[LLM] setupTabNavigation ✓');
-  } catch (err) {
-    console.error('[LLM] setupTabNavigation FAILED:', err);
-  }
-
-  try {
-    console.log('[LLM] setupEventListeners…');
-    setupEventListeners();
-    console.log('[LLM] setupEventListeners ✓');
-  } catch (err) {
-    console.error('[LLM] setupEventListeners FAILED:', err);
-  }
-
-  try {
-    console.log('[LLM] loadSettings…');
-    await loadSettings();
-    console.log('[LLM] loadSettings ✓');
-  } catch (err) {
-    console.error('[LLM] loadSettings FAILED:', err);
-  }
+  setupTabNavigation();
+  setupEventListeners();
+  await loadSettings();
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -75,55 +50,24 @@ async function loadSettings() {
   try {
     showLoadingState();
     const scope = `company:${state.companyId}`;
-    console.log('[LLM] Fetching settings for scope:', scope);
-
     const data = await AgentConsoleAuth.apiFetch(`/api/admin/llm-settings?scope=${encodeURIComponent(scope)}`);
-    console.log('[LLM] Settings API response received:', { hasSettings: !!data?.settings, hasProfiles: !!data?.profiles, hasPromptParts: !!data?.promptParts });
 
     state.settings = data.settings;
     state.profiles = data.profiles;
     state.promptParts = data.promptParts;
 
-    // Fetch company name
+    // Fetch company name (non-critical)
     try {
-      console.log('[LLM] Fetching truth data…');
       const truthData = await AgentConsoleAuth.apiFetch(`/api/agent-console/${state.companyId}/truth`);
       state.companyName = truthData?.companyProfile?.businessName ||
                           truthData?.companyProfile?.companyName || '';
-      console.log('[LLM] Company name:', state.companyName || '(empty)');
     } catch (err) {
-      console.warn('[LLM] Truth fetch failed (non-critical):', err.message);
+      console.warn('[LLM] Truth fetch failed:', err.message);
     }
 
-    console.log('[LLM] renderAllSections…');
     renderAllSections();
-    console.log('[LLM] renderAllSections ✓');
-
-    console.log('[LLM] updatePreview…');
     updatePreview();
-    console.log('[LLM] updatePreview ✓');
-
     hideLoadingState();
-
-    // ── Visibility diagnostic ──
-    const overview = document.getElementById('panel-overview');
-    const mainEl = document.querySelector('.main-content');
-    console.log('[LLM] DIAG panel-overview:', {
-      exists: !!overview,
-      display: overview ? getComputedStyle(overview).display : 'N/A',
-      offsetHeight: overview?.offsetHeight,
-      classList: overview?.className,
-      childCount: overview?.children.length
-    });
-    console.log('[LLM] DIAG main-content:', {
-      exists: !!mainEl,
-      display: mainEl ? getComputedStyle(mainEl).display : 'N/A',
-      offsetHeight: mainEl?.offsetHeight,
-      offsetWidth: mainEl?.offsetWidth
-    });
-    console.log('[LLM] DIAG stylesheets loaded:', document.styleSheets.length);
-
-    console.log('[LLM] ── Page fully loaded ──');
   } catch (error) {
     console.error('[LLM] Load error:', error);
     showToast('error', `Failed to load settings: ${error.message}`);
@@ -163,20 +107,11 @@ async function saveSettings() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function renderAllSections() {
-  try { console.log('[LLM]   updateCompanyHeader…'); updateCompanyHeader(); console.log('[LLM]   updateCompanyHeader ✓'); }
-  catch (e) { console.error('[LLM]   updateCompanyHeader FAILED:', e); }
-
-  try { console.log('[LLM]   renderOverviewTab…'); renderOverviewTab(); console.log('[LLM]   renderOverviewTab ✓'); }
-  catch (e) { console.error('[LLM]   renderOverviewTab FAILED:', e); }
-
-  try { console.log('[LLM]   renderModelTab…'); renderModelTab(); console.log('[LLM]   renderModelTab ✓'); }
-  catch (e) { console.error('[LLM]   renderModelTab FAILED:', e); }
-
-  try { console.log('[LLM]   renderPromptsSafetyTab…'); renderPromptsSafetyTab(); console.log('[LLM]   renderPromptsSafetyTab ✓'); }
-  catch (e) { console.error('[LLM]   renderPromptsSafetyTab FAILED:', e); }
-
-  try { console.log('[LLM]   renderCallHandlingTab…'); renderCallHandlingTab(); console.log('[LLM]   renderCallHandlingTab ✓'); }
-  catch (e) { console.error('[LLM]   renderCallHandlingTab FAILED:', e); }
+  updateCompanyHeader();
+  renderOverviewTab();
+  renderModelTab();
+  renderPromptsSafetyTab();
+  renderCallHandlingTab();
 }
 
 function updateCompanyHeader() {
@@ -495,8 +430,6 @@ function updatePreview() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function setupEventListeners() {
-  console.log('[LLM] Wiring event listeners…');
-
   // Navigation
   document.getElementById('btn-back')?.addEventListener('click', navigateBack);
   document.getElementById('header-logo-link')?.addEventListener('click', (e) => {
@@ -596,7 +529,6 @@ function setupEventListeners() {
 
   // ── Call Handling tab ──
   setupCallHandlingListeners();
-  console.log('[LLM] All event listeners wired ✓');
 }
 
 function setupCallHandlingListeners() {
@@ -694,7 +626,6 @@ function setupCallHandlingListeners() {
 
 function setupTabNavigation() {
   const tabs = document.querySelectorAll('.llm-tab');
-  console.log('[LLM] Found', tabs.length, 'tab buttons');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => switchToTab(tab.dataset.tab));
   });
@@ -897,9 +828,8 @@ function hideLoadingState() {
 }
 
 function showToast(type, message) {
-  console.log(`[LLM] Toast [${type}]:`, message);
   const container = document.getElementById('toast-container');
-  if (!container) { console.warn('[LLM] toast-container element not found!'); return; }
+  if (!container) return;
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.innerHTML = `
