@@ -819,12 +819,12 @@ function toggleFieldset(id, show) {
 
 function showLoadingState() {
   const el = document.getElementById('loading-overlay');
-  if (el) el.hidden = false;
+  if (el) { el.removeAttribute('hidden'); el.classList.add('active'); }
 }
 
 function hideLoadingState() {
   const el = document.getElementById('loading-overlay');
-  if (el) el.hidden = true;
+  if (el) { el.setAttribute('hidden', ''); el.classList.remove('active'); }
 }
 
 function showToast(type, message) {
