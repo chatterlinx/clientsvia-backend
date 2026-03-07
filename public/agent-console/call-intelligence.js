@@ -618,9 +618,9 @@
         <p class="section-description">Step-by-step breakdown of every caller input and system decision.</p>
         
         ${flow.map(turn => `
-          <div class="turn-flow-card">
+          <div class="turn-flow-card ${turn.traceOnly ? 'trace-only-turn' : ''}">
             <div class="turn-flow-header">
-              <h3>Turn ${turn.turnNumber} ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''}</h3>
+              <h3>Turn ${turn.turnNumber} ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''} ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}</h3>
             </div>
 
             ${turn.callerInput ? `

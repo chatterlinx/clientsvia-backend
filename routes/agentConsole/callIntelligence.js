@@ -118,12 +118,18 @@ function buildResponseContext(trace = []) {
 }
 
 function buildTurnByTurnFlow(turns = [], trace = []) {
-  if (!Array.isArray(turns) || turns.length === 0) return [];
-  if (!Array.isArray(trace)) return [];
-  
+  if (!Array.isArray(trace)) trace = [];
+  if (!Array.isArray(turns)) turns = [];
+  if (turns.length === 0 && trace.length === 0) return [];
+
   const flowSteps = [];
   const maxTurns = 10;
-  const turnNumbers = [...new Set(turns.map(t => t.turnNumber).filter(n => Number.isFinite(n)))].sort((a, b) => a - b).slice(0, maxTurns);
+
+  // Collect turn numbers from BOTH transcript entries AND trace events
+  // so turns with only trace data (e.g., bridge/fallback turns) are visible
+  const turnNumsFromTranscript = turns.map(t => t.turnNumber).filter(n => Number.isFinite(n));
+  const turnNumsFromTrace = trace.map(t => t.turnNumber).filter(n => Number.isFinite(n) && n > 0);
+  const turnNumbers = [...new Set([...turnNumsFromTranscript, ...turnNumsFromTrace])].sort((a, b) => a - b).slice(0, maxTurns);
 
   const traceByKind = new Map();
   for (const t of trace) {
@@ -136,6 +142,10 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     const turnData = { turnNumber: turnNum };
 
     const callerTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'caller');
+    const agentTurnEntry = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
+    const hasTranscript = !!(callerTurn || agentTurnEntry);
+    if (!hasTranscript) turnData.traceOnly = true;
+
     if (callerTurn) {
       turnData.callerInput = { raw: callerTurn.text?.substring(0, 500) };
     }
