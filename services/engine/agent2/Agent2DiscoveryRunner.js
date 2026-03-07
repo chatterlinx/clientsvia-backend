@@ -128,15 +128,18 @@ function deepMergeLLMAgent(target, source) {
 }
 
 /**
- * Call the LLM Agent (Claude) to handle a non-YES/NO follow-up response.
+ * 123RP Tier 2: Call LLM Agent for follow-up consent edge cases.
+ * Fires when the caller's response to a follow-up question is not a clear
+ * YES/NO — e.g., ambiguous, hesitant, complex, or multi-intent.
  * Returns { response, tokensUsed, latencyMs } or null if disabled/failed.
+ * On null return, caller falls to Tier 3 (canned response).
  *
  * @param {Object} params
  * @param {Object} params.company       - Full company doc (or lean object)
- * @param {string} params.input         - Caller's raw input
+ * @param {string} params.input         - Caller's raw input (from gather, no ScrabEngine)
  * @param {string} params.followUpQuestion - The question that was asked
  * @param {string} params.triggerSource - Which trigger card asked the question
- * @param {string} params.bucket        - Classifier bucket (REPROMPT/HESITANT/COMPLEX)
+ * @param {string} params.bucket        - Classifier bucket (REPROMPT/HESITANT/COMPLEX/NO)
  * @param {string} params.channel       - 'call' | 'sms' | 'webchat'
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
@@ -239,7 +242,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
   } catch (error) {
     logger.error('[LLM_AGENT] Follow-up call failed', { error: error.message });
     emit('A2_LLM_AGENT_ERROR', { error: error.message });
-    return null; // Graceful fallback — existing canned behavior will handle it
+    return null; // Tier 3: canned response will handle it
   }
 }
 
@@ -845,17 +848,19 @@ class Agent2DiscoveryRunner {
     const nameGreetingConfig = safeObj(discoveryCfg.nameGreeting, null);
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PENDING FOLLOW-UP QUESTION — EARLY EXIT (before ScrabEngine)
+    // 123RP: FOLLOW-UP CONSENT GATE — Raw from Gather (before ScrabEngine)
     // ══════════════════════════════════════════════════════════════════════════
-    // If the agent asked a follow-up question last turn (e.g., "Do you want me
-    // to get that scheduled?"), the caller's response is a simple yes/no/choice.
-    // Route DIRECTLY to the Follow-up Consent Card classifier — skip ScrabEngine
-    // entirely. ScrabEngine normalization is unnecessary for consent classification
-    // and its quality gate generates false INPUT_TOO_SHORT warnings on short
-    // answers like "yes".
+    // When a trigger card asked a follow-up question last turn (e.g., "Would
+    // you like to book an appointment?"), the caller's raw response routes
+    // DIRECTLY here — bypassing ScrabEngine entirely.
     //
-    // The consent classifier uses raw inputLower (not normalized text), so
-    // bypassing ScrabEngine is safe and correct.
+    // 123RP applies:
+    //   Tier 1 (Deterministic): YES/NO/MAINTENANCE/SERVICE_CALL phrase match
+    //   Tier 2 (LLM Agent):     REPROMPT/HESITANT/COMPLEX/NO/YES+residual → Claude
+    //   Tier 3 (Canned):        If LLM Agent disabled/failed → UI-owned response
+    //
+    // Input: raw from gather → lowercase → strip punctuation (Tier 1 only)
+    //        raw from gather → as-is to Claude (Tier 2)
     // ══════════════════════════════════════════════════════════════════════════
     const pfuq = nextState.agent2?.discovery?.pendingFollowUpQuestion || null;
     const pfuqTurn = nextState.agent2?.discovery?.pendingFollowUpQuestionTurn;
@@ -1006,68 +1011,75 @@ class Agent2DiscoveryRunner {
             fallbackAction
           });
 
-          return { response: missingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+          return { response: missingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
         }
       }
 
       if (!fallthroughMissingConfig) {
-        // ── REPROMPT: re-ask the question ──
-        if (bucket === 'REPROMPT') {
-          // Try LLM Agent first — if enabled, let Claude handle the ambiguous response
-          const llmAgentResult = await callLLMAgentForFollowUp({
-            company, input, followUpQuestion: pfuq,
-            triggerSource: pfuqSource?.replace('card:', '') || null,
-            bucket, channel: 'call', emit
-          });
-          if (llmAgentResult) {
-            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+
+        // ────────────────────────────────────────────────────────────────
+        // 123RP TIER 1: Deterministic phrase-match buckets
+        // ────────────────────────────────────────────────────────────────
+
+        // ── YES (Tier 1 or Tier 2 if residual content) ──
+        if (bucket === 'YES') {
+          // Detect residual content: "yes but I also want to know about X"
+          // Strip matched YES phrases — if meaningful content remains,
+          // caller said more than a pure yes → Tier 2 (LLM Agent) handles
+          const residualAfterYes = matchedByBucket.yes
+            .reduce((text, phrase) => {
+              const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return text.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '').trim();
+            }, inputLowerCleanFUQ)
+            .replace(/^[\s,]+|[\s,]+$/g, '')
+            .replace(/^(but|and|also|however|though|although|i\b)\s*/i, '')
+            .trim();
+          const hasResidualContent = residualAfterYes.length > 6;
+
+          if (hasResidualContent) {
+            // YES + extra content → fall through to Tier 2 (LLM Agent) below
+            emit('A2_FOLLOWUP_YES_WITH_QUESTION', {
+              residualPreview: clip(residualAfterYes, 60),
+              reason: 'YES with substantive extra content — routing to Tier 2 (LLM Agent)',
+              cardId: pfuqSource?.replace('card:', '') || null
+            });
+          } else {
+            // Pure YES → Tier 1 deterministic: execute consent card direction
             clearPendingFollowUp(nextState);
-            const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
-            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState };
+            const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
+            const yesText = bucketResponse;
+
+            if (yesDirection === 'HANDOFF_BOOKING') {
+              nextState.sessionMode = 'BOOKING';
+              nextState.consent = {
+                pending: false,
+                given: true,
+                turn,
+                source: 'followup_consent_gate',
+                bucket: bucketKey,
+                matchedPhrases,
+                grantedAt: new Date().toISOString()
+              };
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
+
+              emit('A2_CONSENT_GATE_BOOKING', {
+                reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
+                cardId: pfuqSource?.replace('card:', '') || null,
+                inputPreview: clip(inputLowerCleanFUQ, 60)
+              });
+            } else {
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
+            }
+
+            const yesResponse = `${fuqAck} ${yesText}`.trim();
+            emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
+            return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
           }
-          // Fallback: existing canned behavior if LLM Agent disabled/failed
-          const repromptText = bucketResponse || `${pfuq}`;
-          nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
-          const repromptResponse = `${fuqAck} ${repromptText}`.trim();
-
-          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_REPROMPT', responsePreview: clip(repromptResponse, 120) });
-          return { response: repromptResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
         }
 
-        // ── HESITANT: gentle clarification, keep question pending ──
-        if (bucket === 'HESITANT') {
-          // Try LLM Agent first — if enabled, let Claude handle the hesitant response
-          const llmAgentResult = await callLLMAgentForFollowUp({
-            company, input, followUpQuestion: pfuq,
-            triggerSource: pfuqSource?.replace('card:', '') || null,
-            bucket, channel: 'call', emit
-          });
-          if (llmAgentResult) {
-            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
-            clearPendingFollowUp(nextState);
-            const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
-            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState };
-          }
-          // Fallback: existing canned behavior if LLM Agent disabled/failed
-          const hesitantText = bucketResponse || `${pfuq}`;
-          nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
-          const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
-
-          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_HESITANT', responsePreview: clip(hesitantResponse, 120) });
-          return { response: hesitantResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-        }
-
-        // Clear the pending follow-up for resolved buckets
-        if (bucket !== 'REPROMPT' && bucket !== 'HESITANT') {
-          clearPendingFollowUp(nextState);
-          if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
-          nextState.agent2.discovery.bookingMode = null;
-        }
-
-        // ── MAINTENANCE / SERVICE CALL: handoff with booking mode ──
+        // ── MAINTENANCE / SERVICE_CALL (Tier 1): handoff with booking mode ──
         if (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL') {
+          clearPendingFollowUp(nextState);
           const choiceText = bucketResponse;
 
           if (direction === 'HANDOFF_BOOKING') {
@@ -1103,67 +1115,14 @@ class Agent2DiscoveryRunner {
             direction,
             bookingMode: bookingMode || null
           });
-          return { response: choiceResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+          return { response: choiceResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
         }
 
-        // ── YES: execute the consent card direction (single source of truth) ──
-        if (bucket === 'YES') {
-          // Detect residual content: "yes but I also want to know about X"
-          // Strip matched YES phrases from input — if meaningful content remains,
-          // caller said more than a pure yes → LLMAgent handles with full PFUQ context (tier 2)
-          const residualAfterYes = matchedByBucket.yes
-            .reduce((text, phrase) => {
-              const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              return text.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '').trim();
-            }, inputLowerCleanFUQ)
-            .replace(/^[\s,]+|[\s,]+$/g, '')
-            .replace(/^(but|and|also|however|though|although|i\b)\s*/i, '')
-            .trim();
-          const hasResidualContent = residualAfterYes.length > 6;
+        // ────────────────────────────────────────────────────────────────
+        // 123RP TIER 2 → TIER 3: LLM Agent, then canned response
+        // ────────────────────────────────────────────────────────────────
 
-          if (hasResidualContent) {
-            // Caller said YES but also has a secondary question — route to LLMAgent (tier 2)
-            // LLMAgent receives the full input + PFUQ context and can handle both naturally
-            emit('A2_FOLLOWUP_YES_WITH_QUESTION', {
-              residualPreview: clip(residualAfterYes, 60),
-              reason: 'YES with substantive extra content — routing to LLMAgent with follow-up context',
-              cardId: pfuqSource?.replace('card:', '') || null
-            });
-            // Fall through to LLMAgent handler below
-          } else {
-            // Pure YES — fire booking handoff (deterministic, tier 1)
-            const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
-            const yesText = bucketResponse;
-
-            if (yesDirection === 'HANDOFF_BOOKING') {
-              nextState.sessionMode = 'BOOKING';
-              nextState.consent = {
-                pending: false,
-                given: true,
-                turn,
-                source: 'followup_consent_gate',
-                bucket: bucketKey,
-                matchedPhrases,
-                grantedAt: new Date().toISOString()
-              };
-              nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
-
-              emit('A2_CONSENT_GATE_BOOKING', {
-                reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
-                cardId: pfuqSource?.replace('card:', '') || null,
-                inputPreview: clip(inputLowerCleanFUQ, 60)
-              });
-            } else {
-              nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
-            }
-
-            const yesResponse = `${fuqAck} ${yesText}`.trim();
-            emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
-            return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
-          }
-        }
-
-        // ── NO: try LLM Agent first (tier 2), then canned response (tier 3 fallback) ──
+        // ── NO (Tier 2 → 3): try LLM Agent first, then canned response ──
         if (bucket === 'NO') {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
@@ -1175,18 +1134,19 @@ class Agent2DiscoveryRunner {
             clearPendingFollowUp(nextState);
             const noLlmResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
             emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(noLlmResponse, 120), source: 'llmAgent' });
-            return { response: noLlmResponse, matchSource: 'LLM_AGENT', state: nextState };
+            return { response: noLlmResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
           }
-          // LLMAgent disabled or failed — canned response (tier 3)
+          // Tier 3: canned response if LLM Agent disabled/failed
+          clearPendingFollowUp(nextState);
           const noText = bucketResponse;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
           const noResponse = `${fuqAck} ${noText}`.trim();
           emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_NO', responsePreview: clip(noResponse, 120) });
-          return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+          return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('FOLLOWUP_NO') };
         }
 
-        // ── COMPLEX: try LLM Agent, then fall through to normal agent ──
-        {
+        // ── REPROMPT (Tier 2 → 3): ambiguous short response ──
+        if (bucket === 'REPROMPT') {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
@@ -1195,19 +1155,64 @@ class Agent2DiscoveryRunner {
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
             clearPendingFollowUp(nextState);
-            const { ack: complexAck } = buildAck(ack, callerName, state, nameGreetingConfig);
-            const agentResponse = `${complexAck} ${llmAgentResult.response}`.trim();
+            const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
             emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState };
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
           }
+          // Tier 3: canned re-ask if LLM Agent disabled/failed
+          const repromptText = bucketResponse || `${pfuq}`;
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
+          const repromptResponse = `${fuqAck} ${repromptText}`.trim();
+
+          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_REPROMPT', responsePreview: clip(repromptResponse, 120) });
+          return { response: repromptResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('FOLLOWUP_REPROMPT') };
         }
-        // LLM Agent disabled or failed — fall through to normal discovery
+
+        // ── HESITANT (Tier 2 → 3): caller expressing doubt/conflict ──
+        if (bucket === 'HESITANT') {
+          const llmAgentResult = await callLLMAgentForFollowUp({
+            company, input, followUpQuestion: pfuq,
+            triggerSource: pfuqSource?.replace('card:', '') || null,
+            bucket, channel: 'call', emit
+          });
+          if (llmAgentResult) {
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+            clearPendingFollowUp(nextState);
+            const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
+            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
+          }
+          // Tier 3: canned clarification if LLM Agent disabled/failed
+          const hesitantText = bucketResponse || `${pfuq}`;
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
+          const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
+
+          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_HESITANT', responsePreview: clip(hesitantResponse, 120) });
+          return { response: hesitantResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('FOLLOWUP_HESITANT') };
+        }
+
+        // ── COMPLEX / YES+residual (Tier 2 → fallthrough): substantive response ──
+        const llmAgentResult = await callLLMAgentForFollowUp({
+          company, input, followUpQuestion: pfuq,
+          triggerSource: pfuqSource?.replace('card:', '') || null,
+          bucket, channel: 'call', emit
+        });
+        if (llmAgentResult) {
+          nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+          clearPendingFollowUp(nextState);
+          const { ack: complexAck } = buildAck(ack, callerName, state, nameGreetingConfig);
+          const agentResponse = `${complexAck} ${llmAgentResult.response}`.trim();
+          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+          return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
+        }
+
+        // Tier 3: LLM Agent unavailable — fall through to ScrabEngine + trigger matching
+        clearPendingFollowUp(nextState);
         nextState.agent2.discovery.lastPath = 'FOLLOWUP_COMPLEX';
         emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
           reason: 'Caller gave substantive non-yes/no response — LLM Agent unavailable, routing through normal discovery',
           inputPreview: clip(inputLowerCleanFUQ, 80)
         });
-        // Fall through — ScrabEngine + normal trigger matching will handle this turn
       }
     }
 
