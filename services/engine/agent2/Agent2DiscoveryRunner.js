@@ -1104,42 +1104,79 @@ class Agent2DiscoveryRunner {
 
         // ── YES: execute the consent card direction (single source of truth) ──
         if (bucket === 'YES') {
-          const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
-          const yesText = bucketResponse;
+          // Detect residual content: "yes but I also want to know about X"
+          // Strip matched YES phrases from input — if meaningful content remains,
+          // caller said more than a pure yes → LLMAgent handles with full PFUQ context (tier 2)
+          const residualAfterYes = matchedByBucket.yes
+            .reduce((text, phrase) => {
+              const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return text.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '').trim();
+            }, inputLowerCleanFUQ)
+            .replace(/^[\s,]+|[\s,]+$/g, '')
+            .replace(/^(but|and|also|however|though|although|i\b)\s*/i, '')
+            .trim();
+          const hasResidualContent = residualAfterYes.length > 6;
 
-          if (yesDirection === 'HANDOFF_BOOKING') {
-            nextState.sessionMode = 'BOOKING';
-            nextState.consent = {
-              pending: false,
-              given: true,
-              turn,
-              source: 'followup_consent_gate',
-              bucket: bucketKey,
-              matchedPhrases,
-              grantedAt: new Date().toISOString()
-            };
-            nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
-
-            emit('A2_CONSENT_GATE_BOOKING', {
-              reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
-              cardId: pfuqSource?.replace('card:', '') || null,
-              inputPreview: clip(inputLowerCleanFUQ, 60)
+          if (hasResidualContent) {
+            // Caller said YES but also has a secondary question — route to LLMAgent (tier 2)
+            // LLMAgent receives the full input + PFUQ context and can handle both naturally
+            emit('A2_FOLLOWUP_YES_WITH_QUESTION', {
+              residualPreview: clip(residualAfterYes, 60),
+              reason: 'YES with substantive extra content — routing to LLMAgent with follow-up context',
+              cardId: pfuqSource?.replace('card:', '') || null
             });
+            // Fall through to LLMAgent handler below
           } else {
-            nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
-          }
+            // Pure YES — fire booking handoff (deterministic, tier 1)
+            const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
+            const yesText = bucketResponse;
 
-          const yesResponse = `${fuqAck} ${yesText}`.trim();
-          emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
-          return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+            if (yesDirection === 'HANDOFF_BOOKING') {
+              nextState.sessionMode = 'BOOKING';
+              nextState.consent = {
+                pending: false,
+                given: true,
+                turn,
+                source: 'followup_consent_gate',
+                bucket: bucketKey,
+                matchedPhrases,
+                grantedAt: new Date().toISOString()
+              };
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
+
+              emit('A2_CONSENT_GATE_BOOKING', {
+                reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
+                cardId: pfuqSource?.replace('card:', '') || null,
+                inputPreview: clip(inputLowerCleanFUQ, 60)
+              });
+            } else {
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES';
+            }
+
+            const yesResponse = `${fuqAck} ${yesText}`.trim();
+            emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
+            return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+          }
         }
 
-        // ── NO: acknowledge and continue ──
+        // ── NO: try LLM Agent first (tier 2), then canned response (tier 3 fallback) ──
         if (bucket === 'NO') {
+          const llmAgentResult = await callLLMAgentForFollowUp({
+            company, input, followUpQuestion: pfuq,
+            triggerSource: pfuqSource?.replace('card:', '') || null,
+            bucket, channel: 'call', emit
+          });
+          if (llmAgentResult) {
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+            clearPendingFollowUp(nextState);
+            const noLlmResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
+            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(noLlmResponse, 120), source: 'llmAgent' });
+            return { response: noLlmResponse, matchSource: 'LLM_AGENT', state: nextState };
+          }
+          // LLMAgent disabled or failed — canned response (tier 3)
           const noText = bucketResponse;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
           const noResponse = `${fuqAck} ${noText}`.trim();
-
           emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_NO', responsePreview: clip(noResponse, 120) });
           return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState };
         }
