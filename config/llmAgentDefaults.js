@@ -60,6 +60,17 @@ const DEFAULT_LLM_AGENT_SETTINGS = {
     escalationMessage: 'Let me connect you with someone who can help with that.'
   },
 
+  // ── Behavior Rules ──────────────────────────────────────────────────────
+  // Each rule: { id, title, rule, category, enabled, isDefault, priority, createdAt, updatedAt }
+  //   category: 'emotional' — handling caller emotions (anger, frustration, hesitation)
+  //             'language'  — language switching, communication barriers
+  //             'intent'    — multiple intents, topic changes, ambiguity
+  //             'flow'      — conversational flow edge cases
+  //             'custom'    — admin-created rules
+  //
+  // Pre-seeded with DEFAULT_BEHAVIOR_RULES on first load (onboarding-ready)
+  behaviorRules: [],
+
   // ── Knowledge Cards ──────────────────────────────────────────────────────
   // Each card: { id, type, title, content, enabled, priority, createdAt, updatedAt }
   //   type: 'trigger' — auto-synced from trigger cards
@@ -113,6 +124,84 @@ const AVAILABLE_MODELS = [
   { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  description: 'Fast & affordable — ideal for receptionist work', tier: 'default' },
   { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', description: 'Smarter — for complex industries (dental, legal)', tier: 'advanced' },
   { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   description: 'Most capable — for highest accuracy needs', tier: 'premium' }
+];
+
+// ── Default Behavior Rules (seeded on onboarding) ───────────────────────────
+// These are pre-built rules that every company gets out of the box.
+// Admins can toggle, edit, or delete them. They can also add custom rules.
+const DEFAULT_BEHAVIOR_RULES = [
+  {
+    id: 'br_frustrated_caller',
+    title: 'Frustrated Caller',
+    rule: 'When the caller sounds frustrated or upset, acknowledge their concern before offering solutions. Say something like "I understand this is frustrating" before proceeding.',
+    category: 'emotional',
+    enabled: true,
+    isDefault: true,
+    priority: 0
+  },
+  {
+    id: 'br_angry_demanding',
+    title: 'Angry / Demanding',
+    rule: 'If the caller is angry or demanding immediate action, stay calm, validate their urgency, and guide them toward the next step without making promises you cannot keep.',
+    category: 'emotional',
+    enabled: true,
+    isDefault: true,
+    priority: 1
+  },
+  {
+    id: 'br_language_switching',
+    title: 'Language Switching',
+    rule: 'If the caller switches to a language other than English, respond in their language to the best of your ability.',
+    category: 'language',
+    enabled: true,
+    isDefault: true,
+    priority: 2
+  },
+  {
+    id: 'br_multiple_intents',
+    title: 'Multiple Intents',
+    rule: 'When the caller mentions two or more issues in one sentence, address the most urgent issue first, then acknowledge the second issue.',
+    category: 'intent',
+    enabled: true,
+    isDefault: true,
+    priority: 3
+  },
+  {
+    id: 'br_topic_change',
+    title: 'Topic Change',
+    rule: 'If the caller changes the subject mid-conversation, acknowledge the shift and address the new topic without forcing them back to the previous one.',
+    category: 'intent',
+    enabled: true,
+    isDefault: true,
+    priority: 4
+  },
+  {
+    id: 'br_wants_more_info',
+    title: 'Wants More Info First',
+    rule: 'If the caller says yes but immediately asks for more details (pricing, timing, etc.), provide what you know from the knowledge base before proceeding with booking.',
+    category: 'flow',
+    enabled: true,
+    isDefault: true,
+    priority: 5
+  },
+  {
+    id: 'br_specific_person',
+    title: 'Asks for Specific Person',
+    rule: 'If the caller asks for a specific technician or employee by name, explain that assignments are based on availability and service area.',
+    category: 'flow',
+    enabled: true,
+    isDefault: true,
+    priority: 6
+  },
+  {
+    id: 'br_unclear_response',
+    title: 'Partial or Unclear Response',
+    rule: 'If the caller gives an unclear or partial answer, ask one clarifying question rather than repeating the original question.',
+    category: 'flow',
+    enabled: true,
+    isDefault: true,
+    priority: 7
+  }
 ];
 
 /**
@@ -202,7 +291,18 @@ function composeSystemPrompt(settings, channel = 'call') {
     parts.push('\n=== END KNOWLEDGE BASE ===');
   }
 
-  // 10. Max turns
+  // 10. Behavior rules
+  const behaviorRules = (settings.behaviorRules || []).filter(r => r.enabled !== false && r.rule?.trim());
+  if (behaviorRules.length > 0) {
+    parts.push('\n=== BEHAVIOR RULES ===');
+    parts.push('Follow these rules when handling edge cases and difficult situations:');
+    for (const rule of behaviorRules) {
+      parts.push(`\u2022 ${rule.rule.trim()}`);
+    }
+    parts.push('=== END BEHAVIOR RULES ===');
+  }
+
+  // 11. Max turns
   const maxTurns = settings.activation?.maxTurnsPerSession || 10;
   parts.push(`\nYou have a maximum of ${maxTurns} turns in this conversation. If you haven't resolved the caller's needs by then, escalate to a human agent.`);
 
@@ -211,6 +311,7 @@ function composeSystemPrompt(settings, channel = 'call') {
 
 module.exports = {
   DEFAULT_LLM_AGENT_SETTINGS,
+  DEFAULT_BEHAVIOR_RULES,
   CHATTINESS_LEVELS,
   TONE_DESCRIPTIONS,
   ROLE_DESCRIPTIONS,

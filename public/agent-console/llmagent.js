@@ -26,7 +26,9 @@ const state = {
   testMessages: [],       // [{role: 'user'|'assistant', content}]
   modalCardType: null,
   editingCardId: null,     // null = add, string = edit
-  scrapedContent: null     // temp storage for website scrape result
+  scrapedContent: null,    // temp storage for website scrape result
+  activeBrFilter: 'all',   // behavior rules category filter
+  editingBrId: null         // null = add, string = edit behavior rule
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -50,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('[LLMAgent] Setting up tabs...');
     setupConfigTabs();
     setupFilterChips();
+    setupBrFilterChips();
     setupChannelTabs();
     console.log('[LLMAgent] Setting up event listeners...');
     setupEventListeners();
@@ -251,6 +254,8 @@ function renderAll() {
   renderActivationPanel();
   renderGuardrailsPanel();
   renderKnowledgeCards();
+  seedDefaultBehaviorRules();
+  renderBehaviorRules();
   renderPromptPreview();
 }
 
@@ -445,6 +450,204 @@ function renderKnowledgeCards() {
   }).join('');
 }
 
+// ── Behavior Rules ──────────────────────────────────────────────────────
+
+const DEFAULT_BEHAVIOR_RULES = [
+  { id: 'br_frustrated_caller', title: 'Frustrated Caller', rule: 'When the caller sounds frustrated or upset, acknowledge their concern before offering solutions. Say something like "I understand this is frustrating" before proceeding.', category: 'emotional', enabled: true, isDefault: true, priority: 0 },
+  { id: 'br_angry_demanding', title: 'Angry / Demanding', rule: 'If the caller is angry or demanding immediate action, stay calm, validate their urgency, and guide them toward the next step without making promises you cannot keep.', category: 'emotional', enabled: true, isDefault: true, priority: 1 },
+  { id: 'br_language_switching', title: 'Language Switching', rule: 'If the caller switches to a language other than English, respond in their language to the best of your ability.', category: 'language', enabled: true, isDefault: true, priority: 2 },
+  { id: 'br_multiple_intents', title: 'Multiple Intents', rule: 'When the caller mentions two or more issues in one sentence, address the most urgent issue first, then acknowledge the second issue.', category: 'intent', enabled: true, isDefault: true, priority: 3 },
+  { id: 'br_topic_change', title: 'Topic Change', rule: 'If the caller changes the subject mid-conversation, acknowledge the shift and address the new topic without forcing them back to the previous one.', category: 'intent', enabled: true, isDefault: true, priority: 4 },
+  { id: 'br_wants_more_info', title: 'Wants More Info First', rule: 'If the caller says yes but immediately asks for more details (pricing, timing, etc.), provide what you know from the knowledge base before proceeding with booking.', category: 'flow', enabled: true, isDefault: true, priority: 5 },
+  { id: 'br_specific_person', title: 'Asks for Specific Person', rule: 'If the caller asks for a specific technician or employee by name, explain that assignments are based on availability and service area.', category: 'flow', enabled: true, isDefault: true, priority: 6 },
+  { id: 'br_unclear_response', title: 'Partial or Unclear Response', rule: 'If the caller gives an unclear or partial answer, ask one clarifying question rather than repeating the original question.', category: 'flow', enabled: true, isDefault: true, priority: 7 },
+];
+
+function seedDefaultBehaviorRules() {
+  if (!state.config) return;
+  if (state.config.behaviorRules && state.config.behaviorRules.length > 0) return;
+  state.config.behaviorRules = DEFAULT_BEHAVIOR_RULES.map(r => ({
+    ...r,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }));
+}
+
+function renderBehaviorRules() {
+  const container = document.getElementById('behavior-rules-list');
+  if (!container) return;
+
+  const rules = state.config?.behaviorRules || [];
+  const filter = state.activeBrFilter;
+  const filtered = filter === 'all' ? rules : rules.filter(r => r.category === filter);
+
+  // Update count badges
+  const counts = { all: rules.length, emotional: 0, language: 0, intent: 0, flow: 0, custom: 0 };
+  rules.forEach(r => { if (counts[r.category] !== undefined) counts[r.category]++; });
+  for (const [cat, count] of Object.entries(counts)) {
+    const el = document.getElementById('br-count-' + cat);
+    if (el) el.textContent = count;
+  }
+  const badge = document.getElementById('br-count-badge');
+  if (badge) badge.textContent = rules.length + (rules.length === 1 ? ' rule' : ' rules');
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="cards-empty">
+        <svg class="cards-empty-svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+          <rect x="8" y="12" width="48" height="40" rx="4" stroke="#d1d5db" stroke-width="2"/>
+          <path d="M20 26h24M20 34h16" stroke="#d1d5db" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="48" cy="48" r="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="2"/>
+          <path d="M44 48h8M48 44v8" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div class="cards-empty-title">${rules.length === 0 ? 'No behavior rules yet' : 'No rules match this filter'}</div>
+        <div class="cards-empty-text">${rules.length === 0 ? 'Add behavior rules to control how the AI agent handles edge cases.' : 'Try selecting a different filter above.'}</div>
+      </div>
+    `;
+    return;
+  }
+
+  const CATEGORY_ICONS = {
+    emotional: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 9.5c.5 1 1.5 1.5 2.5 1.5s2-.5 2.5-1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="6" cy="6.5" r="0.8" fill="currentColor"/><circle cx="10" cy="6.5" r="0.8" fill="currentColor"/></svg>`,
+    language:  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12M8 2c-1.5 2-1.5 8 0 12M8 2c1.5 2 1.5 8 0 12" stroke="currentColor" stroke-width="1.4"/></svg>`,
+    intent:    `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v4M8 10v4M2 8h4M10 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/></svg>`,
+    flow:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4v3a2 2 0 002 2h4a2 2 0 012 2v1M4 4h2M4 4H2M12 12h2M12 12h-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    custom:    `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="2" width="10" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`
+  };
+  const BR_BADGE_COLORS = { emotional: 'badge-danger', language: 'badge-success', intent: 'badge-info', flow: 'badge-purple', custom: 'badge-neutral' };
+
+  container.innerHTML = filtered.map(rule => {
+    const icon = CATEGORY_ICONS[rule.category] || CATEGORY_ICONS.custom;
+    const badgeColor = BR_BADGE_COLORS[rule.category] || 'badge-neutral';
+    const disabledClass = rule.enabled === false ? 'disabled' : '';
+
+    return `
+      <div class="knowledge-card ${disabledClass}" data-br-id="${rule.id}">
+        <div class="kc-accent ${rule.category}"></div>
+        <div class="kc-inner">
+          <div class="kc-type-icon ${rule.category}">${icon}</div>
+          <div class="kc-body">
+            <div class="kc-header">
+              <h4 class="kc-title">${escapeHtml(rule.title || 'Untitled')}</h4>
+              <span class="badge ${badgeColor}">${rule.category}</span>
+              ${rule.isDefault ? '<span class="badge badge-neutral" style="font-size:10px;">default</span>' : ''}
+              <div class="kc-toggle-wrap">
+                <label class="toggle-switch">
+                  <input type="checkbox" data-action="toggle-br" data-br-id="${rule.id}" ${rule.enabled !== false ? 'checked' : ''}>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <p class="kc-content">${escapeHtml((rule.rule || '').substring(0, 200))}</p>
+          </div>
+        </div>
+        <div class="kc-actions">
+          <button class="kc-action-btn" type="button" data-action="edit-br" data-br-id="${rule.id}" title="Edit">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M9 2l2 2-7 7H2V9l7-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="kc-action-btn delete" type="button" data-action="delete-br" data-br-id="${rule.id}" title="Delete">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 3.5h9M5 3.5V2.5h3v1M5.5 5.5v4M7.5 5.5v4M3 3.5l.5 7h6l.5-7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleBehaviorRule(ruleId, enabled) {
+  const rules = state.config?.behaviorRules || [];
+  const rule = rules.find(r => r.id === ruleId);
+  if (rule) {
+    rule.enabled = enabled;
+    rule.updatedAt = new Date().toISOString();
+    markDirty();
+    renderBehaviorRules();
+    renderPromptPreview();
+  }
+}
+
+function deleteBehaviorRule(ruleId) {
+  if (!confirm('Delete this behavior rule?')) return;
+  const rules = state.config?.behaviorRules || [];
+  state.config.behaviorRules = rules.filter(r => r.id !== ruleId);
+  markDirty();
+  renderBehaviorRules();
+  renderPromptPreview();
+}
+
+function editBehaviorRule(ruleId) {
+  const rules = state.config?.behaviorRules || [];
+  const rule = rules.find(r => r.id === ruleId);
+  if (!rule) return;
+
+  state.editingBrId = ruleId;
+  const modal = document.getElementById('modal-behavior-rule');
+  const titleEl = document.getElementById('br-modal-title');
+  if (titleEl) titleEl.textContent = 'Edit Behavior Rule';
+  if (modal) { modal.removeAttribute('hidden'); modal.classList.add('open'); }
+
+  setValue('br-title', rule.title || '');
+  setValue('br-category', rule.category || 'custom');
+  setValue('br-rule', rule.rule || '');
+}
+
+function openAddBrModal() {
+  state.editingBrId = null;
+  const modal = document.getElementById('modal-behavior-rule');
+  const titleEl = document.getElementById('br-modal-title');
+  if (titleEl) titleEl.textContent = 'Add Behavior Rule';
+  if (modal) { modal.removeAttribute('hidden'); modal.classList.add('open'); }
+
+  setValue('br-title', '');
+  setValue('br-category', 'custom');
+  setValue('br-rule', '');
+}
+
+function closeBrModal() {
+  const modal = document.getElementById('modal-behavior-rule');
+  if (modal) { modal.classList.remove('open'); modal.setAttribute('hidden', ''); }
+  state.editingBrId = null;
+}
+
+function saveBehaviorRule() {
+  const title = document.getElementById('br-title')?.value?.trim();
+  const category = document.getElementById('br-category')?.value || 'custom';
+  const rule = document.getElementById('br-rule')?.value?.trim();
+
+  if (!title) { showToast('error', 'Title is required'); return; }
+  if (!rule) { showToast('error', 'Rule instruction is required'); return; }
+
+  if (!state.config.behaviorRules) state.config.behaviorRules = [];
+
+  if (state.editingBrId) {
+    const existing = state.config.behaviorRules.find(r => r.id === state.editingBrId);
+    if (existing) {
+      existing.title = title;
+      existing.category = category;
+      existing.rule = rule;
+      existing.updatedAt = new Date().toISOString();
+    }
+  } else {
+    state.config.behaviorRules.push({
+      id: 'br_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6),
+      title,
+      rule,
+      category,
+      enabled: true,
+      isDefault: false,
+      priority: state.config.behaviorRules.length,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  markDirty();
+  renderBehaviorRules();
+  renderPromptPreview();
+  closeBrModal();
+  showToast('success', state.editingBrId ? 'Rule updated' : 'Rule added');
+}
+
 // ── Prompt Preview ───────────────────────────────────────────────────────
 
 function renderPromptPreview() {
@@ -546,6 +749,17 @@ function composeSystemPromptLocal(config, channel) {
     parts.push('\n=== END KNOWLEDGE BASE ===');
   }
 
+  // Behavior rules
+  const behaviorRules = (config.behaviorRules || []).filter(r => r.enabled !== false && r.rule?.trim());
+  if (behaviorRules.length > 0) {
+    parts.push('\n=== BEHAVIOR RULES ===');
+    parts.push('Follow these rules when handling edge cases and difficult situations:');
+    for (const br of behaviorRules) {
+      parts.push(`\u2022 ${br.rule.trim()}`);
+    }
+    parts.push('=== END BEHAVIOR RULES ===');
+  }
+
   const maxTurns = config.activation?.maxTurnsPerSession || 10;
   parts.push(`\nYou have a maximum of ${maxTurns} turns. If unresolved, escalate to a human agent.`);
 
@@ -568,6 +782,20 @@ function setupConfigTabs() {
       document.querySelectorAll('.config-section').forEach(s => s.classList.remove('active'));
       const section = document.getElementById(`config-${target}`);
       if (section) section.classList.add('active');
+
+      // Swap center column: Knowledge Cards vs Behavior Rules
+      const knowledgeCol = document.getElementById('knowledge-cards-column');
+      const behaviorCol = document.getElementById('behavior-rules-column');
+      if (knowledgeCol && behaviorCol) {
+        if (target === 'behavior') {
+          knowledgeCol.style.display = 'none';
+          behaviorCol.style.display = '';
+          renderBehaviorRules();
+        } else {
+          knowledgeCol.style.display = '';
+          behaviorCol.style.display = 'none';
+        }
+      }
     });
   });
 }
@@ -579,6 +807,17 @@ function setupFilterChips() {
       document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       renderKnowledgeCards();
+    });
+  });
+}
+
+function setupBrFilterChips() {
+  document.querySelectorAll('[data-br-filter]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      state.activeBrFilter = chip.dataset.brFilter;
+      document.querySelectorAll('[data-br-filter]').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      renderBehaviorRules();
     });
   });
 }
@@ -815,6 +1054,34 @@ function setupEventListeners() {
   // Modal overlay click to close
   document.getElementById('modal-add-card')?.addEventListener('click', (e) => {
     if (e.target.id === 'modal-add-card') closeModal();
+  });
+
+  // ── Behavior Rules ──
+  document.getElementById('btn-add-behavior-rule')?.addEventListener('click', openAddBrModal);
+
+  // Event delegation for behavior rule cards
+  const brList = document.getElementById('behavior-rules-list');
+  if (brList) {
+    brList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'edit-br') editBehaviorRule(btn.dataset.brId);
+      if (action === 'delete-br') deleteBehaviorRule(btn.dataset.brId);
+    });
+    brList.addEventListener('change', (e) => {
+      const el = e.target.closest('[data-action="toggle-br"]');
+      if (!el) return;
+      toggleBehaviorRule(el.dataset.brId, el.checked);
+    });
+  }
+
+  // Behavior rule modal
+  document.getElementById('br-modal-close')?.addEventListener('click', closeBrModal);
+  document.getElementById('br-modal-cancel')?.addEventListener('click', closeBrModal);
+  document.getElementById('br-modal-save')?.addEventListener('click', saveBehaviorRule);
+  document.getElementById('modal-behavior-rule')?.addEventListener('click', (e) => {
+    if (e.target.id === 'modal-behavior-rule') closeBrModal();
   });
 
   // ── Preview ──

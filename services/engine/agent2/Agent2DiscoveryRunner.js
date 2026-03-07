@@ -31,11 +31,14 @@
  * │    - Keywords, phrases, negative keywords                              │
  * │    - PRIMARY PATH (instant response, pre-recorded audio)               │
  * │                                                                         │
- * │ 4. GREETING FALLBACK (if detected but no trigger matched)              │
+ * │ 4. GREETING (if detected but no trigger matched)                        │
  * │    - Uses greeting response from step 2                                │
  * │                                                                         │
- * │ 5. LLM AGENT FALLBACK (if nothing matched)                              │
- * │    - Claude-powered intelligent response (per-company config)          │
+ * │ 5. LLM AGENT — 123RP TIER 2 (if nothing matched)                      │
+ * │    - Claude-powered AI intelligence (NOT a fallback)                   │
+ * │                                                                         │
+ * │ 6. FALLBACK — 123RP TIER 3 (safety net)                               │
+ * │    - Deterministic fallback if Tier 1 + Tier 2 cannot respond          │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * HARD RULES (V119):
@@ -53,8 +56,8 @@
  * 5. Greeting fallback (V125 - if greeting detected but no trigger)
  * 6. Scenario engine fallback (ONLY if playbook.useScenarioFallback=true)
  * 7. Captured reason acknowledgment (if reason extracted but no match)
- * 8. LLM Agent fallback (Claude — per-company config, one-shot per turn)
- * 9. Generic fallback (last resort if LLM Agent disabled/failed)
+ * 8. 123RP Tier 2: LLM Agent (Claude — per-company config, one-shot per turn)
+ * 9. 123RP Tier 3: Fallback (safety net if Tier 2 disabled/failed)
  *
  * Raw Events Emitted (MANDATORY - proof trail):
  * - A2_GATE               : Entry proof (enabled, uiBuild, configHash, legacyBlocked)
@@ -93,6 +96,7 @@ const { ScrabEngine } = require('../../ScrabEngine');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, composeSystemPrompt } = require('../../../config/llmAgentDefaults');
+const { RESPONSE_TIER, build123rpMeta } = require('../../../config/ResponseProtocol');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -240,7 +244,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
 }
 
 /**
- * Call LLM Agent for no-trigger-match fallback.
+ * 123RP Tier 2: Call LLM Agent when no trigger card matches (AI intelligence layer).
  * When no trigger card matches the caller's input, the LLM Agent steps in
  * to understand what the caller needs and provide an intelligent response.
  * After responding, control returns to the normal discovery pipeline — the
@@ -289,7 +293,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const basePrompt = composeSystemPrompt(config, channel || 'call');
     const noMatchContext = [
       '\n=== NO-MATCH CONTEXT ===',
-      'No trigger card matched the caller\'s input. You are stepping in as the intelligent fallback.',
+      'No trigger card matched the caller\'s input. You are Tier 2 of the 123 Response Protocol — the AI intelligence layer.',
       `The caller said: "${input}"`,
       capturedReason ? `Detected intent/reason: "${capturedReason}"` : 'No specific call reason was detected.',
       `This is turn ${turn || 'unknown'} of the conversation.`,
@@ -309,7 +313,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const maxTokens = config.model?.maxTokens || 300;
 
     emit('A2_LLM_AGENT_CALLED', {
-      mode: 'NO_MATCH_FALLBACK',
+      mode: 'TIER_2_NO_MATCH',
       model: modelId,
       inputPreview: input?.substring(0, 80),
       capturedReason: capturedReason?.substring(0, 80) || null,
@@ -340,7 +344,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     if (!res.ok) {
       const errText = await res.text().catch(() => 'unknown');
       logger.error('[LLM_AGENT] Anthropic API error (no-match)', { status: res.status, body: errText?.substring(0, 200) });
-      emit('A2_LLM_AGENT_ERROR', { mode: 'NO_MATCH_FALLBACK', status: res.status, latencyMs });
+      emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_NO_MATCH', status: res.status, latencyMs });
       return null;
     }
 
@@ -357,7 +361,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     }
 
     emit('A2_LLM_AGENT_RESPONSE', {
-      mode: 'NO_MATCH_FALLBACK',
+      mode: 'TIER_2_NO_MATCH',
       latencyMs,
       model: modelId,
       tokensInput: tokensUsed.input,
@@ -369,8 +373,8 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
 
   } catch (error) {
     logger.error('[LLM_AGENT] No-match call failed', { error: error.message });
-    emit('A2_LLM_AGENT_ERROR', { mode: 'NO_MATCH_FALLBACK', error: error.message });
-    return null; // Graceful fallback — deterministic paths will handle it
+    emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_NO_MATCH', error: error.message });
+    return null; // Graceful degradation to Tier 3 — deterministic paths will handle it
   }
 }
 
@@ -2630,6 +2634,9 @@ class Agent2DiscoveryRunner {
       rule: 'First match by priority wins. Only ONE card can be selected per turn.'
     });
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 123RP TIER 1: DETERMINISTIC MATCH (Trigger Card)
+    // ══════════════════════════════════════════════════════════════════════════
     if (triggerResult.matched && triggerResult.card) {
       const card = triggerResult.card;
       const cardAnswer = card.answer || {};
@@ -2688,6 +2695,8 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: 'TRIGGER_CARD_LLM',
           reason: `Matched LLM card: ${card.label || card.id}`,
+          _123rpTier: RESPONSE_TIER.TIER_1,
+          _123rpLabel: 'DETERMINISTIC',
           matchType: triggerResult.matchType,
           matchedOn: triggerResult.matchedOn,
           cardId: card.id,
@@ -2758,6 +2767,7 @@ class Agent2DiscoveryRunner {
           _triggerPoolCount: triggerCards?.length ?? null,
           _exitReason: null,
           _fallbackUsed: null,
+          _123rp: build123rpMeta('TRIGGER_CARD_LLM'),
           uiPath: `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}].llmFactPack`
         };
       }
@@ -2804,6 +2814,8 @@ class Agent2DiscoveryRunner {
       emit('A2_PATH_SELECTED', {
         path: 'TRIGGER_CARD',
         reason: `Matched card: ${card.label || card.id}`,
+        _123rpTier: RESPONSE_TIER.TIER_1,
+        _123rpLabel: 'DETERMINISTIC',
         matchType: triggerResult.matchType,
         matchedOn: triggerResult.matchedOn,
         cardId: card.id,
@@ -2891,6 +2903,7 @@ class Agent2DiscoveryRunner {
         _triggerPoolCount: triggerCards?.length ?? null,
         _exitReason: null,
         _fallbackUsed: null,
+        _123rp: build123rpMeta('TRIGGER_CARD_ANSWER'),
         uiPath: `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}]`
       };
     }
@@ -2985,7 +2998,8 @@ class Agent2DiscoveryRunner {
             return {
               response,
               matchSource: 'AGENT2_DISCOVERY',
-              state: nextState
+              state: nextState,
+              _123rp: build123rpMeta('CLARIFIER_ASKED'),
             };
           }
         }
@@ -3157,7 +3171,7 @@ class Agent2DiscoveryRunner {
       
     } else {
       // ══════════════════════════════════════════════════════════════════════════
-      // ✅ V125: GREETING FALLBACK (if greeting detected but no trigger matched)
+      // 123RP TIER 1: DETERMINISTIC MATCH (Greeting Response)
       // ══════════════════════════════════════════════════════════════════════════
       // If greeting was detected earlier AND no trigger matched, use greeting response.
       // This handles pure greetings like "hi" or "hello" without business intent.
@@ -3168,6 +3182,8 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: 'GREETING_ONLY',
           reason: 'Greeting detected, no trigger matched, using greeting response',
+          _123rpTier: RESPONSE_TIER.TIER_1,
+          _123rpLabel: 'DETERMINISTIC',
           greetingRuleId: nextState.agent2.discovery.lastGreetingRuleId
         });
         
@@ -3200,21 +3216,25 @@ class Agent2DiscoveryRunner {
             response: null,
             matchSource: 'AGENT2_DISCOVERY',
             state: nextState,
-            audioUrl: greetingAudioUrl
+            audioUrl: greetingAudioUrl,
+            _123rp: build123rpMeta('GREETING_ONLY'),
           };
         }
 
         return {
           response: greetingResponse,
           matchSource: 'AGENT2_DISCOVERY',
-          state: nextState
+          state: nextState,
+          _123rp: build123rpMeta('GREETING_ONLY'),
         };
       }
       
-      // ──────────────────────────────────────────────────────────────────────
-      // PATH 4+: LLM AGENT FALLBACK (Claude — Per-Company Config)
-      // ──────────────────────────────────────────────────────────────────────
+      // ══════════════════════════════════════════════════════════════════════════
+      // 123RP TIER 2: LLM AGENT (Claude — Per-Company Config)
+      // ══════════════════════════════════════════════════════════════════════════
       // When no trigger matches, the LLM Agent (Claude) steps in for ONE turn.
+      // This is TIER 2 intelligence — NOT a fallback. It is the AI handling
+      // the conversation when deterministic matching cannot.
       // After responding, control returns to normal discovery pipeline.
       // The agent does NOT persist — triggers are tried again on the next turn.
       
@@ -3270,12 +3290,12 @@ class Agent2DiscoveryRunner {
       );
       
       // ────────────────────────────────────────────────────────────────
-      // LLM AGENT — Primary no-match fallback (replaces old OpenAI LLM)
+      // 123RP TIER 2: LLM Agent — Primary no-match intelligence
       // ────────────────────────────────────────────────────────────────
       // The LLM Agent (Claude) steps in when no trigger card matches.
       // It responds ONE time, then control returns to normal discovery.
       // It does NOT persist — only fires again if NEXT turn also misses.
-      // If disabled/failed → falls through to deterministic fallback.
+      // If disabled/failed → falls through to TIER 3 (Fallback).
       // ────────────────────────────────────────────────────────────────
       const llmAgentResult = await callLLMAgentForNoMatch({
         company,
@@ -3309,6 +3329,8 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: 'LLM_AGENT_NO_MATCH',
           reason: pathReason,
+          _123rpTier: RESPONSE_TIER.TIER_2,
+          _123rpLabel: 'LLM_AGENT',
           model: llmAgentResult.tokensUsed ? 'claude' : null,
           latencyMs: llmAgentResult.latencyMs,
           tokensInput: llmAgentResult.tokensUsed?.input,
@@ -3319,7 +3341,7 @@ class Agent2DiscoveryRunner {
           null, // LLM Agent generates dynamic text — no static UI path
           response,
           null,
-          'LLM Agent (Claude) — no-match fallback response'
+          '123RP Tier 2: LLM Agent (Claude) — AI intelligence response'
         ));
         emit('A2_RESPONSE_READY', {
           path: 'LLM_AGENT_NO_MATCH',
@@ -3332,17 +3354,17 @@ class Agent2DiscoveryRunner {
           latencyMs: llmAgentResult.latencyMs
         });
 
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('LLM_AGENT_NO_MATCH') };
       }
 
-      // LLM Agent didn't run (disabled) or failed — fall through to deterministic fallback
+      // 123RP: Tier 2 didn't run (disabled) or failed — fall through to Tier 3 (Fallback)
       // This preserves existing behavior for companies without LLM Agent enabled
     }
     
-    // ──────────────────────────────────────────────────────────────────────
-    // PATH 5: DETERMINISTIC FALLBACK (when scenario + LLM don't provide response)
-    // ──────────────────────────────────────────────────────────────────────
-    // These paths execute if we haven't returned yet (no scenario, no LLM success)
+    // ══════════════════════════════════════════════════════════════════════════
+    // 123RP TIER 3: FALLBACK (safety net when Tier 1 + Tier 2 cannot respond)
+    // ══════════════════════════════════════════════════════════════════════════
+    // These paths execute if we haven't returned yet (no trigger, no LLM success)
     
     if (response) {
       // Response already set by scenario path - skip fallback
@@ -3460,9 +3482,11 @@ class Agent2DiscoveryRunner {
         delete nextState.agent2.discovery.pendingQuestionWasComplex;
       }
       
-      emit('A2_PATH_SELECTED', { 
-        path: 'FALLBACK_WITH_REASON', 
+      emit('A2_PATH_SELECTED', {
+        path: 'FALLBACK_WITH_REASON',
         reason: pathReason,
+        _123rpTier: RESPONSE_TIER.TIER_3,
+        _123rpLabel: 'FALLBACK',
         capturedReasonPreview: clip(capturedReason, 60),
         capturedReasonRaw: clip(capturedReasonRaw, 60),
         sanitizedReason: capturedReason !== capturedReasonRaw,
@@ -3561,9 +3585,11 @@ class Agent2DiscoveryRunner {
         ? 'No card/scenario match, no reason, but just resolved pending (asking for more info)'
         : 'No card/scenario match and no call_reason_detail';
       
-      emit('A2_PATH_SELECTED', { 
-        path: 'FALLBACK_NO_REASON', 
+      emit('A2_PATH_SELECTED', {
+        path: 'FALLBACK_NO_REASON',
         reason: pathReason,
+        _123rpTier: RESPONSE_TIER.TIER_3,
+        _123rpLabel: 'FALLBACK',
         skippedGenericQuestion: skipGenericQuestion
       });
       // V125: SPEECH_SOURCE_SELECTED
@@ -3650,24 +3676,31 @@ class Agent2DiscoveryRunner {
       }
     }
 
-    // Determine what fallback was used for TURN_TRACE_SUMMARY
+    // 123RP: Determine response tier and fallback status for TURN_TRACE_SUMMARY
     const lastPath = nextState.agent2?.discovery?.lastPath || 'UNKNOWN';
+    const _123rp = build123rpMeta(lastPath);
+
+    // _fallbackUsed: Only set for TRUE Tier 3 fallbacks (backward compat).
+    // LLM Agent is Tier 2 intelligence — NOT a fallback.
     let fallbackUsed = null;
-    if (lastPath.includes('LLM_AGENT')) fallbackUsed = 'LLM_AGENT';
-    else if (lastPath.includes('LLM')) fallbackUsed = 'LLM_FALLBACK';
-    else if (lastPath.includes('GREETING')) fallbackUsed = 'GREETING';
-    else if (lastPath.includes('SCENARIO')) fallbackUsed = 'SCENARIO_ENGINE';
-    else if (lastPath.includes('CAPTURED_REASON')) fallbackUsed = 'CAPTURED_REASON_ACK';
-    else if (lastPath.includes('NO_MATCH')) fallbackUsed = 'GENERIC_FALLBACK';
+    if (_123rp.tier === RESPONSE_TIER.TIER_3) {
+      if (lastPath.includes('CAPTURED_REASON')) fallbackUsed = 'CAPTURED_REASON_ACK';
+      else if (lastPath.includes('NO_MATCH')) fallbackUsed = 'GENERIC_FALLBACK';
+    } else if (lastPath.includes('GREETING')) {
+      fallbackUsed = 'GREETING';
+    } else if (lastPath.includes('SCENARIO')) {
+      fallbackUsed = 'SCENARIO_ENGINE';
+    }
     
-    return { 
-      response, 
-      matchSource: 'AGENT2_DISCOVERY', 
+    return {
+      response,
+      matchSource: 'AGENT2_DISCOVERY',
       state: nextState,
       // TURN_TRACE_SUMMARY metadata
       _triggerPoolCount: typeof triggerCards !== 'undefined' ? triggerCards?.length : null,
       _exitReason: lastPath,
-      _fallbackUsed: fallbackUsed
+      _fallbackUsed: fallbackUsed,
+      _123rp,
     };
   }
 }
