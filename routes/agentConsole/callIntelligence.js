@@ -408,30 +408,53 @@ router.get('/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
     
-    const intelligence = await CallIntelligenceService.getCallIntelligence(callSid);
-    
-    if (!intelligence) {
-      return res.status(404).json({
-        success: false,
-        error: 'Intelligence not found for this call'
-      });
-    }
-
-    const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
-    const summary = await CallSummary.findOne({
-      $or: [{ twilioSid: callSid }, { callId: callSid }]
-    }).lean();
+    const [intelligence, transcript, summary] = await Promise.all([
+      CallIntelligenceService.getCallIntelligence(callSid),
+      CallTranscriptV2.findOne({ callSid }).lean(),
+      CallSummary.findOne({ $or: [{ twilioSid: callSid }, { callId: callSid }] }).lean()
+    ]);
 
     const turns = transcript?.turns || summary?.turns || [];
     const trace = transcript?.trace || summary?.events || [];
     const callContext = buildCallContext(turns, trace);
 
-    const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
-    payload.callContext = callContext;
+    // If GPT-4 analysis exists, merge callContext and return
+    if (intelligence) {
+      const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
+      payload.callContext = callContext;
+      return res.json({ success: true, intelligence: payload });
+    }
 
-    res.json({
-      success: true,
-      intelligence: payload
+    // No GPT-4 analysis yet — return trace-based callContext so admin can
+    // still see turn-by-turn flow + 123RP tier data without waiting for analysis.
+    if (turns.length > 0 || trace.length > 0) {
+      return res.json({
+        success: true,
+        intelligence: {
+          callSid,
+          companyId: transcript?.companyId || summary?.companyId || null,
+          status: 'trace_only',
+          executiveSummary: 'GPT-4 analysis not yet run. Turn-by-turn trace data shown below.',
+          topIssue: 'Not analyzed',
+          issueCount: 0,
+          criticalIssueCount: 0,
+          issues: [],
+          recommendations: [],
+          callMetadata: {
+            duration: summary?.durationSeconds || 0,
+            turns: summary?.turnCount || turns.filter(t => t.speaker === 'caller').length || 0,
+            fromPhone: summary?.phone || null,
+            startTime: summary?.startedAt || transcript?.firstTurnTs || null,
+            routingTier: summary?.routingTier || null
+          },
+          callContext
+        }
+      });
+    }
+
+    return res.status(404).json({
+      success: false,
+      error: 'No trace data or intelligence found for this call'
     });
   } catch (error) {
     console.error('Error getting intelligence:', error);

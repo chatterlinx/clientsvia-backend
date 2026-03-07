@@ -1194,6 +1194,13 @@
           fullLabel: 'PERFORMING WELL',
           className: 'status-success'
         };
+      case 'trace_only':
+        return {
+          icon: '🔍',
+          label: 'TRACE ONLY',
+          fullLabel: 'TRACE DATA (GPT-4 NOT RUN)',
+          className: 'status-trace'
+        };
       case 'not_analyzed':
         return {
           icon: '⚪',

@@ -319,6 +319,15 @@ body {
   color: #4B5563;
 }
 
+.intelligence-cell.status-trace {
+  background: #EDE9FE;
+  border-left-color: #7C3AED;
+}
+
+.status-trace .status-text {
+  color: #5B21B6;
+}
+
 .intelligence-summary {
   font-size: 0.75rem;
   color: #6B7280;
