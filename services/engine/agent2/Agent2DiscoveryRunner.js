@@ -866,9 +866,24 @@ class Agent2DiscoveryRunner {
     const pfuqTurn = nextState.agent2?.discovery?.pendingFollowUpQuestionTurn;
     const pfuqSource = nextState.agent2?.discovery?.pendingFollowUpQuestionSource || null;
     const hasPFUQ = pfuq && typeof pfuqTurn === 'number';
-    const isRespondingToPFUQ = hasPFUQ && pfuqTurn === (turn - 1);
+    // Allow ±1 turn tolerance: bridge ghost turns (actionOnEmptyResult) increment
+    // the counter without real caller speech, so pfuqTurn may be turn-2 instead of turn-1
+    const isRespondingToPFUQ = hasPFUQ && (turn - pfuqTurn) >= 1 && (turn - pfuqTurn) <= 2;
 
-    if (isRespondingToPFUQ) {
+    // Ghost turn guard: if PFUQ is active but input is empty (bridge timeout
+    // Gather with actionOnEmptyResult:true), bump pfuqTurn forward instead of
+    // consuming the consent gate with an empty input.
+    const inputTrimmed = (input || '').trim();
+    if (isRespondingToPFUQ && inputTrimmed.length === 0) {
+      nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn;
+      emit('PFUQ_GHOST_TURN_SKIPPED', {
+        reason: 'Empty input (bridge ghost turn) — preserving PFUQ for next real turn',
+        question: clip(pfuq, 60),
+        pfuqTurn,
+        currentTurn: turn
+      });
+      // Fall through to normal pipeline which will handle the empty input
+    } else if (isRespondingToPFUQ) {
       emit('PFUQ_SCRABENGINE_BYPASSED', {
         reason: 'Pending follow-up question active — skipping ScrabEngine, routing to Consent Card classifier',
         question: clip(pfuq, 60),
@@ -1571,8 +1586,10 @@ class Agent2DiscoveryRunner {
     const pendingQuestionTurn = nextState.agent2.discovery.pendingQuestionTurn || null;
     const pendingQuestionSource = nextState.agent2.discovery.pendingQuestionSource || null;
     const hasPendingQuestion = pendingQuestion && typeof pendingQuestionTurn === 'number';
-    const isRespondingToPending = hasPendingQuestion && pendingQuestionTurn === (turn - 1);
-    
+    // Allow ±1 turn tolerance: bridge ghost turns (actionOnEmptyResult) increment
+    // the counter without real caller speech, so pendingQuestionTurn may be turn-2
+    const isRespondingToPending = hasPendingQuestion && (turn - pendingQuestionTurn) >= 1 && (turn - pendingQuestionTurn) <= 2;
+
     // V127: Build pendingInfo object for logging and state management
     // This was previously undefined causing "pendingInfo is not defined" crashes
     const pendingInfo = hasPendingQuestion ? {
@@ -1581,15 +1598,26 @@ class Agent2DiscoveryRunner {
       source: pendingQuestionSource,
       cardId: pendingQuestionSource?.startsWith('card:') ? pendingQuestionSource.replace('card:', '') : null
     } : null;
-    
+
     // Check if this is a scheduling-related pending question
     const isSchedulingQuestion = pendingQuestion && (
       /schedule|book|appointment|service today/i.test(pendingQuestion) ||
       pendingQuestionSource?.includes('card:') ||
       pendingQuestionSource === 'fallback.clarifier'
     );
-    
-    if (isRespondingToPending) {
+
+    // Ghost turn guard: if pending question is active but input is empty
+    // (bridge timeout Gather with actionOnEmptyResult:true), bump turn forward
+    // to preserve the pending question for the next real caller turn.
+    if (isRespondingToPending && (input || '').trim().length === 0) {
+      nextState.agent2.discovery.pendingQuestionTurn = turn;
+      emit('PQ_GHOST_TURN_SKIPPED', {
+        reason: 'Empty input (bridge ghost turn) — preserving pending question for next real turn',
+        question: clip(pendingQuestion, 60),
+        pendingQuestionTurn,
+        currentTurn: turn
+      });
+    } else if (isRespondingToPending) {
       // ────────────────────────────────────────────────────────────────────────
       // STEP 1: Classify the user's response as YES / NO / MICRO / OTHER
       // ────────────────────────────────────────────────────────────────────────
