@@ -4206,7 +4206,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     const pendingQ = callState?.agent2?.discovery?.pendingQuestion || null;
     const pendingQTurn = callState?.agent2?.discovery?.pendingQuestionTurn;
-    const isRespondingToPendingYesNo = !!pendingQ && typeof pendingQTurn === 'number' && pendingQTurn === (turnNumber - 1);
+    const pendingFUQ = callState?.agent2?.discovery?.pendingFollowUpQuestion || null;
+    const pendingFUQTurn = callState?.agent2?.discovery?.pendingFollowUpQuestionTurn;
+    // Disable bridge when caller is responding to a pending question (legacy PQ or PFUQ)
+    // Use ±2 turn tolerance to account for ghost turns that bump the turn counter
+    const isRespondingToPendingYesNo = !!pendingQ && typeof pendingQTurn === 'number' &&
+      (turnNumber - pendingQTurn) >= 1 && (turnNumber - pendingQTurn) <= 2;
+    const isRespondingToPFUQ = !!pendingFUQ && typeof pendingFUQTurn === 'number' &&
+      (turnNumber - pendingFUQTurn) >= 1 && (turnNumber - pendingFUQTurn) <= 2;
     const isAlreadyTransferLane = (callState?.sessionMode === 'TRANSFER');
 
     const mayBridge =
@@ -4217,6 +4224,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       bridgeHardCapMs >= bridgeThresholdMs &&
       bridgeMaxPerCall > 0 &&
       !isRespondingToPendingYesNo &&
+      !isRespondingToPFUQ &&
       !isAlreadyTransferLane;
 
     const computeTurnPromise = (async () => {
@@ -4377,6 +4385,114 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (wasPatienceMode && !speechIsEmpty) {
         callState.agent2.discovery.patienceMode = false;
         callState.agent2.discovery.patienceCheckinCount = 0;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // GHOST TURN GUARD — Empty-input from bridge timeout with pending question
+      // ═══════════════════════════════════════════════════════════════════════════
+      // When bridge timeout fires actionOnEmptyResult:true, it creates a ghost
+      // turn with empty speechResult. If there's a pending follow-up question
+      // (PFUQ) or legacy pending question (PQ) waiting for the caller's response,
+      // skip the full pipeline (no bridge, no runtime, no ScrabEngine) and just
+      // re-open the listener. Bump the pending question turn forward so it
+      // survives for the next real turn.
+      // ═══════════════════════════════════════════════════════════════════════════
+      const ghostPFUQ = callState?.agent2?.discovery?.pendingFollowUpQuestion || null;
+      const ghostPFUQTurn = callState?.agent2?.discovery?.pendingFollowUpQuestionTurn;
+      const ghostPQ = callState?.agent2?.discovery?.pendingQuestion || null;
+      const ghostPQTurn = callState?.agent2?.discovery?.pendingQuestionTurn;
+      const hasAnyPendingQ = !!ghostPFUQ || !!ghostPQ;
+
+      if (speechIsEmpty && hasAnyPendingQ) {
+        // Bump pending question turns forward so they survive for the next real turn
+        if (ghostPFUQ && typeof ghostPFUQTurn === 'number') {
+          callState.agent2.discovery.pendingFollowUpQuestionTurn = turnNumber;
+        }
+        if (ghostPQ && typeof ghostPQTurn === 'number') {
+          callState.agent2.discovery.pendingQuestionTurn = turnNumber;
+        }
+
+        logger.info('[V2TWILIO] GHOST_TURN_EARLY_EXIT — empty input with pending question, skipping pipeline', {
+          callSid: callSid?.slice(-8),
+          turnNumber,
+          hasPFUQ: !!ghostPFUQ,
+          hasPQ: !!ghostPQ,
+          pfuqTurnBumped: ghostPFUQ ? `${ghostPFUQTurn} → ${turnNumber}` : null,
+          pqTurnBumped: ghostPQ ? `${ghostPQTurn} → ${turnNumber}` : null
+        });
+
+        // Trace event for Call Intelligence turn-by-turn
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'GHOST_TURN_EARLY_EXIT',
+            turn: turnNumber,
+            data: {
+              reason: 'Empty input (bridge ghost turn) — preserving pending question, skipping full pipeline',
+              hasPFUQ: !!ghostPFUQ,
+              hasPQ: !!ghostPQ,
+              pfuqTurnOriginal: ghostPFUQTurn,
+              pfuqTurnBumped: ghostPFUQ ? turnNumber : null,
+              pqTurnOriginal: ghostPQTurn,
+              pqTurnBumped: ghostPQ ? turnNumber : null,
+              pfuqText: typeof ghostPFUQ === 'string' ? ghostPFUQ.substring(0, 80) : null,
+              pqText: typeof ghostPQ === 'string' ? ghostPQ.substring(0, 80) : null
+            }
+          }).catch(() => {});
+        }
+
+        // Persist transcript trace for this ghost turn
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          await CallTranscriptV2.appendTurns(companyID, callSid, [
+            {
+              speaker: 'system',
+              kind: 'GHOST_TURN_SKIPPED',
+              text: `Ghost turn skipped — empty input, pending question preserved for next real turn`,
+              turnNumber,
+              ts: new Date(),
+              sourceKey: 'ghost_guard',
+              trace: {
+                hasPFUQ: !!ghostPFUQ,
+                hasPQ: !!ghostPQ,
+                pfuqText: typeof ghostPFUQ === 'string' ? ghostPFUQ.substring(0, 80) : null
+              }
+            }
+          ], { from: fromNumber || null, to: req.body.To || null });
+        } catch (mongoErr) {
+          logger.warn('[V2TWILIO] Failed to persist ghost turn trace', {
+            callSid: callSid?.slice(-8), error: mongoErr.message
+          });
+        }
+
+        // Persist state with bumped turn numbers
+        if (redis && redisKey) {
+          try { await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 }); } catch (_) {}
+        }
+
+        // Return fresh Gather TwiML — silently re-open listener for caller
+        const twiml = new twilio.twiml.VoiceResponse();
+        const gather = twiml.gather({
+          input: 'speech',
+          action: `/api/twilio/v2-agent-respond/${companyID}`,
+          method: 'POST',
+          actionOnEmptyResult: true,
+          timeout: 7,
+          speechTimeout: 'auto',
+          speechModel: 'phone_call',
+          partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+          partialResultCallbackMethod: 'POST'
+        });
+        gather.say(''); // Silent — just listen for caller's response
+
+        return {
+          twimlString: twiml.toString(),
+          voiceProviderUsed: 'ghost_turn_skip',
+          responseText: '',
+          matchSource: 'GHOST_TURN_EARLY_EXIT',
+          timings: { totalMs: Date.now() - T0 }
+        };
       }
 
       // ═══════════════════════════════════════════════════════════════════════════
