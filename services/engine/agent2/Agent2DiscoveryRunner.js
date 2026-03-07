@@ -1698,9 +1698,9 @@ class Agent2DiscoveryRunner {
           wasBlocked: yesValidation.blocked
         });
         
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('PENDING_YES') };
       }
-      
+
       if (isNo) {
         // ══════════════════════════════════════════════════════════════════════
         // PATH: PENDING_QUESTION_NO — User declined
@@ -1764,9 +1764,9 @@ class Agent2DiscoveryRunner {
           wasBlocked: noValidation.blocked
         });
         
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('PENDING_NO') };
       }
-      
+
       if (needsReprompt) {
         // ══════════════════════════════════════════════════════════════════════
         // PATH: PENDING_QUESTION_REPROMPT — Garbage/unclear input, ask again
@@ -1835,9 +1835,9 @@ class Agent2DiscoveryRunner {
           wasBlocked: repromptValidation.blocked
         });
         
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('PENDING_REPROMPT') };
       }
-      
+
       // ══════════════════════════════════════════════════════════════════════
       // PATH: PENDING_QUESTION_COMPLEX — User gave a substantive but unclear response
       // ══════════════════════════════════════════════════════════════════════
@@ -1921,7 +1921,7 @@ class Agent2DiscoveryRunner {
         source: 'style.robotChallenge'
       });
 
-      return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, audioUrl: audioUrl || null };
+      return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, audioUrl: audioUrl || null, _123rp: build123rpMeta('ROBOT_CHALLENGE') };
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -1974,7 +1974,8 @@ class Agent2DiscoveryRunner {
         return {
           response: handoffResponse,
           matchSource: 'AGENT2_DISCOVERY',
-          state: nextState
+          state: nextState,
+          _123rp: build123rpMeta('LLM_HANDOFF_CONFIRMED')
         };
       } else if (isNo) {
         // Caller declined — clear pending, offer alternative
@@ -2007,7 +2008,8 @@ class Agent2DiscoveryRunner {
         return {
           response: declineResponse,
           matchSource: 'AGENT2_DISCOVERY',
-          state: nextState
+          state: nextState,
+          _123rp: build123rpMeta('LLM_HANDOFF_DECLINED')
         };
       }
       // If neither YES nor NO, clear pending and fall through to normal processing
@@ -2056,7 +2058,8 @@ class Agent2DiscoveryRunner {
           response: patienceResponse,
           matchSource: 'AGENT2_DISCOVERY',
           state: nextState,
-          patienceMode: true
+          patienceMode: true,
+          _123rp: build123rpMeta('PATIENCE_MODE')
         };
       }
     }
