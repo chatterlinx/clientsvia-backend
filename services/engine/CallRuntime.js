@@ -635,7 +635,10 @@ class CallRuntime {
                 
                 // WHAT FALLBACK WAS USED (if any)
                 fallbackUsed: ownerResult._fallbackUsed || null,
-                
+
+                // 123RP — Response Protocol tier classification
+                _123rp: ownerResult._123rp || null,
+
                 // RESPONSE PROVENANCE - THE KEY QUESTION
                 responseSource: {
                     type: isUiOwned ? 'UI_OWNED' : 'HARDCODED',
@@ -660,11 +663,14 @@ class CallRuntime {
                 // SECTION TRAIL (for crash diagnosis)
                 sectionTrail: tracer?.getTrailString() || null,
                 
-                // VERDICT - One-liner for quick scanning
-                verdict: triggerCard ? `TRIGGER:${triggerCard.label || triggerCard.id}` :
-                         ownerResult.matchSource === 'AGENT2_DISCOVERY' ? 'AGENT2:LLM_OR_FALLBACK' :
-                         lane === 'BOOKING' ? 'BOOKING_ENGINE' :
-                         `FALLBACK:${ownerResult.matchSource}`
+                // VERDICT - One-liner for quick scanning (prefixed with tier tag)
+                verdict: (() => {
+                    const t = ownerResult._123rp ? `[T${ownerResult._123rp.tier}]` : '';
+                    if (triggerCard) return `${t}TRIGGER:${triggerCard.label || triggerCard.id}`;
+                    if (ownerResult.matchSource === 'AGENT2_DISCOVERY') return `${t}AGENT2:${ownerResult._123rp?.tierLabel || 'UNKNOWN'}`;
+                    if (lane === 'BOOKING') return `${t}BOOKING_ENGINE`;
+                    return `${t}FALLBACK:${ownerResult.matchSource}`;
+                })()
             });
 
             logger.info('[CALL_RUNTIME] Turn result', {
@@ -687,6 +693,7 @@ class CallRuntime {
                 matchSource: ownerResult.matchSource,
                 audioUrl: ownerResult.audioUrl || null,
                 triggerCard: ownerResult.triggerCard || null,
+                _123rp: ownerResult._123rp || null,
                 turnEventBuffer
             };
             

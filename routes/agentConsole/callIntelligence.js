@@ -112,7 +112,8 @@ function buildResponseContext(trace = []) {
     triggerMatched: triggerEval?.payload?.matched ?? null,
     matchedTriggerLabel: triggerEval?.payload?.cardLabel || null,
     matchedTriggerId: rawCardId,
-    matchedTriggerRuleId: ruleId
+    matchedTriggerRuleId: ruleId,
+    routingTier: traceSummary?.payload?._123rp || null
   };
 }
 
@@ -194,6 +195,12 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         source: responseReady?.payload?.source,
         usedCallerName: responseReady?.payload?.usedCallerName
       };
+    }
+
+    // 123RP — Extract routing tier from TURN_TRACE_SUMMARY
+    const turnTraceSummary = traceByKind.get(`${turnNum}:TURN_TRACE_SUMMARY`);
+    if (turnTraceSummary?.payload?._123rp) {
+      turnData.routingTier = turnTraceSummary.payload._123rp;
     }
 
     flowSteps.push(turnData);
@@ -485,7 +492,7 @@ router.get('/company/:companyId/list', async (req, res) => {
         .sort({ startedAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
-        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount events turns')
+        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns')
         .lean(),
       CallSummary.countDocuments(summaryQuery)
     ]);
@@ -498,7 +505,7 @@ router.get('/company/:companyId/list', async (req, res) => {
           .sort({ startedAt: -1 })
           .skip((pageNum - 1) * limitNum)
           .limit(limitNum)
-          .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount events turns')
+          .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns')
           .lean(),
         CallSummary.countDocuments(fallbackQuery)
       ]);
@@ -589,7 +596,14 @@ router.get('/company/:companyId/list', async (req, res) => {
     let items = summaries.map(summary => {
       const callSid = summary.twilioSid || summary.callId;
       const intel = intelligenceMap.get(callSid);
-      if (intel) return intel;
+      if (intel) {
+        // Merge routingTier from CallSummary into intelligence response
+        if (summary.routingTier) {
+          intel.callMetadata = intel.callMetadata || {};
+          intel.callMetadata.routingTier = summary.routingTier;
+        }
+        return intel;
+      }
 
       return {
         callSid,
@@ -608,7 +622,8 @@ router.get('/company/:companyId/list', async (req, res) => {
           duration: summary.durationSeconds || 0,
           turns: summary.turnCount || 0,
           fromPhone: summary.phone,
-          startTime: summary.startedAt
+          startTime: summary.startedAt,
+          routingTier: summary.routingTier || null
         }
       };
     });

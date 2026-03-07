@@ -1380,6 +1380,61 @@ input:disabled + .toggle-slider {
 }
 
 /* =============================================================================
+   TIER BADGES (123RP)
+   ============================================================================= */
+
+.tier-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.tier-1 {
+  background: #D1FAE5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+
+.tier-2 {
+  background: #DBEAFE;
+  color: #1E40AF;
+  border: 1px solid #93C5FD;
+}
+
+.tier-3 {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+}
+
+.tier-unknown {
+  background: #F3F4F6;
+  color: #6B7280;
+  border: 1px solid #D1D5DB;
+}
+
+.col-tier {
+  width: 120px;
+  text-align: center;
+}
+
+/* Tier step in turn-by-turn flow */
+.tier-step {
+  background: #F5F3FF;
+  border-left-color: #7C3AED;
+}
+
+/* Tier stat cards in banner */
+.tier-1-stat .stat-value { color: #065F46; }
+.tier-2-stat .stat-value { color: #1E40AF; }
+.tier-3-stat .stat-value { color: #991B1B; }
+
+/* =============================================================================
    RESPONSIVE
    ============================================================================= */
 

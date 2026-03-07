@@ -41,6 +41,9 @@
     statNeedsWork: document.getElementById('stat-needs-work'),
     statGood: document.getElementById('stat-good'),
     statMatchRate: document.getElementById('stat-match-rate'),
+    statTier1: document.getElementById('stat-tier1'),
+    statTier2: document.getElementById('stat-tier2'),
+    statTier3: document.getElementById('stat-tier3'),
 
     // Filters
     searchInput: document.getElementById('search-input'),
@@ -206,6 +209,7 @@
 
       renderCalls();
       updatePagination();
+      updateTierStats(state.calls);
     } catch (error) {
       console.error('[CallIntelligence UI] Failed to load calls:', error);
       showError(error.message);
@@ -286,7 +290,7 @@
     if (state.calls.length === 0) {
       DOM.callsTbody.innerHTML = `
         <tr class="empty-row">
-          <td colspan="8" class="empty-cell">
+          <td colspan="9" class="empty-cell">
             <p>No calls found</p>
           </td>
         </tr>
@@ -308,6 +312,9 @@
           <td class="col-from">${call.callMetadata.fromPhone || 'Unknown'}</td>
           <td class="col-duration">${formatDuration(call.callMetadata.duration)}</td>
           <td class="col-turns">${call.callMetadata.turns || 0}</td>
+          <td class="col-tier">
+            ${getTierBadge(call.callMetadata?.routingTier)}
+          </td>
           <td class="col-provenance">
             <span class="provenance-badge">✓ UI-Owned</span>
           </td>
@@ -479,6 +486,21 @@
               ${statusInfo.icon} ${statusInfo.fullLabel}
             </span>
           </div>
+          ${intel.callContext?.response?.routingTier ? `
+            <div class="overview-item">
+              <span class="overview-label">Routing Tier (123RP):</span>
+              <span class="overview-value">
+                ${getTierBadge(intel.callContext.response.routingTier.tier)}
+              </span>
+            </div>
+          ` : (intel.callMetadata?.routingTier ? `
+            <div class="overview-item">
+              <span class="overview-label">Routing Tier (123RP):</span>
+              <span class="overview-value">
+                ${getTierBadge(intel.callMetadata.routingTier)}
+              </span>
+            </div>
+          ` : '')}
         </div>
       </section>
     `;
@@ -598,7 +620,7 @@
         ${flow.map(turn => `
           <div class="turn-flow-card">
             <div class="turn-flow-header">
-              <h3>Turn ${turn.turnNumber}</h3>
+              <h3>Turn ${turn.turnNumber} ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''}</h3>
             </div>
 
             ${turn.callerInput ? `
@@ -748,6 +770,31 @@
                   <div class="step-detail full-width">
                     <span class="detail-label">Response Text:</span>
                     <pre class="code-block">${turn.agentResponse.text || 'N/A'}</pre>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.routingTier ? `
+              <div class="flow-step tier-step">
+                <div class="step-label">
+                  <span class="step-icon">🏷️</span>
+                  <strong>7. ROUTING TIER (123RP)</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Tier:</span>
+                    <span class="detail-value">
+                      ${getTierBadge(turn.routingTier.tier)}
+                    </span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Classification:</span>
+                    <span class="detail-value">${turn.routingTier.tierLabel || 'Unknown'}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Last Path:</span>
+                    <span class="detail-value"><code>${turn.routingTier.lastPath || 'Unknown'}</code></span>
                   </div>
                 </div>
               </div>
@@ -1092,6 +1139,38 @@
   // UTILITY FUNCTIONS
   // =============================================================================
 
+  function getTierBadge(tier) {
+    switch (tier) {
+      case 1: return '<span class="tier-badge tier-1">T1 DETERMINISTIC</span>';
+      case 2: return '<span class="tier-badge tier-2">T2 LLM AGENT</span>';
+      case 3: return '<span class="tier-badge tier-3">T3 FALLBACK</span>';
+      default: return '<span class="tier-badge tier-unknown">--</span>';
+    }
+  }
+
+  function getTierBadgeCompact(tierObj) {
+    if (!tierObj) return '';
+    switch (tierObj.tier) {
+      case 1: return '<span class="tier-badge tier-1">T1</span>';
+      case 2: return '<span class="tier-badge tier-2">T2</span>';
+      case 3: return '<span class="tier-badge tier-3">T3</span>';
+      default: return '';
+    }
+  }
+
+  function updateTierStats(calls) {
+    let t1 = 0, t2 = 0, t3 = 0;
+    for (const call of calls) {
+      const tier = call.callMetadata?.routingTier;
+      if (tier === 1) t1++;
+      else if (tier === 2) t2++;
+      else if (tier === 3) t3++;
+    }
+    if (DOM.statTier1) DOM.statTier1.textContent = t1;
+    if (DOM.statTier2) DOM.statTier2.textContent = t2;
+    if (DOM.statTier3) DOM.statTier3.textContent = t3;
+  }
+
   function getStatusInfo(status) {
     switch (status) {
       case 'critical':
@@ -1223,7 +1302,7 @@
   function showLoading() {
     DOM.callsTbody.innerHTML = `
       <tr class="loading-row">
-        <td colspan="8" class="loading-cell">
+        <td colspan="9" class="loading-cell">
           <div class="loading-spinner"></div>
           <p>Loading call intelligence...</p>
         </td>
@@ -1234,7 +1313,7 @@
   function showError(message = 'Failed to load calls. Please try again.') {
     DOM.callsTbody.innerHTML = `
       <tr class="error-row">
-        <td colspan="8" class="error-cell">
+        <td colspan="9" class="error-cell">
           <p>⚠️ ${message}</p>
           <button class="btn btn-primary" onclick="location.reload()">Retry</button>
         </td>

@@ -52,6 +52,18 @@
       <span class="stat-label">Match Rate</span>
       <span class="stat-value" id="stat-match-rate">-%</span>
     </div>
+    <div class="stat-card tier-1-stat">
+      <span class="stat-label">T1 Deterministic</span>
+      <span class="stat-value" id="stat-tier1">-</span>
+    </div>
+    <div class="stat-card tier-2-stat">
+      <span class="stat-label">T2 LLM Agent</span>
+      <span class="stat-value" id="stat-tier2">-</span>
+    </div>
+    <div class="stat-card tier-3-stat">
+      <span class="stat-label">T3 Fallback</span>
+      <span class="stat-value" id="stat-tier3">-</span>
+    </div>
   </section>
 
   <!-- Filters -->
@@ -94,6 +106,7 @@
             <th class="col-from">FROM</th>
             <th class="col-duration">DURATION</th>
             <th class="col-turns">TURNS</th>
+            <th class="col-tier">TIER</th>
             <th class="col-provenance">PROVENANCE</th>
             <th class="col-intelligence">INTELLIGENCE</th>
             <th class="col-callsid">CALLSID</th>
@@ -102,7 +115,7 @@
         <tbody id="calls-tbody">
           <!-- Rows populated by JavaScript -->
           <tr class="loading-row">
-            <td colspan="8" class="loading-cell">
+            <td colspan="9" class="loading-cell">
               <div class="loading-spinner"></div>
               <p>Loading call intelligence...</p>
             </td>

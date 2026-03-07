@@ -4527,9 +4527,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       if (callSid && companyID) {
         const CallSummary = require('../models/CallSummary');
+        const tier = runtimeResult?._123rp?.tier;
         CallSummary.findOneAndUpdate(
           { companyId: companyID, twilioSid: callSid },
-          { $set: { turnCount: turnNumber } },
+          {
+            $set: { turnCount: turnNumber },
+            ...(tier ? { $max: { routingTier: tier } } : {})
+          },
           { upsert: false }
         ).catch(err => {
           logger.warn('[V2TWILIO] Failed to update CallSummary turnCount (non-blocking)', {
