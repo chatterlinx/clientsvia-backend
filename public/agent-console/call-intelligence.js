@@ -1060,18 +1060,18 @@
   }
 
   function renderAnalysisFooter(intel) {
-    const gpt4 = intel.gpt4Analysis;
-    
+    const gpt4 = intel.gpt4Analysis || {};
+
     return `
       <footer class="analysis-footer">
         <p>
-          Analysis generated ${gpt4.enabled ? 'by GPT-4' : 'by rule-based engine'} 
+          Analysis generated ${gpt4.enabled ? 'by GPT-4' : (intel.status === 'trace_only' ? 'from trace data' : 'by rule-based engine')}
           on ${formatDate(intel.analyzedAt)}
         </p>
         ${gpt4.enabled ? `
           <p class="analysis-meta">
-            Model: ${gpt4.modelVersion} • 
-            Processing: ${gpt4.processingTime}ms • 
+            Model: ${gpt4.modelVersion} •
+            Processing: ${gpt4.processingTime}ms •
             Tokens: ${gpt4.tokensUsed}
           </p>
         ` : ''}
