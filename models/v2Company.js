@@ -3921,14 +3921,16 @@ const companySchema = new mongoose.Schema({
                 enabled: { type: Boolean, default: false },
                 // If processing crosses this threshold, we may send the bridge TwiML.
                 thresholdMs: { type: Number, default: 1100 },
-                // Soft cap: original hard cap for bridge redirects (when heartbeat is NOT alive)
+                // LEGACY: old hard cap (kept for backward compat, no longer drives decisions)
                 hardCapMs: { type: Number, default: 6000 },
-                // Absolute ceiling: max wait time even WITH healthy heartbeat (streaming safety valve)
-                maxCeilingMs: { type: Number, default: 25000 },
-                // Heartbeat silence threshold: if no heartbeat for this long, stream is dead
-                heartbeatSilenceMs: { type: Number, default: 3000 },
+                // Absolute ceiling: emergency-only safety stop (was 25s, now 15s)
+                maxCeilingMs: { type: Number, default: 15000 },
+                // Heartbeat silence threshold: stream dead if no heartbeat for this long
+                heartbeatSilenceMs: { type: Number, default: 5000 },
                 // Enable heartbeat-aware bridge cycling (hold messages while Claude streams)
                 heartbeatCyclingEnabled: { type: Boolean, default: true },
+                // Quiet window: ms of silence before first bridge audio plays (staged onset)
+                bridgeQuietWindowMs: { type: Number, default: 500 },
                 // Caps to prevent spam
                 maxBridgesPerCall: { type: Number, default: 2 },
                 maxRedirectAttempts: { type: Number, default: 2 },

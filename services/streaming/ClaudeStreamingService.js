@@ -52,7 +52,7 @@ const { FALLBACK_REASON_CODE } = require('../../config/ResponseProtocol');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const DEFAULTS = {
-  maxCeilingMs:       25000,  // Absolute max wait time (hard ceiling)
+  maxCeilingMs:       15000,  // Absolute max wait time — emergency-only safety stop (was 25s)
   heartbeatIntervalMs: 500,   // How often to update Redis heartbeat
   partialThreshold:    0.40,  // 40% of maxTokens = usable partial response
   partialMinChars:     40,    // Minimum chars for a partial to be deliverable

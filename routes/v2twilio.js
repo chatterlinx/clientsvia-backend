@@ -3498,16 +3498,35 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // HEARTBEAT-AWARE CAP LOGIC (123RP Bridge Control Unit)
+    // STAGED BRIDGE CONTROL UNIT (replaces old timer-based cap logic)
     // ═══════════════════════════════════════════════════════════════════════════
-    // OLD: capHit = attempt >= max || elapsed >= hardCap → transfer (dead T2)
-    // NEW: Check streaming heartbeat. If Claude is actively producing tokens,
-    //      override the soft cap and keep cycling hold messages. Only the absolute
-    //      ceiling (25s default) or a dead heartbeat triggers cap.
+    //
+    // ARCHITECTURE (agreed design — bridge timing overhaul):
+    //   T2 dispatches immediately on route decision.
+    //   Bridge is optional and reactive — heartbeat governs, not elapsed time.
+    //
+    //   0–500ms:  Silent quiet window (no audio to caller)
+    //   500ms:    First Redis check — deliver if ready
+    //   Not ready: Short hold messages (1–1.5s each, ElevenLabs cached audio)
+    //   Heartbeat alive: Keep cycling hold messages
+    //   Heartbeat silent 5s: Declare stall → recover
+    //   15s ceiling: Emergency-only safety stop
+    //
+    // THREE SEPARATE TIMING CONCEPTS (never blended):
+    //   A. LLM dispatch timing → immediate (handled in v2-agent-respond)
+    //   B. Bridge onset timing → quiet window, then short hold messages
+    //   C. T2 death detection → heartbeat silence threshold, NOT raw elapsed time
+    //
+    // WHAT WAS KILLED:
+    //   - hardCapMs as a decision-maker (legacy, kept in schema for compat only)
+    //   - maxRedirectAttempts as a cap (was cutting live responses)
+    //   - Twilio <Say> for hold lines (now uses BridgeAudioService cached audio)
+    //
     // ═══════════════════════════════════════════════════════════════════════════
-    const maxCeilingMs = Number.isFinite(bridgeCfg.maxCeilingMs) ? bridgeCfg.maxCeilingMs : 25000;
-    const heartbeatSilenceMs = Number.isFinite(bridgeCfg.heartbeatSilenceMs) ? bridgeCfg.heartbeatSilenceMs : 3000;
-    const heartbeatCyclingEnabled = bridgeCfg.heartbeatCyclingEnabled !== false; // default true
+    const maxCeilingMs = Number.isFinite(bridgeCfg.maxCeilingMs) ? bridgeCfg.maxCeilingMs : 15000;
+    const heartbeatSilenceMs = Number.isFinite(bridgeCfg.heartbeatSilenceMs) ? bridgeCfg.heartbeatSilenceMs : 5000;
+    const heartbeatCyclingEnabled = bridgeCfg.heartbeatCyclingEnabled !== false;
+    const bridgeQuietWindowMs = Number.isFinite(bridgeCfg.bridgeQuietWindowMs) ? bridgeCfg.bridgeQuietWindowMs : 500;
 
     // ── Check streaming heartbeat ───────────────────────────────────────────
     let heartbeatAlive = false;
@@ -3525,7 +3544,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       }
     }
 
-    // ── Check for partial/complete result from streaming ────────────────────
+    // ── Check for streaming result (fast path — deliver immediately) ────────
     let streamingResult = null;
     if (redis && callSid && token) {
       try {
@@ -3539,8 +3558,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       }
     }
 
-    // ── If streaming wrote a result directly, deliver it ────────────────────
-    // (ClaudeStreamingService writes to resultKey on completion)
+    // ── FAST PATH: Streaming result ready → deliver immediately ─────────────
     if (streamingResult && !cached?.twimlString) {
       const twiml = new twilio.twiml.VoiceResponse();
       twiml.say(escapeTwiML(streamingResult));
@@ -3560,6 +3578,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             heartbeatTokens: heartbeatData?.tokens || 0,
             elapsedMs,
             attempt,
+            deliveryPath: 'streaming_fast_path',
           }
         }).catch(() => {});
       }
@@ -3568,15 +3587,23 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       return res.send(twimlString);
     }
 
-    // ── Cap logic: three-tier decision ──────────────────────────────────────
-    // 1. Absolute ceiling (25s) → always cap (safety valve)
-    // 2. Soft cap (old hardCap 6s or maxAttempts) → cap ONLY if heartbeat dead
-    // 3. Heartbeat alive → keep cycling hold messages
+    // ── RECOVERY DECISION: heartbeat-governed, not timer-governed ────────────
+    //
+    // Decision matrix:
+    //   1. ceiling hit (15s)         → ALWAYS recover (emergency stop)
+    //   2. compute error             → ALWAYS recover (nothing to wait for)
+    //   3. heartbeat dead (5s silent)→ recover (T2 stalled)
+    //   4. heartbeat alive           → KEEP WAITING (T2 is working)
+    //   5. no heartbeat data yet     → keep waiting if within quiet window
+    //
+    // NOTE: hardCapMs and maxRedirectAttempts are INTENTIONALLY not used here.
+    // They were the old "dumb timer" that cut live responses. Heartbeat decides.
+    // ─────────────────────────────────────────────────────────────────────────
     const ceilingHit = typeof elapsedMs === 'number' && elapsedMs >= maxCeilingMs;
-    const softCapHit = attempt >= maxRedirectAttempts || (typeof elapsedMs === 'number' && elapsedMs >= hardCapMs);
-    const capHit = ceilingHit || cached?.error || (softCapHit && !heartbeatAlive);
+    const heartbeatStalled = heartbeatData && !heartbeatAlive; // had heartbeat, now silent
+    const shouldRecover = ceilingHit || cached?.error || heartbeatStalled;
 
-    if (capHit) {
+    if (shouldRecover) {
       // ── Before falling back, check for partial response ─────────────────
       let partialText = null;
       if (redis && callSid && token) {
@@ -3594,9 +3621,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         ? 'bridge_compute_failed'
         : ceilingHit
           ? 'bridge_ceiling_hit'
-          : !heartbeatAlive && heartbeatData
-            ? 'bridge_heartbeat_dead'
-            : 'bridge_soft_cap';
+          : 'bridge_heartbeat_dead';
 
       if (CallLogger && callSid) {
         await CallLogger.logEvent({
@@ -3606,14 +3631,14 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           turn: turnNumber,
           data: {
             attempt,
-            maxRedirectAttempts,
-            hardCapMs,
             maxCeilingMs,
+            heartbeatSilenceMs,
             elapsedMs,
             fallbackReason,
             heartbeatAlive,
             heartbeatTokens: heartbeatData?.tokens || 0,
             heartbeatStatus: heartbeatData?.status || null,
+            heartbeatAge: heartbeatData ? (Date.now() - heartbeatData.ts) : null,
             hasPartial: !!partialText,
             partialChars: partialText?.length || 0,
             error: cached?.error || null
@@ -3667,9 +3692,6 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       }
 
       // ── No partial: fall back to T3 pathway (Gather for next input) ───
-      // Instead of handleTransfer (which creates ghost turns), open a Gather
-      // so the caller can speak again. T3 fallback text comes from the
-      // regular discovery pipeline on the next turn.
       const twiml = new twilio.twiml.VoiceResponse();
       const fallbackText = "I'm sorry about the wait. Could you tell me a bit more about what you need help with?";
       const gather = twiml.gather({
@@ -3683,7 +3705,6 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       gather.say(escapeTwiML(fallbackText));
       twimlString = twiml.toString();
 
-      // Log the T3 fallback
       if (callSid) {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
@@ -3745,20 +3766,61 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NOT READY: Cycle hold message and redirect back to poll
+    // STAGED ONSET: T2 still working — cycle hold messages or stay silent
     // ═══════════════════════════════════════════════════════════════════════════
-    // When heartbeat is alive, cycle through bridge hold lines to keep the
-    // caller engaged. No redirect attempt cap when heartbeat is healthy.
-    const bridgeLines = bridgeCfg.lines || ['One moment please.'];
-    const usableLines = bridgeLines.filter(l => l && l.trim());
-    const lineIdx = (attempt - 1) % (usableLines.length || 1);
-    const holdLine = usableLines[lineIdx] || 'One moment please.';
-
+    //
+    // Attempt 1 (quiet window): 500ms silent <Pause> → fast poll back
+    //   - If T2 finishes in <500ms, next poll delivers instantly
+    //   - Caller hears a natural breath-pause, not robotic filler
+    //
+    // Attempt 2+: Short hold messages (1–1.5s) via BridgeAudioService
+    //   - ElevenLabs cached audio (consistent voice)
+    //   - Falls back to <Pause> if no cached audio (never <Say>)
+    //   - Cycles through configured bridge lines
+    //
+    // No redirect attempt cap when heartbeat is alive — heartbeat decides.
+    // ═══════════════════════════════════════════════════════════════════════════
     const redirectUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=${attempt}`;
     const twiml = new twilio.twiml.VoiceResponse();
-    // Say the hold line (cycles through available lines)
-    twiml.say(escapeTwiML(holdLine));
-    twiml.pause({ length: 1 });
+
+    if (attempt <= 1) {
+      // ── QUIET WINDOW: silent pause for fast-path delivery ─────────────
+      // Convert ms to seconds for Twilio <Pause>, minimum 1 second (Twilio floor)
+      const pauseSeconds = Math.max(1, Math.round(bridgeQuietWindowMs / 1000));
+      twiml.pause({ length: pauseSeconds });
+    } else {
+      // ── HOLD MESSAGE: short ElevenLabs cached audio ───────────────────
+      const bridgeLines = bridgeCfg.lines || ['One moment please.'];
+      const usableLines = bridgeLines.filter(l => l && l.trim());
+      const lineIdx = (attempt - 2) % (usableLines.length || 1); // -2 because attempt 1 was quiet
+      const holdLine = usableLines[lineIdx] || 'One moment please.';
+
+      // Use BridgeAudioService for consistent ElevenLabs voice
+      const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
+      const bridgeVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+      const holdAudioUrl = BridgeAudioService.getAudioUrl({
+        companyId: companyID,
+        text: holdLine,
+        voiceSettings: bridgeVoiceSettings,
+        hostHeader: req.get('host')
+      });
+
+      if (holdAudioUrl) {
+        twiml.play(holdAudioUrl);
+        voiceProviderUsed = 'elevenlabs_cached';
+      } else {
+        // No cached audio → silence (never <Say> — voice mismatch is worse than silence)
+        logger.warn('[V2 BRIDGE CONTINUE] No cached bridge audio — using <Pause>', {
+          callSid: callSid?.slice(-8),
+          companyId: companyID,
+          holdLine: holdLine.substring(0, 60),
+          attempt,
+        });
+        twiml.pause({ length: 1 });
+        voiceProviderUsed = 'silence';
+      }
+    }
+
     // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)
     twiml.redirect({ method: 'POST' }, redirectUrl);
     twimlString = twiml.toString();
