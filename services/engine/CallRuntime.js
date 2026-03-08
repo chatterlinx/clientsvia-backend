@@ -469,7 +469,9 @@ class CallRuntime {
                         userInput,
                         state,
                         emitEvent: bufferEvent,
-                        turn
+                        turn,
+                        bridgeToken: context.bridgeToken || null,
+                        redis: context.redis || null,
                     });
                     
                     bufferEvent('A2_MIC_OWNER_PROOF', {

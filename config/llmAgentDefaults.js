@@ -40,6 +40,16 @@ const DEFAULT_LLM_AGENT_SETTINGS = {
     silenceTimeoutMs: 8000                    // Silence before agent prompts caller
   },
 
+  // ── Backup Model (Package 5: 123RP resilience) ──────────────────────────
+  // If primary model fails (API error, not timeout), retry with faster backup.
+  // Only triggers on retryable failures — timeouts mean model was working.
+  backupModel: {
+    enabled: true,
+    modelId: 'claude-haiku-4-5-20251001',     // Same as primary default — fast, reliable
+    temperature: 0.5,                           // Slightly lower for reliability
+    maxTokens: 200                              // Shorter to ensure faster response
+  },
+
   // ── Guardrails ───────────────────────────────────────────────────────────
   guardrails: {
     noPiiCollection: true,                    // Agent must NOT collect PII

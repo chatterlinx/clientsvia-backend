@@ -96,7 +96,9 @@ const { ScrabEngine } = require('../../ScrabEngine');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, composeSystemPrompt } = require('../../../config/llmAgentDefaults');
-const { RESPONSE_TIER, build123rpMeta } = require('../../../config/ResponseProtocol');
+const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
+const { buildT3Context, validateT3Context } = require('./TierStateContract');
+const { streamWithHeartbeat, streamWithRetry } = require('../../streaming/ClaudeStreamingService');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -144,7 +146,7 @@ function deepMergeLLMAgent(target, source) {
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit }) {
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -182,6 +184,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
     const maxTokens = config.model?.maxTokens || 300;
 
     emit('A2_LLM_AGENT_CALLED', {
+      mode: 'TIER_2_FOLLOW_UP',
       bucket,
       model: modelId,
       followUpQuestion: followUpQuestion?.substring(0, 80),
@@ -189,59 +192,56 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       triggerSource
     });
 
-    const startMs = Date.now();
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: modelId,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: input }]
-      }),
-      signal: AbortSignal.timeout(6000) // 6s timeout — must not block calls
-    });
-
-    const latencyMs = Date.now() - startMs;
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => 'unknown');
-      logger.error('[LLM_AGENT] Anthropic API error', { status: res.status, body: errText?.substring(0, 200) });
-      emit('A2_LLM_AGENT_ERROR', { status: res.status, latencyMs });
-      return null;
-    }
-
-    const data = await res.json();
-    const responseText = data.content?.[0]?.text || '';
-    const tokensUsed = {
-      input: data.usage?.input_tokens || 0,
-      output: data.usage?.output_tokens || 0
-    };
-
-    if (!responseText) {
-      logger.warn('[LLM_AGENT] Empty response from Anthropic');
-      return null;
-    }
-
-    emit('A2_LLM_AGENT_RESPONSE', {
-      latencyMs,
+    // ── Streaming with heartbeat (replaces batch fetch + 6s AbortSignal) ──
+    const result = await streamWithHeartbeat({
+      apiKey,
       model: modelId,
-      tokensInput: tokensUsed.input,
-      tokensOutput: tokensUsed.output,
-      responsePreview: responseText.substring(0, 120)
+      maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: input }],
+      callSid,
+      turn,
+      token: bridgeToken,
+      redis,
+      emit,
     });
 
-    return { response: responseText, tokensUsed, latencyMs };
+    // Complete failure — no response at all
+    if (!result?.response) {
+      logger.warn('[LLM_AGENT] Follow-up streaming returned no response', {
+        failureReason: result?.failureReason,
+        latencyMs: result?.latencyMs,
+      });
+      emit('A2_LLM_AGENT_ERROR', {
+        mode: 'TIER_2_FOLLOW_UP',
+        failureReason: result?.failureReason,
+        latencyMs: result?.latencyMs,
+      });
+      return null;
+    }
+
+    // Success (full or partial)
+    emit('A2_LLM_AGENT_RESPONSE', {
+      mode: 'TIER_2_FOLLOW_UP',
+      latencyMs: result.latencyMs,
+      model: modelId,
+      tokensInput: result.tokensUsed?.input || 0,
+      tokensOutput: result.tokensUsed?.output || 0,
+      responsePreview: result.response.substring(0, 120),
+      wasPartial: result.wasPartial,
+    });
+
+    return {
+      response: result.response,
+      tokensUsed: result.tokensUsed || { input: 0, output: 0 },
+      latencyMs: result.latencyMs,
+      wasPartial: result.wasPartial,
+    };
 
   } catch (error) {
     logger.error('[LLM_AGENT] Follow-up call failed', { error: error.message });
-    emit('A2_LLM_AGENT_ERROR', { error: error.message });
+    emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_FOLLOW_UP', error: error.message });
     return null; // Tier 3: canned response will handle it
   }
 }
@@ -263,7 +263,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0 }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -282,6 +282,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const maxTurnsPerSession = config.activation?.maxTurnsPerSession ?? 10;
     if (llmTurnsThisCall >= maxTurnsPerSession) {
       logger.info('[LLM_AGENT] maxTurnsPerSession reached — skipping no-match agent', { llmTurnsThisCall, maxTurnsPerSession });
+      emit('A2_LLM_STREAM_FAILED', { reason: FALLBACK_REASON_CODE.T2_MAX_TURNS, turn, llmTurnsThisCall });
       return null;
     }
 
@@ -294,7 +295,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
 
     // Build system prompt with no-match context appended
     const basePrompt = composeSystemPrompt(config, channel || 'call');
-    const noMatchContext = [
+    const noMatchParts = [
       '\n=== NO-MATCH CONTEXT ===',
       'No trigger card matched the caller\'s input. You are Tier 2 of the 123 Response Protocol — the AI intelligence layer.',
       `The caller said: "${input}"`,
@@ -307,9 +308,26 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       'After you respond, the caller\'s next message will go back through normal trigger matching.',
       'You are handling THIS turn only — do not try to drive a multi-turn conversation.',
       '=== END NO-MATCH CONTEXT ==='
-    ].join('\n');
+    ];
 
-    const systemPrompt = basePrompt + noMatchContext;
+    // ── Cross-turn recovery context (Package 4) ─────────────────────────────
+    // If T3 fired last turn, enrich Claude with context about what happened
+    // so it can recover gracefully instead of starting from scratch.
+    if (t3RecoveryCtx) {
+      noMatchParts.push('');
+      noMatchParts.push('=== RECOVERY CONTEXT ===');
+      noMatchParts.push('The previous turn failed to respond properly (Tier 3 fallback fired).');
+      if (t3RecoveryCtx.intent) {
+        noMatchParts.push(`The caller\'s original intent was: "${t3RecoveryCtx.intent}"`);
+      }
+      if (t3RecoveryCtx.callerName) {
+        noMatchParts.push(`The caller\'s name is: ${t3RecoveryCtx.callerName}`);
+      }
+      noMatchParts.push('Prioritize acknowledging what happened and addressing their needs directly.');
+      noMatchParts.push('=== END RECOVERY CONTEXT ===');
+    }
+
+    const systemPrompt = basePrompt + noMatchParts.join('\n');
 
     const modelId = config.model?.modelId || 'claude-3-5-haiku-20241022';
     const temperature = config.model?.temperature ?? 0.7;
@@ -320,59 +338,62 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       model: modelId,
       inputPreview: input?.substring(0, 80),
       capturedReason: capturedReason?.substring(0, 80) || null,
-      turn
+      turn,
+      isRecovery: !!t3RecoveryCtx,
     });
 
-    const startMs = Date.now();
+    // ── Streaming with heartbeat (replaces batch fetch + 6s AbortSignal) ──
+    // Bridge config ceiling can be company-specific via opts.maxCeilingMs
+    const bridgeCfg = company?.voiceSettings?.agent2?.bridge || {};
+    const maxCeilingMs = bridgeCfg.maxCeilingMs || undefined;  // undefined = use service default (25s)
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: modelId,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: input }]
-      }),
-      signal: AbortSignal.timeout(6000) // 6s timeout — must not block calls
+    const result = await streamWithHeartbeat({
+      apiKey,
+      model: modelId,
+      maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: input }],
+      callSid,
+      turn,
+      token: bridgeToken,
+      redis,
+      emit,
+      ...(maxCeilingMs ? { maxCeilingMs } : {}),
     });
 
-    const latencyMs = Date.now() - startMs;
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => 'unknown');
-      logger.error('[LLM_AGENT] Anthropic API error (no-match)', { status: res.status, body: errText?.substring(0, 200) });
-      emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_NO_MATCH', status: res.status, latencyMs });
-      return null;
+    // Complete failure — no response at all
+    if (!result?.response) {
+      logger.warn('[LLM_AGENT] No-match streaming returned no response', {
+        failureReason: result?.failureReason,
+        latencyMs: result?.latencyMs,
+      });
+      emit('A2_LLM_AGENT_ERROR', {
+        mode: 'TIER_2_NO_MATCH',
+        failureReason: result?.failureReason,
+        latencyMs: result?.latencyMs,
+      });
+      // Return failure info so caller can set accurate t2FailureReason
+      return { response: null, failureReason: result?.failureReason || null };
     }
 
-    const data = await res.json();
-    const responseText = data.content?.[0]?.text || '';
-    const tokensUsed = {
-      input: data.usage?.input_tokens || 0,
-      output: data.usage?.output_tokens || 0
-    };
-
-    if (!responseText) {
-      logger.warn('[LLM_AGENT] Empty response from Anthropic (no-match)');
-      return null;
-    }
-
+    // Success (full or partial)
     emit('A2_LLM_AGENT_RESPONSE', {
       mode: 'TIER_2_NO_MATCH',
-      latencyMs,
+      latencyMs: result.latencyMs,
       model: modelId,
-      tokensInput: tokensUsed.input,
-      tokensOutput: tokensUsed.output,
-      responsePreview: responseText.substring(0, 120)
+      tokensInput: result.tokensUsed?.input || 0,
+      tokensOutput: result.tokensUsed?.output || 0,
+      responsePreview: result.response.substring(0, 120),
+      wasPartial: result.wasPartial,
     });
 
-    return { response: responseText, tokensUsed, latencyMs };
+    return {
+      response: result.response,
+      tokensUsed: result.tokensUsed || { input: 0, output: 0 },
+      latencyMs: result.latencyMs,
+      wasPartial: result.wasPartial,
+    };
 
   } catch (error) {
     logger.error('[LLM_AGENT] No-match call failed', { error: error.message });
@@ -707,7 +728,7 @@ class Agent2DiscoveryRunner {
    * @param {number} params.turn - Current turn number
    * @returns {Object|null} { response, matchSource, state } or null if disabled
    */
-  static async run({ company, companyId, callSid, userInput, state, emitEvent = null, turn = null }) {
+  static async run({ company, companyId, callSid, userInput, state, emitEvent = null, turn = null, bridgeToken = null, redis = null }) {
     const emit = (type, data) => {
       try {
         if (typeof emitEvent === 'function') emitEvent(type, data);
@@ -749,6 +770,30 @@ class Agent2DiscoveryRunner {
 
     // V119: ScenarioEngine is OFF by default
     const useScenarioFallback = playbook.useScenarioFallback === true;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 123RP CROSS-TURN MEMORY (Package 4A) — Recovery Detection
+    // ══════════════════════════════════════════════════════════════════════════
+    // If the previous turn was a T3 fallback, this turn is a recovery turn.
+    // Load the recovery context so T2 (LLM Agent) can be enriched with what
+    // happened last turn instead of starting from scratch.
+    // ══════════════════════════════════════════════════════════════════════════
+    const prevLastPath = state?.agent2?.discovery?.lastPath || null;
+    const prevTier = prevLastPath?.startsWith('FALLBACK_') ? 3 : null;
+    const isRecoveryTurn = prevTier === 3;
+    const t3RecoveryCtx = isRecoveryTurn
+      ? (state?.agent2?.discovery?.t3RecoveryContext || null)
+      : null;
+
+    if (isRecoveryTurn) {
+      emit('A2_RECOVERY_TURN', {
+        prevPath: prevLastPath,
+        consecutiveT3Count: t3RecoveryCtx?.consecutiveT3Count || 0,
+        prevIntent: t3RecoveryCtx?.intent ? clip(t3RecoveryCtx.intent, 60) : null,
+        prevCallerName: t3RecoveryCtx?.callerName || null,
+        turn,
+      });
+    }
 
     const input = `${userInput || ''}`.trim();
     const inputLower = input.toLowerCase();
@@ -800,6 +845,13 @@ class Agent2DiscoveryRunner {
     nextState.agent2 = safeObj(nextState.agent2, {});
     nextState.agent2.discovery = safeObj(nextState.agent2.discovery, {});
     nextState.agent2.discovery.turnLastRan = typeof turn === 'number' ? turn : null;
+
+    // 123RP Package 4C: Reset recovery counters at start of every turn.
+    // T3 section re-sets these if it fires. If T1/T2 succeeds (early return),
+    // the counters stay at 0 — consecutive streak is broken.
+    nextState.agent2.discovery.consecutiveT3Count = 0;
+    nextState.agent2.discovery.t3RecoveryContext = null;
+    nextState.agent2.discovery.t3Context = null;
     
     // ══════════════════════════════════════════════════════════════════════════
     // V5: LLM ASSIST STATE INITIALIZATION & COOLDOWN MANAGEMENT
@@ -1142,7 +1194,8 @@ class Agent2DiscoveryRunner {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
-            bucket, channel: 'call', emit
+            bucket, channel: 'call', emit,
+            callSid, turn, bridgeToken, redis,
           });
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -1165,7 +1218,8 @@ class Agent2DiscoveryRunner {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
-            bucket, channel: 'call', emit
+            bucket, channel: 'call', emit,
+            callSid, turn, bridgeToken, redis,
           });
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -1188,7 +1242,8 @@ class Agent2DiscoveryRunner {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
-            bucket, channel: 'call', emit
+            bucket, channel: 'call', emit,
+            callSid, turn, bridgeToken, redis,
           });
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -1210,7 +1265,8 @@ class Agent2DiscoveryRunner {
         const llmAgentResult = await callLLMAgentForFollowUp({
           company, input, followUpQuestion: pfuq,
           triggerSource: pfuqSource?.replace('card:', '') || null,
-          bucket, channel: 'call', emit
+          bucket, channel: 'call', emit,
+          callSid, turn, bridgeToken, redis,
         });
         if (llmAgentResult) {
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -3273,7 +3329,10 @@ class Agent2DiscoveryRunner {
       // the conversation when deterministic matching cannot.
       // After responding, control returns to normal discovery pipeline.
       // The agent does NOT persist — triggers are tried again on the next turn.
-      
+
+      // Hoisted so T3 state contract can access failure reason from T2
+      let llmAgentResult = null;
+
       // Track no-match count for this call
       const noMatchCount = (nextState.agent2.discovery.noMatchCount || 0) + 1;
       nextState.agent2.discovery.noMatchCount = noMatchCount;
@@ -3333,20 +3392,27 @@ class Agent2DiscoveryRunner {
       // It does NOT persist — only fires again if NEXT turn also misses.
       // If disabled/failed → falls through to TIER 3 (Fallback).
       // ────────────────────────────────────────────────────────────────
-      const llmAgentResult = await callLLMAgentForNoMatch({
+      llmAgentResult = await callLLMAgentForNoMatch({
         company,
         input,
         capturedReason,
         channel: 'call',
         turn,
         emit,
-        llmTurnsThisCall
+        llmTurnsThisCall,
+        callSid,
+        bridgeToken,
+        redis,
+        t3RecoveryCtx,  // Package 4B: cross-turn recovery context
       });
 
-      if (llmAgentResult) {
+      if (llmAgentResult?.response) {
         // LLM Agent handled this turn — set state and return
         nextState.agent2.discovery.lastPath = 'LLM_AGENT_NO_MATCH';
         nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
+        if (llmAgentResult.wasPartial) {
+          nextState.agent2.discovery.lastResponseWasPartial = true;
+        }
 
         // Use personalized ack if appropriate
         const { ack: llmAck, usedName: llmUsedName, usedGreeting: llmUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
@@ -3396,12 +3462,76 @@ class Agent2DiscoveryRunner {
       // 123RP: Tier 2 didn't run (disabled) or failed — fall through to Tier 3 (Fallback)
       // This preserves existing behavior for companies without LLM Agent enabled
     }
-    
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 123RP STATE CONTRACT — Preserve context for T3
+    // ══════════════════════════════════════════════════════════════════════════
+    // When T2 fails or is disabled, T3 MUST have all captured context.
+    // This contract ensures T3 never fires with amnesia.
+    // ══════════════════════════════════════════════════════════════════════════
+    const llmCfgRaw = company?.aiAgentSettings?.llmAgent || {};
+    const llmEnabled = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, llmCfgRaw)?.enabled === true;
+    // Use specific failure reason from streaming service if available,
+    // otherwise fall back to generic reason based on enabled state
+    const t2FailureReason = llmAgentResult?.failureReason
+      || (llmEnabled ? FALLBACK_REASON_CODE.T2_PROVIDER_ERROR : FALLBACK_REASON_CODE.T2_DISABLED);
+
+    const t3Context = buildT3Context(state, scrabResult, callerName, t2FailureReason);
+    nextState.agent2.discovery.t3Context = t3Context;
+
+    const t3Validation = validateT3Context(t3Context);
+    if (!t3Validation.valid) {
+      emit('T3_STATE_CONTRACT_WARNING', {
+        warnings: t3Validation.warnings,
+        t2FailureReason,
+        intent: t3Context.intent ? clip(t3Context.intent, 60) : null,
+        callerName: t3Context.callerName || null,
+        hasInput: !!t3Context.normalizedInput,
+        tokenCount: t3Context.expandedTokens?.length || 0,
+        turn
+      });
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // 123RP TIER 3: FALLBACK (safety net when Tier 1 + Tier 2 cannot respond)
     // ══════════════════════════════════════════════════════════════════════════
     // These paths execute if we haven't returned yet (no trigger, no LLM success)
-    
+
+    // ── T3 Recovery Tracking (Package 3C) ───────────────────────────────────
+    // Track consecutive T3 fires. If 3+ in a row, escalation is needed.
+    const prevConsecutiveT3 = nextState.agent2?.discovery?.consecutiveT3Count || 0;
+    const consecutiveT3Count = prevConsecutiveT3 + 1;
+    nextState.agent2.discovery.consecutiveT3Count = consecutiveT3Count;
+    nextState.agent2.discovery.t3RecoveryContext = {
+      firedAt: turn,
+      intent: t3Context?.intent || capturedReason || null,
+      callerName: t3Context?.callerName || callerName || null,
+      t2FailureReason: t3Context?.t2FailureReason || t2FailureReason || null,
+      consecutiveT3Count,
+    };
+
+    if (consecutiveT3Count >= 3) {
+      emit('T3_CONSECUTIVE_LIMIT', {
+        count: consecutiveT3Count,
+        turn,
+        intent: t3Context?.intent ? clip(t3Context.intent, 60) : null,
+        t2FailureReason: t3Context?.t2FailureReason || null,
+      });
+    }
+
+    // ── T3 Reason Code Emission (Package 6B) ────────────────────────────────
+    const t3OutcomeReason = capturedReason
+      ? FALLBACK_REASON_CODE.T3_REASON_CAPTURED
+      : FALLBACK_REASON_CODE.T3_NO_REASON;
+    emit('A2_FALLBACK_REASON', {
+      t2FailureReason: t3Context?.t2FailureReason || t2FailureReason || null,
+      t3OutcomeReason,
+      consecutiveT3Count,
+      intent: t3Context?.intent ? clip(t3Context.intent, 60) : null,
+      callerName: t3Context?.callerName || null,
+      turn,
+    });
+
     if (response) {
       // Response already set by scenario path - skip fallback
     } else if (capturedReason) {

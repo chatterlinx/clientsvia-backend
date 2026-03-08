@@ -3921,8 +3921,14 @@ const companySchema = new mongoose.Schema({
                 enabled: { type: Boolean, default: false },
                 // If processing crosses this threshold, we may send the bridge TwiML.
                 thresholdMs: { type: Number, default: 1100 },
-                // Absolute ceiling: after this, do not keep redirecting/waiting.
+                // Soft cap: original hard cap for bridge redirects (when heartbeat is NOT alive)
                 hardCapMs: { type: Number, default: 6000 },
+                // Absolute ceiling: max wait time even WITH healthy heartbeat (streaming safety valve)
+                maxCeilingMs: { type: Number, default: 25000 },
+                // Heartbeat silence threshold: if no heartbeat for this long, stream is dead
+                heartbeatSilenceMs: { type: Number, default: 3000 },
+                // Enable heartbeat-aware bridge cycling (hold messages while Claude streams)
+                heartbeatCyclingEnabled: { type: Boolean, default: true },
                 // Caps to prevent spam
                 maxBridgesPerCall: { type: Number, default: 2 },
                 maxRedirectAttempts: { type: Number, default: 2 },
@@ -3930,10 +3936,10 @@ const companySchema = new mongoose.Schema({
                 lines: {
                     type: [String],
                     default: [
-                        'Ok — one moment.',
-                        'Got it — give me just a second.',
-                        "One sec — I’m pulling that up now.",
-                        'Alright — hang with me for a moment.'
+                        "Ok \u2014 one moment.",
+                        "Got it \u2014 give me just a second.",
+                        "One sec \u2014 I’m pulling that up now.",
+                        "Alright \u2014 hang with me for a moment."
                     ]
                 }
             },

@@ -28,6 +28,7 @@ const AdminNotificationService = require('../services/AdminNotificationService')
 const { initializeCall } = require('../services/v2AIAgentRuntime');
 // ☢️ NUKED Feb 2026: FrontDeskCoreRuntime references removed - CallRuntime is the sole runtime
 const { CallRuntime } = require('../services/engine/CallRuntime');
+const { heartbeatKey, partialKey, resultKey } = require('../services/streaming/ClaudeStreamingService');
 const { StateStore } = require('../services/engine/StateStore');
 const LLM0ControlsLoader = require('../services/LLM0ControlsLoader');
 // NOTE: processUserInput REMOVED - HybridReceptionistLLM is the only brain now
@@ -3496,9 +3497,107 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       return res.send(twimlString);
     }
 
-    // If background compute failed OR caps hit: fall back to transfer policy.
-    const capHit = attempt >= maxRedirectAttempts || (typeof elapsedMs === 'number' && elapsedMs >= hardCapMs);
-    if (cached?.error || capHit) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HEARTBEAT-AWARE CAP LOGIC (123RP Bridge Control Unit)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // OLD: capHit = attempt >= max || elapsed >= hardCap → transfer (dead T2)
+    // NEW: Check streaming heartbeat. If Claude is actively producing tokens,
+    //      override the soft cap and keep cycling hold messages. Only the absolute
+    //      ceiling (25s default) or a dead heartbeat triggers cap.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const maxCeilingMs = Number.isFinite(bridgeCfg.maxCeilingMs) ? bridgeCfg.maxCeilingMs : 25000;
+    const heartbeatSilenceMs = Number.isFinite(bridgeCfg.heartbeatSilenceMs) ? bridgeCfg.heartbeatSilenceMs : 3000;
+    const heartbeatCyclingEnabled = bridgeCfg.heartbeatCyclingEnabled !== false; // default true
+
+    // ── Check streaming heartbeat ───────────────────────────────────────────
+    let heartbeatAlive = false;
+    let heartbeatData = null;
+    if (redis && callSid && token && heartbeatCyclingEnabled) {
+      try {
+        const hbKey = heartbeatKey(callSid, turnNumber, token);
+        const raw = await redis.get(hbKey);
+        if (raw) {
+          heartbeatData = JSON.parse(raw);
+          heartbeatAlive = (Date.now() - heartbeatData.ts) < heartbeatSilenceMs;
+        }
+      } catch (_) {
+        // Heartbeat read failure = assume not alive (safe default)
+      }
+    }
+
+    // ── Check for partial/complete result from streaming ────────────────────
+    let streamingResult = null;
+    if (redis && callSid && token) {
+      try {
+        const rKey = resultKey(callSid, turnNumber, token);
+        const raw = await redis.get(rKey);
+        if (raw && raw.length > 0) {
+          streamingResult = raw;
+        }
+      } catch (_) {
+        // Non-fatal
+      }
+    }
+
+    // ── If streaming wrote a result directly, deliver it ────────────────────
+    // (ClaudeStreamingService writes to resultKey on completion)
+    if (streamingResult && !cached?.twimlString) {
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say(escapeTwiML(streamingResult));
+      const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
+      twiml.redirect({ method: 'POST' }, listenUrl);
+      twimlString = twiml.toString();
+
+      if (CallLogger && callSid) {
+        await CallLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'AGENT2_BRIDGE_STREAMING_RESULT',
+          turn: turnNumber,
+          data: {
+            resultLength: streamingResult.length,
+            heartbeatAlive,
+            heartbeatTokens: heartbeatData?.tokens || 0,
+            elapsedMs,
+            attempt,
+          }
+        }).catch(() => {});
+      }
+
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    // ── Cap logic: three-tier decision ──────────────────────────────────────
+    // 1. Absolute ceiling (25s) → always cap (safety valve)
+    // 2. Soft cap (old hardCap 6s or maxAttempts) → cap ONLY if heartbeat dead
+    // 3. Heartbeat alive → keep cycling hold messages
+    const ceilingHit = typeof elapsedMs === 'number' && elapsedMs >= maxCeilingMs;
+    const softCapHit = attempt >= maxRedirectAttempts || (typeof elapsedMs === 'number' && elapsedMs >= hardCapMs);
+    const capHit = ceilingHit || cached?.error || (softCapHit && !heartbeatAlive);
+
+    if (capHit) {
+      // ── Before falling back, check for partial response ─────────────────
+      let partialText = null;
+      if (redis && callSid && token) {
+        try {
+          const pKey = partialKey(callSid, turnNumber, token);
+          const raw = await redis.get(pKey);
+          if (raw && raw.length >= 40) {
+            partialText = raw;
+          }
+        } catch (_) { /* non-fatal */ }
+      }
+
+      // Determine specific fallback reason for observability
+      const fallbackReason = cached?.error
+        ? 'bridge_compute_failed'
+        : ceilingHit
+          ? 'bridge_ceiling_hit'
+          : !heartbeatAlive && heartbeatData
+            ? 'bridge_heartbeat_dead'
+            : 'bridge_soft_cap';
+
       if (CallLogger && callSid) {
         await CallLogger.logEvent({
           callId: callSid,
@@ -3509,18 +3608,82 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             attempt,
             maxRedirectAttempts,
             hardCapMs,
+            maxCeilingMs,
             elapsedMs,
+            fallbackReason,
+            heartbeatAlive,
+            heartbeatTokens: heartbeatData?.tokens || 0,
+            heartbeatStatus: heartbeatData?.status || null,
+            hasPartial: !!partialText,
+            partialChars: partialText?.length || 0,
             error: cached?.error || null
           }
         }).catch(() => {});
       }
 
+      // ── If we have a usable partial response, deliver it ──────────────
+      if (partialText) {
+        const twiml = new twilio.twiml.VoiceResponse();
+        twiml.say(escapeTwiML(partialText));
+        const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
+        twiml.redirect({ method: 'POST' }, listenUrl);
+        twimlString = twiml.toString();
+
+        if (callSid) {
+          try {
+            const CallTranscriptV2 = require('../models/CallTranscriptV2');
+            await CallTranscriptV2.appendTurns(companyID, callSid, [
+              {
+                speaker: 'agent',
+                kind: 'CONVERSATION_AGENT',
+                text: partialText,
+                turnNumber,
+                ts: new Date(),
+                sourceKey: 'AGENT2_BRIDGE_PARTIAL',
+                trace: {
+                  provenance: {
+                    type: 'LLM_PARTIAL',
+                    reason: fallbackReason,
+                    voiceProviderUsed: 'twilio_say',
+                    isBridge: true,
+                  },
+                  deliveredVia: 'bridge_partial_response',
+                  attempt,
+                  elapsedMs,
+                  heartbeatTokens: heartbeatData?.tokens || 0,
+                }
+              }
+            ]);
+          } catch (v2Err) {
+            logger.warn('[V2 BRIDGE CONTINUE] Failed to append partial turn to CallTranscriptV2', {
+              callSid: callSid?.slice(-8),
+              error: v2Err.message
+            });
+          }
+        }
+
+        res.type('text/xml');
+        return res.send(twimlString);
+      }
+
+      // ── No partial: fall back to T3 pathway (Gather for next input) ───
+      // Instead of handleTransfer (which creates ghost turns), open a Gather
+      // so the caller can speak again. T3 fallback text comes from the
+      // regular discovery pipeline on the next turn.
       const twiml = new twilio.twiml.VoiceResponse();
-      const transferText = "I'm connecting you to our team.";
-      handleTransfer(twiml, company || {}, transferText, companyID);
+      const fallbackText = "I'm sorry about the wait. Could you tell me a bit more about what you need help with?";
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`,
+        method: 'POST',
+        timeout: 5,
+        speechTimeout: 'auto',
+        actionOnEmptyResult: false,
+      });
+      gather.say(escapeTwiML(fallbackText));
       twimlString = twiml.toString();
 
-      // Log the transfer fallback to CallTranscriptV2 so it appears in transcripts
+      // Log the T3 fallback
       if (callSid) {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
@@ -3528,27 +3691,28 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             {
               speaker: 'agent',
               kind: 'CONVERSATION_AGENT',
-              text: transferText,
+              text: fallbackText,
               turnNumber,
               ts: new Date(),
               sourceKey: 'AGENT2_BRIDGE_TIMEOUT',
               trace: {
                 provenance: {
-                  type: 'UI_OWNED',
+                  type: 'T3_BRIDGE_FALLBACK',
                   uiPath: 'aiAgentSettings.agent2.bridge',
-                  reason: cached?.error ? 'bridge_compute_failed' : 'bridge_timeout',
+                  reason: fallbackReason,
                   voiceProviderUsed: 'twilio_say',
                   isBridge: true
                 },
-                deliveredVia: 'bridge_timeout_transfer',
+                deliveredVia: 'bridge_t3_fallback',
                 attempt,
                 elapsedMs,
+                heartbeatAlive,
                 error: cached?.error || null
               }
             }
           ]);
         } catch (v2Err) {
-          logger.warn('[V2 BRIDGE CONTINUE] Failed to append transfer turn to CallTranscriptV2', {
+          logger.warn('[V2 BRIDGE CONTINUE] Failed to append T3 fallback turn to CallTranscriptV2', {
             callSid: callSid?.slice(-8),
             error: v2Err.message
           });
@@ -3570,8 +3734,8 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             hasSay: twimlString.includes('<Say'),
             voiceProviderUsed: 'twilio_say',
             isFallback: true,
-            fallbackReason: cached?.error ? 'bridge_compute_failed' : 'bridge_timeout',
-            bridge: { attempt, elapsedMs }
+            fallbackReason,
+            bridge: { attempt, elapsedMs, heartbeatAlive }
           }
         }).catch(() => {});
       }
@@ -3580,9 +3744,20 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       return res.send(twimlString);
     }
 
-    // Not ready: pause briefly and redirect to poll again.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOT READY: Cycle hold message and redirect back to poll
+    // ═══════════════════════════════════════════════════════════════════════════
+    // When heartbeat is alive, cycle through bridge hold lines to keep the
+    // caller engaged. No redirect attempt cap when heartbeat is healthy.
+    const bridgeLines = bridgeCfg.lines || ['One moment please.'];
+    const usableLines = bridgeLines.filter(l => l && l.trim());
+    const lineIdx = (attempt - 1) % (usableLines.length || 1);
+    const holdLine = usableLines[lineIdx] || 'One moment please.';
+
     const redirectUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=${attempt}`;
     const twiml = new twilio.twiml.VoiceResponse();
+    // Say the hold line (cycles through available lines)
+    twiml.say(escapeTwiML(holdLine));
     twiml.pause({ length: 1 });
     // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)
     twiml.redirect({ method: 'POST' }, redirectUrl);
@@ -4227,6 +4402,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       !isRespondingToPFUQ &&
       !isAlreadyTransferLane;
 
+    // ── Pre-generate bridge token ─────────────────────────────────────────
+    // Generated early so streaming heartbeat can write to the same Redis keys
+    // that bridge-continue will poll. Reused in bridge init (line 5335→ below).
+    const preGeneratedBridgeToken = crypto.randomBytes(8).toString('hex');
+
     const computeTurnPromise = (async () => {
       let localVoiceProviderUsed = 'twilio_say';
       const buildTurnKey = (t) => {
@@ -4539,7 +4719,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           companyId: companyID,
           callerPhone: fromNumber,
           turnCount: callState.turnCount,
-          inputTextSource
+          inputTextSource,
+          bridgeToken: mayBridge ? preGeneratedBridgeToken : null,
+          redis: redis || null,
         }
       );
       timings.coreRuntimeMs = Date.now() - T2_start;
@@ -5332,7 +5514,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     callState.agent2Bridge.lastBridgeTurn = turnNumber;
     callState.agent2Bridge.bridgesUsedThisCall = newCount;
 
-    const token = crypto.randomBytes(8).toString('hex');
+    // Use pre-generated token (matches the one passed to streaming heartbeat)
+    const token = preGeneratedBridgeToken;
     const cacheKey = `a2bridge:twiml:${callSid}:${turnNumber}:${token}`;
     const startedKey = `a2bridge:t0:${callSid}:${turnNumber}:${token}`;
     await redis.set(startedKey, String(Date.now()), { EX: 60 * 10 }).catch(() => {});
