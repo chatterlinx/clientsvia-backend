@@ -491,6 +491,39 @@ function toAbsoluteAudioUrl(req, rawUrl) {
   return `${getSecureBaseUrl(req)}/${url}`;
 }
 
+/**
+ * Consolidated voice-decision audit log.
+ * Call after EVERY TwiML verb choice for spoken output so every line can be
+ * traced: what provider was desired, what was attempted, and what was actually
+ * delivered.
+ *
+ * @param {object} CallLogger
+ * @param {object} opts
+ * @param {string} opts.callSid
+ * @param {string} opts.companyId
+ * @param {number} opts.turnNumber
+ * @param {object} opts.decision
+ */
+function logVoiceDecision(CallLogger, { callSid, companyId, turnNumber, decision }) {
+  if (!CallLogger || !callSid) return;
+  CallLogger.logEvent({
+    callId: callSid,
+    companyId,
+    type: 'VOICE_DECISION',
+    turn: turnNumber,
+    data: {
+      responseSource: decision.responseSource,          // T1_CARD | T2_LLM | T3_FALLBACK | BRIDGE_HOLD | BRIDGE_RESULT | BRIDGE_STREAMING | BRIDGE_PARTIAL
+      desiredProvider: decision.desiredProvider,         // elevenlabs | twilio
+      audioUrlPresent: !!decision.audioUrlPresent,
+      audioUrlPreflightPassed: decision.audioUrlPreflightPassed ?? null,
+      elevenLabsAttempted: !!decision.elevenLabsAttempted,
+      elevenLabsSuccess: !!decision.elevenLabsSuccess,
+      finalTwimlVerb: decision.finalTwimlVerb,          // PLAY | SAY | PAUSE
+      fallbackReasonCode: decision.fallbackReasonCode || 'NONE',
+    }
+  }).catch(() => {});
+}
+
 // ============================================================================
 // 🧠 3-TIER SELF-IMPROVEMENT SYSTEM CONFIGURATION
 // ============================================================================
@@ -3343,6 +3376,47 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     const hardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
     const maxRedirectAttempts = Number.isFinite(bridgeCfg.maxRedirectAttempts) ? bridgeCfg.maxRedirectAttempts : 2;
 
+    // V-FIX: Hoist voice settings so all bridge paths can attempt ElevenLabs
+    const hostHeader = req.get('host');
+    const voiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+    const elevenLabsVoice = voiceSettings.voiceId || null;
+
+    /**
+     * Attempt bounded ElevenLabs synthesis for bridge delivery paths.
+     * Returns an absolute audio URL on success, null on failure.
+     * Used by cached-result, streaming-result, partial, and T3 fallback paths
+     * to avoid falling through to Twilio <Say>.
+     */
+    async function synthesizeForBridge(text, { timeoutMs = 4000 } = {}) {
+      if (!text || !elevenLabsVoice) return null;
+      try {
+        const buffer = await Promise.race([
+          synthesizeSpeech({
+            text,
+            voiceId: elevenLabsVoice,
+            stability: voiceSettings.stability,
+            similarity_boost: voiceSettings.similarityBoost,
+            style: voiceSettings.styleExaggeration,
+            model_id: voiceSettings.aiModel,
+            company
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('BRIDGE_TTS_TIMEOUT')), timeoutMs))
+        ]);
+        const fileName = `bridge_synth_${callSid}_${Date.now()}.mp3`;
+        const audioDir = path.join(__dirname, '../public/audio');
+        if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+        fs.writeFileSync(path.join(audioDir, fileName), buffer);
+        return `https://${hostHeader}/audio/${fileName}`;
+      } catch (err) {
+        logger.warn('[V2 BRIDGE CONTINUE] synthesizeForBridge failed', {
+          callSid: callSid?.slice(-8),
+          textLen: text?.length,
+          error: err.message
+        });
+        return null;
+      }
+    }
+
     const cacheKey = callSid && token ? `a2bridge:twiml:${callSid}:${turnNumber}:${token}` : null;
     const startedKey = callSid && token ? `a2bridge:t0:${callSid}:${turnNumber}:${token}` : null;
     const attemptsKey = callSid && token ? `a2bridge:attempts:${callSid}:${turnNumber}:${token}` : null;
@@ -3389,20 +3463,36 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       // 1. Plays the response WITHOUT Gather (so it can't be interrupted)
       // 2. Redirects to a listen endpoint that sets up the Gather for next input
       // ═══════════════════════════════════════════════════════════════════════════
-      const hostHeader = req.get('host');
+      // hostHeader, voiceSettings, elevenLabsVoice hoisted above (V-FIX)
       const twiml = new twilio.twiml.VoiceResponse();
-      
+
       if (cached.audioUrl) {
         twiml.play(cached.audioUrl);
       } else if (cached.responseText) {
-        twiml.say(escapeTwiML(cached.responseText));
+        // V-FIX: Attempt ElevenLabs synthesis instead of falling back to Twilio <Say>
+        const synthUrl = await synthesizeForBridge(cached.responseText);
+        if (synthUrl) {
+          twiml.play(synthUrl);
+          voiceProviderUsed = 'elevenlabs';
+        } else {
+          twiml.say(escapeTwiML(cached.responseText)); // Emergency fallback only
+          voiceProviderUsed = 'twilio_say';
+        }
       } else {
         const playUrlMatch = cached.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
         const sayMatch = cached.twimlString.match(/<Say[^>]*>([^<]+)<\/Say>/);
         if (playUrlMatch) {
           twiml.play(playUrlMatch[1]);
         } else if (sayMatch) {
-          twiml.say(sayMatch[1]);
+          // V-FIX: Attempt ElevenLabs synthesis for extracted <Say> content
+          const synthUrl = await synthesizeForBridge(sayMatch[1]);
+          if (synthUrl) {
+            twiml.play(synthUrl);
+            voiceProviderUsed = 'elevenlabs';
+          } else {
+            twiml.say(sayMatch[1]); // Emergency fallback only
+            voiceProviderUsed = 'twilio_say';
+          }
         } else {
           twimlString = cached.twimlString;
           res.type('text/xml');
@@ -3412,8 +3502,23 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
       twiml.redirect({ method: 'POST' }, listenUrl);
-      
+
       twimlString = twiml.toString();
+
+      // V-FIX: Voice decision audit log for bridge-continue cached result
+      logVoiceDecision(CallLogger, {
+        callSid, companyId: companyID, turnNumber,
+        decision: {
+          responseSource: 'BRIDGE_RESULT',
+          desiredProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+          audioUrlPresent: !!cached.audioUrl,
+          audioUrlPreflightPassed: cached.audioUrl ? true : null,
+          elevenLabsAttempted: !cached.audioUrl && !!elevenLabsVoice,
+          elevenLabsSuccess: voiceProviderUsed === 'elevenlabs',
+          finalTwimlVerb: twimlString.includes('<Play') ? 'PLAY' : 'SAY',
+          fallbackReasonCode: voiceProviderUsed === 'twilio_say' ? 'BRIDGE_RESULT_NO_AUDIOURL' : 'NONE'
+        }
+      });
 
       // ═══════════════════════════════════════════════════════════════════════════
       // TRANSCRIPT SAFETY NET: Log agent turn from cached data.
@@ -3561,7 +3666,17 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     // ── FAST PATH: Streaming result ready → deliver immediately ─────────────
     if (streamingResult && !cached?.twimlString) {
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say(escapeTwiML(streamingResult));
+
+      // V-FIX: Attempt ElevenLabs synthesis before falling back to Twilio <Say>
+      const synthUrl = await synthesizeForBridge(streamingResult);
+      if (synthUrl) {
+        twiml.play(synthUrl);
+        voiceProviderUsed = 'elevenlabs';
+      } else {
+        twiml.say(escapeTwiML(streamingResult));
+        voiceProviderUsed = 'twilio_say';
+      }
+
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
       twiml.redirect({ method: 'POST' }, listenUrl);
       twimlString = twiml.toString();
@@ -3582,6 +3697,19 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           }
         }).catch(() => {});
       }
+
+      logVoiceDecision(CallLogger, {
+        callSid, companyId: companyID, turnNumber,
+        decision: {
+          responseSource: 'BRIDGE_STREAMING',
+          desiredProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+          audioUrlPresent: false,
+          elevenLabsAttempted: !!elevenLabsVoice,
+          elevenLabsSuccess: voiceProviderUsed === 'elevenlabs',
+          finalTwimlVerb: voiceProviderUsed === 'elevenlabs' ? 'PLAY' : 'SAY',
+          fallbackReasonCode: voiceProviderUsed === 'twilio_say' ? 'BRIDGE_STREAMING_TTS_FAILED' : 'NONE'
+        }
+      });
 
       res.type('text/xml');
       return res.send(twimlString);
@@ -3649,7 +3777,17 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       // ── If we have a usable partial response, deliver it ──────────────
       if (partialText) {
         const twiml = new twilio.twiml.VoiceResponse();
-        twiml.say(escapeTwiML(partialText));
+
+        // V-FIX: Attempt ElevenLabs synthesis for partial text
+        const synthUrl = await synthesizeForBridge(partialText);
+        if (synthUrl) {
+          twiml.play(synthUrl);
+          voiceProviderUsed = 'elevenlabs';
+        } else {
+          twiml.say(escapeTwiML(partialText));
+          voiceProviderUsed = 'twilio_say';
+        }
+
         const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
         twiml.redirect({ method: 'POST' }, listenUrl);
         twimlString = twiml.toString();
@@ -3669,7 +3807,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
                   provenance: {
                     type: 'LLM_PARTIAL',
                     reason: fallbackReason,
-                    voiceProviderUsed: 'twilio_say',
+                    voiceProviderUsed,
                     isBridge: true,
                   },
                   deliveredVia: 'bridge_partial_response',
@@ -3687,6 +3825,19 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           }
         }
 
+        logVoiceDecision(CallLogger, {
+          callSid, companyId: companyID, turnNumber,
+          decision: {
+            responseSource: 'BRIDGE_PARTIAL',
+            desiredProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+            audioUrlPresent: false,
+            elevenLabsAttempted: !!elevenLabsVoice,
+            elevenLabsSuccess: voiceProviderUsed === 'elevenlabs',
+            finalTwimlVerb: voiceProviderUsed === 'elevenlabs' ? 'PLAY' : 'SAY',
+            fallbackReasonCode: voiceProviderUsed === 'twilio_say' ? 'BRIDGE_PARTIAL_TTS_FAILED' : 'NONE'
+          }
+        });
+
         res.type('text/xml');
         return res.send(twimlString);
       }
@@ -3694,6 +3845,21 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       // ── No partial: fall back to T3 pathway (Gather for next input) ───
       const twiml = new twilio.twiml.VoiceResponse();
       const fallbackText = "I'm sorry about the wait. Could you tell me a bit more about what you need help with?";
+
+      // V-FIX: Use BridgeAudioService cache or ElevenLabs synthesis for T3 fallback
+      const BridgeAudioServiceT3 = require('../services/bridgeAudio/BridgeAudioService');
+      const t3AudioUrl = BridgeAudioServiceT3.getAudioUrl({
+        companyId: companyID,
+        text: fallbackText,
+        voiceSettings,
+        hostHeader
+      });
+
+      let t3PlayUrl = t3AudioUrl || null;
+      if (!t3PlayUrl && elevenLabsVoice) {
+        t3PlayUrl = await synthesizeForBridge(fallbackText, { timeoutMs: 3000 });
+      }
+
       const gather = twiml.gather({
         input: 'speech',
         action: `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`,
@@ -3702,7 +3868,14 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         speechTimeout: 'auto',
         actionOnEmptyResult: false,
       });
-      gather.say(escapeTwiML(fallbackText));
+
+      if (t3PlayUrl) {
+        gather.play(t3PlayUrl);
+        voiceProviderUsed = t3AudioUrl ? 'elevenlabs_cached' : 'elevenlabs';
+      } else {
+        gather.say(escapeTwiML(fallbackText)); // Emergency fallback only
+        voiceProviderUsed = 'twilio_say';
+      }
       twimlString = twiml.toString();
 
       if (callSid) {
@@ -3721,7 +3894,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
                   type: 'T3_BRIDGE_FALLBACK',
                   uiPath: 'aiAgentSettings.agent2.bridge',
                   reason: fallbackReason,
-                  voiceProviderUsed: 'twilio_say',
+                  voiceProviderUsed,
                   isBridge: true
                 },
                 deliveredVia: 'bridge_t3_fallback',
@@ -3753,13 +3926,26 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             hasGather: twimlString.includes('<Gather'),
             hasPlay: twimlString.includes('<Play'),
             hasSay: twimlString.includes('<Say'),
-            voiceProviderUsed: 'twilio_say',
+            voiceProviderUsed,
             isFallback: true,
             fallbackReason,
             bridge: { attempt, elapsedMs, heartbeatAlive }
           }
         }).catch(() => {});
       }
+
+      logVoiceDecision(CallLogger, {
+        callSid, companyId: companyID, turnNumber,
+        decision: {
+          responseSource: 'T3_FALLBACK',
+          desiredProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+          audioUrlPresent: false,
+          elevenLabsAttempted: !!(elevenLabsVoice && voiceProviderUsed !== 'elevenlabs_cached'),
+          elevenLabsSuccess: voiceProviderUsed === 'elevenlabs' || voiceProviderUsed === 'elevenlabs_cached',
+          finalTwimlVerb: twimlString.includes('<Play') ? 'PLAY' : 'SAY',
+          fallbackReasonCode: voiceProviderUsed === 'twilio_say' ? 'FINAL_FALLBACK_TWILIO_SAY' : 'NONE'
+        }
+      });
 
       res.type('text/xml');
       return res.send(twimlString);
@@ -3795,21 +3981,20 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       const lineIdx = (attempt - 2) % (usableLines.length || 1); // -2 because attempt 1 was quiet
       const holdLine = usableLines[lineIdx] || 'One moment please.';
 
-      // Use BridgeAudioService for consistent ElevenLabs voice
+      // V-FIX: Use BridgeAudioService cached ElevenLabs audio; never <Say> for ElevenLabs companies
       const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
-      const bridgeVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
       const holdAudioUrl = BridgeAudioService.getAudioUrl({
         companyId: companyID,
         text: holdLine,
-        voiceSettings: bridgeVoiceSettings,
-        hostHeader: req.get('host')
+        voiceSettings,
+        hostHeader
       });
 
       if (holdAudioUrl) {
         twiml.play(holdAudioUrl);
         voiceProviderUsed = 'elevenlabs_cached';
-      } else {
-        // No cached audio → silence (never <Say> — voice mismatch is worse than silence)
+      } else if (elevenLabsVoice) {
+        // Cache miss but ElevenLabs configured — silence is better than wrong voice
         logger.warn('[V2 BRIDGE CONTINUE] No cached bridge audio — using <Pause>', {
           callSid: callSid?.slice(-8),
           companyId: companyID,
@@ -3818,12 +4003,30 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         });
         twiml.pause({ length: 1 });
         voiceProviderUsed = 'silence';
+      } else {
+        // No ElevenLabs configured — Twilio <Say> is the correct voice for this company
+        twiml.say(escapeTwiML(holdLine));
+        voiceProviderUsed = 'twilio_say';
       }
     }
-
     // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)
     twiml.redirect({ method: 'POST' }, redirectUrl);
     twimlString = twiml.toString();
+
+    logVoiceDecision(CallLogger, {
+      callSid, companyId: companyID, turnNumber,
+      decision: {
+        responseSource: 'BRIDGE_HOLD',
+        desiredProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+        audioUrlPresent: false,
+        elevenLabsAttempted: false,
+        elevenLabsSuccess: voiceProviderUsed === 'elevenlabs_cached',
+        finalTwimlVerb: voiceProviderUsed === 'elevenlabs_cached' ? 'PLAY'
+          : voiceProviderUsed === 'silence' ? 'PAUSE' : 'SAY',
+        fallbackReasonCode: voiceProviderUsed === 'twilio_say' ? 'BRIDGE_HOLD_TWILIO_SAY'
+          : voiceProviderUsed === 'silence' ? 'BRIDGE_HOLD_CACHE_MISS' : 'NONE'
+      }
+    });
 
     res.type('text/xml');
     return res.send(twimlString);
@@ -4471,6 +4674,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     const computeTurnPromise = (async () => {
       let localVoiceProviderUsed = 'twilio_say';
+      // V-FIX: Voice decision tracking for observability
+      let vd_audioUrlPresent = false;
+      let vd_preflightPassed = null;   // null = not checked, true/false = result
+      let vd_elevenLabsAttempted = false;
+      let vd_elevenLabsSuccess = false;
+
       const buildTurnKey = (t) => {
         const turn = typeof t?.turn === 'number' ? t.turn : 'na';
         const speaker = t?.speaker || 'unknown';
@@ -4951,6 +5160,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
         const agent2AudioUrl = runtimeResult?.audioUrl;
         if (!audioUrl && isAgent2Discovery && agent2AudioUrl) {
+          vd_audioUrlPresent = true;
           let audioFileExists = false;
 
           if (agent2AudioUrl.startsWith('/audio/') || agent2AudioUrl.startsWith('/instant-lines/')) {
@@ -4982,7 +5192,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }
             }
           } else if (agent2AudioUrl.startsWith('http')) {
-            audioFileExists = true;
+            // V-FIX: HTTP URLs must be validated — a stale/unreachable URL
+            // would block ElevenLabs synthesis and fall through to Twilio <Say>.
+            const { isAudioUrlReachable } = require('../utils/audioUrlPreflight');
+            audioFileExists = await isAudioUrlReachable(agent2AudioUrl, { timeoutMs: 2000 });
+
+            if (!audioFileExists) {
+              logger.warn('[V2 RESPOND] HTTP audio URL preflight FAILED', {
+                url: agent2AudioUrl.substring(0, 120),
+                triggerCardId: runtimeResult?.triggerCard?.id
+              });
+
+              if (CallLogger) {
+                CallLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'AUDIO_URL_PREFLIGHT_FAILED',
+                  turn: turnNumber,
+                  data: {
+                    audioUrl: agent2AudioUrl,
+                    reason: 'http_url_unreachable',
+                    triggerCardId: runtimeResult?.triggerCard?.id,
+                    triggerCardLabel: runtimeResult?.triggerCard?.label,
+                    fallbackAction: 'will_use_tts'
+                  }
+                }).catch(() => {});
+              }
+            }
           }
 
           if (audioFileExists) {
@@ -4990,6 +5226,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               ? agent2AudioUrl
               : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
             localVoiceProviderUsed = 'instant_audio_agent2';
+            vd_preflightPassed = true;
 
             if (CallLogger) {
               CallLogger.logEvent({
@@ -5006,19 +5243,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 }
               }).catch(() => {});
             }
-          } else if (CallLogger) {
-            CallLogger.logEvent({
-              callId: callSid,
-              companyId: companyID,
-              type: 'FELL_BACK_TO_TTS',
-              turn: turnNumber,
-              data: {
-                reason: 'instant_audio_file_missing',
-                missingAudioUrl: agent2AudioUrl,
-                triggerCardId: runtimeResult?.triggerCard?.id,
-                triggerCardLabel: runtimeResult?.triggerCard?.label
-              }
-            }).catch(() => {});
+          } else {
+            vd_preflightPassed = false;
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'FELL_BACK_TO_TTS',
+                turn: turnNumber,
+                data: {
+                  reason: 'instant_audio_file_missing',
+                  missingAudioUrl: agent2AudioUrl,
+                  triggerCardId: runtimeResult?.triggerCard?.id,
+                  triggerCardLabel: runtimeResult?.triggerCard?.label
+                }
+              }).catch(() => {});
+            }
           }
         }
       } catch (e) {
@@ -5026,6 +5266,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
 
       if (!audioUrl && elevenLabsVoice && responseText) {
+        vd_elevenLabsAttempted = true;
         const ttsStartTime = Date.now();
         try {
           if (CallLogger) {
@@ -5059,6 +5300,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
           audioUrl = `https://${hostHeader}/audio/${fileName}`;
           localVoiceProviderUsed = 'elevenlabs';
+          vd_elevenLabsSuccess = true;
 
           if (CallLogger) {
             CallLogger.logEvent({
@@ -5120,6 +5362,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
       if (audioUrl) gather.play(audioUrl);
       else gather.say(escapeTwiML(responseText));
+
+      // V-FIX: Voice decision audit log
+      logVoiceDecision(CallLogger, {
+        callSid, companyId: companyID, turnNumber,
+        decision: {
+          responseSource: runtimeResult?.matchSource === 'AGENT2_DISCOVERY' ? 'T1_CARD' : 'T2_LLM',
+          desiredProvider: elevenLabsVoice ? 'elevenlabs' : 'twilio',
+          audioUrlPresent: vd_audioUrlPresent,
+          audioUrlPreflightPassed: vd_preflightPassed,
+          elevenLabsAttempted: vd_elevenLabsAttempted,
+          elevenLabsSuccess: vd_elevenLabsSuccess,
+          finalTwimlVerb: audioUrl ? 'PLAY' : 'SAY',
+          fallbackReasonCode: audioUrl ? 'NONE'
+            : (!vd_elevenLabsAttempted && vd_audioUrlPresent) ? 'ELEVENLABS_SKIPPED_STALE_AUDIOURL'
+            : (vd_elevenLabsAttempted && !vd_elevenLabsSuccess) ? 'ELEVENLABS_TTS_FAILED'
+            : !elevenLabsVoice ? 'NO_ELEVENLABS_CONFIGURED'
+            : 'FINAL_FALLBACK_TWILIO_SAY'
+        }
+      });
 
       // ═══════════════════════════════════════════════════════════════════════════
       // 📝 TRANSCRIPT: Persist agent turn with provenance + voice provider

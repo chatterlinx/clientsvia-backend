@@ -1154,10 +1154,15 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     const bridgeLines = next?.bridge?.lines || [];
     const voiceSettings = afterCompany?.aiAgentSettings?.voiceSettings || {};
     if (bridgeLines.length > 0 && voiceSettings.voiceId) {
+      // V-FIX: Also pre-generate the T3 bridge fallback text so it's cached
+      // when bridge-continue needs it (avoids inline TTS or Twilio <Say>).
+      const T3_FALLBACK_TEXT = "I'm sorry about the wait. Could you tell me a bit more about what you need help with?";
+      const allBridgeLines = [...bridgeLines, T3_FALLBACK_TEXT];
+
       const BridgeAudioService = require('../../services/bridgeAudio/BridgeAudioService');
       BridgeAudioService.generateAll({
         companyId,
-        lines: bridgeLines,
+        lines: allBridgeLines,
         company: afterCompany,
         voiceSettings,
         force: false
