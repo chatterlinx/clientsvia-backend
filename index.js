@@ -1214,10 +1214,19 @@ async function startServer() {
         const { initializeAutoPurgeCron } = require('./services/autoPurgeCron');
         initializeAutoPurgeCron();
         
+        // Seed default data (BEFORE health check — so check sees populated tables)
+        console.log('[Server] Running startup seeders...');
+        const { ensureBehaviorsSeeded } = require('./services/seeders/BehaviorSeeder');
+        try {
+            await ensureBehaviorsSeeded();
+        } catch (err) {
+            console.error('[Server] Behavior seeder failed (non-fatal):', err.message);
+        }
+
         // Initialize Critical Data Health Check (PROACTIVE MONITORING)
         console.log('[Server] Initializing Critical Data Health Check...');
         const CriticalDataHealthCheck = require('./services/CriticalDataHealthCheck');
-        
+
         // Run immediately on startup
         setTimeout(async () => {
             try {

@@ -166,7 +166,7 @@ const notificationLogSchema = new mongoose.Schema({
             recipientName: String,
             status: {
                 type: String,
-                enum: ['pending', 'sent', 'delivered', 'bounced', 'failed']
+                enum: ['pending', 'sent', 'delivered', 'bounced', 'failed', 'skipped']
             },
             provider: String,            // 'SendGrid', 'AWS SES', etc.
             messageId: String,
