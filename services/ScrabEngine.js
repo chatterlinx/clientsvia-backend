@@ -573,10 +573,29 @@ class TokenExpansionEngine {
 // QUALITY GATE - Filter garbage input before triggers
 // ════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Valid short responses — semantically complete even at 1-2 words.
+ * These are real caller answers (affirmatives, negatives, consent) that
+ * should never be downgraded by the minWordCount gate.
+ *
+ * Normalized (lowercase, trimmed) before lookup.
+ */
+const VALID_SHORT_RESPONSES = new Set([
+  // Affirmatives
+  'yes', 'yeah', 'yep', 'yup', 'yea', 'sure', 'ok', 'okay',
+  'correct', 'right', 'absolutely', 'please', 'definitely',
+  'uh huh', 'mm hmm', 'mhm',
+  'sounds good', "that's fine", 'go ahead', 'do it', 'let\'s do it',
+  'yes please', 'yeah please', 'sure thing',
+  // Negatives
+  'no', 'nope', 'nah', 'no thanks', 'not really',
+  'not right now', "i'm good", 'im good', 'no thank you',
+]);
+
 class QualityGate {
   /**
    * Assess input quality and determine if it should proceed to triggers
-   * 
+   *
    * @param {string} text - Normalized text
    * @param {Object} config - Quality gate configuration
    * @returns {Object} { passed, reason, confidence, shouldReprompt }
@@ -584,10 +603,24 @@ class QualityGate {
   static assess(text, config = {}) {
     const minWordCount = config.minWordCount || 2;
     const minConfidence = config.minConfidence || 0.5;
-    
+
+    const normalized = normalizeText(text);
     const tokens = tokenize(text);
     const wordCount = tokens.length;
-    
+
+    // Gate 0: Valid short responses bypass minWordCount entirely.
+    // A caller saying "yes" or "no" to a question is a complete answer,
+    // not noise. Full confidence — no reprompt.
+    if (VALID_SHORT_RESPONSES.has(normalized)) {
+      return {
+        passed: true,
+        reason: 'QUALITY_OK',
+        confidence: 0.95,
+        shouldReprompt: false,
+        details: { wordCount, matchedShortResponse: normalized }
+      };
+    }
+
     // Gate 1: Too short
     if (wordCount < minWordCount) {
       return {
@@ -598,7 +631,7 @@ class QualityGate {
         details: { wordCount, minRequired: minWordCount }
       };
     }
-    
+
     // Gate 2: Mostly non-words (gibberish)
     const validWords = tokens.filter(t => t.length > 1 && /^[a-z]+$/.test(t));
     const validRatio = validWords.length / wordCount;
@@ -611,11 +644,11 @@ class QualityGate {
         details: { validWords: validWords.length, total: wordCount, ratio: validRatio }
       };
     }
-    
+
     // Gate 3: Check if it's just a repeat of common patterns
     const commonNoisePatterns = ['thank you', 'goodbye', 'bye', 'thanks'];
-    const isJustNoise = commonNoisePatterns.some(pattern => 
-      normalizeText(text) === pattern
+    const isJustNoise = commonNoisePatterns.some(pattern =>
+      normalized === pattern
     );
     if (isJustNoise) {
       return {
@@ -626,7 +659,7 @@ class QualityGate {
         details: { pattern: text }
       };
     }
-    
+
     // Passed all gates
     return {
       passed: true,
