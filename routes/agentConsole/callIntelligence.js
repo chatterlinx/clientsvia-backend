@@ -932,6 +932,12 @@ router.get('/company/:companyId/lifecycle-diagnostic', async (req, res) => {
       ? new mongoose.Types.ObjectId(companyId)
       : companyId;
 
+    // Load company Twilio config to expose Account SID for credential verification
+    const Company = require('../../models/v2Company');
+    const company = await Company.findById(companyObjectId)
+      .select('twilioConfig.accountSid businessName')
+      .lean();
+
     const calls = await CallSummary.find({ companyId: companyObjectId })
       .sort({ startedAt: -1 })
       .limit(limit)
@@ -957,6 +963,8 @@ router.get('/company/:companyId/lifecycle-diagnostic', async (req, res) => {
     res.json({
       success: true,
       companyId,
+      companyName: company?.businessName || 'unknown',
+      twilioAccountSid: company?.twilioConfig?.accountSid || 'NOT CONFIGURED',
       callCount: diagnostic.length,
       diagnostic
     });

@@ -204,6 +204,26 @@
 
       console.log('[CallIntelligence UI] Received', data.items?.length || 0, 'calls');
 
+      // ── CHECKPOINT: Log per-call data health for debugging ──────────────
+      if (data.items?.length > 0) {
+        const sample = data.items.slice(0, 5);
+        console.group('[CallIntelligence UI] 📊 Call Data Health (first 5 calls)');
+        sample.forEach((call, i) => {
+          const dur = call.callMetadata?.duration;
+          const rec = call.recording || {};
+          console.log(
+            `  Call ${i + 1}: ${call.callSid?.substring(0, 12)}...`,
+            `| duration: ${dur === null ? 'NULL (callback missing)' : dur === undefined ? 'UNDEFINED' : dur + 's'}`,
+            `| turns: ${call.callMetadata?.turns || 0}`,
+            `| recording.hasRecording: ${rec.hasRecording}`,
+            `| recording.sid: ${rec.sid || 'NONE'}`,
+            `| recording.url: ${rec.url ? 'YES' : 'NONE'}`,
+            `| status: ${call.status}`
+          );
+        });
+        console.groupEnd();
+      }
+
       state.calls = data.items || [];
       state.totalPages = data.pages || 1;
 
