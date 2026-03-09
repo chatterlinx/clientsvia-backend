@@ -713,37 +713,12 @@ function computeConfigHash(agent2Config) {
 }
 
 /**
- * Build personalized ack, optionally prepending a one-time name greeting.
- * 
- * Name Greeting (configured in UI):
- *   - Fires ONCE per call (first response only), never repeats
- *   - alwaysGreet=true: fires with or without name
- *   - alwaysGreet=false: only fires if name was captured
- *   - {name} in the greeting resolves to caller name or "" (stripped)
- * 
- * After the greeting has fired, subsequent turns just use the ack word.
+ * Build ack word for response prefix ("Ok.", "Sure.", etc.).
+ * Name Greeting is now handled by applyFirstTurnGreeting() as a
+ * universal post-processor — no longer part of ack construction.
  */
-function buildAck(baseAck, callerName, state, nameGreetingConfig) {
-  const ack = `${baseAck || 'Ok.'}`.trim();
-  const usedGreetingThisCall = state?.agent2?.discovery?.usedNameGreetingThisCall === true;
-  
-  if (!usedGreetingThisCall && nameGreetingConfig) {
-    const cfg = nameGreetingConfig;
-    const greetingLine = `${cfg.greetingLine || ''}`.trim();
-    const alwaysGreet = cfg.alwaysGreet === true;
-    
-    if (greetingLine && (callerName || alwaysGreet)) {
-      let resolved = greetingLine;
-      if (callerName) {
-        resolved = resolved.replace(/\{name\}/gi, callerName);
-      } else {
-        resolved = resolved.replace(/\s*\{name\}\s*/gi, ' ').replace(/\s+/g, ' ').trim();
-      }
-      return { ack: resolved, usedName: true, usedGreeting: true, greetingFired: true, greetingText: resolved };
-    }
-  }
-  
-  return { ack, usedName: false, usedGreeting: false };
+function buildAck(baseAck) {
+  return { ack: `${baseAck || 'Ok.'}`.trim() };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -935,7 +910,6 @@ class Agent2DiscoveryRunner {
     }
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
-    const nameGreetingConfig = safeObj(discoveryCfg.nameGreeting, null);
 
     // ══════════════════════════════════════════════════════════════════════════
     // 123RP: FOLLOW-UP CONSENT GATE — Raw from Gather (before ScrabEngine)
@@ -1083,9 +1057,7 @@ class Agent2DiscoveryRunner {
         markers: { isMaintenanceFUQ, isServiceCallFUQ, isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, hasServiceChoiceConflict }
       });
 
-      const { ack: fuqAck, usedName: fuqUsedName, usedGreeting: fuqUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-      nextState.agent2.discovery.usedNameThisTurn = fuqUsedName;
-      if (fuqUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+      const { ack: fuqAck } = buildAck(ack);
 
       // ── Missing response config: re-ask follow-up (UI-owned) or fall through ──
       let fallthroughMissingConfig = false;
@@ -1380,7 +1352,7 @@ class Agent2DiscoveryRunner {
             });
           }
 
-          const { ack: complexAck } = buildAck(ack, callerName, state, nameGreetingConfig);
+          const { ack: complexAck } = buildAck(ack);
           const agentResponse = `${complexAck} ${llmAgentResult.response}`.trim();
           const resolvedPath = nextState.agent2.discovery.lastPath;
           emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
@@ -1894,10 +1866,8 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_YES';
         
-        const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-        nextState.agent2.discovery.usedNameThisTurn = usedName;
-        if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
-        
+        const { ack: personalAck } = buildAck(ack);
+
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
         const pendingYes = `${pendingResponses.yes || fallback.pendingYesResponse || ''}`.trim();
         let response;
@@ -1941,7 +1911,7 @@ class Agent2DiscoveryRunner {
           responseLength: response.length,
           hasAudio: false,
           source: 'pendingQuestion.yesPath',
-          usedCallerName: usedName,
+          usedCallerName: false,
           wasBlocked: yesValidation.blocked
         });
         
@@ -1957,10 +1927,8 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_NO';
         
-        const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-        nextState.agent2.discovery.usedNameThisTurn = usedName;
-        if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
-        
+        const { ack: personalAck } = buildAck(ack);
+
         // V128: Pending question NO response (new namespace with legacy fallback)
         const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
         const pendingNo = `${pendingResponses.no || fallback.pendingNoResponse || ''}`.trim();
@@ -2007,7 +1975,7 @@ class Agent2DiscoveryRunner {
           responseLength: response.length,
           hasAudio: false,
           source: 'pendingQuestion.noPath',
-          usedCallerName: usedName,
+          usedCallerName: false,
           wasBlocked: noValidation.blocked
         });
         
@@ -2909,18 +2877,7 @@ class Agent2DiscoveryRunner {
       // ════════════════════════════════════════════════════════════════════════
       const isLLMTrigger = card.responseMode === 'llm' && card.llmFactPack;
 
-      // Build ack (with one-time name greeting if configured)
-      const { ack: personalAck, usedName, usedGreeting, greetingText } = buildAck(ack, callerName, state, nameGreetingConfig);
-      nextState.agent2.discovery.usedNameThisTurn = usedName;
-      if (usedGreeting) {
-        nextState.agent2.discovery.usedNameGreetingThisCall = true;
-        emit('NAME_GREETING_FIRED', {
-          greetingText,
-          callerName: callerName || null,
-          alwaysGreet: nameGreetingConfig?.alwaysGreet === true,
-          turn
-        });
-      }
+      const { ack: personalAck } = buildAck(ack);
 
       // Update state
       nextState.agent2.discovery.lastPath = isLLMTrigger ? 'TRIGGER_CARD_LLM' : 'TRIGGER_CARD_ANSWER';
@@ -2992,7 +2949,7 @@ class Agent2DiscoveryRunner {
           hasAudio: false,
           audioUrl: null,
           source: `card:${card.id}:llm`,
-          usedCallerName: usedName,
+          usedCallerName: false,
           nextAction,
           llmMeta: llmTriggerResult.llmMeta
         });
@@ -3125,7 +3082,7 @@ class Agent2DiscoveryRunner {
         hasAudio: !!audioUrl,
         audioUrl: audioUrl || null,
         source: `card:${card.id}`,
-        usedCallerName: usedName,
+        usedCallerName: false,
         nextAction
       });
 
@@ -3202,10 +3159,8 @@ class Agent2DiscoveryRunner {
           const clarifierQuestion = `${clarifier.question || ''}`.trim();
           
           if (clarifierQuestion) {
-            const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-            nextState.agent2.discovery.usedNameThisTurn = usedName;
-            if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
-            
+            const { ack: personalAck } = buildAck(ack);
+
             // Store clarifier state
             nextState.agent2.discovery.pendingClarifier = {
               id: clarifier.id,
@@ -3248,7 +3203,7 @@ class Agent2DiscoveryRunner {
               responseLength: response.length,
               hasAudio: false,
               source: `clarifier:${clarifier.id}`,
-              usedCallerName: usedName
+              usedCallerName: false
             });
             
             return {
@@ -3394,9 +3349,7 @@ class Agent2DiscoveryRunner {
     let pathSelected = null;
     let pathReason = null;
 
-    const { ack: personalAck, usedName, usedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-    nextState.agent2.discovery.usedNameThisTurn = usedName;
-    if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+    const { ack: personalAck } = buildAck(ack);
 
     // Declared at response-composition scope so T3 state contract (line ~3476)
     // can safely read T2 failure reason regardless of which branch executed.
@@ -3426,7 +3379,7 @@ class Agent2DiscoveryRunner {
         responseLength: response.length,
         hasAudio: false,
         source: 'ScenarioEngine',
-        usedCallerName: usedName
+        usedCallerName: false
       });
       
     } else {
@@ -3579,10 +3532,7 @@ class Agent2DiscoveryRunner {
           nextState.agent2.discovery.lastResponseWasPartial = true;
         }
 
-        // Use personalized ack if appropriate
-        const { ack: llmAck, usedName: llmUsedName, usedGreeting: llmUsedGreeting } = buildAck(ack, callerName, state, nameGreetingConfig);
-        nextState.agent2.discovery.usedNameThisTurn = llmUsedName;
-        if (llmUsedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
+        const { ack: llmAck } = buildAck(ack);
 
         // Don't double-ack if LLM Agent response already sounds natural
         const agentStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds|sure|absolutely|of course|i can help|i'd be happy)/i.test(llmAgentResult.response);
@@ -3616,7 +3566,7 @@ class Agent2DiscoveryRunner {
           responseLength: response.length,
           hasAudio: false,
           source: 'llmAgent.noMatch',
-          usedCallerName: llmUsedName,
+          usedCallerName: false,
           isLLMAgent: true,
           latencyMs: llmAgentResult.latencyMs
         });
@@ -3841,7 +3791,7 @@ class Agent2DiscoveryRunner {
         responseLength: response.length,
         hasAudio: false,
         source: humanToneConfig.enabled !== false ? 'empathyLayer' : 'fallback.noMatchWhenReasonCaptured',
-        usedCallerName: usedName,
+        usedCallerName: false,
         hadClarifier: !!nextQ && !skipClarifierQuestion,
         pendingQuestion: nextQ || null,
         skippedClarifier: skipClarifierQuestion,
@@ -3943,7 +3893,7 @@ class Agent2DiscoveryRunner {
         responseLength: response.length,
         hasAudio: false,
         source: skipGenericQuestion ? 'fallback.pendingComplexFollowup' : 'fallback.noMatchAnswer',
-        usedCallerName: usedName,
+        usedCallerName: false,
         skippedGenericQuestion: skipGenericQuestion
       });
     }
@@ -4033,6 +3983,79 @@ class Agent2DiscoveryRunner {
       _fallbackUsed: fallbackUsed,
       _123rp,
     };
+  }
+
+  /**
+   * First-turn greeting decorator.
+   *
+   * Applies the Name Greeting (one-time opening line) as a universal
+   * post-processor AFTER the core response is determined, regardless of
+   * which path produced it (greeting interceptor, trigger, LLM, fallback).
+   *
+   * Runs once per call. Avoids double-naming when the base response
+   * already contains the caller's name.
+   *
+   * @param {Object} result - Return value from run()
+   * @param {Object} company - Company document (for nameGreeting config)
+   * @returns {Object} Decorated result
+   */
+  static applyFirstTurnGreeting(result, company) {
+    if (!result || !result.response || !result.state) return result;
+
+    const state = result.state;
+
+    // One-shot: already used this call
+    if (state.agent2?.discovery?.usedNameGreetingThisCall) return result;
+
+    // Load config
+    const nameGreetingConfig = company?.aiAgentSettings?.agent2?.discovery?.nameGreeting;
+    if (!nameGreetingConfig) return result;
+
+    const greetingLine = `${nameGreetingConfig.greetingLine || ''}`.trim();
+    if (!greetingLine) return result;
+
+    const callerName = state.callerName
+      || state.agent2?.scrabEngine?.entities?.firstName
+      || null;
+    const alwaysGreet = nameGreetingConfig.alwaysGreet === true;
+
+    // Need a name or alwaysGreet to fire
+    if (!callerName && !alwaysGreet) return result;
+
+    // Resolve {name} placeholder
+    let resolved;
+    if (callerName) {
+      resolved = greetingLine.replace(/\{name\}/gi, callerName);
+    } else {
+      resolved = greetingLine
+        .replace(/\s*\{name\}\s*/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // Nothing meaningful after resolving (e.g., "{name}," with no name → just ",")
+    if (!resolved || /^[,.\s]*$/.test(resolved)) {
+      state.agent2 = state.agent2 || {};
+      state.agent2.discovery = state.agent2.discovery || {};
+      state.agent2.discovery.usedNameGreetingThisCall = true;
+      return result;
+    }
+
+    // DOUBLE-NAME GUARD: skip prepend if response already contains the name
+    if (callerName && result.response.toLowerCase().includes(callerName.toLowerCase())) {
+      state.agent2 = state.agent2 || {};
+      state.agent2.discovery = state.agent2.discovery || {};
+      state.agent2.discovery.usedNameGreetingThisCall = true;
+      return result;
+    }
+
+    // Apply greeting as opening wrapper
+    result.response = `${resolved} ${result.response}`.trim();
+    state.agent2 = state.agent2 || {};
+    state.agent2.discovery = state.agent2.discovery || {};
+    state.agent2.discovery.usedNameGreetingThisCall = true;
+
+    return result;
   }
 }
 

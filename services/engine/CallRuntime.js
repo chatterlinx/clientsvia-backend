@@ -494,6 +494,12 @@ class CallRuntime {
                         bridgeToken: context.bridgeToken || null,
                         redis: context.redis || null,
                     });
+
+                    // Apply Name Greeting as universal first-response decorator.
+                    // Runs once per call, after all response paths, with double-name guard.
+                    if (ownerResult) {
+                        ownerResult = Agent2DiscoveryRunner.applyFirstTurnGreeting(ownerResult, company);
+                    }
                     
                     bufferEvent('A2_MIC_OWNER_PROOF', {
                         agent2Enabled: true,
