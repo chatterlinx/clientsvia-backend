@@ -3234,6 +3234,10 @@ class Agent2DiscoveryRunner {
     nextState.agent2.discovery.usedNameThisTurn = usedName;
     if (usedGreeting) nextState.agent2.discovery.usedNameGreetingThisCall = true;
 
+    // Declared at response-composition scope so T3 state contract (line ~3476)
+    // can safely read T2 failure reason regardless of which branch executed.
+    let llmAgentResult = null;
+
     if (answerText && scenarioUsed) {
       // Path 3a: Scenario engine provided an answer (only if enabled and matched)
       response = afterQuestion
@@ -3329,9 +3333,6 @@ class Agent2DiscoveryRunner {
       // the conversation when deterministic matching cannot.
       // After responding, control returns to normal discovery pipeline.
       // The agent does NOT persist — triggers are tried again on the next turn.
-
-      // Hoisted so T3 state contract can access failure reason from T2
-      let llmAgentResult = null;
 
       // Track no-match count for this call
       const noMatchCount = (nextState.agent2.discovery.noMatchCount || 0) + 1;
