@@ -1792,7 +1792,6 @@ router.post('/voice', async (req, res) => {
         const twilioRecClient = twilio(company.twilioConfig.accountSid, company.twilioConfig.authToken);
         twilioRecClient.calls(_recCallSid)
           .recordings.create({
-            recordingChannels: 'dual',
             recordingStatusCallback: recordingCallbackUrl,
             recordingStatusCallbackMethod: 'POST',
             recordingStatusCallbackEvent: ['completed', 'failed']
@@ -1801,7 +1800,7 @@ router.post('/voice', async (req, res) => {
             logger.info('[CALL RECORDING] Recording started', {
               callSid: _recCallSid,
               recordingSid: recording.sid,
-              channels: 'dual'
+              channels: 'mono'
             });
             // Persist success to lifecycle
             try {
@@ -7820,20 +7819,41 @@ router.post('/status-callback/:companyId', async (req, res) => {
         });
       } catch (endCallErr) {
         // Capture the EXACT error so we can diagnose via lifecycle
-        logger.error('[CALL STATUS] ❌ endCall() FAILED — this is why duration is missing', {
+        logger.error('[CALL STATUS] ❌ endCall() FAILED — falling back to direct duration write', {
           callId: callSummary.callId,
           callSid: CallSid,
           error: endCallErr.message,
           stack: endCallErr.stack?.split('\n').slice(0, 5).join(' | ')
         });
-        // Persist the error to lifecycle so the diagnostic endpoint shows it
-        await CallSummary.updateOne(
-          { _id: callSummary._id },
-          { $set: {
-            'callLifecycle.endCallPersisted': false,
-            'callLifecycle.statusCallbackError': `endCall failed: ${endCallErr.message}`
-          }}
-        ).catch(() => {});
+
+        // ── FALLBACK: Write duration + outcome directly even if endCall() fails ──
+        // endCall() does many things (transcript, customer events, KPI). If ANY of
+        // those throw, we must still persist the authoritative Twilio duration so
+        // the dashboard doesn't show "--" forever.
+        try {
+          await CallSummary.updateOne(
+            { _id: callSummary._id },
+            { $set: {
+              durationSeconds,
+              endedAt: now,
+              outcome: outcomeMap[CallStatus] || 'completed',
+              processingStatus: 'complete',
+              'callLifecycle.endCallPersisted': false,
+              'callLifecycle.endCallPersistedAt': new Date(),
+              'callLifecycle.statusCallbackError': `endCall failed: ${endCallErr.message}`,
+              'callLifecycle.finalDurationSource': 'twilio_callback_fallback'
+            }}
+          );
+          logger.info('[CALL STATUS] ✅ Fallback direct-write succeeded — duration saved despite endCall failure', {
+            callId: callSummary.callId,
+            durationSeconds
+          });
+        } catch (fallbackErr) {
+          logger.error('[CALL STATUS] ❌ Even fallback direct-write failed', {
+            callId: callSummary.callId,
+            error: fallbackErr.message
+          });
+        }
       }
     }
 
