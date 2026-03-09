@@ -686,11 +686,28 @@ class EntityExtractionEngine {
    * @param {Object} context.GlobalHubService - GlobalShare service for name validation
    * @returns {Promise<Object>} { entities, extractions, validations, processingTimeMs }
    */
+  // Words that must NEVER be accepted as a surname.
+  // These appear after name introductions ("this is Mark AND having issues")
+  // and are conjunctions, prepositions, or verb fragments — never surnames.
+  static SURNAME_CONNECTOR_BLOCKLIST = new Set([
+    'and', 'or', 'but', 'nor', 'yet', 'so',
+    'with', 'from', 'at', 'by', 'for', 'in', 'of', 'to', 'on', 'as',
+    'having', 'just', 'because', 'since', 'then', 'when', 'where',
+    'who', 'what', 'that', 'which', 'about', 'also', 'still', 'been',
+    'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'he', 'she', 'they', 'we', 'it', 'my', 'your', 'their', 'our', 'its'
+  ]);
+
+  static isValidSurnameCandidate(word) {
+    if (!word || word.length < 2) return false;
+    return !ScrabEngine.SURNAME_CONNECTOR_BLOCKLIST.has(word.toLowerCase());
+  }
+
   static async process(text, config = {}, context = {}) {
     const startTime = Date.now();
     const extractions = [];
     const validations = [];
-    
+
     const entities = {
       firstName: null,
       lastName: null,
@@ -957,7 +974,8 @@ class EntityExtractionEngine {
       const thisIsFullPattern = /this is (\w+)\s+(\w+)/i;
       const thisIsFullMatch = text.match(thisIsFullPattern);
 
-      if (thisIsFullMatch && thisIsFullMatch[1] && thisIsFullMatch[2]) {
+      if (thisIsFullMatch && thisIsFullMatch[1] && thisIsFullMatch[2]
+          && ScrabEngine.isValidSurnameCandidate(thisIsFullMatch[2])) {
         const firstCandidate = this.capitalizeFirst(thisIsFullMatch[1]);
         const secondCandidate = this.capitalizeFirst(thisIsFullMatch[2]);
 
@@ -972,11 +990,16 @@ class EntityExtractionEngine {
             source: 'GlobalShare'
           });
 
+          // Always set firstName; only set lastName if it passes the connector blocklist
           entities.firstName = firstMatch.value;
-          entities.lastName = lastMatch.value;
-          entities.fullName = `${firstMatch.value} ${lastMatch.value}`;
           entities.firstNameMeta = firstMatch;
-          entities.lastNameMeta = lastMatch;
+          if (lastMatch.value) {
+            entities.lastName = lastMatch.value;
+            entities.lastNameMeta = lastMatch;
+          }
+          if (entities.firstName && entities.lastName) {
+            entities.fullName = `${entities.firstName} ${entities.lastName}`;
+          }
 
           extractions.push({
             type: 'fullName',
@@ -989,6 +1012,8 @@ class EntityExtractionEngine {
             correctedFrom: firstMatch.correctedFrom || lastMatch.correctedFrom || null
           });
         } else {
+          // No GlobalHubService — only accept firstName; skip secondCandidate
+          // (already validated above by isValidSurnameCandidate)
           entities.firstName = firstCandidate;
           entities.lastName = secondCandidate;
           entities.fullName = `${firstCandidate} ${secondCandidate}`;
