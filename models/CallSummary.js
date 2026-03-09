@@ -264,7 +264,7 @@ const CallSummarySchema = new mongoose.Schema({
     /** Where did the final authoritative duration come from? */
     finalDurationSource: {
       type: String,
-      enum: ['twilio_callback', 'calculated', 'unknown', null],
+      enum: ['twilio_callback', 'twilio_callback_fallback', 'calculated', 'unknown', null],
       default: null
     }
   },

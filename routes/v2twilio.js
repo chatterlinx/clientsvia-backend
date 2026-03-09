@@ -1788,57 +1788,70 @@ router.post('/voice', async (req, res) => {
     if (company.twilioConfig?.accountSid && company.twilioConfig?.authToken && req.body.CallSid) {
       const recordingCallbackUrl = `${getSecureBaseUrl(req)}/api/twilio/recording-status`;
       const _recCallSid = req.body.CallSid;
-      try {
-        const twilioRecClient = twilio(company.twilioConfig.accountSid, company.twilioConfig.authToken);
-        twilioRecClient.calls(_recCallSid)
-          .recordings.create({
-            recordingStatusCallback: recordingCallbackUrl,
-            recordingStatusCallbackMethod: 'POST',
-            recordingStatusCallbackEvent: ['completed', 'failed']
-          })
-          .then(async (recording) => {
-            logger.info('[CALL RECORDING] Recording started', {
-              callSid: _recCallSid,
-              recordingSid: recording.sid,
-              channels: 'mono'
+      const _recAccountSid = company.twilioConfig.accountSid;
+      const _recAuthToken = company.twilioConfig.authToken;
+
+      // ── DELAY recording start by 4 seconds ──────────────────────────────
+      // The /voice webhook fires when Twilio connects the call, but the call
+      // is NOT "in-progress" until our TwiML response is returned and Twilio
+      // begins executing it. Twilio REST API recordings.create() requires the
+      // call to be "in-progress" — calling it immediately returns
+      // "Requested resource is not eligible for recording".
+      // 4 seconds is conservative: TwiML return + Twilio processing < 2s.
+      // ────────────────────────────────────────────────────────────────────
+      setTimeout(() => {
+        try {
+          const twilioRecClient = twilio(_recAccountSid, _recAuthToken);
+          twilioRecClient.calls(_recCallSid)
+            .recordings.create({
+              recordingStatusCallback: recordingCallbackUrl,
+              recordingStatusCallbackMethod: 'POST',
+              recordingStatusCallbackEvent: ['completed', 'failed']
+            })
+            .then(async (recording) => {
+              logger.info('[CALL RECORDING] ✅ Recording started (after delay)', {
+                callSid: _recCallSid,
+                recordingSid: recording.sid
+              });
+              // Persist success to lifecycle
+              try {
+                const _CS = require('../models/CallSummary');
+                await _CS.updateOne(
+                  { twilioSid: _recCallSid },
+                  { $set: {
+                    recordingSid: recording.sid,
+                    'callLifecycle.recordingRequested': true,
+                    'callLifecycle.recordingRequestedAt': new Date()
+                  }}
+                );
+              } catch (_e) { /* non-blocking */ }
+            })
+            .catch(async (recErr) => {
+              logger.error('[CALL RECORDING] ❌ FAILED to start recording (after delay)', {
+                callSid: _recCallSid,
+                error: recErr.message,
+                code: recErr.code,
+                recordingCallbackUrl
+              });
+              // Persist failure to lifecycle
+              try {
+                const _CS = require('../models/CallSummary');
+                await _CS.updateOne(
+                  { twilioSid: _recCallSid },
+                  { $set: {
+                    'callLifecycle.recordingRequested': false,
+                    'callLifecycle.recordingError': recErr.message
+                  }}
+                );
+              } catch (_e) { /* non-blocking */ }
             });
-            // Persist success to lifecycle
-            try {
-              const _CS = require('../models/CallSummary');
-              await _CS.updateOne(
-                { twilioSid: _recCallSid },
-                { $set: {
-                  'callLifecycle.recordingRequested': true,
-                  'callLifecycle.recordingRequestedAt': new Date()
-                }}
-              );
-            } catch (_e) { /* non-blocking */ }
-          })
-          .catch(async (recErr) => {
-            logger.error('[CALL RECORDING] ❌ FAILED to start recording — no recording will exist for this call', {
-              callSid: _recCallSid,
-              error: recErr.message,
-              code: recErr.code,
-              recordingCallbackUrl
-            });
-            // Persist failure to lifecycle
-            try {
-              const _CS = require('../models/CallSummary');
-              await _CS.updateOne(
-                { twilioSid: _recCallSid },
-                { $set: {
-                  'callLifecycle.recordingRequested': false,
-                  'callLifecycle.recordingError': recErr.message
-                }}
-              );
-            } catch (_e) { /* non-blocking */ }
+        } catch (recInitErr) {
+          logger.error('[CALL RECORDING] ❌ Could not init Twilio client for recording', {
+            callSid: _recCallSid,
+            error: recInitErr.message
           });
-      } catch (recInitErr) {
-        logger.error('[CALL RECORDING] ❌ Could not init Twilio client for recording', {
-          callSid: _recCallSid,
-          error: recInitErr.message
-        });
-      }
+        }
+      }, 4000); // 4-second delay — call must be "in-progress" before Twilio allows recording
     }
     // ════════════════════════════════════════════════════════════════════════════
 

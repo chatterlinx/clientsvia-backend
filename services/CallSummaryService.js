@@ -36,6 +36,7 @@
  */
 
 const CallSummary = require('../models/CallSummary');
+const { CALL_OUTCOMES } = require('../models/CallSummary');
 const CallTranscript = require('../models/CallTranscript');
 const CustomerEvent = require('../models/CustomerEvent');
 const CustomerLookup = require('./CustomerLookup');
