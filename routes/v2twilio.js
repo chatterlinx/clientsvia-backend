@@ -7786,29 +7786,55 @@ router.post('/status-callback/:companyId', async (req, res) => {
         ? parsedDuration
         : 0;
 
-      await CallSummaryService.endCall(callSummary.callId, {
-        outcome: outcomeMap[CallStatus] || 'completed',
-        durationSeconds,
-        endedAt: now
-      });
-
-      // ── MARK: endCall persisted with source (lifecycle observability) ───
-      await CallSummary.updateOne(
-        { _id: callSummary._id },
-        { $set: {
-          'callLifecycle.endCallPersisted': true,
-          'callLifecycle.endCallPersistedAt': new Date(),
-          'callLifecycle.finalDurationSource': 'twilio_callback'
-        }}
-      );
-
-      logger.info('[CALL STATUS] Company CallSummary updated successfully', {
-        companyId: callSummary.companyId,
+      logger.info('[CALL STATUS] About to call endCall()', {
         callId: callSummary.callId,
-        outcome: outcomeMap[CallStatus],
+        callSid: CallSid,
         durationSeconds,
-        rawCallDuration: CallDuration
+        rawCallDuration: CallDuration,
+        callStatus: CallStatus
       });
+
+      try {
+        await CallSummaryService.endCall(callSummary.callId, {
+          outcome: outcomeMap[CallStatus] || 'completed',
+          durationSeconds,
+          endedAt: now
+        });
+
+        // ── MARK: endCall persisted with source (lifecycle observability) ───
+        await CallSummary.updateOne(
+          { _id: callSummary._id },
+          { $set: {
+            'callLifecycle.endCallPersisted': true,
+            'callLifecycle.endCallPersistedAt': new Date(),
+            'callLifecycle.finalDurationSource': 'twilio_callback'
+          }}
+        );
+
+        logger.info('[CALL STATUS] Company CallSummary updated successfully', {
+          companyId: callSummary.companyId,
+          callId: callSummary.callId,
+          outcome: outcomeMap[CallStatus],
+          durationSeconds,
+          rawCallDuration: CallDuration
+        });
+      } catch (endCallErr) {
+        // Capture the EXACT error so we can diagnose via lifecycle
+        logger.error('[CALL STATUS] ❌ endCall() FAILED — this is why duration is missing', {
+          callId: callSummary.callId,
+          callSid: CallSid,
+          error: endCallErr.message,
+          stack: endCallErr.stack?.split('\n').slice(0, 5).join(' | ')
+        });
+        // Persist the error to lifecycle so the diagnostic endpoint shows it
+        await CallSummary.updateOne(
+          { _id: callSummary._id },
+          { $set: {
+            'callLifecycle.endCallPersisted': false,
+            'callLifecycle.statusCallbackError': `endCall failed: ${endCallErr.message}`
+          }}
+        ).catch(() => {});
+      }
     }
 
     res.type('text/xml').status(200).send('<Response></Response>');
