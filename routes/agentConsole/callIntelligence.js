@@ -919,6 +919,53 @@ router.get('/debug/:companyId', async (req, res) => {
 });
 
 /**
+ * GET /api/call-intelligence/company/:companyId/lifecycle-diagnostic
+ * Shows the Twilio callback lifecycle for the most recent calls.
+ * Answers: "Did the status callback register? Did it fire? Did recording start?"
+ */
+router.get('/company/:companyId/lifecycle-diagnostic', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const limit = parseInt(req.query.limit, 10) || 10;
+
+    const companyObjectId = mongoose.Types.ObjectId.isValid(companyId)
+      ? new mongoose.Types.ObjectId(companyId)
+      : companyId;
+
+    const calls = await CallSummary.find({ companyId: companyObjectId })
+      .sort({ startedAt: -1 })
+      .limit(limit)
+      .select('callId twilioSid phone startedAt endedAt durationSeconds turnCount hasRecording recordingUrl recordingSid callLifecycle')
+      .lean();
+
+    const diagnostic = calls.map(c => ({
+      callId: c.callId,
+      twilioSid: c.twilioSid,
+      phone: c.phone,
+      startedAt: c.startedAt,
+      endedAt: c.endedAt,
+      durationSeconds: c.durationSeconds,
+      turnCount: c.turnCount,
+      recording: {
+        hasRecording: c.hasRecording || false,
+        hasUrl: !!c.recordingUrl,
+        hasSid: !!c.recordingSid
+      },
+      lifecycle: c.callLifecycle || { _note: 'NO LIFECYCLE DATA — call predates this fix or lifecycle was never written' }
+    }));
+
+    res.json({
+      success: true,
+      companyId,
+      callCount: diagnostic.length,
+      diagnostic
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/call-intelligence/recording/:recordingSid/audio
  * Proxy Twilio recording audio so the browser can play it without CORS/auth issues.
  */
