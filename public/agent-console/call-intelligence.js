@@ -290,7 +290,7 @@
     if (state.calls.length === 0) {
       DOM.callsTbody.innerHTML = `
         <tr class="empty-row">
-          <td colspan="9" class="empty-cell">
+          <td colspan="10" class="empty-cell">
             <p>No calls found</p>
           </td>
         </tr>
@@ -317,6 +317,13 @@
           </td>
           <td class="col-provenance">
             <span class="provenance-badge">✓ UI-Owned</span>
+          </td>
+          <td class="col-recording">
+            ${call.recording?.hasRecording ? `
+              <button class="btn-play-recording" data-recording-url="${call.recording.url}" title="Play recording${call.recording.duration ? ' (' + formatDuration(call.recording.duration) + ')' : ''}">
+                <span class="play-icon">&#9654;</span>
+              </button>
+            ` : '<span class="text-muted">--</span>'}
           </td>
           <td class="col-intelligence">
             <div class="intelligence-cell ${statusInfo.className}">
@@ -346,6 +353,44 @@
         e.stopPropagation();
         const callSid = btn.dataset.callsid;
         openAnalysisModal(callSid);
+      });
+    });
+
+    // Recording play buttons — toggle inline audio player
+    document.querySelectorAll('.btn-play-recording').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const url = btn.dataset.recordingUrl;
+        const row = btn.closest('tr');
+        const existingPlayer = row.nextElementSibling;
+
+        // If player row already exists for this row, toggle it
+        if (existingPlayer && existingPlayer.classList.contains('recording-player-row')) {
+          existingPlayer.remove();
+          btn.classList.remove('active');
+          return;
+        }
+
+        // Remove any other open player rows
+        document.querySelectorAll('.recording-player-row').forEach(r => r.remove());
+        document.querySelectorAll('.btn-play-recording.active').forEach(b => b.classList.remove('active'));
+
+        // Insert player row below this row
+        const playerRow = document.createElement('tr');
+        playerRow.className = 'recording-player-row';
+        playerRow.innerHTML = `
+          <td colspan="10" class="recording-player-cell">
+            <div class="recording-player-wrapper">
+              <audio controls autoplay class="recording-audio-player">
+                <source src="${url}" type="audio/mpeg">
+                Your browser does not support the audio element.
+              </audio>
+              <a href="${url}" target="_blank" class="recording-external-link" title="Open in new tab">&#8599;</a>
+            </div>
+          </td>
+        `;
+        row.after(playerRow);
+        btn.classList.add('active');
       });
     });
   }
@@ -502,6 +547,19 @@
             </div>
           ` : '')}
         </div>
+        ${intel.recording?.hasRecording ? `
+          <div class="overview-recording">
+            <span class="overview-recording-label">Call Recording</span>
+            <div class="overview-recording-player">
+              <audio controls class="modal-recording-audio">
+                <source src="${intel.recording.url}" type="audio/mpeg">
+                Your browser does not support the audio element.
+              </audio>
+              ${intel.recording.duration ? `<span class="recording-duration">${formatDuration(intel.recording.duration)}</span>` : ''}
+              <a href="${intel.recording.url}" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>
+            </div>
+          </div>
+        ` : ''}
       </section>
     `;
   }

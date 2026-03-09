@@ -14,6 +14,7 @@ const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const CallSummary = require('../../models/CallSummary');
 const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
 const CallIntelligence = require('../../models/CallIntelligence');
+const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
 const mongoose = require('mongoose');
 
 function buildCallSummaryDateRange(timeRange) {
@@ -418,20 +419,32 @@ router.get('/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
     
-    const [intelligence, transcript, summary] = await Promise.all([
+    const [intelligence, transcript, summary, callLog] = await Promise.all([
       CallIntelligenceService.getCallIntelligence(callSid),
       CallTranscriptV2.findOne({ callSid }).lean(),
-      CallSummary.findOne({ $or: [{ twilioSid: callSid }, { callId: callSid }] }).lean()
+      CallSummary.findOne({ $or: [{ twilioSid: callSid }, { callId: callSid }] }).lean(),
+      v2AIAgentCallLog.findOne(
+        { callId: callSid },
+        { 'conversation.recordingUrl': 1, 'conversation.recordingDuration': 1, 'conversation.recordingSid': 1 }
+      ).lean()
     ]);
+
+    const recording = {
+      hasRecording: !!callLog?.conversation?.recordingUrl,
+      url: callLog?.conversation?.recordingUrl || null,
+      duration: callLog?.conversation?.recordingDuration || null,
+      sid: callLog?.conversation?.recordingSid || null
+    };
 
     const turns = transcript?.turns || summary?.turns || [];
     const trace = transcript?.trace || summary?.events || [];
     const callContext = buildCallContext(turns, trace);
 
-    // If GPT-4 analysis exists, merge callContext and return
+    // If GPT-4 analysis exists, merge callContext and recording, return
     if (intelligence) {
       const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
       payload.callContext = callContext;
+      payload.recording = recording;
       return res.json({ success: true, intelligence: payload });
     }
 
@@ -450,6 +463,7 @@ router.get('/:callSid', async (req, res) => {
           criticalIssueCount: 0,
           issues: [],
           recommendations: [],
+          recording,
           callMetadata: {
             duration: summary?.durationSeconds || 0,
             turns: summary?.turnCount || turns.filter(t => t.speaker === 'caller').length || 0,
@@ -545,10 +559,23 @@ router.get('/company/:companyId/list', async (req, res) => {
     }
 
     const callSids = summaries.map(c => c.twilioSid || c.callId).filter(Boolean);
-    const intelligenceDocs = callSids.length > 0
-      ? await CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean()
-      : [];
+    const [intelligenceDocs, callLogs] = await Promise.all([
+      callSids.length > 0
+        ? CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean()
+        : [],
+      // Fetch recording URLs from v2AIAgentCallLog (lightweight projection)
+      callSids.length > 0
+        ? v2AIAgentCallLog.find(
+            { callId: { $in: callSids } },
+            { callId: 1, 'conversation.recordingUrl': 1, 'conversation.recordingDuration': 1 }
+          ).lean()
+        : []
+    ]);
     const intelligenceMap = new Map(intelligenceDocs.map(doc => [doc.callSid, doc]));
+    const recordingMap = new Map(callLogs.map(log => [log.callId, {
+      url: log.conversation?.recordingUrl || null,
+      duration: log.conversation?.recordingDuration || null
+    }]));
 
     if (autoAnalyze === 'true') {
       const settings = await CallIntelligenceSettings.getSettings(companyId);
@@ -629,12 +656,20 @@ router.get('/company/:companyId/list', async (req, res) => {
     let items = summaries.map(summary => {
       const callSid = summary.twilioSid || summary.callId;
       const intel = intelligenceMap.get(callSid);
+      const rec = recordingMap.get(callSid);
+      const recording = {
+        hasRecording: !!rec?.url,
+        url: rec?.url || null,
+        duration: rec?.duration || null
+      };
+
       if (intel) {
         // Merge routingTier from CallSummary into intelligence response
         if (summary.routingTier) {
           intel.callMetadata = intel.callMetadata || {};
           intel.callMetadata.routingTier = summary.routingTier;
         }
+        intel.recording = recording;
         return intel;
       }
 
@@ -651,6 +686,7 @@ router.get('/company/:companyId/list', async (req, res) => {
         recommendations: [],
         analysis: {},
         gpt4Analysis: { enabled: false },
+        recording,
         callMetadata: {
           duration: summary.durationSeconds || 0,
           turns: summary.turnCount || 0,

@@ -263,6 +263,130 @@ body {
 }
 
 /* =============================================================================
+   RECORDING COLUMN & PLAYER
+   ============================================================================= */
+
+.col-recording {
+  width: 70px;
+  text-align: center;
+}
+
+.btn-play-recording {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #D1D5DB;
+  border-radius: 50%;
+  background: #F9FAFB;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.btn-play-recording .play-icon {
+  font-size: 0.75rem;
+  color: #374151;
+  margin-left: 2px; /* optical centering for play triangle */
+}
+
+.btn-play-recording:hover {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.btn-play-recording:hover .play-icon {
+  color: white;
+}
+
+.btn-play-recording.active {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.btn-play-recording.active .play-icon {
+  color: white;
+}
+
+.text-muted {
+  color: #9CA3AF;
+  font-size: 0.75rem;
+}
+
+/* Inline player row below the call row */
+.recording-player-row {
+  background: #F0F4FF;
+}
+
+.recording-player-cell {
+  padding: 0.5rem 1rem !important;
+}
+
+.recording-player-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.recording-audio-player {
+  height: 32px;
+  flex: 1;
+  max-width: 500px;
+}
+
+.recording-external-link {
+  color: #3B82F6;
+  text-decoration: none;
+  font-size: 1rem;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.recording-external-link:hover {
+  color: #2563EB;
+}
+
+/* Modal recording player */
+.overview-recording {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #F0F4FF;
+  border-radius: 0.5rem;
+  border: 1px solid #DBEAFE;
+}
+
+.overview-recording-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.overview-recording-player {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.modal-recording-audio {
+  height: 36px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 100%;
+}
+
+.recording-duration {
+  font-size: 0.75rem;
+  color: #6B7280;
+  flex-shrink: 0;
+}
+
+/* =============================================================================
    INTELLIGENCE CELL
    ============================================================================= */
 
