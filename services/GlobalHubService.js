@@ -45,6 +45,7 @@
 
 const logger = require('../utils/logger');
 const { redisClient } = require('../clients');
+const { levenshteinDistance } = require('../utils/stringDistance');
 
 // Redis key constants
 const REDIS_KEYS = {
@@ -64,6 +65,11 @@ let memoryFallback = {
     lastNames: new Set(),
     lastNamesOriginal: []
 };
+
+// Prefix indexes for fuzzy matching (built during initialize)
+// Structure: { 'a': ['Aaron','Adam',...], 'b': ['Brian','Bryan',...], ... }
+let firstNamePrefixIndex = {};
+let lastNamePrefixIndex = {};
 
 /**
  * ============================================================================
@@ -440,6 +446,9 @@ async function initialize() {
 
                     logger.info(`🌱 [GLOBAL HUB] AUTO-SEEDED: ${firstSeed.count.toLocaleString()} first names, ${lastSeed.count.toLocaleString()} last names`);
 
+                    // Build prefix indexes for fuzzy matching
+                    rebuildPrefixIndexes();
+
                     return {
                         success: true,
                         firstNames: firstSeed.count,
@@ -455,6 +464,9 @@ async function initialize() {
             }
         }
 
+        // Build prefix indexes for fuzzy matching
+        rebuildPrefixIndexes();
+
         logger.info(`✅ [GLOBAL HUB] Initialized - ${firstResult.count.toLocaleString()} first names, ${lastResult.count.toLocaleString()} last names loaded`);
         return {
             success: true,
@@ -466,6 +478,218 @@ async function initialize() {
         logger.error('❌ [GLOBAL HUB] Initialization failed:', error);
         return { success: false, error: error.message };
     }
+}
+
+/**
+ * ============================================================================
+ * SMART NAME MATCHING — Dictionary-Backed Verification & Correction
+ * ============================================================================
+ *
+ * Behavior model:
+ * - Exact hit           → accept confidently, canonical casing
+ * - Levenshtein 1, 1 candidate  → silently normalize (e.g. "Dustn" → "Dustin")
+ * - Levenshtein 1, 2+ candidates → flag for confirmation (e.g. Marc/Mark)
+ * - No hit              → allow through, mark unverified (foreign/rare names OK)
+ *
+ * Safety: Only matches within same first-letter bucket.
+ *         "Marc" can match "Mark" but never "Karl".
+ */
+
+/**
+ * @typedef {Object} NameMatchResult
+ * @property {boolean} match       - Whether a dictionary match was found (exact or fuzzy)
+ * @property {string}  value       - Recommended name to use (canonical casing if matched)
+ * @property {string}  raw         - Original input before any correction
+ * @property {number}  score       - Confidence 0.0-1.0
+ * @property {'exact'|'fuzzy-auto'|'fuzzy-ambiguous'|'spelled'|'unknown'} verificationMode
+ * @property {string|null}   correctedFrom - Original value if corrected, null otherwise
+ * @property {string[]|null} candidates    - Alternative candidates if ambiguous, null otherwise
+ */
+
+/**
+ * Build a prefix index from an array of names for fast fuzzy matching.
+ * Groups names by their lowercase first character.
+ *
+ * @param {string[]} namesOriginal - Array of names in original casing
+ * @returns {Object} Prefix index: { 'a': ['Aaron','Adam',...], ... }
+ */
+function buildPrefixIndex(namesOriginal) {
+    const index = {};
+    for (const name of namesOriginal) {
+        if (!name || name.length === 0) continue;
+        const key = name.charAt(0).toLowerCase();
+        if (!index[key]) index[key] = [];
+        index[key].push(name);
+    }
+    return index;
+}
+
+/**
+ * Rebuild prefix indexes from current memory fallback data.
+ * Called after sync or auto-seed completes.
+ */
+function rebuildPrefixIndexes() {
+    firstNamePrefixIndex = buildPrefixIndex(memoryFallback.firstNamesOriginal);
+    lastNamePrefixIndex = buildPrefixIndex(memoryFallback.lastNamesOriginal);
+    logger.info('🔤 [GLOBAL HUB] Prefix indexes built', {
+        firstNameBuckets: Object.keys(firstNamePrefixIndex).length,
+        lastNameBuckets: Object.keys(lastNamePrefixIndex).length,
+        firstNamesTotal: memoryFallback.firstNamesOriginal.length,
+        lastNamesTotal: memoryFallback.lastNamesOriginal.length
+    });
+}
+
+/**
+ * Title-case a name string (first char uppercase, rest lowercase).
+ * @param {string} str
+ * @returns {string}
+ */
+function titleCase(str) {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+/**
+ * Find the canonical (original-cased) version of a name from the memory fallback.
+ *
+ * @param {string} name - Name to look up (any casing)
+ * @param {string[]} originalArray - memoryFallback.*Original array
+ * @returns {string|null} Canonical-cased name or null if not found
+ */
+function findCanonicalCasing(name, originalArray) {
+    const lower = name.toLowerCase();
+    for (const original of originalArray) {
+        if (original.toLowerCase() === lower) return original;
+    }
+    return null;
+}
+
+/**
+ * Smart matching against the first names dictionary.
+ *
+ * 1. Exact match (O(1) Redis SISMEMBER) → score 1.0, verificationMode 'exact'
+ * 2. Fuzzy match (prefix-bucketed Levenshtein ≤ 1):
+ *    - Single candidate → score 0.95, 'fuzzy-auto' (silent correction)
+ *    - Multiple candidates → score 0.80, 'fuzzy-ambiguous' (needs confirmation)
+ * 3. No match → score 0.50, 'unknown' (allow through)
+ *
+ * @param {string} name - Name to match
+ * @returns {Promise<NameMatchResult>}
+ */
+async function matchFirstName(name) {
+    return _matchName(name, 'first');
+}
+
+/**
+ * Smart matching against the last names dictionary.
+ * Same algorithm as matchFirstName but queries the last names dictionary.
+ *
+ * @param {string} name - Name to match
+ * @returns {Promise<NameMatchResult>}
+ */
+async function matchLastName(name) {
+    return _matchName(name, 'last');
+}
+
+/**
+ * Internal: Unified matching algorithm for both first and last names.
+ *
+ * @param {string} name - Name to match
+ * @param {'first'|'last'} type - Which dictionary to search
+ * @returns {Promise<NameMatchResult>}
+ * @private
+ */
+async function _matchName(name, type) {
+    // Guard: invalid input
+    if (!name || typeof name !== 'string' || !name.trim()) {
+        return {
+            match: false,
+            value: name || '',
+            raw: name || '',
+            score: 0,
+            verificationMode: 'unknown',
+            correctedFrom: null,
+            candidates: null
+        };
+    }
+
+    const trimmed = name.trim();
+    const isFirst = type === 'first';
+    const exactCheckFn = isFirst ? isFirstName : isLastName;
+    const originalArray = isFirst ? memoryFallback.firstNamesOriginal : memoryFallback.lastNamesOriginal;
+    const prefixIndex = isFirst ? firstNamePrefixIndex : lastNamePrefixIndex;
+
+    // ── Step 1: Exact match (O(1)) ──────────────────────────────────────
+    const isExact = await exactCheckFn(trimmed);
+    if (isExact) {
+        const canonical = findCanonicalCasing(trimmed, originalArray) || titleCase(trimmed);
+        return {
+            match: true,
+            value: canonical,
+            raw: trimmed,
+            score: 1.0,
+            verificationMode: 'exact',
+            correctedFrom: null,
+            candidates: null
+        };
+    }
+
+    // ── Step 2: Fuzzy match (prefix-bucketed Levenshtein ≤ 1) ───────────
+    const prefix = trimmed.charAt(0).toLowerCase();
+    const bucket = prefixIndex[prefix];
+
+    if (bucket && bucket.length > 0) {
+        const nameLower = trimmed.toLowerCase();
+        const fuzzyHits = [];
+
+        for (const dictName of bucket) {
+            // Quick length filter: Levenshtein ≤ 1 requires length difference ≤ 1
+            const lenDiff = Math.abs(nameLower.length - dictName.length);
+            if (lenDiff > 1) continue;
+
+            const dist = levenshteinDistance(nameLower, dictName.toLowerCase());
+            if (dist === 1) {
+                fuzzyHits.push(dictName);
+            }
+        }
+
+        if (fuzzyHits.length === 1) {
+            // Single candidate at distance 1 → silent auto-correct
+            return {
+                match: true,
+                value: fuzzyHits[0],
+                raw: trimmed,
+                score: 0.95,
+                verificationMode: 'fuzzy-auto',
+                correctedFrom: trimmed,
+                candidates: null
+            };
+        }
+
+        if (fuzzyHits.length > 1) {
+            // Multiple candidates → ambiguous, flag for confirmation
+            return {
+                match: true,
+                value: fuzzyHits[0],
+                raw: trimmed,
+                score: 0.80,
+                verificationMode: 'fuzzy-ambiguous',
+                correctedFrom: trimmed,
+                candidates: fuzzyHits
+            };
+        }
+    }
+
+    // ── Step 3: No match → allow through as unknown ─────────────────────
+    return {
+        match: false,
+        value: titleCase(trimmed),
+        raw: trimmed,
+        score: 0.50,
+        verificationMode: 'unknown',
+        correctedFrom: null,
+        candidates: null
+    };
 }
 
 /**
@@ -512,22 +736,26 @@ module.exports = {
     isFirstName,
     getFirstNames,
     getFirstNamesCount,
-    
+
     // Last Names - Lookup functions (for runtime use across all companies)
     isLastName,
     getLastNames,
     getLastNamesCount,
-    
+
+    // Smart Name Matching - Dictionary-backed verification & correction
+    matchFirstName,
+    matchLastName,
+
     // Sync functions (for admin operations)
     syncFirstNamesToRedis,
     syncLastNamesToRedis,
-    
+
     // Initialization (called on server startup)
     initialize,
-    
+
     // Health check
     healthCheck,
-    
+
     // Constants (for external reference)
     REDIS_KEYS
 };

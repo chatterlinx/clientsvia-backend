@@ -1527,7 +1527,12 @@ class Agent2DiscoveryRunner {
       expandedTokens: scrabResult.expandedTokens,
       transformations: scrabResult.transformations,
       entities: scrabResult.entities,
-      handoffEntities: scrabResult.handoffEntities || scrabResult.entities
+      handoffEntities: scrabResult.handoffEntities || scrabResult.entities,
+      // Stage 4 extraction metadata for name verification downstream
+      stage4_extraction: scrabResult.stage4_extraction ? {
+        extractions: scrabResult.stage4_extraction.extractions,
+        validations: scrabResult.stage4_extraction.validations
+      } : null
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1584,12 +1589,21 @@ class Agent2DiscoveryRunner {
       // so on Turn 1 it was always null even though we extracted a name.
       callerName = scrabResult.entities.firstName;
       
+      const firstNameExtraction = scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName');
+      const lastNameExtraction = scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'lastName');
+
       emit('CALLER_NAME_EXTRACTED', {
         firstName: scrabResult.entities.firstName,
         lastName: scrabResult.entities.lastName || null,
         source: 'scrabengine_stage4',
-        pattern: scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName')?.pattern || 'unknown',
-        confidence: scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName')?.confidence || 0.9
+        pattern: firstNameExtraction?.pattern || 'unknown',
+        confidence: firstNameExtraction?.confidence || 0.9,
+        // Name verification metadata
+        verificationMode: firstNameExtraction?.verificationMode || null,
+        correctedFrom: firstNameExtraction?.correctedFrom || null,
+        candidates: firstNameExtraction?.candidates || null,
+        lastNameVerificationMode: lastNameExtraction?.verificationMode || null,
+        lastNameCorrectedFrom: lastNameExtraction?.correctedFrom || null
       });
       
       logger.info('[ScrabEngine] ✅ Caller name extracted and stored', {

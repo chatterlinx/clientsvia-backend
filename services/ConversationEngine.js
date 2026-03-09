@@ -54,6 +54,8 @@ const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
 const { isSuspiciousDuplicateName } = require('../utils/nameGuards');
+const { isSpelledInput, parseSpelledName } = require('../utils/spelledNameParser');
+const { levenshteinDistance } = require('../utils/stringDistance');
 const { normalizeCityStatePhrase, parseCityStatePhrase, combineAddressParts } = require('../utils/addressNormalization');
 const {
     isAffirmative: isAffirmativeAccess,
@@ -486,17 +488,35 @@ function __testHandleNameSlotTurn({
         nameMeta.last = parts.slice(1).join(' ');
     } else if (currentSlots.partialName && !nameMeta.first && !nameMeta.last) {
         const partialName = currentSlots.partialName;
-        // V84+: Read from global AdminSettings cache (NOT per-company)
-        const commonFirstNames = AWConfigReader.getGlobalFirstNames();
-        const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
-        const listIsEmpty = commonFirstNames.length === 0;
-        const isCommonFirstName = listIsEmpty || commonFirstNamesSet.has(partialName.toLowerCase());
-        if (isCommonFirstName) {
-            nameMeta.first = partialName;
-            nameMeta.assumedSingleTokenAs = 'first';
+
+        // Check if ScrabEngine already classified this name via smart matching
+        // ScrabEngine stores firstNameMeta/lastNameMeta with verification scores
+        const scrabMeta = nameMetaInput?.scrabEngineMeta || null;
+        const scrabFirstScore = scrabMeta?.firstNameMeta?.score || 0;
+        const scrabLastScore = scrabMeta?.lastNameMeta?.score || 0;
+
+        if (scrabFirstScore > 0 || scrabLastScore > 0) {
+            // Use ScrabEngine's dictionary-backed classification
+            if (scrabFirstScore >= scrabLastScore) {
+                nameMeta.first = partialName;
+                nameMeta.assumedSingleTokenAs = 'first';
+            } else {
+                nameMeta.last = partialName;
+                nameMeta.assumedSingleTokenAs = 'last';
+            }
         } else {
-            nameMeta.last = partialName;
-            nameMeta.assumedSingleTokenAs = 'last';
+            // Fallback: V84+ binary classification from global AdminSettings cache
+            const commonFirstNames = AWConfigReader.getGlobalFirstNames();
+            const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
+            const listIsEmpty = commonFirstNames.length === 0;
+            const isCommonFirstName = listIsEmpty || commonFirstNamesSet.has(partialName.toLowerCase());
+            if (isCommonFirstName) {
+                nameMeta.first = partialName;
+                nameMeta.assumedSingleTokenAs = 'first';
+            } else {
+                nameMeta.last = partialName;
+                nameMeta.assumedSingleTokenAs = 'last';
+            }
         }
     } else if (currentSlots.name && !currentSlots.name.includes(' ')) {
         nameMeta.first = currentSlots.name;
@@ -1715,30 +1735,7 @@ function findSpellingVariant(name, config, commonFirstNames = [], slotLevelEnabl
     return null;
 }
 
-// Helper: Calculate Levenshtein distance between two strings
-function levenshteinDistance(a, b) {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-    
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
-                matrix[i][j] = matrix[i - 1][j - 1];
-            } else {
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1,
-                    matrix[i][j - 1] + 1,
-                    matrix[i - 1][j] + 1
-                );
-            }
-        }
-    }
-    return matrix[b.length][a.length];
-}
+// levenshteinDistance — imported from utils/stringDistance.js (shared implementation)
 
 // Helper: Find the differing letters between two similar names
 function findDifferingLetters(name1, name2) {
@@ -4374,10 +4371,88 @@ async function processTurn({
                 delete currentSlots.partialName;
                 setExtractedSlotIfChanged('name', currentSlots.name);
                 log('Accepting partial name as complete', { name: currentSlots.name });
+                } else if (expectingName && !extractedName) {
+                // ════════════════════════════════════════════════════════════════
+                // FIX C: SPELLING FALLBACK — Track failed name extraction attempts
+                // ════════════════════════════════════════════════════════════════
+                // After 2 failed attempts where we're actively expecting a name,
+                // set a flag so the LLM asks "Could you spell that for me?"
+                // On the NEXT turn, check isSpelledInput() to parse letter-by-letter.
+                // ════════════════════════════════════════════════════════════════
+                session._nameExtractionAttempts = (session._nameExtractionAttempts || 0) + 1;
+                log('🔍 Fix C: Name extraction failed', {
+                    attempt: session._nameExtractionAttempts,
+                    userText: userText.substring(0, 50)
+                });
+
+                if (session._nameExtractionAttempts >= 2) {
+                    session._awaitingSpelledName = true;
+                    log('🔍 Fix C: Switching to spelled-name mode after 2 failed attempts');
+                }
                 }
             }
         }
-        
+
+        // ════════════════════════════════════════════════════════════════════════
+        // FIX C: SPELLED NAME DETECTION — Handle letter-by-letter input
+        // ════════════════════════════════════════════════════════════════════════
+        // When awaiting spelled name (after 2 failed extraction attempts),
+        // check if user is spelling letter-by-letter: "D-U-S-T-I-N", NATO, etc.
+        // ════════════════════════════════════════════════════════════════════════
+        if (session._awaitingSpelledName && userText && !currentSlots.name) {
+            if (isSpelledInput(userText)) {
+                const spelled = parseSpelledName(userText);
+                if (spelled.parsed && spelled.name) {
+                    const assembledName = spelled.name.charAt(0).toUpperCase() + spelled.name.slice(1).toLowerCase();
+                    currentSlots.name = assembledName;
+                    setExtractedSlotIfChanged('name', assembledName);
+                    // Reset tracking
+                    session._awaitingSpelledName = false;
+                    session._nameExtractionAttempts = 0;
+                    log('📝 Fix C: Spelled name parsed successfully', {
+                        raw: userText.substring(0, 50),
+                        assembled: assembledName,
+                        confidence: spelled.confidence,
+                        letters: spelled.letters
+                    });
+                }
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // FIX D: FUZZY-AMBIGUOUS CANDIDATE STORAGE
+        // ════════════════════════════════════════════════════════════════════════
+        // When ScrabEngine's smart matching found multiple near-hit candidates
+        // (e.g., "Marc" → ["Marc", "Mark"]), store them on the session so the
+        // LLM prompt context can generate "Is that Marc with a C or Mark with a K?"
+        // The existing parseSpellingVariantResponse captures the user's choice.
+        // ════════════════════════════════════════════════════════════════════════
+        if (currentSlots.name || currentSlots.partialName) {
+            const scrabStage4 = session?.agent2?.scrabEngine?.stage4_extraction;
+            if (scrabStage4?.extractions) {
+                const nameExtraction = scrabStage4.extractions.find(e =>
+                    (e.type === 'firstName' || e.type === 'lastName') &&
+                    e.verificationMode === 'fuzzy-ambiguous' &&
+                    Array.isArray(e.candidates) && e.candidates.length > 1
+                );
+                if (nameExtraction && !session._ambiguousCandidatesHandled) {
+                    session._ambiguousNameCandidates = nameExtraction.candidates;
+                    session._ambiguousNameType = nameExtraction.type;
+                    log('🔍 Fix D: Fuzzy-ambiguous candidates stored for LLM confirmation', {
+                        name: currentSlots.name || currentSlots.partialName,
+                        candidates: nameExtraction.candidates,
+                        type: nameExtraction.type
+                    });
+                }
+            }
+        }
+
+        // Reset extraction counter on successful extraction
+        if ((currentSlots.name || currentSlots.partialName) && session._nameExtractionAttempts > 0) {
+            session._nameExtractionAttempts = 0;
+            session._awaitingSpelledName = false;
+        }
+
         // ═══════════════════════════════════════════════════════════════════════════
         // V92 FIX: SLOT PERSISTENCE GATING
         // ═══════════════════════════════════════════════════════════════════════════
@@ -7095,7 +7170,12 @@ async function processTurn({
                 // V116: Discovery truth data
                 firstUtterance: discoveryTruth?.first_utterance || null,
                 callReasonDetail: truthProblem,
-                callIntentGuess: discoveryTruth?.call_intent_guess || null
+                callIntentGuess: discoveryTruth?.call_intent_guess || null,
+                // Fix C: Spelling fallback hints for LLM
+                awaitingSpelledName: session._awaitingSpelledName || false,
+                nameExtractionAttempts: session._nameExtractionAttempts || 0,
+                // Fix D: Fuzzy-ambiguous candidates for LLM confirmation
+                ambiguousNameCandidates: session._ambiguousNameCandidates || null
             };
             
             log('CHECKPOINT 9d.2: 📊 V31 State Summary for LLM', stateSummary);

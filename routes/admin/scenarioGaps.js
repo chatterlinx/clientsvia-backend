@@ -430,38 +430,8 @@ function clusterPhrases(phrases, similarityThreshold = 0.5) {
     return clusters;
 }
 
-/**
- * Calculate Levenshtein similarity ratio between two strings
- * @returns {number} Similarity ratio between 0 and 1
- */
-function levenshteinSimilarity(str1, str2) {
-    const len1 = str1.length;
-    const len2 = str2.length;
-    
-    if (len1 === 0) return len2 === 0 ? 1 : 0;
-    if (len2 === 0) return 0;
-    
-    // Create distance matrix
-    const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
-    
-    for (let i = 0; i <= len1; i++) matrix[i][0] = i;
-    for (let j = 0; j <= len2; j++) matrix[0][j] = j;
-    
-    for (let i = 1; i <= len1; i++) {
-        for (let j = 1; j <= len2; j++) {
-            const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-            matrix[i][j] = Math.min(
-                matrix[i - 1][j] + 1,      // deletion
-                matrix[i][j - 1] + 1,      // insertion
-                matrix[i - 1][j - 1] + cost // substitution
-            );
-        }
-    }
-    
-    const distance = matrix[len1][len2];
-    const maxLen = Math.max(len1, len2);
-    return 1 - (distance / maxLen);
-}
+// Levenshtein similarity — imported from shared utility
+const { levenshteinSimilarity } = require('../../utils/stringDistance');
 
 /**
  * Determine gap priority based on call count

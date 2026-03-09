@@ -71,6 +71,7 @@
 'use strict';
 
 const logger = require('../utils/logger');
+const { isSpelledInput, parseSpelledName } = require('../utils/spelledNameParser');
 
 // ════════════════════════════════════════════════════════════════════════════
 // CONSTANTS - Built-in defaults that are always safe to apply
@@ -694,6 +695,8 @@ class EntityExtractionEngine {
       firstName: null,
       lastName: null,
       fullName: null,
+      firstNameMeta: null,  // NameMatchResult from GlobalHubService
+      lastNameMeta: null,   // NameMatchResult from GlobalHubService
       phone: null,
       address: null,
       email: null
@@ -704,353 +707,380 @@ class EntityExtractionEngine {
     // HONORIFICS - Strip titles before name extraction
     // ────────────────────────────────────────────────────────────────────────
     const HONORIFICS = ['mr', 'mrs', 'ms', 'miss', 'dr', 'doctor', 'prof', 'professor', 'sir', 'madam'];
-    
-    // Helper: Strip honorifics and clean name tokens
-    const stripHonorifics = (nameCandidate) => {
-      const parts = nameCandidate.toLowerCase().split(/\s+/);
-      return parts.filter(part => !HONORIFICS.includes(part)).join(' ');
-    };
-    
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STAGE 4.0: SPELLED NAME DETECTION (Fix B)
+    // ════════════════════════════════════════════════════════════════════════
+    // Before regex patterns, check if caller is spelling name letter-by-letter.
+    // Handles: "D-U-S-T-I-N", "D as in David, U, S, T, I, N", NATO phonetic, etc.
+    // If detected → parse, match against dictionary, return early.
+
+    if (context.GlobalHubService && isSpelledInput(text)) {
+      const spelled = parseSpelledName(text);
+      if (spelled.parsed && spelled.name) {
+        const firstMatch = await context.GlobalHubService.matchFirstName(spelled.name);
+        const lastMatch = await context.GlobalHubService.matchLastName(spelled.name);
+
+        // Classify as first or last based on which dictionary has a stronger match
+        if (firstMatch.score >= lastMatch.score) {
+          entities.firstName = firstMatch.value;
+          entities.firstNameMeta = { ...firstMatch, verificationMode: 'spelled' };
+          extractions.push({
+            type: 'firstName',
+            value: firstMatch.value,
+            pattern: 'spelled_name',
+            confidence: Math.max(firstMatch.score, spelled.confidence),
+            validated: firstMatch.match,
+            verificationMode: 'spelled',
+            correctedFrom: firstMatch.correctedFrom,
+            candidates: firstMatch.candidates,
+            spelledLetters: spelled.letters
+          });
+          validations.push({
+            entity: 'firstName',
+            value: firstMatch.value,
+            isValid: firstMatch.match,
+            source: 'spelled_name_parser',
+            spelledRaw: spelled.raw,
+            assembledName: spelled.name,
+            verificationMode: 'spelled'
+          });
+        } else {
+          entities.lastName = lastMatch.value;
+          entities.lastNameMeta = { ...lastMatch, verificationMode: 'spelled' };
+          extractions.push({
+            type: 'lastName',
+            value: lastMatch.value,
+            pattern: 'spelled_name',
+            confidence: Math.max(lastMatch.score, spelled.confidence),
+            validated: lastMatch.match,
+            verificationMode: 'spelled',
+            correctedFrom: lastMatch.correctedFrom,
+            candidates: lastMatch.candidates,
+            spelledLetters: spelled.letters
+          });
+          validations.push({
+            entity: 'lastName',
+            value: lastMatch.value,
+            isValid: lastMatch.match,
+            source: 'spelled_name_parser',
+            spelledRaw: spelled.raw,
+            assembledName: spelled.name,
+            verificationMode: 'spelled'
+          });
+        }
+
+        // Return early — spelled input is fully handled
+        ['firstName', 'lastName', 'fullName', 'phone', 'email', 'address'].forEach((key) => {
+          if (entities[key]) handoffEntities[key] = entities[key];
+        });
+        if (entities.firstNameMeta) handoffEntities._firstNameMeta = entities.firstNameMeta;
+        if (entities.lastNameMeta) handoffEntities._lastNameMeta = entities.lastNameMeta;
+
+        return {
+          entities, handoffEntities, extractions, validations,
+          processingTimeMs: Date.now() - startTime
+        };
+      }
+    }
+
     // ────────────────────────────────────────────────────────────────────────
-    // INTELLIGENT NAME EXTRACTION WITH GLOBALSHARE VALIDATION
+    // INTELLIGENT NAME EXTRACTION WITH DICTIONARY-BACKED SMART MATCHING
     // ────────────────────────────────────────────────────────────────────────
     // Detects patterns like:
     // - "I'm Mr. Johnson" → lastName="Johnson"
     // - "I'm Mr. John Johnson" → firstName="John", lastName="Johnson"
     // - "my name is John" → firstName="John"
     // - "this is John Smith" → firstName="John", lastName="Smith"
-    // 
-    // Uses GlobalShare to distinguish first vs last names when ambiguous
+    //
+    // Uses GlobalHubService.matchFirstName/matchLastName for:
+    // - Exact dictionary match → canonical casing (score 1.0)
+    // - Fuzzy near-miss correction → silently normalize (score 0.95)
+    // - Ambiguous near-hit → flag for confirmation (score 0.80)
+    // - Unknown name → allow through, mark unverified (score 0.50)
     // ────────────────────────────────────────────────────────────────────────
-    
+
     // ════════════════════════════════════════════════════════════════════════
     // PATTERN 1: "I'm Mr./Dr. [Name(s)]"
     // ════════════════════════════════════════════════════════════════════════
-    // Handles: "I'm Mr. Johnson", "I'm Dr. John Smith", "I'm Mrs. Sarah Williams"
-    
+
     const imHonorificPattern = /i'?m\s+(mr|mrs|ms|miss|dr|doctor|prof|professor)\.?\s+(\w+)(?:\s+(\w+))?/i;
     const imHonorificMatch = text.match(imHonorificPattern);
-    
+
     if (imHonorificMatch) {
-      const firstNameCandidate = imHonorificMatch[2] ? this.capitalizeFirst(imHonorificMatch[2]) : null;
-      const lastNameCandidate = imHonorificMatch[3] ? this.capitalizeFirst(imHonorificMatch[3]) : null;
-      
-      if (context.GlobalHubService && firstNameCandidate && lastNameCandidate) {
-        // Two names after honorific - use GlobalShare to determine which is which
-        const isFirstAFirstName = await context.GlobalHubService.isFirstName(firstNameCandidate);
-        const isSecondAFirstName = await context.GlobalHubService.isFirstName(lastNameCandidate);
-        const isFirstALastName = await context.GlobalHubService.isLastName(firstNameCandidate);
-        const isSecondALastName = await context.GlobalHubService.isLastName(lastNameCandidate);
-        
+      const rawFirst = imHonorificMatch[2] ? this.capitalizeFirst(imHonorificMatch[2]) : null;
+      const rawLast = imHonorificMatch[3] ? this.capitalizeFirst(imHonorificMatch[3]) : null;
+
+      if (context.GlobalHubService && rawFirst && rawLast) {
+        // Two names after honorific — smart match both
+        const firstMatch = await context.GlobalHubService.matchFirstName(rawFirst);
+        const lastMatch = await context.GlobalHubService.matchLastName(rawLast);
+
         validations.push({
           scenario: 'im_honorific_two_names',
-          first_candidate: { value: firstNameCandidate, isFirstName: isFirstAFirstName, isLastName: isFirstALastName },
-          second_candidate: { value: lastNameCandidate, isFirstName: isSecondAFirstName, isLastName: isSecondALastName },
+          first_candidate: { value: rawFirst, ...firstMatch },
+          second_candidate: { value: rawLast, ...lastMatch },
           source: 'GlobalShare'
         });
-        
-        if (isFirstAFirstName && isSecondALastName) {
-          // "I'm Mr. John Johnson" - clear case
-          entities.firstName = firstNameCandidate;
-          entities.lastName = lastNameCandidate;
-          entities.fullName = `${firstNameCandidate} ${lastNameCandidate}`;
-          
+
+        if (firstMatch.match && lastMatch.match) {
+          entities.firstName = firstMatch.value;
+          entities.lastName = lastMatch.value;
+          entities.fullName = `${firstMatch.value} ${lastMatch.value}`;
+          entities.firstNameMeta = firstMatch;
+          entities.lastNameMeta = lastMatch;
+
           extractions.push({
             type: 'fullName',
-            firstName: firstNameCandidate,
-            lastName: lastNameCandidate,
+            firstName: firstMatch.value,
+            lastName: lastMatch.value,
             pattern: 'im_honorific_full',
-            confidence: 0.98,
-            validated: true
+            confidence: Math.min(firstMatch.score, lastMatch.score),
+            validated: true,
+            verificationMode: firstMatch.verificationMode,
+            correctedFrom: firstMatch.correctedFrom || lastMatch.correctedFrom || null
           });
-        } else if (!isFirstAFirstName && isSecondALastName) {
-          // "I'm Mr. Johnson" - only last name given
-          entities.lastName = lastNameCandidate;
-          
+        } else if (!firstMatch.match && lastMatch.match) {
+          entities.lastName = lastMatch.value;
+          entities.lastNameMeta = lastMatch;
+
           extractions.push({
             type: 'lastName',
-            value: lastNameCandidate,
+            value: lastMatch.value,
             pattern: 'im_honorific_last',
-            confidence: 0.95,
-            validated: true
+            confidence: lastMatch.score,
+            validated: true,
+            verificationMode: lastMatch.verificationMode,
+            correctedFrom: lastMatch.correctedFrom
           });
         } else {
-          // Ambiguous - take best guess (first + last)
-          entities.firstName = firstNameCandidate;
-          entities.lastName = lastNameCandidate;
-          
+          // Ambiguous — use best values
+          entities.firstName = firstMatch.value;
+          entities.lastName = lastMatch.value;
+          entities.firstNameMeta = firstMatch;
+          entities.lastNameMeta = lastMatch;
+
           extractions.push({
             type: 'fullName',
-            firstName: firstNameCandidate,
-            lastName: lastNameCandidate,
+            firstName: firstMatch.value,
+            lastName: lastMatch.value,
             pattern: 'im_honorific_ambiguous',
-            confidence: 0.75,
+            confidence: Math.max(firstMatch.score, lastMatch.score) * 0.75,
             validated: false,
-            note: 'Ambiguous - neither name strongly matches dictionary'
+            verificationMode: 'unknown',
+            note: 'Ambiguous — neither name strongly matches dictionary'
           });
         }
-      } else if (firstNameCandidate && !lastNameCandidate) {
-        // Only one name after honorific: "I'm Mr. Johnson"
+      } else if (rawFirst && !rawLast) {
+        // Single name after honorific: "I'm Mr. Johnson"
         if (context.GlobalHubService) {
-          const isLastName = await context.GlobalHubService.isLastName(firstNameCandidate);
-          
-          if (isLastName) {
-            entities.lastName = firstNameCandidate;
-            validations.push({
-              entity: 'lastName',
-              value: firstNameCandidate,
-              isValid: true,
-              source: 'GlobalShare',
-              dictionarySize: 161427
-            });
-            
+          const lastMatch = await context.GlobalHubService.matchLastName(rawFirst);
+
+          if (lastMatch.match) {
+            entities.lastName = lastMatch.value;
+            entities.lastNameMeta = lastMatch;
+            validations.push({ entity: 'lastName', value: lastMatch.value, isValid: true, source: 'GlobalShare', verificationMode: lastMatch.verificationMode });
             extractions.push({
-              type: 'lastName',
-              value: firstNameCandidate,
-              pattern: 'im_honorific_single',
-              confidence: 0.95,
-              validated: true
+              type: 'lastName', value: lastMatch.value, pattern: 'im_honorific_single',
+              confidence: lastMatch.score, validated: true,
+              verificationMode: lastMatch.verificationMode, correctedFrom: lastMatch.correctedFrom
             });
           } else {
-            // Not in last names - might be first name
-            entities.firstName = firstNameCandidate;
+            // Not in last names — try as first name
+            const firstMatch = await context.GlobalHubService.matchFirstName(rawFirst);
+            entities.firstName = firstMatch.value;
+            entities.firstNameMeta = firstMatch;
             extractions.push({
-              type: 'firstName',
-              value: firstNameCandidate,
-              pattern: 'im_honorific_single',
-              confidence: 0.75,
-              validated: false
+              type: 'firstName', value: firstMatch.value, pattern: 'im_honorific_single',
+              confidence: firstMatch.score, validated: firstMatch.match,
+              verificationMode: firstMatch.verificationMode, correctedFrom: firstMatch.correctedFrom
             });
           }
         } else {
-          // No GlobalShare - default to lastName
-          entities.lastName = firstNameCandidate;
-          extractions.push({
-            type: 'lastName',
-            value: firstNameCandidate,
-            pattern: 'im_honorific_single',
-            confidence: 0.70
-          });
+          entities.lastName = rawFirst;
+          extractions.push({ type: 'lastName', value: rawFirst, pattern: 'im_honorific_single', confidence: 0.70 });
         }
-      } else if (firstNameCandidate && lastNameCandidate) {
-        // Two names but no GlobalShare - assume firstName + lastName
-        entities.firstName = firstNameCandidate;
-        entities.lastName = lastNameCandidate;
-        entities.fullName = `${firstNameCandidate} ${lastNameCandidate}`;
-        
+      } else if (rawFirst && rawLast) {
+        // Two names but no GlobalHubService
+        entities.firstName = rawFirst;
+        entities.lastName = rawLast;
+        entities.fullName = `${rawFirst} ${rawLast}`;
         extractions.push({
-          type: 'fullName',
-          firstName: firstNameCandidate,
-          lastName: lastNameCandidate,
-          pattern: 'im_honorific_full',
-          confidence: 0.80
+          type: 'fullName', firstName: rawFirst, lastName: rawLast,
+          pattern: 'im_honorific_full', confidence: 0.80
         });
       }
     }
-    
+
     // ════════════════════════════════════════════════════════════════════════
-    // PATTERN 2: "my name is [Name]" - First name only
+    // PATTERN 2: "my name is [Name]"
     // ════════════════════════════════════════════════════════════════════════
-    
+
     if (!entities.firstName && !entities.lastName) {
       const myNamePattern = /my name is (\w+)/i;
       const myNameMatch = text.match(myNamePattern);
       if (myNameMatch && myNameMatch[1]) {
         const candidate = this.capitalizeFirst(myNameMatch[1]);
-        
-        // 🌐 GLOBALSHARE VALIDATION - Check against 9,530 first names
-        let isValidFirstName = false;
+
         if (context.GlobalHubService) {
           try {
-            isValidFirstName = await context.GlobalHubService.isFirstName(candidate);
+            const firstMatch = await context.GlobalHubService.matchFirstName(candidate);
+            entities.firstName = firstMatch.value;
+            entities.firstNameMeta = firstMatch;
             validations.push({
-              entity: 'firstName',
-              value: candidate,
-              isValid: isValidFirstName,
-              source: 'GlobalShare',
-              dictionarySize: 9530
+              entity: 'firstName', value: firstMatch.value, isValid: firstMatch.match,
+              source: 'GlobalShare', verificationMode: firstMatch.verificationMode
+            });
+            extractions.push({
+              type: 'firstName', value: firstMatch.value, pattern: 'my_name_is',
+              confidence: firstMatch.score, validated: firstMatch.match,
+              verificationMode: firstMatch.verificationMode,
+              correctedFrom: firstMatch.correctedFrom, candidates: firstMatch.candidates
             });
           } catch (err) {
-            // Non-blocking - proceed even if validation fails
+            // Non-blocking fallback
+            entities.firstName = candidate;
+            extractions.push({ type: 'firstName', value: candidate, pattern: 'my_name_is', confidence: 0.85, validated: false });
           }
+        } else {
+          entities.firstName = candidate;
+          extractions.push({ type: 'firstName', value: candidate, pattern: 'my_name_is', confidence: 0.85 });
         }
-        
-        entities.firstName = candidate;
-        extractions.push({
-          type: 'firstName',
-          value: entities.firstName,
-          pattern: 'my_name_is',
-          confidence: isValidFirstName ? 0.98 : 0.85,
-          validated: isValidFirstName
-        });
       }
     }
-    
+
     // ════════════════════════════════════════════════════════════════════════
-    // PATTERN 3: "this is [First] [Last]" - Full name with GlobalShare validation
+    // PATTERN 3: "this is [First] [Last]"
     // ════════════════════════════════════════════════════════════════════════
-    
+
     if (!entities.firstName || !entities.lastName) {
       const thisIsFullPattern = /this is (\w+)\s+(\w+)/i;
       const thisIsFullMatch = text.match(thisIsFullPattern);
-      
+
       if (thisIsFullMatch && thisIsFullMatch[1] && thisIsFullMatch[2]) {
         const firstCandidate = this.capitalizeFirst(thisIsFullMatch[1]);
         const secondCandidate = this.capitalizeFirst(thisIsFullMatch[2]);
-        
-        // Use GlobalShare to validate proper order
+
         if (context.GlobalHubService) {
-          const isFirstAFirstName = await context.GlobalHubService.isFirstName(firstCandidate);
-          const isSecondALastName = await context.GlobalHubService.isLastName(secondCandidate);
-          
+          const firstMatch = await context.GlobalHubService.matchFirstName(firstCandidate);
+          const lastMatch = await context.GlobalHubService.matchLastName(secondCandidate);
+
           validations.push({
             scenario: 'this_is_full',
-            first_candidate: { value: firstCandidate, isFirstName: isFirstAFirstName },
-            second_candidate: { value: secondCandidate, isLastName: isSecondALastName },
+            first_candidate: { value: firstCandidate, ...firstMatch },
+            second_candidate: { value: secondCandidate, ...lastMatch },
             source: 'GlobalShare'
           });
-          
-          if (isFirstAFirstName && isSecondALastName) {
-            // Perfect match - high confidence
-            entities.firstName = firstCandidate;
-            entities.lastName = secondCandidate;
-            entities.fullName = `${firstCandidate} ${secondCandidate}`;
-            
-            extractions.push({
-              type: 'fullName',
-              firstName: firstCandidate,
-              lastName: secondCandidate,
-              pattern: 'this_is_full',
-              confidence: 0.99,
-              validated: true
-            });
-          } else {
-            // Not validated but still extract
-            entities.firstName = firstCandidate;
-            entities.lastName = secondCandidate;
-            entities.fullName = `${firstCandidate} ${secondCandidate}`;
-            
-            extractions.push({
-              type: 'fullName',
-              firstName: firstCandidate,
-              lastName: secondCandidate,
-              pattern: 'this_is_full',
-              confidence: 0.80,
-              validated: false,
-              note: 'Not validated against GlobalShare'
-            });
-          }
+
+          entities.firstName = firstMatch.value;
+          entities.lastName = lastMatch.value;
+          entities.fullName = `${firstMatch.value} ${lastMatch.value}`;
+          entities.firstNameMeta = firstMatch;
+          entities.lastNameMeta = lastMatch;
+
+          extractions.push({
+            type: 'fullName',
+            firstName: firstMatch.value,
+            lastName: lastMatch.value,
+            pattern: 'this_is_full',
+            confidence: Math.min(firstMatch.score, lastMatch.score),
+            validated: firstMatch.match && lastMatch.match,
+            verificationMode: firstMatch.match && lastMatch.match ? 'exact' : (firstMatch.verificationMode || lastMatch.verificationMode),
+            correctedFrom: firstMatch.correctedFrom || lastMatch.correctedFrom || null
+          });
         } else {
-          // No GlobalShare - assume firstName + lastName
           entities.firstName = firstCandidate;
           entities.lastName = secondCandidate;
           entities.fullName = `${firstCandidate} ${secondCandidate}`;
-          
           extractions.push({
-            type: 'fullName',
-            firstName: firstCandidate,
-            lastName: secondCandidate,
-            pattern: 'this_is_full',
-            confidence: 0.85
+            type: 'fullName', firstName: firstCandidate, lastName: secondCandidate,
+            pattern: 'this_is_full', confidence: 0.85
           });
         }
       }
     }
-    
+
     // ════════════════════════════════════════════════════════════════════════
-    // PATTERN 4: "call me [Name]" - First name
+    // PATTERN 4: "call me [Name]"
     // ════════════════════════════════════════════════════════════════════════
-    
+
     if (!entities.firstName) {
       const callMePattern = /call me (\w+)/i;
       const callMeMatch = text.match(callMePattern);
       if (callMeMatch && callMeMatch[1]) {
         const candidate = this.capitalizeFirst(callMeMatch[1]);
-        
-        let isValidFirstName = false;
+
         if (context.GlobalHubService) {
-          isValidFirstName = await context.GlobalHubService.isFirstName(candidate);
-          validations.push({
-            entity: 'firstName',
-            value: candidate,
-            isValid: isValidFirstName,
-            source: 'GlobalShare'
+          const firstMatch = await context.GlobalHubService.matchFirstName(candidate);
+          entities.firstName = firstMatch.value;
+          entities.firstNameMeta = firstMatch;
+          validations.push({ entity: 'firstName', value: firstMatch.value, isValid: firstMatch.match, source: 'GlobalShare', verificationMode: firstMatch.verificationMode });
+          extractions.push({
+            type: 'firstName', value: firstMatch.value, pattern: 'call_me',
+            confidence: firstMatch.score, validated: firstMatch.match,
+            verificationMode: firstMatch.verificationMode,
+            correctedFrom: firstMatch.correctedFrom, candidates: firstMatch.candidates
           });
+        } else {
+          entities.firstName = candidate;
+          extractions.push({ type: 'firstName', value: candidate, pattern: 'call_me', confidence: 0.80 });
         }
-        
-        entities.firstName = candidate;
-        extractions.push({
-          type: 'firstName',
-          value: candidate,
-          pattern: 'call_me',
-          confidence: isValidFirstName ? 0.96 : 0.80,
-          validated: isValidFirstName
-        });
       }
     }
-    
+
     // ════════════════════════════════════════════════════════════════════════
-    // PATTERN 5: "first name is [Name]" - Explicit first name
+    // PATTERN 5: "first name is [Name]"
     // ════════════════════════════════════════════════════════════════════════
-    
+
     if (!entities.firstName) {
       const firstNamePattern = /(?:my\s+)?first\s+name\s+(?:is\s+)?(\w+)/i;
       const firstNameMatch = text.match(firstNamePattern);
       if (firstNameMatch && firstNameMatch[1]) {
         const candidate = this.capitalizeFirst(firstNameMatch[1]);
-        
-        let isValidFirstName = false;
+
         if (context.GlobalHubService) {
-          isValidFirstName = await context.GlobalHubService.isFirstName(candidate);
-          validations.push({
-            entity: 'firstName',
-            value: candidate,
-            isValid: isValidFirstName,
-            source: 'GlobalShare'
+          const firstMatch = await context.GlobalHubService.matchFirstName(candidate);
+          entities.firstName = firstMatch.value;
+          entities.firstNameMeta = firstMatch;
+          validations.push({ entity: 'firstName', value: firstMatch.value, isValid: firstMatch.match, source: 'GlobalShare', verificationMode: firstMatch.verificationMode });
+          extractions.push({
+            type: 'firstName', value: firstMatch.value, pattern: 'first_name_is',
+            confidence: firstMatch.score, validated: firstMatch.match,
+            verificationMode: firstMatch.verificationMode,
+            correctedFrom: firstMatch.correctedFrom, candidates: firstMatch.candidates
           });
+        } else {
+          entities.firstName = candidate;
+          extractions.push({ type: 'firstName', value: candidate, pattern: 'first_name_is', confidence: 0.90 });
         }
-        
-        entities.firstName = candidate;
-        extractions.push({
-          type: 'firstName',
-          value: candidate,
-          pattern: 'first_name_is',
-          confidence: isValidFirstName ? 0.98 : 0.90,
-          validated: isValidFirstName
-        });
       }
     }
-    
+
     // ════════════════════════════════════════════════════════════════════════
-    // PATTERN 6: "last name is [Name]" - Explicit last name
+    // PATTERN 6: "last name is [Name]"
     // ════════════════════════════════════════════════════════════════════════
-    
+
     if (!entities.lastName) {
       const lastNamePattern = /(?:my\s+)?last\s+name\s+(?:is\s+)?(\w+)/i;
       const lastNameMatch = text.match(lastNamePattern);
       if (lastNameMatch && lastNameMatch[1]) {
         const candidate = this.capitalizeFirst(lastNameMatch[1]);
-        
-        let isValidLastName = false;
+
         if (context.GlobalHubService) {
-          isValidLastName = await context.GlobalHubService.isLastName(candidate);
-          validations.push({
-            entity: 'lastName',
-            value: candidate,
-            isValid: isValidLastName,
-            source: 'GlobalShare',
-            dictionarySize: 161427
+          const lastMatch = await context.GlobalHubService.matchLastName(candidate);
+          entities.lastName = lastMatch.value;
+          entities.lastNameMeta = lastMatch;
+          validations.push({ entity: 'lastName', value: lastMatch.value, isValid: lastMatch.match, source: 'GlobalShare', verificationMode: lastMatch.verificationMode });
+          extractions.push({
+            type: 'lastName', value: lastMatch.value, pattern: 'last_name_is',
+            confidence: lastMatch.score, validated: lastMatch.match,
+            verificationMode: lastMatch.verificationMode,
+            correctedFrom: lastMatch.correctedFrom, candidates: lastMatch.candidates
           });
+        } else {
+          entities.lastName = candidate;
+          extractions.push({ type: 'lastName', value: candidate, pattern: 'last_name_is', confidence: 0.85 });
         }
-        
-        entities.lastName = candidate;
-        extractions.push({
-          type: 'lastName',
-          value: candidate,
-          pattern: 'last_name_is',
-          confidence: isValidLastName ? 0.98 : 0.85,
-          validated: isValidLastName
-        });
       }
     }
     
@@ -1190,7 +1220,11 @@ class EntityExtractionEngine {
         handoffEntities[key] = entities[key];
       }
     });
-    
+
+    // Propagate name verification metadata for downstream consumers
+    if (entities.firstNameMeta) handoffEntities._firstNameMeta = entities.firstNameMeta;
+    if (entities.lastNameMeta) handoffEntities._lastNameMeta = entities.lastNameMeta;
+
     return {
       entities,
       handoffEntities,
