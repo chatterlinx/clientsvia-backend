@@ -4926,6 +4926,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
 
         // Return fresh Gather TwiML — silently re-open listener for caller
+        // Use lenient speechTimeout when a pending question is active, matching
+        // the follow-up mode behavior in the response gather (see below).
         const twiml = new twilio.twiml.VoiceResponse();
         const gather = twiml.gather({
           input: 'speech',
@@ -4933,7 +4935,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           method: 'POST',
           actionOnEmptyResult: true,
           timeout: 7,
-          speechTimeout: 'auto',
+          speechTimeout: hasAnyPendingQ ? '2' : 'auto',
           speechModel: 'phone_call',
           partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
           partialResultCallbackMethod: 'POST'
@@ -5341,7 +5343,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         || persistedState?.agent2?.discovery?.patienceMode === true;
       const patienceTimeout = Math.max(10, Math.min(180, parseInt(patienceCfg.timeoutSeconds) || 45));
       const gatherTimeout = isPatienceMode ? patienceTimeout : 7;
-      
+
       if (isPatienceMode && CallLogger) {
         CallLogger.logEvent({
           callId: callSid, companyId: companyID,
@@ -5350,14 +5352,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           data: { timeout: gatherTimeout, reason: 'Caller requested hold/wait' }
         }).catch(() => {});
       }
-      
+
+      // FOLLOW-UP MODE: When a pending follow-up question is active, use a
+      // fixed speechTimeout instead of 'auto'. Twilio's auto-detect can fire
+      // prematurely on mid-sentence pauses ("I tried to... [thinking]"),
+      // cutting the caller off before they finish their thought. A fixed 2s
+      // timeout gives callers room to pause without losing the floor.
+      const hasPendingFollowUp = !!persistedState?.agent2?.discovery?.pendingFollowUpQuestion;
+      const speechTimeoutValue = hasPendingFollowUp ? '2' : 'auto';
+
       const gather = twiml.gather({
         input: 'speech',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
         actionOnEmptyResult: true,
         timeout: gatherTimeout,
-        speechTimeout: 'auto',
+        speechTimeout: speechTimeoutValue,
         speechModel: 'phone_call',
         partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
         partialResultCallbackMethod: 'POST'

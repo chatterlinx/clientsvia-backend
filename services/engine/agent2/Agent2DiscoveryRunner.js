@@ -402,14 +402,50 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// FOLLOW-UP STATE MANAGEMENT
+// ────────────────────────────────────────────────────────────────────────────
+// Non-terminal consent buckets (COMPLEX, HESITANT, REPROMPT) preserve follow-up
+// state so the NEXT turn stays in the protected follow-up lane:
+//   - ScrabEngine bypass (raw STT → consent classifier)
+//   - Bridge suppression (no filler audio while caller is responding)
+//   - Lenient speechTimeout (caller gets time to finish thought)
+//   - LLM receives follow-up context (original question + conversation thread)
+//
+// Terminal buckets (YES, NO, MAINTENANCE, SERVICE_CALL) clear immediately —
+// the question was answered.
+//
+// MAX_FOLLOWUP_CONTINUATIONS caps non-terminal cycles to prevent infinite
+// consent gate loops. After the cap, state clears and normal discovery resumes.
+// ────────────────────────────────────────────────────────────────────────────
+
+const MAX_FOLLOWUP_CONTINUATIONS = 3;
+
 /**
- * Clear pending follow-up question state.
+ * Clear pending follow-up question state (terminal resolution).
+ * Called when the caller gives a definitive answer (YES/NO/MAINTENANCE/SERVICE_CALL)
+ * or when continuation cap is exhausted.
  */
 function clearPendingFollowUp(nextState) {
   nextState.agent2.discovery.pendingFollowUpQuestion = null;
   nextState.agent2.discovery.pendingFollowUpQuestionTurn = null;
   nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
   nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
+  nextState.agent2.discovery.followUpContinuationCount = 0;
+}
+
+/**
+ * Preserve follow-up state for the next turn (non-terminal continuation).
+ * Bumps the turn number to refresh the ±2 tolerance window so the consent
+ * gate remains active. Increments the continuation counter toward the cap.
+ *
+ * Does NOT touch pendingFollowUpQuestion, pendingFollowUpQuestionSource, or
+ * pendingFollowUpQuestionNextAction — the original question stays intact.
+ */
+function preserveFollowUpForNextTurn(nextState, turn) {
+  nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn;
+  nextState.agent2.discovery.followUpContinuationCount =
+    (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1214,6 +1250,8 @@ class Agent2DiscoveryRunner {
         }
 
         // ── REPROMPT (Tier 2 → 3): ambiguous short response ──
+        // Non-terminal: caller gave a short/unclear response. Follow-up
+        // state is preserved so the next turn stays in the consent gate.
         if (bucket === 'REPROMPT') {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
@@ -1222,13 +1260,33 @@ class Agent2DiscoveryRunner {
             callSid, turn, bridgeToken, redis,
           });
           if (llmAgentResult) {
-            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
-            clearPendingFollowUp(nextState);
+            const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
+
+            if (continuationCount > MAX_FOLLOWUP_CONTINUATIONS) {
+              clearPendingFollowUp(nextState);
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+              emit('PFUQ_CONTINUATION_EXHAUSTED', {
+                reason: `Follow-up reached max continuations (${MAX_FOLLOWUP_CONTINUATIONS}) — clearing state`,
+                bucket, continuationCount, question: clip(pfuq, 60),
+                cardId: pfuqSource?.replace('card:', '') || null
+              });
+            } else {
+              preserveFollowUpForNextTurn(nextState, turn);
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT_CONTINUED';
+              emit('PFUQ_STATE_CONTINUED', {
+                reason: 'Non-terminal bucket — follow-up question still unresolved, preserving state for next turn',
+                bucket, continuationCount, question: clip(pfuq, 60),
+                cardId: pfuqSource?.replace('card:', '') || null
+              });
+            }
+
+            const resolvedPath = nextState.agent2.discovery.lastPath;
             const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
-            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
+            emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta(resolvedPath) };
           }
           // Tier 3: canned re-ask if LLM Agent disabled/failed
+          // State already preserved (no clearPendingFollowUp call) — T3 re-asks the question
           const repromptText = bucketResponse || `${pfuq}`;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_REPROMPT';
           const repromptResponse = `${fuqAck} ${repromptText}`.trim();
@@ -1238,6 +1296,8 @@ class Agent2DiscoveryRunner {
         }
 
         // ── HESITANT (Tier 2 → 3): caller expressing doubt/conflict ──
+        // Non-terminal: caller is unsure. Follow-up state is preserved so
+        // the next turn stays in the consent gate for continued resolution.
         if (bucket === 'HESITANT') {
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
@@ -1246,13 +1306,33 @@ class Agent2DiscoveryRunner {
             callSid, turn, bridgeToken, redis,
           });
           if (llmAgentResult) {
-            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
-            clearPendingFollowUp(nextState);
+            const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
+
+            if (continuationCount > MAX_FOLLOWUP_CONTINUATIONS) {
+              clearPendingFollowUp(nextState);
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+              emit('PFUQ_CONTINUATION_EXHAUSTED', {
+                reason: `Follow-up reached max continuations (${MAX_FOLLOWUP_CONTINUATIONS}) — clearing state`,
+                bucket, continuationCount, question: clip(pfuq, 60),
+                cardId: pfuqSource?.replace('card:', '') || null
+              });
+            } else {
+              preserveFollowUpForNextTurn(nextState, turn);
+              nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT_CONTINUED';
+              emit('PFUQ_STATE_CONTINUED', {
+                reason: 'Non-terminal bucket — follow-up question still unresolved, preserving state for next turn',
+                bucket, continuationCount, question: clip(pfuq, 60),
+                cardId: pfuqSource?.replace('card:', '') || null
+              });
+            }
+
+            const resolvedPath = nextState.agent2.discovery.lastPath;
             const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
-            emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
+            emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta(resolvedPath) };
           }
           // Tier 3: canned clarification if LLM Agent disabled/failed
+          // State already preserved (no clearPendingFollowUp call) — T3 re-asks with clarification
           const hesitantText = bucketResponse || `${pfuq}`;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_HESITANT';
           const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
@@ -1262,6 +1342,9 @@ class Agent2DiscoveryRunner {
         }
 
         // ── COMPLEX / YES+residual (Tier 2 → fallthrough): substantive response ──
+        // Non-terminal: question is still unresolved. LLM handles the response
+        // contextually, then follow-up state is PRESERVED (not cleared) so the
+        // next turn stays in the protected consent gate lane.
         const llmAgentResult = await callLLMAgentForFollowUp({
           company, input, followUpQuestion: pfuq,
           triggerSource: pfuqSource?.replace('card:', '') || null,
@@ -1269,15 +1352,42 @@ class Agent2DiscoveryRunner {
           callSid, turn, bridgeToken, redis,
         });
         if (llmAgentResult) {
-          nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
-          clearPendingFollowUp(nextState);
+          const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
+
+          if (continuationCount > MAX_FOLLOWUP_CONTINUATIONS) {
+            // Continuation cap exhausted — clear state, return LLM response normally
+            clearPendingFollowUp(nextState);
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
+            emit('PFUQ_CONTINUATION_EXHAUSTED', {
+              reason: `Follow-up reached max continuations (${MAX_FOLLOWUP_CONTINUATIONS}) — clearing state, returning to normal discovery`,
+              bucket,
+              continuationCount,
+              question: clip(pfuq, 60),
+              cardId: pfuqSource?.replace('card:', '') || null
+            });
+          } else {
+            // Preserve follow-up state — next turn re-enters consent gate
+            preserveFollowUpForNextTurn(nextState, turn);
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT_CONTINUED';
+            emit('PFUQ_STATE_CONTINUED', {
+              reason: 'Non-terminal bucket — follow-up question still unresolved, preserving state for next turn',
+              bucket,
+              continuationCount,
+              question: clip(pfuq, 60),
+              cardId: pfuqSource?.replace('card:', '') || null
+            });
+          }
+
           const { ack: complexAck } = buildAck(ack, callerName, state, nameGreetingConfig);
           const agentResponse = `${complexAck} ${llmAgentResult.response}`.trim();
-          emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-          return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
+          const resolvedPath = nextState.agent2.discovery.lastPath;
+          emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
+          return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta(resolvedPath) };
         }
 
         // Tier 3: LLM Agent unavailable — fall through to ScrabEngine + trigger matching
+        // When LLM is down, there's no contextual handler for COMPLEX — falling
+        // through to normal discovery is the correct degradation path.
         clearPendingFollowUp(nextState);
         nextState.agent2.discovery.lastPath = 'FOLLOWUP_COMPLEX';
         emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
@@ -2774,6 +2884,7 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingFollowUpQuestionSource = `card:${card.id}`;
         // DEPRECATED: kept for call review tools; consent card direction is source of truth
         nextState.agent2.discovery.pendingFollowUpQuestionNextAction = nextAction;
+        nextState.agent2.discovery.followUpContinuationCount = 0;
       } else if (afterQuestion) {
         nextState.agent2.discovery.pendingQuestion = afterQuestion;
         nextState.agent2.discovery.pendingQuestionTurn = typeof turn === 'number' ? turn : null;

@@ -1,6 +1,6 @@
 # Consent Gate — Trigger Card Follow-up → 7-Bucket Classification
 
-> **Last updated:** 2026-02-25
+> **Last updated:** 2026-03-09
 > **Status:** Production-ready
 
 ---
@@ -20,9 +20,9 @@ Caller: "Maintenance"  → 🧰 MAINTENANCE  → Booking handoff (bookingMode=ma
 Caller: "Service call" → 🛠 SERVICE_CALL → Booking handoff (bookingMode=service_call)
 Caller: "Yes"          → ✅ YES         → Booking Logic handoff
 Caller: "No"           → ❌ NO          → "No problem. How can I help?"
-Caller: "Huh?"         → 🔄 REPROMPT    → Re-asks the question
-Caller: "Maybe"        → 🤔 HESITANT    → Gentle clarification + re-ask
-Caller: "My AC..."     → 💬 COMPLEX     → Back to normal agent
+Caller: "Huh?"         → 🔄 REPROMPT    → LLM Agent or re-ask (state preserved)
+Caller: "Maybe"        → 🤔 HESITANT    → LLM Agent or clarification (state preserved)
+Caller: "My AC..."     → 💬 COMPLEX     → LLM Agent handles contextually (state preserved)
 ```
 
 ---
@@ -69,7 +69,7 @@ The Follow-up Question text IS the toggle. No checkbox, no extra state.
 | **SERVICE_CALL** | service call, repair, diagnostic... | "Got it — I'll get you scheduled for a service call..." | Hand off to Booking Logic (bookingMode=service_call) |
 | **REPROMPT** | huh, what, sorry, come again... | (re-asks original question) | Re-ask |
 | **HESITANT** | I don't know, maybe, I'm not sure... | "No worries — I just need to know..." | Gentle Clarification |
-| **COMPLEX** | (catch-all, no keywords) | (none — agent handles naturally) | Back to Agent |
+| **COMPLEX** | (catch-all, no keywords) | (none — agent handles naturally) | LLM Agent with context |
 
 Keywords are configurable per company via tag input (comma-separated bulk add).
 
@@ -91,6 +91,41 @@ Priority: SERVICE_CALL > MAINTENANCE > YES > NO > HESITANT > REPROMPT > COMPLEX
 
 ---
 
+## Terminal vs Non-Terminal Buckets
+
+Buckets are classified as **terminal** or **non-terminal** based on whether the caller's response resolves the follow-up question.
+
+### Terminal (clears `pendingFollowUpQuestion` immediately)
+
+| Bucket | Reason |
+|--------|--------|
+| **YES** | Caller confirmed — question answered |
+| **NO** | Caller declined — question answered |
+| **MAINTENANCE** | Caller chose a service type — question answered |
+| **SERVICE_CALL** | Caller chose a service type — question answered |
+
+### Non-Terminal (preserves `pendingFollowUpQuestion` for next turn)
+
+| Bucket | Reason |
+|--------|--------|
+| **REPROMPT** | Ambiguous/short response — question still unresolved |
+| **HESITANT** | Caller expressing doubt — question still unresolved |
+| **COMPLEX** | Substantive non-yes/no response — question still unresolved |
+
+Non-terminal buckets route to the LLM Agent (Tier 2) with full follow-up context, then **preserve** the pending follow-up state. This keeps the next turn in the protected consent gate lane:
+- ScrabEngine bypass (raw STT → consent classifier)
+- Bridge suppression (no filler audio while caller is responding)
+- Lenient speechTimeout (2s fixed instead of 'auto', prevents premature cutoff)
+- LLM receives follow-up context (original question + conversation thread)
+
+### Continuation Cap
+
+`MAX_FOLLOWUP_CONTINUATIONS = 3` — after 3 non-terminal T2 responses, the state is cleared and normal discovery resumes. This prevents infinite consent gate loops.
+
+State field: `state.agent2.discovery.followUpContinuationCount` (initialized to 0 when PFUQ is set, incremented on each non-terminal T2 response, cleared by `clearPendingFollowUp`).
+
+---
+
 ## Missing Config Behavior (UI-Only Enforcement)
 
 If a required bucket response is blank (e.g., `followUpConsent.yes.response`):
@@ -105,7 +140,7 @@ No runtime fallback phrases are allowed.
 
 `followUpConsent.missingResponseAction` controls the fallback:
 
-- `REASK_FOLLOWUP` → re-ask the trigger’s follow-up question
+- `REASK_FOLLOWUP` → re-ask the trigger's follow-up question
 - `BACK_TO_AGENT` → clear pending follow-up and resume discovery (ScrabEngine start)
 
 Single-word phrases match on word boundaries. Multi-word phrases match as substrings.
@@ -133,31 +168,64 @@ state.agent2.discovery.pendingFollowUpQuestion = "this is routine, right?"
 state.agent2.discovery.pendingFollowUpQuestionTurn = N
 state.agent2.discovery.pendingFollowUpQuestionSource = "card:maintenance_routine"
 state.agent2.discovery.pendingFollowUpQuestionNextAction = "HANDOFF_BOOKING"
+state.agent2.discovery.followUpContinuationCount = 0
 ```
 
-### Turn N+1 — Caller responds YES
+### Turn N+1 — Caller responds YES (terminal)
 ```
 state.agent2.discovery.pendingFollowUpQuestion = null  (cleared)
+state.agent2.discovery.followUpContinuationCount = 0   (cleared)
 state.agent2.discovery.lastPath = "FOLLOWUP_YES_HANDOFF_BOOKING"
 state.sessionMode = "BOOKING"
 state.consent = { pending: false, given: true, turn: N+1, source: "followup_consent_gate" }
 ```
 
-### Turn N+1 — Caller chooses maintenance
+### Turn N+1 — Caller chooses maintenance (terminal)
 ```
 state.agent2.discovery.pendingFollowUpQuestion = null  (cleared)
+state.agent2.discovery.followUpContinuationCount = 0   (cleared)
 state.agent2.discovery.bookingMode = "maintenance"
 state.agent2.discovery.lastPath = "FOLLOWUP_MAINTENANCE_HANDOFF_BOOKING"
 state.sessionMode = "BOOKING"
 state.consent = { pending: false, given: true, turn: N+1, source: "followup_consent_gate", bookingMode: "maintenance" }
 ```
 
-### Turn N+1 — Caller responds HESITANT
+### Turn N+1 — Caller responds COMPLEX (non-terminal, T2 LLM)
 ```
-state.agent2.discovery.pendingFollowUpQuestion = (kept active)
+state.agent2.discovery.pendingFollowUpQuestion = (preserved)
+state.agent2.discovery.pendingFollowUpQuestionTurn = N+1  (bumped)
+state.agent2.discovery.followUpContinuationCount = 1
+state.agent2.discovery.lastPath = "FOLLOWUP_LLM_AGENT_CONTINUED"
+→ LLM Agent responds with follow-up context, state preserved for Turn N+2
+```
+
+### Turn N+2 — Caller continues (non-terminal, T2 LLM)
+```
+state.agent2.discovery.pendingFollowUpQuestion = (preserved)
+state.agent2.discovery.pendingFollowUpQuestionTurn = N+2  (bumped)
+state.agent2.discovery.followUpContinuationCount = 2
+state.agent2.discovery.lastPath = "FOLLOWUP_LLM_AGENT_CONTINUED"
+→ Still in protected lane, LLM handles with full context
+```
+
+### Turn N+1 — Caller responds HESITANT (non-terminal, T3 canned)
+```
+state.agent2.discovery.pendingFollowUpQuestion = (preserved — T3 does not clear)
 state.agent2.discovery.lastPath = "FOLLOWUP_HESITANT"
 → Gentle clarification spoken, question re-asked, waits again
 ```
+
+---
+
+## Speech Timeout in Follow-Up Mode
+
+When `pendingFollowUpQuestion` is active, the Gather uses `speechTimeout: '2'` (2 seconds fixed) instead of `'auto'`. This prevents Twilio's auto-detect from firing prematurely on mid-sentence pauses like "I tried to... [thinking]".
+
+Applies to:
+- Response gather (wraps the agent's response, captures next caller input)
+- Ghost turn gather (re-opens listener after empty bridge timeout)
+
+Does NOT apply to the listen endpoint (`/v2-agent-listen`) because bridge is suppressed during PFUQ turns.
 
 ---
 
@@ -179,6 +247,7 @@ This makes mode decisions auditable in Call Review.
 | File | What |
 |------|------|
 | `services/engine/agent2/Agent2DiscoveryRunner.js` | 7-bucket handler (before pendingQuestion), trigger card routing to pendingFollowUpQuestion |
+| `routes/v2twilio.js` | Bridge suppression, ghost turn guard, speechTimeout follow-up mode |
 | `routes/admin/agent2.js` | Default followUpConsent config with keywords + directions |
 | `public/agent-console/triggers.html` | Follow-up Consent Cards UI section |
 | `public/agent-console/triggers.js` | Tag management, save/load consent cards |
@@ -192,5 +261,8 @@ This makes mode decisions auditable in Call Review.
 |-------|------|
 | `A2_FOLLOWUP_CONSENT_CLASSIFIED` | Caller response classified into a bucket |
 | `A2_CONSENT_GATE_BOOKING` | YES bucket triggered booking handoff |
-| `A2_FOLLOWUP_COMPLEX_FALLTHROUGH` | COMPLEX bucket, falling through to normal agent |
+| `A2_FOLLOWUP_COMPLEX_FALLTHROUGH` | COMPLEX bucket, LLM Agent unavailable, falling through to normal discovery |
+| `PFUQ_STATE_CONTINUED` | Non-terminal T2 bucket — follow-up state preserved for next turn |
+| `PFUQ_CONTINUATION_EXHAUSTED` | Non-terminal T2 hit max continuations — state cleared |
+| `PFUQ_GHOST_TURN_SKIPPED` | Empty input during PFUQ — turn bumped, state preserved |
 | `A2_RESPONSE_READY` | Response built for any bucket |
