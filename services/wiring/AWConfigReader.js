@@ -66,9 +66,15 @@ async function _loadGlobalNameLists() {
         const AdminSettings = require('../../models/AdminSettings');
         const settings = await AdminSettings.findOne().lean();
         
+        // Canonical source: globalHub.dictionaries (used by GlobalShare UI + ScrabEngine)
+        // Fallback: top-level commonFirstNames/commonLastNames (legacy, seeded by migrate script)
         _globalNameCache = {
-            commonFirstNames: settings?.commonFirstNames || [],
-            commonLastNames: settings?.commonLastNames || [],
+            commonFirstNames: (settings?.globalHub?.dictionaries?.firstNames?.length > 0
+                ? settings.globalHub.dictionaries.firstNames
+                : settings?.commonFirstNames) || [],
+            commonLastNames: (settings?.globalHub?.dictionaries?.lastNames?.length > 0
+                ? settings.globalHub.dictionaries.lastNames
+                : settings?.commonLastNames) || [],
             nameStopWords: settings?.nameStopWords || []
         };
         _globalNameCacheExpiry = now + GLOBAL_NAME_CACHE_TTL_MS;

@@ -873,16 +873,22 @@ const adminSettingsSchema = new mongoose.Schema({
     // a first name or last name. This prevents each company from maintaining
     // their own separate lists.
     // ============================================================================
+    // @deprecated — Canonical source is now globalHub.dictionaries.firstNames
+    // AWConfigReader reads from globalHub.dictionaries first, falls back here for transition safety.
+    // Do NOT write new data here. Use globalHub.dictionaries.firstNames instead.
     commonFirstNames: {
         type: [String],
         default: [],
-        description: 'Global list of common first names for booking validation (shared across all companies)'
+        description: '@deprecated — Use globalHub.dictionaries.firstNames. Legacy field kept for backward compat.'
     },
-    
+
+    // @deprecated — Canonical source is now globalHub.dictionaries.lastNames
+    // AWConfigReader reads from globalHub.dictionaries first, falls back here for transition safety.
+    // Do NOT write new data here. Use globalHub.dictionaries.lastNames instead.
     commonLastNames: {
         type: [String],
         default: [],
-        description: 'Global list of common last names - US Census top 50K surnames (shared across all companies)'
+        description: '@deprecated — Use globalHub.dictionaries.lastNames. Legacy field kept for backward compat.'
     },
     
     // ============================================================================

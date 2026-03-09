@@ -230,32 +230,21 @@ router.post('/first-names', authenticateJWT, async (req, res) => {
         
         logger.info(`🌐 [GLOBAL HUB] ${requestId} - Normalized: ${inputCount} → ${outputCount} (${duplicatesRemoved} duplicates removed)`);
         
-        // Get current settings
-        const settings = await AdminSettings.getSettings();
-        
-        // Initialize globalHub structure if needed
-        if (!settings.globalHub) {
-            settings.globalHub = {};
-        }
-        if (!settings.globalHub.dictionaries) {
-            settings.globalHub.dictionaries = {};
-        }
-        
-        // Update first names
+        // Save to MongoDB using atomic $set (prevents race condition with concurrent saves)
         const now = new Date();
-        settings.globalHub.dictionaries.firstNames = normalizedNames;
-        settings.globalHub.dictionaries.firstNamesUpdatedAt = now;
-        settings.globalHub.dictionaries.firstNamesUpdatedBy = req.user?.email || req.user?.userId || 'admin';
-        
-        // Mark as modified (Mongoose mixed type)
-        settings.markModified('globalHub');
-        
-        // Save
-        await settings.save();
-        
+        await AdminSettings.findOneAndUpdate(
+            {},
+            { $set: {
+                'globalHub.dictionaries.firstNames': normalizedNames,
+                'globalHub.dictionaries.firstNamesUpdatedAt': now,
+                'globalHub.dictionaries.firstNamesUpdatedBy': req.user?.email || req.user?.userId || 'admin'
+            }},
+            { upsert: true }
+        );
+
         // Sync to Redis for fast runtime lookups
         await GlobalHubService.syncFirstNamesToRedis(normalizedNames);
-        
+
         // Invalidate BookingLogicEngine cache
         try {
             const BookingLogicEngine = require('../../services/engine/booking/BookingLogicEngine');
@@ -264,9 +253,9 @@ router.post('/first-names', authenticateJWT, async (req, res) => {
         } catch (cacheErr) {
             logger.warn(`⚠️ [GLOBAL HUB] ${requestId} - Failed to invalidate BookingLogicEngine cache:`, cacheErr.message);
         }
-        
+
         logger.info(`✅ [GLOBAL HUB] ${requestId} - First names dictionary updated successfully`);
-        
+
         return res.json({
             success: true,
             data: {
@@ -368,32 +357,21 @@ router.post('/last-names', authenticateJWT, async (req, res) => {
         
         logger.info(`🌐 [GLOBAL HUB] ${requestId} - Normalized: ${inputCount} → ${outputCount} (${duplicatesRemoved} duplicates removed)`);
         
-        // Get current settings
-        const settings = await AdminSettings.getSettings();
-        
-        // Initialize globalHub structure if needed
-        if (!settings.globalHub) {
-            settings.globalHub = {};
-        }
-        if (!settings.globalHub.dictionaries) {
-            settings.globalHub.dictionaries = {};
-        }
-        
-        // Update last names
+        // Save to MongoDB using atomic $set (prevents race condition with concurrent saves)
         const now = new Date();
-        settings.globalHub.dictionaries.lastNames = normalizedNames;
-        settings.globalHub.dictionaries.lastNamesUpdatedAt = now;
-        settings.globalHub.dictionaries.lastNamesUpdatedBy = req.user?.email || req.user?.userId || 'admin';
-        
-        // Mark as modified (Mongoose mixed type)
-        settings.markModified('globalHub');
-        
-        // Save
-        await settings.save();
-        
+        await AdminSettings.findOneAndUpdate(
+            {},
+            { $set: {
+                'globalHub.dictionaries.lastNames': normalizedNames,
+                'globalHub.dictionaries.lastNamesUpdatedAt': now,
+                'globalHub.dictionaries.lastNamesUpdatedBy': req.user?.email || req.user?.userId || 'admin'
+            }},
+            { upsert: true }
+        );
+
         // Sync to Redis for fast runtime lookups
         await GlobalHubService.syncLastNamesToRedis(normalizedNames);
-        
+
         // Invalidate BookingLogicEngine cache
         try {
             const BookingLogicEngine = require('../../services/engine/booking/BookingLogicEngine');
@@ -402,9 +380,9 @@ router.post('/last-names', authenticateJWT, async (req, res) => {
         } catch (cacheErr) {
             logger.warn(`⚠️ [GLOBAL HUB] ${requestId} - Failed to invalidate BookingLogicEngine cache:`, cacheErr.message);
         }
-        
+
         logger.info(`✅ [GLOBAL HUB] ${requestId} - Last names dictionary updated successfully`);
-        
+
         return res.json({
             success: true,
             data: {
@@ -454,27 +432,18 @@ router.post('/last-names/seed', authenticateJWT, async (req, res) => {
         // Normalize names
         const normalizedNames = normalizeFirstNames(LAST_NAMES_SEED);
         
-        // Get current settings
-        const settings = await AdminSettings.getSettings();
-        
-        // Initialize globalHub structure if needed
-        if (!settings.globalHub) {
-            settings.globalHub = {};
-        }
-        if (!settings.globalHub.dictionaries) {
-            settings.globalHub.dictionaries = {};
-        }
-        
-        // Update last names
+        // Save to MongoDB using atomic $set (prevents race condition with concurrent saves)
         const now = new Date();
-        settings.globalHub.dictionaries.lastNames = normalizedNames;
-        settings.globalHub.dictionaries.lastNamesUpdatedAt = now;
-        settings.globalHub.dictionaries.lastNamesUpdatedBy = 'seed-endpoint';
-        
-        // Mark as modified and save
-        settings.markModified('globalHub');
-        await settings.save();
-        
+        await AdminSettings.findOneAndUpdate(
+            {},
+            { $set: {
+                'globalHub.dictionaries.lastNames': normalizedNames,
+                'globalHub.dictionaries.lastNamesUpdatedAt': now,
+                'globalHub.dictionaries.lastNamesUpdatedBy': 'seed-endpoint'
+            }},
+            { upsert: true }
+        );
+
         // Sync to Redis
         await GlobalHubService.syncLastNamesToRedis(normalizedNames);
         
@@ -577,27 +546,18 @@ router.post('/first-names/seed', authenticateJWT, async (req, res) => {
         // Normalize names
         const normalizedNames = normalizeFirstNames(FIRST_NAMES_SEED);
         
-        // Get current settings
-        const settings = await AdminSettings.getSettings();
-        
-        // Initialize globalHub structure if needed
-        if (!settings.globalHub) {
-            settings.globalHub = {};
-        }
-        if (!settings.globalHub.dictionaries) {
-            settings.globalHub.dictionaries = {};
-        }
-        
-        // Update first names
+        // Save to MongoDB using atomic $set (prevents race condition with concurrent saves)
         const now = new Date();
-        settings.globalHub.dictionaries.firstNames = normalizedNames;
-        settings.globalHub.dictionaries.firstNamesUpdatedAt = now;
-        settings.globalHub.dictionaries.firstNamesUpdatedBy = 'seed-endpoint';
-        
-        // Mark as modified and save
-        settings.markModified('globalHub');
-        await settings.save();
-        
+        await AdminSettings.findOneAndUpdate(
+            {},
+            { $set: {
+                'globalHub.dictionaries.firstNames': normalizedNames,
+                'globalHub.dictionaries.firstNamesUpdatedAt': now,
+                'globalHub.dictionaries.firstNamesUpdatedBy': 'seed-endpoint'
+            }},
+            { upsert: true }
+        );
+
         // Sync to Redis
         await GlobalHubService.syncFirstNamesToRedis(normalizedNames);
         

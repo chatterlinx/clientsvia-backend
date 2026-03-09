@@ -245,19 +245,31 @@ async function syncFirstNamesToRedis(namesFromDb = null) {
         }
         
         if (!Array.isArray(names) || names.length === 0) {
+            // GUARD: If Redis has a large dataset, refuse to overwrite with nothing
+            if (redisClient && redisClient.isReady) {
+                try {
+                    const currentRedisCount = await redisClient.sCard(REDIS_KEYS.FIRST_NAMES);
+                    if (currentRedisCount > 1000) {
+                        logger.error(`🚨 CRITICAL [GLOBAL HUB] MongoDB returned 0 first names but Redis has ${currentRedisCount.toLocaleString()}. REFUSING to sync empty data. Preserving Redis.`);
+                        return { success: false, count: currentRedisCount, preserved: true };
+                    }
+                } catch (guardErr) {
+                    logger.warn('⚠️ [GLOBAL HUB] Could not check Redis for empty-data guard:', guardErr.message);
+                }
+            }
             logger.warn('🌐 [GLOBAL HUB] No first names to sync');
             return { success: true, count: 0 };
         }
-        
+
         // Update memory fallback first (always works)
         memoryFallback.firstNames = new Set(names.map(n => n.toLowerCase()));
         memoryFallback.firstNamesOriginal = [...names];
-        
+
         // Sync to Redis if available
         if (redisClient && redisClient.isReady) {
             // Use pipeline for efficiency
             const pipeline = redisClient.multi();
-            
+
             // Clear existing sets
             pipeline.del(REDIS_KEYS.FIRST_NAMES);
             pipeline.del(REDIS_KEYS.FIRST_NAMES_ORIGINAL);
@@ -318,19 +330,31 @@ async function syncLastNamesToRedis(namesFromDb = null) {
         }
         
         if (!Array.isArray(names) || names.length === 0) {
+            // GUARD: If Redis has a large dataset, refuse to overwrite with nothing
+            if (redisClient && redisClient.isReady) {
+                try {
+                    const currentRedisCount = await redisClient.sCard(REDIS_KEYS.LAST_NAMES);
+                    if (currentRedisCount > 1000) {
+                        logger.error(`🚨 CRITICAL [GLOBAL HUB] MongoDB returned 0 last names but Redis has ${currentRedisCount.toLocaleString()}. REFUSING to sync empty data. Preserving Redis.`);
+                        return { success: false, count: currentRedisCount, preserved: true };
+                    }
+                } catch (guardErr) {
+                    logger.warn('⚠️ [GLOBAL HUB] Could not check Redis for empty-data guard:', guardErr.message);
+                }
+            }
             logger.warn('🌐 [GLOBAL HUB] No last names to sync');
             return { success: true, count: 0 };
         }
-        
+
         // Update memory fallback first (always works)
         memoryFallback.lastNames = new Set(names.map(n => n.toLowerCase()));
         memoryFallback.lastNamesOriginal = [...names];
-        
+
         // Sync to Redis if available
         if (redisClient && redisClient.isReady) {
             // Use pipeline for efficiency
             const pipeline = redisClient.multi();
-            
+
             // Clear existing sets
             pipeline.del(REDIS_KEYS.LAST_NAMES);
             pipeline.del(REDIS_KEYS.LAST_NAMES_ORIGINAL);
@@ -375,21 +399,69 @@ async function syncLastNamesToRedis(namesFromDb = null) {
  */
 async function initialize() {
     logger.info('🌐 [GLOBAL HUB] Initializing Global Hub Service...');
-    
+
     try {
         // Sync first names
         const firstResult = await syncFirstNamesToRedis();
-        
+
         // Sync last names
         const lastResult = await syncLastNamesToRedis();
-        
+
+        // AUTO-SEED: If both dictionaries are empty, seed from static data files
+        if (firstResult.count === 0 && lastResult.count === 0) {
+            logger.warn('🌐 [GLOBAL HUB] Both name dictionaries are EMPTY. Auto-seeding from static data files...');
+
+            try {
+                const { FIRST_NAMES_SEED } = require('../data/firstNamesSeed');
+                const { LAST_NAMES_SEED } = require('../data/lastNamesSeed');
+
+                if (Array.isArray(FIRST_NAMES_SEED) && FIRST_NAMES_SEED.length > 0 &&
+                    Array.isArray(LAST_NAMES_SEED) && LAST_NAMES_SEED.length > 0) {
+
+                    // Write to MongoDB using atomic $set (avoids race condition with getSettings + save)
+                    const AdminSettings = require('../models/AdminSettings');
+                    const now = new Date();
+                    await AdminSettings.findOneAndUpdate(
+                        {},
+                        { $set: {
+                            'globalHub.dictionaries.firstNames': FIRST_NAMES_SEED,
+                            'globalHub.dictionaries.firstNamesUpdatedAt': now,
+                            'globalHub.dictionaries.firstNamesUpdatedBy': 'auto-seed-startup',
+                            'globalHub.dictionaries.lastNames': LAST_NAMES_SEED,
+                            'globalHub.dictionaries.lastNamesUpdatedAt': now,
+                            'globalHub.dictionaries.lastNamesUpdatedBy': 'auto-seed-startup'
+                        }},
+                        { upsert: true }
+                    );
+
+                    // Re-sync to Redis with the seeded data
+                    const firstSeed = await syncFirstNamesToRedis(FIRST_NAMES_SEED);
+                    const lastSeed = await syncLastNamesToRedis(LAST_NAMES_SEED);
+
+                    logger.info(`🌱 [GLOBAL HUB] AUTO-SEEDED: ${firstSeed.count.toLocaleString()} first names, ${lastSeed.count.toLocaleString()} last names`);
+
+                    return {
+                        success: true,
+                        firstNames: firstSeed.count,
+                        lastNames: lastSeed.count,
+                        autoSeeded: true
+                    };
+                } else {
+                    logger.warn('⚠️ [GLOBAL HUB] Seed data files are empty or malformed');
+                }
+            } catch (seedError) {
+                logger.error('❌ [GLOBAL HUB] Auto-seed failed:', seedError.message);
+                // Not fatal — continue with 0 names
+            }
+        }
+
         logger.info(`✅ [GLOBAL HUB] Initialized - ${firstResult.count.toLocaleString()} first names, ${lastResult.count.toLocaleString()} last names loaded`);
-        return { 
-            success: true, 
-            firstNames: firstResult.count, 
-            lastNames: lastResult.count 
+        return {
+            success: true,
+            firstNames: firstResult.count,
+            lastNames: lastResult.count
         };
-        
+
     } catch (error) {
         logger.error('❌ [GLOBAL HUB] Initialization failed:', error);
         return { success: false, error: error.message };

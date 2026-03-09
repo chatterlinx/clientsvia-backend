@@ -81,7 +81,7 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'AdminSettings.commonLastNames',
+        dbPath: 'AdminSettings.globalHub.dictionaries.lastNames',
         scope: 'global',
         defaultValue: []
     },

@@ -205,16 +205,17 @@ router.post('/first-names/bulk-add', async (req, res) => {
       ...newNames
     ].sort((a, b) => a.localeCompare(b));
     
-    // Save to MongoDB
-    if (!settings.globalHub) settings.globalHub = {};
-    if (!settings.globalHub.dictionaries) settings.globalHub.dictionaries = {};
-    
-    settings.globalHub.dictionaries.firstNames = allNames;
-    settings.globalHub.dictionaries.firstNamesUpdatedAt = new Date();
-    settings.globalHub.dictionaries.firstNamesUpdatedBy = req.user?.email || 'api';
-    
-    settings.markModified('globalHub');
-    await settings.save();
+    // Save to MongoDB using atomic $set (prevents race condition with concurrent saves)
+    const now = new Date();
+    await AdminSettings.findOneAndUpdate(
+      {},
+      { $set: {
+        'globalHub.dictionaries.firstNames': allNames,
+        'globalHub.dictionaries.firstNamesUpdatedAt': now,
+        'globalHub.dictionaries.firstNamesUpdatedBy': req.user?.email || 'api'
+      }},
+      { upsert: true }
+    );
     
     // Sync to Redis immediately
     await GlobalHubService.syncFirstNamesToRedis(allNames);
@@ -375,16 +376,17 @@ router.post('/last-names/bulk-add', async (req, res) => {
       ...newNames
     ].sort((a, b) => a.localeCompare(b));
     
-    // Save to MongoDB
-    if (!settings.globalHub) settings.globalHub = {};
-    if (!settings.globalHub.dictionaries) settings.globalHub.dictionaries = {};
-    
-    settings.globalHub.dictionaries.lastNames = allNames;
-    settings.globalHub.dictionaries.lastNamesUpdatedAt = new Date();
-    settings.globalHub.dictionaries.lastNamesUpdatedBy = req.user?.email || 'api';
-    
-    settings.markModified('globalHub');
-    await settings.save();
+    // Save to MongoDB using atomic $set (prevents race condition with concurrent saves)
+    const now = new Date();
+    await AdminSettings.findOneAndUpdate(
+      {},
+      { $set: {
+        'globalHub.dictionaries.lastNames': allNames,
+        'globalHub.dictionaries.lastNamesUpdatedAt': now,
+        'globalHub.dictionaries.lastNamesUpdatedBy': req.user?.email || 'api'
+      }},
+      { upsert: true }
+    );
     
     // Sync to Redis immediately
     await GlobalHubService.syncLastNamesToRedis(allNames);

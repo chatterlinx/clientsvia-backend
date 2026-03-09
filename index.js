@@ -1126,7 +1126,7 @@ async function startServer() {
             const GlobalHubService = require('./services/GlobalHubService');
             const hubResult = await GlobalHubService.initialize();
             if (hubResult.success) {
-                console.log(`[Server] ✅ Step 3.6 COMPLETE: Global Hub initialized (${hubResult.count.toLocaleString()} first names loaded)`);
+                console.log(`[Server] ✅ Step 3.6 COMPLETE: Global Hub initialized (${hubResult.firstNames?.toLocaleString() || 0} first names, ${hubResult.lastNames?.toLocaleString() || 0} last names loaded${hubResult.autoSeeded ? ' [AUTO-SEEDED]' : ''})`);
             } else {
                 console.warn('[Server] ⚠️ Global Hub initialization returned no data (seed via admin UI)');
             }
