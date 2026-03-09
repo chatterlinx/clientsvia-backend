@@ -414,6 +414,7 @@ async function getRecoveryMessage(company, type = 'audioUnclear') {
   return message || null;
 }
 const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('../utils/textUtils');
+const { sanitizeForSpeech } = require('../utils/sanitizeForSpeech');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // ============================================================================
@@ -897,13 +898,15 @@ function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to
   }
 }
 
-// Helper function to escape text for TwiML Say verb
+// Helper function to escape text for TwiML Say verb.
+// Also acts as the final safety gate: sanitizeForSpeech blocks internal/error
+// text from ever reaching a caller's ear.
 function escapeTwiML(text) {
-  if (!text) {return '';}
-  
-  // For TTS, we want clean text without HTML entities
-  // Only do minimal escaping for XML structure
-  return text.replace(/&/g, '&amp;')
+  if (!text) { return ''; }
+
+  const safe = sanitizeForSpeech(text);
+
+  return safe.replace(/&/g, '&amp;')
              .replace(/</g, '&lt;')
              .replace(/>/g, '&gt;');
 }

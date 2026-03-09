@@ -35,6 +35,7 @@ const ScenarioEngine = require('../ScenarioEngine');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 const { selectOpener, prependOpener } = require('./OpenerEngine');
 const { Agent2DiscoveryRunner } = require('./agent2/Agent2DiscoveryRunner');
+const { sanitizeForSpeech } = require('../../utils/sanitizeForSpeech');
 const BookingLogicEngine = require('./booking/BookingLogicEngine');
 
 // Agent 2.0 uses CallLogger (not legacy BlackBox name)
@@ -61,9 +62,10 @@ try {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function resolveErrorFallback(company, type, bufferEvent) {
+    const LAST_RESORT = 'I can help you with that.';
     const recoveryMessages = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
     const agent2Config = company?.aiAgentSettings?.agent2 || {};
-    
+
     // Type-specific fallback mapping
     const typeToRecoveryKey = {
         generalError: 'generalError',
@@ -74,37 +76,53 @@ function resolveErrorFallback(company, type, bufferEvent) {
         timeout: 'timeout',
         technicalTransfer: 'technicalTransfer'
     };
-    
+
     const recoveryKey = typeToRecoveryKey[type] || 'generalError';
-    
-    // Try recovery message variants
-    let variants = recoveryMessages[recoveryKey];
+    let resolved = null;
+
+    // Try recovery message variants (from UI config)
+    const variants = recoveryMessages[recoveryKey];
     if (Array.isArray(variants) && variants.length > 0) {
-        return variants[Math.floor(Math.random() * variants.length)];
+        resolved = variants[Math.floor(Math.random() * variants.length)];
+    } else if (typeof variants === 'string' && variants.trim()) {
+        resolved = variants.trim();
     }
-    if (typeof variants === 'string' && variants.trim()) {
-        return variants.trim();
-    }
-    
+
     // Fallback to emergency line
-    const emergencyLine = agent2Config.emergencyFallbackLine?.text;
-    if (emergencyLine && typeof emergencyLine === 'string' && emergencyLine.trim()) {
-        return emergencyLine.trim();
+    if (!resolved) {
+        const emergencyLine = agent2Config.emergencyFallbackLine?.text;
+        if (emergencyLine && typeof emergencyLine === 'string' && emergencyLine.trim()) {
+            resolved = emergencyLine.trim();
+        }
     }
-    
-    // Last resort: minimal safe acknowledgment (better than "repeat that")
-    bufferEvent?.('EMERGENCY_FALLBACK_NOT_CONFIGURED', {
-        severity: 'WARNING',
-        type,
-        recoveryKey,
-        message: `No UI-configured fallback for type="${type}". Using minimal safe.`,
-        attemptedPaths: [
-            `aiAgentSettings.llm0Controls.recoveryMessages.${recoveryKey}`,
-            'aiAgentSettings.agent2.emergencyFallbackLine.text'
-        ]
-    });
-    
-    return 'I can help you with that.';
+
+    // Last resort: minimal safe acknowledgment
+    if (!resolved) {
+        bufferEvent?.('EMERGENCY_FALLBACK_NOT_CONFIGURED', {
+            severity: 'WARNING',
+            type,
+            recoveryKey,
+            message: `No UI-configured fallback for type="${type}". Using minimal safe.`,
+            attemptedPaths: [
+                `aiAgentSettings.llm0Controls.recoveryMessages.${recoveryKey}`,
+                'aiAgentSettings.agent2.emergencyFallbackLine.text'
+            ]
+        });
+        return LAST_RESORT;
+    }
+
+    // ── Speech sanitization gate ─────────────────────────────────────────
+    // Config values are untrusted — placeholders, debug text, or non-string
+    // data must never reach a caller's ear.
+    const sanitized = sanitizeForSpeech(resolved, { fallback: LAST_RESORT });
+    if (sanitized !== resolved) {
+        logger.warn('[resolveErrorFallback] Sanitization replaced unsafe config text', {
+            type,
+            recoveryKey,
+            originalPreview: `${resolved}`.substring(0, 80),
+        });
+    }
+    return sanitized;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
