@@ -135,18 +135,12 @@ CallTranscriptV2Schema.statics.appendTurns = async function appendTurns(companyI
   const minTs = cleaned.reduce((min, t) => (!min || t.ts < min ? t.ts : min), null);
   const maxTs = cleaned.reduce((max, t) => (!max || t.ts > max ? t.ts : max), null);
 
-  const setOnInsert = {
-    companyId,
-    callSid,
-    callMeta: {
-      from: opts?.from || null,
-      to: opts?.to || null,
-      startedAt: toDate(opts?.startedAt, null),
-      endedAt: null,
-      twilioDurationSeconds: null
-    }
-  };
+  // Identity-only fields for $setOnInsert — never includes nested objects
+  // to avoid MongoDB path conflicts with concurrent $set on sub-paths.
+  const setOnInsert = { companyId, callSid };
 
+  // All callMeta fields use dot-path $set so concurrent writers never
+  // conflict between a whole-object insert and sub-path updates.
   const $set = { updatedAt: now };
   if (opts?.from) $set['callMeta.from'] = opts.from;
   if (opts?.to) $set['callMeta.to'] = opts.to;
