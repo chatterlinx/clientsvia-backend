@@ -562,7 +562,26 @@ const CallSummarySchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
+
+  /**
+   * Twilio call recording URL (full-call dual-channel recording)
+   * Set by /recording-status callback when Twilio finishes processing.
+   */
+  recordingUrl: {
+    type: String,
+    trim: true
+  },
+
+  recordingSid: {
+    type: String,
+    trim: true
+  },
+
+  recordingDuration: {
+    type: Number,  // seconds
+    min: 0
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // NOTES & REVIEW
   // ─────────────────────────────────────────────────────────────────────────

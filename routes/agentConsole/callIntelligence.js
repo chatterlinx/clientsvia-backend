@@ -14,7 +14,7 @@ const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const CallSummary = require('../../models/CallSummary');
 const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
 const CallIntelligence = require('../../models/CallIntelligence');
-const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
+
 const mongoose = require('mongoose');
 
 function buildCallSummaryDateRange(timeRange) {
@@ -419,21 +419,19 @@ router.get('/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
     
-    const [intelligence, transcript, summary, callLog] = await Promise.all([
+    const [intelligence, transcript, summary] = await Promise.all([
       CallIntelligenceService.getCallIntelligence(callSid),
       CallTranscriptV2.findOne({ callSid }).lean(),
-      CallSummary.findOne({ $or: [{ twilioSid: callSid }, { callId: callSid }] }).lean(),
-      v2AIAgentCallLog.findOne(
-        { callId: callSid },
-        { 'conversation.recordingUrl': 1, 'conversation.recordingDuration': 1, 'conversation.recordingSid': 1 }
-      ).lean()
+      CallSummary.findOne({ $or: [{ twilioSid: callSid }, { callId: callSid }] })
+        .select('companyId callId twilioSid phone durationSeconds turnCount routingTier startedAt events turns hasRecording recordingUrl recordingSid recordingDuration')
+        .lean()
     ]);
 
     const recording = {
-      hasRecording: !!callLog?.conversation?.recordingUrl,
-      url: callLog?.conversation?.recordingUrl || null,
-      duration: callLog?.conversation?.recordingDuration || null,
-      sid: callLog?.conversation?.recordingSid || null
+      hasRecording: !!summary?.recordingUrl,
+      url: summary?.recordingUrl || null,
+      duration: summary?.recordingDuration || null,
+      sid: summary?.recordingSid || null
     };
 
     const turns = transcript?.turns || summary?.turns || [];
@@ -539,7 +537,7 @@ router.get('/company/:companyId/list', async (req, res) => {
         .sort({ startedAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
-        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns')
+        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns hasRecording recordingUrl recordingSid recordingDuration')
         .lean(),
       CallSummary.countDocuments(summaryQuery)
     ]);
@@ -552,30 +550,20 @@ router.get('/company/:companyId/list', async (req, res) => {
           .sort({ startedAt: -1 })
           .skip((pageNum - 1) * limitNum)
           .limit(limitNum)
-          .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns')
+          .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns hasRecording recordingUrl recordingSid recordingDuration')
           .lean(),
         CallSummary.countDocuments(fallbackQuery)
       ]);
     }
 
     const callSids = summaries.map(c => c.twilioSid || c.callId).filter(Boolean);
-    const [intelligenceDocs, callLogs] = await Promise.all([
-      callSids.length > 0
-        ? CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean()
-        : [],
-      // Fetch recording URLs from v2AIAgentCallLog (lightweight projection)
-      callSids.length > 0
-        ? v2AIAgentCallLog.find(
-            { callId: { $in: callSids } },
-            { callId: 1, 'conversation.recordingUrl': 1, 'conversation.recordingDuration': 1 }
-          ).lean()
-        : []
-    ]);
+    const intelligenceDocs = callSids.length > 0
+      ? await CallIntelligence.find({ companyId, callSid: { $in: callSids } }).lean()
+      : [];
     const intelligenceMap = new Map(intelligenceDocs.map(doc => [doc.callSid, doc]));
-    const recordingMap = new Map(callLogs.map(log => [log.callId, {
-      url: log.conversation?.recordingUrl || null,
-      duration: log.conversation?.recordingDuration || null
-    }]));
+
+    // Recording data is now read directly from CallSummary (hasRecording, recordingUrl, etc.)
+    // No separate v2AIAgentCallLog query needed.
 
     if (autoAnalyze === 'true') {
       const settings = await CallIntelligenceSettings.getSettings(companyId);
@@ -656,11 +644,10 @@ router.get('/company/:companyId/list', async (req, res) => {
     let items = summaries.map(summary => {
       const callSid = summary.twilioSid || summary.callId;
       const intel = intelligenceMap.get(callSid);
-      const rec = recordingMap.get(callSid);
       const recording = {
-        hasRecording: !!rec?.url,
-        url: rec?.url || null,
-        duration: rec?.duration || null
+        hasRecording: !!summary.recordingUrl,
+        url: summary.recordingUrl || null,
+        duration: summary.recordingDuration || null
       };
 
       if (intel) {

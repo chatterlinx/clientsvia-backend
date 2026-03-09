@@ -1733,7 +1733,47 @@ router.post('/voice', async (req, res) => {
       }
     }
     // ════════════════════════════════════════════════════════════════════════════
-    
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🎙️ FULL-CALL RECORDING — Start dual-channel Twilio recording
+    // ════════════════════════════════════════════════════════════════════════════
+    // Records both sides of the conversation for QA/supervision via Call Intelligence.
+    // Fire-and-forget: must NOT block the voice response.
+    // Recording status callback fires when Twilio finishes processing the audio,
+    // delivering RecordingUrl + RecordingSid which we persist to CallSummary.
+    // ════════════════════════════════════════════════════════════════════════════
+    if (company.twilioConfig?.accountSid && company.twilioConfig?.authToken && req.body.CallSid) {
+      const recordingCallbackUrl = `${getSecureBaseUrl(req)}/api/twilio/recording-status`;
+      try {
+        const twilioRecClient = twilio(company.twilioConfig.accountSid, company.twilioConfig.authToken);
+        twilioRecClient.calls(req.body.CallSid)
+          .recordings.create({
+            recordingChannels: 'dual',
+            recordingStatusCallback: recordingCallbackUrl,
+            recordingStatusCallbackMethod: 'POST',
+            recordingStatusCallbackEvent: ['completed', 'failed']
+          })
+          .then(recording => {
+            logger.info('[CALL RECORDING] Recording started', {
+              callSid: req.body.CallSid,
+              recordingSid: recording.sid,
+              channels: 'dual'
+            });
+          })
+          .catch(recErr => {
+            logger.warn('[CALL RECORDING] Failed to start recording (non-blocking)', {
+              callSid: req.body.CallSid,
+              error: recErr.message
+            });
+          });
+      } catch (recInitErr) {
+        logger.warn('[CALL RECORDING] Could not init Twilio client for recording', {
+          error: recInitErr.message
+        });
+      }
+    }
+    // ════════════════════════════════════════════════════════════════════════════
+
     // ════════════════════════════════════════════════════════════════════════════
     // 📼 BLACK BOX: Initialize call recording
     // ════════════════════════════════════════════════════════════════════════════
@@ -7285,6 +7325,75 @@ Example: ACK ALT-20251020-001
         res.type('text/xml');
         res.send('<Response></Response>');
     }
+});
+
+// ============================================================================
+// 🎙️ RECORDING STATUS CALLBACK — Twilio recording completion
+// ============================================================================
+// Purpose: Persist recording URL + metadata to CallSummary when Twilio
+// finishes processing the full-call recording started in /voice.
+// ============================================================================
+
+router.post('/recording-status', async (req, res) => {
+  const {
+    CallSid,
+    RecordingSid,
+    RecordingUrl,
+    RecordingStatus,
+    RecordingDuration,
+    RecordingChannels
+  } = req.body;
+
+  logger.info('[CALL RECORDING] Recording status callback received', {
+    callSid: CallSid,
+    recordingSid: RecordingSid,
+    status: RecordingStatus,
+    duration: RecordingDuration,
+    channels: RecordingChannels
+  });
+
+  try {
+    if (RecordingStatus === 'completed' && RecordingUrl && CallSid) {
+      const CallSummary = require('../models/CallSummary');
+      const result = await CallSummary.findOneAndUpdate(
+        { twilioSid: CallSid },
+        {
+          hasRecording: true,
+          recordingUrl: RecordingUrl,
+          recordingSid: RecordingSid,
+          recordingDuration: parseInt(RecordingDuration) || 0
+        },
+        { new: true }
+      );
+
+      if (result) {
+        logger.info('[CALL RECORDING] Recording URL saved to CallSummary', {
+          callSid: CallSid,
+          callId: result.callId,
+          recordingSid: RecordingSid,
+          duration: RecordingDuration
+        });
+      } else {
+        logger.warn('[CALL RECORDING] No CallSummary found for recording', {
+          callSid: CallSid,
+          recordingSid: RecordingSid
+        });
+      }
+    } else if (RecordingStatus === 'failed') {
+      logger.error('[CALL RECORDING] Recording failed', {
+        callSid: CallSid,
+        recordingSid: RecordingSid
+      });
+    }
+  } catch (error) {
+    logger.error('[CALL RECORDING] Error processing recording callback', {
+      error: error.message,
+      callSid: CallSid
+    });
+  }
+
+  // Always return 200 to Twilio
+  res.type('text/xml').status(200).send('<Response></Response>');
 });
 
 // ============================================================================
