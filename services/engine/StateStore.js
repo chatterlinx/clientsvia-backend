@@ -104,7 +104,10 @@ class StateStore {
             callReasonCaptured: presenceFlags.callReasonCaptured,
             namePresent: presenceFlags.namePresent,
             addressPresent: presenceFlags.addressPresent,
-            
+
+            // Cross-turn caller name persistence
+            callerName: callState.callerName || null,
+
             // ═══════════════════════════════════════════════════════════════════════════
             // V116: PENDING SLOTS - Extracted but not confirmed
             // ═══════════════════════════════════════════════════════════════════════════
@@ -206,6 +209,9 @@ class StateStore {
         next.callReasonCaptured = presenceFlags.callReasonCaptured;
         next.namePresent = presenceFlags.namePresent;
         next.addressPresent = presenceFlags.addressPresent;
+
+        // Persist caller name across turns (extracted by ScrabEngine)
+        next.callerName = state.callerName || null;
 
         // Keep legacy views derived from slots to avoid downstream breakage.
         next.bookingCollected = { ...(next.bookingCollected || {}), ...(state.plainSlots || {}) };

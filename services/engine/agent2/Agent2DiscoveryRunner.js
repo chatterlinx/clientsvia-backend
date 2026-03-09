@@ -865,7 +865,9 @@ class Agent2DiscoveryRunner {
     }
     
     // V129: Use 'let' so we can update after ScrabEngine extracts name on Turn 1
-    let callerName = state?.plainSlots?.name || null;
+    // Primary: persisted callerName (survives across turns via StateStore)
+    // Fallback: plainSlots.name (legacy, rarely populated)
+    let callerName = state?.callerName || state?.plainSlots?.name || null;
 
     // ──────────────────────────────────────────────────────────────────────
     // V119: COMPUTE CONFIG HASH FOR PROOF
@@ -1521,19 +1523,56 @@ class Agent2DiscoveryRunner {
     }
     
     // Store ScrabEngine result in state for downstream access
+    // ACCUMULATION: Merge entities across turns instead of overwriting.
+    // Null from current turn means "no extraction" — preserve previous turn's value.
+    // Prevents name loss when consent turns ("yes please") yield no entities.
+    const previousScrab = state?.agent2?.scrabEngine || {};
+
+    const mergeEntities = (prev, curr) => {
+      if (!prev) return curr || {};
+      if (!curr) return prev;
+      const merged = { ...prev };
+      for (const [key, value] of Object.entries(curr)) {
+        if (value != null) merged[key] = value;
+      }
+      return merged;
+    };
+
+    const mergedEntities = mergeEntities(previousScrab.entities, scrabResult.entities);
+    const mergedHandoff = mergeEntities(
+      previousScrab.handoffEntities,
+      scrabResult.handoffEntities || scrabResult.entities
+    );
+
     nextState.agent2.scrabEngine = {
       rawText: scrabResult.rawText,
       normalizedText: scrabResult.normalizedText,
       expandedTokens: scrabResult.expandedTokens,
       transformations: scrabResult.transformations,
-      entities: scrabResult.entities,
-      handoffEntities: scrabResult.handoffEntities || scrabResult.entities,
-      // Stage 4 extraction metadata for name verification downstream
-      stage4_extraction: scrabResult.stage4_extraction ? {
+      entities: mergedEntities,
+      handoffEntities: mergedHandoff,
+      // Stage 4: current turn's extraction if available, else preserve previous
+      stage4_extraction: (scrabResult.stage4_extraction ? {
         extractions: scrabResult.stage4_extraction.extractions,
         validations: scrabResult.stage4_extraction.validations
-      } : null
+      } : null) || previousScrab.stage4_extraction || null
     };
+
+    // Diagnostic: log when accumulation preserves a name from a previous turn
+    if (previousScrab.entities?.firstName && !scrabResult.entities?.firstName) {
+      logger.info('[ScrabEngine] Accumulation preserved firstName from previous turn', {
+        preserved: previousScrab.entities.firstName,
+        currentInput: clip(input, 40),
+        callSid, turn
+      });
+    }
+    if (previousScrab.entities?.lastName && !scrabResult.entities?.lastName) {
+      logger.info('[ScrabEngine] Accumulation preserved lastName from previous turn', {
+        preserved: previousScrab.entities.lastName,
+        currentInput: clip(input, 40),
+        callSid, turn
+      });
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // SCRABENGINE → TRIGGER HANDOFF REPORT

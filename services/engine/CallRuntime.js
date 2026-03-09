@@ -247,8 +247,8 @@ async function runBookingLogicLane({
     const consentMatchedPhrases = Array.isArray(state?.consent?.matchedPhrases) ? state.consent.matchedPhrases : [];
     const handoffPayload = {
         assumptions: {
-            firstName: scrabEngineEntities.firstName || state?.plainSlots?.name || null,
-            lastName: scrabEngineEntities.lastName || state?.plainSlots?.lastName || null,
+            firstName: scrabEngineEntities.firstName || state?.callerName || null,
+            lastName: scrabEngineEntities.lastName || null,
             phone: scrabEngineEntities.phone || null,
             email: scrabEngineEntities.email || null,
             // All ScrabEngine custom extractions auto-wired
