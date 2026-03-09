@@ -252,9 +252,12 @@ async function runBookingLogicLane({
             phone: scrabEngineEntities.phone || null,
             email: scrabEngineEntities.email || null,
             // All ScrabEngine custom extractions auto-wired
+            // Exclude built-in fields (already mapped above) and internal metadata keys
             ...Object.fromEntries(
-                Object.entries(scrabEngineEntities).filter(([key]) => 
-                    !['firstName', 'lastName', 'fullName', 'phone', 'email', 'address'].includes(key)
+                Object.entries(scrabEngineEntities).filter(([key]) =>
+                    !key.startsWith('_') &&
+                    !['firstName', 'lastName', 'fullName', 'phone', 'email', 'address',
+                      'firstNameMeta', 'lastNameMeta'].includes(key)
                 )
             ),
             callerPhone: state?.plainSlots?.phone || callState?.callerPhone || null,
