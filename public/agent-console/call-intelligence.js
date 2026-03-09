@@ -319,10 +319,18 @@
             <span class="provenance-badge">✓ UI-Owned</span>
           </td>
           <td class="col-recording">
-            ${call.recording?.hasRecording ? `
-              <button class="btn-play-recording" data-recording-url="${call.recording.url}" title="Play recording${call.recording.duration ? ' (' + formatDuration(call.recording.duration) + ')' : ''}">
-                <span class="play-icon">&#9654;</span>
-              </button>
+            ${call.recording?.hasRecording && call.recording.sid ? `
+              <div class="recording-actions">
+                <button class="btn-play-recording"
+                  data-recording-url="/api/call-intelligence/recording/${call.recording.sid}/audio"
+                  title="Quick listen${call.recording.duration ? ' (' + formatDuration(call.recording.duration) + ')' : ''}">
+                  <span class="play-icon">&#9654;</span>
+                </button>
+                <a href="https://www.twilio.com/console/voice/recordings/${call.recording.sid}"
+                   target="_blank"
+                   class="btn-recording-twilio"
+                   title="Open in Twilio Console">&#8599;</a>
+              </div>
             ` : '<span class="text-muted">--</span>'}
           </td>
           <td class="col-intelligence">

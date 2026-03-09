@@ -8,12 +8,14 @@
 
 const express = require('express');
 const router = express.Router();
+const https = require('https');
 const CallIntelligenceService = require('../../services/CallIntelligenceService');
 const GPT4AnalysisService = require('../../services/GPT4AnalysisService');
 const CallTranscriptV2 = require('../../models/CallTranscriptV2');
 const CallSummary = require('../../models/CallSummary');
 const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
 const CallIntelligence = require('../../models/CallIntelligence');
+const Company = require('../../models/v2Company');
 
 const mongoose = require('mongoose');
 
@@ -647,14 +649,20 @@ router.get('/company/:companyId/list', async (req, res) => {
       const recording = {
         hasRecording: !!summary.recordingUrl,
         url: summary.recordingUrl || null,
+        sid: summary.recordingSid || null,
         duration: summary.recordingDuration || null
       };
 
       if (intel) {
+        intel.callMetadata = intel.callMetadata || {};
         // Merge routingTier from CallSummary into intelligence response
         if (summary.routingTier) {
-          intel.callMetadata = intel.callMetadata || {};
           intel.callMetadata.routingTier = summary.routingTier;
+        }
+        // Always use CallSummary duration — it's set authoritatively by Twilio status callback
+        // which fires after analysis, so stored intel.callMetadata.duration is often 0
+        if (summary.durationSeconds > 0) {
+          intel.callMetadata.duration = summary.durationSeconds;
         }
         intel.recording = recording;
         return intel;
@@ -894,6 +902,70 @@ router.get('/debug/:companyId', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+/**
+ * GET /api/call-intelligence/recording/:recordingSid/audio
+ * Proxy Twilio recording audio so the browser can play it without CORS/auth issues.
+ */
+router.get('/recording/:recordingSid/audio', async (req, res) => {
+  try {
+    const { recordingSid } = req.params;
+
+    // Look up the CallSummary to get the recording URL and companyId
+    const summary = await CallSummary.findOne({ recordingSid })
+      .select('recordingUrl companyId')
+      .lean();
+
+    if (!summary?.recordingUrl) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    // Get Twilio credentials from the company config
+    const company = await Company.findById(summary.companyId)
+      .select('twilioConfig.accountSid twilioConfig.authToken')
+      .lean();
+
+    const accountSid = company?.twilioConfig?.accountSid || process.env.TWILIO_ACCOUNT_SID;
+    const authToken = company?.twilioConfig?.authToken || process.env.TWILIO_AUTH_TOKEN;
+
+    if (!accountSid || !authToken) {
+      return res.status(500).json({ error: 'Twilio credentials not configured' });
+    }
+
+    // Twilio recording URL — append .mp3 for the audio file
+    const audioUrl = summary.recordingUrl.endsWith('.mp3')
+      ? summary.recordingUrl
+      : summary.recordingUrl + '.mp3';
+
+    const parsed = new URL(audioUrl);
+    const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+    const proxyReq = https.get(
+      { hostname: parsed.hostname, path: parsed.pathname + parsed.search, headers: { Authorization: `Basic ${auth}` } },
+      (twilioRes) => {
+        if (twilioRes.statusCode !== 200) {
+          res.status(twilioRes.statusCode).json({ error: 'Could not fetch recording from Twilio' });
+          twilioRes.resume();
+          return;
+        }
+        res.setHeader('Content-Type', twilioRes.headers['content-type'] || 'audio/mpeg');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        twilioRes.pipe(res);
+      }
+    );
+
+    proxyReq.on('error', (err) => {
+      console.error('[Recording Proxy] Error:', err.message);
+      if (!res.headersSent) res.status(502).json({ error: 'Upstream error' });
+    });
+
+    req.on('close', () => proxyReq.destroy());
+  } catch (error) {
+    console.error('[Recording Proxy] Unexpected error:', error.message);
+    if (!res.headersSent) res.status(500).json({ error: error.message });
   }
 });
 
