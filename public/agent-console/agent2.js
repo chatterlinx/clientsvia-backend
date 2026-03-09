@@ -150,11 +150,16 @@
     
     // Bridge (Latency Filler)
     inputBridgeEnabled: document.getElementById('input-bridge-enabled'),
+    inputBridgeQuietWindow: document.getElementById('input-bridge-quiet-window'),
     inputBridgeThreshold: document.getElementById('input-bridge-threshold'),
+    inputBridgePostPause: document.getElementById('input-bridge-post-pause'),
+    inputBridgeHeartbeatSilence: document.getElementById('input-bridge-heartbeat-silence'),
     inputBridgeHardcap: document.getElementById('input-bridge-hardcap'),
     inputBridgeMaxPerCall: document.getElementById('input-bridge-max-per-call'),
     inputBridgeMaxRedirects: document.getElementById('input-bridge-max-redirects'),
     inputBridgeLines: document.getElementById('input-bridge-lines'),
+    inputBridgeBookingPhrase: document.getElementById('input-bridge-booking-phrase'),
+    inputBridgeTransferPhrase: document.getElementById('input-bridge-transfer-phrase'),
     
     // Greeting Interceptor
     toggleInterceptorEnabled: document.getElementById('toggle-interceptor-enabled'),
@@ -448,11 +453,16 @@
     // Bridge (Latency Filler)
     const bridge = config.bridge || {};
     if (DOM.inputBridgeEnabled) DOM.inputBridgeEnabled.checked = bridge.enabled === true;
+    if (DOM.inputBridgeQuietWindow) DOM.inputBridgeQuietWindow.value = bridge.bridgeQuietWindowMs ?? 500;
     if (DOM.inputBridgeThreshold) DOM.inputBridgeThreshold.value = bridge.thresholdMs || 1100;
-    if (DOM.inputBridgeHardcap) DOM.inputBridgeHardcap.value = bridge.hardCapMs || 6000;
+    if (DOM.inputBridgePostPause) DOM.inputBridgePostPause.value = bridge.postBridgePauseMs ?? 150;
+    if (DOM.inputBridgeHeartbeatSilence) DOM.inputBridgeHeartbeatSilence.value = bridge.heartbeatSilenceMs || 5000;
+    if (DOM.inputBridgeHardcap) DOM.inputBridgeHardcap.value = bridge.maxCeilingMs || 15000;
     if (DOM.inputBridgeMaxPerCall) DOM.inputBridgeMaxPerCall.value = bridge.maxBridgesPerCall || 2;
     if (DOM.inputBridgeMaxRedirects) DOM.inputBridgeMaxRedirects.value = bridge.maxRedirectAttempts || 2;
     if (DOM.inputBridgeLines) DOM.inputBridgeLines.value = (bridge.lines || []).join('\n');
+    if (DOM.inputBridgeBookingPhrase) DOM.inputBridgeBookingPhrase.value = bridge.bookingBridgePhrase || '';
+    if (DOM.inputBridgeTransferPhrase) DOM.inputBridgeTransferPhrase.value = bridge.transferBridgePhrase || '';
     
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
@@ -595,11 +605,16 @@
       },
       bridge: {
         enabled: DOM.inputBridgeEnabled?.checked || false,
+        bridgeQuietWindowMs: parseInt(DOM.inputBridgeQuietWindow?.value, 10) || 500,
         thresholdMs: parseInt(DOM.inputBridgeThreshold?.value, 10) || 1100,
-        hardCapMs: parseInt(DOM.inputBridgeHardcap?.value, 10) || 6000,
+        postBridgePauseMs: parseInt(DOM.inputBridgePostPause?.value, 10) || 150,
+        heartbeatSilenceMs: parseInt(DOM.inputBridgeHeartbeatSilence?.value, 10) || 5000,
+        maxCeilingMs: parseInt(DOM.inputBridgeHardcap?.value, 10) || 15000,
         maxBridgesPerCall: parseInt(DOM.inputBridgeMaxPerCall?.value, 10) || 2,
         maxRedirectAttempts: parseInt(DOM.inputBridgeMaxRedirects?.value, 10) || 2,
-        lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean)
+        lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean),
+        bookingBridgePhrase: DOM.inputBridgeBookingPhrase?.value?.trim() || '',
+        transferBridgePhrase: DOM.inputBridgeTransferPhrase?.value?.trim() || ''
       },
       consentPhrases: state.config.consentPhrases,
       escalationPhrases: state.config.escalationPhrases

@@ -4012,6 +4012,9 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     const redirectUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=${attempt}`;
     const twiml = new twilio.twiml.VoiceResponse();
 
+    const postBridgePauseMs = Number.isFinite(bridgeCfg.postBridgePauseMs) ? bridgeCfg.postBridgePauseMs : 150;
+    const postBridgePauseSec = Math.max(0, Math.round(postBridgePauseMs / 1000));
+
     if (attempt <= 1) {
       // ── QUIET WINDOW: silent pause for fast-path delivery ─────────────
       // Convert ms to seconds for Twilio <Pause>, minimum 1 second (Twilio floor)
@@ -4019,10 +4022,19 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       twiml.pause({ length: pauseSeconds });
     } else {
       // ── HOLD MESSAGE: short ElevenLabs cached audio ───────────────────
+      // Determine which bridge phrase to use based on call lane context
+      const bridgeContext = req.body?.bridgeContext || 'thinking'; // thinking | booking | transfer
+      let lanePhrase = null;
+      if (bridgeContext === 'booking' && bridgeCfg.bookingBridgePhrase) {
+        lanePhrase = bridgeCfg.bookingBridgePhrase;
+      } else if (bridgeContext === 'transfer' && bridgeCfg.transferBridgePhrase) {
+        lanePhrase = bridgeCfg.transferBridgePhrase;
+      }
+
       const bridgeLines = bridgeCfg.lines || ['One moment please.'];
       const usableLines = bridgeLines.filter(l => l && l.trim());
       const lineIdx = (attempt - 2) % (usableLines.length || 1); // -2 because attempt 1 was quiet
-      const holdLine = usableLines[lineIdx] || 'One moment please.';
+      const holdLine = lanePhrase || usableLines[lineIdx] || 'One moment please.';
 
       // V-FIX: Use BridgeAudioService cached ElevenLabs audio; never <Say> for ElevenLabs companies
       const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
@@ -4050,6 +4062,10 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         // No ElevenLabs configured — Twilio <Say> is the correct voice for this company
         twiml.say(escapeTwiML(holdLine));
         voiceProviderUsed = 'twilio_say';
+      }
+      // Post-bridge pause: short silence after phrase, before redirect check
+      if (postBridgePauseSec > 0) {
+        twiml.pause({ length: postBridgePauseSec });
       }
     }
     // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)

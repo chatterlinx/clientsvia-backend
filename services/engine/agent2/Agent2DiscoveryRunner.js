@@ -146,37 +146,71 @@ function deepMergeLLMAgent(target, source) {
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis }) {
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
-    const config = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, saved);
+    let config = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, saved);
 
     // Gate: LLM Agent must be enabled for this company
-    if (!config.enabled) return null;
+    if (!config.enabled) {
+      emit('T2_FOLLOW_UP_GATE_BLOCKED', { reason: 'disabled', turn, bucket });
+      return { response: null, failureReason: 'disabled' };
+    }
 
     // Gate: Anthropic API key must exist
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       logger.warn('[LLM_AGENT] ANTHROPIC_API_KEY not set — skipping LLM Agent for follow-up');
-      return null;
+      emit('T2_FOLLOW_UP_GATE_BLOCKED', { reason: 'missing_api_key', turn, bucket });
+      return { response: null, failureReason: 'missing_api_key' };
+    }
+
+    // FIX: When self-scheduling, disable the noScheduling guardrail so the LLM
+    // does not produce transfer language ("I'll connect you to scheduling team")
+    // while the conversation is actually handling booking directly.
+    if (selfScheduling) {
+      config = {
+        ...config,
+        guardrails: { ...(config.guardrails || {}), noScheduling: false }
+      };
     }
 
     // Build system prompt with follow-up context appended
     const basePrompt = composeSystemPrompt(config, channel || 'call');
-    const followUpContext = [
+
+    const followUpParts = [
       '\n=== FOLLOW-UP CONTEXT ===',
       `The caller was asked: "${followUpQuestion}"`,
       triggerSource ? `(This was asked because trigger "${triggerSource}" matched.)` : '',
       `The caller responded: "${input}"`,
       `This was classified as: ${bucket} (not a clear yes or no)`,
-      '',
-      'Your job: Understand what the caller is saying. If they are confirming with conditions,',
-      'acknowledge the conditions and guide them. If they have a question, answer it using',
-      'your knowledge base. Then smoothly guide the conversation forward.',
-      '=== END FOLLOW-UP CONTEXT ==='
-    ].filter(Boolean).join('\n');
+      callerName ? `The caller's name is ${callerName}. Use their name naturally at most once.` : null,
+      ''
+    ];
 
+    if (selfScheduling) {
+      // LANE LOCK: self-scheduling — hard rule, no transfer language allowed
+      followUpParts.push(
+        '=== LANE: SELF-SCHEDULING ===',
+        'Scheduling is handled directly in this conversation. You are the scheduling agent.',
+        'NEVER say: "I\'ll connect you to our scheduling team", "one moment while I connect you",',
+        '"let me transfer you", or any variation of transfer/handoff wording.',
+        'After an affirmative response, ask the next booking question directly.',
+        'Examples: "What day works best for you?" or "Do you prefer morning or afternoon?"',
+        '=== END LANE RULE ==='
+      );
+    } else {
+      followUpParts.push(
+        'Your job: Understand what the caller is saying. If they are confirming with conditions,',
+        'acknowledge the conditions and guide them. If they have a question, answer it using',
+        'your knowledge base. Then smoothly guide the conversation forward.'
+      );
+    }
+
+    followUpParts.push('=== END FOLLOW-UP CONTEXT ===');
+
+    const followUpContext = followUpParts.filter(Boolean).join('\n');
     const systemPrompt = basePrompt + followUpContext;
 
     const modelId = config.model?.modelId || 'claude-3-5-haiku-20241022';
@@ -218,8 +252,19 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
         failureReason: result?.failureReason,
         latencyMs: result?.latencyMs,
       });
-      return null;
+      emit('T2_FOLLOW_UP_RESULT', {
+        llmAttempted: true,
+        llmSucceeded: false,
+        llmFailureReason: result?.failureReason || 'null_response',
+        fallbackInvoked: true,
+        selfScheduling,
+        bucket,
+        turn,
+      });
+      return { response: null, failureReason: result?.failureReason || 'null_response' };
     }
+
+    const usedCallerName = !!(callerName && result.response.toLowerCase().includes(callerName.toLowerCase()));
 
     // Success (full or partial)
     emit('A2_LLM_AGENT_RESPONSE', {
@@ -230,6 +275,18 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       tokensOutput: result.tokensUsed?.output || 0,
       responsePreview: result.response.substring(0, 120),
       wasPartial: result.wasPartial,
+      selfScheduling,
+      usedCallerName,
+    });
+    emit('T2_FOLLOW_UP_RESULT', {
+      llmAttempted: true,
+      llmSucceeded: true,
+      llmFailureReason: null,
+      fallbackInvoked: false,
+      selfScheduling,
+      usedCallerName,
+      bucket,
+      turn,
     });
 
     return {
@@ -237,12 +294,22 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       tokensUsed: result.tokensUsed || { input: 0, output: 0 },
       latencyMs: result.latencyMs,
       wasPartial: result.wasPartial,
+      usedCallerName,
     };
 
   } catch (error) {
     logger.error('[LLM_AGENT] Follow-up call failed', { error: error.message });
     emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_FOLLOW_UP', error: error.message });
-    return null; // Tier 3: canned response will handle it
+    emit('T2_FOLLOW_UP_RESULT', {
+      llmAttempted: true,
+      llmSucceeded: false,
+      llmFailureReason: 'exception',
+      fallbackInvoked: true,
+      selfScheduling,
+      bucket,
+      turn,
+    });
+    return { response: null, failureReason: 'exception' }; // Tier 3: canned response will handle it
   }
 }
 
@@ -263,18 +330,22 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
     const config = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, saved);
 
     // Gate: LLM Agent must be enabled for this company
-    if (!config.enabled) return null;
+    if (!config.enabled) {
+      emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'disabled', fallbackInvoked: true, turn });
+      return null;
+    }
 
     // Gate: triggerFallback activation must be enabled
     if (config.activation?.triggerFallback === false) {
       logger.info('[LLM_AGENT] triggerFallback activation is disabled — skipping no-match agent');
+      emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'trigger_fallback_disabled', fallbackInvoked: true, turn });
       return null;
     }
 
@@ -283,6 +354,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     if (llmTurnsThisCall >= maxTurnsPerSession) {
       logger.info('[LLM_AGENT] maxTurnsPerSession reached — skipping no-match agent', { llmTurnsThisCall, maxTurnsPerSession });
       emit('A2_LLM_STREAM_FAILED', { reason: FALLBACK_REASON_CODE.T2_MAX_TURNS, turn, llmTurnsThisCall });
+      emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'max_turns_reached', fallbackInvoked: true, turn });
       return null;
     }
 
@@ -290,6 +362,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       logger.warn('[LLM_AGENT] ANTHROPIC_API_KEY not set — skipping LLM Agent for no-match');
+      emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'missing_api_key', fallbackInvoked: true, turn });
       return null;
     }
 
@@ -300,6 +373,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       'No trigger card matched the caller\'s input. You are Tier 2 of the 123 Response Protocol — the AI intelligence layer.',
       `The caller said: "${input}"`,
       capturedReason ? `Detected intent/reason: "${capturedReason}"` : 'No specific call reason was detected.',
+      callerName ? `The caller's name is ${callerName}. Use their name naturally at most once.` : null,
       `This is turn ${turn || 'unknown'} of the conversation.`,
       '',
       'Your job: Understand what the caller needs. Answer their question using your knowledge base.',
@@ -373,9 +447,18 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
         failureReason: result?.failureReason,
         latencyMs: result?.latencyMs,
       });
+      emit('T2_NO_MATCH_RESULT', {
+        llmAttempted: true,
+        llmSucceeded: false,
+        llmFailureReason: result?.failureReason || 'null_response',
+        fallbackInvoked: true,
+        turn,
+      });
       // Return failure info so caller can set accurate t2FailureReason
       return { response: null, failureReason: result?.failureReason || null };
     }
+
+    const usedCallerName = !!(callerName && result.response.toLowerCase().includes(callerName.toLowerCase()));
 
     // Success (full or partial)
     emit('A2_LLM_AGENT_RESPONSE', {
@@ -386,6 +469,15 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       tokensOutput: result.tokensUsed?.output || 0,
       responsePreview: result.response.substring(0, 120),
       wasPartial: result.wasPartial,
+      usedCallerName,
+    });
+    emit('T2_NO_MATCH_RESULT', {
+      llmAttempted: true,
+      llmSucceeded: true,
+      llmFailureReason: null,
+      fallbackInvoked: false,
+      usedCallerName,
+      turn,
     });
 
     return {
@@ -393,11 +485,19 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       tokensUsed: result.tokensUsed || { input: 0, output: 0 },
       latencyMs: result.latencyMs,
       wasPartial: result.wasPartial,
+      usedCallerName,
     };
 
   } catch (error) {
     logger.error('[LLM_AGENT] No-match call failed', { error: error.message });
     emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_NO_MATCH', error: error.message });
+    emit('T2_NO_MATCH_RESULT', {
+      llmAttempted: true,
+      llmSucceeded: false,
+      llmFailureReason: 'exception',
+      fallbackInvoked: true,
+      turn,
+    });
     return null; // Graceful degradation to Tier 3 — deterministic paths will handle it
   }
 }
@@ -1201,11 +1301,13 @@ class Agent2DiscoveryRunner {
 
         // ── NO (Tier 2 → 3): try LLM Agent first, then canned response ──
         if (bucket === 'NO') {
+          const selfScheduling = direction === 'HANDOFF_BOOKING' || nextState.sessionMode === 'BOOKING' || !!nextState.agent2?.discovery?.bookingMode;
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
             bucket, channel: 'call', emit,
             callSid, turn, bridgeToken, redis,
+            callerName, selfScheduling,
           });
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -1227,11 +1329,13 @@ class Agent2DiscoveryRunner {
         // Non-terminal: caller gave a short/unclear response. Follow-up
         // state is preserved so the next turn stays in the consent gate.
         if (bucket === 'REPROMPT') {
+          const selfScheduling = direction === 'HANDOFF_BOOKING' || nextState.sessionMode === 'BOOKING' || !!nextState.agent2?.discovery?.bookingMode;
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
             bucket, channel: 'call', emit,
             callSid, turn, bridgeToken, redis,
+            callerName, selfScheduling,
           });
           if (llmAgentResult) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -1273,11 +1377,13 @@ class Agent2DiscoveryRunner {
         // Non-terminal: caller is unsure. Follow-up state is preserved so
         // the next turn stays in the consent gate for continued resolution.
         if (bucket === 'HESITANT') {
+          const selfScheduling = direction === 'HANDOFF_BOOKING' || nextState.sessionMode === 'BOOKING' || !!nextState.agent2?.discovery?.bookingMode;
           const llmAgentResult = await callLLMAgentForFollowUp({
             company, input, followUpQuestion: pfuq,
             triggerSource: pfuqSource?.replace('card:', '') || null,
             bucket, channel: 'call', emit,
             callSid, turn, bridgeToken, redis,
+            callerName, selfScheduling,
           });
           if (llmAgentResult) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -1319,11 +1425,13 @@ class Agent2DiscoveryRunner {
         // Non-terminal: question is still unresolved. LLM handles the response
         // contextually, then follow-up state is PRESERVED (not cleared) so the
         // next turn stays in the protected consent gate lane.
+        const selfScheduling = direction === 'HANDOFF_BOOKING' || nextState.sessionMode === 'BOOKING' || !!nextState.agent2?.discovery?.bookingMode;
         const llmAgentResult = await callLLMAgentForFollowUp({
           company, input, followUpQuestion: pfuq,
           triggerSource: pfuqSource?.replace('card:', '') || null,
           bucket, channel: 'call', emit,
           callSid, turn, bridgeToken, redis,
+          callerName, selfScheduling,
         });
         if (llmAgentResult) {
           const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -3522,6 +3630,7 @@ class Agent2DiscoveryRunner {
         bridgeToken,
         redis,
         t3RecoveryCtx,  // Package 4B: cross-turn recovery context
+        callerName,     // Thread caller name so T2 can personalize response
       });
 
       if (llmAgentResult?.response) {
@@ -3566,7 +3675,7 @@ class Agent2DiscoveryRunner {
           responseLength: response.length,
           hasAudio: false,
           source: 'llmAgent.noMatch',
-          usedCallerName: false,
+          usedCallerName: llmAgentResult.usedCallerName || false,
           isLLMAgent: true,
           latencyMs: llmAgentResult.latencyMs
         });
