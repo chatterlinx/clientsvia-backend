@@ -599,7 +599,9 @@ router.get('/company/:companyId/list', async (req, res) => {
                       fromPhone: summary.phone,
                       toPhone: summary.toPhone,
                       startTime: transcript.firstTurnTs || summary.startedAt,
-                      durationSeconds: transcript.callMeta?.twilioDurationSeconds
+                      // null = "unknown / not yet finalized" — analysis should NOT bake 0
+                      // as a permanent value when the real duration hasn't arrived yet.
+                      durationSeconds: transcript.callMeta?.twilioDurationSeconds ?? summary.durationSeconds ?? null
                     },
                     turns: transcript.turns || [],
                     events: transcript.trace || [],
@@ -614,7 +616,8 @@ router.get('/company/:companyId/list', async (req, res) => {
                       fromPhone: summary.phone,
                       toPhone: summary.toPhone,
                       startTime: summary.startedAt,
-                      durationSeconds: summary.durationSeconds || 0
+                      // null = "unknown" — never collapse to 0 for analysis purposes
+                      durationSeconds: summary.durationSeconds ?? null
                     },
                     turns: summary.turns || [],
                     events: summary.events || [],
@@ -643,31 +646,47 @@ router.get('/company/:companyId/list', async (req, res) => {
       }
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // BUILD RESPONSE: CallSummary is the CANONICAL source of truth for
+    // completion metrics (duration, recording, routingTier). CallIntelligence
+    // owns analysis data only. This separation ensures that race conditions
+    // between auto-analysis and Twilio callbacks never corrupt the display.
+    // ──────────────────────────────────────────────────────────────────────────
     let items = summaries.map(summary => {
       const callSid = summary.twilioSid || summary.callId;
       const intel = intelligenceMap.get(callSid);
+
+      // Recording object: derived from CallSummary (canonical owner)
       const recording = {
         hasRecording: !!summary.recordingUrl,
         url: summary.recordingUrl || null,
         sid: summary.recordingSid || null,
-        duration: summary.recordingDuration || null
+        duration: summary.recordingDuration ?? null
+      };
+
+      // Canonical completion metadata: ALWAYS from CallSummary, never from analysis doc.
+      // null = "unknown / not yet received from Twilio"
+      // 0    = "Twilio reported zero seconds" (legitimate for unanswered calls)
+      const canonicalMetadata = {
+        duration: summary.durationSeconds ?? null,
+        turns: summary.turnCount || 0,
+        fromPhone: summary.phone,
+        startTime: summary.startedAt,
+        routingTier: summary.routingTier || null
       };
 
       if (intel) {
-        intel.callMetadata = intel.callMetadata || {};
-        // Merge routingTier from CallSummary into intelligence response
-        if (summary.routingTier) {
-          intel.callMetadata.routingTier = summary.routingTier;
-        }
-        // Always use CallSummary duration — it's set authoritatively by Twilio status callback
-        // which fires after analysis, so stored intel.callMetadata.duration is often 0
-        if (summary.durationSeconds > 0) {
-          intel.callMetadata.duration = summary.durationSeconds;
-        }
+        // Analysis doc exists — use it for analysis fields, but ALWAYS
+        // override completion metrics from CallSummary (authoritative).
+        intel.callMetadata = {
+          ...(intel.callMetadata || {}),
+          ...canonicalMetadata
+        };
         intel.recording = recording;
         return intel;
       }
 
+      // No analysis doc — return stub with CallSummary data
       return {
         callSid,
         companyId,
@@ -682,13 +701,7 @@ router.get('/company/:companyId/list', async (req, res) => {
         analysis: {},
         gpt4Analysis: { enabled: false },
         recording,
-        callMetadata: {
-          duration: summary.durationSeconds || 0,
-          turns: summary.turnCount || 0,
-          fromPhone: summary.phone,
-          startTime: summary.startedAt,
-          routingTier: summary.routingTier || null
-        }
+        callMetadata: canonicalMetadata
       };
     });
 

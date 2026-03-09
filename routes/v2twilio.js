@@ -1703,34 +1703,73 @@ router.post('/voice', async (req, res) => {
     // every inbound call gets duration + transcript generation — even if the Twilio
     // phone-number settings don't have it pre-configured.
     // Fire-and-forget: must NOT block the voice response.
+    //
+    // LIFECYCLE: Success/failure is persisted to CallSummary.callLifecycle so
+    // the dashboard can distinguish "callback never registered" from "callback
+    // registered but never received".
     // ════════════════════════════════════════════════════════════════════════════
     if (company.twilioConfig?.accountSid && company.twilioConfig?.authToken && req.body.CallSid) {
       const statusCallbackUrl = `${getSecureBaseUrl(req)}/api/twilio/status-callback/${company._id}`;
+      const _callSid = req.body.CallSid;
+      const _companyId = company._id;
       try {
         const twilioClient = twilio(company.twilioConfig.accountSid, company.twilioConfig.authToken);
-        twilioClient.calls(req.body.CallSid)
+        twilioClient.calls(_callSid)
           .update({
             statusCallback: statusCallbackUrl,
             statusCallbackMethod: 'POST',
             statusCallbackEvent: ['completed', 'failed', 'busy', 'no-answer']
           })
-          .then(() => {
-            logger.debug('[CALL STATUS] Status callback registered', {
-              callSid: req.body.CallSid,
+          .then(async () => {
+            logger.info('[CALL STATUS] Status callback registered', {
+              callSid: _callSid,
               url: statusCallbackUrl
             });
+            // Persist success to lifecycle
+            try {
+              const _CS = require('../models/CallSummary');
+              await _CS.updateOne(
+                { twilioSid: _callSid },
+                { $set: {
+                  'callLifecycle.statusCallbackRegistered': true,
+                  'callLifecycle.statusCallbackRegisteredAt': new Date()
+                }}
+              );
+            } catch (_e) { /* non-blocking */ }
           })
-          .catch(err => {
-            logger.warn('[CALL STATUS] Failed to register status callback (non-blocking)', {
-              callSid: req.body.CallSid,
-              error: err.message
+          .catch(async (err) => {
+            logger.error('[CALL STATUS] ❌ FAILED to register status callback — duration will NOT be set for this call', {
+              callSid: _callSid,
+              companyId: _companyId,
+              error: err.message,
+              code: err.code,
+              statusCallbackUrl
             });
+            // Persist failure to lifecycle
+            try {
+              const _CS = require('../models/CallSummary');
+              await _CS.updateOne(
+                { twilioSid: _callSid },
+                { $set: {
+                  'callLifecycle.statusCallbackRegistered': false,
+                  'callLifecycle.statusCallbackError': err.message
+                }}
+              );
+            } catch (_e) { /* non-blocking */ }
           });
       } catch (twilioInitErr) {
-        logger.warn('[CALL STATUS] Could not init Twilio client for status callback', {
+        logger.error('[CALL STATUS] ❌ Could not init Twilio client for status callback', {
+          callSid: _callSid,
+          companyId: _companyId,
           error: twilioInitErr.message
         });
       }
+    } else {
+      logger.warn('[CALL STATUS] Skipping status callback registration — missing Twilio credentials or CallSid', {
+        hasAccountSid: !!company.twilioConfig?.accountSid,
+        hasAuthToken: !!company.twilioConfig?.authToken,
+        hasCallSid: !!req.body.CallSid
+      });
     }
     // ════════════════════════════════════════════════════════════════════════════
 
@@ -1741,33 +1780,63 @@ router.post('/voice', async (req, res) => {
     // Fire-and-forget: must NOT block the voice response.
     // Recording status callback fires when Twilio finishes processing the audio,
     // delivering RecordingUrl + RecordingSid which we persist to CallSummary.
+    //
+    // LIFECYCLE: Success/failure is persisted to CallSummary.callLifecycle so
+    // the dashboard can show "recording never started" vs "recording started
+    // but callback never received".
     // ════════════════════════════════════════════════════════════════════════════
     if (company.twilioConfig?.accountSid && company.twilioConfig?.authToken && req.body.CallSid) {
       const recordingCallbackUrl = `${getSecureBaseUrl(req)}/api/twilio/recording-status`;
+      const _recCallSid = req.body.CallSid;
       try {
         const twilioRecClient = twilio(company.twilioConfig.accountSid, company.twilioConfig.authToken);
-        twilioRecClient.calls(req.body.CallSid)
+        twilioRecClient.calls(_recCallSid)
           .recordings.create({
             recordingChannels: 'dual',
             recordingStatusCallback: recordingCallbackUrl,
             recordingStatusCallbackMethod: 'POST',
             recordingStatusCallbackEvent: ['completed', 'failed']
           })
-          .then(recording => {
+          .then(async (recording) => {
             logger.info('[CALL RECORDING] Recording started', {
-              callSid: req.body.CallSid,
+              callSid: _recCallSid,
               recordingSid: recording.sid,
               channels: 'dual'
             });
+            // Persist success to lifecycle
+            try {
+              const _CS = require('../models/CallSummary');
+              await _CS.updateOne(
+                { twilioSid: _recCallSid },
+                { $set: {
+                  'callLifecycle.recordingRequested': true,
+                  'callLifecycle.recordingRequestedAt': new Date()
+                }}
+              );
+            } catch (_e) { /* non-blocking */ }
           })
-          .catch(recErr => {
-            logger.warn('[CALL RECORDING] Failed to start recording (non-blocking)', {
-              callSid: req.body.CallSid,
-              error: recErr.message
+          .catch(async (recErr) => {
+            logger.error('[CALL RECORDING] ❌ FAILED to start recording — no recording will exist for this call', {
+              callSid: _recCallSid,
+              error: recErr.message,
+              code: recErr.code,
+              recordingCallbackUrl
             });
+            // Persist failure to lifecycle
+            try {
+              const _CS = require('../models/CallSummary');
+              await _CS.updateOne(
+                { twilioSid: _recCallSid },
+                { $set: {
+                  'callLifecycle.recordingRequested': false,
+                  'callLifecycle.recordingError': recErr.message
+                }}
+              );
+            } catch (_e) { /* non-blocking */ }
           });
       } catch (recInitErr) {
-        logger.warn('[CALL RECORDING] Could not init Twilio client for recording', {
+        logger.error('[CALL RECORDING] ❌ Could not init Twilio client for recording', {
+          callSid: _recCallSid,
           error: recInitErr.message
         });
       }
@@ -7374,10 +7443,14 @@ router.post('/recording-status', async (req, res) => {
       const result = await CallSummary.findOneAndUpdate(
         { twilioSid: CallSid },
         {
-          hasRecording: true,
-          recordingUrl: RecordingUrl,
-          recordingSid: RecordingSid,
-          recordingDuration: parseInt(RecordingDuration) || 0
+          $set: {
+            hasRecording: true,
+            recordingUrl: RecordingUrl,
+            recordingSid: RecordingSid,
+            recordingDuration: parseInt(RecordingDuration) || 0,
+            'callLifecycle.recordingCallbackReceived': true,
+            'callLifecycle.recordingCallbackReceivedAt': new Date()
+          }
         },
         { new: true }
       );
@@ -7387,15 +7460,29 @@ router.post('/recording-status', async (req, res) => {
           callSid: CallSid,
           callId: result.callId,
           recordingSid: RecordingSid,
-          duration: RecordingDuration
+          duration: RecordingDuration,
+          recordingUrl: RecordingUrl
         });
       } else {
-        logger.warn('[CALL RECORDING] No CallSummary found for recording', {
+        // ── CRITICAL: This means callbacks arrive but can't find the row ──
+        logger.error('[CALL RECORDING] No CallSummary found for recording — recording data LOST', {
           callSid: CallSid,
-          recordingSid: RecordingSid
+          recordingSid: RecordingSid,
+          recordingUrl: RecordingUrl,
+          recordingDuration: RecordingDuration
         });
       }
     } else if (RecordingStatus === 'failed') {
+      // Mark the failure on the lifecycle so the dashboard can show "recording failed"
+      const CallSummary = require('../models/CallSummary');
+      await CallSummary.updateOne(
+        { twilioSid: CallSid },
+        { $set: {
+          'callLifecycle.recordingCallbackReceived': true,
+          'callLifecycle.recordingCallbackReceivedAt': new Date(),
+          'callLifecycle.recordingError': `Recording failed (SID: ${RecordingSid || 'unknown'})`
+        }}
+      );
       logger.error('[CALL RECORDING] Recording failed', {
         callSid: CallSid,
         recordingSid: RecordingSid
@@ -7613,68 +7700,125 @@ router.post('/status-callback', async (req, res) => {
   }
 });
 
-// Status callback for calls made TO customers (outbound)
+// ────────────────────────────────────────────────────────────────────────────
+// Status callback for company-scoped calls (registered at call start)
+// ────────────────────────────────────────────────────────────────────────────
+// FIX: Primary lookup is now CallSid-only (globally unique). CompanyId from
+// the URL is validated but NOT used as a query filter — Mongoose string→ObjectId
+// casting in findOne is a known source of silent null results.
+// ────────────────────────────────────────────────────────────────────────────
 router.post('/status-callback/:companyId', async (req, res) => {
   const { companyId } = req.params;
   const { CallSid, CallStatus, CallDuration, From, To } = req.body;
-  
-  logger.info('[CALL STATUS] Company-specific status callback', {
+  const now = new Date();
+
+  logger.info('[CALL STATUS] Company-specific status callback received', {
     companyId,
     callSid: CallSid,
     status: CallStatus,
-    duration: CallDuration
+    duration: CallDuration,
+    from: From,
+    to: To
   });
-  
-  // Handle same as generic callback
+
   try {
     if (CallSummaryService && ['completed', 'busy', 'no-answer', 'canceled', 'failed'].includes(CallStatus)) {
       const CallSummary = require('../models/CallSummary');
-      const callSummary = await CallSummary.findOne({ twilioSid: CallSid, companyId });
-      
-      if (callSummary) {
-        try {
-          const CallTranscriptV2 = require('../models/CallTranscriptV2');
-          await CallTranscriptV2.finalizeCall(companyId, CallSid, {
-            endedAt: new Date(),
-            twilioDurationSeconds: parseInt(CallDuration) || 0
-          });
-        } catch (v2FinalizeErr) {
-          logger.warn('[CALL STATUS] Failed to finalize CallTranscriptV2 (company callback, non-blocking)', {
-            companyId,
-            callSid: CallSid,
-            error: v2FinalizeErr.message
-          });
-        }
 
-        const outcomeMap = {
-          'completed': 'completed',
-          'busy': 'abandoned',
-          'no-answer': 'abandoned', 
-          'canceled': 'abandoned',
-          'failed': 'error'
-        };
-        
-        await CallSummaryService.endCall(callSummary.callId, {
-          outcome: outcomeMap[CallStatus] || 'completed',
-          durationSeconds: parseInt(CallDuration) || 0,
-          endedAt: new Date()
-        });
-        
-        logger.info('[CALL STATUS] Company CallSummary updated', {
+      // ── PRIMARY LOOKUP: CallSid only (globally unique) ──────────────────
+      const callSummary = await CallSummary.findOne({ twilioSid: CallSid });
+
+      if (!callSummary) {
+        logger.error('[CALL STATUS] No CallSummary found for status callback — duration will NOT be set', {
+          callSid: CallSid,
           companyId,
-          callId: callSummary.callId,
-          outcome: outcomeMap[CallStatus]
+          status: CallStatus,
+          duration: CallDuration
+        });
+        res.type('text/xml').status(200).send('<Response></Response>');
+        return;
+      }
+
+      // ── VALIDATE companyId (log mismatch but do NOT skip update) ────────
+      if (callSummary.companyId.toString() !== companyId) {
+        logger.warn('[CALL STATUS] CompanyId mismatch between URL param and CallSummary — proceeding with update', {
+          callSid: CallSid,
+          urlCompanyId: companyId,
+          summaryCompanyId: callSummary.companyId.toString()
         });
       }
+
+      // ── MARK: Status callback received (lifecycle observability) ────────
+      await CallSummary.updateOne(
+        { _id: callSummary._id },
+        { $set: {
+          'callLifecycle.statusCallbackReceived': true,
+          'callLifecycle.statusCallbackReceivedAt': now
+        }}
+      );
+
+      // ── FINALIZE CallTranscriptV2 (non-blocking) ───────────────────────
+      try {
+        const CallTranscriptV2 = require('../models/CallTranscriptV2');
+        await CallTranscriptV2.finalizeCall(callSummary.companyId, CallSid, {
+          endedAt: now,
+          twilioDurationSeconds: parseInt(CallDuration) || 0
+        });
+      } catch (v2FinalizeErr) {
+        logger.warn('[CALL STATUS] Failed to finalize CallTranscriptV2 (company callback, non-blocking)', {
+          companyId: callSummary.companyId,
+          callSid: CallSid,
+          error: v2FinalizeErr.message
+        });
+      }
+
+      // ── END CALL: Persist authoritative Twilio duration ─────────────────
+      const outcomeMap = {
+        'completed': 'completed',
+        'busy': 'abandoned',
+        'no-answer': 'abandoned',
+        'canceled': 'abandoned',
+        'failed': 'error'
+      };
+
+      const parsedDuration = parseInt(CallDuration);
+      const durationSeconds = Number.isFinite(parsedDuration) && parsedDuration >= 0
+        ? parsedDuration
+        : 0;
+
+      await CallSummaryService.endCall(callSummary.callId, {
+        outcome: outcomeMap[CallStatus] || 'completed',
+        durationSeconds,
+        endedAt: now
+      });
+
+      // ── MARK: endCall persisted with source (lifecycle observability) ───
+      await CallSummary.updateOne(
+        { _id: callSummary._id },
+        { $set: {
+          'callLifecycle.endCallPersisted': true,
+          'callLifecycle.endCallPersistedAt': new Date(),
+          'callLifecycle.finalDurationSource': 'twilio_callback'
+        }}
+      );
+
+      logger.info('[CALL STATUS] Company CallSummary updated successfully', {
+        companyId: callSummary.companyId,
+        callId: callSummary.callId,
+        outcome: outcomeMap[CallStatus],
+        durationSeconds,
+        rawCallDuration: CallDuration
+      });
     }
-    
-    // Return TwiML so this can safely be used in any TwiML action path.
+
     res.type('text/xml').status(200).send('<Response></Response>');
-    
+
   } catch (error) {
     logger.error('[CALL STATUS] Company callback error', {
       companyId,
-      error: error.message
+      callSid: CallSid,
+      error: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join(' | ')
     });
     res.type('text/xml').status(200).send('<Response></Response>');
   }

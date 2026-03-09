@@ -217,11 +217,11 @@ const CallSummarySchema = new mongoose.Schema({
   /**
    * Call duration in seconds
    */
-  durationSeconds: { 
+  durationSeconds: {
     type: Number,
     min: 0
   },
-  
+
   /**
    * Number of conversation turns
    */
@@ -229,6 +229,44 @@ const CallSummarySchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CALLBACK LIFECYCLE — Per-call observability for Twilio callback chain
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tracks whether each step in the Twilio callback pipeline succeeded.
+  // Without this, debugging "why is duration 0?" requires hunting scattered logs.
+  // Every call should have a queryable reconciliation trail.
+  // ─────────────────────────────────────────────────────────────────────────
+  callLifecycle: {
+    /** Was the status callback URL registered with Twilio via REST API? */
+    statusCallbackRegistered: { type: Boolean, default: false },
+    statusCallbackRegisteredAt: { type: Date },
+    statusCallbackError: { type: String },
+
+    /** Was recording requested via Twilio REST API? */
+    recordingRequested: { type: Boolean, default: false },
+    recordingRequestedAt: { type: Date },
+    recordingError: { type: String },
+
+    /** Did the Twilio status callback actually arrive at our server? */
+    statusCallbackReceived: { type: Boolean, default: false },
+    statusCallbackReceivedAt: { type: Date },
+
+    /** Did the Twilio recording callback actually arrive at our server? */
+    recordingCallbackReceived: { type: Boolean, default: false },
+    recordingCallbackReceivedAt: { type: Date },
+
+    /** Was endCall() successfully persisted with final duration? */
+    endCallPersisted: { type: Boolean, default: false },
+    endCallPersistedAt: { type: Date },
+
+    /** Where did the final authoritative duration come from? */
+    finalDurationSource: {
+      type: String,
+      enum: ['twilio_callback', 'calculated', 'unknown', null],
+      default: null
+    }
   },
   
   // ─────────────────────────────────────────────────────────────────────────

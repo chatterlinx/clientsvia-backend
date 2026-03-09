@@ -66,9 +66,12 @@ class CallIntelligenceService {
       recommendations: analysis.recommendations || [],
       analysis: analysis.analysis,
       gpt4Analysis: gpt4Metadata,
+      // NOTE: callMetadata stored here is a snapshot at analysis time.
+      // The dashboard list endpoint ALWAYS overrides duration/turns from
+      // the canonical CallSummary record. null = "not yet known from Twilio".
       callMetadata: {
-        duration: callTrace.call?.durationSeconds,
-        turns: callTrace.turns?.length,
+        duration: callTrace.call?.durationSeconds ?? null,
+        turns: callTrace.turns?.length ?? null,
         fromPhone: callTrace.call?.fromPhone,
         startTime: callTrace.call?.startTime
       }

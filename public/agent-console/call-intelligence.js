@@ -319,19 +319,34 @@
             <span class="provenance-badge">✓ UI-Owned</span>
           </td>
           <td class="col-recording">
-            ${call.recording?.hasRecording && call.recording.sid ? `
-              <div class="recording-actions">
-                <button class="btn-play-recording"
-                  data-recording-url="/api/call-intelligence/recording/${call.recording.sid}/audio"
-                  title="Quick listen${call.recording.duration ? ' (' + formatDuration(call.recording.duration) + ')' : ''}">
-                  <span class="play-icon">&#9654;</span>
-                </button>
-                <a href="https://www.twilio.com/console/voice/recordings/${call.recording.sid}"
-                   target="_blank"
-                   class="btn-recording-twilio"
-                   title="Open in Twilio Console">&#8599;</a>
-              </div>
-            ` : '<span class="text-muted">--</span>'}
+            ${(() => {
+              const rec = call.recording || {};
+              const hasSid = !!rec.sid;
+              const hasUrl = !!rec.url;
+              const hasAny = hasSid || hasUrl;
+              if (!hasAny) return '<span class="text-muted">--</span>';
+              return `
+                <div class="recording-actions">
+                  ${hasSid ? `
+                    <button class="btn-play-recording"
+                      data-recording-url="/api/call-intelligence/recording/${rec.sid}/audio"
+                      title="Quick listen${rec.duration ? ' (' + formatDuration(rec.duration) + ')' : ''}">
+                      <span class="play-icon">&#9654;</span>
+                    </button>
+                  ` : ''}
+                  ${hasSid ? `
+                    <a href="https://www.twilio.com/console/voice/recordings/${rec.sid}"
+                       target="_blank"
+                       class="btn-recording-twilio"
+                       title="Open in Twilio Console">&#8599;</a>
+                  ` : hasUrl ? `
+                    <a href="${rec.url}" target="_blank"
+                       class="btn-recording-twilio"
+                       title="Open recording">&#8599;</a>
+                  ` : ''}
+                </div>
+              `;
+            })()}
           </td>
           <td class="col-intelligence">
             <div class="intelligence-cell ${statusInfo.className}">
@@ -555,19 +570,27 @@
             </div>
           ` : '')}
         </div>
-        ${intel.recording?.hasRecording ? `
-          <div class="overview-recording">
-            <span class="overview-recording-label">Call Recording</span>
-            <div class="overview-recording-player">
-              <audio controls class="modal-recording-audio">
-                <source src="${intel.recording.url}" type="audio/mpeg">
-                Your browser does not support the audio element.
-              </audio>
-              ${intel.recording.duration ? `<span class="recording-duration">${formatDuration(intel.recording.duration)}</span>` : ''}
-              <a href="${intel.recording.url}" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>
+        ${(() => {
+          const rec = intel.recording || {};
+          const audioSrc = rec.sid
+            ? '/api/call-intelligence/recording/' + rec.sid + '/audio'
+            : rec.url || null;
+          if (!audioSrc) return '';
+          return `
+            <div class="overview-recording">
+              <span class="overview-recording-label">Call Recording</span>
+              <div class="overview-recording-player">
+                <audio controls class="modal-recording-audio">
+                  <source src="${audioSrc}" type="audio/mpeg">
+                  Your browser does not support the audio element.
+                </audio>
+                ${rec.duration ? '<span class="recording-duration">' + formatDuration(rec.duration) + '</span>' : ''}
+                ${rec.sid ? '<a href="https://www.twilio.com/console/voice/recordings/' + rec.sid + '" target="_blank" class="recording-external-link" title="Open in Twilio Console">Twilio Console &#8599;</a>' : ''}
+                ${rec.url ? '<a href="' + rec.url + '" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>' : ''}
+              </div>
             </div>
-          </div>
-        ` : ''}
+          `;
+        })()}
       </section>
     `;
   }
@@ -1324,8 +1347,14 @@
     return date.toLocaleString();
   }
 
+  /**
+   * Format seconds into M:SS display.
+   * null/undefined = duration unknown (callback hasn't arrived) → shows "--"
+   * 0              = legitimate zero-second call from Twilio    → shows "0:00"
+   */
   function formatDuration(seconds) {
-    if (!seconds) return '0:00';
+    if (seconds === null || seconds === undefined) return '--';
+    if (seconds === 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
