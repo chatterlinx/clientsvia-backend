@@ -56,13 +56,22 @@ function findLastTrace(trace = [], kind) {
 
 function normalizeTurn(turn) {
   if (!turn) return null;
-  return {
+  const prov = turn.trace?.provenance || turn.provenance || {};
+  const normalized = {
     speaker: turn.speaker || 'unknown',
     text: turn.text || '',
     kind: turn.kind || null,
     source: turn.sourceKey || turn.source || null,
     timestamp: turn.ts || turn.timestamp || null
   };
+  // Include voice delivery metadata for system turns
+  if (turn.speaker === 'system' && (turn.kind === 'TWIML_PLAY' || turn.kind === 'TWIML_SAY')) {
+    normalized.voiceProvider = prov.voiceProviderUsed || (turn.kind === 'TWIML_PLAY' ? 'elevenlabs' : 'twilio_say');
+    normalized.twimlVerb = turn.kind === 'TWIML_PLAY' ? 'PLAY' : 'SAY';
+    if (prov.isBridge) normalized.isBridge = true;
+    if (prov.deliveredVia) normalized.deliveredVia = prov.deliveredVia;
+  }
+  return normalized;
 }
 
 function buildTranscript(turns = [], limit = 12) {
@@ -250,6 +259,71 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
     }
 
+    // ── VOICE DELIVERY AUDIT ─────────────────────────────────────────────
+    // Shows what the caller ACTUALLY heard vs what was intended.
+    // Reads system turns (TWIML_PLAY, TWIML_SAY, TWIML_PAUSE) + bridge
+    // lines to build a complete delivery record for this turn.
+    // ─────────────────────────────────────────────────────────────────────
+    const deliveryTurns = turns.filter(t =>
+      t.turnNumber === turnNum &&
+      t.speaker === 'system' &&
+      (t.kind === 'TWIML_PLAY' || t.kind === 'TWIML_SAY' || t.kind === 'TWIML_PAUSE')
+    );
+    const bridgeTurns = turns.filter(t =>
+      t.turnNumber === turnNum &&
+      t.speaker === 'system' &&
+      t.sourceKey === 'AGENT2_BRIDGE'
+    );
+    if (deliveryTurns.length > 0 || bridgeTurns.length > 0) {
+      const deliveryEntries = [];
+
+      // Bridge lines (played while processing)
+      for (const bt of bridgeTurns) {
+        const prov = bt.trace?.provenance || bt.provenance || {};
+        deliveryEntries.push({
+          type: 'bridge',
+          text: (bt.text || '').substring(0, 300),
+          voiceProvider: prov.voiceProviderUsed || (bt.kind === 'TWIML_PLAY' ? 'elevenlabs_cached' : 'twilio_say'),
+          twimlVerb: bt.kind === 'TWIML_PLAY' ? 'PLAY' : bt.kind === 'TWIML_PAUSE' ? 'PAUSE' : 'SAY',
+          isBridge: true,
+        });
+      }
+
+      // Actual response delivery
+      for (const dt of deliveryTurns) {
+        if (dt.sourceKey === 'AGENT2_BRIDGE') continue; // Already handled above
+        const prov = dt.trace?.provenance || dt.provenance || {};
+        deliveryEntries.push({
+          type: 'response',
+          text: (dt.text || '').substring(0, 500),
+          voiceProvider: prov.voiceProviderUsed || (dt.kind === 'TWIML_PLAY' ? 'elevenlabs' : 'twilio_say'),
+          twimlVerb: dt.kind === 'TWIML_PLAY' ? 'PLAY' : dt.kind === 'TWIML_PAUSE' ? 'PAUSE' : 'SAY',
+          deliveredVia: prov.deliveredVia || (dt.sourceKey === 'twiml' ? 'direct' : dt.sourceKey || 'unknown'),
+          audioUrl: prov.audioUrl || null,
+        });
+      }
+
+      // Detect mismatch: intended response vs what was delivered
+      const intendedText = turnData.agentResponse?.text || '';
+      const deliveredResponse = deliveryEntries.find(e => e.type === 'response');
+      const deliveredText = deliveredResponse?.text || '';
+      const textMismatch = intendedText && deliveredText &&
+        intendedText.substring(0, 80).toLowerCase() !== deliveredText.substring(0, 80).toLowerCase();
+      const voiceMismatch = deliveredResponse?.voiceProvider === 'twilio_say' && deliveredResponse?.twimlVerb === 'SAY';
+
+      turnData.voiceDelivery = {
+        entries: deliveryEntries,
+        voiceProvider: deliveredResponse?.voiceProvider || null,
+        twimlVerb: deliveredResponse?.twimlVerb || null,
+        hadBridge: bridgeTurns.length > 0,
+        bridgeCount: bridgeTurns.length,
+        textMismatch,
+        voiceMismatch,
+        deliveredText: deliveredText.substring(0, 500),
+        intendedText: intendedText.substring(0, 500),
+      };
+    }
+
     // 123RP — Extract routing tier from TURN_TRACE_SUMMARY
     const turnTraceSummary = traceByKind.get(`${turnNum}:TURN_TRACE_SUMMARY`);
     if (turnTraceSummary?.payload?._123rp) {
@@ -262,14 +336,59 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
   return flowSteps;
 }
 
+function buildVoiceDeliverySummary(turns = []) {
+  // Build a call-level summary of all voice delivery:
+  // what voices were used, any Twilio <Say> fallbacks, any text mismatches
+  const systemTurns = turns.filter(t =>
+    t.speaker === 'system' &&
+    (t.kind === 'TWIML_PLAY' || t.kind === 'TWIML_SAY' || t.kind === 'TWIML_PAUSE')
+  );
+
+  if (systemTurns.length === 0) return null;
+
+  const providers = new Set();
+  const verbs = new Set();
+  let twilioSayCount = 0;
+  let elevenLabsPlayCount = 0;
+  const spokenLines = [];
+
+  for (const st of systemTurns) {
+    const prov = st.trace?.provenance || st.provenance || {};
+    const vp = prov.voiceProviderUsed || (st.kind === 'TWIML_PLAY' ? 'elevenlabs' : 'twilio_say');
+    providers.add(vp);
+    verbs.add(st.kind);
+    if (st.kind === 'TWIML_SAY') twilioSayCount++;
+    if (st.kind === 'TWIML_PLAY') elevenLabsPlayCount++;
+
+    spokenLines.push({
+      turn: st.turnNumber,
+      text: (st.text || '').substring(0, 200),
+      voiceProvider: vp,
+      verb: st.kind,
+      source: st.sourceKey || prov.reason || null,
+      isBridge: st.sourceKey === 'AGENT2_BRIDGE' || prov.isBridge === true,
+    });
+  }
+
+  return {
+    totalSpokenLines: spokenLines.length,
+    providers: [...providers],
+    twilioSayCount,
+    elevenLabsPlayCount,
+    hadTwilioFallback: twilioSayCount > 0,
+    spokenLines,
+  };
+}
+
 function buildCallContext(turns = [], trace = []) {
   const scrabHandoff = findLastTrace(trace, 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
-  
+
   return {
     transcript: buildTranscript(turns),
     response: buildResponseContext(trace),
     scrabEngineHandoff: scrabHandoff?.payload || null,
-    turnByTurnFlow: buildTurnByTurnFlow(turns, trace)
+    turnByTurnFlow: buildTurnByTurnFlow(turns, trace),
+    voiceDelivery: buildVoiceDeliverySummary(turns)
   };
 }
 
