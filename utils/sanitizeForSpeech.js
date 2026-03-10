@@ -11,7 +11,7 @@
 // is far less damaging than speaking garbage to a live caller.
 // ════════════════════════════════════════════════════════════════════════════
 
-const SAFE_FALLBACK = 'I apologize, could you repeat that?';
+const SAFE_FALLBACK = 'Thank you for calling. How can I help you today?';
 
 // ── Blocklist: terms that should never appear in spoken output ────────────
 const BLOCKED_TERMS = [
