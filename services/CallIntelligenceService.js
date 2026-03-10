@@ -22,7 +22,7 @@ class CallIntelligenceService {
    * @returns {Promise<Object>} Intelligence analysis
    */
   async analyzeCall(callTrace, options = {}) {
-    const { useGPT4 = false, mode = 'full' } = options;
+    const { useGPT4 = false, mode = 'full', model = null } = options;
     
     const callSid = callTrace.call?.callSid || callTrace.callSid;
     const companyId = callTrace.companyId;
@@ -41,7 +41,7 @@ class CallIntelligenceService {
 
     if (useGPT4 && GPT4AnalysisService.getStatus().enabled) {
       try {
-        const gpt4Result = await GPT4AnalysisService.analyzeCall(callTrace, { mode });
+        const gpt4Result = await GPT4AnalysisService.analyzeCall(callTrace, { mode, model });
         analysis = gpt4Result;
         gpt4Metadata = gpt4Result.gpt4Metadata;
         delete analysis.gpt4Metadata;

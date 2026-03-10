@@ -86,15 +86,17 @@ class GPT4AnalysisService {
     }
 
     const mode = options.mode || 'full';
+    const selectedModel = options.model || this.modelVersion;
     const startTime = Date.now();
+    console.log(`[GPT4-SERVICE] ▶ Analyzing with model: ${selectedModel}, mode: ${mode}`);
 
     try {
-      const userPrompt = mode === 'quick' 
+      const userPrompt = mode === 'quick'
         ? generateQuickPrompt(callTrace)
         : generateUserPrompt(callTrace);
 
       const completion = await this.client.chat.completions.create({
-        model: this.modelVersion,
+        model: selectedModel,
         messages: [
           {
             role: 'system',
@@ -127,7 +129,7 @@ class GPT4AnalysisService {
           enabled: true,
           tokensUsed: completion.usage.total_tokens,
           processingTime,
-          modelVersion: this.modelVersion,
+          modelVersion: selectedModel,
           mode
         }
       };

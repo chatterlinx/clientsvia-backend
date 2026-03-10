@@ -26,6 +26,7 @@
     },
     gpt4Enabled: false,
     analysisMode: 'full',
+    analysisModel: 'gpt-4o-mini',
     selectedCallSid: null
   };
 
@@ -75,6 +76,7 @@
     settingsModal: document.getElementById('settings-modal'),
     closeSettings: document.getElementById('close-settings'),
     gpt4Toggle: document.getElementById('gpt4-toggle'),
+    analysisModel: document.getElementById('analysis-model'),
     analysisMode: document.getElementById('analysis-mode'),
     gpt4Status: document.getElementById('gpt4-status'),
     statusText: document.getElementById('status-text'),
@@ -250,15 +252,16 @@
 
   async function analyzeCall(callSid) {
     console.log('[analyzeCall] ▶ Starting analysis for:', callSid);
-    console.log('[analyzeCall] Params — useGPT4:', state.gpt4Enabled, 'mode:', state.analysisMode);
+    console.log('[analyzeCall] Params — useGPT4:', state.gpt4Enabled, 'mode:', state.analysisMode, 'model:', state.analysisModel);
     try {
-      showNotification('Analyzing call...', 'info');
+      showNotification(`Analyzing call with ${state.analysisModel}...`, 'info');
 
       const data = await apiCall(`/api/call-intelligence/analyze/${callSid}`, {
         method: 'POST',
         body: JSON.stringify({
           useGPT4: state.gpt4Enabled,
-          mode: state.analysisMode
+          mode: state.analysisMode,
+          model: state.analysisModel
         })
       });
 
@@ -283,6 +286,7 @@
       
       if (settingsData.settings) {
         state.analysisMode = settingsData.settings.analysisMode || 'full';
+        state.analysisModel = settingsData.settings.analysisModel || 'gpt-4o-mini';
         DOM.autoAnalyzeToggle.checked = settingsData.settings.autoAnalyzeEnabled || false;
       }
       
@@ -1160,12 +1164,12 @@
     // ── Accurate cost estimation (per 1M tokens, blended input/output) ──
     // Claude 3.5 Haiku: $0.25/1M input + $1.25/1M output → blended ~$0.80/1M
     // OpenAI T3 Fallback: use actual logged cost when available
-    // GPT-4o Analysis: $2.50/1M input + $10/1M output → blended ~$5/1M
-    // GPT-4-turbo: $10/1M input + $30/1M output → blended ~$15/1M (legacy)
+    // gpt-4o-mini: $0.15/1M input + $0.60/1M output → blended ~$0.40/1M
+    // gpt-4o: $2.50/1M input + $10/1M output → blended ~$5/1M
+    // gpt-4-turbo: $10/1M input + $30/1M output → blended ~$15/1M (legacy)
     const claudeCostPer1M = 0.80;
-    const gpt4oCostPer1M = 5.0;
-    const gpt4TurboCostPer1M = 15.0;
-    const gpt4AnalysisCostPer1M = gpt4Model.includes('turbo') ? gpt4TurboCostPer1M : gpt4oCostPer1M;
+    const modelCostMap = { 'gpt-4o-mini': 0.40, 'gpt-4o': 5.0, 'gpt-4-turbo': 15.0, 'gpt-4-turbo-preview': 15.0 };
+    const gpt4AnalysisCostPer1M = modelCostMap[gpt4Model] || 5.0;
 
     const claudeCost = (claudeTokens / 1_000_000) * claudeCostPer1M;
     const openaiCost = openaiCostActual > 0 ? openaiCostActual : (openaiTokens / 1_000_000) * 3.0;
@@ -1336,6 +1340,7 @@
   function openSettings() {
     DOM.settingsModal.classList.add('active');
     DOM.analysisMode.value = state.analysisMode;
+    DOM.analysisModel.value = state.analysisModel;
   }
 
   function closeSettingsModal() {
@@ -1345,6 +1350,7 @@
   async function saveSettings() {
     const gpt4Enabled = DOM.gpt4Toggle.checked;
     const analysisMode = DOM.analysisMode.value;
+    const analysisModel = DOM.analysisModel.value;
     const autoAnalyzeEnabled = DOM.autoAnalyzeToggle.checked;
 
     try {
@@ -1357,11 +1363,13 @@
         body: JSON.stringify({
           gpt4Enabled,
           analysisMode,
+          analysisModel,
           autoAnalyzeEnabled
         })
       });
 
       state.analysisMode = analysisMode;
+      state.analysisModel = analysisModel;
       
       showNotification('Settings saved successfully!', 'success');
       closeSettingsModal();
@@ -1626,7 +1634,7 @@
     console.log('[GPT4-ANALYZE] ▶ Button clicked — callSid:', callSid);
     try {
       console.log('[GPT4-ANALYZE] 📡 Calling POST /api/call-intelligence/analyze/' + callSid);
-      console.log('[GPT4-ANALYZE] State — gpt4Enabled:', state.gpt4Enabled, 'analysisMode:', state.analysisMode);
+      console.log('[GPT4-ANALYZE] State — gpt4Enabled:', state.gpt4Enabled, 'analysisMode:', state.analysisMode, 'analysisModel:', state.analysisModel);
       const intelligence = await analyzeCall(callSid);
       console.log('[GPT4-ANALYZE] ✅ analyzeCall returned:', intelligence ? 'success' : 'null');
       if (intelligence) {

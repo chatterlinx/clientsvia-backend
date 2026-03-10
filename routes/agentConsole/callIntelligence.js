@@ -284,11 +284,12 @@ router.get('/settings/:companyId', async (req, res) => {
 router.post('/settings/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { gpt4Enabled, analysisMode, autoAnalyzeEnabled } = req.body;
+    const { gpt4Enabled, analysisMode, analysisModel, autoAnalyzeEnabled } = req.body;
 
     const updates = {};
     if (typeof gpt4Enabled === 'boolean') updates.gpt4Enabled = gpt4Enabled;
     if (analysisMode) updates.analysisMode = analysisMode;
+    if (analysisModel) updates.analysisModel = analysisModel;
     if (typeof autoAnalyzeEnabled === 'boolean') updates.autoAnalyzeEnabled = autoAnalyzeEnabled;
 
     const settings = await CallIntelligenceSettings.updateSettings(companyId, updates);
@@ -344,8 +345,8 @@ router.post('/toggle', async (req, res) => {
 router.post('/analyze/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
-    const { useGPT4 = false, mode = 'full', forceReanalyze = false } = req.body;
-    console.log(`[ANALYZE] ▶ POST /analyze/${callSid} — useGPT4: ${useGPT4}, mode: ${mode}, forceReanalyze: ${forceReanalyze}`);
+    const { useGPT4 = false, mode = 'full', model = null, forceReanalyze = false } = req.body;
+    console.log(`[ANALYZE] ▶ POST /analyze/${callSid} — useGPT4: ${useGPT4}, mode: ${mode}, model: ${model}, forceReanalyze: ${forceReanalyze}`);
 
     const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
     const callSummary = await CallSummary.findOne({
@@ -401,6 +402,7 @@ router.post('/analyze/:callSid', async (req, res) => {
     const intelligence = await CallIntelligenceService.analyzeCall(callTrace, {
       useGPT4,
       mode,
+      model,
       forceReanalyze
     });
     console.log(`[ANALYZE] ✅ Analysis complete — status: ${intelligence?.status}, issueCount: ${intelligence?.issueCount}`);

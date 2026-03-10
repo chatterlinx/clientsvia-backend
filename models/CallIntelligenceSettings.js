@@ -24,6 +24,11 @@ const CallIntelligenceSettingsSchema = new mongoose.Schema({
     enum: ['quick', 'full'],
     default: 'full'
   },
+  analysisModel: {
+    type: String,
+    enum: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
+    default: 'gpt-4o-mini'
+  },
   autoAnalyzeEnabled: {
     type: Boolean,
     default: false

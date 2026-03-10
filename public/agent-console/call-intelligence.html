@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Call Intelligence Console</title>
-  <link rel="stylesheet" href="/agent-console/call-intelligence.css?v=20260310c">
+  <link rel="stylesheet" href="/agent-console/call-intelligence.css?v=20260310d">
 </head>
 <body>
   <!-- Header -->
@@ -172,6 +172,17 @@
           </div>
           <div class="setting-item">
             <div class="setting-info">
+              <strong>Analysis Model</strong>
+              <p>Choose the AI model for call analysis. Mini is cheapest, GPT-4o is most capable.</p>
+            </div>
+            <select id="analysis-model" class="filter-select">
+              <option value="gpt-4o-mini">GPT-4o Mini (~$0.03/call)</option>
+              <option value="gpt-4o">GPT-4o (~$0.41/call)</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo (~$1.22/call)</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
               <strong>Analysis Mode</strong>
               <p>Quick mode: Faster, less detailed. Full mode: Comprehensive analysis.</p>
             </div>
@@ -207,6 +218,6 @@
     </div>
   </div>
 
-  <script src="/agent-console/call-intelligence.js?v=20260310c"></script>
+  <script src="/agent-console/call-intelligence.js?v=20260310d"></script>
 </body>
 </html>
