@@ -375,8 +375,8 @@
                 <span class="status-text">${statusInfo.label}</span>
               </div>
               <div class="intelligence-summary">${call.topIssue || 'No issues'}</div>
-              <button class="btn btn-small view-analysis-btn" data-callsid="${call.callSid}">
-                VIEW ANALYSIS
+              <button class="btn btn-small ${call.status === 'not_analyzed' ? 'btn-primary' : ''} view-analysis-btn" data-callsid="${call.callSid}">
+                ${call.status === 'not_analyzed' ? 'ANALYZE' : 'VIEW REPORT'}
               </button>
             </div>
           </td>
@@ -480,44 +480,34 @@
 
   async function openAnalysisModal(callSid) {
     state.selectedCallSid = callSid;
-    
+
     DOM.modalBody.innerHTML = `
       <div class="loading-container">
         <div class="loading-spinner"></div>
         <p>Loading analysis...</p>
       </div>
     `;
-    
+
     DOM.analysisModal.classList.add('active');
     document.body.style.overflow = 'hidden';
 
     let intelligence = await loadCallAnalysis(callSid);
-    
+
     if (!intelligence) {
-      console.log('[INFO] No existing analysis found, triggering analysis...');
+      console.log('[INFO] No existing analysis found — showing on-demand button');
       DOM.modalBody.innerHTML = `
-        <div class="loading-container">
-          <div class="loading-spinner"></div>
-          <p>No analysis found. Analyzing call now...</p>
+        <div class="loading-container" style="padding: 4rem 2rem;">
+          <p style="font-size: 1.125rem; color: #374151; margin-bottom: 0.5rem;">No analysis yet for this call.</p>
+          <p style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1.5rem;">Click below to run GPT-4 analysis on demand.</p>
+          <button class="btn btn-primary" onclick="window.analyzeCallNow('${callSid}')" style="font-size: 1rem; padding: 0.75rem 1.5rem;">
+            Analyze This Call
+          </button>
+          <button class="btn btn-secondary" onclick="document.getElementById('analysis-modal').classList.remove('active'); document.body.style.overflow = '';" style="margin-left: 0.75rem;">
+            Close
+          </button>
         </div>
       `;
-      
-      intelligence = await analyzeCall(callSid);
-      
-      if (!intelligence) {
-        DOM.modalBody.innerHTML = `
-          <div class="error-container">
-            <p>⚠️ Failed to analyze this call.</p>
-            <button class="btn btn-primary" onclick="window.analyzeCallNow('${callSid}')">
-              Try Again
-            </button>
-            <button class="btn btn-secondary" onclick="document.getElementById('analysisModal').classList.remove('active'); document.body.style.overflow = '';">
-              Close
-            </button>
-          </div>
-        `;
-        return;
-      }
+      return;
     }
 
     renderAnalysisModal(intelligence);

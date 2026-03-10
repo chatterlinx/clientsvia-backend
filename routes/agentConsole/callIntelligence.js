@@ -523,7 +523,7 @@ router.get('/company/:companyId/summary', async (req, res) => {
 router.get('/company/:companyId/list', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { page, limit, status, autoAnalyze = 'true', timeRange } = req.query;
+    const { page, limit, status, autoAnalyze = 'false', timeRange } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
 
