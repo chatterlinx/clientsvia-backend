@@ -4779,32 +4779,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const hostHeader = req.get('host');
     const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
     const bridgeEnabled = bridgeCfg?.enabled === true;
-    const bridgeThresholdMs = Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 1100;
+    // V131: Post-gather delay replaces the old threshold race.
+    // Bridge fires this many ms after gather completes (unless compute already resolved).
+    // UI-configurable starting at 200ms. Old thresholdMs kept for backward compat reads.
+    const bridgePostGatherDelayMs = Number.isFinite(bridgeCfg.postGatherDelayMs) ? bridgeCfg.postGatherDelayMs
+      : (Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 200);
     const bridgeHardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
-    const bridgeMaxPerCall = Number.isFinite(bridgeCfg.maxBridgesPerCall) ? bridgeCfg.maxBridgesPerCall : 2;
+    // V131: Per-call cap removed — bridge is now per-turn, uncapped.
+    // maxBridgesPerCall kept in schema for backward compat but no longer enforced.
     const bridgeMaxRedirectAttempts = Number.isFinite(bridgeCfg.maxRedirectAttempts) ? bridgeCfg.maxRedirectAttempts : 2;
 
-    const pendingQ = callState?.agent2?.discovery?.pendingQuestion || null;
-    const pendingQTurn = callState?.agent2?.discovery?.pendingQuestionTurn;
-    const pendingFUQ = callState?.agent2?.discovery?.pendingFollowUpQuestion || null;
-    const pendingFUQTurn = callState?.agent2?.discovery?.pendingFollowUpQuestionTurn;
-    // Disable bridge when caller is responding to a pending question (legacy PQ or PFUQ)
-    // Use ±2 turn tolerance to account for ghost turns that bump the turn counter
-    const isRespondingToPendingYesNo = !!pendingQ && typeof pendingQTurn === 'number' &&
-      (turnNumber - pendingQTurn) >= 1 && (turnNumber - pendingQTurn) <= 2;
-    const isRespondingToPFUQ = !!pendingFUQ && typeof pendingFUQTurn === 'number' &&
-      (turnNumber - pendingFUQTurn) >= 1 && (turnNumber - pendingFUQTurn) <= 2;
+    // V131: Only suppress bridge during active transfers (legitimate).
+    // Pending yes/no and PFUQ guards REMOVED — these are internal state concepts
+    // that have no voice UX justification. The caller hears dead air regardless
+    // of whether the system is in a "follow-up state."
     const isAlreadyTransferLane = (callState?.sessionMode === 'TRANSFER');
 
     const mayBridge =
       bridgeEnabled &&
       !!redis &&
       !!callSid &&
-      bridgeThresholdMs >= 200 &&
-      bridgeHardCapMs >= bridgeThresholdMs &&
-      bridgeMaxPerCall > 0 &&
-      !isRespondingToPendingYesNo &&
-      !isRespondingToPFUQ &&
+      bridgePostGatherDelayMs >= 50 &&
       !isAlreadyTransferLane;
 
     // ── Pre-generate bridge token ─────────────────────────────────────────
@@ -5898,13 +5893,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       return res.send(twimlString);
     }
 
-    const thresholdPromise = new Promise((resolve) => setTimeout(resolve, bridgeThresholdMs));
+    // ══════════════════════════════════════════════════════════════════════════
+    // V131: POST-GATHER BRIDGE — Fire bridge after fixed delay, not a race.
+    // Bridge fires every turn unless compute resolves first.
+    // No per-call cap. No follow-up/yes-no suppression. Per-turn dedup only.
+    // ══════════════════════════════════════════════════════════════════════════
+    const delayPromise = new Promise((resolve) => setTimeout(resolve, bridgePostGatherDelayMs));
     const first = await Promise.race([
       computeTurnPromise.then((r) => ({ kind: 'result', r })),
-      thresholdPromise.then(() => ({ kind: 'threshold' }))
+      delayPromise.then(() => ({ kind: 'delay' }))
     ]);
 
     if (first.kind === 'result') {
+      // Compute beat the post-gather delay — no bridge needed, deliver response directly
       const result = first.r;
       twimlString = result.twimlString;
       voiceProviderUsed = result.voiceProviderUsed;
@@ -5920,31 +5921,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       return res.send(twimlString);
     }
 
-    // Threshold crossed first: attempt bridge with caps + per-turn guard.
-    const bridgeCountKey = `a2bridge:count:${callSid}`;
+    // Post-gather delay elapsed, compute still running — fire bridge.
+    // V131: Per-turn dedup guard only (prevents double-firing within same turn).
+    // Per-call cap REMOVED — bridge is a standard conversational layer, not a rationed backup.
     const bridgeTurnKey = `a2bridge:turn:${callSid}:${turnNumber}`;
     const lastLineKey = `a2bridge:lastLine:${callSid}`;
 
-    const bridgesUsedRaw = await redis.get(bridgeCountKey);
-    const bridgesUsed = parseInt(bridgesUsedRaw || 0, 10) || 0;
-    if (bridgesUsed >= bridgeMaxPerCall) {
-      const result = await computeTurnPromise;
-      twimlString = result.twimlString;
-      voiceProviderUsed = result.voiceProviderUsed;
-      await logTwimlSent({
-        route: '/v2-agent-respond',
-        twimlString,
-        voiceProviderUsed,
-        responsePreview: result.responseText,
-        matchSource: result.matchSource,
-        timings: result.timings
-      });
-      res.type('text/xml');
-      return res.send(twimlString);
-    }
-
     const guardSet = await redis.set(bridgeTurnKey, '1', { EX: 60 * 10, NX: true });
     if (!guardSet) {
+      // Already fired bridge this turn (dedup) — wait for compute
       const result = await computeTurnPromise;
       twimlString = result.twimlString;
       voiceProviderUsed = result.voiceProviderUsed;
@@ -5979,13 +5964,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     await redis.set(lastLineKey, String(idx), { EX: 60 * 60 * 4 }).catch(() => {});
 
-    const newCount = await redis.incr(bridgeCountKey);
-    if (newCount === 1) await redis.expire(bridgeCountKey, 60 * 60 * 4).catch(() => {});
-
-    // State flag (best-effort, for traceability; guard keys remain authoritative)
+    // V131: Per-call counter removed — bridge is uncapped.
+    // State flag kept for traceability only.
     callState.agent2Bridge = callState.agent2Bridge || {};
     callState.agent2Bridge.lastBridgeTurn = turnNumber;
-    callState.agent2Bridge.bridgesUsedThisCall = newCount;
 
     // Use pre-generated token (matches the one passed to streaming heartbeat)
     const token = preGeneratedBridgeToken;

@@ -169,6 +169,8 @@ function initializeContext(payload, config) {
       address: null
     },
     summary: payload?.summary || {},
+    // V131: Carry forward call context from discovery for contextual responses
+    callContext: payload?.callContext || null,
     selectedTime: null,
     availableTimeOptions: null,
     calendarEventId: null,
@@ -215,28 +217,41 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
 
 function processInit(ctx, config, events) {
   events.push({ type: 'BL1_INIT', timestamp: Date.now() });
-  
+
+  // V131: Build contextual prefix from discovery call context
+  // If discovery already established the issue, booking acknowledges it
+  const cc = ctx.callContext;
+  let contextPrefix = '';
+  if (cc?.issue?.summary) {
+    const issueNote = cc.issue.summary;
+    const urgencyNote = cc.urgency?.level === 'high' ? " I'll prioritize getting someone out quickly." : '';
+    contextPrefix = `I've got this noted as a ${issueNote}.${urgencyNote} `;
+  }
+
   if (!ctx.collectedFields.firstName) {
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_COLLECTING_NAME', timestamp: Date.now() });
     return {
-      nextPrompt: "To get started with your booking, may I have your name please?",
+      nextPrompt: `${contextPrefix}To get started with your booking, may I have your name please?`,
       bookingCtx: ctx,
       completed: false
     };
   }
-  
+
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
     events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
-    const nameGreeting = ctx.collectedFields.firstName ? `Thanks, ${ctx.collectedFields.firstName}! ` : '';
+    const nameGreeting = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
+    const phonePrompt = contextPrefix
+      ? `${contextPrefix}${nameGreeting}what's the best phone number to reach you at?`
+      : `${nameGreeting ? `Thanks, ${nameGreeting}` : ''}What's the best phone number to reach you at?`;
     return {
-      nextPrompt: `${nameGreeting}What's the best phone number to reach you at?`,
+      nextPrompt: phonePrompt,
       bookingCtx: ctx,
       completed: false
     };
   }
-  
+
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, null, false, events);
 }

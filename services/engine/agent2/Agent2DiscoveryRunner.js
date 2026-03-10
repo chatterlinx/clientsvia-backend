@@ -99,6 +99,7 @@ const { DEFAULT_LLM_AGENT_SETTINGS, composeSystemPrompt } = require('../../../co
 const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
 const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry } = require('../../streaming/ClaudeStreamingService');
+const { ConversationMemory } = require('../ConversationMemory');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -146,7 +147,7 @@ function deepMergeLLMAgent(target, source) {
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false }) {
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -189,6 +190,23 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       ''
     ];
 
+    // V131: Inject structured call context so LLM knows what's already established
+    if (callContext) {
+      followUpParts.push('=== CALL CONTEXT (already established) ===');
+      if (callContext.caller?.firstName && callContext.caller?.speakable) {
+        followUpParts.push(`Caller name: ${callContext.caller.firstName}`);
+      }
+      if (callContext.issue?.summary) {
+        followUpParts.push(`Issue: ${callContext.issue.summary}`);
+        followUpParts.push('IMPORTANT: The caller already explained their issue. Do NOT ask them what the issue is again.');
+      }
+      if (callContext.urgency?.level === 'high') {
+        followUpParts.push(`Urgency: HIGH — ${callContext.urgency.reason || 'caller requested urgent service'}`);
+      }
+      followUpParts.push('=== END CALL CONTEXT ===');
+      followUpParts.push('');
+    }
+
     if (selfScheduling) {
       // LANE LOCK: self-scheduling — hard rule, no transfer language allowed
       followUpParts.push(
@@ -217,13 +235,42 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
     const temperature = config.model?.temperature ?? 0.7;
     const maxTokens = config.model?.maxTokens || 300;
 
+    // V131: Load conversation history for multi-turn context
+    let conversationMessages = [{ role: 'user', content: input }];
+    try {
+      const memory = await ConversationMemory.load(callSid);
+      if (memory) {
+        const ctx = memory.getContextForLLM(4);
+        if (ctx?.history?.length > 0) {
+          // Deduplicate: filter to unique entries only (avoid TWIML_PLAY echoes)
+          const seen = new Set();
+          const deduped = ctx.history.filter(msg => {
+            const key = `${msg.role}:${(msg.content || '').substring(0, 80)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          // Prepend history before current input
+          conversationMessages = [...deduped, { role: 'user', content: input }];
+          // Ensure messages alternate properly (Claude requires user/assistant alternation)
+          // Remove any trailing user message from history since we're adding current input as user
+          if (deduped.length > 0 && deduped[deduped.length - 1].role === 'user') {
+            conversationMessages = [...deduped.slice(0, -1), { role: 'user', content: input }];
+          }
+        }
+      }
+    } catch (memErr) {
+      logger.debug('[LLM_AGENT] ConversationMemory load failed (non-blocking, using single-turn)', { error: memErr.message });
+    }
+
     emit('A2_LLM_AGENT_CALLED', {
       mode: 'TIER_2_FOLLOW_UP',
       bucket,
       model: modelId,
       followUpQuestion: followUpQuestion?.substring(0, 80),
       inputPreview: input?.substring(0, 80),
-      triggerSource
+      triggerSource,
+      historyTurns: conversationMessages.length
     });
 
     // ── Streaming with heartbeat (replaces batch fetch + 6s AbortSignal) ──
@@ -233,7 +280,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       maxTokens,
       temperature,
       system: systemPrompt,
-      messages: [{ role: 'user', content: input }],
+      messages: conversationMessages,
       callSid,
       turn,
       token: bridgeToken,
@@ -330,7 +377,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -380,9 +427,25 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       'If you can identify their intent, acknowledge it and guide them toward the right service.',
       'Keep your response concise and natural — this is a phone call.',
       'After you respond, the caller\'s next message will go back through normal trigger matching.',
-      'You are handling THIS turn only — do not try to drive a multi-turn conversation.',
       '=== END NO-MATCH CONTEXT ==='
     ];
+
+    // V131: Inject structured call context so LLM knows what's already established
+    if (callContext) {
+      noMatchParts.push('');
+      noMatchParts.push('=== CALL CONTEXT (already established) ===');
+      if (callContext.caller?.firstName && callContext.caller?.speakable) {
+        noMatchParts.push(`Caller name: ${callContext.caller.firstName}`);
+      }
+      if (callContext.issue?.summary) {
+        noMatchParts.push(`Issue: ${callContext.issue.summary}`);
+        noMatchParts.push('IMPORTANT: The caller already explained their issue. Do NOT ask them what the issue is again.');
+      }
+      if (callContext.urgency?.level === 'high') {
+        noMatchParts.push(`Urgency: HIGH — ${callContext.urgency.reason || 'caller requested urgent service'}`);
+      }
+      noMatchParts.push('=== END CALL CONTEXT ===');
+    }
 
     // ── Cross-turn recovery context (Package 4) ─────────────────────────────
     // If T3 fired last turn, enrich Claude with context about what happened
@@ -407,6 +470,30 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const temperature = config.model?.temperature ?? 0.7;
     const maxTokens = config.model?.maxTokens || 300;
 
+    // V131: Load conversation history for multi-turn context
+    let conversationMessages = [{ role: 'user', content: input }];
+    try {
+      const memory = await ConversationMemory.load(callSid);
+      if (memory) {
+        const ctx = memory.getContextForLLM(4);
+        if (ctx?.history?.length > 0) {
+          const seen = new Set();
+          const deduped = ctx.history.filter(msg => {
+            const key = `${msg.role}:${(msg.content || '').substring(0, 80)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          conversationMessages = [...deduped, { role: 'user', content: input }];
+          if (deduped.length > 0 && deduped[deduped.length - 1].role === 'user') {
+            conversationMessages = [...deduped.slice(0, -1), { role: 'user', content: input }];
+          }
+        }
+      }
+    } catch (memErr) {
+      logger.debug('[LLM_AGENT] ConversationMemory load failed (non-blocking, using single-turn)', { error: memErr.message });
+    }
+
     emit('A2_LLM_AGENT_CALLED', {
       mode: 'TIER_2_NO_MATCH',
       model: modelId,
@@ -414,6 +501,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       capturedReason: capturedReason?.substring(0, 80) || null,
       turn,
       isRecovery: !!t3RecoveryCtx,
+      historyTurns: conversationMessages.length
     });
 
     // ── Streaming with heartbeat (replaces batch fetch + 6s AbortSignal) ──
@@ -427,7 +515,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       maxTokens,
       temperature,
       system: systemPrompt,
-      messages: [{ role: 'user', content: input }],
+      messages: conversationMessages,
       callSid,
       turn,
       token: bridgeToken,
@@ -1308,6 +1396,7 @@ class Agent2DiscoveryRunner {
             bucket, channel: 'call', emit,
             callSid, turn, bridgeToken, redis,
             callerName, selfScheduling,
+            callContext: nextState.agent2?.callContext || null,
           });
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -1336,6 +1425,7 @@ class Agent2DiscoveryRunner {
             bucket, channel: 'call', emit,
             callSid, turn, bridgeToken, redis,
             callerName, selfScheduling,
+            callContext: nextState.agent2?.callContext || null,
           });
           if (llmAgentResult) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -1384,6 +1474,7 @@ class Agent2DiscoveryRunner {
             bucket, channel: 'call', emit,
             callSid, turn, bridgeToken, redis,
             callerName, selfScheduling,
+            callContext: nextState.agent2?.callContext || null,
           });
           if (llmAgentResult) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -1432,6 +1523,7 @@ class Agent2DiscoveryRunner {
           bucket, channel: 'call', emit,
           callSid, turn, bridgeToken, redis,
           callerName, selfScheduling,
+          callContext: nextState.agent2?.callContext || null,
         });
         if (llmAgentResult) {
           const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -1701,22 +1793,50 @@ class Agent2DiscoveryRunner {
     // Use these instead of running separate extraction logic
     
     if (scrabResult.entities?.firstName && !nextState.callerName) {
-      nextState.callerName = scrabResult.entities.firstName;
-      
-      // V129 FIX: Update local callerName variable so Name Greeting can use it
-      // Previously, callerName was captured from state BEFORE ScrabEngine ran,
-      // so on Turn 1 it was always null even though we extracted a name.
-      callerName = scrabResult.entities.firstName;
-      
       const firstNameExtraction = scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName');
       const lastNameExtraction = scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'lastName');
+      const nameConfidence = firstNameExtraction?.confidence || 0.9;
+
+      // V131: NAME CONFIDENCE GATE — never speak a low-confidence name.
+      // Wrong name is catastrophically worse than no name.
+      // Threshold: 0.70 — below this, name is stored as tentative but never spoken.
+      const NAME_CONFIDENCE_THRESHOLD = 0.70;
+      const nameIsSpeakable = nameConfidence >= NAME_CONFIDENCE_THRESHOLD;
+
+      if (nameIsSpeakable) {
+        nextState.callerName = scrabResult.entities.firstName;
+
+        // V129 FIX: Update local callerName variable so Name Greeting can use it
+        // Previously, callerName was captured from state BEFORE ScrabEngine ran,
+        // so on Turn 1 it was always null even though we extracted a name.
+        callerName = scrabResult.entities.firstName;
+      } else {
+        logger.warn('[ScrabEngine] ⚠️ Name confidence below threshold — suppressed from spoken output', {
+          extractedName: scrabResult.entities.firstName,
+          confidence: nameConfidence,
+          threshold: NAME_CONFIDENCE_THRESHOLD,
+          verificationMode: firstNameExtraction?.verificationMode || null,
+          callSid,
+          turn
+        });
+      }
+
+      // Store tentative name in state metadata regardless of confidence
+      // so later turns or booking can reference it if needed
+      nextState.agent2 = nextState.agent2 || {};
+      nextState.agent2.scrabEngine = nextState.agent2.scrabEngine || {};
+      nextState.agent2.scrabEngine.tentativeFirstName = scrabResult.entities.firstName;
+      nextState.agent2.scrabEngine.firstNameConfidence = nameConfidence;
+      nextState.agent2.scrabEngine.firstNameSpeakable = nameIsSpeakable;
 
       emit('CALLER_NAME_EXTRACTED', {
         firstName: scrabResult.entities.firstName,
         lastName: scrabResult.entities.lastName || null,
         source: 'scrabengine_stage4',
         pattern: firstNameExtraction?.pattern || 'unknown',
-        confidence: firstNameExtraction?.confidence || 0.9,
+        confidence: nameConfidence,
+        speakable: nameIsSpeakable,
+        suppressedReason: nameIsSpeakable ? null : 'confidence_below_threshold',
         // Name verification metadata
         verificationMode: firstNameExtraction?.verificationMode || null,
         correctedFrom: firstNameExtraction?.correctedFrom || null,
@@ -1724,12 +1844,112 @@ class Agent2DiscoveryRunner {
         lastNameVerificationMode: lastNameExtraction?.verificationMode || null,
         lastNameCorrectedFrom: lastNameExtraction?.correctedFrom || null
       });
-      
-      logger.info('[ScrabEngine] ✅ Caller name extracted and stored', {
+
+      logger.info(`[ScrabEngine] ${nameIsSpeakable ? '✅' : '⚠️'} Caller name extracted${nameIsSpeakable ? ' and stored' : ' (tentative — not speakable)'}`, {
         firstName: scrabResult.entities.firstName,
         lastName: scrabResult.entities.lastName,
+        confidence: nameConfidence,
+        speakable: nameIsSpeakable,
         callSid,
         turn
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // V131: STRUCTURED CALL CONTEXT — Live Working Memory
+    // ══════════════════════════════════════════════════════════════════════════
+    // Built after ScrabEngine runs, persisted across turns in state.
+    // Every component reads this: trigger cards, LLM agent, booking handoff.
+    // Contains: who called, why, what urgency, what's been asked/answered.
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+      // Initialize callContext on first turn, update on subsequent turns
+      const existingCtx = nextState.agent2.callContext || null;
+      const callContext = existingCtx || {
+        caller: { firstName: null, firstNameConfidence: 0, speakable: false },
+        issue: { summary: null, rawInput: null, system: null, location: null, risk: null },
+        urgency: { level: 'normal', sameDayRequested: false, reason: null },
+        intent: { primary: null, source: null },
+        questionsAsked: [],
+        questionsAnswered: [],
+        discoveryComplete: false
+      };
+
+      // Update caller name from ScrabEngine (respects confidence gate)
+      if (scrabResult.entities?.firstName) {
+        const fnExtraction = scrabResult.stage4_extraction?.extractions?.find(e => e.type === 'firstName');
+        callContext.caller.firstName = scrabResult.entities.firstName;
+        callContext.caller.firstNameConfidence = fnExtraction?.confidence || 0.9;
+        callContext.caller.speakable = (fnExtraction?.confidence || 0.9) >= 0.70;
+      }
+
+      // Extract issue details from normalized input on turn 1 (or update if not set)
+      if (!callContext.issue.summary && normalizedInput) {
+        const inputLow = normalizedInput.toLowerCase();
+
+        // Issue detection: look for problem-indicator words
+        const problemIndicators = [
+          'leak', 'leaking', 'broken', 'not working', 'not cooling', 'not heating',
+          'water', 'noise', 'smell', 'smoke', 'frozen', 'ice', 'dripping', 'flooding',
+          'no power', 'no air', 'hot air', 'cold air', 'damage', 'emergency'
+        ];
+        const matchedProblems = problemIndicators.filter(p => inputLow.includes(p));
+
+        if (matchedProblems.length > 0) {
+          // Build a concise issue summary from the matched indicators
+          const systemKeywords = ['ac', 'air conditioning', 'furnace', 'heater', 'hvac', 'thermostat', 'unit', 'system', 'heat pump', 'duct', 'vent'];
+          const locationKeywords = ['garage', 'attic', 'basement', 'kitchen', 'bedroom', 'bathroom', 'living room', 'ceiling', 'wall', 'roof', 'closet', 'hallway', 'upstairs', 'downstairs'];
+          const riskKeywords = ['damage', 'damaging', 'flooding', 'fire', 'mold', 'dangerous', 'emergency', 'unsafe'];
+          const urgencyKeywords = ['today', 'asap', 'right away', 'immediately', 'urgent', 'emergency', 'as soon as possible', 'right now'];
+
+          const detectedSystem = systemKeywords.find(s => inputLow.includes(s)) || null;
+          const detectedLocation = locationKeywords.find(l => inputLow.includes(l)) || null;
+          const detectedRisk = riskKeywords.find(r => inputLow.includes(r)) || null;
+          const hasSameDayUrgency = urgencyKeywords.some(u => inputLow.includes(u));
+
+          // Build summary: "water leaking from AC unit" style
+          const summaryParts = [];
+          if (matchedProblems.includes('water') || matchedProblems.includes('leak') || matchedProblems.includes('leaking')) {
+            summaryParts.push('water leak');
+          } else {
+            summaryParts.push(matchedProblems[0]);
+          }
+          if (detectedSystem) summaryParts.push(`from ${detectedSystem === 'ac' ? 'AC unit' : detectedSystem}`);
+          if (detectedLocation) summaryParts.push(`in ${detectedLocation}`);
+
+          callContext.issue.summary = summaryParts.join(' ');
+          callContext.issue.rawInput = normalizedInput.substring(0, 200);
+          callContext.issue.system = detectedSystem === 'ac' ? 'AC unit' : detectedSystem;
+          callContext.issue.location = detectedLocation;
+          callContext.issue.risk = detectedRisk;
+
+          if (hasSameDayUrgency || detectedRisk) {
+            callContext.urgency.level = 'high';
+            callContext.urgency.sameDayRequested = hasSameDayUrgency;
+            callContext.urgency.reason = detectedRisk
+              ? `${detectedRisk} risk reported`
+              : 'same-day service requested';
+          }
+        }
+      }
+
+      // Update captured reason if available
+      if (capturedReason && !callContext.intent.primary) {
+        callContext.intent.primary = capturedReason;
+        callContext.intent.source = 'scrabengine_reason_capture';
+      }
+
+      // Persist to state
+      nextState.agent2.callContext = callContext;
+
+      emit('CALL_CONTEXT_UPDATED', {
+        turn,
+        callerName: callContext.caller.firstName,
+        callerNameSpeakable: callContext.caller.speakable,
+        issueSummary: callContext.issue.summary,
+        urgencyLevel: callContext.urgency.level,
+        sameDayRequested: callContext.urgency.sameDayRequested,
+        intent: callContext.intent.primary
       });
     }
 
@@ -3196,9 +3416,47 @@ class Agent2DiscoveryRunner {
 
       // Substitute trigger card variables in response text
       // Static: {diagnosticfee} → "80 dollars"  |  Runtime: {name} → ", Marc" or ""
-      const runtimeVars = { name: callerName || null };
-      const finalResponse = await substituteTriggerVariables(response, companyId, runtimeVars);
-      
+      const callCtx = nextState.agent2?.callContext || null;
+      const runtimeVars = {
+        name: callerName || null,
+        callerIssue: callCtx?.issue?.summary || null,
+        callerSystem: callCtx?.issue?.system || null,
+        callerLocation: callCtx?.issue?.location || null,
+      };
+      let finalResponse = await substituteTriggerVariables(response, companyId, runtimeVars);
+
+      // V131: CONTEXT-AWARE CARD RESPONSE — if caller already explained the issue,
+      // don't ask "what issue are you experiencing?" or "what's going on?"
+      // Replace generic re-ask phrases with acknowledgment of known issue.
+      if (callCtx?.issue?.summary) {
+        const genericReaskPatterns = [
+          /just let me know what issue you(?:'re| are) experiencing/gi,
+          /what(?:'s| is) (?:the )?(?:issue|problem) you(?:'re| are) (?:experiencing|having)/gi,
+          /can you tell me (?:more )?(?:about )?what(?:'s| is) (?:going on|happening)/gi,
+          /what (?:seems to be|is) the (?:problem|issue|trouble)/gi,
+          /what can (?:we|I) help you with/gi,
+          /what do you need help with/gi,
+        ];
+        const issueSummary = callCtx.issue.summary;
+        const urgencyNote = callCtx.urgency?.level === 'high'
+          ? ` Since this seems urgent, I'll prioritize getting someone out quickly.`
+          : '';
+        const replacement = `I see you're dealing with a ${issueSummary}.${urgencyNote}`;
+
+        for (const pattern of genericReaskPatterns) {
+          if (pattern.test(finalResponse)) {
+            finalResponse = finalResponse.replace(pattern, replacement);
+            emit('A2_CARD_REASK_REPLACED', {
+              cardId: card.id,
+              issueSummary,
+              urgencyLevel: callCtx.urgency?.level || 'normal',
+              reason: 'Caller already explained issue — replaced generic re-ask with acknowledgment'
+            });
+            break;
+          }
+        }
+      }
+
       if (finalResponse !== response) {
         emit('A2_TRIGGER_VARIABLES_SUBSTITUTED', {
           cardId: card.id,
@@ -3206,6 +3464,12 @@ class Agent2DiscoveryRunner {
           finalLength: finalResponse.length,
           hadPlaceholders: true
         });
+      }
+
+      // V131: Track what questions the agent asked (for call context)
+      if (afterQuestion && callCtx) {
+        callCtx.questionsAsked.push(afterQuestion.substring(0, 100));
+        nextState.agent2.callContext = callCtx;
       }
 
       return {
@@ -3631,6 +3895,7 @@ class Agent2DiscoveryRunner {
         redis,
         t3RecoveryCtx,  // Package 4B: cross-turn recovery context
         callerName,     // Thread caller name so T2 can personalize response
+        callContext: nextState.agent2?.callContext || null,
       });
 
       if (llmAgentResult?.response) {

@@ -245,6 +245,9 @@ async function runBookingLogicLane({
     const followUpBookingMode = state?.agent2?.discovery?.bookingMode || null;
     const consentBucket = state?.consent?.bucket || null;
     const consentMatchedPhrases = Array.isArray(state?.consent?.matchedPhrases) ? state.consent.matchedPhrases : [];
+    // V131: Include structured call context from discovery in handoff
+    const callContext = state?.agent2?.callContext || null;
+
     const handoffPayload = {
         assumptions: {
             firstName: scrabEngineEntities.firstName || state?.callerName || null,
@@ -274,7 +277,17 @@ async function runBookingLogicLane({
                 bucket: consentBucket,
                 matchedPhrases: consentMatchedPhrases
             }
-        }
+        },
+        // V131: Structured call context from discovery — booking uses this to
+        // generate contextual opening lines and avoid re-asking known information
+        callContext: callContext ? {
+            issue: callContext.issue || null,
+            urgency: callContext.urgency || null,
+            intent: callContext.intent || null,
+            caller: callContext.caller || null,
+            questionsAsked: callContext.questionsAsked || [],
+            questionsAnswered: callContext.questionsAnswered || [],
+        } : null
     };
     
     const existingBookingCtx = state?.bookingCtx || null;

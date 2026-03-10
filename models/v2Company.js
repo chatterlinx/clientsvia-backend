@@ -3919,7 +3919,10 @@ const companySchema = new mongoose.Schema({
             // Two-phase TwiML: play a short bridge line, then Redirect to continue.
             bridge: {
                 enabled: { type: Boolean, default: false },
-                // If processing crosses this threshold, we may send the bridge TwiML.
+                // V131: Post-gather delay — bridge fires this many ms after gather completes
+                // unless compute already resolved. UI-configurable. Replaces old race threshold.
+                postGatherDelayMs: { type: Number, default: 200 },
+                // LEGACY: old threshold (kept for backward compat, postGatherDelayMs takes priority)
                 thresholdMs: { type: Number, default: 1100 },
                 // LEGACY: old hard cap (kept for backward compat, no longer drives decisions)
                 hardCapMs: { type: Number, default: 6000 },
