@@ -546,7 +546,11 @@
         </div>
       ` : ''}
       ${renderCallOverview(intelligence)}
+      ${renderEngineeringScore(intelligence)}
       ${renderExecutiveSummary(intelligence)}
+      ${renderCallerJourney(intelligence)}
+      ${renderTurnByTurnAnalysis(intelligence)}
+      ${renderRootCause(intelligence)}
       ${renderTurnByTurnFlow(intelligence)}
       ${renderResponseContext(intelligence)}
       ${renderTranscriptSection(intelligence)}
@@ -642,6 +646,307 @@
         ${intel.topIssue ? `
           <div class="top-issue">
             <strong>Top Issue:</strong> ${intel.topIssue}
+          </div>
+        ` : ''}
+      </section>
+    `;
+  }
+
+  // =============================================================================
+  // V2 ENGINEERING-GRADE RENDER FUNCTIONS
+  // =============================================================================
+
+  function renderEngineeringScore(intel) {
+    const score = intel.engineeringScore;
+    if (!score || !score.overall) return '';
+
+    const dimensions = [
+      { key: 'overall', label: 'Overall', icon: '📊' },
+      { key: 'triggerAccuracy', label: 'Trigger Accuracy', icon: '🎯' },
+      { key: 'responseRelevance', label: 'Response Relevance', icon: '💬' },
+      { key: 'callerExperience', label: 'Caller Experience', icon: '😊' },
+      { key: 'conversationFlow', label: 'Conversation Flow', icon: '🔄' },
+      { key: 'nameHandling', label: 'Name Handling', icon: '👤' }
+    ];
+
+    function getScoreColor(val) {
+      if (val <= 3) return 'score-red';
+      if (val <= 6) return 'score-yellow';
+      return 'score-green';
+    }
+
+    return `
+      <section class="analysis-section engineering-score-section">
+        <h2 class="section-title">📊 ENGINEERING SCORE</h2>
+        <div class="engineering-score-grid">
+          ${dimensions.map(d => {
+            const val = score[d.key];
+            if (val === undefined || val === null) return '';
+            return `
+              <div class="score-row">
+                <span class="score-label">${d.icon} ${d.label}</span>
+                <div class="score-bar-track">
+                  <div class="score-bar ${getScoreColor(val)}" style="width: ${val * 10}%"></div>
+                </div>
+                <span class="score-value ${getScoreColor(val)}">${val}/10</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderCallerJourney(intel) {
+    const journey = intel.callerJourney;
+    if (!journey) return '';
+
+    const outcomeLabels = {
+      'wrong_response': '❌ Wrong Response',
+      'correct_booking': '✅ Correct Booking',
+      'correct_info': '✅ Correct Info',
+      'caller_abandoned': '⚠️ Caller Abandoned',
+      'partial_help': '🟡 Partial Help'
+    };
+
+    return `
+      <section class="analysis-section caller-journey-section">
+        <h2 class="section-title">🧭 CALLER JOURNEY</h2>
+
+        ${journey.callerName ? `
+          <div class="journey-name-row">
+            <span class="journey-name-label">Caller:</span>
+            <strong>${journey.callerName}</strong>
+            ${journey.nameDetected !== undefined ? `
+              <span class="journey-name-tag ${journey.nameUsedInResponse ? 'name-used' : 'name-not-used'}">
+                ${journey.nameDetected ? (journey.nameUsedInResponse ? '✅ Name detected & used' : '⚠️ Name detected but NOT used in response') : '❌ Name not detected'}
+              </span>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        ${journey.intentEvolution && journey.intentEvolution.length > 0 ? `
+          <div class="journey-intent-flow">
+            <h3 class="journey-subtitle">Intent Evolution</h3>
+            <div class="intent-timeline">
+              ${journey.intentEvolution.map((intent, idx) => `
+                <div class="intent-step">
+                  <span class="intent-number">${idx + 1}</span>
+                  <span class="intent-text">${intent}</span>
+                </div>
+                ${idx < journey.intentEvolution.length - 1 ? '<span class="intent-arrow">→</span>' : ''}
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="journey-outcome-row">
+          <div class="journey-outcome-item">
+            <span class="journey-meta-label">Final Outcome:</span>
+            <span class="journey-outcome-badge ${journey.wasCallerHelped ? 'outcome-good' : 'outcome-bad'}">
+              ${outcomeLabels[journey.finalOutcome] || journey.finalOutcome || 'Unknown'}
+            </span>
+          </div>
+          <div class="journey-outcome-item">
+            <span class="journey-meta-label">Was Caller Helped?</span>
+            <span class="${journey.wasCallerHelped ? 'verdict-good' : 'verdict-bad'}">
+              ${journey.wasCallerHelped ? '✅ Yes' : '❌ No'}
+            </span>
+          </div>
+        </div>
+
+        ${journey.unaddressedIssues && journey.unaddressedIssues.length > 0 ? `
+          <div class="journey-unaddressed">
+            <h3 class="journey-subtitle">⚠️ Unaddressed Issues</h3>
+            <ul class="unaddressed-list">
+              ${journey.unaddressedIssues.map(issue => `<li>${issue}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${journey.sentimentArc && journey.sentimentArc.length > 0 ? `
+          <div class="journey-sentiment">
+            <h3 class="journey-subtitle">Sentiment Arc</h3>
+            <div class="sentiment-flow">
+              ${journey.sentimentArc.map((s, idx) => `
+                <span class="sentiment-chip sentiment-${s}">${s}</span>
+                ${idx < journey.sentimentArc.length - 1 ? '<span class="intent-arrow">→</span>' : ''}
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </section>
+    `;
+  }
+
+  function renderTurnByTurnAnalysis(intel) {
+    const turns = intel.turnByTurnAnalysis;
+    if (!turns || turns.length === 0) return '';
+
+    function getVerdictBadge(verdict) {
+      const badges = {
+        'correct': '<span class="verdict-badge verdict-correct">✅ Correct</span>',
+        'wrong_trigger': '<span class="verdict-badge verdict-wrong">❌ Wrong Trigger</span>',
+        'missed_trigger': '<span class="verdict-badge verdict-wrong">❌ Missed Trigger</span>',
+        'good_llm': '<span class="verdict-badge verdict-good-llm">✅ Good LLM</span>',
+        'good_llm_response': '<span class="verdict-badge verdict-good-llm">✅ Good LLM</span>',
+        'bad_llm': '<span class="verdict-badge verdict-bad-llm">❌ Bad LLM</span>',
+        'bad_llm_response': '<span class="verdict-badge verdict-bad-llm">❌ Bad LLM</span>',
+        'acceptable': '<span class="verdict-badge verdict-acceptable">🟡 Acceptable</span>'
+      };
+      return badges[verdict] || `<span class="verdict-badge verdict-unknown">${verdict || 'Unknown'}</span>`;
+    }
+
+    function getTierBadgeSmall(tier) {
+      if (!tier) return '';
+      switch (tier) {
+        case 'T1': return '<span class="tier-badge-sm tier-1-sm">T1</span>';
+        case 'T2': return '<span class="tier-badge-sm tier-2-sm">T2</span>';
+        case 'T3': return '<span class="tier-badge-sm tier-3-sm">T3</span>';
+        default: return `<span class="tier-badge-sm">${tier}</span>`;
+      }
+    }
+
+    return `
+      <section class="analysis-section turn-analysis-section">
+        <h2 class="section-title">🔬 TURN-BY-TURN ENGINEERING ANALYSIS</h2>
+        <p class="section-description">Per-turn verdict: what the caller wanted vs what the system did vs what SHOULD have happened.</p>
+
+        ${turns.map(turn => `
+          <div class="turn-analysis-card ${turn.falsePositive ? 'false-positive-card' : ''} ${turn.falseNegative ? 'false-negative-card' : ''}">
+            <div class="turn-analysis-header">
+              <div class="turn-header-left">
+                <span class="turn-num">Turn ${turn.turnNumber}</span>
+                ${getTierBadgeSmall(turn.tier)}
+                ${getVerdictBadge(turn.verdict)}
+                ${turn.falsePositive ? '<span class="fp-flag">🚨 FALSE POSITIVE</span>' : ''}
+                ${turn.falseNegative ? '<span class="fn-flag">⚠️ FALSE NEGATIVE</span>' : ''}
+              </div>
+              <div class="turn-header-right">
+                ${turn.responseQuality !== undefined ? `
+                  <span class="quality-badge quality-${turn.responseQuality <= 3 ? 'low' : (turn.responseQuality <= 6 ? 'mid' : 'high')}">${turn.responseQuality}/10</span>
+                ` : ''}
+                ${turn.callerSentiment ? `
+                  <span class="sentiment-chip sentiment-${turn.callerSentiment}">${turn.callerSentiment}</span>
+                ` : ''}
+              </div>
+            </div>
+
+            <div class="turn-analysis-body">
+              ${turn.callerSaid ? `
+                <div class="turn-row caller-row">
+                  <span class="turn-row-label">🎤 Caller Said:</span>
+                  <span class="turn-row-value">"${turn.callerSaid}"</span>
+                </div>
+              ` : ''}
+              ${turn.callerIntent ? `
+                <div class="turn-row intent-row">
+                  <span class="turn-row-label">🧠 Caller Intent:</span>
+                  <span class="turn-row-value">${turn.callerIntent}</span>
+                </div>
+              ` : ''}
+              ${turn.systemAction ? `
+                <div class="turn-row system-row">
+                  <span class="turn-row-label">⚙️ System Did:</span>
+                  <span class="turn-row-value">${turn.systemAction}</span>
+                </div>
+              ` : ''}
+              ${turn.correctAction && turn.correctAction !== 'correct' ? `
+                <div class="turn-row correct-row">
+                  <span class="turn-row-label">✅ Should Have:</span>
+                  <span class="turn-row-value">${turn.correctAction}</span>
+                </div>
+              ` : ''}
+              ${turn.verdictReason ? `
+                <div class="turn-row reason-row">
+                  <span class="turn-row-label">📝 Why:</span>
+                  <span class="turn-row-value">${turn.verdictReason}</span>
+                </div>
+              ` : ''}
+              ${turn.triggerMatched ? `
+                <div class="turn-row trigger-row">
+                  <span class="turn-row-label">🎯 Trigger Matched:</span>
+                  <span class="turn-row-value"><code>${turn.triggerMatched}</code></span>
+                </div>
+              ` : ''}
+              ${turn.triggerShouldHaveMatched ? `
+                <div class="turn-row trigger-row should-match">
+                  <span class="turn-row-label">🎯 Should Have Matched:</span>
+                  <span class="turn-row-value"><code>${turn.triggerShouldHaveMatched}</code></span>
+                </div>
+              ` : ''}
+              ${turn.responseIssues && turn.responseIssues.length > 0 ? `
+                <div class="turn-row issues-row">
+                  <span class="turn-row-label">⚠️ Response Issues:</span>
+                  <span class="turn-row-value">${turn.responseIssues.join(', ')}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </section>
+    `;
+  }
+
+  function renderRootCause(intel) {
+    const rc = intel.rootCauseAnalysis;
+    if (!rc) return '';
+
+    return `
+      <section class="analysis-section root-cause-section">
+        <h2 class="section-title">🔍 ROOT CAUSE ANALYSIS</h2>
+
+        ${rc.primaryRootCause ? `
+          <div class="root-cause-box">
+            <div class="root-cause-label">Primary Root Cause</div>
+            <p class="root-cause-text">${rc.primaryRootCause}</p>
+          </div>
+        ` : ''}
+
+        ${rc.triggerGaps && rc.triggerGaps.length > 0 ? `
+          <div class="root-cause-subsection">
+            <h3>⚠️ Trigger Gaps (${rc.triggerGaps.length})</h3>
+            ${rc.triggerGaps.map(gap => `
+              <div class="trigger-gap-card priority-${gap.priority || 'medium'}">
+                <div class="gap-header">
+                  <strong>${gap.triggerLabel || gap.missingTrigger || 'Unknown trigger'}</strong>
+                  <span class="gap-priority">${getPriorityBadge(gap.priority || 'medium')}</span>
+                </div>
+                ${gap.evidence ? `<p class="gap-evidence">Evidence: "${gap.evidence}"</p>` : ''}
+                ${gap.suggestedKeywords && gap.suggestedKeywords.length > 0 ? `
+                  <div class="gap-keywords">
+                    <span class="gap-kw-label">Suggested Keywords:</span>
+                    ${gap.suggestedKeywords.map(kw => `<code class="keyword-chip">${kw}</code>`).join(' ')}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${rc.falsePositives && rc.falsePositives.length > 0 ? `
+          <div class="root-cause-subsection">
+            <h3>🚨 False Positives (${rc.falsePositives.length})</h3>
+            ${rc.falsePositives.map(fp => `
+              <div class="false-positive-alert">
+                <div class="fp-header">
+                  <strong>${fp.triggerLabel || fp.triggerId}</strong>
+                  <span class="fp-badge">FALSE POSITIVE</span>
+                </div>
+                ${fp.matchedOn ? `<p class="fp-detail"><strong>Matched On:</strong> "${fp.matchedOn}"</p>` : ''}
+                ${fp.actualCallerIntent ? `<p class="fp-detail"><strong>Actual Intent:</strong> ${fp.actualCallerIntent}</p>` : ''}
+                ${fp.fix ? `<p class="fp-fix"><strong>Fix:</strong> ${fp.fix}</p>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${rc.systemDesignIssues && rc.systemDesignIssues.length > 0 ? `
+          <div class="root-cause-subsection">
+            <h3>🏗️ System Design Issues</h3>
+            <ul class="system-issues-list">
+              ${rc.systemDesignIssues.map(issue => `<li>${issue}</li>`).join('')}
+            </ul>
           </div>
         ` : ''}
       </section>

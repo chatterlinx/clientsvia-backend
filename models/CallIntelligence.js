@@ -17,7 +17,7 @@ const RecommendationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['add_keyword', 'create_trigger', 'update_bucket', 'improve_response', 'fix_scrabengine'],
+    enum: ['add_keyword', 'create_trigger', 'update_bucket', 'improve_response', 'fix_scrabengine', 'fix_false_positive', 'system_design'],
     required: true
   },
   priority: {
@@ -72,7 +72,7 @@ const IssueSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['trigger_match', 'bucket_gap', 'scrabengine', 'response_quality', 'performance'],
+    enum: ['trigger_match', 'bucket_gap', 'scrabengine', 'response_quality', 'performance', 'false_positive', 'name_handling'],
     required: true
   },
   title: {
@@ -172,6 +172,12 @@ const CallIntelligenceSchema = new mongoose.Schema({
   issues: [IssueSchema],
   recommendations: [RecommendationSchema],
   analysis: AnalysisSectionSchema,
+
+  // V2 Engineering-grade analysis (from enhanced prompt)
+  engineeringScore: { type: mongoose.Schema.Types.Mixed },
+  callerJourney: { type: mongoose.Schema.Types.Mixed },
+  turnByTurnAnalysis: [{ type: mongoose.Schema.Types.Mixed }],
+  rootCauseAnalysis: { type: mongoose.Schema.Types.Mixed },
   gpt4Analysis: {
     enabled: {
       type: Boolean,

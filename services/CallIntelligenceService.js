@@ -65,6 +65,11 @@ class CallIntelligenceService {
       issues: analysis.issues || [],
       recommendations: analysis.recommendations || [],
       analysis: analysis.analysis,
+      // V2 Engineering-grade fields
+      engineeringScore: analysis.engineeringScore || null,
+      callerJourney: analysis.callerJourney || null,
+      turnByTurnAnalysis: analysis.turnByTurnAnalysis || [],
+      rootCauseAnalysis: analysis.rootCauseAnalysis || null,
       gpt4Analysis: gpt4Metadata,
       // NOTE: callMetadata stored here is a snapshot at analysis time.
       // The dashboard list endpoint ALWAYS overrides duration/turns from
