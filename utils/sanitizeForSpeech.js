@@ -7,8 +7,9 @@
 // callers via TTS (Twilio <Say> or ElevenLabs synthesis).
 //
 // If text fails any check, it is replaced entirely with a safe fallback.
-// This is intentionally aggressive — a false positive (replacing valid text)
-// is far less damaging than speaking garbage to a live caller.
+// Checks are targeted at code artifacts, NOT legitimate speech.
+// LLM-generated responses (which may contain newlines or brand names)
+// must pass through cleanly.
 // ════════════════════════════════════════════════════════════════════════════
 
 const SAFE_FALLBACK = 'Thank you for calling. How can I help you today?';
@@ -21,8 +22,6 @@ const BLOCKED_TERMS = [
   'rangeerror',
   'urierror',
   'evalerror',
-  'undefined',
-  'null',
   '[object',
   'NaN',
   'stacktrace',
@@ -32,10 +31,7 @@ const BLOCKED_TERMS = [
   'generalerror',
   'general_error',
   'general error',
-  'todo',
   'fixme',
-  'hack',
-  'debug',
   'console.log',
 ];
 
@@ -46,12 +42,6 @@ const BLOCKED_REGEX = new RegExp(
 );
 
 // ── Heuristic checks for code/config artifacts ───────────────────────────
-
-/**
- * Detects camelCase or PascalCase identifiers (e.g., llmAgentResult, ReferenceError).
- * Allows common English contractions and short words.
- */
-const CAMEL_CASE_RE = /[a-z][A-Z][a-zA-Z]{2,}/;
 
 /**
  * Detects code-like syntax: braces, brackets, arrows, triple-equals, etc.
@@ -84,45 +74,38 @@ function sanitizeForSpeech(text, options = {}) {
     return fallback;
   }
 
-  const trimmed = text.trim();
+  // ── Normalize whitespace: replace newlines/tabs with spaces ────────────
+  // LLM responses commonly contain \n characters. These are not dangerous —
+  // they just need to be flattened to single-line text for TTS.
+  const cleaned = text.replace(/[\t\n\r]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
   // ── Length guard ───────────────────────────────────────────────────────
-  if (trimmed.length < 2 || trimmed.length > 1000) {
+  if (cleaned.length < 2 || cleaned.length > 1000) {
     return fallback;
   }
 
   // ── Blocklist check ───────────────────────────────────────────────────
-  if (BLOCKED_REGEX.test(trimmed)) {
-    return fallback;
-  }
-
-  // ── Heuristic: camelCase/PascalCase identifiers ───────────────────────
-  if (CAMEL_CASE_RE.test(trimmed)) {
+  if (BLOCKED_REGEX.test(cleaned)) {
     return fallback;
   }
 
   // ── Heuristic: code-like syntax ───────────────────────────────────────
-  if (CODE_SYNTAX_RE.test(trimmed)) {
+  if (CODE_SYNTAX_RE.test(cleaned)) {
     return fallback;
   }
 
   // ── Heuristic: JSON-like structures ───────────────────────────────────
-  if (JSON_LIKE_RE.test(trimmed)) {
+  if (JSON_LIKE_RE.test(cleaned)) {
     return fallback;
   }
 
   // ── Heuristic: stack trace patterns ───────────────────────────────────
-  if (STACK_TRACE_RE.test(trimmed)) {
-    return fallback;
-  }
-
-  // ── Heuristic: contains tab or newline (config/log artifacts) ─────────
-  if (/[\t\n\r]/.test(trimmed)) {
+  if (STACK_TRACE_RE.test(cleaned)) {
     return fallback;
   }
 
   // All checks passed — text is safe for speech
-  return trimmed;
+  return cleaned;
 }
 
 module.exports = { sanitizeForSpeech, SAFE_FALLBACK };
