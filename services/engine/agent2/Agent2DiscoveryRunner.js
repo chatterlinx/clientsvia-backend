@@ -1403,6 +1403,15 @@ class Agent2DiscoveryRunner {
           nextState.plainSlots.call_reason_detail = ext.callReason;
         }
 
+        // ── Set pendingQuestion so ghost guard protects Turn 2 from STT_EMPTY ──
+        // The intake response is a forward-move prompt (e.g. "Let me pull up your
+        // account..."). If the caller is silent on turn 2 (bridge ghost turn),
+        // the ghost guard will skip processing and preserve state instead of
+        // falling through to FALLBACK_WITH_REASON with empty input.
+        nextState.agent2.discovery.pendingQuestion = response;
+        nextState.agent2.discovery.pendingQuestionTurn = turn;
+        nextState.agent2.discovery.pendingQuestionSource = 'llm_intake';
+
         // ── Emit extraction details for Call Intelligence ─────────────────
         emit('LLM_INTAKE_EXTRACTION', {
           entities: intakeEntities,
