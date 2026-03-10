@@ -539,6 +539,7 @@
       ${renderIssues(intelligence)}
       ${renderScrabEnginePerformance(intelligence)}
       ${renderRecommendations(intelligence)}
+      ${renderTokenUsage(intelligence)}
       ${renderPerformanceMetrics(intelligence)}
       ${renderRawDataAccess(intelligence)}
       ${renderAnalysisFooter(intelligence)}
@@ -1123,6 +1124,115 @@
             ` : ''}
           </div>
         `).join('')}
+      </section>
+    `;
+  }
+
+  function renderTokenUsage(intel) {
+    const t = intel.tokenUsage;
+    if (!t) return '';
+
+    const claudeTokens = t.claude?.totalTokens || 0;
+    const claudeTurns = t.claude?.llmTurns || 0;
+    const openaiTokens = t.openai?.totalTokens || 0;
+    const openaiPrompt = t.openai?.promptTokens || 0;
+    const openaiCompletion = t.openai?.completionTokens || 0;
+    const openaiCostActual = t.openai?.totalCost || 0;
+    const openaiCalls = t.openai?.callCount || 0;
+    const openaiModel = t.openai?.model || null;
+    const gpt4Tokens = t.gpt4Analysis?.totalTokens || 0;
+    const gpt4Ran = t.gpt4Analysis?.enabled;
+
+    const totalAll = claudeTokens + openaiTokens + gpt4Tokens;
+
+    // ── Cost estimation (per 1K tokens) ──
+    // Claude Haiku 3.5: ~$0.25/1M input, ~$1.25/1M output — blended ~$0.80/1M
+    // OpenAI: use actual cost if available, else estimate ~$3/1M tokens (GPT-4-turbo)
+    // GPT-4 Analysis: ~$10/1M input, ~$30/1M output — blended ~$15/1M
+    const claudeCostPer1M = 0.80;
+    const gpt4AnalysisCostPer1M = 15.0;
+
+    const claudeCost = (claudeTokens / 1_000_000) * claudeCostPer1M;
+    const openaiCost = openaiCostActual > 0 ? openaiCostActual : (openaiTokens / 1_000_000) * 3.0;
+    const gpt4Cost = (gpt4Tokens / 1_000_000) * gpt4AnalysisCostPer1M;
+    const totalCost = claudeCost + openaiCost + gpt4Cost;
+
+    function fmtCost(val) {
+      if (val === 0) return '$0.00';
+      if (val < 0.01) return '<$0.01';
+      return '$' + val.toFixed(4);
+    }
+
+    if (totalAll === 0 && !gpt4Ran) {
+      return `
+        <section class="analysis-section">
+          <h2 class="section-title">🔢 TOKEN USAGE & COST</h2>
+          <p style="color: #6B7280; font-size: 0.875rem;">No token usage data recorded for this call.</p>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="analysis-section">
+        <h2 class="section-title">🔢 TOKEN USAGE & COST</h2>
+        <div class="token-table-wrapper">
+          <table class="token-table">
+            <thead>
+              <tr>
+                <th>AI System</th>
+                <th>Tokens</th>
+                <th>Details</th>
+                <th>Est. Cost (This Call)</th>
+                <th>Est. Cost (1,000 Calls)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <span class="token-system-badge claude-badge">🟣 Claude</span>
+                  <span class="token-system-label">T2 LLM Agent</span>
+                </td>
+                <td class="token-number">${claudeTokens.toLocaleString()}</td>
+                <td class="token-detail">${claudeTurns} LLM turn${claudeTurns !== 1 ? 's' : ''}</td>
+                <td class="token-cost">${fmtCost(claudeCost)}</td>
+                <td class="token-cost">${fmtCost(claudeCost * 1000)}</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="token-system-badge openai-badge">🟢 OpenAI</span>
+                  <span class="token-system-label">T3 Fallback</span>
+                </td>
+                <td class="token-number">${openaiTokens.toLocaleString()}</td>
+                <td class="token-detail">
+                  ${openaiCalls} call${openaiCalls !== 1 ? 's' : ''}${openaiModel ? ' · ' + openaiModel : ''}
+                  ${openaiTokens > 0 ? '<br><small>P: ' + openaiPrompt.toLocaleString() + ' · C: ' + openaiCompletion.toLocaleString() + '</small>' : ''}
+                </td>
+                <td class="token-cost">${fmtCost(openaiCost)}</td>
+                <td class="token-cost">${fmtCost(openaiCost * 1000)}</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="token-system-badge gpt4-badge">🔵 GPT-4</span>
+                  <span class="token-system-label">Analysis</span>
+                </td>
+                <td class="token-number">${gpt4Ran ? gpt4Tokens.toLocaleString() : '—'}</td>
+                <td class="token-detail">${gpt4Ran ? 'Analysis complete' : 'Not yet analyzed'}</td>
+                <td class="token-cost">${gpt4Ran ? fmtCost(gpt4Cost) : '—'}</td>
+                <td class="token-cost">${gpt4Ran ? fmtCost(gpt4Cost * 1000) : '—'}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="token-total-row">
+                <td><strong>📊 Total</strong></td>
+                <td class="token-number"><strong>${totalAll.toLocaleString()}</strong></td>
+                <td class="token-detail">All AI systems</td>
+                <td class="token-cost"><strong>${fmtCost(totalCost)}</strong></td>
+                <td class="token-cost"><strong>${fmtCost(totalCost * 1000)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="token-disclaimer">Cost estimates are approximate based on current API pricing. Actual costs may vary.</p>
       </section>
     `;
   }

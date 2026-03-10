@@ -992,6 +992,102 @@ body {
 }
 
 /* =============================================================================
+   TOKEN USAGE TABLE
+   ============================================================================= */
+
+.token-table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.token-table thead th {
+  background: #F3F4F6;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #374151;
+  border-bottom: 2px solid #E5E7EB;
+  white-space: nowrap;
+}
+
+.token-table tbody td,
+.token-table tfoot td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #F3F4F6;
+  vertical-align: middle;
+}
+
+.token-table tbody tr:hover {
+  background: #F9FAFB;
+}
+
+.token-system-badge {
+  display: inline-block;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.token-system-label {
+  display: block;
+  font-size: 0.7rem;
+  color: #9CA3AF;
+  margin-top: 0.125rem;
+}
+
+.token-number {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #1F2937;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-detail {
+  color: #6B7280;
+  font-size: 0.8rem;
+}
+
+.token-detail small {
+  color: #9CA3AF;
+}
+
+.token-cost {
+  font-weight: 600;
+  color: #059669;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.token-total-row {
+  background: #F0FDF4;
+  border-top: 2px solid #D1FAE5;
+}
+
+.token-total-row td {
+  padding: 0.875rem 1rem;
+}
+
+.token-total-row .token-cost {
+  color: #047857;
+  font-size: 0.95rem;
+}
+
+.token-disclaimer {
+  font-size: 0.7rem;
+  color: #9CA3AF;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+/* =============================================================================
    RAW DATA ACCESS
    ============================================================================= */
 

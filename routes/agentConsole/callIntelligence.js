@@ -16,6 +16,8 @@ const CallSummary = require('../../models/CallSummary');
 const CallIntelligenceSettings = require('../../models/CallIntelligenceSettings');
 const CallIntelligence = require('../../models/CallIntelligence');
 const Company = require('../../models/v2Company');
+const ConversationSession = require('../../models/ConversationSession');
+const LLMCallLog = require('../../models/LLMCallLog');
 
 const mongoose = require('mongoose');
 
@@ -421,11 +423,19 @@ router.get('/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
     
-    const [intelligence, transcript, summary] = await Promise.all([
+    const [intelligence, transcript, summary, session, llmLogs] = await Promise.all([
       CallIntelligenceService.getCallIntelligence(callSid),
       CallTranscriptV2.findOne({ callSid }).lean(),
       CallSummary.findOne({ $or: [{ twilioSid: callSid }, { callId: callSid }] })
         .select('companyId callId twilioSid phone durationSeconds turnCount routingTier startedAt events turns hasRecording recordingUrl recordingSid recordingDuration')
+        .lean(),
+      // Claude T2 tokens — ConversationSession keyed by twilioCallSid
+      ConversationSession.findOne({ 'channelIdentifiers.twilioCallSid': callSid })
+        .select('metrics.totalTokens metrics.llmTurns turns.tokensUsed turns.role')
+        .lean(),
+      // OpenAI T3 tokens — LLMCallLog entries for this call
+      LLMCallLog.find({ callId: callSid, 'tier3Result.attempted': true })
+        .select('tier3Result.tokensUsed tier3Result.cost tier3Result.llmModel tier3Result.llmProvider')
         .lean()
     ]);
 
@@ -440,11 +450,38 @@ router.get('/:callSid', async (req, res) => {
     const trace = transcript?.trace || summary?.events || [];
     const callContext = buildCallContext(turns, trace);
 
-    // If GPT-4 analysis exists, merge callContext and recording, return
+    // ── Build token usage summary across all 3 AI systems ──
+    const tokenUsage = {
+      // Claude (T2 LLM Agent) tokens
+      claude: {
+        totalTokens: session?.metrics?.totalTokens || 0,
+        llmTurns: session?.metrics?.llmTurns || 0,
+        perTurn: (session?.turns || [])
+          .filter(t => t.role === 'assistant' && t.tokensUsed > 0)
+          .map(t => t.tokensUsed)
+      },
+      // OpenAI (T3 Fallback) tokens
+      openai: {
+        totalTokens: (llmLogs || []).reduce((sum, log) => sum + (log.tier3Result?.tokensUsed?.total || 0), 0),
+        promptTokens: (llmLogs || []).reduce((sum, log) => sum + (log.tier3Result?.tokensUsed?.prompt || 0), 0),
+        completionTokens: (llmLogs || []).reduce((sum, log) => sum + (log.tier3Result?.tokensUsed?.completion || 0), 0),
+        totalCost: (llmLogs || []).reduce((sum, log) => sum + (log.tier3Result?.cost || 0), 0),
+        model: llmLogs?.[0]?.tier3Result?.llmModel || null,
+        callCount: (llmLogs || []).length
+      },
+      // GPT-4 Analysis tokens (already on the intelligence doc)
+      gpt4Analysis: {
+        totalTokens: intelligence?.gpt4Analysis?.tokensUsed || 0,
+        enabled: !!intelligence?.gpt4Analysis?.enabled
+      }
+    };
+
+    // If GPT-4 analysis exists, merge callContext, recording & tokens, return
     if (intelligence) {
       const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
       payload.callContext = callContext;
       payload.recording = recording;
+      payload.tokenUsage = tokenUsage;
       return res.json({ success: true, intelligence: payload });
     }
 
@@ -471,7 +508,8 @@ router.get('/:callSid', async (req, res) => {
             startTime: summary?.startedAt || transcript?.firstTurnTs || null,
             routingTier: summary?.routingTier || null
           },
-          callContext
+          callContext,
+          tokenUsage
         }
       });
     }
