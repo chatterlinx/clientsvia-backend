@@ -553,6 +553,7 @@
       ${renderRootCause(intelligence)}
       ${renderTurnByTurnFlow(intelligence)}
       ${renderResponseContext(intelligence)}
+      ${renderVoiceDeliverySummary(intelligence)}
       ${renderTranscriptSection(intelligence)}
       ${renderScrabEngineHandoff(intelligence)}
       ${renderTriggerAnalysis(intelligence)}
@@ -1018,6 +1019,61 @@
     `;
   }
 
+  function renderVoiceDeliverySummary(intel) {
+    const vd = intel.callContext?.voiceDelivery;
+    if (!vd || !vd.spokenLines || vd.spokenLines.length === 0) return '';
+
+    const hasTwilioFallback = vd.hadTwilioFallback;
+    const alertClass = hasTwilioFallback ? 'voice-alert' : '';
+
+    return `
+      <section class="analysis-section ${alertClass}">
+        <h2 class="section-title">🔊 VOICE DELIVERY AUDIT</h2>
+        <p class="section-description">Everything spoken to the caller — voice provider, bridge lines, and actual text delivered.</p>
+        ${hasTwilioFallback ? `
+          <div class="voice-alert-banner">
+            ⚠️ <strong>Twilio Voice Detected:</strong> ${vd.twilioSayCount} line(s) fell back to Twilio &lt;Say&gt; (default female voice) instead of ElevenLabs.
+          </div>
+        ` : ''}
+        <div class="overview-grid">
+          <div class="overview-item">
+            <span class="overview-label">Total Lines Spoken:</span>
+            <span class="overview-value">${vd.totalSpokenLines}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Voice Providers:</span>
+            <span class="overview-value">${vd.providers.map(p => `<code class="${p === 'twilio_say' ? 'voice-twilio' : 'voice-elevenlabs'}">${p}</code>`).join(', ')}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">ElevenLabs (Play):</span>
+            <span class="overview-value">${vd.elevenLabsPlayCount}</span>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">Twilio Say (Fallback):</span>
+            <span class="overview-value ${vd.twilioSayCount > 0 ? 'voice-twilio' : ''}">${vd.twilioSayCount}</span>
+          </div>
+        </div>
+        <div class="subsection">
+          <h3>All Spoken Lines:</h3>
+          <div class="spoken-lines-list">
+            ${vd.spokenLines.map((line, i) => `
+              <div class="spoken-line ${line.isBridge ? 'spoken-bridge' : ''} ${line.voiceProvider === 'twilio_say' ? 'spoken-twilio-fallback' : ''}">
+                <div class="spoken-line-meta">
+                  <span class="spoken-line-turn">Turn ${line.turn || '?'}</span>
+                  <span class="spoken-line-provider ${line.voiceProvider === 'twilio_say' ? 'voice-twilio' : 'voice-elevenlabs'}">${line.voiceProvider || 'unknown'}</span>
+                  <code class="spoken-line-verb">${line.verb || 'N/A'}</code>
+                  ${line.isBridge ? '<span class="spoken-line-badge bridge-badge">BRIDGE</span>' : ''}
+                  ${line.source ? `<span class="spoken-line-source">${line.source}</span>` : ''}
+                </div>
+                <div class="spoken-line-text">"${line.text}"</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
   function renderTranscriptSection(intel) {
     const transcript = intel.callContext?.transcript || [];
     if (transcript.length === 0) return '';
@@ -1204,6 +1260,43 @@
                     <span class="detail-label">Response Text:</span>
                     <pre class="code-block">${turn.agentResponse.text || 'N/A'}</pre>
                   </div>
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.voiceDelivery ? `
+              <div class="flow-step voice-delivery-step ${turn.voiceDelivery.textMismatch ? 'voice-mismatch' : ''} ${turn.voiceDelivery.voiceMismatch ? 'voice-fallback' : ''}">
+                <div class="step-label">
+                  <span class="step-icon">🔊</span>
+                  <strong>VOICE DELIVERY</strong>
+                  ${turn.voiceDelivery.textMismatch ? '<span class="mismatch-badge">⚠️ TEXT MISMATCH</span>' : ''}
+                  ${turn.voiceDelivery.voiceMismatch ? '<span class="mismatch-badge voice-badge">📢 TWILIO VOICE</span>' : ''}
+                </div>
+                <div class="step-content">
+                  ${turn.voiceDelivery.hadBridge ? `
+                    <div class="step-detail full-width">
+                      <span class="detail-label">Bridge Lines (${turn.voiceDelivery.bridgeCount}):</span>
+                      <span class="detail-value">${(turn.voiceDelivery.entries || []).filter(e => e.isBridge).map(e => `"${e.text}" <code>${e.voiceProvider}</code>`).join(', ') || 'N/A'}</span>
+                    </div>
+                  ` : ''}
+                  <div class="step-detail">
+                    <span class="detail-label">Voice Provider:</span>
+                    <span class="detail-value ${turn.voiceDelivery.voiceProvider === 'twilio_say' ? 'voice-twilio' : 'voice-elevenlabs'}">${turn.voiceDelivery.voiceProvider || 'Unknown'}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">TwiML Verb:</span>
+                    <span class="detail-value"><code>${turn.voiceDelivery.twimlVerb || 'N/A'}</code></span>
+                  </div>
+                  <div class="step-detail full-width">
+                    <span class="detail-label">Caller Heard:</span>
+                    <pre class="code-block ${turn.voiceDelivery.textMismatch ? 'mismatch-text' : ''}">${turn.voiceDelivery.deliveredText || 'N/A'}</pre>
+                  </div>
+                  ${turn.voiceDelivery.textMismatch ? `
+                    <div class="step-detail full-width">
+                      <span class="detail-label">System Intended:</span>
+                      <pre class="code-block intended-text">${turn.voiceDelivery.intendedText || 'N/A'}</pre>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
             ` : ''}
