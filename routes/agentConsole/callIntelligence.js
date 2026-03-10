@@ -89,6 +89,8 @@ function buildResponseContext(trace = []) {
   const callerName = findLastTrace(trace, 'CALLER_NAME_EXTRACTED');
   const traceSummary = findLastTrace(trace, 'TURN_TRACE_SUMMARY');
 
+  const intakeExtraction = findLastTrace(trace, 'LLM_INTAKE_EXTRACTION');
+
   const responseSource = responseReady?.payload?.source || speechSelected?.payload?.sourceId || null;
   const responsePath = responseReady?.payload?.path || pathSelected?.payload?.path || null;
   const responseOwner = micProof?.payload?.finalResponder || micConfirmed?.payload?.owner || null;
@@ -104,7 +106,7 @@ function buildResponseContext(trace = []) {
   const rawCardId = triggerEval?.payload?.cardId;
   const ruleId = extractRuleId(rawCardId);
 
-  return {
+  const ctx = {
     responseType,
     responseSource,
     responsePath,
@@ -120,6 +122,22 @@ function buildResponseContext(trace = []) {
     matchedTriggerRuleId: ruleId,
     routingTier: traceSummary?.payload?._123rp || null
   };
+
+  // Attach LLM Intake extraction summary if present
+  if (intakeExtraction?.payload) {
+    const ip = intakeExtraction.payload;
+    ctx.intakeExtraction = {
+      entities: ip.entities || {},
+      callReason: ip.callReason,
+      urgency: ip.urgency,
+      nextLane: ip.nextLane,
+      extractionSummary: ip.extractionSummary || [],
+      wasPartial: ip.wasPartial,
+      latencyMs: ip.latencyMs
+    };
+  }
+
+  return ctx;
 }
 
 function buildTurnByTurnFlow(turns = [], trace = []) {
@@ -199,6 +217,26 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       turnData.pathSelected = {
         path: pathSelected.payload.path,
         reason: pathSelected.payload.reason?.substring(0, 200)
+      };
+    }
+
+    // LLM Intake extraction details (Turn-1 entity extraction)
+    const intakeExtraction = traceByKind.get(`${turnNum}:LLM_INTAKE_EXTRACTION`);
+    if (intakeExtraction?.payload) {
+      const ip = intakeExtraction.payload;
+      turnData.intakeExtraction = {
+        entities: ip.entities || {},
+        callReason: ip.callReason,
+        urgency: ip.urgency,
+        nextLane: ip.nextLane,
+        doNotReask: ip.doNotReask || [],
+        technicianMentioned: ip.technicianMentioned,
+        priorVisit: ip.priorVisit,
+        sameDayRequested: ip.sameDayRequested,
+        extractionSummary: ip.extractionSummary || [],
+        confidence: ip.confidence || {},
+        wasPartial: ip.wasPartial,
+        latencyMs: ip.latencyMs
       };
     }
 

@@ -1403,6 +1403,23 @@ class Agent2DiscoveryRunner {
           nextState.plainSlots.call_reason_detail = ext.callReason;
         }
 
+        // ── Emit extraction details for Call Intelligence ─────────────────
+        emit('LLM_INTAKE_EXTRACTION', {
+          entities: intakeEntities,
+          handoffEntities: intakeHandoff,
+          callReason: ext.callReason || null,
+          urgency: ext.urgency || null,
+          nextLane: intakeResult.nextLane,
+          doNotReask: intakeResult.doNotReask || [],
+          technicianMentioned: ext.technicianMentioned || null,
+          priorVisit: ext.priorVisit != null ? ext.priorVisit : null,
+          sameDayRequested: ext.sameDayRequested != null ? ext.sameDayRequested : null,
+          extractionSummary: Object.keys(ext).filter(k => ext[k] != null),
+          confidence: conf,
+          wasPartial: intakeResult.wasPartial || false,
+          latencyMs: intakeResult.latencyMs,
+        });
+
         // ── Build response and return ─────────────────────────────────────
         const response = intakeResult.responseText;
 
