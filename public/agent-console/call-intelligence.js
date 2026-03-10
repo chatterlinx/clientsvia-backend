@@ -515,8 +515,20 @@
 
   function renderAnalysisModal(intelligence) {
     const statusInfo = getStatusInfo(intelligence.status);
-    
+    const needsGpt4 = !intelligence.gpt4Analysis?.enabled;
+
     DOM.modalBody.innerHTML = `
+      ${needsGpt4 ? `
+        <div class="gpt4-analyze-banner" style="background: #EFF6FF; border: 2px solid #3B82F6; border-radius: 0.5rem; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <strong style="color: #1E40AF; font-size: 0.95rem;">GPT-4 analysis has not been run on this call.</strong>
+            <p style="color: #6B7280; font-size: 0.8rem; margin-top: 0.25rem;">Click to run a full AI-powered analysis for deeper insights.</p>
+          </div>
+          <button class="btn btn-primary" onclick="window.analyzeCallNow('${intelligence.callSid}')" style="white-space: nowrap;">
+            Analyze with GPT-4
+          </button>
+        </div>
+      ` : ''}
       ${renderCallOverview(intelligence)}
       ${renderExecutiveSummary(intelligence)}
       ${renderTurnByTurnFlow(intelligence)}
