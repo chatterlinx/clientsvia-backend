@@ -1153,15 +1153,19 @@
     const openaiModel = t.openai?.model || null;
     const gpt4Tokens = t.gpt4Analysis?.totalTokens || 0;
     const gpt4Ran = t.gpt4Analysis?.enabled;
+    const gpt4Model = t.gpt4Analysis?.model || 'gpt-4o';
 
     const totalAll = claudeTokens + openaiTokens + gpt4Tokens;
 
-    // ── Cost estimation (per 1K tokens) ──
-    // Claude Haiku 3.5: ~$0.25/1M input, ~$1.25/1M output — blended ~$0.80/1M
-    // OpenAI: use actual cost if available, else estimate ~$3/1M tokens (GPT-4-turbo)
-    // GPT-4 Analysis: ~$10/1M input, ~$30/1M output — blended ~$15/1M
+    // ── Accurate cost estimation (per 1M tokens, blended input/output) ──
+    // Claude 3.5 Haiku: $0.25/1M input + $1.25/1M output → blended ~$0.80/1M
+    // OpenAI T3 Fallback: use actual logged cost when available
+    // GPT-4o Analysis: $2.50/1M input + $10/1M output → blended ~$5/1M
+    // GPT-4-turbo: $10/1M input + $30/1M output → blended ~$15/1M (legacy)
     const claudeCostPer1M = 0.80;
-    const gpt4AnalysisCostPer1M = 15.0;
+    const gpt4oCostPer1M = 5.0;
+    const gpt4TurboCostPer1M = 15.0;
+    const gpt4AnalysisCostPer1M = gpt4Model.includes('turbo') ? gpt4TurboCostPer1M : gpt4oCostPer1M;
 
     const claudeCost = (claudeTokens / 1_000_000) * claudeCostPer1M;
     const openaiCost = openaiCostActual > 0 ? openaiCostActual : (openaiTokens / 1_000_000) * 3.0;
@@ -1227,7 +1231,7 @@
                   <span class="token-system-label">Analysis</span>
                 </td>
                 <td class="token-number">${gpt4Ran ? gpt4Tokens.toLocaleString() : '—'}</td>
-                <td class="token-detail">${gpt4Ran ? 'Analysis complete' : 'Not yet analyzed'}</td>
+                <td class="token-detail">${gpt4Ran ? gpt4Model + ' · Analysis complete' : 'Not yet analyzed'}</td>
                 <td class="token-cost">${gpt4Ran ? fmtCost(gpt4Cost) : '—'}</td>
                 <td class="token-cost">${gpt4Ran ? fmtCost(gpt4Cost * 1000) : '—'}</td>
               </tr>

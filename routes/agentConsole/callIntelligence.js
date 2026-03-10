@@ -478,7 +478,8 @@ router.get('/:callSid', async (req, res) => {
       // GPT-4 Analysis tokens (already on the intelligence doc)
       gpt4Analysis: {
         totalTokens: intelligence?.gpt4Analysis?.tokensUsed || 0,
-        enabled: !!intelligence?.gpt4Analysis?.enabled
+        enabled: !!intelligence?.gpt4Analysis?.enabled,
+        model: intelligence?.gpt4Analysis?.modelVersion || null
       }
     };
 

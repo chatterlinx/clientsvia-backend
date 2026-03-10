@@ -14,7 +14,7 @@ class GPT4AnalysisService {
   constructor() {
     this.client = null;
     this.isEnabled = false;
-    this.modelVersion = 'gpt-4-turbo-preview';
+    this.modelVersion = 'gpt-4o';
     this.maxTokens = 4000;
     this.temperature = 0.3;
     
@@ -183,8 +183,9 @@ class GPT4AnalysisService {
    */
   estimateCost(callCount, mode = 'full') {
     const avgTokensPerCall = mode === 'quick' ? 1500 : 3500;
-    const costPerMillionTokens = 10;
-    
+    // gpt-4o pricing: $2.50/1M input, $10/1M output — blended ~$5/1M
+    const costPerMillionTokens = 5;
+
     const totalTokens = callCount * avgTokensPerCall;
     const estimatedCost = (totalTokens / 1000000) * costPerMillionTokens;
 
