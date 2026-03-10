@@ -6038,11 +6038,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         turn: turnNumber,
         data: {
           elapsedMs,
-          thresholdMs: bridgeThresholdMs,
+          thresholdMs: bridgePostGatherDelayMs,
           hardCapMs: bridgeHardCapMs,
           maxRedirectAttempts: bridgeMaxRedirectAttempts,
-          bridgesUsedBefore: bridgesUsed,
-          bridgesUsedAfter: newCount,
+          bridgeTurn: turnNumber,
           lineIdx: idx,
           linePreview: bridgeLine.substring(0, 80),
           reason: 'threshold_exceeded',
@@ -6071,7 +6070,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           isBridge: true,
           bridge: {
             elapsedMs,
-            thresholdMs: bridgeThresholdMs,
+            thresholdMs: bridgePostGatherDelayMs,
             hardCapMs: bridgeHardCapMs
           }
         }
@@ -6114,7 +6113,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                     },
                     latency: {
                       bridgeElapsedMs: elapsedMs,
-                      thresholdMs: bridgeThresholdMs,
+                      thresholdMs: bridgePostGatherDelayMs,
                       hardCapMs: bridgeHardCapMs
                     }
                   }
@@ -6190,7 +6189,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       bridgeMeta: {
         token: token.slice(0, 8),
         elapsedMs,
-        thresholdMs: bridgeThresholdMs,
+        thresholdMs: bridgePostGatherDelayMs,
         outputMode: bridgeOutputMode,
         audioUrl: bridgeAudioUrl || null
       }
