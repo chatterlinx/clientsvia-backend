@@ -135,6 +135,7 @@
     DOM.closeModal.addEventListener('click', closeAnalysisModal);
     DOM.closeSettings.addEventListener('click', closeSettingsModal);
     DOM.copyAllBtn.addEventListener('click', copyAnalysisToClipboard);
+    DOM.exportPdfBtn.addEventListener('click', saveAsPdf);
     DOM.saveSettingsBtn.addEventListener('click', saveSettings);
 
     // Close modal on outside click
@@ -1536,8 +1537,15 @@
     const text = DOM.modalBody.innerText;
     const success = await copyToClipboard(text);
     if (success) {
-      showNotification('Analysis copied to clipboard!', 'success');
+      showNotification('Copied!', 'success');
+    } else {
+      showNotification('Copy failed', 'error');
     }
+  }
+
+  function saveAsPdf() {
+    showNotification('Preparing PDF...', 'info');
+    setTimeout(() => window.print(), 100);
   }
 
   function debounce(func, wait) {
@@ -1554,6 +1562,21 @@
 
   function showNotification(message, type = 'info') {
     console.log(`[${type.toUpperCase()}] ${message}`);
+    // Micro-toast — small text that fades in/out near top-center
+    const existing = document.querySelector('.micro-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `micro-toast micro-toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 1800);
   }
 
   function showLoading() {

@@ -1743,6 +1743,50 @@ input:disabled + .toggle-slider {
   }
 }
 
+/* =============================================================================
+   MICRO TOAST — small acknowledgement text
+   ============================================================================= */
+
+.micro-toast {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.micro-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.micro-toast-success {
+  background: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
+.micro-toast-error {
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
+}
+
+.micro-toast-info {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
 @media (max-width: 768px) {
   .intelligence-header {
     flex-direction: column;
