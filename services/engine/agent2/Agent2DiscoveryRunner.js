@@ -95,7 +95,7 @@ const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
 const { ScrabEngine } = require('../../ScrabEngine');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
-const { DEFAULT_LLM_AGENT_SETTINGS, composeSystemPrompt } = require('../../../config/llmAgentDefaults');
+const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
 const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
 const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry } = require('../../streaming/ClaudeStreamingService');
@@ -587,6 +587,176 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       turn,
     });
     return null; // Graceful degradation to Tier 3 — deterministic paths will handle it
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// LLM AGENT — Turn-1 Intake (Entity Extraction + Warm Acknowledgment)
+// ────────────────────────────────────────────────────────────────────────────
+// On turn 1, sends raw caller speech to Claude for structured JSON extraction.
+// Returns extracted entities + warm response text + nextLane recommendation.
+// On failure: returns null → caller falls through to normal pipeline.
+//
+// CRITICAL: This function does NOT write state. It returns structured data.
+// The caller (run()) is responsible for writing state to match ScrabEngine format.
+// ────────────────────────────────────────────────────────────────────────────
+
+async function callLLMAgentForIntake({ company, input, channel, turn, emit, callSid, bridgeToken, redis }) {
+  const FUNC_TAG = '[LLM_INTAKE]';
+
+  try {
+    // ── Load & merge config ──────────────────────────────────────────────
+    const savedLlm = company?.aiAgentSettings?.llmAgent || {};
+    const llmConfig = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, savedLlm);
+
+    const savedIntake = savedLlm?.intake || {};
+    const intakeConfig = deepMergeLLMAgent(DEFAULT_INTAKE_SETTINGS, savedIntake);
+
+    // ── Gate: LLM Agent must be enabled ──────────────────────────────────
+    if (!llmConfig.enabled) {
+      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'llm_agent_disabled', turn });
+      return null;
+    }
+
+    // ── Gate: Intake must be enabled ─────────────────────────────────────
+    if (!intakeConfig.enabled) {
+      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'intake_disabled', turn });
+      return null;
+    }
+
+    // ── Gate: Must be correct turn ───────────────────────────────────────
+    const triggerTurn = intakeConfig.triggerOnTurn || 1;
+    if (turn !== triggerTurn) {
+      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'wrong_turn', turn, expected: triggerTurn });
+      return null;
+    }
+
+    // ── Gate: API key ────────────────────────────────────────────────────
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      logger.warn(`${FUNC_TAG} ANTHROPIC_API_KEY not set — skipping intake`);
+      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'missing_api_key', turn });
+      return null;
+    }
+
+    // ── Gate: Non-empty input ────────────────────────────────────────────
+    if (!input || input.trim().length < 3) {
+      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'input_too_short', turn, inputLength: (input || '').length });
+      return null;
+    }
+
+    // ── Build system prompt ──────────────────────────────────────────────
+    const systemPrompt = composeIntakeSystemPrompt(llmConfig, intakeConfig, channel || 'call');
+
+    const modelId = intakeConfig.model?.modelId || llmConfig.model?.modelId || 'claude-haiku-4-5-20251001';
+    const temperature = intakeConfig.model?.temperature ?? 0.3;
+    const maxTokens = intakeConfig.model?.maxTokens || 600;
+
+    emit('A2_LLM_AGENT_CALLED', {
+      mode: 'TIER_2_INTAKE',
+      model: modelId,
+      inputPreview: clip(input, 80),
+      turn,
+    });
+
+    // ── Call Claude via streaming infrastructure ─────────────────────────
+    const result = await streamWithHeartbeat({
+      apiKey,
+      model: modelId,
+      maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: input }],  // Turn 1 = no history
+      callSid,
+      turn,
+      token: bridgeToken,
+      redis,
+      emit,
+    });
+
+    // ── Handle streaming failure ─────────────────────────────────────────
+    if (!result?.response) {
+      logger.warn(`${FUNC_TAG} Streaming returned no response`, {
+        failureReason: result?.failureReason,
+        latencyMs: result?.latencyMs,
+      });
+      emit('A2_LLM_AGENT_ERROR', {
+        mode: 'TIER_2_INTAKE',
+        failureReason: result?.failureReason,
+        latencyMs: result?.latencyMs,
+      });
+      return null;
+    }
+
+    // ── Parse JSON response ──────────────────────────────────────────────
+    let parsed = null;
+    try {
+      parsed = JSON.parse(result.response);
+    } catch (_jsonErr) {
+      // Fallback: extract JSON from markdown code blocks or surrounding text
+      const jsonMatch = result.response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch (_innerErr) { /* JSON extraction failed completely */ }
+      }
+    }
+
+    if (!parsed || !parsed.responseText) {
+      logger.warn(`${FUNC_TAG} Failed to parse JSON from LLM response`, {
+        responsePreview: clip(result.response, 200),
+        callSid, turn
+      });
+      emit('A2_LLM_INTAKE_PARSE_FAILED', {
+        responsePreview: clip(result.response, 120),
+        latencyMs: result.latencyMs,
+      });
+      // Use raw response as acknowledgment with empty extraction
+      parsed = {
+        responseText: result.response.replace(/[{}"\\]/g, '').trim().substring(0, 300),
+        extraction: {},
+        confidence: {},
+        nextLane: 'DISCOVERY_CONTINUE',
+        doNotReask: []
+      };
+    }
+
+    // ── Validate and sanitize ────────────────────────────────────────────
+    const VALID_LANES = ['BOOKING_HANDOFF', 'DISCOVERY_CONTINUE', 'TRANSFER', 'UNKNOWN'];
+    if (!VALID_LANES.includes(parsed.nextLane)) {
+      parsed.nextLane = 'DISCOVERY_CONTINUE';
+    }
+    if (!Array.isArray(parsed.doNotReask)) {
+      parsed.doNotReask = [];
+    }
+    parsed.extraction = parsed.extraction || {};
+    parsed.confidence = parsed.confidence || {};
+
+    // ── Emit success ─────────────────────────────────────────────────────
+    emit('A2_LLM_AGENT_RESPONSE', {
+      mode: 'TIER_2_INTAKE',
+      latencyMs: result.latencyMs,
+      model: modelId,
+      tokensInput: result.tokensUsed?.input || 0,
+      tokensOutput: result.tokensUsed?.output || 0,
+      responsePreview: clip(parsed.responseText, 120),
+      wasPartial: result.wasPartial,
+      nextLane: parsed.nextLane,
+      entitiesExtracted: Object.keys(parsed.extraction).filter(k => parsed.extraction[k] != null).length,
+      doNotReaskCount: parsed.doNotReask.length,
+    });
+
+    return {
+      ...parsed,
+      tokensUsed: result.tokensUsed || { input: 0, output: 0 },
+      latencyMs: result.latencyMs,
+      wasPartial: result.wasPartial,
+    };
+
+  } catch (error) {
+    logger.error(`${FUNC_TAG} Intake call failed`, { error: error.message, callSid, turn });
+    emit('A2_LLM_AGENT_ERROR', { mode: 'TIER_2_INTAKE', error: error.message });
+    return null;
   }
 }
 
@@ -1098,6 +1268,189 @@ class Agent2DiscoveryRunner {
     }
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // TURN-1 LLM INTAKE — Structured Entity Extraction (before ScrabEngine)
+    // ══════════════════════════════════════════════════════════════════════════
+    // On turn 1, if LLM Intake is enabled, bypass ScrabEngine and triggers.
+    // Send raw speech to Claude for entity extraction + warm acknowledgment.
+    // Extracted entities are written to the SAME state paths ScrabEngine uses,
+    // so turn 2+ sees pre-filled slots and does not re-ask.
+    //
+    // On failure: falls through to normal pipeline (ScrabEngine → triggers → LLM).
+    // ══════════════════════════════════════════════════════════════════════════
+    if (turn === 1) {
+      const intakeResult = await callLLMAgentForIntake({
+        company,
+        input,
+        channel: 'call',
+        turn,
+        emit,
+        callSid,
+        bridgeToken,
+        redis,
+      });
+
+      if (intakeResult?.responseText) {
+        // ── SUCCESS: Write extracted entities into ScrabEngine state format ──
+        const ext = intakeResult.extraction || {};
+        const conf = intakeResult.confidence || {};
+
+        // Load intake config for confidence thresholds
+        const savedIntake = company?.aiAgentSettings?.llmAgent?.intake || {};
+        const intakeConf = deepMergeLLMAgent(DEFAULT_INTAKE_SETTINGS, savedIntake);
+        const thresholds = intakeConf.confidence || {};
+
+        // Build ScrabEngine-compatible entity structure
+        const intakeEntities = {};
+        const intakeHandoff = {};
+
+        if (ext.firstName && (conf.firstName || 0) >= (thresholds.nameThreshold || 0.70)) {
+          intakeEntities.firstName = ext.firstName;
+          intakeHandoff.firstName = ext.firstName;
+          intakeHandoff._firstNameMeta = { source: 'llm_intake', confidence: conf.firstName };
+        }
+        if (ext.lastName) {
+          intakeEntities.lastName = ext.lastName;
+          intakeHandoff.lastName = ext.lastName;
+          intakeHandoff._lastNameMeta = { source: 'llm_intake', confidence: conf.lastName };
+        }
+        if (ext.firstName && ext.lastName) {
+          intakeEntities.fullName = `${ext.firstName} ${ext.lastName}`.trim();
+        } else if (ext.firstName) {
+          intakeEntities.fullName = ext.firstName;
+        }
+        if (ext.phone && (conf.phone || 0) >= (thresholds.phoneThreshold || 0.80)) {
+          intakeEntities.phone = ext.phone;
+          intakeHandoff.phone = ext.phone;
+        }
+        if (ext.email) {
+          intakeEntities.email = ext.email;
+          intakeHandoff.email = ext.email;
+        }
+        if (ext.address && (conf.address || 0) >= (thresholds.addressThreshold || 0.60)) {
+          intakeEntities.address = ext.address;
+          intakeHandoff.address = ext.address;
+        }
+
+        // Write to ScrabEngine state paths (so turn 2+ sees pre-filled data)
+        nextState.agent2.scrabEngine = nextState.agent2.scrabEngine || {};
+        nextState.agent2.scrabEngine.entities = intakeEntities;
+        nextState.agent2.scrabEngine.handoffEntities = intakeHandoff;
+        nextState.agent2.scrabEngine.rawText = input;
+        nextState.agent2.scrabEngine.normalizedText = input;
+
+        // Write name metadata (matches ScrabEngine name confidence gate pattern)
+        const nameConfidence = conf.firstName || 0;
+        const NAME_CONFIDENCE_THRESHOLD = 0.70;
+        const nameIsSpeakable = nameConfidence >= NAME_CONFIDENCE_THRESHOLD;
+
+        if (ext.firstName) {
+          nextState.agent2.scrabEngine.tentativeFirstName = ext.firstName;
+          nextState.agent2.scrabEngine.firstNameConfidence = nameConfidence;
+          nextState.agent2.scrabEngine.firstNameSpeakable = nameIsSpeakable;
+
+          if (nameIsSpeakable) {
+            nextState.callerName = ext.firstName;
+            callerName = ext.firstName;
+          }
+        }
+
+        // Write callContext (matches V131 structured call context format)
+        nextState.agent2.callContext = {
+          caller: {
+            firstName: ext.firstName || null,
+            firstNameConfidence: conf.firstName || 0,
+            speakable: nameIsSpeakable
+          },
+          issue: {
+            summary: ext.callReason || null,
+            rawInput: input,
+            system: null,
+            location: ext.address || null,
+            risk: ext.urgency === 'emergency' ? 'emergency' : null
+          },
+          urgency: {
+            level: ext.urgency || 'normal',
+            sameDayRequested: ext.sameDayRequested || false,
+            reason: ext.urgency === 'high' || ext.urgency === 'emergency' ? 'caller_stated' : null
+          },
+          intent: {
+            primary: ext.callReason || null,
+            source: 'llm_intake'
+          },
+          questionsAsked: [],
+          questionsAnswered: [],
+          discoveryComplete: false
+        };
+
+        // Write intake-specific state (for turn 2+ to reference)
+        nextState.agent2.discovery.lastPath = 'LLM_INTAKE_TURN_1';
+        nextState.agent2.discovery.intakeResult = {
+          nextLane: intakeResult.nextLane,
+          doNotReask: intakeResult.doNotReask || [],
+          technicianMentioned: ext.technicianMentioned || null,
+          priorVisit: ext.priorVisit,
+          extractionSummary: Object.keys(ext).filter(k => ext[k] != null),
+          latencyMs: intakeResult.latencyMs,
+          wasPartial: intakeResult.wasPartial,
+        };
+        nextState.agent2.discovery.llmTurnsThisCall = 1;
+
+        // Write to capturedReason slot if call reason was extracted
+        if (ext.callReason) {
+          nextState.plainSlots = nextState.plainSlots || {};
+          nextState.plainSlots.call_reason_detail = ext.callReason;
+        }
+
+        // ── Build response and return ─────────────────────────────────────
+        const response = intakeResult.responseText;
+
+        emit('A2_PATH_SELECTED', {
+          path: 'LLM_INTAKE_TURN_1',
+          reason: 'Turn-1 LLM Intake extracted entities and generated acknowledgment',
+          _123rpTier: RESPONSE_TIER.TIER_2,
+          _123rpLabel: 'LLM_AGENT',
+          model: 'claude',
+          latencyMs: intakeResult.latencyMs,
+          tokensInput: intakeResult.tokensUsed?.input,
+          tokensOutput: intakeResult.tokensUsed?.output,
+          nextLane: intakeResult.nextLane,
+          entitiesExtracted: Object.keys(ext).filter(k => ext[k] != null).length,
+        });
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          'agent2.llmAgent.intake',
+          null,
+          response,
+          null,
+          '123RP Tier 2: LLM Intake — Turn-1 entity extraction + acknowledgment'
+        ));
+        emit('A2_RESPONSE_READY', {
+          path: 'LLM_INTAKE_TURN_1',
+          responsePreview: clip(response, 120),
+          responseLength: response.length,
+          hasAudio: false,
+          source: 'llmAgent.intake',
+          usedCallerName: !!(callerName && response.toLowerCase().includes(callerName.toLowerCase())),
+          isLLMAgent: true,
+          isIntake: true,
+          latencyMs: intakeResult.latencyMs,
+        });
+
+        return {
+          response,
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState,
+          _123rp: build123rpMeta('LLM_INTAKE_TURN_1')
+        };
+      }
+
+      // Intake returned null or no responseText — fall through to normal pipeline
+      emit('A2_INTAKE_FALLTHROUGH', {
+        reason: 'Intake disabled, gated, or failed — proceeding to normal pipeline',
+        turn,
+      });
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 123RP: FOLLOW-UP CONSENT GATE — Raw from Gather (before ScrabEngine)

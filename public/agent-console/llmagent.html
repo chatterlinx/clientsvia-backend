@@ -1355,6 +1355,14 @@
             </svg>
             Behavior
           </button>
+          <!-- First Turn Intake -->
+          <button class="config-tab" data-config-tab="intake" type="button">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1v6M8 7l3-3M8 7L5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 10v2a2 2 0 002 2h6a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            First Turn
+          </button>
         </div>
 
         <div class="config-content">
@@ -1672,6 +1680,123 @@
               </div>
             </div>
             <p class="section-hint">Manage behavior rule cards in the center panel. Each rule is a structured instruction composed into the AI agent's system prompt.</p>
+          </div>
+
+          <!-- ══ First Turn Intake ═════════════════════════════════════ -->
+          <div class="config-section" id="config-intake">
+            <div class="section-info-box">
+              <div class="section-info-icon">
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 1v6M8 7l3-3M8 7L5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3 10v2a2 2 0 002 2h6a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="section-info-text">
+                <strong>First Turn Intake</strong> sends the caller's first utterance directly to Claude for entity extraction. Extracts name, phone, address, call reason, and urgency — then generates a warm acknowledgment. Turn 2+ proceeds normally with pre-filled slots.
+              </div>
+            </div>
+
+            <!-- Intake Enable -->
+            <div class="config-field">
+              <div class="config-field-header">
+                <label for="intake-enabled">Enable First Turn Intake</label>
+              </div>
+              <div class="config-field-control">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="intake-enabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <p class="config-field-hint">When enabled, turn 1 bypasses ScrabEngine and triggers. Requires LLM Agent to also be enabled.</p>
+            </div>
+
+            <!-- Extraction Targets -->
+            <div class="config-field-group">
+              <div class="config-field-group-label">Extraction Targets</div>
+
+              <div class="config-field inline">
+                <label for="intake-extract-name">Name (first + last)</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-name" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="config-field inline">
+                <label for="intake-extract-phone">Phone number</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-phone" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="config-field inline">
+                <label for="intake-extract-address">Address / location</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-address" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="config-field inline">
+                <label for="intake-extract-reason">Call reason</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-reason" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="config-field inline">
+                <label for="intake-extract-urgency">Urgency detection</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-urgency" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="config-field inline">
+                <label for="intake-extract-technician">Technician mentioned</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-technician" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="config-field inline">
+                <label for="intake-extract-priorvisit">Prior visit</label>
+                <label class="toggle-switch"><input type="checkbox" id="intake-extract-priorvisit" checked><span class="toggle-slider"></span></label>
+              </div>
+            </div>
+
+            <!-- Confidence Thresholds -->
+            <div class="config-field-group">
+              <div class="config-field-group-label">Confidence Thresholds</div>
+              <p class="section-hint">Minimum confidence score (0.0 - 1.0) for accepting extracted values. Below threshold, values are discarded.</p>
+
+              <div class="config-field">
+                <label>Name Threshold</label>
+                <div class="slider-row">
+                  <input type="range" id="intake-conf-name" min="0.3" max="1.0" step="0.05" value="0.70">
+                  <span class="slider-value" id="intake-conf-name-value">0.70</span>
+                </div>
+              </div>
+              <div class="config-field">
+                <label>Phone Threshold</label>
+                <div class="slider-row">
+                  <input type="range" id="intake-conf-phone" min="0.3" max="1.0" step="0.05" value="0.80">
+                  <span class="slider-value" id="intake-conf-phone-value">0.80</span>
+                </div>
+              </div>
+              <div class="config-field">
+                <label>Address Threshold</label>
+                <div class="slider-row">
+                  <input type="range" id="intake-conf-address" min="0.3" max="1.0" step="0.05" value="0.60">
+                  <span class="slider-value" id="intake-conf-address-value">0.60</span>
+                </div>
+              </div>
+              <div class="config-field">
+                <label>Reason Threshold</label>
+                <div class="slider-row">
+                  <input type="range" id="intake-conf-reason" min="0.3" max="1.0" step="0.05" value="0.50">
+                  <span class="slider-value" id="intake-conf-reason-value">0.50</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Model Override -->
+            <div class="config-field-group">
+              <div class="config-field-group-label">Model (Optional Override)</div>
+              <p class="section-hint">Uses the main LLM Agent model by default. Override here for intake-specific tuning.</p>
+              <div class="config-field">
+                <label for="intake-model-select">Model</label>
+                <select id="intake-model-select" class="config-select">
+                  <option value="">Use main model</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <label>Temperature</label>
+                <div class="slider-row">
+                  <input type="range" id="intake-temperature" min="0" max="1" step="0.1" value="0.3">
+                  <span class="slider-value" id="intake-temperature-value">0.3</span>
+                </div>
+              </div>
+            </div>
           </div>
 
         </div>

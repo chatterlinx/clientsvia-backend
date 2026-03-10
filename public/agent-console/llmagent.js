@@ -253,6 +253,7 @@ function renderAll() {
   renderModelPanel();
   renderActivationPanel();
   renderGuardrailsPanel();
+  renderIntakePanel();
   renderKnowledgeCards();
   seedDefaultBehaviorRules();
   renderBehaviorRules();
@@ -376,6 +377,50 @@ function renderCustomRules() {
       markDirty();
     });
   });
+}
+
+// ── First Turn Intake Panel ──────────────────────────────────────────────
+
+function renderIntakePanel() {
+  const c = state.config;
+  if (!c) return;
+
+  const intake = c.intake || {};
+
+  setChecked('intake-enabled', intake.enabled ?? false);
+
+  // Extraction targets
+  const extract = intake.extract || {};
+  setChecked('intake-extract-name', extract.firstName ?? true);
+  setChecked('intake-extract-phone', extract.phone ?? true);
+  setChecked('intake-extract-address', extract.address ?? true);
+  setChecked('intake-extract-reason', extract.callReason ?? true);
+  setChecked('intake-extract-urgency', extract.urgency ?? true);
+  setChecked('intake-extract-technician', extract.technicianMentioned ?? true);
+  setChecked('intake-extract-priorvisit', extract.priorVisit ?? true);
+
+  // Confidence thresholds
+  const conf = intake.confidence || {};
+  setSlider('intake-conf-name', 'intake-conf-name-value', conf.nameThreshold ?? 0.70);
+  setSlider('intake-conf-phone', 'intake-conf-phone-value', conf.phoneThreshold ?? 0.80);
+  setSlider('intake-conf-address', 'intake-conf-address-value', conf.addressThreshold ?? 0.60);
+  setSlider('intake-conf-reason', 'intake-conf-reason-value', conf.reasonThreshold ?? 0.50);
+
+  // Model override
+  const modelSelect = document.getElementById('intake-model-select');
+  if (modelSelect) {
+    const models = state.availableModels || [];
+    while (modelSelect.options.length > 1) modelSelect.remove(1);
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = `${m.label} — ${m.description}`;
+      modelSelect.appendChild(opt);
+    }
+    modelSelect.value = intake.model?.modelId || '';
+  }
+
+  setSlider('intake-temperature', 'intake-temperature-value', intake.model?.temperature ?? 0.3);
 }
 
 // ── Knowledge Cards ──────────────────────────────────────────────────────
@@ -1005,6 +1050,80 @@ function setupEventListeners() {
     state.config.handoff.escalationMessage = e.target.value;
     markDirty();
     renderPromptPreview();
+  });
+
+  // ── First Turn Intake listeners ──
+  listenToggle('intake-enabled', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    state.config.intake.enabled = v;
+  });
+  listenToggle('intake-extract-name', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.firstName = v;
+    state.config.intake.extract.lastName = v;
+  });
+  listenToggle('intake-extract-phone', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.phone = v;
+  });
+  listenToggle('intake-extract-address', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.address = v;
+  });
+  listenToggle('intake-extract-reason', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.callReason = v;
+  });
+  listenToggle('intake-extract-urgency', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.urgency = v;
+    state.config.intake.extract.sameDayRequested = v;
+  });
+  listenToggle('intake-extract-technician', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.technicianMentioned = v;
+  });
+  listenToggle('intake-extract-priorvisit', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.extract) state.config.intake.extract = {};
+    state.config.intake.extract.priorVisit = v;
+  });
+  listenSlider('intake-conf-name', 'intake-conf-name-value', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.confidence) state.config.intake.confidence = {};
+    state.config.intake.confidence.nameThreshold = parseFloat(v);
+  });
+  listenSlider('intake-conf-phone', 'intake-conf-phone-value', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.confidence) state.config.intake.confidence = {};
+    state.config.intake.confidence.phoneThreshold = parseFloat(v);
+  });
+  listenSlider('intake-conf-address', 'intake-conf-address-value', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.confidence) state.config.intake.confidence = {};
+    state.config.intake.confidence.addressThreshold = parseFloat(v);
+  });
+  listenSlider('intake-conf-reason', 'intake-conf-reason-value', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.confidence) state.config.intake.confidence = {};
+    state.config.intake.confidence.reasonThreshold = parseFloat(v);
+  });
+  listen('intake-model-select', 'change', (e) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.model) state.config.intake.model = {};
+    state.config.intake.model.modelId = e.target.value || undefined;
+    markDirty();
+  });
+  listenSlider('intake-temperature', 'intake-temperature-value', (v) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.model) state.config.intake.model = {};
+    state.config.intake.model.temperature = parseFloat(v);
   });
 
   // ── Knowledge card buttons ──

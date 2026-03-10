@@ -52,6 +52,7 @@ const PATH_TO_TIER = {
   // Tier 2: LLM Agent (AI intelligence — NOT fallback)
   'LLM_AGENT_NO_MATCH':     RESPONSE_TIER.TIER_2,
   'FOLLOWUP_LLM_AGENT':     RESPONSE_TIER.TIER_2,
+  'LLM_INTAKE_TURN_1':      RESPONSE_TIER.TIER_2,
 
   // Tier 3: Fallback (safety net)
   'FALLBACK_REASON_CAPTURED': RESPONSE_TIER.TIER_3,
