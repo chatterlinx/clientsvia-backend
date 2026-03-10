@@ -237,16 +237,20 @@
   }
 
   async function loadCallAnalysis(callSid) {
+    console.log('[loadCallAnalysis] ▶ Fetching GET /api/call-intelligence/' + callSid);
     try {
       const data = await apiCall(`/api/call-intelligence/${callSid}`);
+      console.log('[loadCallAnalysis] ✅ Received — status:', data?.intelligence?.status, 'gpt4Enabled:', data?.intelligence?.gpt4Analysis?.enabled);
       return data.intelligence;
     } catch (error) {
-      console.error('Failed to load analysis:', error);
+      console.error('[loadCallAnalysis] ❌ Failed:', error.message);
       return null;
     }
   }
 
   async function analyzeCall(callSid) {
+    console.log('[analyzeCall] ▶ Starting analysis for:', callSid);
+    console.log('[analyzeCall] Params — useGPT4:', state.gpt4Enabled, 'mode:', state.analysisMode);
     try {
       showNotification('Analyzing call...', 'info');
 
@@ -258,10 +262,12 @@
         })
       });
 
+      console.log('[analyzeCall] ✅ API responded — success:', data?.success, 'has intelligence:', !!data?.intelligence);
       showNotification('Analysis complete!', 'success');
       return data.intelligence;
     } catch (error) {
-      showNotification('Analysis failed', 'error');
+      console.error('[analyzeCall] ❌ Failed:', error.message);
+      showNotification('Analysis failed: ' + error.message, 'error');
       throw error;
     }
   }
@@ -479,6 +485,7 @@
   // =============================================================================
 
   async function openAnalysisModal(callSid) {
+    console.log('[openAnalysisModal] ▶ Opening report for callSid:', callSid);
     state.selectedCallSid = callSid;
 
     DOM.modalBody.innerHTML = `
@@ -492,9 +499,10 @@
     document.body.style.overflow = 'hidden';
 
     let intelligence = await loadCallAnalysis(callSid);
+    console.log('[openAnalysisModal] loadCallAnalysis result:', intelligence ? 'has data (status: ' + intelligence.status + ')' : 'null');
 
     if (!intelligence) {
-      console.log('[INFO] No existing analysis found — showing on-demand button');
+      console.log('[openAnalysisModal] ⚠️ No existing analysis — showing on-demand button');
       DOM.modalBody.innerHTML = `
         <div class="loading-container" style="padding: 4rem 2rem;">
           <p style="font-size: 1.125rem; color: #374151; margin-bottom: 0.5rem;">No analysis yet for this call.</p>
@@ -514,6 +522,9 @@
   }
 
   function renderAnalysisModal(intelligence) {
+    console.log('[renderAnalysisModal] ▶ Rendering report — callSid:', intelligence.callSid, 'status:', intelligence.status);
+    console.log('[renderAnalysisModal] gpt4Analysis:', JSON.stringify(intelligence.gpt4Analysis || {}));
+    console.log('[renderAnalysisModal] tokenUsage:', JSON.stringify(intelligence.tokenUsage || {}));
     const statusInfo = getStatusInfo(intelligence.status);
     const needsGpt4 = !intelligence.gpt4Analysis?.enabled;
 
@@ -1608,9 +1619,23 @@
   // =============================================================================
 
   window.analyzeCallNow = async function(callSid) {
-    const intelligence = await analyzeCall(callSid);
-    if (intelligence) {
-      renderAnalysisModal(intelligence);
+    console.log('[GPT4-ANALYZE] ▶ Button clicked — callSid:', callSid);
+    try {
+      console.log('[GPT4-ANALYZE] 📡 Calling POST /api/call-intelligence/analyze/' + callSid);
+      console.log('[GPT4-ANALYZE] State — gpt4Enabled:', state.gpt4Enabled, 'analysisMode:', state.analysisMode);
+      const intelligence = await analyzeCall(callSid);
+      console.log('[GPT4-ANALYZE] ✅ analyzeCall returned:', intelligence ? 'success' : 'null');
+      if (intelligence) {
+        console.log('[GPT4-ANALYZE] 🎨 Rendering analysis modal...');
+        renderAnalysisModal(intelligence);
+        console.log('[GPT4-ANALYZE] ✅ Modal rendered successfully');
+      } else {
+        console.warn('[GPT4-ANALYZE] ⚠️ analyzeCall returned null/undefined — nothing to render');
+        showNotification('Analysis returned no data', 'error');
+      }
+    } catch (err) {
+      console.error('[GPT4-ANALYZE] ❌ Error during analysis:', err);
+      showNotification('Analysis failed: ' + err.message, 'error');
     }
   };
 

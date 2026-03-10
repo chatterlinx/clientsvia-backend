@@ -345,6 +345,7 @@ router.post('/analyze/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
     const { useGPT4 = false, mode = 'full', forceReanalyze = false } = req.body;
+    console.log(`[ANALYZE] ▶ POST /analyze/${callSid} — useGPT4: ${useGPT4}, mode: ${mode}, forceReanalyze: ${forceReanalyze}`);
 
     const transcript = await CallTranscriptV2.findOne({ callSid }).lean();
     const callSummary = await CallSummary.findOne({
@@ -396,18 +397,20 @@ router.post('/analyze/:callSid', async (req, res) => {
       });
     }
 
+    console.log(`[ANALYZE] 📊 callTrace built — turns: ${callTrace.turns?.length || 0}, events: ${callTrace.events?.length || 0}`);
     const intelligence = await CallIntelligenceService.analyzeCall(callTrace, {
       useGPT4,
       mode,
       forceReanalyze
     });
+    console.log(`[ANALYZE] ✅ Analysis complete — status: ${intelligence?.status}, issueCount: ${intelligence?.issueCount}`);
 
     res.json({
       success: true,
       intelligence
     });
   } catch (error) {
-    console.error('Error analyzing call:', error);
+    console.error('[ANALYZE] ❌ Error analyzing call:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -422,7 +425,8 @@ router.post('/analyze/:callSid', async (req, res) => {
 router.get('/:callSid', async (req, res) => {
   try {
     const { callSid } = req.params;
-    
+    console.log(`[GET-INTEL] ▶ GET /api/call-intelligence/${callSid}`);
+
     const [intelligence, transcript, summary, session, llmLogs] = await Promise.all([
       CallIntelligenceService.getCallIntelligence(callSid),
       CallTranscriptV2.findOne({ callSid }).lean(),
@@ -438,6 +442,8 @@ router.get('/:callSid', async (req, res) => {
         .select('tier3Result.tokensUsed tier3Result.cost tier3Result.llmModel tier3Result.llmProvider')
         .lean()
     ]);
+
+    console.log(`[GET-INTEL] 📊 Queries done — intelligence: ${!!intelligence}, transcript: ${!!transcript}, summary: ${!!summary}, session: ${!!session}, llmLogs: ${(llmLogs || []).length}`);
 
     const recording = {
       hasRecording: !!summary?.recordingUrl,
@@ -475,6 +481,8 @@ router.get('/:callSid', async (req, res) => {
         enabled: !!intelligence?.gpt4Analysis?.enabled
       }
     };
+
+    console.log(`[GET-INTEL] 🔢 Token usage — Claude: ${tokenUsage.claude.totalTokens}, OpenAI: ${tokenUsage.openai.totalTokens}, GPT4: ${tokenUsage.gpt4Analysis.totalTokens}`);
 
     // If GPT-4 analysis exists, merge callContext, recording & tokens, return
     if (intelligence) {
