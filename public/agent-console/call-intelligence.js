@@ -375,8 +375,8 @@
                 <span class="status-text">${statusInfo.label}</span>
               </div>
               <div class="intelligence-summary">${call.topIssue || 'No issues'}</div>
-              <button class="btn btn-small ${call.status === 'not_analyzed' ? 'btn-primary' : ''} view-analysis-btn" data-callsid="${call.callSid}">
-                ${call.status === 'not_analyzed' ? 'ANALYZE' : 'VIEW REPORT'}
+              <button class="btn btn-small view-analysis-btn" data-callsid="${call.callSid}">
+                VIEW REPORT
               </button>
             </div>
           </td>
