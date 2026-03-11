@@ -68,9 +68,11 @@ const STACK_TRACE_RE = /at\s+\w+\s*\(.*:\d+:\d+\)/;
  */
 function sanitizeForSpeech(text, options = {}) {
   const fallback = options.fallback || SAFE_FALLBACK;
+  const trap = options._trap || null; // MOUSETRAP: optional diagnostic output
 
   // ── Type guard: only strings pass ──────────────────────────────────────
   if (typeof text !== 'string') {
+    if (trap) trap.reason = 'NOT_STRING';
     return fallback;
   }
 
@@ -81,26 +83,31 @@ function sanitizeForSpeech(text, options = {}) {
 
   // ── Length guard ───────────────────────────────────────────────────────
   if (cleaned.length < 2 || cleaned.length > 1000) {
+    if (trap) trap.reason = `LENGTH_${cleaned.length}`;
     return fallback;
   }
 
   // ── Blocklist check ───────────────────────────────────────────────────
   if (BLOCKED_REGEX.test(cleaned)) {
+    if (trap) trap.reason = 'BLOCKED_TERM';
     return fallback;
   }
 
   // ── Heuristic: code-like syntax ───────────────────────────────────────
   if (CODE_SYNTAX_RE.test(cleaned)) {
+    if (trap) trap.reason = 'CODE_SYNTAX';
     return fallback;
   }
 
   // ── Heuristic: JSON-like structures ───────────────────────────────────
   if (JSON_LIKE_RE.test(cleaned)) {
+    if (trap) trap.reason = 'JSON_LIKE';
     return fallback;
   }
 
   // ── Heuristic: stack trace patterns ───────────────────────────────────
   if (STACK_TRACE_RE.test(cleaned)) {
+    if (trap) trap.reason = 'STACK_TRACE';
     return fallback;
   }
 
