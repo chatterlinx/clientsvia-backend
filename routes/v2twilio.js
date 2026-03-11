@@ -414,7 +414,7 @@ async function getRecoveryMessage(company, type = 'audioUnclear') {
   return message || null;
 }
 const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('../utils/textUtils');
-const { sanitizeForSpeech } = require('../utils/sanitizeForSpeech');
+const { sanitizeForSpeech, SAFE_FALLBACK } = require('../utils/sanitizeForSpeech');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // ============================================================================
