@@ -261,9 +261,15 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
 
     // ── VOICE DELIVERY AUDIT ─────────────────────────────────────────────
     // Shows what the caller ACTUALLY heard vs what was intended.
-    // Reads system turns (TWIML_PLAY, TWIML_SAY, TWIML_PAUSE) + bridge
-    // lines to build a complete delivery record for this turn.
+    // Priority: ACTUAL_DELIVERY entries (ground truth from bridge-continue)
+    // are authoritative. Falls back to TWIML_PLAY/TWIML_SAY if no
+    // ACTUAL_DELIVERY exists (non-bridge path, older calls).
     // ─────────────────────────────────────────────────────────────────────
+    const actualDeliveryTurn = turns.find(t =>
+      t.turnNumber === turnNum &&
+      t.speaker === 'system' &&
+      t.kind === 'ACTUAL_DELIVERY'
+    );
     const deliveryTurns = turns.filter(t =>
       t.turnNumber === turnNum &&
       t.speaker === 'system' &&
@@ -274,7 +280,7 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       t.speaker === 'system' &&
       t.sourceKey === 'AGENT2_BRIDGE'
     );
-    if (deliveryTurns.length > 0 || bridgeTurns.length > 0) {
+    if (actualDeliveryTurn || deliveryTurns.length > 0 || bridgeTurns.length > 0) {
       const deliveryEntries = [];
 
       // Bridge lines (played while processing)
@@ -289,26 +295,44 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         });
       }
 
-      // Actual response delivery
-      for (const dt of deliveryTurns) {
-        if (dt.sourceKey === 'AGENT2_BRIDGE') continue; // Already handled above
-        const prov = dt.trace?.provenance || dt.provenance || {};
+      // ── ACTUAL_DELIVERY is ground truth (from bridge-continue) ──────
+      if (actualDeliveryTurn) {
+        const adTrace = actualDeliveryTurn.trace || {};
         deliveryEntries.push({
           type: 'response',
-          text: (dt.text || '').substring(0, 500),
-          voiceProvider: prov.voiceProviderUsed || (dt.kind === 'TWIML_PLAY' ? 'elevenlabs' : 'twilio_say'),
-          twimlVerb: dt.kind === 'TWIML_PLAY' ? 'PLAY' : dt.kind === 'TWIML_PAUSE' ? 'PAUSE' : 'SAY',
-          deliveredVia: prov.deliveredVia || (dt.sourceKey === 'twiml' ? 'direct' : dt.sourceKey || 'unknown'),
-          audioUrl: prov.audioUrl || null,
+          text: (actualDeliveryTurn.text || '').substring(0, 500),
+          voiceProvider: adTrace.voiceProvider || 'unknown',
+          twimlVerb: adTrace.twimlVerb || 'SAY',
+          deliveredVia: adTrace.bridgePath || 'bridge',
+          audioUrl: null,
+          isActualDelivery: true,
         });
+      } else {
+        // Fallback: use TWIML_PLAY/TWIML_SAY entries (non-bridge or older calls)
+        for (const dt of deliveryTurns) {
+          if (dt.sourceKey === 'AGENT2_BRIDGE') continue;
+          const prov = dt.trace?.provenance || dt.provenance || {};
+          deliveryEntries.push({
+            type: 'response',
+            text: (dt.text || '').substring(0, 500),
+            voiceProvider: prov.voiceProviderUsed || (dt.kind === 'TWIML_PLAY' ? 'elevenlabs' : 'twilio_say'),
+            twimlVerb: dt.kind === 'TWIML_PLAY' ? 'PLAY' : dt.kind === 'TWIML_PAUSE' ? 'PAUSE' : 'SAY',
+            deliveredVia: prov.deliveredVia || (dt.sourceKey === 'twiml' ? 'direct' : dt.sourceKey || 'unknown'),
+            audioUrl: prov.audioUrl || null,
+          });
+        }
       }
 
       // Detect mismatch: intended response vs what was delivered
       const intendedText = turnData.agentResponse?.text || '';
       const deliveredResponse = deliveryEntries.find(e => e.type === 'response');
       const deliveredText = deliveredResponse?.text || '';
-      const textMismatch = intendedText && deliveredText &&
-        intendedText.substring(0, 80).toLowerCase() !== deliveredText.substring(0, 80).toLowerCase();
+      // ACTUAL_DELIVERY carries its own mismatch flag (most reliable)
+      const adMismatch = actualDeliveryTurn?.trace?.mismatch;
+      const textMismatch = adMismatch === true || (
+        adMismatch == null && intendedText && deliveredText &&
+        intendedText.substring(0, 80).toLowerCase() !== deliveredText.substring(0, 80).toLowerCase()
+      );
       const voiceMismatch = deliveredResponse?.voiceProvider === 'twilio_say' && deliveredResponse?.twimlVerb === 'SAY';
 
       turnData.voiceDelivery = {
@@ -320,7 +344,9 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         textMismatch,
         voiceMismatch,
         deliveredText: deliveredText.substring(0, 500),
-        intendedText: intendedText.substring(0, 500),
+        intendedText: actualDeliveryTurn?.trace?.intended || intendedText.substring(0, 500),
+        sanitizerReason: actualDeliveryTurn?.trace?.sanitizerReason || null,
+        bridgePath: actualDeliveryTurn?.trace?.bridgePath || null,
       };
     }
 

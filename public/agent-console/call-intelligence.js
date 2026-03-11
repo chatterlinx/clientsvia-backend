@@ -1296,6 +1296,18 @@
                       <span class="detail-label">System Intended:</span>
                       <pre class="code-block intended-text">${turn.voiceDelivery.intendedText || 'N/A'}</pre>
                     </div>
+                    ${turn.voiceDelivery.sanitizerReason ? `
+                      <div class="step-detail">
+                        <span class="detail-label">Blocked By:</span>
+                        <span class="detail-value voice-twilio">Sanitizer: ${turn.voiceDelivery.sanitizerReason}</span>
+                      </div>
+                    ` : ''}
+                    ${turn.voiceDelivery.bridgePath ? `
+                      <div class="step-detail">
+                        <span class="detail-label">Bridge Path:</span>
+                        <span class="detail-value"><code>${turn.voiceDelivery.bridgePath}</code></span>
+                      </div>
+                    ` : ''}
                   ` : ''}
                 </div>
               </div>

@@ -3598,6 +3598,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       // hostHeader, voiceSettings, elevenLabsVoice hoisted above (V-FIX)
       const twiml = new twilio.twiml.VoiceResponse();
+      const _mt_cached = {};
 
       if (cached.audioUrl) {
         twiml.play(cached.audioUrl);
@@ -3608,20 +3609,8 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           twiml.play(synthUrl);
           voiceProviderUsed = 'elevenlabs';
         } else {
-          const _mt1 = {};
-          twiml.say(escapeTwiML(cached.responseText, _mt1));
+          twiml.say(escapeTwiML(cached.responseText, _mt_cached));
           voiceProviderUsed = 'twilio_say';
-          // MOUSETRAP: cached result path
-          if (_mt1.fired && callSid) {
-            try {
-              const CallTranscriptV2 = require('../models/CallTranscriptV2');
-              await CallTranscriptV2.appendTurns(companyID, callSid, [{
-                speaker: 'system', kind: 'MOUSETRAP',
-                text: `SANITIZER_BLOCKED | path:cached_result | reason:${_mt1.reason} | original:${_mt1.originalPreview}`,
-                turnNumber, ts: new Date(), sourceKey: 'mousetrap'
-              }]);
-            } catch (_) {}
-          }
         }
       } else {
         const playUrlMatch = cached.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
@@ -3645,6 +3634,32 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         }
       }
       
+      // ── ACTUAL DELIVERY: record what the caller will actually hear ──────
+      if (callSid) {
+        try {
+          const intended = cached.responseText || cached.agentTurn?.text || '';
+          const actual = _mt_cached.fired ? SAFE_FALLBACK : intended;
+          const verb = (cached.audioUrl || voiceProviderUsed === 'elevenlabs') ? 'PLAY' : 'SAY';
+          const CallTranscriptV2_ad = require('../models/CallTranscriptV2');
+          await CallTranscriptV2_ad.appendTurns(companyID, callSid, [{
+            speaker: 'system',
+            kind: 'ACTUAL_DELIVERY',
+            text: actual,
+            turnNumber,
+            ts: new Date(),
+            sourceKey: 'actual_delivery',
+            trace: {
+              bridgePath: 'cached_result',
+              voiceProvider: voiceProviderUsed,
+              twimlVerb: verb,
+              intended: intended.substring(0, 300),
+              mismatch: actual !== intended,
+              sanitizerReason: _mt_cached.reason || null
+            }
+          }]);
+        } catch (_) {}
+      }
+
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
       twiml.redirect({ method: 'POST' }, listenUrl);
 
@@ -3811,6 +3826,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     // ── FAST PATH: Streaming result ready → deliver immediately ─────────────
     if (streamingResult && !cached?.twimlString) {
       const twiml = new twilio.twiml.VoiceResponse();
+      const _mt_stream = {};
 
       // V-FIX: Attempt ElevenLabs synthesis before falling back to Twilio <Say>
       const synthUrl = await synthesizeForBridge(streamingResult);
@@ -3818,20 +3834,34 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         twiml.play(synthUrl);
         voiceProviderUsed = 'elevenlabs';
       } else {
-        const _mt2 = {};
-        twiml.say(escapeTwiML(streamingResult, _mt2));
+        twiml.say(escapeTwiML(streamingResult, _mt_stream));
         voiceProviderUsed = 'twilio_say';
-        // MOUSETRAP: streaming fast path
-        if (_mt2.fired && callSid) {
-          try {
-            const CallTranscriptV2 = require('../models/CallTranscriptV2');
-            await CallTranscriptV2.appendTurns(companyID, callSid, [{
-              speaker: 'system', kind: 'MOUSETRAP',
-              text: `SANITIZER_BLOCKED | path:streaming_fast | reason:${_mt2.reason} | original:${_mt2.originalPreview}`,
-              turnNumber, ts: new Date(), sourceKey: 'mousetrap'
-            }]);
-          } catch (_) {}
-        }
+      }
+
+      // ── ACTUAL DELIVERY: record what the caller will actually hear ──────
+      if (callSid) {
+        try {
+          const intended = streamingResult;
+          const actual = _mt_stream.fired ? SAFE_FALLBACK : intended;
+          const verb = voiceProviderUsed === 'elevenlabs' ? 'PLAY' : 'SAY';
+          const CallTranscriptV2_ad = require('../models/CallTranscriptV2');
+          await CallTranscriptV2_ad.appendTurns(companyID, callSid, [{
+            speaker: 'system',
+            kind: 'ACTUAL_DELIVERY',
+            text: actual,
+            turnNumber,
+            ts: new Date(),
+            sourceKey: 'actual_delivery',
+            trace: {
+              bridgePath: 'streaming_fast',
+              voiceProvider: voiceProviderUsed,
+              twimlVerb: verb,
+              intended: intended.substring(0, 300),
+              mismatch: actual !== intended,
+              sanitizerReason: _mt_stream.reason || null
+            }
+          }]);
+        } catch (_) {}
       }
 
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
@@ -3934,6 +3964,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       // ── If we have a usable partial response, deliver it ──────────────
       if (partialText) {
         const twiml = new twilio.twiml.VoiceResponse();
+        const _mt_partial = {};
 
         // V-FIX: Attempt ElevenLabs synthesis for partial text
         const synthUrl = await synthesizeForBridge(partialText);
@@ -3941,20 +3972,34 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           twiml.play(synthUrl);
           voiceProviderUsed = 'elevenlabs';
         } else {
-          const _mt3 = {};
-          twiml.say(escapeTwiML(partialText, _mt3));
+          twiml.say(escapeTwiML(partialText, _mt_partial));
           voiceProviderUsed = 'twilio_say';
-          // MOUSETRAP: recovery partial path
-          if (_mt3.fired && callSid) {
-            try {
-              const CallTranscriptV2 = require('../models/CallTranscriptV2');
-              await CallTranscriptV2.appendTurns(companyID, callSid, [{
-                speaker: 'system', kind: 'MOUSETRAP',
-                text: `SANITIZER_BLOCKED | path:recovery_partial | reason:${_mt3.reason} | original:${_mt3.originalPreview}`,
-                turnNumber, ts: new Date(), sourceKey: 'mousetrap'
-              }]);
-            } catch (_) {}
-          }
+        }
+
+        // ── ACTUAL DELIVERY: record what the caller will actually hear ──────
+        if (callSid) {
+          try {
+            const intended = partialText;
+            const actual = _mt_partial.fired ? SAFE_FALLBACK : intended;
+            const verb = voiceProviderUsed === 'elevenlabs' ? 'PLAY' : 'SAY';
+            const CallTranscriptV2_ad = require('../models/CallTranscriptV2');
+            await CallTranscriptV2_ad.appendTurns(companyID, callSid, [{
+              speaker: 'system',
+              kind: 'ACTUAL_DELIVERY',
+              text: actual,
+              turnNumber,
+              ts: new Date(),
+              sourceKey: 'actual_delivery',
+              trace: {
+                bridgePath: 'recovery_partial',
+                voiceProvider: voiceProviderUsed,
+                twimlVerb: verb,
+                intended: intended.substring(0, 300),
+                mismatch: actual !== intended,
+                sanitizerReason: _mt_partial.reason || null
+              }
+            }]);
+          } catch (_) {}
         }
 
         const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
