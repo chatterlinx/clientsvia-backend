@@ -98,7 +98,7 @@ const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings')
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
 const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
 const { buildT3Context, validateT3Context } = require('./TierStateContract');
-const { streamWithHeartbeat, streamWithRetry } = require('../../streaming/ClaudeStreamingService');
+const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
 const { ConversationMemory } = require('../ConversationMemory');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
@@ -719,6 +719,17 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
         nextLane: 'DISCOVERY_CONTINUE',
         doNotReask: []
       };
+    }
+
+    // ── Overwrite streaming result key with clean responseText ──────────
+    // streamWithHeartbeat wrote raw JSON to a2bridge:result. Bridge-continue
+    // reads that key and tries to speak it — sanitizer blocks JSON → fallback.
+    // Overwrite with the parsed responseText so bridge gets speakable text.
+    if (redis && callSid && bridgeToken && parsed.responseText) {
+      try {
+        const rKey = resultKey(callSid, turn, bridgeToken);
+        await redis.set(rKey, parsed.responseText, { EX: 90 });
+      } catch (_) { /* non-fatal */ }
     }
 
     // ── Validate and sanitize ────────────────────────────────────────────
