@@ -94,7 +94,10 @@
   <section class="table-section">
     <div class="table-header">
       <h2>Recent Calls</h2>
-      <span class="call-count" id="call-count">0 calls</span>
+      <div class="table-header-right">
+        <button id="delete-selected-btn" class="btn btn-danger" style="display:none;">🗑 Delete Selected (<span id="selected-count">0</span>)</button>
+        <span class="call-count" id="call-count">0 calls</span>
+      </div>
     </div>
 
     <div class="table-wrapper">

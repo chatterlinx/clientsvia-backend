@@ -27,7 +27,8 @@
     gpt4Enabled: false,
     analysisMode: 'full',
     analysisModel: 'gpt-4o-mini',
-    selectedCallSid: null
+    selectedCallSid: null,
+    selectedCallSids: new Set()
   };
 
   // =============================================================================
@@ -56,6 +57,8 @@
     callsTbody: document.getElementById('calls-tbody'),
     callCount: document.getElementById('call-count'),
     selectAll: document.getElementById('select-all'),
+    deleteSelectedBtn: document.getElementById('delete-selected-btn'),
+    selectedCount: document.getElementById('selected-count'),
 
     // Pagination
     prevPage: document.getElementById('prev-page'),
@@ -126,6 +129,10 @@
     // Pagination
     DOM.prevPage.addEventListener('click', () => changePage(state.currentPage - 1));
     DOM.nextPage.addEventListener('click', () => changePage(state.currentPage + 1));
+
+    // Checkboxes / bulk delete
+    DOM.selectAll.addEventListener('change', handleSelectAll);
+    DOM.deleteSelectedBtn.addEventListener('click', handleDeleteSelected);
 
     // Buttons
     DOM.refreshBtn.addEventListener('click', handleRefresh);
@@ -332,6 +339,12 @@
 
     DOM.callCount.textContent = `${state.calls.length} calls`;
 
+    // Reset selection on re-render
+    state.selectedCallSids.clear();
+    DOM.selectAll.checked = false;
+    DOM.selectAll.indeterminate = false;
+    DOM.deleteSelectedBtn.style.display = 'none';
+
     DOM.callsTbody.innerHTML = state.calls.map(call => {
       const statusInfo = getStatusInfo(call.status);
       const timeAgo = formatTimeAgo(call.analyzedAt);
@@ -401,7 +414,74 @@
     attachCallRowListeners();
   }
 
+  function handleSelectAll(e) {
+    const checked = e.target.checked;
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+      cb.checked = checked;
+      const row = cb.closest('tr');
+      const callSid = row.dataset.callsid;
+      if (checked) {
+        state.selectedCallSids.add(callSid);
+        row.classList.add('row-selected');
+      } else {
+        state.selectedCallSids.delete(callSid);
+        row.classList.remove('row-selected');
+      }
+    });
+    updateSelectionUI();
+  }
+
+  function updateSelectionUI() {
+    const count = state.selectedCallSids.size;
+    const total = document.querySelectorAll('.row-checkbox').length;
+
+    DOM.selectedCount.textContent = count;
+    DOM.deleteSelectedBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+
+    // Sync select-all indeterminate state
+    DOM.selectAll.checked = count > 0 && count === total;
+    DOM.selectAll.indeterminate = count > 0 && count < total;
+  }
+
+  async function handleDeleteSelected() {
+    const callSids = Array.from(state.selectedCallSids);
+    if (callSids.length === 0) return;
+
+    if (!confirm(`Delete ${callSids.length} call record(s)? This cannot be undone.`)) return;
+
+    try {
+      await apiCall(`/api/call-intelligence/company/${state.companyId}/bulk-delete`, {
+        method: 'DELETE',
+        body: JSON.stringify({ callSids })
+      });
+
+      showNotification(`Deleted ${callSids.length} call(s)`, 'success');
+      state.selectedCallSids.clear();
+      DOM.selectAll.checked = false;
+      DOM.selectAll.indeterminate = false;
+      loadCalls();
+    } catch (error) {
+      showNotification('Delete failed: ' + error.message, 'error');
+    }
+  }
+
   function attachCallRowListeners() {
+    // Row checkboxes
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const row = e.target.closest('tr');
+        const callSid = row.dataset.callsid;
+        if (e.target.checked) {
+          state.selectedCallSids.add(callSid);
+          row.classList.add('row-selected');
+        } else {
+          state.selectedCallSids.delete(callSid);
+          row.classList.remove('row-selected');
+        }
+        updateSelectionUI();
+      });
+    });
+
     document.querySelectorAll('.view-analysis-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
