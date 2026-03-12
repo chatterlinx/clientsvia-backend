@@ -5674,9 +5674,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           ? 'triggers'
           : null;
         const isUiOwned = provData?.isFromUiConfig === true || !!inferredUiPath;
-        const isLlmGenerated = runtimeResult?._123rp?.lastPath === 'LLM_INTAKE_TURN_1'
-          || runtimeResult?._123rp?.lastPath === 'LLM_NO_MATCH'
-          || runtimeResult?._123rp?.lastPath === 'FOLLOWUP_LLM_AGENT';
+        const llmPath = runtimeResult?._123rp?.lastPath || '';
+        const isLlmGenerated = llmPath.includes('LLM');
         const provType = isUiOwned ? 'UI_OWNED' : isLlmGenerated ? 'LLM_GENERATED' : 'HARDCODED';
         const uiPath = provData?.uiPath || provData?.configPath || inferredUiPath || null;
 
@@ -5963,9 +5962,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               uiPath = 'LLMSettings.callHandling.recoveryMessages';
             }
             
-            const isLlmGenerated = runtimeResult?._123rp?.lastPath === 'LLM_INTAKE_TURN_1'
-              || runtimeResult?._123rp?.lastPath === 'LLM_NO_MATCH'
-              || runtimeResult?._123rp?.lastPath === 'FOLLOWUP_LLM_AGENT';
+            const llmPath = runtimeResult?._123rp?.lastPath || '';
+            const isLlmGenerated = llmPath.includes('LLM');
             const provType = isUiOwned ? 'UI_OWNED' : isLlmGenerated ? 'LLM_GENERATED' : 'HARDCODED';
 
             return {

@@ -1122,10 +1122,11 @@ router.patch('/:companyId/local-triggers/:ruleId',
         }
       }
 
-      // ── Pre-generate instant audio if text changed (non-blocking) ──────
+      // ── Pre-generate instant audio if text changed or mode switched to standard ──
       const finalText = cleanUpdates.answerText || trigger.answerText;
       const isStandardMode = (cleanUpdates.responseMode || trigger.responseMode) !== 'llm';
-      if (isStandardMode && finalText && finalText.trim() && textChanged) {
+      const needsAudioGen = textChanged || (isStandardMode && cleanUpdates.responseMode);
+      if (isStandardMode && finalText && finalText.trim() && needsAudioGen) {
         (async () => {
           try {
             const company = await v2Company.findById(companyId).lean();
@@ -1133,12 +1134,12 @@ router.patch('/:companyId/local-triggers/:ruleId',
             if (vs?.voiceId) {
               await InstantAudioService.generate({
                 companyId, kind: 'TRIGGER_RESPONSE', text: finalText,
-                company, voiceSettings: vs, force: true
+                company, voiceSettings: vs, force: textChanged
               });
-              logger.info('[CompanyTriggers] Instant audio re-generated after text change', { companyId, ruleId });
+              logger.info('[CompanyTriggers] Instant audio generated for trigger', { companyId, ruleId, reason: textChanged ? 'text_changed' : 'mode_changed' });
             }
           } catch (err) {
-            logger.warn('[CompanyTriggers] Instant audio re-generation failed (non-fatal)', { companyId, ruleId, error: err.message });
+            logger.warn('[CompanyTriggers] Instant audio generation failed (non-fatal)', { companyId, ruleId, error: err.message });
           }
         })();
       }
