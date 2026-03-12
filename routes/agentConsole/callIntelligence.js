@@ -1269,4 +1269,44 @@ router.get('/recording/:recordingSid/audio', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/call-intelligence/company/:companyId/bulk-delete
+ * Delete selected call records (CallSummary + CallIntelligence docs).
+ * Body: { callSids: ['CA...', ...] }
+ */
+router.delete('/company/:companyId/bulk-delete', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { callSids } = req.body;
+
+    if (!Array.isArray(callSids) || callSids.length === 0) {
+      return res.status(400).json({ error: 'callSids array required' });
+    }
+
+    const [summaryResult, intelligenceResult] = await Promise.all([
+      CallSummary.deleteMany({
+        companyId,
+        $or: [
+          { twilioSid: { $in: callSids } },
+          { callId: { $in: callSids } }
+        ]
+      }),
+      CallIntelligence.deleteMany({ companyId, callSid: { $in: callSids } })
+    ]);
+
+    console.log(`[CallIntelligence] Bulk delete for company ${companyId}: ${summaryResult.deletedCount} summaries, ${intelligenceResult.deletedCount} intelligence docs`);
+
+    res.json({
+      success: true,
+      deleted: {
+        summaries: summaryResult.deletedCount,
+        intelligence: intelligenceResult.deletedCount
+      }
+    });
+  } catch (error) {
+    console.error('[CallIntelligence] Bulk delete error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

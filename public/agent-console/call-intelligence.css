@@ -530,6 +530,27 @@ body {
   font-size: 0.75rem;
 }
 
+.btn-danger {
+  background: #EF4444;
+  color: white;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.btn-danger:hover {
+  background: #DC2626;
+}
+
+.row-selected td {
+  background: #FEF2F2 !important;
+}
+
+.table-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .btn-text {
   background: transparent;
   color: #6B7280;
