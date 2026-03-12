@@ -5383,6 +5383,45 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.warn('[V2 RESPOND] Instant audio cache check failed', { error: e.message });
       }
 
+      // ── INSTANT AUDIO: Pre-cached trigger response (disk, fastest path) ──
+      try {
+        const isTriggerHit = runtimeResult?.triggerCard && runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
+        if (!audioUrl && isTriggerHit && responseText) {
+          const InstantAudioService = require('../services/instantAudio/InstantAudioService');
+          const iaStatus = InstantAudioService.getStatus({
+            companyId: companyID,
+            kind: 'TRIGGER_RESPONSE',
+            text: responseText,
+            voiceSettings
+          });
+
+          if (iaStatus.exists) {
+            audioUrl = `${getSecureBaseUrl(req)}${iaStatus.url}`;
+            localVoiceProviderUsed = 'instant_audio_trigger';
+            vd_audioUrlPresent = true;
+            vd_preflightPassed = true;
+
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'INSTANT_AUDIO_TRIGGER_HIT',
+                turn: turnNumber,
+                data: {
+                  triggerCardId: runtimeResult?.triggerCard?.id || null,
+                  triggerCardLabel: runtimeResult?.triggerCard?.label || null,
+                  fileName: iaStatus.fileName,
+                  url: iaStatus.url,
+                  matchSource: runtimeResult?.matchSource || null
+                }
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('[V2 RESPOND] Instant audio trigger cache check failed', { error: e.message });
+      }
+
       try {
         const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
         const agent2AudioUrl = runtimeResult?.audioUrl;
@@ -5635,7 +5674,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           ? 'triggers'
           : null;
         const isUiOwned = provData?.isFromUiConfig === true || !!inferredUiPath;
-        const provType = isUiOwned ? 'UI_OWNED' : 'HARDCODED';
+        const isLlmGenerated = runtimeResult?._123rp?.lastPath === 'LLM_INTAKE_TURN_1'
+          || runtimeResult?._123rp?.lastPath === 'LLM_NO_MATCH'
+          || runtimeResult?._123rp?.lastPath === 'FOLLOWUP_LLM_AGENT';
+        const provType = isUiOwned ? 'UI_OWNED' : isLlmGenerated ? 'LLM_GENERATED' : 'HARDCODED';
         const uiPath = provData?.uiPath || provData?.configPath || inferredUiPath || null;
 
         // Enterprise Trace Pack — minimum viable decision chain + audio/TwiML layer.
@@ -5921,8 +5963,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               uiPath = 'LLMSettings.callHandling.recoveryMessages';
             }
             
+            const isLlmGenerated = runtimeResult?._123rp?.lastPath === 'LLM_INTAKE_TURN_1'
+              || runtimeResult?._123rp?.lastPath === 'LLM_NO_MATCH'
+              || runtimeResult?._123rp?.lastPath === 'FOLLOWUP_LLM_AGENT';
+            const provType = isUiOwned ? 'UI_OWNED' : isLlmGenerated ? 'LLM_GENERATED' : 'HARDCODED';
+
             return {
-              type: isUiOwned ? 'UI_OWNED' : 'HARDCODED',
+              type: provType,
               uiPath,
               matchSource,
               voiceProviderUsed: localVoiceProviderUsed,

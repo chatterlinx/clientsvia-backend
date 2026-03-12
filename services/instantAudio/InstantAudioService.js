@@ -119,8 +119,9 @@ async function generate({ companyId, kind, text, company, voiceSettings, force =
     throw err;
   }
 
-  if (normalizedText.length > 420) {
-    const err = new Error('Text too long for instant audio (max 420 chars)');
+  const maxChars = normalizeKind(kind) === 'TRIGGER_RESPONSE' ? 800 : 420;
+  if (normalizedText.length > maxChars) {
+    const err = new Error(`Text too long for instant audio (max ${maxChars} chars)`);
     err.code = 'TEXT_TOO_LONG';
     throw err;
   }
@@ -156,10 +157,79 @@ function remove({ companyId, kind, text, voiceSettings }) {
   return { ...status, removed: false };
 }
 
+/**
+ * Batch-generate audio for all standard-mode trigger responses.
+ * Skips triggers that already have a valid cached file.
+ * @param {Object} params
+ * @param {string} params.companyId
+ * @param {Array}  params.triggers - array of { ruleId, answerText, responseMode }
+ * @param {Object} params.company
+ * @param {Object} params.voiceSettings
+ * @param {boolean} [params.force=false]
+ * @returns {{ total, generated, skipped, failed, results }}
+ */
+async function generateAllTriggers({ companyId, triggers, company, voiceSettings, force = false }) {
+  const results = [];
+  let generated = 0, skipped = 0, failed = 0;
+
+  const eligible = (triggers || []).filter(t =>
+    t.responseMode !== 'llm' && t.answerText && t.answerText.trim().length > 0
+  );
+
+  for (const t of eligible) {
+    try {
+      const result = await generate({
+        companyId,
+        kind: 'TRIGGER_RESPONSE',
+        text: t.answerText,
+        company,
+        voiceSettings,
+        force
+      });
+      if (result.generated) {
+        generated++;
+      } else {
+        skipped++;
+      }
+      results.push({ ruleId: t.ruleId, ...result });
+    } catch (err) {
+      failed++;
+      results.push({ ruleId: t.ruleId, error: err.message });
+    }
+  }
+
+  return { total: eligible.length, generated, skipped, failed, results };
+}
+
+/**
+ * Remove all cached trigger response audio for a company.
+ * Used when voice settings change (audio must be regenerated with new voice).
+ */
+function purgeCompanyTriggerAudio(companyId) {
+  ensureAudioDir();
+  const safeCompany = `${companyId || ''}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+  if (!safeCompany) return { removed: 0 };
+
+  const prefix = `fd_TRIGGER_RESPONSE_${safeCompany}_`;
+  let removed = 0;
+  try {
+    const files = fs.readdirSync(AUDIO_DIR);
+    for (const f of files) {
+      if (f.startsWith(prefix) && f.endsWith('.mp3')) {
+        fs.unlinkSync(path.join(AUDIO_DIR, f));
+        removed++;
+      }
+    }
+  } catch (_) { /* best-effort */ }
+  return { removed };
+}
+
 module.exports = {
   AUDIO_SUBDIR,
   getStatus,
   generate,
+  generateAllTriggers,
+  purgeCompanyTriggerAudio,
   remove
 };
 

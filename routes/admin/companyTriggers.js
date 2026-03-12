@@ -51,6 +51,7 @@ const TriggerBucket = require('../../models/TriggerBucket');
 const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
 const { resolveAudioUrl } = require('../../services/engine/agent2/TriggerService');
+const InstantAudioService = require('../../services/instantAudio/InstantAudioService');
 
 // Helper to clear Redis cache after company config changes
 async function clearCompanyCache(companyId, context = '') {
@@ -917,6 +918,25 @@ router.post('/:companyId/local-triggers',
         });
       }
 
+      // ── Pre-generate instant audio for trigger response (non-blocking) ────
+      if (responseMode !== 'llm' && answerText && answerText.trim()) {
+        (async () => {
+          try {
+            const company = await v2Company.findById(companyId).lean();
+            const vs = company?.aiAgentSettings?.voiceSettings;
+            if (vs?.voiceId) {
+              await InstantAudioService.generate({
+                companyId, kind: 'TRIGGER_RESPONSE', text: answerText,
+                company, voiceSettings: vs
+              });
+              logger.info('[CompanyTriggers] Instant audio pre-generated for new trigger', { companyId, ruleId });
+            }
+          } catch (err) {
+            logger.warn('[CompanyTriggers] Instant audio pre-generation failed (non-fatal)', { companyId, ruleId, error: err.message });
+          }
+        })();
+      }
+
       logger.info('[CompanyTriggers] Local trigger created', {
         companyId,
         ruleId,
@@ -1100,6 +1120,27 @@ router.patch('/:companyId/local-triggers/:ruleId',
             ruleId
           });
         }
+      }
+
+      // ── Pre-generate instant audio if text changed (non-blocking) ──────
+      const finalText = cleanUpdates.answerText || trigger.answerText;
+      const isStandardMode = (cleanUpdates.responseMode || trigger.responseMode) !== 'llm';
+      if (isStandardMode && finalText && finalText.trim() && textChanged) {
+        (async () => {
+          try {
+            const company = await v2Company.findById(companyId).lean();
+            const vs = company?.aiAgentSettings?.voiceSettings;
+            if (vs?.voiceId) {
+              await InstantAudioService.generate({
+                companyId, kind: 'TRIGGER_RESPONSE', text: finalText,
+                company, voiceSettings: vs, force: true
+              });
+              logger.info('[CompanyTriggers] Instant audio re-generated after text change', { companyId, ruleId });
+            }
+          } catch (err) {
+            logger.warn('[CompanyTriggers] Instant audio re-generation failed (non-fatal)', { companyId, ruleId, error: err.message });
+          }
+        })();
       }
 
       logger.info('[CompanyTriggers] Local trigger updated', {

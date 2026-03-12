@@ -621,6 +621,17 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
 
         logger.debug(`✅ [SAVE-24] Voice settings saved successfully`);
 
+        // Purge pre-cached trigger audio (voice changed → must regenerate)
+        try {
+            const InstantAudioService = require('../../services/instantAudio/InstantAudioService');
+            const purged = InstantAudioService.purgeCompanyTriggerAudio(companyId);
+            if (purged.removed > 0) {
+                logger.info(`[SAVE-24b] Purged ${purged.removed} cached trigger audio files (voice changed)`, { companyId });
+            }
+        } catch (purgeErr) {
+            logger.warn('[SAVE-24b] Trigger audio purge failed (non-fatal)', { error: purgeErr.message });
+        }
+
         // Return safe response (mask API key)
         const safeSettings = { ...newVoiceSettings };
         if (safeSettings.apiKey) {
