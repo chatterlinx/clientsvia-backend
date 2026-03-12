@@ -53,7 +53,9 @@ function voiceFingerprint(voiceSettings = {}) {
     stability: voiceSettings.stability ?? null,
     similarityBoost: voiceSettings.similarityBoost ?? null,
     styleExaggeration: voiceSettings.styleExaggeration ?? null,
-    aiModel: voiceSettings.aiModel || null
+    speakerBoost: voiceSettings.speakerBoost ?? null,
+    aiModel: voiceSettings.aiModel || null,
+    outputFormat: voiceSettings.outputFormat || null
   };
 }
 
@@ -134,9 +136,11 @@ async function generate({ companyId, kind, text, company, voiceSettings, force =
     stability: voiceSettings.stability,
     similarity_boost: voiceSettings.similarityBoost,
     style: voiceSettings.styleExaggeration,
+    use_speaker_boost: voiceSettings.speakerBoost,
     model_id: voiceSettings.aiModel,
-    company,
-    output_format: 'mp3_44100_128'
+    output_format: voiceSettings.outputFormat || 'mp3_44100_128',
+    optimize_streaming_latency: 0, // Best quality for pre-cached files
+    company
   });
 
   fs.writeFileSync(status.filePath, buffer);

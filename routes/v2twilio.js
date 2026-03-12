@@ -2223,16 +2223,20 @@ router.post('/voice', async (req, res) => {
               const ttsStartTime = Date.now();
               const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
               
+              const _vs = company.aiAgentSettings?.voiceSettings || {};
               const buffer = await synthesizeSpeech({
                 text: greetingText,
                 voiceId: elevenLabsVoice,
-                stability: company.aiAgentSettings?.voiceSettings?.stability,
-                similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
-                style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
-                model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
+                stability: _vs.stability,
+                similarity_boost: _vs.similarityBoost,
+                style: _vs.styleExaggeration,
+                use_speaker_boost: _vs.speakerBoost,
+                model_id: _vs.aiModel,
+                output_format: _vs.outputFormat,
+                optimize_streaming_latency: _vs.streamingLatency,
                 company
               });
-              
+
               const ttsTime = Date.now() - ttsStartTime;
               logger.info(`[GREETING] ✅ TTS fallback completed in ${ttsTime}ms`);
               
@@ -2286,16 +2290,20 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {});
           }
           
+          const _vs2 = company.aiAgentSettings?.voiceSettings || {};
           const buffer = await synthesizeSpeech({
             text: greetingText,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentSettings?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
-            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
-            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
+            stability: _vs2.stability,
+            similarity_boost: _vs2.similarityBoost,
+            style: _vs2.styleExaggeration,
+            use_speaker_boost: _vs2.speakerBoost,
+            model_id: _vs2.aiModel,
+            output_format: _vs2.outputFormat,
+            optimize_streaming_latency: _vs2.streamingLatency,
             company
           });
-          
+
           const ttsTime = Date.now() - ttsStartTime;
           logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms (source: ${greetingSource})`);
           
@@ -3026,13 +3034,17 @@ router.post('/handle-speech', async (req, res) => {
       if (elevenLabsVoice) {
         try {
           const retryMsgClean = cleanTextForTTS(stripMarkdown(retryMsg));
+          const _vs3 = company.aiAgentSettings?.voiceSettings || {};
           const buffer = await synthesizeSpeech({
             text: retryMsgClean,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentSettings?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
-            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
-            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
+            stability: _vs3.stability,
+            similarity_boost: _vs3.similarityBoost,
+            style: _vs3.styleExaggeration,
+            use_speaker_boost: _vs3.speakerBoost,
+            model_id: _vs3.aiModel,
+            output_format: _vs3.outputFormat,
+            optimize_streaming_latency: _vs3.streamingLatency,
             company
           });
           
@@ -3141,13 +3153,17 @@ router.post('/handle-speech', async (req, res) => {
       
       if (elevenLabsVoice) {
         try {
+          const _vs4 = company.aiAgentSettings?.voiceSettings || {};
           const buffer = await synthesizeSpeech({
             text: cachedAnswer,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentSettings?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
-            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
-            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
+            stability: _vs4.stability,
+            similarity_boost: _vs4.similarityBoost,
+            style: _vs4.styleExaggeration,
+            use_speaker_boost: _vs4.speakerBoost,
+            model_id: _vs4.aiModel,
+            output_format: _vs4.outputFormat,
+            optimize_streaming_latency: _vs4.streamingLatency,
             company
           });
           
@@ -3256,13 +3272,17 @@ router.post('/handle-speech', async (req, res) => {
         const ttsStartTime = Date.now();
         
         // Direct TTS call without timeout interference
+        const _vsLegacy = company.aiAgentSettings?.voiceSettings || company.aiSettings?.elevenLabs || {};
         const buffer = await synthesizeSpeech({
           text: strippedAnswer,
           voiceId: elevenLabsVoice,
-          stability: company.aiSettings.elevenLabs?.stability,
-          similarity_boost: company.aiSettings.elevenLabs?.similarityBoost,
-          style: company.aiSettings.elevenLabs?.style,
-          model_id: company.aiSettings.elevenLabs?.modelId,
+          stability: _vsLegacy.stability,
+          similarity_boost: _vsLegacy.similarityBoost || _vsLegacy.similarity_boost,
+          style: _vsLegacy.styleExaggeration || _vsLegacy.style,
+          use_speaker_boost: _vsLegacy.speakerBoost,
+          model_id: _vsLegacy.aiModel || _vsLegacy.modelId,
+          output_format: _vsLegacy.outputFormat,
+          optimize_streaming_latency: _vsLegacy.streamingLatency,
           company
         });
         
@@ -3530,7 +3550,10 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             stability: voiceSettings.stability,
             similarity_boost: voiceSettings.similarityBoost,
             style: voiceSettings.styleExaggeration,
+            use_speaker_boost: voiceSettings.speakerBoost,
             model_id: voiceSettings.aiModel,
+            output_format: voiceSettings.outputFormat,
+            optimize_streaming_latency: voiceSettings.streamingLatency,
             company
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('BRIDGE_TTS_TIMEOUT')), timeoutMs))
@@ -5035,7 +5058,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             const buffer = await synthesizeSpeech({
               text: checkinText, voiceId: elevenLabsVoice,
               stability: voiceSettings.stability, similarity_boost: voiceSettings.similarityBoost,
-              style: voiceSettings.styleExaggeration, model_id: voiceSettings.aiModel, company
+              style: voiceSettings.styleExaggeration, use_speaker_boost: voiceSettings.speakerBoost,
+              model_id: voiceSettings.aiModel, output_format: voiceSettings.outputFormat,
+              optimize_streaming_latency: voiceSettings.streamingLatency, company
             });
             const fileName = `patience_checkin_${callSid}_${Date.now()}.mp3`;
             const audioDir = path.join(__dirname, '../public/audio');
@@ -5551,7 +5576,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             stability: voiceSettings.stability,
             similarity_boost: voiceSettings.similarityBoost,
             style: voiceSettings.styleExaggeration,
+            use_speaker_boost: voiceSettings.speakerBoost,
             model_id: voiceSettings.aiModel,
+            output_format: voiceSettings.outputFormat,
+            optimize_streaming_latency: voiceSettings.streamingLatency,
             company
           });
 

@@ -228,11 +228,13 @@ router.post('/:companyId/tts', authenticateJWT, async (req, res) => {
         const audioBuffer = await elevenLabsService.synthesizeSpeech({
             text,
             voiceId,
-            stability: voiceSettings.stability || 0.5,
-            similarity_boost: voiceSettings.similarityBoost || 0.7,
-            style: voiceSettings.style || 0.0,
-            use_speaker_boost: voiceSettings.useSpeakerBoost !== false,
-            model_id: voiceSettings.modelId || 'eleven_turbo_v2_5',
+            stability: voiceSettings.stability,
+            similarity_boost: voiceSettings.similarityBoost,
+            style: voiceSettings.styleExaggeration,
+            use_speaker_boost: voiceSettings.speakerBoost,
+            model_id: voiceSettings.aiModel,
+            output_format: voiceSettings.outputFormat,
+            optimize_streaming_latency: voiceSettings.streamingLatency,
             company
         });
         
