@@ -181,7 +181,7 @@
       id: uid(),
       title: title || '',
       content: '',
-      collapsed: false,
+      collapsed: true,
       order: 0,
       tags: []
     };
@@ -215,12 +215,25 @@
     const tab = getActiveTab();
     if (!tab) return;
     const sec = tab.sections.find(s => s.id === secId);
-    if (sec) {
-      sec.collapsed = !sec.collapsed;
+    if (!sec) return;
+
+    const wasCollapsed = sec.collapsed;
+
+    // Accordion: collapse ALL sections first
+    tab.sections.forEach(s => {
+      s.collapsed = true;
+      const c = document.querySelector(`[data-section-id="${s.id}"]`);
+      if (c) c.classList.add('collapsed');
+    });
+
+    // If clicked section was collapsed, open it; otherwise leave all collapsed
+    if (wasCollapsed) {
+      sec.collapsed = false;
       const card = document.querySelector(`[data-section-id="${secId}"]`);
-      if (card) card.classList.toggle('collapsed', sec.collapsed);
-      markDirty();
+      if (card) card.classList.remove('collapsed');
     }
+
+    markDirty();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -353,6 +366,11 @@
                  value="${escHtml(sec.title)}"
                  placeholder="Section title...">
           <div class="section-header-actions">
+            <button class="section-action-btn toolbar-toggle-btn" title="Toggle format toolbar">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <text x="0" y="10" font-size="9" font-weight="700" font-family="sans-serif" fill="currentColor">Aa</text>
+              </svg>
+            </button>
             <button class="section-action-btn delete-btn" title="Delete section">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M1.5 3H10.5M4 3V2H8V3M3.5 3L4 10H8L8.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -408,6 +426,17 @@
 
     // Collapse toggle
     card.querySelector('.section-collapse-btn').addEventListener('click', () => toggleCollapse(secId));
+
+    // Toolbar toggle (Aa button)
+    const toolbarToggleBtn = card.querySelector('.toolbar-toggle-btn');
+    const formatToolbar    = card.querySelector('.format-toolbar');
+    if (toolbarToggleBtn && formatToolbar) {
+      toolbarToggleBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const visible = formatToolbar.classList.toggle('toolbar-visible');
+        toolbarToggleBtn.classList.toggle('active', visible);
+      });
+    }
 
     // Title input
     const titleInput = card.querySelector('.section-title-input');
@@ -759,12 +788,15 @@
     document.getElementById('btn-import')?.addEventListener('click', triggerImport);
     document.getElementById('import-file-input')?.addEventListener('change', handleImport);
 
-    // Save on unload
+    // Collapse all sections on page exit so user returns to clean list view
     window.addEventListener('beforeunload', () => {
-      if (state.dirty) {
-        clearTimeout(state.saveTimer);
-        apiSave({ tabs: state.tabs, lastActiveTabId: state.activeTabId }).catch(() => {});
-      }
+      clearTimeout(state.saveTimer);
+      // Mark all sections collapsed regardless of current state
+      state.tabs.forEach(tab => {
+        tab.sections.forEach(sec => { sec.collapsed = true; });
+      });
+      // Always save so collapsed state persists
+      apiSave({ tabs: state.tabs, lastActiveTabId: state.activeTabId }).catch(() => {});
     });
   }
 
