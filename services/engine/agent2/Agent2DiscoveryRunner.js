@@ -377,7 +377,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null, sttEmpty = false }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null, sttEmpty = false, bookingDirection = false }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -489,6 +489,22 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       }
       noMatchParts.push('Prioritize acknowledging what happened and addressing their needs directly.');
       noMatchParts.push('=== END RECOVERY CONTEXT ===');
+    }
+
+    // ── LLM Handoff: Booking Direction (llmhandoff) ─────────────────────
+    // When intake classified the caller's intent as BOOKING_HANDOFF, override
+    // the noScheduling guardrail and instruct the LLM to guide toward scheduling.
+    // The LLM's response naturally becomes the confirmation question for PATH 1.5.
+    if (bookingDirection && !sttEmpty) {
+      noMatchParts.push('');
+      noMatchParts.push('=== BOOKING DIRECTION ===');
+      noMatchParts.push('The caller\'s intent has been classified as needing to schedule service.');
+      noMatchParts.push('OVERRIDE: Ignore any earlier instruction that says "NEVER schedule." In this context, your job is to guide the caller toward scheduling.');
+      noMatchParts.push('Your job: Understand their specific need, then naturally ask if they\'d like to get scheduled.');
+      noMatchParts.push('Do NOT book the appointment yourself — just confirm they want to proceed with scheduling.');
+      noMatchParts.push('Keep it conversational: "It sounds like you need [service]. Would you like me to get a technician scheduled to come take a look?"');
+      noMatchParts.push('End with a clear yes/no question about scheduling so the caller can confirm.');
+      noMatchParts.push('=== END BOOKING DIRECTION ===');
     }
 
     const systemPrompt = basePrompt + noMatchParts.join('\n');
@@ -3025,52 +3041,76 @@ class Agent2DiscoveryRunner {
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // PATH 1.5: LLM HANDOFF CONFIRMATION CHECK
+    // PATH 1.5: LLM HANDOFF CONFIRMATION CHECK (llmhandoff)
     // ──────────────────────────────────────────────────────────────────────
     // If LLM asked a service-confirm question last turn, check for YES/NO response.
-    // If YES → set bookingIntentConfirmed, emit event, respond with UI-owned handoff line.
-    // If NO → offer alternative (message/forward if enabled) or continue discovery.
+    // If YES → transition to BOOKING mode (BookingLogicEngine takes over next turn).
+    // If NO → offer alternative or continue discovery.
     // ──────────────────────────────────────────────────────────────────────
     const llmHandoffPending = state?.agent2?.discovery?.llmHandoffPending;
-    
+
     if (llmHandoffPending && typeof llmHandoffPending === 'object') {
       const inputLower = (input || '').toLowerCase().trim();
-      
+
       // Simple YES detection
       const isYes = /^(yes|yeah|yep|sure|ok|okay|absolutely|definitely|please|go ahead|let's do it|sounds good|that works)/.test(inputLower);
       // Simple NO detection
       const isNo = /^(no|nope|nah|not|i don't|i'm not|never mind|cancel|forget|actually)/.test(inputLower);
-      
+
       if (isYes) {
-        // Caller confirmed service intent — hand off to deterministic flow
+        // Caller confirmed service intent — transition to BOOKING mode
         nextState.agent2.discovery.bookingIntentConfirmed = true;
         nextState.agent2.discovery.llmHandoffPending = null; // Clear pending state
         nextState.agent2.discovery.lastPath = 'LLM_HANDOFF_CONFIRMED';
-        
+
+        // ── CRITICAL: Transition to BOOKING mode (llmhandoff) ───────────
+        // Both lane AND sessionMode must be set.
+        // StateStore.persist (line 169) reads state.lane to write sessionMode.
+        // Setting only sessionMode would be overwritten during persist.
+        nextState.lane = 'BOOKING';
+        nextState.sessionMode = 'BOOKING';
+        nextState.consent = {
+          pending: false,
+          given: true,
+          turn,
+          source: 'llm_handoff_confirmed',
+          grantedAt: new Date().toISOString()
+        };
+
+        // Carry booking context from the handoff pending object
+        if (llmHandoffPending.capturedReason && !nextState.plainSlots?.call_reason_detail) {
+          nextState.plainSlots = nextState.plainSlots || {};
+          nextState.plainSlots.call_reason_detail = llmHandoffPending.capturedReason;
+        }
+
         emit('A2_LLM_HANDOFF_CONFIRMED_SERVICE', {
           mode: llmHandoffPending.mode,
           turn,
-          response: 'yes'
+          response: 'yes',
+          transitionTo: 'BOOKING',
+          capturedReason: llmHandoffPending.capturedReason || null,
         });
-        
-        // Use UI-owned response
+
+        // Use UI-owned response (escalation message from handoff config)
         const handoffResponse = llmHandoffPending.yesResponse || "Perfect — I'm going to grab a few details so we can get this scheduled.";
-        
+
         emit('A2_PATH_SELECTED', {
           path: 'LLM_HANDOFF_CONFIRMED',
-          reason: 'Caller confirmed service intent after LLM assist',
+          reason: 'Caller confirmed service intent after LLM assist — transitioning to BOOKING',
           handoffMode: llmHandoffPending.mode,
-          bookingIntentConfirmed: true
+          bookingIntentConfirmed: true,
+          transitionTo: 'BOOKING',
         });
-        
+
         emit('A2_RESPONSE_READY', {
           path: 'LLM_HANDOFF_CONFIRMED',
           responsePreview: clip(handoffResponse, 120),
           responseLength: handoffResponse.length,
           hasAudio: false,
-          source: 'llmFallback.handoff.confirmService.yesResponse'
+          source: 'llmHandoff.confirmService.yesResponse',
+          transitionTo: 'BOOKING',
         });
-        
+
         return {
           response: handoffResponse,
           matchSource: 'AGENT2_DISCOVERY',
@@ -4439,6 +4479,14 @@ class Agent2DiscoveryRunner {
       // It does NOT persist — only fires again if NEXT turn also misses.
       // If disabled/failed → falls through to TIER 3 (Fallback).
       // ────────────────────────────────────────────────────────────────
+
+      // ── LLM Handoff: Compute booking direction from intake (llmhandoff) ──
+      // If Turn-1 intake classified nextLane as BOOKING_HANDOFF, tell the LLM
+      // to guide toward scheduling. This enables the handoff detection below.
+      const intakeNextLane = nextState.agent2?.discovery?.intakeResult?.nextLane || null;
+      const llmHandoffCfg = safeObj(company?.aiAgentSettings?.llmAgent?.handoff, {});
+      const bookingDirection = intakeNextLane === 'BOOKING_HANDOFF' && llmHandoffCfg.mode !== 'disabled';
+
       llmAgentResult = await callLLMAgentForNoMatch({
         company,
         input,
@@ -4453,6 +4501,7 @@ class Agent2DiscoveryRunner {
         t3RecoveryCtx,  // Package 4B: cross-turn recovery context
         callerName,     // Thread caller name so T2 can personalize response
         callContext: nextState.agent2?.callContext || null,
+        bookingDirection, // llmhandoff: tell LLM to guide toward scheduling
       });
 
       if (llmAgentResult?.response) {
@@ -4461,6 +4510,35 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
         if (llmAgentResult.wasPartial) {
           nextState.agent2.discovery.lastResponseWasPartial = true;
+        }
+
+        // ── LLM Handoff: Detect booking signal in response (llmhandoff) ──
+        // When intake said BOOKING_HANDOFF and the LLM's response contains
+        // scheduling language, set llmHandoffPending so PATH 1.5 catches
+        // the caller's YES/NO on the next turn.
+        if (bookingDirection && !nextState.agent2.discovery.llmHandoffPending) {
+          const BOOKING_SIGNAL = /\b(schedule|appointment|book|technician|come out|set up|available|get .{0,30}scheduled)\b/i;
+          const responseHasBookingSignal = BOOKING_SIGNAL.test(llmAgentResult.response);
+
+          if (responseHasBookingSignal) {
+            const handoffEscalation = llmHandoffCfg.escalationMessage || "Perfect — I'm going to grab a few details so we can get this scheduled.";
+            nextState.agent2.discovery.llmHandoffPending = {
+              mode: 'confirmService',
+              yesResponse: handoffEscalation,
+              noResponse: "No problem. Is there anything else I can help you with today?",
+              setByTurn: turn,
+              intakeNextLane: 'BOOKING_HANDOFF',
+              capturedReason: capturedReason || nextState.plainSlots?.call_reason_detail || null,
+            };
+
+            emit('A2_LLM_HANDOFF_PENDING_SET', {
+              turn,
+              mode: 'confirmService',
+              bookingDirection: true,
+              intakeNextLane: 'BOOKING_HANDOFF',
+              responsePreview: clip(llmAgentResult.response, 120),
+            });
+          }
         }
 
         const { ack: llmAck } = buildAck(ack);
@@ -4482,7 +4560,8 @@ class Agent2DiscoveryRunner {
           model: llmAgentResult.tokensUsed ? 'claude' : null,
           latencyMs: llmAgentResult.latencyMs,
           tokensInput: llmAgentResult.tokensUsed?.input,
-          tokensOutput: llmAgentResult.tokensUsed?.output
+          tokensOutput: llmAgentResult.tokensUsed?.output,
+          llmHandoffPendingSet: !!nextState.agent2.discovery.llmHandoffPending,
         });
         emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
           'agent2.llmAgent.noMatch',
@@ -4499,7 +4578,8 @@ class Agent2DiscoveryRunner {
           source: 'llmAgent.noMatch',
           usedCallerName: llmAgentResult.usedCallerName || false,
           isLLMAgent: true,
-          latencyMs: llmAgentResult.latencyMs
+          latencyMs: llmAgentResult.latencyMs,
+          llmHandoffPendingSet: !!nextState.agent2.discovery.llmHandoffPending,
         });
 
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('LLM_AGENT_NO_MATCH') };

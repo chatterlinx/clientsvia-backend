@@ -5399,6 +5399,37 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
       }
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // LLM HANDOFF CONFIRMED — Transcript Entry (llmhandoff)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // When PATH 1.5 confirms booking intent, log a system transcript turn so
+      // the Call Review Console shows the transition from discovery to booking.
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (runtimeResult?._123rp?.lastPath === 'LLM_HANDOFF_CONFIRMED') {
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          await CallTranscriptV2.appendTurns(companyID, callSid, [{
+            speaker: 'system',
+            kind: 'LLM_HANDOFF_CONFIRMED',
+            text: 'LLM Handoff — caller confirmed booking intent, transitioning to BookingLogicEngine',
+            turnNumber,
+            ts: new Date().toISOString(),
+            sourceKey: 'llmhandoff',
+            trace: {
+              protocol: 'llmhandoff',
+              fromPath: 'LLM_AGENT_NO_MATCH',
+              toMode: 'BOOKING',
+            }
+          }], { from: fromNumber || null, to: req.body.To || null });
+        } catch (handoffTranscriptErr) {
+          // Non-blocking — don't crash the response pipeline
+          logger.warn('[V2TWILIO] Failed to log LLM_HANDOFF_CONFIRMED transcript (non-blocking)', {
+            callSid: callSid?.slice(-8),
+            error: handoffTranscriptErr.message
+          });
+        }
+      }
+
       let audioUrl = null;
       let ttsLatencyMs = null;
 

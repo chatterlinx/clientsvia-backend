@@ -92,6 +92,8 @@
       'TWIML_SAY': 'TTS Spoken',
       'STT_EMPTY': 'No Speech Detected',
       'STT_EMPTY_LLM_RECOVERY': '⚠️ STT Empty — LLM Recovery',
+      'LLM_HANDOFF_CONFIRMED': '🔄 LLM Handoff → Booking',
+      'LLM_HANDOFF_DECLINED': '↩️ LLM Handoff Declined',
       'ESCALATION': 'Escalation',
       'PATIENCE_WAIT': 'Patience (Waiting)',
       'PATIENCE_CHECKIN': 'Patience Check-in',
