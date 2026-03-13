@@ -377,7 +377,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null, sttEmpty = false }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -413,22 +413,49 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       return null;
     }
 
-    // Build system prompt with no-match context appended
+    // Build system prompt with context appended
     const basePrompt = composeSystemPrompt(config, channel || 'call');
-    const noMatchParts = [
-      '\n=== NO-MATCH CONTEXT ===',
-      'No trigger card matched the caller\'s input. You are Tier 2 of the 123 Response Protocol — the AI intelligence layer.',
-      `The caller said: "${input}"`,
-      capturedReason ? `Detected intent/reason: "${capturedReason}"` : 'No specific call reason was detected.',
-      callerName ? `The caller's name is ${callerName}. Use their name naturally at most once.` : null,
-      `This is turn ${turn || 'unknown'} of the conversation.`,
-      '',
-      'Your job: Understand what the caller needs. Answer their question using your knowledge base.',
-      'If you can identify their intent, acknowledge it and guide them toward the right service.',
-      'Keep your response concise and natural — this is a phone call.',
-      'After you respond, the caller\'s next message will go back through normal trigger matching.',
-      '=== END NO-MATCH CONTEXT ==='
-    ];
+    const noMatchParts = [];
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // EMPTY STT PROTOCOL (emptysttprotocol)
+    // When STT returns nothing, the LLM produces a contextual re-engagement
+    // response using caller name and conversation context instead of a
+    // robotic T3 fallback.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (sttEmpty) {
+      noMatchParts.push('\n=== EMPTY STT PROTOCOL ===');
+      noMatchParts.push('The caller is still on the line but their speech was NOT captured (possible background noise, low audio, or momentary silence).');
+      noMatchParts.push('You are Tier 2 of the 123 Response Protocol — re-engaging the caller after empty STT.');
+      noMatchParts.push(`This is turn ${turn || 'unknown'} of the conversation.`);
+      noMatchParts.push('');
+      noMatchParts.push('Your job: Gently re-engage the caller. DO NOT start a new topic. Instead:');
+      noMatchParts.push('- Reference what the caller was already discussing if you have context');
+      noMatchParts.push('- Ask them to repeat or speak up in a natural, friendly way');
+      noMatchParts.push('- Use their name if available (at most once, naturally)');
+      noMatchParts.push('- Do NOT say "I didn\'t understand" — the issue is audio capture, not comprehension');
+      noMatchParts.push('');
+      noMatchParts.push('EXAMPLES (adapt to context):');
+      noMatchParts.push('- "Hey Mark, I didn\'t quite catch that — you were telling me about the AC issue, right?"');
+      noMatchParts.push('- "Sorry, I had a little trouble hearing you. Could you say that again?"');
+      noMatchParts.push('- "I\'m still here! Sounds like the line cut out for a second — what were you saying?"');
+      noMatchParts.push('');
+      noMatchParts.push('Keep it to ONE short sentence. Sound warm, human, and conversational.');
+      noMatchParts.push('=== END EMPTY STT PROTOCOL ===');
+    } else {
+      noMatchParts.push('\n=== NO-MATCH CONTEXT ===');
+      noMatchParts.push('No trigger card matched the caller\'s input. You are Tier 2 of the 123 Response Protocol — the AI intelligence layer.');
+      noMatchParts.push(`The caller said: "${input}"`);
+      noMatchParts.push(capturedReason ? `Detected intent/reason: "${capturedReason}"` : 'No specific call reason was detected.');
+      noMatchParts.push(callerName ? `The caller's name is ${callerName}. Use their name naturally at most once.` : null);
+      noMatchParts.push(`This is turn ${turn || 'unknown'} of the conversation.`);
+      noMatchParts.push('');
+      noMatchParts.push('Your job: Understand what the caller needs. Answer their question using your knowledge base.');
+      noMatchParts.push('If you can identify their intent, acknowledge it and guide them toward the right service.');
+      noMatchParts.push('Keep your response concise and natural — this is a phone call.');
+      noMatchParts.push('After you respond, the caller\'s next message will go back through normal trigger matching.');
+      noMatchParts.push('=== END NO-MATCH CONTEXT ===');
+    }
 
     // V131: Inject structured call context so LLM knows what's already established
     if (callContext) {
@@ -471,7 +498,12 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const maxTokens = config.model?.maxTokens || 300;
 
     // V131: Load conversation history for multi-turn context
-    let conversationMessages = [{ role: 'user', content: input }];
+    // For sttEmpty: use a descriptive placeholder instead of empty string so LLM
+    // sees conversation history + a meaningful "current turn" message.
+    const userContent = sttEmpty
+      ? '[Caller speech not captured — STT returned empty]'
+      : input;
+    let conversationMessages = [{ role: 'user', content: userContent }];
     try {
       const memory = await ConversationMemory.load(callSid);
       if (memory) {
@@ -484,9 +516,9 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
             seen.add(key);
             return true;
           });
-          conversationMessages = [...deduped, { role: 'user', content: input }];
+          conversationMessages = [...deduped, { role: 'user', content: userContent }];
           if (deduped.length > 0 && deduped[deduped.length - 1].role === 'user') {
-            conversationMessages = [...deduped.slice(0, -1), { role: 'user', content: input }];
+            conversationMessages = [...deduped.slice(0, -1), { role: 'user', content: userContent }];
           }
         }
       }
@@ -495,12 +527,13 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     }
 
     emit('A2_LLM_AGENT_CALLED', {
-      mode: 'TIER_2_NO_MATCH',
+      mode: sttEmpty ? 'STT_EMPTY_RECOVERY' : 'TIER_2_NO_MATCH',
       model: modelId,
-      inputPreview: input?.substring(0, 80),
+      inputPreview: sttEmpty ? '[STT_EMPTY]' : input?.substring(0, 80),
       capturedReason: capturedReason?.substring(0, 80) || null,
       turn,
       isRecovery: !!t3RecoveryCtx,
+      isSttEmpty: sttEmpty,
       historyTurns: conversationMessages.length
     });
 
@@ -1506,6 +1539,121 @@ class Agent2DiscoveryRunner {
         reason: 'Intake disabled, gated, or failed — proceeding to normal pipeline',
         turn,
       });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // EMPTY STT PROTOCOL (emptysttprotocol)
+    // ══════════════════════════════════════════════════════════════════════════
+    // When STT returns nothing on turn 2+, skip ScrabEngine/triggers (they
+    // can't match empty input anyway) and route directly to the LLM Agent with
+    // a specialized prompt that produces a contextual re-engagement response.
+    // The LLM uses caller name and conversation context to say something like:
+    //   "Hey Mark, I didn't quite catch that — you were telling me about..."
+    //
+    // Turn 1 is NOT intercepted (no caller context yet).
+    // Ghost guard (v2twilio.js) still catches empty STT with pending questions.
+    // Patience mode still catches empty STT during patience.
+    // This protocol catches the remaining case: turn 2+ with no pending Q.
+    //
+    // On LLM failure, falls through to normal pipeline (T3 catches as safety net).
+    // ══════════════════════════════════════════════════════════════════════════
+    if (turn > 1 && (!input || !input.trim())) {
+      const existingCallContext = nextState.agent2?.callContext || null;
+
+      emit('STT_EMPTY_PROTOCOL_ENGAGED', {
+        turn,
+        callerName: callerName || null,
+        hasCallContext: !!existingCallContext,
+        hasIssueSummary: !!(existingCallContext?.issue?.summary),
+        isRecoveryTurn,
+        capturedReason: capturedReason ? clip(capturedReason, 60) : null,
+      });
+
+      try {
+        const sttLlmResult = await callLLMAgentForNoMatch({
+          company,
+          input: '',
+          capturedReason,
+          channel: 'call',
+          turn,
+          emit,
+          llmTurnsThisCall,
+          callSid,
+          bridgeToken,
+          redis,
+          t3RecoveryCtx,
+          callerName,
+          callContext: existingCallContext,
+          sttEmpty: true,
+        });
+
+        if (sttLlmResult?.response) {
+          // ── Success: LLM produced a re-engagement response ──
+          nextState.agent2.discovery.lastPath = 'STT_EMPTY_LLM_RECOVERY';
+          nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
+          nextState.agent2.discovery.lastSttEmptyRecoveryTurn = turn;
+
+          // Reset T3 recovery counters — LLM handled the recovery
+          nextState.agent2.discovery.consecutiveT3Count = 0;
+          nextState.agent2.discovery.t3RecoveryContext = null;
+
+          const sttResponse = sttLlmResult.response;
+
+          emit('A2_PATH_SELECTED', {
+            path: 'STT_EMPTY_LLM_RECOVERY',
+            reason: 'Empty STT Protocol — LLM re-engagement',
+            _123rpTier: RESPONSE_TIER.TIER_2,
+            _123rpLabel: 'LLM_AGENT',
+            model: 'claude',
+            latencyMs: sttLlmResult.latencyMs,
+            usedCallerName: !!(callerName && sttResponse.toLowerCase().includes(callerName.toLowerCase())),
+          });
+          emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+            'agent2.llmAgent.sttEmptyRecovery',
+            null,
+            sttResponse,
+            null,
+            '123RP Tier 2: STT Empty Protocol — LLM re-engagement'
+          ));
+          emit('A2_RESPONSE_READY', {
+            path: 'STT_EMPTY_LLM_RECOVERY',
+            responsePreview: clip(sttResponse, 120),
+            responseLength: sttResponse.length,
+            hasAudio: false,
+            source: 'llmAgent.sttEmptyRecovery',
+            usedCallerName: !!(callerName && sttResponse.toLowerCase().includes(callerName.toLowerCase())),
+            isLLMAgent: true,
+            isSttEmptyRecovery: true,
+            latencyMs: sttLlmResult.latencyMs,
+          });
+
+          return {
+            response: sttResponse,
+            matchSource: 'AGENT2_DISCOVERY',
+            state: nextState,
+            _123rp: build123rpMeta('STT_EMPTY_LLM_RECOVERY'),
+          };
+        }
+
+        // LLM returned null/empty — fall through to normal pipeline
+        emit('STT_EMPTY_PROTOCOL_LLM_FAILED', {
+          turn,
+          failureReason: sttLlmResult?.failureReason || 'null_result',
+          fallingThrough: 'normal_pipeline',
+        });
+      } catch (sttProtoErr) {
+        // Protocol error — fall through to normal pipeline (T3 safety net)
+        logger.error('[STT_EMPTY_PROTOCOL] Error in LLM recovery — falling through', {
+          error: sttProtoErr.message,
+          callSid,
+          turn,
+        });
+        emit('STT_EMPTY_PROTOCOL_ERROR', {
+          turn,
+          error: sttProtoErr.message,
+          fallingThrough: 'normal_pipeline',
+        });
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

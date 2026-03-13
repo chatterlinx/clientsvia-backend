@@ -91,6 +91,7 @@
       'TWIML_PLAY': 'Audio Played',
       'TWIML_SAY': 'TTS Spoken',
       'STT_EMPTY': 'No Speech Detected',
+      'STT_EMPTY_LLM_RECOVERY': '⚠️ STT Empty — LLM Recovery',
       'ESCALATION': 'Escalation',
       'PATIENCE_WAIT': 'Patience (Waiting)',
       'PATIENCE_CHECKIN': 'Patience Check-in',
@@ -756,6 +757,25 @@
           </h4>
           <p style="font-size: 13px; color: #92400e;">
             Speech-to-text returned an empty SpeechResult for at least one turn. This explains missing caller lines.
+          </p>
+        </div>
+      `;
+    }
+
+    // Diagnostics: Empty STT Protocol engaged — LLM saved the call but STT had issues
+    if (flags.includes('DIAG_STT_EMPTY_RECOVERY')) {
+      return `
+        <div class="problems-section" style="background: #fef3c7; border-color: #f59e0b;">
+          <h4 style="color: #b45309;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2L14 13H2L8 2Z" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M8 6V9M8 11.5V12" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            DIAGNOSTIC — Empty STT Protocol Engaged (STT Problem Detected)
+          </h4>
+          <p style="font-size: 13px; color: #92400e;">
+            Speech-to-text returned empty on one or more turns. The LLM Agent produced a re-engagement response instead of a fallback message.
+            This indicates an STT capture problem — check audio quality, background noise, or caller volume.
           </p>
         </div>
       `;

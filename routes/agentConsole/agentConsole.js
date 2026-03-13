@@ -2354,6 +2354,10 @@ router.get('/:companyId/calls/:callSid',
         if (agentTurns.length === 0) flags.push('INCOMPLETE_NO_AGENT_TURNS');
         if (callerTurns.length === 0) flags.push(hasSttEmptyDiag ? 'DIAG_STT_EMPTY' : 'INCOMPLETE_NO_CALLER_INPUT');
 
+        // Empty STT Protocol: flag when LLM recovery was engaged (STT problem indicator)
+        const hasSttEmptyRecovery = turns.some(t => t.speaker === 'system' && t.kind === 'STT_EMPTY_LLM_RECOVERY');
+        if (hasSttEmptyRecovery) flags.push('DIAG_STT_EMPTY_RECOVERY');
+
         const missingProvenance = agentTurns.some(t => !t.provenance);
         const missingTracePack = agentTurns.some(t => !t.source); // should never happen, but signals contract break
 

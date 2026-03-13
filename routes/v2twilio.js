@@ -5364,6 +5364,41 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         });
       }
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // EMPTY STT PROTOCOL (emptysttprotocol) — Transcript Logging
+      // ═══════════════════════════════════════════════════════════════════════════
+      // When the Empty STT Protocol engaged and the LLM produced a recovery
+      // response, log a system diagnostic turn so Call Review Console can display
+      // a clear "STT Empty — LLM Recovery" indicator. This supplements the
+      // STT_EMPTY diagnostic already written at line ~4851.
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (runtimeResult?._123rp?.lastPath === 'STT_EMPTY_LLM_RECOVERY') {
+        try {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          await CallTranscriptV2.appendTurns(companyID, callSid, [{
+            speaker: 'system',
+            kind: 'STT_EMPTY_LLM_RECOVERY',
+            text: 'Empty STT Protocol — LLM re-engagement response generated',
+            turnNumber,
+            ts: new Date().toISOString(),
+            sourceKey: 'emptysttprotocol',
+            trace: {
+              protocol: 'emptysttprotocol',
+              callerName: persistedState?.callerName || null,
+              hadCallContext: !!(persistedState?.agent2?.callContext),
+              hadIssueSummary: !!(persistedState?.agent2?.callContext?.issue?.summary),
+              responsePreview: responseText?.substring(0, 100) || null,
+            }
+          }], { from: fromNumber || null, to: req.body.To || null });
+        } catch (sttProtoTranscriptErr) {
+          // Non-blocking — don't crash the response pipeline
+          logger.warn('[V2TWILIO] Failed to log STT_EMPTY_LLM_RECOVERY transcript (non-blocking)', {
+            callSid: callSid?.slice(-8),
+            error: sttProtoTranscriptErr.message
+          });
+        }
+      }
+
       let audioUrl = null;
       let ttsLatencyMs = null;
 
