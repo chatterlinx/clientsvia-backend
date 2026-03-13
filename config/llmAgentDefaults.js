@@ -439,7 +439,7 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     'Your response MUST:',
     '- Warmly acknowledge what the caller said',
     '- Confirm the MOST IMPORTANT extracted detail (usually callReason or name)',
-    '- End with a forward-moving statement ("Let me pull up your information" or "I can help with that")',
+    '- End with a forward-moving statement that invites the caller to keep talking ("I can definitely help with that" or "We can take care of that for you"). NEVER say "let me look that up" or "let me pull up your information" — the caller will go silent waiting. Instead, keep the conversation moving.',
     'Your response MUST NOT:',
     '- Ask more than ONE question',
     '- Mention booking, scheduling, or pricing',

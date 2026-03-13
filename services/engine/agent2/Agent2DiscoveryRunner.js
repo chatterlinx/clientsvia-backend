@@ -390,7 +390,10 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     }
 
     // Gate: triggerFallback activation must be enabled
-    if (config.activation?.triggerFallback === false) {
+    // EXCEPTION: sttEmpty bypasses this gate — the Empty STT Protocol is a
+    // re-engagement mechanism, NOT a trigger fallback. It must fire even when
+    // triggerFallback is disabled so callers don't hear T3 placeholders on silence.
+    if (config.activation?.triggerFallback === false && !sttEmpty) {
       logger.info('[LLM_AGENT] triggerFallback activation is disabled — skipping no-match agent');
       emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'trigger_fallback_disabled', fallbackInvoked: true, turn });
       return null;
