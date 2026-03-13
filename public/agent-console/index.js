@@ -40,6 +40,7 @@
     // Header - Note: btnDownloadTruth in header handled by shared/truthButton.js
     headerCompanyName: document.getElementById('header-company-name'),
     headerCompanyId: document.getElementById('header-company-id'),
+    btnOpenNotes: document.getElementById('btn-open-notes'),
     btnLogout: document.getElementById('btn-logout'),
     btnBackToProfile: document.getElementById('btn-back-to-profile'),
     
@@ -114,6 +115,11 @@
     };
     DOM.btnLogout.addEventListener('click', navigateToCompanyProfile);
     DOM.btnBackToProfile.addEventListener('click', navigateToCompanyProfile);
+    if (DOM.btnOpenNotes) {
+      DOM.btnOpenNotes.addEventListener('click', () => {
+        window.location.href = `/agent-console/notes.html?companyId=${encodeURIComponent(state.companyId)}`;
+      });
+    }
     
     // Truth Panel Actions
     DOM.btnRefreshTruth.addEventListener('click', refreshTruthData);
