@@ -1908,7 +1908,7 @@
   }
 
   function buildTranscriptRailHtml(intel) {
-    const flow = intel.turnByTurnFlow || [];
+    const flow = intel.callContext?.turnByTurnFlow || [];
     if (!flow.length) return '';
 
     const startMs = intel.callMetadata?.startTime
