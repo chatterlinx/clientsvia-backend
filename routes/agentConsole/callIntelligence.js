@@ -410,6 +410,20 @@ function buildVoiceDeliverySummary(turns = []) {
   };
 }
 
+function buildGreeting(turns = []) {
+  // Greeting is stored as turnNumber:0 — excluded from turnByTurnFlow (n > 0 filter)
+  const agentTurn = turns.find(t => t.turnNumber === 0 && t.speaker === 'agent' && t.kind === 'GREETING');
+  const systemTurn = turns.find(t => t.turnNumber === 0 && t.speaker === 'system' &&
+    (t.kind === 'TWIML_PLAY' || t.kind === 'TWIML_SAY'));
+  if (!agentTurn && !systemTurn) return null;
+  return {
+    text: (agentTurn?.text || systemTurn?.text || '').substring(0, 500),
+    timestamp: agentTurn?.timestamp || systemTurn?.timestamp || null,
+    voiceProvider: systemTurn?.kind === 'TWIML_PLAY' ? 'elevenlabs' : 'twilio_say',
+    twimlVerb: systemTurn?.kind === 'TWIML_PLAY' ? 'PLAY' : 'SAY'
+  };
+}
+
 function buildCallContext(turns = [], trace = []) {
   const scrabHandoff = findLastTrace(trace, 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
 
@@ -417,6 +431,7 @@ function buildCallContext(turns = [], trace = []) {
     transcript: buildTranscript(turns),
     response: buildResponseContext(trace),
     scrabEngineHandoff: scrabHandoff?.payload || null,
+    greeting: buildGreeting(turns),
     turnByTurnFlow: buildTurnByTurnFlow(turns, trace),
     voiceDelivery: buildVoiceDeliverySummary(turns)
   };

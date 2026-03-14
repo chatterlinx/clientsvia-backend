@@ -2713,6 +2713,28 @@ class Agent2DiscoveryRunner {
         currentTurn: turn
       });
     } else if (isRespondingToPending) {
+      // ══════════════════════════════════════════════════════════════════════
+      // LLM INTAKE PASSTHROUGH — skip YES/NO interceptor
+      // ══════════════════════════════════════════════════════════════════════
+      // LLM intake asks OPEN-ENDED questions ("Tell me more about what's going on").
+      // These are NOT yes/no questions — the caller's full response contains their
+      // actual service request and must flow through ScrabEngine → triggers.
+      // If we let YES detection fire here, "Yes. I need AC service today" gets
+      // classified as YES and returns "One moment please", discarding the request.
+      // ══════════════════════════════════════════════════════════════════════
+      if (pendingQuestionSource === 'llm_intake') {
+        nextState.agent2.discovery.pendingQuestion = null;
+        nextState.agent2.discovery.pendingQuestionTurn = null;
+        nextState.agent2.discovery.pendingQuestionSource = null;
+        // Do NOT set pendingQuestionResolved — avoids triggering justResolvedPending cascade
+        emit('PQ_INTAKE_PASSTHROUGH', {
+          reason: 'LLM intake open-ended question — full utterance routed to ScrabEngine/triggers',
+          inputPreview: clip(input, 80),
+          turn,
+          pendingQuestionTurn
+        });
+        // Fall through — do NOT return. Full utterance continues to ScrabEngine below.
+      } else {
       // ────────────────────────────────────────────────────────────────────────
       // STEP 1: Classify the user's response as YES / NO / MICRO / OTHER
       // ────────────────────────────────────────────────────────────────────────
@@ -2975,6 +2997,7 @@ class Agent2DiscoveryRunner {
       });
       
       // Fall through to trigger card matching, but DON'T let it ask the same question again
+      } // end else (non-llm_intake pending question handling)
     } else if (hasPendingQuestion) {
       // Pending question exists but from a different turn — clear stale state
       nextState.agent2.discovery.pendingQuestion = null;
@@ -2982,7 +3005,13 @@ class Agent2DiscoveryRunner {
     }
     
     // V120: Flag if we just resolved a pending question (for downstream logic)
+    // CONSUME the flag immediately — it must only fire on the single turn after resolution.
+    // Without this, pendingQuestionResolved persists in Redis and triggers justResolvedPending
+    // on every subsequent turn, causing a cascade of skipGenericQuestion → noMatchClarifierQuestion.
     const justResolvedPending = nextState.agent2.discovery.pendingQuestionResolved === true;
+    if (justResolvedPending) {
+      delete nextState.agent2.discovery.pendingQuestionResolved;
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // PATH 1: ROBOT CHALLENGE

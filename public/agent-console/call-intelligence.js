@@ -629,19 +629,15 @@
         </div>
       ` : ''}
       ${renderCallOverview(intelligence)}
+      ${renderTurnByTurnFlow(intelligence)}
       ${renderEngineeringScore(intelligence)}
       ${renderExecutiveSummary(intelligence)}
       ${renderCallerJourney(intelligence)}
       ${renderTurnByTurnAnalysis(intelligence)}
       ${renderRootCause(intelligence)}
-      ${renderTurnByTurnFlow(intelligence)}
       ${renderResponseContext(intelligence)}
       ${renderVoiceDeliverySummary(intelligence)}
-      ${renderTranscriptSection(intelligence)}
-      ${renderScrabEngineHandoff(intelligence)}
-      ${renderTriggerAnalysis(intelligence)}
       ${renderIssues(intelligence)}
-      ${renderScrabEnginePerformance(intelligence)}
       ${renderRecommendations(intelligence)}
       ${renderTokenUsage(intelligence)}
       ${renderPerformanceMetrics(intelligence)}
@@ -1191,7 +1187,13 @@
         ${flow.map(turn => `
           <div class="turn-flow-card ${turn.traceOnly ? 'trace-only-turn' : ''}">
             <div class="turn-flow-header">
-              <h3>Turn ${turn.turnNumber} ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''} ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}</h3>
+              <div class="turn-flow-header-row">
+                <span class="turn-num">Turn ${turn.turnNumber}</span>
+                ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''}
+                ${turn.pathSelected?.path ? `<span class="turn-path-pill">${turn.pathSelected.path}</span>` : ''}
+                ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}
+              </div>
+              ${turn.pathSelected?.reason ? `<div class="turn-path-reason">↳ ${turn.pathSelected.reason}</div>` : ''}
             </div>
 
             ${turn.callerInput ? `
@@ -1280,22 +1282,39 @@
                       ${turn.triggerEvaluation.matched ? '✅ MATCHED' : '❌ NO MATCH'}
                     </span>
                   </div>
-                  ${turn.triggerEvaluation.matched ? `
+                  ${turn.triggerEvaluation.matched ? (() => {
+                    const _cid = new URLSearchParams(window.location.search).get('companyId') || '';
+                    const _rid = turn.triggerEvaluation.ruleId || '';
+                    const _rawId = turn.triggerEvaluation.cardId || '';
+                    const _editHref = _rid && _cid
+                      ? `/agent-console/triggers.html?companyId=${_cid}&edit=${encodeURIComponent(_rid)}`
+                      : null;
+                    const _editLink = _editHref
+                      ? `<a href="${_editHref}" target="_blank" class="ci-card-link">Edit card ↗</a>`
+                      : '';
+                    return `
                     <div class="step-detail">
-                      <span class="detail-label">Matched Trigger ID:</span>
-                      <span class="detail-value"><code class="trigger-id-display">${turn.triggerEvaluation.ruleId || turn.triggerEvaluation.cardId || 'Unknown'}</code></span>
+                      <span class="detail-label">Rule ID:</span>
+                      <span class="detail-value">
+                        <code class="trigger-id-display">${_rid || '<span class="ci-unknown">UNKNOWN — trace gap</span>'}</code>
+                        ${_editLink}
+                      </span>
                     </div>
+                    ${_rawId && _rawId !== _rid ? `
+                    <div class="step-detail">
+                      <span class="detail-label">Full Card ID:</span>
+                      <span class="detail-value"><code class="trigger-id-display">${_rawId}</code></span>
+                    </div>` : ''}
                     ${turn.triggerEvaluation.cardLabel ? `
-                      <div class="step-detail">
-                        <span class="detail-label">Matched Trigger Name:</span>
-                        <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
-                      </div>
-                    ` : ''}
+                    <div class="step-detail">
+                      <span class="detail-label">Card Name:</span>
+                      <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
+                    </div>` : ''}
                     <div class="step-detail">
                       <span class="detail-label">Matched On:</span>
                       <span class="detail-value">${turn.triggerEvaluation.matchedOn || 'keyword'}</span>
-                    </div>
-                  ` : ''}
+                    </div>`;
+                  })() : ''}
                 </div>
               </div>
             ` : ''}
@@ -1908,7 +1927,7 @@
   }
 
   function buildTranscriptRailHtml(intel) {
-    const flow = intel.turnByTurnFlow || [];
+    const flow = intel.callContext?.turnByTurnFlow || [];
     if (!flow.length) return '';
 
     const startMs = intel.callMetadata?.startTime
@@ -1918,14 +1937,33 @@
     const totalTurns = flow.length;
 
     const entries = [];
+
+    // ── Greeting (turnNumber:0, excluded from flow by n>0 filter) ────────
+    const greeting = intel.callContext?.greeting;
+    if (greeting?.text) {
+      const greetTs = greeting.timestamp ? new Date(greeting.timestamp).getTime() : null;
+      entries.push({
+        type: 'agent',
+        turnNumber: 0,
+        text: greeting.text,
+        seekTime: greetTs && startMs ? (greetTs - startMs) / 1000 : 0,
+        hasRealTs: !!(greetTs && startMs),
+        path: 'GREETING',
+        tier: null,
+        reason: 'Initial greeting',
+        source: 'greeting'
+      });
+    }
+
     flow.forEach((turn, idx) => {
       const callerTs = turn.callerInput?.timestamp;
       const agentTs  = turn.agentResponse?.timestamp;
 
       // Seek time: real timestamp preferred, estimated fallback
-      const callerSeek = callerTs && startMs ? (callerTs - startMs) / 1000
+      // Timestamps from MongoDB are ISO strings — must convert to ms before subtracting
+      const callerSeek = callerTs && startMs ? (new Date(callerTs).getTime() - startMs) / 1000
         : totalDuration > 0 ? (idx / totalTurns) * totalDuration : null;
-      const agentSeek = agentTs && startMs ? (agentTs - startMs) / 1000
+      const agentSeek = agentTs && startMs ? (new Date(agentTs).getTime() - startMs) / 1000
         : callerSeek !== null ? callerSeek + 0.5 : null;
 
       if (turn.callerInput?.raw) {
@@ -1935,6 +1973,18 @@
           text: turn.callerInput.raw,
           seekTime: callerSeek,
           hasRealTs: !!(callerTs && startMs)
+        });
+      }
+
+      // ── Bridge phrases (hold audio played while LLM is processing) ───────
+      const bridgeLines = (turn.voiceDelivery?.entries || []).filter(e => e.type === 'bridge' && e.text);
+      for (const bl of bridgeLines) {
+        entries.push({
+          type: 'bridge',
+          turnNumber: turn.turnNumber,
+          text: bl.text,
+          seekTime: callerSeek !== null ? callerSeek + 0.2 : agentSeek,
+          hasRealTs: false
         });
       }
 
@@ -1955,27 +2005,36 @@
           tier,
           path,
           reason,
-          source
+          source,
+          cardId: turn.triggerEvaluation?.ruleId || null
         });
       }
     });
 
     if (!entries.length) return '';
 
+    const companyId = new URLSearchParams(window.location.search).get('companyId') || '';
     const tierLabel = { 1: 'T1', 2: 'T2', 3: 'T3' };
     const rows = entries.map((e, i) => {
       const seekAttr = e.seekTime !== null ? `data-seek="${e.seekTime.toFixed(2)}"` : '';
       const timeLabel = e.seekTime !== null ? `<span class="tr-time">${cvFmtTime(e.seekTime)}</span>` : '';
       const tierBadge = e.tier ? `<span class="tr-badge tr-tier-${e.tier}">${tierLabel[e.tier] || 'T?'}</span>` : '';
       const pathBadge = e.path ? `<span class="tr-badge tr-path">${escapeHtml(e.path)}</span>` : '';
-      const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}</div>` : '';
+      const cardLink  = e.cardId && companyId
+        ? ` <a href="/agent-console/triggers.html?companyId=${companyId}&edit=${encodeURIComponent(e.cardId)}" target="_blank" class="tr-card-link" onclick="event.stopPropagation()">Edit card ↗</a>`
+        : '';
+      const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}${cardLink}</div>` : (cardLink ? `<div class="tr-reason">${cardLink}</div>` : '');
       const clickable = e.seekTime !== null ? 'tr-clickable' : '';
+
+      const speakerLabel = e.type === 'caller' ? '&#127908; CALLER'
+        : e.type === 'bridge' ? '&#9203; BRIDGE'
+        : '&#129302; AGENT';
 
       return `
         <div class="tr-entry tr-${e.type} ${clickable}" data-tr-idx="${i}" ${seekAttr}>
           <div class="tr-meta">
             ${timeLabel}
-            <span class="tr-speaker tr-speaker-${e.type}">${e.type === 'caller' ? '&#127908; CALLER' : '&#129302; AGENT'}</span>
+            <span class="tr-speaker tr-speaker-${e.type}">${speakerLabel}</span>
             ${tierBadge}${pathBadge}
           </div>
           <div class="tr-text">${escapeHtml(e.text)}</div>
@@ -2022,14 +2081,9 @@
         }
       });
       if (activeIdx >= 0) {
-        const el = entries[activeIdx];
-        const railTop = rail.scrollTop;
-        const railBottom = railTop + rail.clientHeight;
-        const elTop = el.offsetTop;
-        const elBottom = elTop + el.offsetHeight;
-        if (elBottom > railBottom || elTop < railTop) {
-          rail.scrollTo({ top: elTop - 8, behavior: 'smooth' });
-        }
+        // scrollIntoView avoids the offsetTop/offsetParent mismatch that was
+        // causing the rail to scroll to the wrong position (always the bottom)
+        entries[activeIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     });
   }
