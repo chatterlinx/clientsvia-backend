@@ -1923,9 +1923,10 @@
       const agentTs  = turn.agentResponse?.timestamp;
 
       // Seek time: real timestamp preferred, estimated fallback
-      const callerSeek = callerTs && startMs ? (callerTs - startMs) / 1000
+      // Timestamps from MongoDB are ISO strings — must convert to ms before subtracting
+      const callerSeek = callerTs && startMs ? (new Date(callerTs).getTime() - startMs) / 1000
         : totalDuration > 0 ? (idx / totalTurns) * totalDuration : null;
-      const agentSeek = agentTs && startMs ? (agentTs - startMs) / 1000
+      const agentSeek = agentTs && startMs ? (new Date(agentTs).getTime() - startMs) / 1000
         : callerSeek !== null ? callerSeek + 0.5 : null;
 
       if (turn.callerInput?.raw) {
@@ -2022,14 +2023,9 @@
         }
       });
       if (activeIdx >= 0) {
-        const el = entries[activeIdx];
-        const railTop = rail.scrollTop;
-        const railBottom = railTop + rail.clientHeight;
-        const elTop = el.offsetTop;
-        const elBottom = elTop + el.offsetHeight;
-        if (elBottom > railBottom || elTop < railTop) {
-          rail.scrollTo({ top: elTop - 8, behavior: 'smooth' });
-        }
+        // scrollIntoView avoids the offsetTop/offsetParent mismatch that was
+        // causing the rail to scroll to the wrong position (always the bottom)
+        entries[activeIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     });
   }
