@@ -1918,6 +1918,24 @@
     const totalTurns = flow.length;
 
     const entries = [];
+
+    // ── Greeting (turnNumber:0, excluded from flow by n>0 filter) ────────
+    const greeting = intel.callContext?.greeting;
+    if (greeting?.text) {
+      const greetTs = greeting.timestamp ? new Date(greeting.timestamp).getTime() : null;
+      entries.push({
+        type: 'agent',
+        turnNumber: 0,
+        text: greeting.text,
+        seekTime: greetTs && startMs ? (greetTs - startMs) / 1000 : 0,
+        hasRealTs: !!(greetTs && startMs),
+        path: 'GREETING',
+        tier: null,
+        reason: 'Initial greeting',
+        source: 'greeting'
+      });
+    }
+
     flow.forEach((turn, idx) => {
       const callerTs = turn.callerInput?.timestamp;
       const agentTs  = turn.agentResponse?.timestamp;
@@ -1936,6 +1954,18 @@
           text: turn.callerInput.raw,
           seekTime: callerSeek,
           hasRealTs: !!(callerTs && startMs)
+        });
+      }
+
+      // ── Bridge phrases (hold audio played while LLM is processing) ───────
+      const bridgeLines = (turn.voiceDelivery?.entries || []).filter(e => e.type === 'bridge' && e.text);
+      for (const bl of bridgeLines) {
+        entries.push({
+          type: 'bridge',
+          turnNumber: turn.turnNumber,
+          text: bl.text,
+          seekTime: callerSeek !== null ? callerSeek + 0.2 : agentSeek,
+          hasRealTs: false
         });
       }
 
@@ -1972,11 +2002,15 @@
       const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}</div>` : '';
       const clickable = e.seekTime !== null ? 'tr-clickable' : '';
 
+      const speakerLabel = e.type === 'caller' ? '&#127908; CALLER'
+        : e.type === 'bridge' ? '&#9203; BRIDGE'
+        : '&#129302; AGENT';
+
       return `
         <div class="tr-entry tr-${e.type} ${clickable}" data-tr-idx="${i}" ${seekAttr}>
           <div class="tr-meta">
             ${timeLabel}
-            <span class="tr-speaker tr-speaker-${e.type}">${e.type === 'caller' ? '&#127908; CALLER' : '&#129302; AGENT'}</span>
+            <span class="tr-speaker tr-speaker-${e.type}">${speakerLabel}</span>
             ${tierBadge}${pathBadge}
           </div>
           <div class="tr-text">${escapeHtml(e.text)}</div>
