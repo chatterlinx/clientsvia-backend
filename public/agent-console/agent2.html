@@ -357,6 +357,82 @@
           </div>
         </div>
 
+        <!-- Speech Detection -->
+        <div class="card" id="card-speech-detection">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">🎙️ Speech Detection</h2>
+              <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">
+                Controls how Twilio detects when the caller has finished speaking. <strong>This is the single biggest factor in response speed.</strong>
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <!-- Row 1: Timing -->
+            <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0 0 10px 0;">Response Timing</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+              <div class="form-group mb-0">
+                <label class="form-label">End-of-Speech Silence (s)</label>
+                <input type="number" class="form-input" id="input-speech-timeout" min="0.5" max="5" step="0.5" placeholder="1.5">
+                <p class="form-hint">Seconds of silence <em>after</em> the caller stops talking before we send their speech for processing. <strong>1.0–1.5s recommended.</strong> Lower = faster but may cut off natural pauses.</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Initial Wait (s)</label>
+                <input type="number" class="form-input" id="input-speech-initial-timeout" min="3" max="15" step="1" placeholder="7">
+                <p class="form-hint">How long to wait for the caller to <em>begin</em> speaking before timing out. Does not affect response speed.</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Impact Preview</label>
+                <div id="speech-impact-preview" style="
+                  background: var(--bg-secondary, #f8fafc);
+                  border: 1px solid var(--border-color, #e5e7eb);
+                  border-radius: 6px;
+                  padding: 10px 12px;
+                  font-size: 0.8rem;
+                  line-height: 1.5;
+                  color: var(--text-secondary, #4b5563);
+                ">
+                  <div>⏱ End-of-speech wait: <strong id="preview-silence">—</strong></div>
+                  <div>📡 Typical response: <strong id="preview-total">—</strong></div>
+                  <div id="preview-tip" style="margin-top: 6px; font-style: italic; color: var(--text-muted);"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Behaviour -->
+            <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0 0 10px 0;">Behaviour</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+              <div class="form-group mb-0">
+                <label class="form-label">Barge-In</label>
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+                  <input type="checkbox" id="input-speech-barge-in">
+                  <span>Allow caller to interrupt agent</span>
+                </label>
+                <p class="form-hint">Off = agent must finish speaking before caller can respond. Recommended: <strong>off</strong>.</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Enhanced Recognition</label>
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+                  <input type="checkbox" id="input-speech-enhanced">
+                  <span>Use Twilio enhanced STT</span>
+                </label>
+                <p class="form-hint">Higher accuracy but adds ~100ms. Recommended: <strong>on</strong> for conversational calls.</p>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Speech Model</label>
+                <select class="form-input" id="input-speech-model" style="margin-top: 6px;">
+                  <option value="phone_call">phone_call (recommended)</option>
+                  <option value="default">default</option>
+                  <option value="numbers_and_commands">numbers_and_commands</option>
+                </select>
+                <p class="form-hint">Optimized for the type of input you expect. Use <strong>phone_call</strong> for natural conversation.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         <!-- Bridge (Latency Filler) -->
         <div class="card" id="card-bridge">
           <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">

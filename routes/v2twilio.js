@@ -1981,8 +1981,12 @@ router.post('/voice', async (req, res) => {
       logger.debug(`[V2 VOICE] Voice settings:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
       // Set up speech gathering with V2 Agent response handler
-      // 📞 SPEECH DETECTION: Now configurable per company in Voice Settings
-      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
+      // 📞 SPEECH DETECTION: Agent 2.0 settings take priority, Voice Settings as fallback.
+      // agent2.speechDetection is set from the Agent 2.0 admin panel (Speech Detection card).
+      // voiceSettings.speechDetection is the older path kept for backward compat.
+      const speechDetection = company.aiAgentSettings?.agent2?.speechDetection
+        || company.aiAgentSettings?.voiceSettings?.speechDetection
+        || {};
       
       // 🐰 RABBIT HOLE CHECKPOINT #1: WHERE WILL GATHER SEND USER INPUT?
       const actionUrl = `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`;
@@ -2010,7 +2014,7 @@ router.post('/voice', async (req, res) => {
         actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech detected (prevents infinite loop)
         bargeIn: speechDetection.bargeIn ?? false,
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
+        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         hints: hints,
@@ -3004,7 +3008,7 @@ router.post('/handle-speech', async (req, res) => {
         actionOnEmptyResult: true,
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
+        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -3115,7 +3119,7 @@ router.post('/handle-speech', async (req, res) => {
           actionOnEmptyResult: true,
           bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
           timeout: speechDetection.initialTimeout ?? 7,
-          speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
+          speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
           enhanced: speechDetection.enhancedRecognition ?? true,
           speechModel: speechDetection.speechModel ?? 'phone_call',
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -3143,7 +3147,7 @@ router.post('/handle-speech', async (req, res) => {
         actionOnEmptyResult: true,
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
+        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`

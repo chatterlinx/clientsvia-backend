@@ -148,6 +148,16 @@
     callStartAudioStatus: document.getElementById('call-start-audio-status'),
     linkElevenLabsSetupCallStart: document.getElementById('link-elevenlabs-setup-callstart'),
     
+    // Speech Detection
+    inputSpeechTimeout: document.getElementById('input-speech-timeout'),
+    inputSpeechInitialTimeout: document.getElementById('input-speech-initial-timeout'),
+    inputSpeechBargeIn: document.getElementById('input-speech-barge-in'),
+    inputSpeechEnhanced: document.getElementById('input-speech-enhanced'),
+    inputSpeechModel: document.getElementById('input-speech-model'),
+    speechImpactSilence: document.getElementById('preview-silence'),
+    speechImpactTotal: document.getElementById('preview-total'),
+    speechImpactTip: document.getElementById('preview-tip'),
+
     // Bridge (Latency Filler)
     inputBridgeEnabled: document.getElementById('input-bridge-enabled'),
     inputBridgeQuietWindow: document.getElementById('input-bridge-quiet-window'),
@@ -237,6 +247,7 @@
     
     setupEventListeners();
     setupGreetingsEventListeners();
+    initSpeechDetectionListeners();
     setupUnsavedChangesProtection();
     loadGreetings();
     if (state.embedMode !== 'greetings') {
@@ -464,6 +475,15 @@
     if (DOM.inputBridgeBookingPhrase) DOM.inputBridgeBookingPhrase.value = bridge.bookingBridgePhrase || '';
     if (DOM.inputBridgeTransferPhrase) DOM.inputBridgeTransferPhrase.value = bridge.transferBridgePhrase || '';
     
+    // Speech Detection
+    const speechDet = config.speechDetection || {};
+    if (DOM.inputSpeechTimeout) DOM.inputSpeechTimeout.value = speechDet.speechTimeout ?? 1.5;
+    if (DOM.inputSpeechInitialTimeout) DOM.inputSpeechInitialTimeout.value = speechDet.initialTimeout ?? 7;
+    if (DOM.inputSpeechBargeIn) DOM.inputSpeechBargeIn.checked = speechDet.bargeIn === true;
+    if (DOM.inputSpeechEnhanced) DOM.inputSpeechEnhanced.checked = speechDet.enhancedRecognition !== false;
+    if (DOM.inputSpeechModel) DOM.inputSpeechModel.value = speechDet.speechModel || 'phone_call';
+    updateSpeechImpactPreview();
+
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
     renderPhraseList('consent', consentPhrases);
@@ -574,6 +594,34 @@
   }
 
   /* --------------------------------------------------------------------------
+     SPEECH DETECTION HELPERS
+     -------------------------------------------------------------------------- */
+  function updateSpeechImpactPreview() {
+    const val = parseFloat(DOM.inputSpeechTimeout?.value);
+    if (!DOM.speechImpactSilence || isNaN(val)) return;
+
+    DOM.speechImpactSilence.textContent = val.toFixed(1) + 's';
+
+    // Rough estimate: silence + STT (~0.3s) + server T1 (~0.1s) + network (~0.1s)
+    const low  = (val + 0.4).toFixed(1);
+    const high = (val + 1.2).toFixed(1);
+    DOM.speechImpactTotal.textContent = low + '–' + high + 's';
+
+    let tip = '';
+    if (val <= 1.0) tip = '⚡ Very fast — may cut off callers who pause naturally.';
+    else if (val <= 1.5) tip = '✅ Recommended — fast and natural.';
+    else if (val <= 2.5) tip = '⚠️ Noticeable delay but tolerant of pauses.';
+    else tip = '🐢 Slow — only use if callers frequently need long pauses.';
+    DOM.speechImpactTip.textContent = tip;
+  }
+
+  function initSpeechDetectionListeners() {
+    if (DOM.inputSpeechTimeout) {
+      DOM.inputSpeechTimeout.addEventListener('input', updateSpeechImpactPreview);
+    }
+  }
+
+  /* --------------------------------------------------------------------------
      SAVE CONFIG
      -------------------------------------------------------------------------- */
   async function saveConfig() {
@@ -615,6 +663,13 @@
         lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean),
         bookingBridgePhrase: DOM.inputBridgeBookingPhrase?.value?.trim() || '',
         transferBridgePhrase: DOM.inputBridgeTransferPhrase?.value?.trim() || ''
+      },
+      speechDetection: {
+        speechTimeout: parseFloat(DOM.inputSpeechTimeout?.value) || 1.5,
+        initialTimeout: parseInt(DOM.inputSpeechInitialTimeout?.value, 10) || 7,
+        bargeIn: DOM.inputSpeechBargeIn?.checked || false,
+        enhancedRecognition: DOM.inputSpeechEnhanced?.checked !== false,
+        speechModel: DOM.inputSpeechModel?.value || 'phone_call'
       },
       consentPhrases: state.config.consentPhrases,
       escalationPhrases: state.config.escalationPhrases
