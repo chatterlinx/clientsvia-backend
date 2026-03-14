@@ -629,19 +629,15 @@
         </div>
       ` : ''}
       ${renderCallOverview(intelligence)}
+      ${renderTurnByTurnFlow(intelligence)}
       ${renderEngineeringScore(intelligence)}
       ${renderExecutiveSummary(intelligence)}
       ${renderCallerJourney(intelligence)}
       ${renderTurnByTurnAnalysis(intelligence)}
       ${renderRootCause(intelligence)}
-      ${renderTurnByTurnFlow(intelligence)}
       ${renderResponseContext(intelligence)}
       ${renderVoiceDeliverySummary(intelligence)}
-      ${renderTranscriptSection(intelligence)}
-      ${renderScrabEngineHandoff(intelligence)}
-      ${renderTriggerAnalysis(intelligence)}
       ${renderIssues(intelligence)}
-      ${renderScrabEnginePerformance(intelligence)}
       ${renderRecommendations(intelligence)}
       ${renderTokenUsage(intelligence)}
       ${renderPerformanceMetrics(intelligence)}
@@ -1191,7 +1187,13 @@
         ${flow.map(turn => `
           <div class="turn-flow-card ${turn.traceOnly ? 'trace-only-turn' : ''}">
             <div class="turn-flow-header">
-              <h3>Turn ${turn.turnNumber} ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''} ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}</h3>
+              <div class="turn-flow-header-row">
+                <span class="turn-num">Turn ${turn.turnNumber}</span>
+                ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''}
+                ${turn.pathSelected?.path ? `<span class="turn-path-pill">${turn.pathSelected.path}</span>` : ''}
+                ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}
+              </div>
+              ${turn.pathSelected?.reason ? `<div class="turn-path-reason">↳ ${turn.pathSelected.reason}</div>` : ''}
             </div>
 
             ${turn.callerInput ? `
