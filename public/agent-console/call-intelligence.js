@@ -1986,20 +1986,25 @@
           tier,
           path,
           reason,
-          source
+          source,
+          cardId: turn.triggerEvaluation?.ruleId || null
         });
       }
     });
 
     if (!entries.length) return '';
 
+    const companyId = new URLSearchParams(window.location.search).get('companyId') || '';
     const tierLabel = { 1: 'T1', 2: 'T2', 3: 'T3' };
     const rows = entries.map((e, i) => {
       const seekAttr = e.seekTime !== null ? `data-seek="${e.seekTime.toFixed(2)}"` : '';
       const timeLabel = e.seekTime !== null ? `<span class="tr-time">${cvFmtTime(e.seekTime)}</span>` : '';
       const tierBadge = e.tier ? `<span class="tr-badge tr-tier-${e.tier}">${tierLabel[e.tier] || 'T?'}</span>` : '';
       const pathBadge = e.path ? `<span class="tr-badge tr-path">${escapeHtml(e.path)}</span>` : '';
-      const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}</div>` : '';
+      const cardLink  = e.cardId && companyId
+        ? ` <a href="/agent-console/triggers.html?companyId=${companyId}&edit=${encodeURIComponent(e.cardId)}" target="_blank" class="tr-card-link" onclick="event.stopPropagation()">Edit card ↗</a>`
+        : '';
+      const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}${cardLink}</div>` : (cardLink ? `<div class="tr-reason">${cardLink}</div>` : '');
       const clickable = e.seekTime !== null ? 'tr-clickable' : '';
 
       const speakerLabel = e.type === 'caller' ? '&#127908; CALLER'
