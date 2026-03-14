@@ -649,7 +649,7 @@
       ${renderAnalysisFooter(intelligence)}
     `;
 
-    attachModalEventListeners();
+    attachModalEventListeners(intelligence);
   }
 
   function renderCallOverview(intel) {
@@ -713,6 +713,7 @@
                   ${rec.url ? '<a href="' + rec.url + '" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>' : ''}
                 </div>
               </div>
+              ${buildTranscriptRailHtml(intel)}
             </div>
           `;
         })()}
@@ -1896,7 +1897,144 @@
     });
   }
 
-  function attachModalEventListeners() {
+  // =============================================================================
+  // SYNCHRONIZED TRANSCRIPT RAIL
+  // =============================================================================
+
+  function cvFmtTime(s) {
+    if (s == null || isNaN(s) || s < 0) return '';
+    const m = Math.floor(s / 60);
+    return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  }
+
+  function buildTranscriptRailHtml(intel) {
+    const flow = intel.turnByTurnFlow || [];
+    if (!flow.length) return '';
+
+    const startMs = intel.callMetadata?.startTime
+      ? new Date(intel.callMetadata.startTime).getTime()
+      : null;
+    const totalDuration = intel.callMetadata?.duration || 0;
+    const totalTurns = flow.length;
+
+    const entries = [];
+    flow.forEach((turn, idx) => {
+      const callerTs = turn.callerInput?.timestamp;
+      const agentTs  = turn.agentResponse?.timestamp;
+
+      // Seek time: real timestamp preferred, estimated fallback
+      const callerSeek = callerTs && startMs ? (callerTs - startMs) / 1000
+        : totalDuration > 0 ? (idx / totalTurns) * totalDuration : null;
+      const agentSeek = agentTs && startMs ? (agentTs - startMs) / 1000
+        : callerSeek !== null ? callerSeek + 0.5 : null;
+
+      if (turn.callerInput?.raw) {
+        entries.push({
+          type: 'caller',
+          turnNumber: turn.turnNumber,
+          text: turn.callerInput.raw,
+          seekTime: callerSeek,
+          hasRealTs: !!(callerTs && startMs)
+        });
+      }
+
+      const agentText = turn.agentResponse?.text || '';
+      const path      = turn.pathSelected?.path || '';
+      const reason    = turn.pathSelected?.reason || '';
+      const source    = turn.agentResponse?.source || '';
+      const tier      = turn.pathSelected?.tier
+        || (path.startsWith('LLM') ? 2 : path.startsWith('TRIGGER') ? 1 : path.startsWith('FALLBACK') ? 3 : null);
+
+      if (agentText || path) {
+        entries.push({
+          type: 'agent',
+          turnNumber: turn.turnNumber,
+          text: agentText,
+          seekTime: agentSeek,
+          hasRealTs: !!(agentTs && startMs),
+          tier,
+          path,
+          reason,
+          source
+        });
+      }
+    });
+
+    if (!entries.length) return '';
+
+    const tierLabel = { 1: 'T1', 2: 'T2', 3: 'T3' };
+    const rows = entries.map((e, i) => {
+      const seekAttr = e.seekTime !== null ? `data-seek="${e.seekTime.toFixed(2)}"` : '';
+      const timeLabel = e.seekTime !== null ? `<span class="tr-time">${cvFmtTime(e.seekTime)}</span>` : '';
+      const tierBadge = e.tier ? `<span class="tr-badge tr-tier-${e.tier}">${tierLabel[e.tier] || 'T?'}</span>` : '';
+      const pathBadge = e.path ? `<span class="tr-badge tr-path">${escapeHtml(e.path)}</span>` : '';
+      const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}</div>` : '';
+      const clickable = e.seekTime !== null ? 'tr-clickable' : '';
+
+      return `
+        <div class="tr-entry tr-${e.type} ${clickable}" data-tr-idx="${i}" ${seekAttr}>
+          <div class="tr-meta">
+            ${timeLabel}
+            <span class="tr-speaker tr-speaker-${e.type}">${e.type === 'caller' ? '&#127908; CALLER' : '&#129302; AGENT'}</span>
+            ${tierBadge}${pathBadge}
+          </div>
+          <div class="tr-text">${escapeHtml(e.text)}</div>
+          ${reasonEl}
+        </div>`;
+    }).join('');
+
+    return `<div class="transcript-rail" id="modal-transcript-rail">${rows}</div>`;
+  }
+
+  function initTranscriptRail(intelligence) {
+    const rail = document.getElementById('modal-transcript-rail');
+    if (!rail) return;
+
+    const player = DOM.modalBody.querySelector('.cv-player');
+    if (!player) return;
+    const audio = player.querySelector('.cv-audio');
+    if (!audio) return;
+
+    const entries = Array.from(rail.querySelectorAll('.tr-entry[data-seek]'));
+    const seekTimes = entries.map(e => parseFloat(e.dataset.seek));
+
+    // Click to seek
+    entries.forEach((entry, i) => {
+      if (!isNaN(seekTimes[i])) {
+        entry.addEventListener('click', () => {
+          audio.currentTime = seekTimes[i];
+          if (audio.paused) audio.play().catch(() => {});
+        });
+      }
+    });
+
+    // Auto-highlight + auto-scroll on timeupdate
+    audio.addEventListener('timeupdate', () => {
+      const t = audio.currentTime;
+      let activeIdx = -1;
+      for (let i = 0; i < seekTimes.length; i++) {
+        if (!isNaN(seekTimes[i]) && seekTimes[i] <= t) activeIdx = i;
+      }
+      entries.forEach((e, i) => {
+        const isActive = i === activeIdx;
+        if (isActive !== e.classList.contains('tr-active')) {
+          e.classList.toggle('tr-active', isActive);
+        }
+      });
+      if (activeIdx >= 0) {
+        const el = entries[activeIdx];
+        const railTop = rail.scrollTop;
+        const railBottom = railTop + rail.clientHeight;
+        const elTop = el.offsetTop;
+        const elBottom = elTop + el.offsetHeight;
+        if (elBottom > railBottom || elTop < railTop) {
+          rail.scrollTo({ top: elTop - 8, behavior: 'smooth' });
+        }
+      }
+    });
+  }
+
+  function attachModalEventListeners(intelligence) {
     document.querySelectorAll('.copy-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const content = btn.dataset.content;
@@ -1907,6 +2045,7 @@
       });
     });
     initAllCustomPlayers(DOM.modalBody);
+    if (intelligence) initTranscriptRail(intelligence);
   }
 
   function closeAnalysisModal() {

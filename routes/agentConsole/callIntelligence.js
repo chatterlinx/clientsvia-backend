@@ -179,7 +179,10 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     if (!hasTranscript) turnData.traceOnly = true;
 
     if (callerTurn) {
-      turnData.callerInput = { raw: callerTurn.text?.substring(0, 500) };
+      turnData.callerInput = {
+        raw: callerTurn.text?.substring(0, 500),
+        timestamp: callerTurn.timestamp || null
+      };
     }
 
     const scrabProcessed = traceByKind.get(`${turnNum}:SCRABENGINE_PROCESSED`);
@@ -255,7 +258,8 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       turnData.agentResponse = {
         text: (agentTurn?.text || responseReady?.payload?.responsePreview || '').substring(0, 500),
         source: responseReady?.payload?.source,
-        usedCallerName: responseReady?.payload?.usedCallerName
+        usedCallerName: responseReady?.payload?.usedCallerName,
+        timestamp: agentTurn?.timestamp || null
       };
     }
 
