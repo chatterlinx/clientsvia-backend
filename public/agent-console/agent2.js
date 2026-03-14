@@ -19,6 +19,22 @@
   /* --------------------------------------------------------------------------
      CONFIGURATION
      -------------------------------------------------------------------------- */
+  // ─── Optimal performance defaults (used by "↺ Optimal Defaults" buttons) ───
+  const OPTIMAL_DEFAULTS = {
+    speech: {
+      speechTimeout:        1.5,
+      initialTimeout:       7,
+      bargeIn:              false,
+      enhancedRecognition:  true,
+      speechModel:          'phone_call'
+    },
+    bridge: {
+      thresholdMs:          500,
+      heartbeatSilenceMs:   5000,
+      maxCeilingMs:         15000
+    }
+  };
+
   const CONFIG = {
     API_BASE: '/api/agent-console',
     DEFAULT_CONSENT_PHRASES: [
@@ -384,6 +400,10 @@
     if (DOM.inputBridgeEnabled) {
       DOM.inputBridgeEnabled.addEventListener('change', () => { state.isDirty = true; });
     }
+
+    // Optimal defaults reset buttons
+    document.getElementById('btn-reset-speech')?.addEventListener('click', resetSpeechToDefaults);
+    document.getElementById('btn-reset-bridge')?.addEventListener('click', resetBridgeToDefaults);
   }
 
   /* --------------------------------------------------------------------------
@@ -609,6 +629,27 @@
     if (DOM.inputSpeechTimeout) {
       DOM.inputSpeechTimeout.addEventListener('input', updateSpeechImpactPreview);
     }
+  }
+
+  function resetSpeechToDefaults() {
+    const d = OPTIMAL_DEFAULTS.speech;
+    if (DOM.inputSpeechTimeout)       DOM.inputSpeechTimeout.value         = d.speechTimeout;
+    if (DOM.inputSpeechInitialTimeout) DOM.inputSpeechInitialTimeout.value  = d.initialTimeout;
+    if (DOM.inputSpeechBargeIn)       DOM.inputSpeechBargeIn.checked        = d.bargeIn;
+    if (DOM.inputSpeechEnhanced)      DOM.inputSpeechEnhanced.checked       = d.enhancedRecognition;
+    if (DOM.inputSpeechModel)         DOM.inputSpeechModel.value            = d.speechModel;
+    updateSpeechImpactPreview();
+    state.isDirty = true;
+    showToast('info', 'Defaults Applied', 'Speech Detection reset to optimal. Save to persist.');
+  }
+
+  function resetBridgeToDefaults() {
+    const d = OPTIMAL_DEFAULTS.bridge;
+    if (DOM.inputBridgeThreshold)         DOM.inputBridgeThreshold.value         = d.thresholdMs;
+    if (DOM.inputBridgeHeartbeatSilence)  DOM.inputBridgeHeartbeatSilence.value  = d.heartbeatSilenceMs;
+    if (DOM.inputBridgeHardcap)           DOM.inputBridgeHardcap.value           = d.maxCeilingMs;
+    state.isDirty = true;
+    showToast('info', 'Defaults Applied', 'Bridge reset to optimal. Save to persist.');
   }
 
   /* --------------------------------------------------------------------------
