@@ -1549,6 +1549,22 @@ body {
   font-weight: 600;
 }
 
+.ci-card-link {
+  margin-left: 0.6rem;
+  font-size: 0.75rem;
+  color: #6d28d9;
+  text-decoration: none;
+  font-weight: 600;
+}
+.ci-card-link:hover { text-decoration: underline; color: #7c3aed; }
+
+.ci-unknown {
+  color: #dc2626;
+  font-style: italic;
+  font-family: inherit;
+  font-weight: 700;
+}
+
 .path-fallback {
   color: #DC2626;
   font-weight: 600;

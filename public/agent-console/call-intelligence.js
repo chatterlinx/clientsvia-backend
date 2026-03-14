@@ -1280,22 +1280,39 @@
                       ${turn.triggerEvaluation.matched ? '✅ MATCHED' : '❌ NO MATCH'}
                     </span>
                   </div>
-                  ${turn.triggerEvaluation.matched ? `
+                  ${turn.triggerEvaluation.matched ? (() => {
+                    const _cid = new URLSearchParams(window.location.search).get('companyId') || '';
+                    const _rid = turn.triggerEvaluation.ruleId || '';
+                    const _rawId = turn.triggerEvaluation.cardId || '';
+                    const _editHref = _rid && _cid
+                      ? `/agent-console/triggers.html?companyId=${_cid}&edit=${encodeURIComponent(_rid)}`
+                      : null;
+                    const _editLink = _editHref
+                      ? `<a href="${_editHref}" target="_blank" class="ci-card-link">Edit card ↗</a>`
+                      : '';
+                    return `
                     <div class="step-detail">
-                      <span class="detail-label">Matched Trigger ID:</span>
-                      <span class="detail-value"><code class="trigger-id-display">${turn.triggerEvaluation.ruleId || turn.triggerEvaluation.cardId || 'Unknown'}</code></span>
+                      <span class="detail-label">Rule ID:</span>
+                      <span class="detail-value">
+                        <code class="trigger-id-display">${_rid || '<span class="ci-unknown">UNKNOWN — trace gap</span>'}</code>
+                        ${_editLink}
+                      </span>
                     </div>
+                    ${_rawId && _rawId !== _rid ? `
+                    <div class="step-detail">
+                      <span class="detail-label">Full Card ID:</span>
+                      <span class="detail-value"><code class="trigger-id-display">${_rawId}</code></span>
+                    </div>` : ''}
                     ${turn.triggerEvaluation.cardLabel ? `
-                      <div class="step-detail">
-                        <span class="detail-label">Matched Trigger Name:</span>
-                        <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
-                      </div>
-                    ` : ''}
+                    <div class="step-detail">
+                      <span class="detail-label">Card Name:</span>
+                      <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
+                    </div>` : ''}
                     <div class="step-detail">
                       <span class="detail-label">Matched On:</span>
                       <span class="detail-value">${turn.triggerEvaluation.matchedOn || 'keyword'}</span>
-                    </div>
-                  ` : ''}
+                    </div>`;
+                  })() : ''}
                 </div>
               </div>
             ` : ''}
