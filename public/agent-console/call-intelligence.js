@@ -14,6 +14,8 @@
   // STATE MANAGEMENT
   // =============================================================================
 
+  let _playerCounter = 0;
+
   const state = {
     companyId: null,
     calls: [],
@@ -515,15 +517,16 @@
         playerRow.innerHTML = `
           <td colspan="10" class="recording-player-cell">
             <div class="recording-player-wrapper">
-              <audio controls autoplay class="recording-audio-player">
-                <source src="${url}" type="audio/mpeg">
-                Your browser does not support the audio element.
-              </audio>
+              ${buildCustomPlayer(url)}
               <a href="${url}" target="_blank" class="recording-external-link" title="Open in new tab">&#8599;</a>
             </div>
           </td>
         `;
         row.after(playerRow);
+        initAllCustomPlayers(playerRow);
+        // Auto-play after init
+        const audio = playerRow.querySelector('.cv-audio');
+        if (audio) audio.play().catch(() => {});
         btn.classList.add('active');
       });
     });
@@ -702,15 +705,13 @@
           if (!audioSrc) return '';
           return `
             <div class="overview-recording">
-              <span class="overview-recording-label">Call Recording</span>
+              <span class="overview-recording-label">CALL RECORDING</span>
               <div class="overview-recording-player">
-                <audio controls class="modal-recording-audio">
-                  <source src="${audioSrc}" type="audio/mpeg">
-                  Your browser does not support the audio element.
-                </audio>
-                ${rec.duration ? '<span class="recording-duration">' + formatDuration(rec.duration) + '</span>' : ''}
-                ${rec.sid ? '<a href="https://www.twilio.com/console/voice/recordings/' + rec.sid + '" target="_blank" class="recording-external-link" title="Open in Twilio Console">Twilio Console &#8599;</a>' : ''}
-                ${rec.url ? '<a href="' + rec.url + '" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>' : ''}
+                ${buildCustomPlayer(audioSrc)}
+                <div class="recording-links">
+                  ${rec.sid ? '<a href="https://www.twilio.com/console/voice/recordings/' + rec.sid + '" target="_blank" class="recording-external-link" title="Open in Twilio Console">Twilio Console &#8599;</a>' : ''}
+                  ${rec.url ? '<a href="' + rec.url + '" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>' : ''}
+                </div>
               </div>
             </div>
           `;
@@ -1810,6 +1811,91 @@
     `;
   }
 
+  // =============================================================================
+  // CUSTOM AUDIO PLAYER
+  // =============================================================================
+
+  function buildCustomPlayer(url) {
+    const id = 'cvp-' + (++_playerCounter);
+    return `
+      <div class="cv-player" id="${id}">
+        <audio class="cv-audio" src="${url}" preload="metadata"></audio>
+        <button class="cv-btn cv-btn-play" title="Play / Pause">&#9654;</button>
+        <button class="cv-btn cv-btn-skip" data-skip="-10" title="Back 10s">&#8722;10s</button>
+        <div class="cv-seek-block">
+          <span class="cv-time cv-time-cur">0:00</span>
+          <input type="range" class="cv-seek" min="0" max="100" value="0" step="0.1">
+          <span class="cv-time cv-time-dur">&#8210;</span>
+        </div>
+        <button class="cv-btn cv-btn-skip" data-skip="10" title="Forward 10s">+10s</button>
+        <select class="cv-speed" title="Playback speed">
+          <option value="0.75">0.75&#215;</option>
+          <option value="1" selected>1&#215;</option>
+          <option value="1.25">1.25&#215;</option>
+          <option value="1.5">1.5&#215;</option>
+          <option value="2">2&#215;</option>
+        </select>
+      </div>
+    `;
+  }
+
+  function initCustomPlayer(wrapper) {
+    const audio   = wrapper.querySelector('.cv-audio');
+    const btnPlay = wrapper.querySelector('.cv-btn-play');
+    const seek    = wrapper.querySelector('.cv-seek');
+    const timeCur = wrapper.querySelector('.cv-time-cur');
+    const timeDur = wrapper.querySelector('.cv-time-dur');
+    const skipBtns = wrapper.querySelectorAll('.cv-btn-skip');
+    const speedSel = wrapper.querySelector('.cv-speed');
+
+    function fmt(s) {
+      if (!s || isNaN(s)) return '0:00';
+      const m = Math.floor(s / 60);
+      return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+    }
+
+    audio.addEventListener('loadedmetadata', () => {
+      seek.max = audio.duration;
+      timeDur.textContent = fmt(audio.duration);
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      seek.value = audio.currentTime;
+      timeCur.textContent = fmt(audio.currentTime);
+    });
+
+    audio.addEventListener('play', () => { btnPlay.innerHTML = '&#9646;&#9646;'; });
+    audio.addEventListener('pause', () => { btnPlay.innerHTML = '&#9654;'; });
+    audio.addEventListener('ended', () => { btnPlay.innerHTML = '&#9654;'; });
+
+    btnPlay.addEventListener('click', () => {
+      if (audio.paused) {
+        document.querySelectorAll('.cv-audio').forEach(a => { if (a !== audio) { a.pause(); } });
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    });
+
+    seek.addEventListener('input', () => { audio.currentTime = seek.value; });
+
+    skipBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + Number(btn.dataset.skip)));
+      });
+    });
+
+    speedSel.addEventListener('change', () => { audio.playbackRate = Number(speedSel.value); });
+  }
+
+  function initAllCustomPlayers(scope) {
+    const root = scope || document;
+    root.querySelectorAll('.cv-player:not([data-initialized])').forEach(wrapper => {
+      wrapper.dataset.initialized = '1';
+      initCustomPlayer(wrapper);
+    });
+  }
+
   function attachModalEventListeners() {
     document.querySelectorAll('.copy-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -1820,6 +1906,7 @@
         }
       });
     });
+    initAllCustomPlayers(DOM.modalBody);
   }
 
   function closeAnalysisModal() {
