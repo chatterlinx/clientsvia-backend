@@ -3531,7 +3531,6 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
 
     const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
     const hardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
-    const maxRedirectAttempts = Number.isFinite(bridgeCfg.maxRedirectAttempts) ? bridgeCfg.maxRedirectAttempts : 2;
 
     // V-FIX: Hoist voice settings so all bridge paths can attempt ElevenLabs
     const hostHeader = req.get('host');
@@ -3806,19 +3805,20 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     //
     // THREE SEPARATE TIMING CONCEPTS (never blended):
     //   A. LLM dispatch timing → immediate (handled in v2-agent-respond)
-    //   B. Bridge onset timing → quiet window, then short hold messages
+    //   B. Bridge onset timing → immediate hold phrase on first poll (no dead-air pause)
     //   C. T2 death detection → heartbeat silence threshold, NOT raw elapsed time
     //
     // WHAT WAS KILLED:
     //   - hardCapMs as a decision-maker (legacy, kept in schema for compat only)
     //   - maxRedirectAttempts as a cap (was cutting live responses)
     //   - Twilio <Say> for hold lines (now uses BridgeAudioService cached audio)
+    //   - Attempt-1 silent pause (bridgeQuietWindowMs) — was always 1s due to Twilio floor
+    //   - postBridgePauseMs — Math.round(150ms/1000)=0, condition never fired
     //
     // ═══════════════════════════════════════════════════════════════════════════
     const maxCeilingMs = Number.isFinite(bridgeCfg.maxCeilingMs) ? bridgeCfg.maxCeilingMs : 15000;
     const heartbeatSilenceMs = Number.isFinite(bridgeCfg.heartbeatSilenceMs) ? bridgeCfg.heartbeatSilenceMs : 5000;
     const heartbeatCyclingEnabled = bridgeCfg.heartbeatCyclingEnabled !== false;
-    const bridgeQuietWindowMs = Number.isFinite(bridgeCfg.bridgeQuietWindowMs) ? bridgeCfg.bridgeQuietWindowMs : 500;
 
     // ── Check streaming heartbeat ───────────────────────────────────────────
     let heartbeatAlive = false;
@@ -4193,79 +4193,65 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // STAGED ONSET: T2 still working — cycle hold messages or stay silent
+    // HOLD MESSAGE: T2 still working — play cached bridge phrase immediately
     // ═══════════════════════════════════════════════════════════════════════════
     //
-    // Attempt 1 (quiet window): 500ms silent <Pause> → fast poll back
-    //   - If T2 finishes in <500ms, next poll delivers instantly
-    //   - Caller hears a natural breath-pause, not robotic filler
+    // Every poll (attempt 1, 2, 3...) plays a bridge phrase right away.
+    // No silent pause on attempt 1 — the old "quiet window" was always rounded
+    // up to 1 second by Twilio's floor, adding 1s of dead air on every bridge.
     //
-    // Attempt 2+: Short hold messages (1–1.5s) via BridgeAudioService
-    //   - ElevenLabs cached audio (consistent voice)
-    //   - Falls back to <Pause> if no cached audio (never <Say>)
-    //   - Cycles through configured bridge lines
+    //   - ElevenLabs cached audio (consistent voice) — cycles through lines
+    //   - Falls back to <Pause> on cache miss if ElevenLabs configured
+    //   - Falls back to <Say> for non-ElevenLabs companies
     //
-    // No redirect attempt cap when heartbeat is alive — heartbeat decides.
+    // No redirect attempt cap — heartbeat governs, ceiling is the hard stop.
     // ═══════════════════════════════════════════════════════════════════════════
     const redirectUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=${attempt}`;
     const twiml = new twilio.twiml.VoiceResponse();
 
-    const postBridgePauseMs = Number.isFinite(bridgeCfg.postBridgePauseMs) ? bridgeCfg.postBridgePauseMs : 150;
-    const postBridgePauseSec = Math.max(0, Math.round(postBridgePauseMs / 1000));
-
-    if (attempt <= 1) {
-      // ── QUIET WINDOW: silent pause for fast-path delivery ─────────────
-      // Convert ms to seconds for Twilio <Pause>, minimum 1 second (Twilio floor)
-      const pauseSeconds = Math.max(1, Math.round(bridgeQuietWindowMs / 1000));
-      twiml.pause({ length: pauseSeconds });
-    } else {
-      // ── HOLD MESSAGE: short ElevenLabs cached audio ───────────────────
-      // Determine which bridge phrase to use based on call lane context
-      const bridgeContext = req.body?.bridgeContext || 'thinking'; // thinking | booking | transfer
-      let lanePhrase = null;
-      if (bridgeContext === 'booking' && bridgeCfg.bookingBridgePhrase) {
-        lanePhrase = bridgeCfg.bookingBridgePhrase;
-      } else if (bridgeContext === 'transfer' && bridgeCfg.transferBridgePhrase) {
-        lanePhrase = bridgeCfg.transferBridgePhrase;
-      }
-
-      const bridgeLines = bridgeCfg.lines || ['One moment please.'];
-      const usableLines = bridgeLines.filter(l => l && l.trim());
-      const lineIdx = (attempt - 2) % (usableLines.length || 1); // -2 because attempt 1 was quiet
-      const holdLine = lanePhrase || usableLines[lineIdx] || 'One moment please.';
-
-      // V-FIX: Use BridgeAudioService cached ElevenLabs audio; never <Say> for ElevenLabs companies
-      const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
-      const holdAudioUrl = BridgeAudioService.getAudioUrl({
-        companyId: companyID,
-        text: holdLine,
-        voiceSettings,
-        hostHeader
-      });
-
-      if (holdAudioUrl) {
-        twiml.play(holdAudioUrl);
-        voiceProviderUsed = 'elevenlabs_cached';
-      } else if (elevenLabsVoice) {
-        // Cache miss but ElevenLabs configured — silence is better than wrong voice
-        logger.warn('[V2 BRIDGE CONTINUE] No cached bridge audio — using <Pause>', {
-          callSid: callSid?.slice(-8),
-          companyId: companyID,
-          holdLine: holdLine.substring(0, 60),
-          attempt,
-        });
-        twiml.pause({ length: 1 });
-        voiceProviderUsed = 'silence';
-      } else {
-        // No ElevenLabs configured — Twilio <Say> is the correct voice for this company
-        twiml.say(escapeTwiML(holdLine));
-        voiceProviderUsed = 'twilio_say';
-      }
-      // Post-bridge pause: short silence after phrase, before redirect check
-      if (postBridgePauseSec > 0) {
-        twiml.pause({ length: postBridgePauseSec });
-      }
+    // ── HOLD MESSAGE: short ElevenLabs cached audio ───────────────────────────
+    // Determine which bridge phrase to use based on call lane context
+    const bridgeContext = req.body?.bridgeContext || 'thinking'; // thinking | booking | transfer
+    let lanePhrase = null;
+    if (bridgeContext === 'booking' && bridgeCfg.bookingBridgePhrase) {
+      lanePhrase = bridgeCfg.bookingBridgePhrase;
+    } else if (bridgeContext === 'transfer' && bridgeCfg.transferBridgePhrase) {
+      lanePhrase = bridgeCfg.transferBridgePhrase;
     }
+
+    const bridgeLines = bridgeCfg.lines || ['One moment please.'];
+    const usableLines = bridgeLines.filter(l => l && l.trim());
+    const lineIdx = (attempt - 1) % (usableLines.length || 1);
+    const holdLine = lanePhrase || usableLines[lineIdx] || 'One moment please.';
+
+    // Use BridgeAudioService cached ElevenLabs audio; never <Say> for ElevenLabs companies
+    const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
+    const holdAudioUrl = BridgeAudioService.getAudioUrl({
+      companyId: companyID,
+      text: holdLine,
+      voiceSettings,
+      hostHeader
+    });
+
+    if (holdAudioUrl) {
+      twiml.play(holdAudioUrl);
+      voiceProviderUsed = 'elevenlabs_cached';
+    } else if (elevenLabsVoice) {
+      // Cache miss but ElevenLabs configured — silence is better than wrong voice
+      logger.warn('[V2 BRIDGE CONTINUE] No cached bridge audio — using <Pause>', {
+        callSid: callSid?.slice(-8),
+        companyId: companyID,
+        holdLine: holdLine.substring(0, 60),
+        attempt,
+      });
+      twiml.pause({ length: 1 });
+      voiceProviderUsed = 'silence';
+    } else {
+      // No ElevenLabs configured — Twilio <Say> is the correct voice for this company
+      twiml.say(escapeTwiML(holdLine));
+      voiceProviderUsed = 'twilio_say';
+    }
+
     // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)
     twiml.redirect({ method: 'POST' }, redirectUrl);
     twimlString = twiml.toString();
@@ -4902,9 +4888,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const bridgePostGatherDelayMs = Number.isFinite(bridgeCfg.postGatherDelayMs) ? bridgeCfg.postGatherDelayMs
       : (Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 200);
     const bridgeHardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
-    // V131: Per-call cap removed — bridge is now per-turn, uncapped.
-    // maxBridgesPerCall kept in schema for backward compat but no longer enforced.
-    const bridgeMaxRedirectAttempts = Number.isFinite(bridgeCfg.maxRedirectAttempts) ? bridgeCfg.maxRedirectAttempts : 2;
 
     // V131: Only suppress bridge during active transfers (legitimate).
     // Pending yes/no and PFUQ guards REMOVED — these are internal state concepts
@@ -6273,7 +6256,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           elapsedMs,
           thresholdMs: bridgePostGatherDelayMs,
           hardCapMs: bridgeHardCapMs,
-          maxRedirectAttempts: bridgeMaxRedirectAttempts,
           bridgeTurn: turnNumber,
           lineIdx: idx,
           linePreview: bridgeLine.substring(0, 80),
