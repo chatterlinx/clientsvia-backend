@@ -506,6 +506,7 @@ class CallRuntime {
                         turn,
                         bridgeToken: context.bridgeToken || null,
                         redis: context.redis || null,
+                        onSentence: context.onSentence || null,
                     });
 
                     // Apply Name Greeting as universal first-response decorator.

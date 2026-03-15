@@ -4288,6 +4288,166 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SENTENCE-CONTINUE ENDPOINT — Sentence-by-sentence TTS streaming
+// ═══════════════════════════════════════════════════════════════════════════
+// Called by Twilio after each sentence plays. Serves the next sentence.
+//
+// Flow:
+//   s0 plays (served by v2-agent-respond firstSentence path)
+//     → <Redirect /v2-agent-sentence-continue?idx=1>
+//   s1 synthesized → plays → <Redirect ...?idx=2>
+//   ...until no more sentences → final <Gather> to listen for caller
+//
+// Edge cases:
+//   - LLM full result ready → serve remaining sentences batched
+//   - Next sentence not yet synthesized → brief poll + self-redirect
+//   - Total sentences exceeded cap (10) → finalize
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
+  const companyID = req.params.companyID;
+  const turn      = parseInt(req.query.turn || '0', 10);
+  const token     = req.query.token || '';
+  const idx       = parseInt(req.query.idx || '1', 10);
+  const callSid   = req.query.callSid || req.body?.CallSid || '';
+  const attempt   = parseInt(req.query.attempt || '0', 10);
+
+  const MAX_SENTENCES  = 10;
+  const MAX_POLL_TRIES = 6;   // 6 × 300ms = 1.8s max wait for next sentence
+  const POLL_PAUSE_MS  = 300;
+
+  res.type('text/xml');
+
+  try {
+    const redis = getRedisClient();
+
+    // ── Read gather config saved by v2-agent-respond ──────────────────────
+    const gatherConfigRaw = redis ? await redis.get(`a2sentence:gather:${callSid}:${turn}`).catch(() => null) : null;
+    const gatherCfg       = gatherConfigRaw ? JSON.parse(gatherConfigRaw) : null;
+    const hostHeader      = gatherCfg?.hostHeader || req.get('host') || '';
+    const voiceId         = gatherCfg?.voiceId || null;
+    const voiceSettings   = gatherCfg?.voiceSettings || {};
+
+    // ── Helper: build final <Gather> TwiML to listen for caller ──────────
+    const buildFinalGather = (extraAudioUrl = null) => {
+      const twiml  = new twilio.twiml.VoiceResponse();
+      const gather = twiml.gather({
+        input:                    'speech',
+        action:                   gatherCfg?.action || `/api/twilio/v2-agent-respond/${companyID}`,
+        method:                   'POST',
+        actionOnEmptyResult:      true,
+        timeout:                  gatherCfg?.timeout ?? 7,
+        speechTimeout:            gatherCfg?.speechTimeout ?? '1.5',
+        bargeIn:                  gatherCfg?.bargeIn ?? false,
+        enhanced:                 gatherCfg?.enhanced ?? true,
+        speechModel:              gatherCfg?.speechModel || 'phone_call',
+        partialResultCallback:    `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+        partialResultCallbackMethod: 'POST',
+      });
+      if (extraAudioUrl) gather.play(extraAudioUrl);
+      return twiml.toString();
+    };
+
+    // ── Safety cap: too many sentences or no redis → finalize ────────────
+    if (idx >= MAX_SENTENCES || !redis || !callSid) {
+      return res.send(buildFinalGather());
+    }
+
+    // ── Check if full LLM result is already in Redis ──────────────────────
+    // If the full result key exists (set by SentenceStreamingService),
+    // all sentences are done — serve any remaining and finalize.
+    const fullResultKey = resultKey(callSid, turn, token);
+    const fullResult    = redis ? await redis.get(fullResultKey).catch(() => null) : null;
+
+    // ── Read next sentence audio URL ──────────────────────────────────────
+    const sAudioKey = `a2sentence:audio:${callSid}:${turn}:${idx}`;
+    let   sAudioUrl = redis ? await redis.get(sAudioKey).catch(() => null) : null;
+
+    // ── If audio not ready yet, poll briefly ─────────────────────────────
+    if (!sAudioUrl && attempt < MAX_POLL_TRIES) {
+      // Check if sentence text exists (being synthesized)
+      const sTextKey  = `a2sentence:${callSid}:${turn}:${idx}`;
+      const sText     = redis ? await redis.get(sTextKey).catch(() => null) : null;
+
+      if (sText && voiceId) {
+        // Sentence text arrived but audio isn't ready — synthesize now
+        try {
+          const company = await require('../models/Company').findById(companyID).lean();
+          const buf     = await synthesizeSpeech({
+            text:                       sText,
+            voiceId,
+            stability:                  voiceSettings.stability,
+            similarity_boost:           voiceSettings.similarityBoost,
+            style:                      voiceSettings.styleExaggeration,
+            use_speaker_boost:          voiceSettings.speakerBoost,
+            model_id:                   voiceSettings.aiModel,
+            output_format:              voiceSettings.outputFormat,
+            optimize_streaming_latency: voiceSettings.streamingLatency,
+            company,
+          });
+          const sFile = `s${idx}_${callSid}_${turn}_${Date.now()}.mp3`;
+          fs.writeFileSync(path.join(__dirname, '../public/audio', sFile), buf);
+          sAudioUrl = `https://${hostHeader}/audio/${sFile}`;
+          await redis.set(sAudioKey, sAudioUrl, { EX: 60 }).catch(() => {});
+        } catch (synthErr) {
+          logger.warn('[SENTENCE_CONTINUE] Synthesis failed for idx=' + idx, { error: synthErr.message, callSid: callSid?.slice(-8) });
+        }
+      }
+
+      if (!sAudioUrl) {
+        // Not ready — self-redirect to poll again after brief pause
+        const twiml    = new twilio.twiml.VoiceResponse();
+        const nextTry  = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-sentence-continue/${companyID}?turn=${turn}&token=${encodeURIComponent(token)}&idx=${idx}&callSid=${encodeURIComponent(callSid)}&attempt=${attempt + 1}`;
+        twiml.pause({ length: 1 });  // 1s pause before retry (Twilio minimum)
+        twiml.redirect({ method: 'POST' }, nextTry);
+        return res.send(twiml.toString());
+      }
+    }
+
+    if (sAudioUrl) {
+      // Sentence audio ready — play it and redirect for next
+      const twiml   = new twilio.twiml.VoiceResponse();
+      const isLast  = !!fullResult && !(redis ? await redis.get(`a2sentence:${callSid}:${turn}:${idx + 1}`).catch(() => null) : null);
+
+      if (isLast) {
+        // Last sentence — final gather
+        const gather = twiml.gather({
+          input:                    'speech',
+          action:                   gatherCfg?.action || `/api/twilio/v2-agent-respond/${companyID}`,
+          method:                   'POST',
+          actionOnEmptyResult:      true,
+          timeout:                  gatherCfg?.timeout ?? 7,
+          speechTimeout:            gatherCfg?.speechTimeout ?? '1.5',
+          bargeIn:                  gatherCfg?.bargeIn ?? false,
+          enhanced:                 gatherCfg?.enhanced ?? true,
+          speechModel:              gatherCfg?.speechModel || 'phone_call',
+          partialResultCallback:    `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+          partialResultCallbackMethod: 'POST',
+        });
+        gather.play(sAudioUrl);
+      } else {
+        const nextUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-sentence-continue/${companyID}?turn=${turn}&token=${encodeURIComponent(token)}&idx=${idx + 1}&callSid=${encodeURIComponent(callSid)}&attempt=0`;
+        twiml.play(sAudioUrl);
+        twiml.redirect({ method: 'POST' }, nextUrl);
+      }
+      return res.send(twiml.toString());
+    }
+
+    // Nothing ready and poll exhausted — finalize with gather
+    return res.send(buildFinalGather());
+
+  } catch (err) {
+    logger.error('[SENTENCE_CONTINUE] Endpoint error', { error: err.message, callSid: callSid?.slice(-8) });
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.gather({
+      input: 'speech',
+      action: `/api/twilio/v2-agent-respond/${companyID}`,
+      method: 'POST', actionOnEmptyResult: true, timeout: 7,
+    });
+    return res.send(twiml.toString());
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // V130: LISTEN ENDPOINT (POST-BRIDGE GATHER)
 // ═══════════════════════════════════════════════════════════════════════════
 // Called after bridge continuation plays the response.
@@ -5216,6 +5376,96 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
       
       // ═══════════════════════════════════════════════════════════════════════════
+      // SENTENCE STREAMING — First-sentence TTS fast path
+      // ═══════════════════════════════════════════════════════════════════════════
+      // onSentence fires per-sentence as the LLM streams tokens.
+      //   idx=0 → immediately synthesize s0 with ElevenLabs → resolve firstSentenceAudioPromise
+      //           This lets the bridge race skip its delay and play s0 to the caller
+      //           while s1, s2... are still being generated.
+      //   idx>0 → write sentence text to Redis for /v2-agent-sentence-continue to serve
+      // ═══════════════════════════════════════════════════════════════════════════
+      let _firstSentenceAudioResolve;
+      // Safety: auto-resolve null after 4s so bridge race never hangs
+      const firstSentenceAudioPromise = new Promise(resolve => {
+        _firstSentenceAudioResolve = resolve;
+        setTimeout(() => resolve(null), 4000);
+      });
+
+      const _sentenceVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+      const _sentenceElevenLabsVoice = elevenLabsVoice;  // already resolved above
+      const _sentenceHostHeader = hostHeader;
+      const _sentenceTurnToken = preGeneratedBridgeToken;
+
+      const onSentence = async (sentence, idx) => {
+        try {
+          // Write ALL sentences to Redis for sentence-continue endpoint
+          if (redis && callSid) {
+            await redis.set(
+              `a2sentence:${callSid}:${turnNumber}:${idx}`,
+              sentence,
+              { EX: 60 }
+            ).catch(() => {});
+          }
+
+          // ALL idx>0: synthesize in background so sentence-continue finds audio ready
+          if (idx > 0 && _sentenceElevenLabsVoice) {
+            (async () => {
+              try {
+                const buf2    = await synthesizeSpeech({
+                  text: sentence, voiceId: _sentenceElevenLabsVoice,
+                  stability:                  _sentenceVoiceSettings.stability,
+                  similarity_boost:           _sentenceVoiceSettings.similarityBoost,
+                  style:                      _sentenceVoiceSettings.styleExaggeration,
+                  use_speaker_boost:          _sentenceVoiceSettings.speakerBoost,
+                  model_id:                   _sentenceVoiceSettings.aiModel,
+                  output_format:              _sentenceVoiceSettings.outputFormat,
+                  optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
+                  company,
+                });
+                const sFile = `s${idx}_${callSid}_${turnNumber}_${Date.now()}.mp3`;
+                fs.writeFileSync(path.join(__dirname, '../public/audio', sFile), buf2);
+                const sUrl = `https://${_sentenceHostHeader}/audio/${sFile}`;
+                if (redis && callSid) {
+                  await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:${idx}`, sUrl, { EX: 60 }).catch(() => {});
+                }
+              } catch { /* non-fatal — sentence-continue will synthesize on demand */ }
+            })();
+          }
+
+          // idx=0: synthesize immediately → fire firstSentenceAudioPromise
+          if (idx === 0 && _sentenceElevenLabsVoice && mayBridge) {
+            const buf = await synthesizeSpeech({
+              text:                       sentence,
+              voiceId:                    _sentenceElevenLabsVoice,
+              stability:                  _sentenceVoiceSettings.stability,
+              similarity_boost:           _sentenceVoiceSettings.similarityBoost,
+              style:                      _sentenceVoiceSettings.styleExaggeration,
+              use_speaker_boost:          _sentenceVoiceSettings.speakerBoost,
+              model_id:                   _sentenceVoiceSettings.aiModel,
+              output_format:              _sentenceVoiceSettings.outputFormat,
+              optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
+              company,
+            });
+            const s0FileName = `s0_${callSid}_${turnNumber}_${Date.now()}.mp3`;
+            const s0Path     = path.join(__dirname, '../public/audio', s0FileName);
+            fs.writeFileSync(s0Path, buf);
+            const s0Url = `https://${_sentenceHostHeader}/audio/${s0FileName}`;
+            // Write s0 audio URL to Redis so sentence-continue can pick it up
+            if (redis && callSid) {
+              await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:0`, s0Url, { EX: 60 }).catch(() => {});
+            }
+            _firstSentenceAudioResolve({ audioUrl: s0Url, sentence });
+          }
+        } catch (err) {
+          logger.warn('[SENTENCE_STREAM] onSentence synthesis failed (non-fatal)', {
+            idx, error: err.message, callSid: callSid?.slice(-8),
+          });
+          // On s0 failure, resolve with null so bridge race doesn't hang
+          if (idx === 0) _firstSentenceAudioResolve(null);
+        }
+      };
+
+      // ═══════════════════════════════════════════════════════════════════════════
       // CORE RUNTIME - Process turn and collect events in buffer
       // ═══════════════════════════════════════════════════════════════════════════
       const T2_start = Date.now();
@@ -5232,6 +5482,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           inputTextSource,
           bridgeToken: mayBridge ? preGeneratedBridgeToken : null,
           redis: redis || null,
+          onSentence,
         }
       );
       timings.coreRuntimeMs = Date.now() - T2_start;
@@ -5727,6 +5978,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (audioUrl) gather.play(audioUrl);
       else gather.say(escapeTwiML(responseText));
 
+      // Write gather config to Redis for sentence-continue endpoint
+      if (redis && callSid) {
+        redis.set(`a2sentence:gather:${callSid}:${turnNumber}`, JSON.stringify({
+          action:         `/api/twilio/v2-agent-respond/${companyID}`,
+          timeout:        gatherTimeout,
+          speechTimeout:  speechTimeoutValue,
+          bargeIn:        speechDet.bargeIn ?? false,
+          enhanced:       speechDet.enhancedRecognition ?? true,
+          speechModel:    speechDet.speechModel || 'phone_call',
+          hostHeader,
+          companyID,
+          voiceSettings:  _sentenceVoiceSettings,
+          voiceId:        elevenLabsVoice || null,
+        }), { EX: 120 }).catch(() => {});
+      }
+
       // V-FIX: Voice decision audit log
       logVoiceDecision(CallLogger, {
         callSid, companyId: companyID, turnNumber,
@@ -6127,10 +6394,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // hits. When any cached audio is detected inside computeTurnPromise,
     // _fastPathResolve fires immediately — bridge is skipped and we wait for
     // compute to finish (which completes in <10ms after fastPath signals).
+    //
+    // FIRST-SENTENCE STREAMING: firstSentenceAudioPromise fires when s0 TTS is
+    // ready (~400-600ms). The bridge plays s0 immediately then redirects to
+    // /v2-agent-sentence-continue for s1, s2... while LLM is still generating.
     // ══════════════════════════════════════════════════════════════════════════
     const delayPromise = new Promise((resolve) => setTimeout(resolve, bridgePostGatherDelayMs));
     const first = await Promise.race([
       fastPathPromise.then(() => ({ kind: 'fast' })),
+      firstSentenceAudioPromise.then((r) => ({ kind: 'firstSentence', r })),
       computeTurnPromise.then((r) => ({ kind: 'result', r })),
       delayPromise.then(() => ({ kind: 'delay' }))
     ]);
@@ -6148,6 +6420,38 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         responsePreview: result.responseText,
         matchSource: result.matchSource,
         timings: result.timings
+      });
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    if (first.kind === 'firstSentence' && first.r?.audioUrl) {
+      // ── FIRST-SENTENCE FAST PATH ─────────────────────────────────────────
+      // s0 is synthesized and ready. Play it immediately, then redirect to
+      // sentence-continue for s1, s2... Caller hears audio in ~500ms.
+      const { audioUrl: s0Url } = first.r;
+      const sentContinueUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-sentence-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(preGeneratedBridgeToken)}&idx=1&callSid=${encodeURIComponent(callSid)}`;
+
+      const s0Twiml = new twilio.twiml.VoiceResponse();
+      s0Twiml.play(s0Url);
+      s0Twiml.redirect({ method: 'POST' }, sentContinueUrl);
+      twimlString    = s0Twiml.toString();
+      voiceProviderUsed = 'elevenlabs_sentence_streaming';
+
+      if (CallLogger) {
+        CallLogger.logEvent({
+          callId: callSid, companyId: companyID,
+          type:   'SENTENCE_STREAM_S0_DELIVERED',
+          turn:   turnNumber,
+          data:   { audioUrl: s0Url, elapsedMs: Date.now() - T0 }
+        }).catch(() => {});
+      }
+
+      await logTwimlSent({
+        route: '/v2-agent-respond',
+        twimlString, voiceProviderUsed,
+        responsePreview: first.r.sentence,
+        matchSource: 'SENTENCE_STREAM',
       });
       res.type('text/xml');
       return res.send(twimlString);

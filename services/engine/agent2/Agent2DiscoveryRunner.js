@@ -148,7 +148,7 @@ function deepMergeLLMAgent(target, source) {
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null }) {
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null, onSentence = null }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -287,6 +287,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       token: bridgeToken,
       redis,
       emit,
+      onSentence,
     });
 
     // Complete failure — no response at all
@@ -378,7 +379,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
  * @param {Function} params.emit           - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null, sttEmpty = false, bookingDirection = false }) {
+async function callLLMAgentForNoMatch({ company, input, capturedReason, channel, turn, emit, llmTurnsThisCall = 0, callSid, bridgeToken, redis, t3RecoveryCtx, callerName = null, callContext = null, sttEmpty = false, bookingDirection = false, onSentence = null }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -574,6 +575,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       token: bridgeToken,
       redis,
       emit,
+      onSentence,
       ...(maxCeilingMs ? { maxCeilingMs } : {}),
     });
 
@@ -654,7 +656,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
 // The caller (run()) is responsible for writing state to match ScrabEngine format.
 // ────────────────────────────────────────────────────────────────────────────
 
-async function callLLMAgentForIntake({ company, input, channel, turn, emit, callSid, bridgeToken, redis }) {
+async function callLLMAgentForIntake({ company, input, channel, turn, emit, callSid, bridgeToken, redis, onSentence = null }) {
   const FUNC_TAG = '[LLM_INTAKE]';
 
   try {
@@ -725,6 +727,7 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
       token: bridgeToken,
       redis,
       emit,
+      onSentence,
     });
 
     // ── Handle streaming failure ─────────────────────────────────────────
@@ -1161,7 +1164,7 @@ class Agent2DiscoveryRunner {
    * @param {number} params.turn - Current turn number
    * @returns {Object|null} { response, matchSource, state } or null if disabled
    */
-  static async run({ company, companyId, callSid, userInput, state, emitEvent = null, turn = null, bridgeToken = null, redis = null }) {
+  static async run({ company, companyId, callSid, userInput, state, emitEvent = null, turn = null, bridgeToken = null, redis = null, onSentence = null }) {
     const emit = (type, data) => {
       try {
         if (typeof emitEvent === 'function') emitEvent(type, data);
@@ -1353,6 +1356,7 @@ class Agent2DiscoveryRunner {
         callSid,
         bridgeToken,
         redis,
+        onSentence,
       });
 
       if (intakeResult?.responseText) {
@@ -1605,6 +1609,7 @@ class Agent2DiscoveryRunner {
           callerName,
           callContext: existingCallContext,
           sttEmpty: true,
+          onSentence,
         });
 
         if (sttLlmResult?.response) {
@@ -1974,6 +1979,7 @@ class Agent2DiscoveryRunner {
             callSid, turn, bridgeToken, redis,
             callerName, selfScheduling,
             callContext: nextState.agent2?.callContext || null,
+            onSentence,
           });
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
@@ -2003,6 +2009,7 @@ class Agent2DiscoveryRunner {
             callSid, turn, bridgeToken, redis,
             callerName, selfScheduling,
             callContext: nextState.agent2?.callContext || null,
+            onSentence,
           });
           if (llmAgentResult) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -2052,6 +2059,7 @@ class Agent2DiscoveryRunner {
             callSid, turn, bridgeToken, redis,
             callerName, selfScheduling,
             callContext: nextState.agent2?.callContext || null,
+            onSentence,
           });
           if (llmAgentResult) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -2101,6 +2109,7 @@ class Agent2DiscoveryRunner {
           callSid, turn, bridgeToken, redis,
           callerName, selfScheduling,
           callContext: nextState.agent2?.callContext || null,
+          onSentence,
         });
         if (llmAgentResult) {
           const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
@@ -4535,6 +4544,7 @@ class Agent2DiscoveryRunner {
         callerName,     // Thread caller name so T2 can personalize response
         callContext: nextState.agent2?.callContext || null,
         bookingDirection, // llmhandoff: tell LLM to guide toward scheduling
+        onSentence,
       });
 
       if (llmAgentResult?.response) {
