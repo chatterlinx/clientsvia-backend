@@ -5671,6 +5671,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (!responseText || !responseText.trim()) {
         responseText = (await getRecoveryMessage(company, 'generalError')) || 'I can help you with that.';
       }
+      // Strip the hardcoded "Ok."/"Okay." ackWord that Agent2DiscoveryRunner prepends by default.
+      // OpenerEngine already skips Agent2 paths so nothing replaces it — bare response sounds more natural.
+      if (responseText) responseText = responseText.replace(/^(Ok|Okay)\.\s+/i, '').trim();
 
       // ═══════════════════════════════════════════════════════════════════════════
       // 📊 UPDATE CALL SUMMARY TURN COUNT
@@ -5837,6 +5840,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   triggerCardLabel: runtimeResult?.triggerCard?.label || null,
                   fileName: iaStatus.fileName,
                   url: iaStatus.url,
+                  matchSource: runtimeResult?.matchSource || null
+                }
+              }).catch(() => {});
+            }
+          } else {
+            // BRIDGE-SKIP FIX: Trigger card matched but audio not pre-cached.
+            // Fire fast-path signal so the race skips the 200ms bridge delay.
+            // Outer scope awaits computeTurnPromise (which continues to synthesize audio).
+            // Twilio webhook timeout is 15s — ElevenLabs synthesis (~300-500ms) is well within budget.
+            _fastPathResolve?.();
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'TRIGGER_BRIDGE_SKIPPED',
+                turn: turnNumber,
+                data: {
+                  triggerCardId: runtimeResult?.triggerCard?.id || null,
+                  triggerCardLabel: runtimeResult?.triggerCard?.label || null,
+                  reason: 'trigger_match_no_instant_audio',
                   matchSource: runtimeResult?.matchSource || null
                 }
               }).catch(() => {});
@@ -6255,27 +6278,35 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             to: req.body.To || null
           });
 
-          // Telephony action for this turn (what was actually played to the caller)
-          await CallTranscriptV2.appendTurns(companyID, callSid, [
-            {
-              speaker: 'system',
-              kind: audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
-              text: responseText.trim(),
-              turnNumber,
-              ts: new Date(),
-              sourceKey: 'twiml',
-              trace: {
-                action: audioUrl ? 'PLAY' : 'SAY',
-                audioUrl: audioUrl || null,
-                voiceProviderUsed: localVoiceProviderUsed,
-                origin: agentTurn?.provenance?.uiPath || null,
-                gather: {
-                  action: `/api/twilio/v2-agent-respond/${companyID}`,
-                  partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`
+          // Telephony action for this turn (what was actually played to the caller).
+          // DEDUP FIX: Skip this log when the bridge path is active — bridge-continue logs TWIML_PLAY
+          // instead, after it actually plays the audio. Both logging it would double the entry in
+          // spokenLines. The bridge guard key is set at ~200ms when delay wins the race; this IIFE
+          // always finishes >200ms later, so the check is reliable.
+          const _twimlLogBridgeKey = `a2bridge:turn:${callSid}:${turnNumber}`;
+          const _bridgeIsActive = !!(redis && await redis.get(_twimlLogBridgeKey).catch(() => null));
+          if (!_bridgeIsActive) {
+            await CallTranscriptV2.appendTurns(companyID, callSid, [
+              {
+                speaker: 'system',
+                kind: audioUrl ? 'TWIML_PLAY' : 'TWIML_SAY',
+                text: responseText.trim(),
+                turnNumber,
+                ts: new Date(),
+                sourceKey: 'twiml',
+                trace: {
+                  action: audioUrl ? 'PLAY' : 'SAY',
+                  audioUrl: audioUrl || null,
+                  voiceProviderUsed: localVoiceProviderUsed,
+                  origin: agentTurn?.provenance?.uiPath || null,
+                  gather: {
+                    action: `/api/twilio/v2-agent-respond/${companyID}`,
+                    partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`
+                  }
                 }
               }
-            }
-          ]);
+            ]);
+          }
 
           // Consent gate diagnostic: log every follow-up consent decision to transcript
           const runtimeLastPath = persistedState?.agent2?.discovery?.lastPath || '';
