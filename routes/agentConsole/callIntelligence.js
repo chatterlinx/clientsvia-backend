@@ -74,7 +74,7 @@ function normalizeTurn(turn) {
   return normalized;
 }
 
-function buildTranscript(turns = [], limit = 12) {
+function buildTranscript(turns = [], limit = 25) {
   const normalized = turns.map(normalizeTurn).filter(t => t && t.text);
   if (normalized.length === 0) return [];
   return normalized.slice(Math.max(0, normalized.length - limit));
@@ -155,7 +155,7 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
   if (turns.length === 0 && trace.length === 0) return [];
 
   const flowSteps = [];
-  const maxTurns = 10;
+  const maxTurns = 20;
 
   // Collect turn numbers from BOTH transcript entries AND trace events
   // so turns with only trace data (e.g., bridge/fallback turns) are visible
@@ -689,12 +689,22 @@ router.get('/:callSid', async (req, res) => {
 
     console.log(`[GET-INTEL] 🔢 Token usage — Claude: ${tokenUsage.claude.totalTokens}, OpenAI: ${tokenUsage.openai.totalTokens}, GPT4: ${tokenUsage.gpt4Analysis.totalTokens}`);
 
+    // Build trace event summary — counts by event type for full audit trail
+    const traceEventSummary = (() => {
+      const counts = {};
+      for (const t of trace) {
+        if (t.kind) counts[t.kind] = (counts[t.kind] || 0) + 1;
+      }
+      return { totalEvents: trace.length, eventCounts: counts };
+    })();
+
     // If GPT-4 analysis exists, merge callContext, recording & tokens, return
     if (intelligence) {
       const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
       payload.callContext = callContext;
       payload.recording = recording;
       payload.tokenUsage = tokenUsage;
+      payload.traceEventSummary = traceEventSummary;
       return res.json({ success: true, intelligence: payload });
     }
 
@@ -722,7 +732,8 @@ router.get('/:callSid', async (req, res) => {
             routingTier: summary?.routingTier || null
           },
           callContext,
-          tokenUsage
+          tokenUsage,
+          traceEventSummary
         }
       });
     }

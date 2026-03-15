@@ -1798,11 +1798,8 @@
       <section class="analysis-section">
         <h2 class="section-title">📎 RAW DATA ACCESS</h2>
         <div class="raw-data-actions">
-          <button class="btn btn-secondary" onclick="downloadJSON('${intel.callSid}')">
-            📥 Download Full Analysis JSON
-          </button>
-          <a href="/agent-console/call-report?callSid=${intel.callSid}" 
-             class="btn btn-secondary" 
+          <a href="/agent-console/call-report?callSid=${intel.callSid}"
+             class="btn btn-secondary"
              target="_blank">
             🔗 Open in Call Console
           </a>
@@ -2098,6 +2095,11 @@
         }
       });
     });
+    // Wire header download button to this call's SID
+    const headerDownloadBtn = document.getElementById('download-json-btn');
+    if (headerDownloadBtn && intelligence?.callSid) {
+      headerDownloadBtn.onclick = () => window.downloadJSON(intelligence.callSid);
+    }
     initAllCustomPlayers(DOM.modalBody);
     if (intelligence) initTranscriptRail(intelligence);
   }
@@ -2444,8 +2446,31 @@
     }
   };
 
-  window.downloadJSON = function(callSid) {
-    window.open(`/api/call-intelligence/${callSid}`, '_blank');
+  window.downloadJSON = async function(callSid) {
+    const btn = document.getElementById('download-json-btn');
+    const origHTML = btn ? btn.innerHTML : null;
+    try {
+      if (btn) { btn.innerHTML = '⏳ Fetching…'; btn.disabled = true; }
+      const resp = await fetch(`/api/call-intelligence/${callSid}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `call-intelligence-${callSid}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showNotification('JSON downloaded', 'success');
+    } catch (err) {
+      console.error('[downloadJSON] failed:', err);
+      showNotification('Download failed: ' + err.message, 'error');
+    } finally {
+      if (btn && origHTML !== null) { btn.innerHTML = origHTML; btn.disabled = false; }
+    }
   };
 
   // =============================================================================
