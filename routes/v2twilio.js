@@ -5460,7 +5460,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // _firstSentenceAudioResolve and firstSentenceAudioPromise are defined in
       // outer scope (above computeTurnPromise) so the bridge race can see them.
       const _sentenceVoiceSettings   = company?.aiAgentSettings?.voiceSettings || {};
-      const _sentenceElevenLabsVoice = elevenLabsVoice;  // already resolved above
+      // BUG-FIX: `elevenLabsVoice` is declared with `const` at line 5665 (below), causing a TDZ
+      // crash when referenced here. Use _sentenceVoiceSettings.voiceId directly instead.
+      const _sentenceElevenLabsVoice = _sentenceVoiceSettings.voiceId || null;
       const _sentenceHostHeader      = hostHeader;
 
       // ── BUG-28 FIX: Write preflight gather config BEFORE LLM starts ──────────
