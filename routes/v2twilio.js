@@ -98,6 +98,12 @@ try {
     ConversationMemory = null;
 }
 
+// ─── Speculative LLM pre-warm (fires during partialResultCallback) ─────────────
+const { runSpeculativeLLM, checkSpeculativeResult } = require('../services/speculative/SpeculativeLLMService');
+// In-memory debounce: prevents firing LLM on every partial burst.
+// Single-process safe (Render runs one Node instance).
+const _speculativeDebounce = new Map(); // callSid → timer handle
+
 // Helper: Get Redis client safely (returns null if unavailable)
 async function getRedis() {
   if (!isRedisConfigured()) return null;
@@ -5560,10 +5566,31 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       };
 
       // ═══════════════════════════════════════════════════════════════════════════
+      // SPECULATIVE PRE-WARM CHECK
+      // While the caller was speaking, partialResultCallback fired the LLM early.
+      // If that result is in Redis and matches the final transcript (≥75% token
+      // containment), skip the LLM call entirely — ~1–2s saved on every turn.
+      // Falls through to normal processTurn on any error or mismatch.
+      // ═══════════════════════════════════════════════════════════════════════════
+      const _specPrewarm = await checkSpeculativeResult(
+        callSid, speechResult, callState.turnCount || 0, redis
+      );
+      if (_specPrewarm) {
+        // Cancel any in-flight debounce timer for this call — turn is done
+        if (_speculativeDebounce.has(callSid)) {
+          clearTimeout(_speculativeDebounce.get(callSid));
+          _speculativeDebounce.delete(callSid);
+        }
+        // Signal fast path immediately — bridge will either not fire or
+        // bridge-continue will find audio almost instantly (TTS still starts now)
+        _fastPathResolve?.();
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
       // CORE RUNTIME - Process turn and collect events in buffer
       // ═══════════════════════════════════════════════════════════════════════════
       const T2_start = Date.now();
-      const runtimeResult = await CallRuntime.processTurn(
+      const runtimeResult = _specPrewarm || await CallRuntime.processTurn(
         company.aiAgentSettings || {},
         callState,
         speechResult,
@@ -7008,8 +7035,26 @@ router.post('/v2-agent-partial/:companyId', async (req, res) => {
           logger.warn('[V2 PARTIAL] Failed to cache transcript', { error: err.message });
         }
       }
+
+      // ── Speculative LLM pre-warm ────────────────────────────────────────────
+      // Fire the LLM now, while the caller is still speaking, so the response
+      // is ready (or nearly ready) when the final transcript arrives.
+      // Debounced 350ms so rapid partial bursts only trigger ONE LLM call.
+      // Only fire on substantial partials (>15 chars) — short fragments aren't useful.
+      if (CallSid && StableSpeechResult.length > 15) {
+        // Clear previous timer for this call (sliding window debounce)
+        if (_speculativeDebounce.has(CallSid)) clearTimeout(_speculativeDebounce.get(CallSid));
+        const _sid = CallSid;
+        const _cid = companyId;
+        const _txt = StableSpeechResult;
+        _speculativeDebounce.set(_sid, setTimeout(() => {
+          _speculativeDebounce.delete(_sid);
+          // Fire-and-forget — any error is swallowed inside runSpeculativeLLM
+          runSpeculativeLLM(_sid, _cid, _txt).catch(() => {});
+        }, 350));
+      }
     }
-    
+
     // Return EMPTY TwiML - do NOT interrupt the call, do NOT greet
     // This is just for logging/monitoring real-time speech
     res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
