@@ -4950,7 +4950,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     
     if (!callState) {
-      callState = initializeCall(callSid, fromNumber, companyID);
+      // BUG-FIX: args were swapped (callSid passed as companyID → CastError on every call).
+      // Also missing await — caused unhandled promise rejection instead of proper state init.
+      // initializeCall returns { greeting, callState: {...}, voiceSettings } — extract .callState.
+      const _initResult = await initializeCall(companyID, callSid, fromNumber, req.body.To || '');
+      callState = _initResult?.callState || {};
       stateSource = 'initialized';
     }
 
