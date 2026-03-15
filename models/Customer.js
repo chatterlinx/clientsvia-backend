@@ -70,6 +70,20 @@ const preferencesSchema = new Schema({
     specialInstructions: { type: String, trim: true } // "Call 30 min before arrival"
 }, { _id: false });
 
+// --- Sub-schema for Discovery Notes (per-call live state — DiscoveryNotesService) ---
+const discoveryNoteSchema = new Schema({
+    callSid:    { type: String, trim: true },
+    capturedAt: { type: Date, default: Date.now },
+    entities:   { type: Schema.Types.Mixed, default: {} },   // { firstName, address, phone, confidence: {} }
+    callReason: { type: String, default: null },
+    urgency:    { type: String, enum: ['low', 'medium', 'high', null], default: null },
+    objective:  { type: String, enum: ['INTAKE', 'DISCOVERY', 'BOOKING', 'TRANSFER', 'CLOSING'], default: 'INTAKE' },
+    turnCount:  { type: Number, default: 0 },
+    qaLog:      [{ type: Schema.Types.Mixed }],              // { turn, question, answer, timestamp }
+    startedAt:  { type: String, default: null },
+    updatedAt:  { type: Date, default: Date.now }
+}, { _id: true });
+
 // --- Main Customer Schema ---
 const customerSchema = new Schema({
     // ═══════════════════════════════════════════════════════════════════════════
@@ -158,6 +172,13 @@ const customerSchema = new Schema({
         sessionId: { type: Schema.Types.ObjectId, ref: 'ConversationSession' }
     }],
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DISCOVERY NOTES (per-call live state — populated by DiscoveryNotesService)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // One entry per call. Redis is the hot-path store during the call;
+    // this is the durable record written at call end via DiscoveryNotesService.persist().
+    discoveryNotes: [discoveryNoteSchema],
+
     // ═══════════════════════════════════════════════════════════════════════════
     // RELATIONSHIP METRICS
     // ═══════════════════════════════════════════════════════════════════════════

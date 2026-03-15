@@ -532,6 +532,7 @@ class HybridReceptionistLLM {
         const callId = callContext.callId || 'unknown';
         const companyId = company.id || company._id || callContext.companyId;
         const customerContext = callContext.customerContext || { isReturning: false, totalCalls: 0 };
+        const discoveryNotes = callContext.discoveryNotes || null;
         
         // Note: callLLM0 is imported from llmRegistry - it handles OpenAI config internally
         if (!callLLM0) {
@@ -1063,7 +1064,8 @@ ACKNOWLEDGE this context naturally:
                     turnCount: callContext.turnCount || 1,
                     speakingCorrections,  // What words NOT to use
                     callerId: callContext.callerId || callContext.callerPhone || null,  // For caller ID confirmation
-                    partialName: callContext.partialName || knownSlots.partialName || null  // For asking for missing name part
+                    partialName: callContext.partialName || knownSlots.partialName || null,  // For asking for missing name part
+                    discoveryNotes  // Live in-call state — anti-amnesia block
                 });
                 
                 // V116: Inject discovery truth into standard mode too
@@ -1551,7 +1553,7 @@ ACKNOWLEDGE this context naturally:
      * 
      * ════════════════════════════════════════════════════════════════════════════
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, runningSummary, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId, partialName }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, runningSummary, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId, partialName, discoveryNotes }) {
         const companyName = company.companyName || company.name || 'our company';
         const trade = company.tradeType || company.trade || 'service';
         
@@ -1680,6 +1682,14 @@ ACKNOWLEDGE this context naturally:
             callerInfo = `Returning customer${customerContext.name ? `: ${customerContext.name}` : ''}`;
         }
         
+        // ════════════════════════════════════════════════════════════════════
+        // DISCOVERY NOTES — live in-call state block (anti-amnesia)
+        // ════════════════════════════════════════════════════════════════════
+        // Injected after customer intelligence. Empty string if notes are null
+        // (graceful degrade when Redis is unavailable).
+        const DiscoveryNotesService = require('./discoveryNotes/DiscoveryNotesService');
+        const discoveryNotesBlock = DiscoveryNotesService.formatForLLM(discoveryNotes || null);
+
         // Forbidden phrases from config (keep short)
         const uiConfig = loadFrontDeskConfig(company);
         const forbidden = uiConfig.forbiddenPhrases?.slice(0, 3).join(', ') || '';
@@ -1704,7 +1714,7 @@ ACKNOWLEDGE this context naturally:
         const prompt = `You are ${companyName}'s receptionist (${trade}). ${styleHint}${warmthHint ? ` ${warmthHint}` : ''}${paceHint ? ` ${paceHint}` : ''}
 
 CALLER: ${callerInfo}${customerIntelligence}
-
+${discoveryNotesBlock}
 HAVE: ${collected.join(', ') || 'nothing yet'}
 NEED (in order): ${needed.join(' → ') || 'nothing - ready to confirm'}
 

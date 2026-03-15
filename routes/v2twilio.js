@@ -8015,6 +8015,21 @@ router.post('/status-callback/:companyId', async (req, res) => {
           }}
         );
 
+        // ── DISCOVERY NOTES: persist to Customer record + purge Redis ───────
+        // Non-blocking — runs after call end, never affects response path.
+        if (callSummary.customerId) {
+          const DiscoveryNotesService = require('../services/discoveryNotes/DiscoveryNotesService');
+          DiscoveryNotesService.persist(
+            String(callSummary.companyId),
+            CallSid,
+            String(callSummary.customerId)
+          ).then(() => DiscoveryNotesService.purge(String(callSummary.companyId), CallSid))
+           .catch(e => logger.warn('[CALL STATUS] DiscoveryNotes persist/purge failed (non-fatal)', {
+             callSid: CallSid,
+             error: e.message
+           }));
+        }
+
         logger.info('[CALL STATUS] Company CallSummary updated successfully', {
           companyId: callSummary.companyId,
           callId: callSummary.callId,

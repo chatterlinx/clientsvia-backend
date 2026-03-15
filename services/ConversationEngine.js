@@ -45,6 +45,7 @@ const ResponseRenderer = require('./ResponseRenderer');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DiscoveryExtractor = require('./engine/booking/DiscoveryExtractor');
+const DiscoveryNotesService = require('./discoveryNotes/DiscoveryNotesService');
 // ☢️ NUKED Feb 2026: DynamicFlowEngine removed - V110 architecture replaces it
 // const DynamicFlowEngine = require('./DynamicFlowEngine');
 const GoogleCalendarService = require('./GoogleCalendarService');
@@ -3929,7 +3930,26 @@ async function processTurn({
                 : { isKnown: false, summary: `New ${channel} visitor` };
         }
         log('CHECKPOINT 5: ✅ Customer context built');
-        
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CHECKPOINT 5b: DiscoveryNotes — init on turn 1, load on turns 2+
+        // ═══════════════════════════════════════════════════════════════════
+        // Redis hot-path: init creates empty notes, load reads existing state.
+        // Graceful degrade: if Redis is down, discoveryNotes = null and the
+        // LLM prompt simply omits the DISCOVERY STATE block. Call continues.
+        let discoveryNotes = null;
+        if (callSid) {
+            try {
+                const isFirstTurn = (session.metrics?.totalTurns || 0) === 0;
+                discoveryNotes = isFirstTurn
+                    ? await DiscoveryNotesService.init(companyId, callSid, customer?._id?.toString() || null)
+                    : await DiscoveryNotesService.load(companyId, callSid);
+            } catch (dnErr) {
+                log('[DISCOVERY NOTES] init/load failed (non-fatal)', { error: dnErr.message });
+            }
+        }
+        log('CHECKPOINT 5b: DiscoveryNotes', { hasNotes: !!discoveryNotes, objective: discoveryNotes?.objective });
+
         // ═══════════════════════════════════════════════════════════════════
         // STEP 5: Build running summary (conversation memory)
         // ═══════════════════════════════════════════════════════════════════
@@ -5797,6 +5817,7 @@ async function processTurn({
                         runningSummary: summaryFormatted,
                         turnCount: (session.metrics?.totalTurns || 0) + 1,
                         channel,
+                        discoveryNotes: discoveryNotes || null,
                         enterpriseContext: {
                             mode: 'POST_BOOKING_QA',
                             bookingComplete: true,
@@ -7295,7 +7316,8 @@ async function processTurn({
                         channel,
                     partialName: currentSlots.partialName || null,
                     enterpriseContext: llmContext,
-                    mode: 'LLM_LED_DISCOVERY'
+                    mode: 'LLM_LED_DISCOVERY',
+                    discoveryNotes: discoveryNotes || null
                     },
                 currentMode: 'discovery',
                     knownSlots: currentSlots,
@@ -7317,6 +7339,27 @@ async function processTurn({
                 session.discovery = session.discovery || {};
                 session.discovery.issue = llmResult.extractedIssue;
                 session.discovery.issueCapturedAtTurn = (session.metrics?.totalTurns || 0) + 1;
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // DISCOVERY NOTES: update with this turn's extracted data
+            // ═══════════════════════════════════════════════════════════════
+            // Fire-and-forget — never awaited, response path is not held up.
+            if (callSid && discoveryNotes !== null) {
+                const dnPatch = {
+                    turnNumber: (discoveryNotes.turnNumber || 0) + 1,
+                    lastMeaningfulInput: userText || null,
+                    entities: {
+                        ...(currentSlots.name     ? { fullName:   currentSlots.name }    : {}),
+                        ...(currentSlots.address  ? { address:    currentSlots.address } : {}),
+                        ...(currentSlots.phone    ? { phone:      currentSlots.phone }   : {})
+                    },
+                    ...(session.discovery?.issue   ? { callReason: session.discovery.issue }   : {}),
+                    ...(session.discovery?.urgency ? { urgency:    session.discovery.urgency }  : {})
+                };
+                DiscoveryNotesService.update(companyId, callSid, dnPatch).catch(e =>
+                    log('[DISCOVERY NOTES] update failed (non-fatal)', { error: e.message })
+                );
             }
             
             // ═══════════════════════════════════════════════════════════════
