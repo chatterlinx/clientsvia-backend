@@ -1356,7 +1356,7 @@ class Agent2DiscoveryRunner {
         callSid,
         bridgeToken,
         redis,
-        onSentence,
+        onSentence: null,  // BUG-29: intake returns JSON — never stream as audio
       });
 
       if (intakeResult?.responseText) {

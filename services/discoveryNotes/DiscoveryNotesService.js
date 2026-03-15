@@ -146,6 +146,13 @@ async function init(companyId, callSid, customerId = null) {
 
     await redis.set(key, JSON.stringify(notes), { EX: CONFIG.REDIS_TTL_SECONDS });
 
+    // BUG-12 FIX: Push stub entry to MongoDB immediately so _persistToMongoFireAndForget
+    // can $set in-place during the call (previously it was always a no-op because the
+    // entry didn't exist until persist() ran at call end).
+    if (customerId) {
+      _initMongoStubFireAndForget(notes);
+    }
+
     logger.info('[DISCOVERY NOTES] ✅ Initialized', {
       callSid,
       companyId: String(companyId),
@@ -254,25 +261,47 @@ async function persist(companyId, callSid, customerId) {
       return false;
     }
 
-    await Customer.updateOne(
-      { _id: customerId, companyId },
+    // BUG-12 FIX: Use $set with arrayFilters (not $push) since init() already pushed
+    // the stub entry. This overwrites the stub with final data without duplicating it.
+    const result = await Customer.updateOne(
+      { _id: customerId, companyId, 'discoveryNotes.callSid': callSid },
       {
-        $push: {
-          discoveryNotes: {
-            callSid,
-            capturedAt: new Date(),
-            entities: notes.entities || {},
-            callReason: notes.callReason || null,
-            urgency: notes.urgency || null,
-            objective: notes.objective || 'INTAKE',
-            turnCount: notes.turnNumber || 0,
-            qaLog: notes.qaLog || [],
-            startedAt: notes.startedAt || null,
-            updatedAt: new Date()
+        $set: {
+          'discoveryNotes.$[elem].entities':   notes.entities || {},
+          'discoveryNotes.$[elem].callReason': notes.callReason || null,
+          'discoveryNotes.$[elem].urgency':    notes.urgency || null,
+          'discoveryNotes.$[elem].objective':  notes.objective || 'INTAKE',
+          'discoveryNotes.$[elem].turnCount':  notes.turnNumber || 0,
+          'discoveryNotes.$[elem].qaLog':      notes.qaLog || [],
+          'discoveryNotes.$[elem].updatedAt':  new Date()
+        }
+      },
+      { arrayFilters: [{ 'elem.callSid': callSid }] }
+    );
+
+    // Fallback: if no stub found (e.g. init() was skipped due to no customerId at call start),
+    // $push the full record now so we never lose data.
+    if (result.matchedCount === 0) {
+      await Customer.updateOne(
+        { _id: customerId, companyId },
+        {
+          $push: {
+            discoveryNotes: {
+              callSid,
+              capturedAt: new Date(),
+              entities: notes.entities || {},
+              callReason: notes.callReason || null,
+              urgency: notes.urgency || null,
+              objective: notes.objective || 'INTAKE',
+              turnCount: notes.turnNumber || 0,
+              qaLog: notes.qaLog || [],
+              startedAt: notes.startedAt || null,
+              updatedAt: new Date()
+            }
           }
         }
-      }
-    );
+      );
+    }
 
     logger.info('[DISCOVERY NOTES] ✅ Persisted to Customer.discoveryNotes', {
       callSid,
@@ -439,11 +468,47 @@ function _mergePatch(current, patch) {
 }
 
 /**
+ * _initMongoStubFireAndForget — Push an empty stub entry at call start.
+ *
+ * Called once by init() so _persistToMongoFireAndForget can $set in-place
+ * throughout the call rather than being a no-op (BUG-12).
+ *
+ * NEVER await this function. It is intentionally fire-and-forget.
+ */
+function _initMongoStubFireAndForget(notes) {
+  Customer.updateOne(
+    { _id: notes.customerId, companyId: notes.companyId },
+    {
+      $push: {
+        discoveryNotes: {
+          callSid:    notes.callSid,
+          capturedAt: new Date(),
+          entities:   notes.entities || {},
+          callReason: null,
+          urgency:    null,
+          objective:  'INTAKE',
+          turnCount:  0,
+          qaLog:      [],
+          startedAt:  notes.startedAt || null,
+          updatedAt:  new Date()
+        }
+      }
+    },
+    { upsert: false }
+  ).catch(err => {
+    logger.warn('[DISCOVERY NOTES] MongoDB init stub failed (non-fatal)', {
+      callSid: notes.callSid,
+      error: err.message
+    });
+  });
+}
+
+/**
  * _persistToMongoFireAndForget — Mid-call durability checkpoint.
  *
- * Writes a lightweight snapshot to Customer.discoveryNotes in-place by callSid.
- * Uses arrayFilters positional $set — safe, never creates a new entry (upsert: false).
- * The canonical $push is done by persist() at call end.
+ * Updates the stub entry pushed by _initMongoStubFireAndForget in-place.
+ * Uses arrayFilters positional $set — safe, never duplicates.
+ * Stub must already exist (created by init() → _initMongoStubFireAndForget).
  *
  * NEVER await this function. It is intentionally fire-and-forget.
  */

@@ -76,21 +76,30 @@ class SentenceSplitter {
   }
 
   _flush(isEnd) {
-    // Keep scanning for sentence boundaries
+    // Scan forward for sentence boundaries.
+    // BUG-2 FIX: use a searchFrom pointer instead of prepending short sentences
+    // back to the buffer. The old approach caused O(n²) re-scanning: every new
+    // token would re-process the same short-sentence prefix at position 0.
+    // Now we advance searchFrom past each too-short boundary and keep looking.
+    let searchFrom = 0;
+
     while (true) {
-      const match = SENTENCE_END_RE.exec(this._buffer);
+      const tail  = this._buffer.slice(searchFrom);
+      const match = SENTENCE_END_RE.exec(tail);
       if (!match) break;
 
-      const boundaryIndex = match.index + match[0].length;
-      const sentence      = this._buffer.slice(0, boundaryIndex).trim();
-      this._buffer        = this._buffer.slice(boundaryIndex);
+      const absoluteEnd = searchFrom + match.index + match[0].length;
+      const sentence    = this._buffer.slice(0, absoluteEnd).trim();
 
       if (sentence.length >= MIN_SENTENCE_CHARS) {
+        // Long enough — emit and consume from buffer, reset scan position
         this._onSentence(sentence);
+        this._buffer = this._buffer.slice(absoluteEnd);
+        searchFrom   = 0;
       } else {
-        // Too short — prepend back to buffer and keep accumulating
-        this._buffer = sentence + ' ' + this._buffer;
-        break;
+        // Too short — advance past this boundary; the short prefix will merge
+        // with whatever comes next (no buffer mutation, no O(n²) re-scan)
+        searchFrom = absoluteEnd;
       }
     }
   }
@@ -219,14 +228,15 @@ async function streamWithSentences(opts) {
   });
 
   // ── Token streaming ───────────────────────────────────────────────────────
+  // NOTE: loop variable is named `chunk` to avoid shadowing `token` (bridge token) from opts
   const streamPromise = (async () => {
-    for await (const token of adapter.streamTokens({
+    for await (const chunk of adapter.streamTokens({
       apiKey, model, maxTokens, temperature, system, messages,
       callSid, turn,
       signal: abortController.signal,
     })) {
-      heartbeat.onTokens(token);
-      splitter.push(token);
+      heartbeat.onTokens(chunk);
+      splitter.push(chunk);
     }
     splitter.end();
   })();

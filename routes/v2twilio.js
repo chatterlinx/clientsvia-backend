@@ -108,6 +108,56 @@ async function getRedis() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🗑️ TEMP AUDIO CLEANUP — Auto-delete per-call MP3s after Twilio fetches them
+// ═══════════════════════════════════════════════════════════════════════════
+// Temp audio files (ai_respond, s0, s1..., patience_checkin) are written to
+// public/audio/ and served via <Play>. Twilio fetches them once then they're
+// dead weight. We delete them 2 minutes after creation — long enough for any
+// slow Twilio fetch but short enough to prevent disk exhaustion.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TEMP_AUDIO_DELETE_DELAY_MS = 2 * 60 * 1000; // 2 minutes
+
+function scheduleTempAudioDelete(filePath, delayMs = TEMP_AUDIO_DELETE_DELAY_MS) {
+  setTimeout(() => {
+    fs.unlink(filePath, (err) => {
+      if (err && err.code !== 'ENOENT') {
+        logger.warn('[TEMP_AUDIO] Failed to delete temp audio file', {
+          file: path.basename(filePath),
+          error: err.message,
+        });
+      }
+    });
+  }, delayMs);
+}
+
+// Startup sweep: delete orphaned temp audio files older than 10 minutes.
+// Protects against server restarts mid-call that leave files stranded.
+(function sweepOrphanedTempAudio() {
+  const audioDir = path.join(__dirname, '../public/audio');
+  const ORPHAN_AGE_MS = 10 * 60 * 1000; // 10 minutes
+  const TEMP_PREFIXES = ['ai_respond_', 's0_', 'bridge_synth_', 'patience_checkin_'];
+  const SENTENCE_RE   = /^s\d+_/;  // matches s1_, s2_, s3_, etc.
+
+  fs.readdir(audioDir, (err, files) => {
+    if (err) return; // audio dir may not exist yet on first boot
+    const now = Date.now();
+    for (const file of files) {
+      if (!file.endsWith('.mp3')) continue;
+      const isTemp = TEMP_PREFIXES.some(p => file.startsWith(p)) || SENTENCE_RE.test(file);
+      if (!isTemp) continue;
+      const filePath = path.join(audioDir, file);
+      fs.stat(filePath, (statErr, stat) => {
+        if (statErr) return;
+        if (now - stat.mtimeMs > ORPHAN_AGE_MS) {
+          fs.unlink(filePath, () => {}); // best-effort
+        }
+      });
+    }
+  });
+})();
+
 /**
  * Ensure a CallSummary exists for this Twilio call.
  * This protects against direct webhooks to /:companyID/voice that bypass /voice.
@@ -2214,7 +2264,9 @@ router.post('/voice', async (req, res) => {
               const fileName = `ai_greet_fallback_${Date.now()}.mp3`;
               const audioDir = path.join(__dirname, '../public/audio');
               if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
-              fs.writeFileSync(path.join(audioDir, fileName), buffer);
+              const greetFallbackPath = path.join(audioDir, fileName);
+              await fs.promises.writeFile(greetFallbackPath, buffer);
+              scheduleTempAudioDelete(greetFallbackPath);
               gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
             } catch (ttsErr) {
               logger.error(`[GREETING] ❌ TTS fallback failed: ${ttsErr.message}`);
@@ -2318,7 +2370,7 @@ router.post('/voice', async (req, res) => {
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
           const filePath = path.join(audioDir, fileName);
-          fs.writeFileSync(filePath, buffer);
+          await fs.promises.writeFile(filePath, buffer);
           gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
           
           // 📼 BLACK BOX: Log greeting sent
@@ -3524,7 +3576,9 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         const fileName = `bridge_synth_${callSid}_${Date.now()}.mp3`;
         const audioDir = path.join(__dirname, '../public/audio');
         if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-        fs.writeFileSync(path.join(audioDir, fileName), buffer);
+        const bridgeSynthPath = path.join(audioDir, fileName);
+        await fs.promises.writeFile(bridgeSynthPath, buffer);
+        scheduleTempAudioDelete(bridgeSynthPath);
         return `https://${hostHeader}/audio/${fileName}`;
       } catch (err) {
         logger.warn('[V2 BRIDGE CONTINUE] synthesizeForBridge failed', {
@@ -4312,8 +4366,7 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
   const attempt   = parseInt(req.query.attempt || '0', 10);
 
   const MAX_SENTENCES  = 10;
-  const MAX_POLL_TRIES = 6;   // 6 × 300ms = 1.8s max wait for next sentence
-  const POLL_PAUSE_MS  = 300;
+  const MAX_POLL_TRIES = 6;   // 6 × 1s Twilio pause = 6s max wait for next sentence
 
   res.type('text/xml');
 
@@ -4371,7 +4424,7 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
       if (sText && voiceId) {
         // Sentence text arrived but audio isn't ready — synthesize now
         try {
-          const company = await require('../models/Company').findById(companyID).lean();
+          const company = await require('../models/v2Company').findById(companyID).lean();
           const buf     = await synthesizeSpeech({
             text:                       sText,
             voiceId,
@@ -4384,8 +4437,10 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
             optimize_streaming_latency: voiceSettings.streamingLatency,
             company,
           });
-          const sFile = `s${idx}_${callSid}_${turn}_${Date.now()}.mp3`;
-          fs.writeFileSync(path.join(__dirname, '../public/audio', sFile), buf);
+          const sFile     = `s${idx}_${callSid}_${turn}_${Date.now()}.mp3`;
+          const sFilePath = path.join(__dirname, '../public/audio', sFile);
+          await fs.promises.writeFile(sFilePath, buf);
+          scheduleTempAudioDelete(sFilePath);
           sAudioUrl = `https://${hostHeader}/audio/${sFile}`;
           await redis.set(sAudioKey, sAudioUrl, { EX: 60 }).catch(() => {});
         } catch (synthErr) {
@@ -5064,10 +5119,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     // firstSentenceAudioPromise — resolves when s0 ElevenLabs synthesis is done.
     // Defined in outer scope so the bridge race (also outer scope) can see it.
+    // BUG-16 FIX: only create the 4000ms safety timeout when mayBridge is true.
+    // When mayBridge=false, the promise is never entered in the race, so no timer needed.
     let _firstSentenceAudioResolve;
     const firstSentenceAudioPromise = new Promise(resolve => {
       _firstSentenceAudioResolve = resolve;
-      setTimeout(() => resolve(null), 4000);  // Safety: never hang the bridge race
+      if (mayBridge) {
+        setTimeout(() => resolve(null), 4000);  // Safety: never hang the bridge race
+      }
     });
 
     const computeTurnPromise = (async () => {
@@ -5212,10 +5271,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               model_id: voiceSettings.aiModel, output_format: voiceSettings.outputFormat,
               optimize_streaming_latency: voiceSettings.streamingLatency, company
             });
-            const fileName = `patience_checkin_${callSid}_${Date.now()}.mp3`;
-            const audioDir = path.join(__dirname, '../public/audio');
+            const fileName       = `patience_checkin_${callSid}_${Date.now()}.mp3`;
+            const audioDir       = path.join(__dirname, '../public/audio');
             if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-            fs.writeFileSync(path.join(audioDir, fileName), buffer);
+            const checkinAudioPath = path.join(audioDir, fileName);
+            await fs.promises.writeFile(checkinAudioPath, buffer);
+            scheduleTempAudioDelete(checkinAudioPath);
             gather.play(`https://${hostHeader}/audio/${fileName}`);
           } catch (_) {
             gather.say(escapeTwiML(checkinText));
@@ -5394,9 +5455,31 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       // _firstSentenceAudioResolve and firstSentenceAudioPromise are defined in
       // outer scope (above computeTurnPromise) so the bridge race can see them.
-      const _sentenceVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+      const _sentenceVoiceSettings   = company?.aiAgentSettings?.voiceSettings || {};
       const _sentenceElevenLabsVoice = elevenLabsVoice;  // already resolved above
-      const _sentenceHostHeader = hostHeader;
+      const _sentenceHostHeader      = hostHeader;
+
+      // ── BUG-28 FIX: Write preflight gather config BEFORE LLM starts ──────────
+      // sentence-continue may be called moments after s0 plays (race window ~200ms).
+      // We write defaults now and overwrite with accurate values after the LLM
+      // completes (patience timeout, pendingFollowUp speechTimeout).
+      const _preflightSpeechDet = company.aiAgentSettings?.agent2?.speechDetection
+        || company.aiAgentSettings?.voiceSettings?.speechDetection
+        || {};
+      if (redis && callSid && mayBridge) {
+        redis.set(`a2sentence:gather:${callSid}:${turnNumber}`, JSON.stringify({
+          action:        `/api/twilio/v2-agent-respond/${companyID}`,
+          timeout:       7,         // default; overwritten after runtimeResult with patience value
+          speechTimeout: '1.5',    // default; overwritten after runtimeResult if pendingFollowUp
+          bargeIn:       _preflightSpeechDet.bargeIn ?? false,
+          enhanced:      _preflightSpeechDet.enhancedRecognition ?? true,
+          speechModel:   _preflightSpeechDet.speechModel || 'phone_call',
+          hostHeader:    _sentenceHostHeader,
+          companyID,
+          voiceSettings: _sentenceVoiceSettings,
+          voiceId:       _sentenceElevenLabsVoice || null,
+        }), { EX: 120 }).catch(() => {});
+      }
 
       const onSentence = async (sentence, idx) => {
         try {
@@ -5424,8 +5507,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
                   company,
                 });
-                const sFile = `s${idx}_${callSid}_${turnNumber}_${Date.now()}.mp3`;
-                fs.writeFileSync(path.join(__dirname, '../public/audio', sFile), buf2);
+                const sFile     = `s${idx}_${callSid}_${turnNumber}_${Date.now()}.mp3`;
+                const sFilePath = path.join(__dirname, '../public/audio', sFile);
+                await fs.promises.writeFile(sFilePath, buf2);
+                scheduleTempAudioDelete(sFilePath);
                 const sUrl = `https://${_sentenceHostHeader}/audio/${sFile}`;
                 if (redis && callSid) {
                   await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:${idx}`, sUrl, { EX: 60 }).catch(() => {});
@@ -5450,7 +5535,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             });
             const s0FileName = `s0_${callSid}_${turnNumber}_${Date.now()}.mp3`;
             const s0Path     = path.join(__dirname, '../public/audio', s0FileName);
-            fs.writeFileSync(s0Path, buf);
+            await fs.promises.writeFile(s0Path, buf);
+            scheduleTempAudioDelete(s0Path);
             const s0Url = `https://${_sentenceHostHeader}/audio/${s0FileName}`;
             // Write s0 audio URL to Redis so sentence-continue can pick it up
             if (redis && callSid) {
@@ -5894,12 +5980,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
           ttsLatencyMs = Date.now() - ttsStartTime;
 
-          const fileName = `ai_respond_${callSid}_${Date.now()}.mp3`;
-          const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) {
-            fs.mkdirSync(audioDir, { recursive: true });
-          }
-          fs.writeFileSync(path.join(audioDir, fileName), buffer);
+          const fileName       = `ai_respond_${callSid}_${Date.now()}.mp3`;
+          const audioDir       = path.join(__dirname, '../public/audio');
+          await fs.promises.mkdir(audioDir, { recursive: true });  // no-op if already exists
+          const aiRespondPath  = path.join(audioDir, fileName);
+          await fs.promises.writeFile(aiRespondPath, buffer);
+          scheduleTempAudioDelete(aiRespondPath);
 
           audioUrl = `https://${hostHeader}/audio/${fileName}`;
           localVoiceProviderUsed = 'elevenlabs';
@@ -5980,7 +6066,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (audioUrl) gather.play(audioUrl);
       else gather.say(escapeTwiML(responseText));
 
-      // Write gather config to Redis for sentence-continue endpoint
+      // ── BUG-28 FIX: Overwrite preflight gather config with accurate post-LLM values ──
+      // Correct patience timeout and pendingFollowUp speechTimeout now that we have runtimeResult.
       if (redis && callSid) {
         redis.set(`a2sentence:gather:${callSid}:${turnNumber}`, JSON.stringify({
           action:         `/api/twilio/v2-agent-respond/${companyID}`,
