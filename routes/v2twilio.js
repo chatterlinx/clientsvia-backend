@@ -4894,6 +4894,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // that bridge-continue will poll. Reused in bridge init (line 5335→ below).
     const preGeneratedBridgeToken = crypto.randomBytes(8).toString('hex');
 
+    // ── Smart bridge: fast-path signal ────────────────────────────────────────
+    // When any InstantAudio cache hit is detected inside computeTurnPromise,
+    // _fastPathResolve() fires immediately — the bridge race sees this before
+    // the 200ms delay and skips the bridge. The pipeline finishes in <50ms after
+    // fastPath fires so computeTurnPromise races to completion right behind it.
+    let _fastPathResolve;
+    const fastPathPromise = new Promise(resolve => { _fastPathResolve = resolve; });
+
     const computeTurnPromise = (async () => {
       let localVoiceProviderUsed = 'twilio_say';
       // V-FIX: Voice decision tracking for observability
@@ -5425,6 +5433,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           if (status.exists) {
             audioUrl = `${getSecureBaseUrl(req)}${status.url}`;
             localVoiceProviderUsed = 'instant_audio_cache';
+            _fastPathResolve?.();  // Smart bridge: skip bridge delay, audio ready now
             if (CallLogger) {
               CallLogger.logEvent({
                 callId: callSid,
@@ -5470,6 +5479,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             localVoiceProviderUsed = 'instant_audio_trigger';
             vd_audioUrlPresent = true;
             vd_preflightPassed = true;
+            _fastPathResolve?.();  // Smart bridge: skip bridge delay, audio ready now
 
             if (CallLogger) {
               CallLogger.logEvent({
@@ -5563,6 +5573,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
             localVoiceProviderUsed = 'instant_audio_agent2';
             vd_preflightPassed = true;
+            _fastPathResolve?.();  // Smart bridge: skip bridge delay, audio ready now
 
             if (CallLogger) {
               CallLogger.logEvent({
@@ -6111,16 +6122,23 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // V131: POST-GATHER BRIDGE — Fire bridge after fixed delay, not a race.
     // Bridge fires every turn unless compute resolves first.
     // No per-call cap. No follow-up/yes-no suppression. Per-turn dedup only.
+    //
+    // SMART BRIDGE: fastPathPromise short-circuits the delay for InstantAudio
+    // hits. When any cached audio is detected inside computeTurnPromise,
+    // _fastPathResolve fires immediately — bridge is skipped and we wait for
+    // compute to finish (which completes in <10ms after fastPath signals).
     // ══════════════════════════════════════════════════════════════════════════
     const delayPromise = new Promise((resolve) => setTimeout(resolve, bridgePostGatherDelayMs));
     const first = await Promise.race([
+      fastPathPromise.then(() => ({ kind: 'fast' })),
       computeTurnPromise.then((r) => ({ kind: 'result', r })),
       delayPromise.then(() => ({ kind: 'delay' }))
     ]);
 
-    if (first.kind === 'result') {
-      // Compute beat the post-gather delay — no bridge needed, deliver response directly
-      const result = first.r;
+    if (first.kind === 'result' || first.kind === 'fast') {
+      // Compute beat the post-gather delay (or InstantAudio fast-path fired) —
+      // no bridge needed, deliver response directly.
+      const result = first.kind === 'result' ? first.r : await computeTurnPromise;
       twimlString = result.twimlString;
       voiceProviderUsed = result.voiceProviderUsed;
       await logTwimlSent({

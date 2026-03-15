@@ -99,6 +99,7 @@ const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt
 const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
 const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
+const { streamWithSentences } = require('../../streaming/SentenceStreamingService');
 const { ConversationMemory } = require('../ConversationMemory');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
@@ -273,8 +274,8 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       historyTurns: conversationMessages.length
     });
 
-    // ── Streaming with heartbeat (replaces batch fetch + 6s AbortSignal) ──
-    const result = await streamWithHeartbeat({
+    // ── Sentence-streaming with heartbeat — first sentence fires TTS immediately ──
+    const result = await streamWithSentences({
       apiKey,
       model: modelId,
       maxTokens,
@@ -556,12 +557,12 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       historyTurns: conversationMessages.length
     });
 
-    // ── Streaming with heartbeat (replaces batch fetch + 6s AbortSignal) ──
+    // ── Sentence-streaming with heartbeat — first sentence fires TTS immediately ──
     // Bridge config ceiling can be company-specific via opts.maxCeilingMs
     const bridgeCfg = company?.voiceSettings?.agent2?.bridge || {};
     const maxCeilingMs = bridgeCfg.maxCeilingMs || undefined;  // undefined = use service default (25s)
 
-    const result = await streamWithHeartbeat({
+    const result = await streamWithSentences({
       apiKey,
       model: modelId,
       maxTokens,
@@ -711,8 +712,8 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
       turn,
     });
 
-    // ── Call Claude via streaming infrastructure ─────────────────────────
-    const result = await streamWithHeartbeat({
+    // ── Sentence-streaming — first sentence fires TTS immediately ───────────
+    const result = await streamWithSentences({
       apiKey,
       model: modelId,
       maxTokens,
