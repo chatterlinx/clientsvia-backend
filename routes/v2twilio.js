@@ -4318,7 +4318,7 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
   res.type('text/xml');
 
   try {
-    const redis = getRedisClient();
+    const redis = await getRedis();
 
     // ── Read gather config saved by v2-agent-respond ──────────────────────
     const gatherConfigRaw = redis ? await redis.get(`a2sentence:gather:${callSid}:${turn}`).catch(() => null) : null;
@@ -5062,6 +5062,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let _fastPathResolve;
     const fastPathPromise = new Promise(resolve => { _fastPathResolve = resolve; });
 
+    // firstSentenceAudioPromise — resolves when s0 ElevenLabs synthesis is done.
+    // Defined in outer scope so the bridge race (also outer scope) can see it.
+    let _firstSentenceAudioResolve;
+    const firstSentenceAudioPromise = new Promise(resolve => {
+      _firstSentenceAudioResolve = resolve;
+      setTimeout(() => resolve(null), 4000);  // Safety: never hang the bridge race
+    });
+
     const computeTurnPromise = (async () => {
       let localVoiceProviderUsed = 'twilio_say';
       // V-FIX: Voice decision tracking for observability
@@ -5384,17 +5392,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       //           while s1, s2... are still being generated.
       //   idx>0 → write sentence text to Redis for /v2-agent-sentence-continue to serve
       // ═══════════════════════════════════════════════════════════════════════════
-      let _firstSentenceAudioResolve;
-      // Safety: auto-resolve null after 4s so bridge race never hangs
-      const firstSentenceAudioPromise = new Promise(resolve => {
-        _firstSentenceAudioResolve = resolve;
-        setTimeout(() => resolve(null), 4000);
-      });
-
+      // _firstSentenceAudioResolve and firstSentenceAudioPromise are defined in
+      // outer scope (above computeTurnPromise) so the bridge race can see them.
       const _sentenceVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
       const _sentenceElevenLabsVoice = elevenLabsVoice;  // already resolved above
       const _sentenceHostHeader = hostHeader;
-      const _sentenceTurnToken = preGeneratedBridgeToken;
 
       const onSentence = async (sentence, idx) => {
         try {
