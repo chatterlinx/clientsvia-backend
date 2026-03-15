@@ -91,31 +91,75 @@ async function* streamTokens(opts) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Streams full response from Claude, returns complete text.
+ * Streams full response from Claude, returns complete text WITH real token counts.
+ * Uses the stream object directly (not through streamTokens generator) so we can
+ * capture message_start / message_delta usage events.
  *
  * @param {import('./LLMStreamAdapter').StreamOpts} opts
  * @returns {Promise<import('./LLMStreamAdapter').StreamResult>}
  */
 async function streamFull(opts) {
+  const {
+    apiKey,
+    model       = DEFAULT_MODEL,
+    maxTokens   = 300,
+    temperature = 0.4,
+    system,
+    messages,
+    callSid,
+    turn,
+    signal,
+  } = opts;
+
   const startMs = Date.now();
   let   buffer  = '';
+  const usage   = { input: 0, output: 0 };
+
+  if (!apiKey) {
+    return { response: null, tokensUsed: usage, latencyMs: 0, wasPartial: false, failureReason: 'CLAUDE_NO_API_KEY' };
+  }
+
+  const client = new Anthropic({ apiKey });
+  const stream = client.messages.stream({ model, max_tokens: maxTokens, temperature, system, messages });
+
+  if (signal) {
+    signal.addEventListener('abort', () => {
+      try { stream.abort(); } catch { /* ignore */ }
+    }, { once: true });
+  }
 
   try {
-    for await (const token of streamTokens(opts)) {
-      buffer += token;
+    for await (const event of stream) {
+      // Capture input token count from message_start
+      if (event.type === 'message_start' && event.message?.usage?.input_tokens) {
+        usage.input = event.message.usage.input_tokens;
+      }
+      // Capture output token count from message_delta (running total)
+      if (event.type === 'message_delta' && event.usage?.output_tokens) {
+        usage.output = event.usage.output_tokens;
+      }
+      // Accumulate text
+      if (
+        event.type === 'content_block_delta' &&
+        event.delta?.type === 'text_delta' &&
+        event.delta?.text
+      ) {
+        buffer += event.delta.text;
+      }
     }
 
     return {
       response:      buffer || null,
-      tokensUsed:    { input: 0, output: 0 },  // Anthropic SDK stream doesn't expose usage mid-stream
+      tokensUsed:    usage,
       latencyMs:     Date.now() - startMs,
       wasPartial:    false,
       failureReason: buffer ? null : 'EMPTY_RESPONSE',
     };
   } catch (err) {
+    logger.warn('[CLAUDE_ADAPTER] streamFull error', { error: err.message, callSid, turn });
     return {
-      response:      buffer.length >= 40 ? buffer : null,  // return partial if usable
-      tokensUsed:    { input: 0, output: 0 },
+      response:      buffer.length >= 40 ? buffer : null,
+      tokensUsed:    usage,  // may have partial counts from events before the error
       latencyMs:     Date.now() - startMs,
       wasPartial:    buffer.length >= 40,
       failureReason: err.message || 'STREAM_ERROR',
