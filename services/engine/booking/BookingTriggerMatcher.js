@@ -198,7 +198,7 @@ class BookingTriggerMatcher {
 
     // Cache miss — load from DB
     try {
-      const CompanyBookingTrigger = require('../../models/CompanyBookingTrigger');
+      const CompanyBookingTrigger = require('../../../models/CompanyBookingTrigger');
 
       const rawDocs = await CompanyBookingTrigger.findActiveByCompanyId(companyId);
 
