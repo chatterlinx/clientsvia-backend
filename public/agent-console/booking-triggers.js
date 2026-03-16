@@ -25,7 +25,6 @@
 
 let companyId    = null;
 let companyName  = 'Company';
-let authToken    = null;
 let allTriggers  = [];
 let editingRuleId = null;   // null = new trigger mode
 
@@ -43,10 +42,11 @@ const tagState = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Read companyId + auth from URL or localStorage (same pattern as booking.js)
+  // Auth gate — redirects to login if no valid token
+  if (!AgentConsoleAuth.requireAuth()) return;
+
   const params = new URLSearchParams(window.location.search);
   companyId = params.get('companyId') || localStorage.getItem('selectedCompanyId');
-  authToken = localStorage.getItem('authToken') || localStorage.getItem('token');
 
   if (!companyId) {
     showError('No companyId in URL — add ?companyId=xxx to the URL.');
@@ -64,17 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const API_BASE = () => `/api/admin/agent2/company/${companyId}/booking-triggers`;
 
+// Delegate to AgentConsoleAuth — handles token, 401 redirect, JSON parsing
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
-    },
-    ...opts
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-  return data;
+  return AgentConsoleAuth.apiFetch(path, opts);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,9 +75,10 @@ async function apiFetch(path, opts = {}) {
 
 async function loadCompanyMeta() {
   try {
-    const data = await apiFetch(`/api/v2/companies/${companyId}`);
-    companyName = data?.company?.companyName || data?.companyName || companyId;
-  } catch (_) { /* non-critical — just display companyId */ }
+    // Re-use the booking config endpoint which returns companyName
+    const data = await apiFetch(`/api/admin/agent2/company/${companyId}/booking/config`);
+    companyName = data?.companyName || companyId;
+  } catch (_) { /* non-critical — companyId shown as fallback */ }
 
   document.getElementById('header-company-name').textContent = companyName;
   document.getElementById('header-company-id').textContent   = companyId;
