@@ -300,11 +300,13 @@ async function runBookingLogicLane({
     
     let bookingResult;
     try {
-        bookingResult = await BookingLogicEngine.computeStep(
-            handoffPayload,
-            existingBookingCtx,
-            { userResponse: userInput }
-        );
+        bookingResult = await BookingLogicEngine.processStep({
+            companyId,
+            payload: handoffPayload,
+            bookingCtx: existingBookingCtx,
+            userInput,
+            isTest: false
+        });
     } catch (err) {
         logger.error('[CALL_RUNTIME] BookingLogicEngine.computeStep FAILED', {
             callSid,
