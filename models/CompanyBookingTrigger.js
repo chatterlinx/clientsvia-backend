@@ -1,0 +1,511 @@
+/**
+ * ============================================================================
+ * COMPANY BOOKING TRIGGER
+ * ============================================================================
+ *
+ * Company-scoped trigger cards that fire INSIDE the BookingLogicEngine flow.
+ * These are the booking-phase equivalent of CompanyLocalTrigger — same
+ * keyword/phrase matching engine, same instant-audio pipeline — but with
+ * three additional fields that control booking-specific behavior:
+ *
+ *   firesOnSteps   — which booking steps this trigger is active on
+ *   behavior       — what happens after the response plays
+ *   redirectMode   — freetext service-type key (behavior=REDIRECT only)
+ *
+ * BEHAVIOR REFERENCE:
+ * ┌──────────┬───────────────────────────────────────────────────────────┐
+ * │ INFO     │ Play response, hold current booking step.                 │
+ * │          │ Caller answers the question; booking resumes next turn.   │
+ * ├──────────┼───────────────────────────────────────────────────────────┤
+ * │ BLOCK    │ Play response, keep step frozen.                          │
+ * │          │ Booking cannot advance until caller changes intent.       │
+ * ├──────────┼───────────────────────────────────────────────────────────┤
+ * │ REDIRECT │ Play response + update ctx.bookingMode to redirectMode +  │
+ * │          │ clear cached slots + re-run OFFER_TIMES for new type.     │
+ * └──────────┴───────────────────────────────────────────────────────────┘
+ *
+ * ISOLATION: Every document is scoped to companyId — no cross-tenant access.
+ *
+ * COLLECTION: companyBookingTriggers
+ *
+ * ============================================================================
+ */
+
+'use strict';
+
+const mongoose = require('mongoose');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BOOKING_STEPS = [
+  'ANY',              // Fires on every booking step
+  'COLLECT_NAME',
+  'COLLECT_PHONE',
+  'COLLECT_ADDRESS',
+  'OFFER_TIMES',
+  'CONFIRM'
+];
+
+const BEHAVIORS = ['INFO', 'BLOCK', 'REDIRECT'];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEMA
+// ─────────────────────────────────────────────────────────────────────────────
+
+const companyBookingTriggerSchema = new mongoose.Schema({
+
+  // ─── IDENTITY ──────────────────────────────────────────────────────────────
+
+  companyId: {
+    type:     String,
+    required: true,
+    trim:     true,
+    index:    true
+  },
+
+  // Unique rule identifier within a company (e.g. "same_day_maintenance_block")
+  ruleId: {
+    type:     String,
+    required: true,
+    trim:     true,
+    match:    [/^[a-z0-9_.]+$/, 'ruleId must be lowercase alphanumeric with dots/underscores only']
+  },
+
+  // Globally unique composite ID — "booking::{companyId}::{ruleId}"
+  triggerId: {
+    type:     String,
+    required: true,
+    unique:   true,
+    trim:     true
+  },
+
+  // Simple numeric display ID shown in the UI as #01, #02 …
+  displayId: {
+    type:    Number,
+    default: null
+  },
+
+  // ─── DISPLAY ───────────────────────────────────────────────────────────────
+
+  label: {
+    type:      String,
+    required:  true,
+    trim:      true,
+    maxlength: 200
+  },
+
+  description: {
+    type:      String,
+    default:   '',
+    maxlength: 500
+  },
+
+  // ─── PUBLISH STATUS ────────────────────────────────────────────────────────
+  // Booking triggers are ALWAYS published on create (same rule as local triggers).
+  // Pre-save hook enforces this — no draft mode.
+
+  state: {
+    type:    String,
+    enum:    ['published', 'draft'],
+    default: 'published'
+  },
+
+  publishedAt: {
+    type:    Date,
+    default: null
+  },
+
+  // ─── MATCHING RULES ────────────────────────────────────────────────────────
+
+  enabled: {
+    type:    Boolean,
+    default: true
+  },
+
+  // Lower = higher priority (1-1000). Evaluated in ascending priority order.
+  priority: {
+    type:    Number,
+    default: 50,
+    min:     1,
+    max:     1000
+  },
+
+  // Word-based: ALL words in the entry must appear in input (any order/distance)
+  keywords: {
+    type:    [String],
+    default: []
+  },
+
+  // Substring: exact phrase must be present in input
+  phrases: {
+    type:    [String],
+    default: []
+  },
+
+  // Block this card if ANY negative keyword word is found
+  negativeKeywords: {
+    type:    [String],
+    default: []
+  },
+
+  // Block this card if ANY negative phrase substring is found
+  negativePhrases: {
+    type:    [String],
+    default: [],
+    validate: {
+      validator: (v) => v.every(p => typeof p === 'string' && p.length <= 200),
+      message:   'Each negative phrase must be a string under 200 characters'
+    }
+  },
+
+  // When set, card is skipped if the caller's utterance has more words than this.
+  // Use for short-utterance guards (e.g. closings, confirmations).
+  maxInputWords: {
+    type:    Number,
+    default: null,
+    min:     1,
+    max:     100
+  },
+
+  // ─── BOOKING-SPECIFIC: STEP FILTER ─────────────────────────────────────────
+  // Which booking steps this trigger is active on.
+  // 'ANY' means it fires regardless of the current step.
+  // Multiple values = active on any of those steps.
+
+  firesOnSteps: {
+    type:     [String],
+    enum:     BOOKING_STEPS,
+    default:  ['ANY'],
+    validate: {
+      validator: (v) => Array.isArray(v) && v.length > 0,
+      message:   'firesOnSteps must have at least one entry'
+    }
+  },
+
+  // ─── BOOKING-SPECIFIC: BEHAVIOR ────────────────────────────────────────────
+  // What the engine does after playing the trigger response.
+  //
+  //   INFO     — play response, hold step, booking resumes normally next turn
+  //   BLOCK    — play response, freeze step, booking cannot advance
+  //   REDIRECT — play response, switch bookingMode to redirectMode, re-fetch slots
+
+  behavior: {
+    type:    String,
+    enum:    BEHAVIORS,
+    default: 'INFO'
+  },
+
+  // Freetext service-type key for REDIRECT behavior.
+  // Must match a key in the company's googleCalendar.eventColors.colorMapping[].
+  // Example: "emergency", "maintenance", "water_heater", "drain_cleaning"
+  // Only evaluated when behavior === 'REDIRECT'. Ignored otherwise.
+  redirectMode: {
+    type:      String,
+    default:   null,
+    trim:      true,
+    maxlength: 100
+  },
+
+  // ─── RESPONSE ──────────────────────────────────────────────────────────────
+
+  // 'standard' — play answerText (with optional instant-audio pre-cache)
+  // 'llm'      — generate response from llmFactPack using Claude
+  responseMode: {
+    type:    String,
+    enum:    ['standard', 'llm'],
+    default: 'standard'
+  },
+
+  // Used when responseMode === 'standard'
+  answerText: {
+    type:      String,
+    required:  function () { return this.responseMode !== 'llm'; },
+    maxlength: 2000
+  },
+
+  // Pre-cached audio URL (generated by InstantAudioService on save)
+  audioUrl: {
+    type:      String,
+    default:   '',
+    maxlength: 500
+  },
+
+  // ─── LLM FACT PACK (responseMode === 'llm') ────────────────────────────────
+
+  llmFactPack: {
+    // What IS covered — Claude generates within these facts only
+    includedFacts: {
+      type:      String,
+      default:   '',
+      maxlength: 2500
+    },
+    // What is NOT included, disclaimers, "needs estimate" items
+    excludedFacts: {
+      type:      String,
+      default:   '',
+      maxlength: 2500
+    },
+    // Deterministic fallback if LLM times out — NOT generic fluff
+    backupAnswer: {
+      type:      String,
+      default:   '',
+      maxlength: 500
+    }
+  },
+
+  // ─── FOLLOW-UP ─────────────────────────────────────────────────────────────
+  // Optional question appended after the trigger response.
+  // Use to clarify intent or offer alternatives after a BLOCK/INFO response.
+
+  followUpQuestion: {
+    type:      String,
+    default:   '',
+    maxlength: 500
+  },
+
+  // ─── TAGS ──────────────────────────────────────────────────────────────────
+
+  tags: {
+    type:    [String],
+    default: []
+  },
+
+  // ─── METADATA ──────────────────────────────────────────────────────────────
+
+  createdAt: {
+    type:    Date,
+    default: Date.now
+  },
+
+  createdBy: {
+    type:     String,
+    required: true
+  },
+
+  updatedAt: {
+    type:    Date,
+    default: Date.now
+  },
+
+  updatedBy: {
+    type:    String,
+    default: null
+  },
+
+  // ─── SOFT DELETE ───────────────────────────────────────────────────────────
+
+  isDeleted: {
+    type:    Boolean,
+    default: false,
+    index:   true
+  },
+
+  deletedAt: {
+    type:    Date,
+    default: null
+  },
+
+  deletedBy: {
+    type:    String,
+    default: null
+  },
+
+  deletedReason: {
+    type:      String,
+    default:   null,
+    maxlength: 200
+  }
+
+}, {
+  timestamps: false,
+  collection: 'companyBookingTriggers'
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INDEXES
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PRIMARY: ruleId unique per company (partial — allows recreate after soft-delete)
+companyBookingTriggerSchema.index(
+  { companyId: 1, ruleId: 1 },
+  {
+    unique:                 true,
+    partialFilterExpression: { isDeleted: { $ne: true } }
+  }
+);
+
+// Query optimisation
+companyBookingTriggerSchema.index({ companyId: 1, priority: 1 });
+companyBookingTriggerSchema.index({ companyId: 1, enabled: 1 });
+companyBookingTriggerSchema.index({ companyId: 1, isDeleted: 1 });
+companyBookingTriggerSchema.index({ companyId: 1, behavior: 1 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRE-SAVE HOOKS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// RULE: Booking triggers are ALWAYS published — no draft mode
+companyBookingTriggerSchema.pre('save', function (next) {
+  if (!this.state || this.state === null) {
+    this.state = 'published';
+  }
+  if (this.state === 'published' && !this.publishedAt) {
+    this.publishedAt = new Date();
+  }
+
+  // Type coercion guards
+  this.enabled    = Boolean(this.enabled);
+  this.isDeleted  = Boolean(this.isDeleted);
+
+  // companyId must always be a plain string
+  if (this.companyId && typeof this.companyId !== 'string') {
+    this.companyId = this.companyId.toString();
+  }
+
+  next();
+});
+
+// Auto-generate triggerId + displayId + normalise text arrays on every save
+companyBookingTriggerSchema.pre('save', async function (next) {
+  // Build triggerId if missing
+  if (!this.triggerId) {
+    this.triggerId = `booking::${this.companyId}::${this.ruleId}`;
+  }
+
+  // Auto-increment displayId for new documents
+  if (this.isNew && !this.displayId) {
+    const Counter = require('./Counter');
+    this.displayId = await Counter.getNextSequence('booking_trigger_displayId_global');
+  }
+
+  this.updatedAt = new Date();
+
+  // Normalise all text arrays to lowercase trimmed strings
+  const norm = (arr) => (Array.isArray(arr) ? arr : [])
+    .map(s => typeof s === 'string' ? s.toLowerCase().trim() : '')
+    .filter(Boolean);
+
+  this.keywords         = norm(this.keywords);
+  this.phrases          = norm(this.phrases);
+  this.negativeKeywords = norm(this.negativeKeywords);
+  this.negativePhrases  = norm(this.negativePhrases);
+
+  // Ensure firesOnSteps always has at least one entry
+  if (!Array.isArray(this.firesOnSteps) || this.firesOnSteps.length === 0) {
+    this.firesOnSteps = ['ANY'];
+  }
+
+  // REDIRECT requires a redirectMode
+  if (this.behavior === 'REDIRECT' && !this.redirectMode?.trim()) {
+    return next(new Error('redirectMode is required when behavior is REDIRECT'));
+  }
+
+  next();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATICS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a globally-unique triggerId for this document.
+ * Pattern: "booking::{companyId}::{ruleId}"
+ */
+companyBookingTriggerSchema.statics.generateTriggerId = function (companyId, ruleId) {
+  return `booking::${companyId}::${ruleId}`;
+};
+
+/**
+ * RUNTIME: Load only enabled, published, non-deleted triggers for a company.
+ * Sorted by priority ascending (lower number = evaluated first).
+ */
+companyBookingTriggerSchema.statics.findActiveByCompanyId = function (companyId) {
+  return this.find({
+    companyId,
+    enabled:   true,
+    isDeleted: { $ne: true },
+    state:     'published'
+  })
+    .sort({ priority: 1 })
+    .lean();
+};
+
+/**
+ * ADMIN: Load all non-deleted triggers for a company (for UI display).
+ */
+companyBookingTriggerSchema.statics.findByCompanyId = function (companyId, includeDeleted = false) {
+  const q = { companyId };
+  if (!includeDeleted) q.isDeleted = { $ne: true };
+  return this.find(q).sort({ priority: 1 }).lean();
+};
+
+/**
+ * Convert a plain lean() document to TriggerCardMatcher-compatible format.
+ * This is a static method because findActiveByCompanyId() uses .lean() — no
+ * instance methods available on plain objects.
+ *
+ * The output shape MUST match what TriggerCardMatcher.match() expects:
+ *   card.id, card.match.keywords, card.answer.answerText, card.firesOnSteps,
+ *   card.behavior, card.redirectMode
+ */
+companyBookingTriggerSchema.statics.formatForMatcher = function (doc) {
+  const base = {
+    // ── TriggerCardMatcher core fields ────────────────────────────────────
+    id:            doc.triggerId,
+    ruleId:        doc.ruleId,
+    triggerId:     doc.triggerId,
+    enabled:       doc.enabled,
+    priority:      doc.priority ?? 50,
+    label:         doc.label,
+    maxInputWords: typeof doc.maxInputWords === 'number' ? doc.maxInputWords : null,
+    match: {
+      keywords:         doc.keywords         || [],
+      phrases:          doc.phrases          || [],
+      negativeKeywords: doc.negativeKeywords || [],
+      negativePhrases:  doc.negativePhrases  || []
+    },
+    responseMode: doc.responseMode || 'standard',
+    answer: {
+      answerText: doc.answerText || '',
+      audioUrl:   doc.audioUrl   || ''
+    },
+    followUp: {
+      question: doc.followUpQuestion || ''
+    },
+    // ── Booking-specific fields ────────────────────────────────────────────
+    firesOnSteps: Array.isArray(doc.firesOnSteps) && doc.firesOnSteps.length
+      ? doc.firesOnSteps
+      : ['ANY'],
+    behavior:    doc.behavior    || 'INFO',
+    redirectMode: doc.redirectMode || null,
+    // ── Provenance ─────────────────────────────────────────────────────────
+    _scope: 'BOOKING_LOCAL'
+  };
+
+  if (doc.responseMode === 'llm' && doc.llmFactPack) {
+    base.llmFactPack = {
+      includedFacts: doc.llmFactPack.includedFacts || '',
+      excludedFacts: doc.llmFactPack.excludedFacts || '',
+      backupAnswer:  doc.llmFactPack.backupAnswer  || ''
+    };
+  }
+
+  return base;
+};
+
+companyBookingTriggerSchema.statics.existsForCompany = async function (companyId, ruleId) {
+  const count = await this.countDocuments({ companyId, ruleId, isDeleted: { $ne: true } });
+  return count > 0;
+};
+
+companyBookingTriggerSchema.statics.countActiveByCompanyId = function (companyId) {
+  return this.countDocuments({ companyId, enabled: true, isDeleted: { $ne: true }, state: 'published' });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+module.exports = mongoose.model('CompanyBookingTrigger', companyBookingTriggerSchema);

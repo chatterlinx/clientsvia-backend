@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Triggers — Agent Console</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════
+       CSS VARIABLES
+       ═══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --bg-primary:       #ffffff;
+      --bg-secondary:     #f9fafb;
+      --bg-tertiary:      #f3f4f6;
+      --text-primary:     #111827;
+      --text-secondary:   #4b5563;
+      --text-muted:       #9ca3af;
+      --border-color:     #e5e7eb;
+      --border-light:     #f3f4f6;
+      --primary:          #3b82f6;
+      --primary-hover:    #2563eb;
+      --success:          #059669;
+      --success-bg:       #ecfdf5;
+      --warning:          #d97706;
+      --warning-bg:       #fffbeb;
+      --danger:           #dc2626;
+      --danger-bg:        #fef2f2;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       STATS BAR
+       ═══════════════════════════════════════════════════════════════════════ */
+    .stats-bar {
+      display: flex;
+      gap: 20px;
+      padding: 14px 20px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .stat-divider {
+      width: 1px;
+      background: var(--border-color);
+      align-self: stretch;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       TEST PANEL
+       ═══════════════════════════════════════════════════════════════════════ */
+    .test-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    .test-panel-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .test-panel-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .test-panel-row .form-group {
+      margin-bottom: 0;
+    }
+    .test-panel-row .form-group:first-child {
+      flex: 1;
+      min-width: 200px;
+    }
+    .test-result {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      display: none;
+    }
+    .test-result.matched {
+      background: var(--success-bg);
+      border: 1px solid #a7f3d0;
+      color: #064e3b;
+    }
+    .test-result.no-match {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+    .test-result-label {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .test-result-meta {
+      font-size: 0.8125rem;
+      color: inherit;
+      opacity: 0.8;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       TRIGGER TABLE
+       ═══════════════════════════════════════════════════════════════════════ */
+    .triggers-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .triggers-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .trigger-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .trigger-table thead th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+    .trigger-table tbody tr {
+      border-bottom: 1px solid var(--border-light);
+      transition: background 0.1s;
+    }
+    .trigger-table tbody tr:hover {
+      background: var(--bg-secondary);
+    }
+    .trigger-table tbody td {
+      padding: 10px 12px;
+      vertical-align: middle;
+      color: var(--text-primary);
+    }
+    .trigger-rule-id {
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+    .trigger-label-cell {
+      max-width: 240px;
+    }
+    .trigger-label {
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       BADGES / CHIPS
+       ═══════════════════════════════════════════════════════════════════════ */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .badge-info     { background: #eff6ff; color: #1d4ed8; }
+    .badge-block    { background: #fff7ed; color: #c2410c; }
+    .badge-redirect { background: #f0fdf4; color: #15803d; }
+    .badge-llm      { background: #faf5ff; color: #7e22ce; }
+    .badge-standard { background: var(--bg-tertiary); color: var(--text-secondary); }
+    .badge-disabled { background: var(--bg-tertiary); color: var(--text-muted); }
+
+    .step-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      margin: 1px;
+    }
+    .step-chip.any { background: #dbeafe; color: #1e40af; }
+    .steps-cell { max-width: 180px; }
+
+    /* Action buttons */
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .btn-icon-sm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+    .btn-icon-sm:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .btn-icon-sm.danger:hover { background: var(--danger-bg); border-color: #fca5a5; color: var(--danger); }
+
+    /* Enabled toggle in table */
+    .toggle-pill {
+      display: inline-flex;
+      width: 36px;
+      height: 20px;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background 0.15s;
+      position: relative;
+    }
+    .toggle-pill.on  { background: #3b82f6; }
+    .toggle-pill.off { background: #d1d5db; }
+    .toggle-pill::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.15s;
+    }
+    .toggle-pill.on::after { transform: translateX(16px); }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MODAL
+       ═══════════════════════════════════════════════════════════════════════ */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 1000;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 16px;
+      overflow-y: auto;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 680px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .modal-title {
+      font-size: 1.0625rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: flex;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.1s;
+    }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-body {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+    }
+    .modal-footer-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Form rows */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 0;
+    }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .form-label .hint {
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+    .form-input, .form-select, .form-textarea {
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      transition: border-color 0.1s;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    .form-textarea { resize: vertical; min-height: 72px; }
+
+    /* Section dividers inside modal */
+    .form-section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 2px;
+    }
+
+    /* Steps checkboxes */
+    .steps-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .step-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      transition: all 0.1s;
+      user-select: none;
+    }
+    .step-checkbox input { display: none; }
+    .step-checkbox.checked {
+      background: #dbeafe;
+      border-color: #93c5fd;
+      color: #1e40af;
+      font-weight: 500;
+    }
+
+    /* Behavior radio */
+    .behavior-radios {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .behavior-radio {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 2px solid var(--border-color);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      transition: all 0.1s;
+      user-select: none;
+    }
+    .behavior-radio input { display: none; }
+    .behavior-radio.selected-info     { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; }
+    .behavior-radio.selected-block    { border-color: #f97316; background: #fff7ed; color: #c2410c; }
+    .behavior-radio.selected-redirect { border-color: #22c55e; background: #f0fdf4; color: #15803d; }
+    .behavior-radio .radio-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      display: inline-block;
+    }
+    .behavior-radio.selected-info .radio-dot    { background: #3b82f6; border-color: #3b82f6; }
+    .behavior-radio.selected-block .radio-dot   { background: #f97316; border-color: #f97316; }
+    .behavior-radio.selected-redirect .radio-dot { background: #22c55e; border-color: #22c55e; }
+
+    /* Response mode toggle */
+    .mode-tabs {
+      display: flex;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .mode-tab {
+      flex: 1;
+      padding: 7px 12px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.1s;
+      color: var(--text-secondary);
+      background: var(--bg-primary);
+      border: none;
+    }
+    .mode-tab.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* Tag input */
+    .tag-input-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      min-height: 38px;
+      align-items: center;
+      background: var(--bg-primary);
+      transition: border-color 0.1s;
+    }
+    .tag-input-container:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      font-size: 0.8125rem;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .tag-remove {
+      cursor: pointer;
+      color: var(--text-muted);
+      line-height: 1;
+      font-size: 0.875rem;
+    }
+    .tag-remove:hover { color: var(--danger); }
+    .tag-input-field {
+      border: none;
+      outline: none;
+      font-size: 0.875rem;
+      font-family: inherit;
+      min-width: 80px;
+      flex: 1;
+      background: transparent;
+      color: var(--text-primary);
+    }
+
+    /* Audio status row */
+    .audio-status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+    .audio-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .audio-dot.cached    { background: #22c55e; }
+    .audio-dot.missing   { background: #d1d5db; }
+    .audio-status-text {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      flex: 1;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      z-index: 9999;
+      display: none;
+      max-width: 360px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    .toast.success { background: #064e3b; color: white; display: flex; align-items: center; gap: 8px; }
+    .toast.error   { background: #7f1d1d; color: white; display: flex; align-items: center; gap: 8px; }
+    .toast.show    { display: flex !important; }
+
+    /* Loading */
+    .loading-overlay {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+    }
+
+    /* Confirm delete dialog */
+    .confirm-bar {
+      background: var(--danger-bg);
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.875rem;
+      color: var(--danger);
+      margin-top: 10px;
+      display: none;
+    }
+    .confirm-bar.show { display: flex; }
+    .confirm-bar strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="app-container">
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       HEADER
+       ══════════════════════════════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-left">
+      <button class="btn btn-ghost btn-icon" id="btn-header-back" title="Back to Booking Logic">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M13 17H16C16.53 17 17.04 16.79 17.41 16.41C17.79 16.04 18 15.53 18 15V5C18 4.47 17.79 3.96 17.41 3.59C17.04 3.21 16.53 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <a href="#" id="header-logo-link" class="header-logo" title="Back to Company Profile">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+          <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+        <span class="header-logo-text">ClientVia</span>
+      </a>
+      <div class="header-divider"></div>
+      <span class="header-title">Booking Triggers</span>
+    </div>
+
+    <div class="header-center">
+      <span class="company-name" id="header-company-name">Loading...</span>
+      <span class="company-id-pill" id="header-company-id">—</span>
+    </div>
+
+    <div class="header-right">
+      <button class="btn btn-primary" id="btn-new-trigger">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        New Trigger
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT
+       ══════════════════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- Page title -->
+    <div class="page-header">
+      <div class="page-header-left">
+        <a href="#" class="back-button" id="btn-back">
+          <svg viewBox="0 0 16 16" fill="none">
+            <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Back to Booking Logic
+        </a>
+        <div>
+          <h1 class="page-title">Booking Triggers</h1>
+          <p class="page-subtitle">Keyword/phrase triggers that fire inside the booking flow — same 123RP engine as Discovery</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Stats Bar ──────────────────────────────────────────────────── -->
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-active">—</div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-info" style="color:#1d4ed8">—</div>
+        <div class="stat-label">INFO</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-block" style="color:#c2410c">—</div>
+        <div class="stat-label">BLOCK</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-redirect" style="color:#15803d">—</div>
+        <div class="stat-label">REDIRECT</div>
+      </div>
+    </div>
+
+    <!-- ── Test Match Panel ───────────────────────────────────────────── -->
+    <div class="test-panel">
+      <div class="test-panel-title">🧪 Test Phrase Against Trigger Pool</div>
+      <div class="test-panel-row">
+        <div class="form-group">
+          <label class="form-label">Caller phrase to test</label>
+          <input class="form-input" id="test-phrase" placeholder='e.g. "can I do a same-day service call"' type="text">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Step</label>
+          <select class="form-select" id="test-step" style="width:180px">
+            <option value="ANY">ANY (any step)</option>
+            <option value="COLLECT_NAME">COLLECT_NAME</option>
+            <option value="COLLECT_PHONE">COLLECT_PHONE</option>
+            <option value="COLLECT_ADDRESS">COLLECT_ADDRESS</option>
+            <option value="OFFER_TIMES">OFFER_TIMES</option>
+            <option value="CONFIRM">CONFIRM</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary" id="btn-test-match" style="white-space:nowrap">Run Test</button>
+      </div>
+      <div class="test-result" id="test-result">
+        <div class="test-result-label" id="test-result-label"></div>
+        <div class="test-result-meta" id="test-result-meta"></div>
+      </div>
+    </div>
+
+    <!-- ── Trigger List ───────────────────────────────────────────────── -->
+    <div class="triggers-header">
+      <h2>Trigger Cards</h2>
+    </div>
+
+    <div id="trigger-list-container">
+      <div class="loading-overlay">Loading triggers...</div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     TRIGGER EDITOR MODAL
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">New Booking Trigger</span>
+      <button class="modal-close" id="modal-close">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- ── Identity ─────────────────────────────────────────────── -->
+      <div class="form-section-title">Identity</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Rule ID <span class="hint">(lowercase, dots/underscores)</span></label>
+          <input class="form-input" id="f-ruleId" placeholder="e.g. asap.block, price.info" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Label</label>
+          <input class="form-input" id="f-label" placeholder="Short display name" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Priority <span class="hint">(1=first, 1000=last)</span></label>
+          <input class="form-input" id="f-priority" type="number" min="1" max="1000" value="50">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Input Words <span class="hint">(optional guard)</span></label>
+          <input class="form-input" id="f-maxInputWords" type="number" min="1" max="100" placeholder="—">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Description <span class="hint">(internal notes)</span></label>
+          <input class="form-input" id="f-description" placeholder="What does this trigger handle?">
+        </div>
+      </div>
+
+      <!-- ── Booking-specific: Steps ──────────────────────────────── -->
+      <div class="form-section-title">Fires On Steps</div>
+      <div class="steps-grid" id="steps-grid">
+        <label class="step-checkbox" data-step="ANY">
+          <input type="checkbox" value="ANY"> ANY (all steps)
+        </label>
+        <label class="step-checkbox" data-step="COLLECT_NAME">
+          <input type="checkbox" value="COLLECT_NAME"> Collect Name
+        </label>
+        <label class="step-checkbox" data-step="COLLECT_PHONE">
+          <input type="checkbox" value="COLLECT_PHONE"> Collect Phone
+        </label>
+        <label class="step-checkbox" data-step="COLLECT_ADDRESS">
+          <input type="checkbox" value="COLLECT_ADDRESS"> Collect Address
+        </label>
+        <label class="step-checkbox" data-step="OFFER_TIMES">
+          <input type="checkbox" value="OFFER_TIMES"> Offer Times
+        </label>
+        <label class="step-checkbox" data-step="CONFIRM">
+          <input type="checkbox" value="CONFIRM"> Confirm
+        </label>
+      </div>
+
+      <!-- ── Booking-specific: Behavior ──────────────────────────── -->
+      <div class="form-section-title">Behavior After Response</div>
+      <div class="behavior-radios" id="behavior-radios">
+        <label class="behavior-radio" data-behavior="INFO">
+          <input type="radio" name="behavior" value="INFO">
+          <span class="radio-dot"></span>
+          INFO — hold step
+        </label>
+        <label class="behavior-radio" data-behavior="BLOCK">
+          <input type="radio" name="behavior" value="BLOCK">
+          <span class="radio-dot"></span>
+          BLOCK — freeze step
+        </label>
+        <label class="behavior-radio" data-behavior="REDIRECT">
+          <input type="radio" name="behavior" value="REDIRECT">
+          <span class="radio-dot"></span>
+          REDIRECT — switch service type
+        </label>
+      </div>
+
+      <!-- Redirect mode field — only shown when REDIRECT selected -->
+      <div class="form-group" id="redirect-mode-group" style="display:none">
+        <label class="form-label">Redirect Mode <span class="hint">(freetext service-type key, e.g. "emergency")</span></label>
+        <input class="form-input" id="f-redirectMode" placeholder="e.g. emergency, maintenance, water_heater">
+      </div>
+
+      <!-- ── Matching Rules ────────────────────────────────────────── -->
+      <div class="form-section-title">Matching Rules</div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label class="form-label">Keywords <span class="hint">(ALL words must appear — press Enter or comma)</span></label>
+          <div class="tag-input-container" id="keywords-container">
+            <input class="tag-input-field" id="keywords-input" placeholder="Add keyword…">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Phrases <span class="hint">(exact substring match)</span></label>
+          <div class="tag-input-container" id="phrases-container">
+            <input class="tag-input-field" id="phrases-input" placeholder="Add phrase…">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Negative Keywords <span class="hint">(block this card if any found)</span></label>
+          <div class="tag-input-container" id="neg-keywords-container">
+            <input class="tag-input-field" id="neg-keywords-input" placeholder="Add negative keyword…">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Negative Phrases <span class="hint">(block this card if any found)</span></label>
+          <div class="tag-input-container" id="neg-phrases-container">
+            <input class="tag-input-field" id="neg-phrases-input" placeholder="Add negative phrase…">
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Response ──────────────────────────────────────────────── -->
+      <div class="form-section-title">Response</div>
+      <div class="form-group">
+        <div class="mode-tabs">
+          <button class="mode-tab active" id="tab-standard" type="button">Standard</button>
+          <button class="mode-tab" id="tab-llm" type="button">LLM (fact pack)</button>
+        </div>
+      </div>
+
+      <!-- Standard mode -->
+      <div id="standard-fields">
+        <div class="form-group">
+          <label class="form-label">Answer Text</label>
+          <textarea class="form-textarea" id="f-answerText" rows="3" placeholder="What the caller hears when this trigger fires…"></textarea>
+        </div>
+      </div>
+
+      <!-- LLM mode -->
+      <div id="llm-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group full">
+            <label class="form-label">Included Facts <span class="hint">(what Claude CAN say)</span></label>
+            <textarea class="form-textarea" id="f-includedFacts" rows="3" placeholder="Price is $89 for standard service call. Saturday appointments available..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Excluded Facts <span class="hint">(disclaimers, off-limits info)</span></label>
+            <textarea class="form-textarea" id="f-excludedFacts" rows="2" placeholder="Do not quote prices for emergency calls. Do not confirm same-day availability..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Backup Answer <span class="hint">(if LLM times out)</span></label>
+            <input class="form-input" id="f-backupAnswer" placeholder="Short deterministic fallback — not generic fluff">
+          </div>
+        </div>
+      </div>
+
+      <!-- Follow-up question -->
+      <div class="form-group">
+        <label class="form-label">Follow-Up Question <span class="hint">(appended after response)</span></label>
+        <input class="form-input" id="f-followUpQuestion" placeholder="Would you still like to book?">
+      </div>
+
+      <!-- ── Instant Audio ─────────────────────────────────────────── -->
+      <div class="form-section-title">Instant Audio Cache</div>
+      <div class="audio-status-row" id="audio-status-row">
+        <div class="audio-dot missing" id="audio-dot"></div>
+        <div class="audio-status-text" id="audio-status-text">Save the trigger first to generate audio</div>
+        <button class="btn btn-secondary" id="btn-gen-audio" type="button" style="display:none;font-size:0.8125rem;padding:6px 12px">
+          Regenerate
+        </button>
+      </div>
+
+      <!-- ── Tags + Enabled ────────────────────────────────────────── -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tags <span class="hint">(optional labels)</span></label>
+          <div class="tag-input-container" id="tags-container">
+            <input class="tag-input-field" id="tags-input" placeholder="Add tag…">
+          </div>
+        </div>
+        <div class="form-group" style="justify-content:flex-end;gap:8px">
+          <label class="form-label">Enabled</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <div class="toggle-pill on" id="enabled-toggle"></div>
+            <span id="enabled-label" style="font-size:0.875rem;color:var(--text-secondary)">Enabled</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete confirm bar -->
+      <div class="confirm-bar" id="confirm-delete-bar">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 6V9M8 11H8.01M2.5 13.5H13.5L8 2.5L2.5 13.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <strong>This will permanently delete this trigger.</strong>
+        <button class="btn" id="btn-confirm-delete" style="background:#dc2626;color:white;padding:4px 12px;font-size:0.8125rem">Delete</button>
+        <button class="btn btn-ghost" id="btn-cancel-delete" style="font-size:0.8125rem">Cancel</button>
+      </div>
+
+    </div><!-- /modal-body -->
+
+    <div class="modal-footer">
+      <div>
+        <button class="btn btn-ghost" id="btn-delete-trigger" type="button" style="color:var(--danger);display:none">
+          Delete Trigger
+        </button>
+      </div>
+      <div class="modal-footer-actions">
+        <button class="btn btn-ghost" id="btn-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-modal-save">Save Trigger</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="/agent-console/booking-triggers.js"></script>
+</body>
+</html>

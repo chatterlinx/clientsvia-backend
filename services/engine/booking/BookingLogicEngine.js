@@ -27,6 +27,7 @@
 const logger               = require('../../../utils/logger');
 const v2Company            = require('../../../models/v2Company');
 const GoogleCalendarService = require('../../GoogleCalendarService');
+const { BookingTriggerMatcher } = require('./BookingTriggerMatcher');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -184,6 +185,51 @@ function initializeContext(payload, config) {
    ============================================================================ */
 
 async function processCurrentStep(ctx, userInput, config, companyId, isTest, events) {
+
+  // ── BOOKING TRIGGER CHECK ─────────────────────────────────────────────────
+  // Run BEFORE the step logic so that keywords/phrases always take priority.
+  // Only fires when caller said something (userInput present) and we are not
+  // at INIT or COMPLETED (no utterance to match on those transitions).
+  if (userInput?.trim() && ctx.step !== STEPS.INIT && ctx.step !== STEPS.COMPLETED) {
+    try {
+      const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, ctx.step);
+
+      if (triggerResult.matched) {
+        const card = triggerResult.card;
+        events.push({
+          type:         'BL2_TRIGGER_MATCHED',
+          ruleId:       card.ruleId,
+          behavior:     triggerResult.behavior,
+          matchType:    triggerResult.matchType,
+          matchedOn:    triggerResult.matchedOn,
+          timestamp:    Date.now()
+        });
+
+        const triggerResponse = await buildTriggerResponse(card, userInput, companyId);
+
+        return handleBookingTriggerHit({
+          ctx,
+          config,
+          companyId,
+          isTest,
+          events,
+          triggerResult,
+          triggerResponse,
+          userInput
+        });
+      }
+    } catch (triggerErr) {
+      // Never let trigger failure kill the booking flow
+      logger.warn(`[${ENGINE_ID}] BookingTriggerMatcher error — continuing without trigger`, {
+        companyId,
+        step:  ctx.step,
+        error: triggerErr.message
+      });
+      events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
+    }
+  }
+  // ── END TRIGGER CHECK ─────────────────────────────────────────────────────
+
   switch (ctx.step) {
     case STEPS.INIT:            return processInit(ctx, config, companyId, isTest, events);
     case STEPS.COLLECT_NAME:    return processCollectName(ctx, userInput, config, companyId, isTest, events);
@@ -462,6 +508,145 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
     bookingCtx: ctx,
     completed:  false
   };
+}
+
+/* ============================================================================
+   BOOKING TRIGGER EXECUTION
+   ============================================================================
+   Called from processCurrentStep() when BookingTriggerMatcher finds a hit.
+   Three behaviors:
+     INFO     — play trigger response, hold the current step (booking resumes next turn)
+     BLOCK    — play trigger response, freeze step (booking cannot advance until intent changes)
+     REDIRECT — play trigger response, switch bookingMode to redirectMode, clear cached slots,
+                re-run OFFER_TIMES so the agent fetches availability for the new service type
+   ============================================================================ */
+
+/**
+ * Build the text response for a matched booking trigger.
+ * Standard mode: use answerText directly.
+ * LLM mode: fall back to backupAnswer (live LLM not called here — that's the
+ *           TriggerLLMResponseService layer; booking triggers just use the backup
+ *           until that pipeline is wired into the booking lane).
+ *
+ * @param {Object} card - TriggerCardMatcher-compatible card from BookingTriggerMatcher
+ * @returns {string}
+ */
+async function buildTriggerResponse(card) {
+  const answer = card.answer?.answerText?.trim();
+  if (answer) return answer;
+
+  // LLM mode fallback
+  const backup = card.llmFactPack?.backupAnswer?.trim();
+  if (backup) return backup;
+
+  return "I'm sorry, I didn't quite catch what you need. Could you rephrase that?";
+}
+
+/**
+ * Execute a matched booking trigger based on its behavior.
+ *
+ * @param {Object} params
+ * @param {Object} params.ctx             - Current booking context (mutated in place for REDIRECT)
+ * @param {Object} params.config          - Company booking config
+ * @param {string} params.companyId
+ * @param {boolean} params.isTest
+ * @param {Array}  params.events
+ * @param {Object} params.triggerResult   - Result from BookingTriggerMatcher.match()
+ * @param {string} params.triggerResponse - Pre-built response text
+ * @param {string} params.userInput
+ * @returns {Promise<Object>}             - Standard processStep return shape
+ */
+async function handleBookingTriggerHit({ ctx, config, companyId, isTest, events, triggerResult, triggerResponse }) {
+  const { behavior, redirectMode, card } = triggerResult;
+
+  // Append the optional follow-up question to the response text
+  const followUp   = card.followUp?.question?.trim();
+  const fullText   = followUp ? `${triggerResponse} ${followUp}` : triggerResponse;
+
+  // 123RP provenance — CallerVia call-review console will show BOOKING_TRIGGER_MATCHED
+  ctx.lastTriggerRuleId = card.ruleId;
+  ctx.lastTriggerBehavior = behavior;
+  ctx.lastPath = 'BOOKING_TRIGGER_MATCHED';
+
+  switch (behavior) {
+
+    // ── INFO: play response, hold step, resume normally next turn ────────────
+    case 'INFO': {
+      logger.info(`[${ENGINE_ID}] Booking trigger INFO — holding step`, {
+        companyId, step: ctx.step, ruleId: card.ruleId
+      });
+      events.push({ type: 'BL2_TRIGGER_INFO', ruleId: card.ruleId, step: ctx.step, timestamp: Date.now() });
+
+      return {
+        nextPrompt: fullText,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior: 'INFO' }
+      };
+    }
+
+    // ── BLOCK: play response, freeze step — booking cannot advance ──────────
+    case 'BLOCK': {
+      logger.info(`[${ENGINE_ID}] Booking trigger BLOCK — step frozen`, {
+        companyId, step: ctx.step, ruleId: card.ruleId
+      });
+      events.push({ type: 'BL2_TRIGGER_BLOCK', ruleId: card.ruleId, step: ctx.step, timestamp: Date.now() });
+
+      ctx.blocked = true;
+
+      return {
+        nextPrompt: fullText,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior: 'BLOCK' }
+      };
+    }
+
+    // ── REDIRECT: switch service type, clear slots, re-run OFFER_TIMES ──────
+    case 'REDIRECT': {
+      logger.info(`[${ENGINE_ID}] Booking trigger REDIRECT — switching bookingMode`, {
+        companyId, step: ctx.step, ruleId: card.ruleId,
+        oldMode: ctx.bookingMode, newMode: redirectMode
+      });
+      events.push({
+        type: 'BL2_TRIGGER_REDIRECT', ruleId: card.ruleId,
+        oldMode: ctx.bookingMode, newMode: redirectMode, timestamp: Date.now()
+      });
+
+      ctx.bookingMode          = redirectMode;
+      ctx.availableTimeOptions = null;  // Force fresh calendar fetch with new service type
+      ctx.selectedTime         = null;
+      ctx.blocked              = false;
+      ctx.step                 = STEPS.OFFER_TIMES;
+
+      // Fetch availability for new service type immediately
+      const { timeOptions, message: timesMsg } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
+      ctx.availableTimeOptions = timeOptions;
+
+      // Play trigger response first, then present the new time options
+      const combinedPrompt = `${fullText} ${timesMsg}`;
+
+      return {
+        nextPrompt: combinedPrompt,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior: 'REDIRECT', newMode: redirectMode }
+      };
+    }
+
+    // ── Unknown behavior — safe fallback to INFO ────────────────────────────
+    default: {
+      logger.warn(`[${ENGINE_ID}] Unknown booking trigger behavior "${behavior}" — treating as INFO`, {
+        companyId, ruleId: card.ruleId
+      });
+      return {
+        nextPrompt: fullText,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior }
+      };
+    }
+  }
 }
 
 /* ============================================================================
