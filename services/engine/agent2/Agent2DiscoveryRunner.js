@@ -764,12 +764,25 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     try {
       parsed = JSON.parse(result.response);
     } catch (_jsonErr) {
-      // Fallback: extract JSON from markdown code blocks or surrounding text
-      const jsonMatch = result.response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]);
-        } catch (_innerErr) { /* JSON extraction failed completely */ }
+      // LLM sometimes wraps JSON in ```json...``` despite being told not to.
+      // Strip the fence, optionally add outer {} if missing, then retry.
+      const stripped = result.response
+        .replace(/^```(?:json)?\s*/m, '')
+        .replace(/\s*```\s*$/m, '')
+        .trim();
+      // If the content has no outer braces (e.g. LLM emitted bare key:value lines),
+      // wrap it — JSON.parse may still succeed if the values are properly quoted.
+      const wrapped = stripped.startsWith('{') ? stripped : `{\n${stripped}\n}`;
+      try {
+        parsed = JSON.parse(wrapped);
+      } catch (_cleanErr) {
+        // Last resort: greedy regex to extract whatever JSON object is present
+        const jsonMatch = (stripped || result.response).match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch (_innerErr) { /* JSON extraction failed completely */ }
+        }
       }
     }
 
@@ -1907,9 +1920,13 @@ class Agent2DiscoveryRunner {
 
         // ── YES (Tier 1 or Tier 2 if residual content) ──
         if (bucket === 'YES') {
+          // Compute direction up front — needed in BOTH the pure-YES and YES+residual paths.
+          const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
+          const yesText = bucketResponse;
+
           // Detect residual content: "yes but I also want to know about X"
           // Strip matched YES phrases — if meaningful content remains,
-          // caller said more than a pure yes → Tier 2 (LLM Agent) handles
+          // caller said more than a pure yes → Tier 2 (LLM Agent) handles.
           const residualAfterYes = matchedByBucket.yes
             .reduce((text, phrase) => {
               const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1920,18 +1937,20 @@ class Agent2DiscoveryRunner {
             .trim();
           const hasResidualContent = residualAfterYes.length > 6;
 
-          if (hasResidualContent) {
-            // YES + extra content → fall through to Tier 2 (LLM Agent) below
+          // When direction is HANDOFF_BOOKING, route to booking EVEN if the caller
+          // said "yes + timing question" (e.g. "yes, how soon can you get here?").
+          // BookingLogicEngine handles scheduling questions far better than the
+          // Discovery LLM — letting LLM handle it traps the call in a loop.
+          if (hasResidualContent && yesDirection !== 'HANDOFF_BOOKING') {
+            // YES + extra content, non-booking direction → fall through to Tier 2 (LLM Agent)
             emit('A2_FOLLOWUP_YES_WITH_QUESTION', {
               residualPreview: clip(residualAfterYes, 60),
               reason: 'YES with substantive extra content — routing to Tier 2 (LLM Agent)',
               cardId: pfuqSource?.replace('card:', '') || null
             });
           } else {
-            // Pure YES → Tier 1 deterministic: execute consent card direction
+            // Pure YES, OR YES+residual where direction=HANDOFF_BOOKING → execute direction
             clearPendingFollowUp(nextState);
-            const yesDirection = `${fuc.yes?.direction || 'CONTINUE'}`.toUpperCase();
-            const yesText = bucketResponse;
 
             if (yesDirection === 'HANDOFF_BOOKING') {
               nextState.lane = 'BOOKING';
@@ -1948,7 +1967,9 @@ class Agent2DiscoveryRunner {
               nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_HANDOFF_BOOKING';
 
               emit('A2_CONSENT_GATE_BOOKING', {
-                reason: 'Caller confirmed YES to trigger follow-up → booking handoff',
+                reason: hasResidualContent
+                  ? 'Caller said YES+extra to booking trigger → booking handoff (residual is timing/scheduling context for booking engine)'
+                  : 'Caller confirmed YES to trigger follow-up → booking handoff',
                 cardId: pfuqSource?.replace('card:', '') || null,
                 inputPreview: clip(inputLowerCleanFUQ, 60)
               });

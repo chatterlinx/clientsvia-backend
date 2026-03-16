@@ -514,7 +514,9 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
   parts.push(
     '',
     '=== OUTPUT FORMAT ===',
-    'You MUST respond with ONLY a JSON object. No markdown, no backticks, no explanation.',
+    'You MUST respond with ONLY a raw JSON object.',
+    'CRITICAL: Do NOT use ```json or any code fence. Do NOT add any text before or after the JSON.',
+    'Your response MUST start with { and end with }. Nothing else.',
     'Schema:',
     '{',
     '  "responseText": "string — your warm acknowledgment (1-2 sentences)",',
