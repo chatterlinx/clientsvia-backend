@@ -76,7 +76,7 @@ async function apiFetch(path, opts = {}) {
 async function loadCompanyMeta() {
   try {
     // Re-use the booking config endpoint which returns companyName
-    const data = await apiFetch(`/api/admin/agent2/company/${companyId}/booking/config`);
+    const data = await apiFetch(`/api/agent-console/${companyId}/booking/config`);
     companyName = data?.companyName || companyId;
   } catch (_) { /* non-critical — companyId shown as fallback */ }
 
