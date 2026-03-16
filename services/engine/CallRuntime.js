@@ -355,7 +355,7 @@ async function runBookingLogicLane({
         consent: { pending: false, askedExplicitly: false }
     };
     
-    const isComplete = bookingResult.bookingComplete === true;
+    const isComplete = bookingResult.completed === true;
     
     bufferEvent('BOOKING_LOGIC_STEP_RESULT', {
         nextPromptPreview: (bookingResult.nextPrompt || '').substring(0, 120),
@@ -372,7 +372,96 @@ async function runBookingLogicLane({
             steps: bookingResult.trace
         });
     }
-    
+
+    // ── BOOKING COMPLETION WIRING ─────────────────────────────────────────
+    // Fire-and-forget: persist BookingRequest, send SMS, notify admin.
+    // Never awaited — caller hears the confirmation immediately.
+    // ─────────────────────────────────────────────────────────────────────
+    if (isComplete) {
+        setImmediate(async () => {
+            try {
+                const BookingRequest         = require('../../models/BookingRequest');
+                const SessionService         = require('../SessionService');
+                const SMSNotificationService = require('../SMSNotificationService');
+                const AdminNotificationService = require('../AdminNotificationService');
+
+                const ctx = bookingResult.bookingCtx;
+
+                // Core booking data (plain shape — works with SMS even if DB save fails)
+                const bookingData = {
+                    companyId,
+                    callSid,
+                    callerPhone:        ctx.phone || null,
+                    status:             ctx.calendarEventId ? 'COMPLETED' : 'FAKE_CONFIRMED',
+                    outcomeMode:        'confirmed_on_call',
+                    slots: {
+                        name: {
+                            full:  ctx.name || null,
+                            first: ctx.name?.split(' ')[0] || null,
+                            last:  ctx.name?.split(' ').slice(1).join(' ') || null
+                        },
+                        phone:   ctx.phone || null,
+                        address: { full: ctx.address || null }
+                    },
+                    calendarEventId:    ctx.calendarEventId   || null,
+                    calendarEventLink:  ctx.calendarEventLink || null,
+                    calendarEventStart: ctx.selectedTime?.start ? new Date(ctx.selectedTime.start) : null,
+                    calendarEventEnd:   ctx.selectedTime?.end   ? new Date(ctx.selectedTime.end)   : null,
+                    calendarCreatedAt:  ctx.calendarEventId ? new Date() : null,
+                    channel: 'phone'
+                };
+
+                // Persist BookingRequest (requires ConversationSession._id)
+                let br = null;
+                try {
+                    const session = await SessionService.findByCallSid(callSid);
+                    if (session?._id) {
+                        const caseId = BookingRequest.generateCaseId();
+                        br = await BookingRequest.create({ ...bookingData, sessionId: session._id, caseId });
+                        logger.info('[CALL_RUNTIME] BookingRequest created', {
+                            callSid, brId: br._id, caseId,
+                            calendarEventId: br.calendarEventId
+                        });
+                    } else {
+                        logger.warn('[CALL_RUNTIME] No session found for callSid — BookingRequest not persisted', { callSid });
+                    }
+                } catch (brErr) {
+                    if (brErr.code === 11000) {
+                        // Idempotency guard — duplicate for this session is expected on retries
+                        logger.info('[CALL_RUNTIME] BookingRequest already exists for session (idempotent)', { callSid });
+                    } else {
+                        logger.error('[CALL_RUNTIME] BookingRequest.create failed', { callSid, error: brErr.message });
+                    }
+                }
+
+                // SMS confirmation — use saved BR if available, else plain bookingData shape
+                await SMSNotificationService.sendBookingConfirmation(companyId, br || bookingData);
+
+                // Admin alert
+                await AdminNotificationService.sendAlert({
+                    code:        'BOOKING_COMPLETED',
+                    severity:    'INFO',
+                    companyId,
+                    companyName: company?.companyName || 'Unknown',
+                    message:     `Booking completed for ${ctx.name || 'caller'}`,
+                    details: {
+                        caseId:          br?.caseId         || null,
+                        calendarEventId: ctx.calendarEventId || null,
+                        customerName:    ctx.name            || null,
+                        customerPhone:   ctx.phone           || null,
+                        callSid
+                    }
+                });
+
+            } catch (e) {
+                logger.error('[CALL_RUNTIME] Booking completion wiring failed (fire-and-forget)', {
+                    callSid,
+                    error: e.message
+                });
+            }
+        });
+    }
+
     return {
         response: bookingResult.nextPrompt || "One moment while I check availability.",
         matchSource: 'BOOKING_LOGIC_ENGINE',
