@@ -1,56 +1,60 @@
 /**
  * ============================================================================
- * BOOKING LOGIC ENGINE — CLEAN IMPLEMENTATION
+ * BOOKING LOGIC ENGINE — PRODUCTION IMPLEMENTATION
  * ClientVia Platform · Agent Console Contract AC1
- * 
- * This is a CLEAN module — NO LEGACY CODE.
- * 
+ *
+ * CLEAN MODULE — NO LEGACY CODE.
+ *
  * Responsibilities:
- * - Receive handoff payload from Agent 2.0
- * - Collect missing required fields (name, phone, address)
- * - Query calendar for available time options
- * - Present options to caller
- * - Confirm and book appointment
- * - Send confirmation
- * 
+ *   - Receive handoff payload from Agent 2.0 discovery
+ *   - Collect missing required fields (name, phone, address)
+ *   - Query Google Calendar for real available time options per company
+ *   - Present options to caller and capture selection
+ *   - Confirm and write the event to Google Calendar
+ *
  * Communication Contract:
- * - Input: { payload, bookingCtx, userInput }
- * - Output: { nextPrompt, bookingCtx, completed, calendarEventId?, events[] }
- * 
- * BANNED TERMS: Do not use "slot" anywhere — use timeOption or availabilityWindow
- * 
+ *   Input:  { companyId, payload, bookingCtx, userInput, isTest }
+ *   Output: { nextPrompt, bookingCtx, completed, calendarEventId?, events[] }
+ *
+ * Multi-tenant: every operation is scoped to companyId.
+ * No hardcoded values — all config comes from aiAgentSettings.bookingLogic.
+ *
  * ============================================================================
  */
 
-const logger = require('../../../utils/logger');
-const v2Company = require('../../../models/v2Company');
+'use strict';
+
+const logger               = require('../../../utils/logger');
+const v2Company            = require('../../../models/v2Company');
+const GoogleCalendarService = require('../../GoogleCalendarService');
+const { BookingTriggerMatcher } = require('./BookingTriggerMatcher');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
-const VERSION = 'BL1.0';
+const VERSION   = 'BL2.0';
 
 /* ============================================================================
    BOOKING FLOW STEPS
    ============================================================================ */
 
 const STEPS = {
-  INIT: 'INIT',
-  COLLECT_NAME: 'COLLECT_NAME',
-  COLLECT_PHONE: 'COLLECT_PHONE',
+  INIT:            'INIT',
+  COLLECT_NAME:    'COLLECT_NAME',
+  COLLECT_PHONE:   'COLLECT_PHONE',
   COLLECT_ADDRESS: 'COLLECT_ADDRESS',
-  OFFER_TIMES: 'OFFER_TIMES',
-  CONFIRM: 'CONFIRM',
-  COMPLETED: 'COMPLETED'
+  OFFER_TIMES:     'OFFER_TIMES',
+  CONFIRM:         'CONFIRM',
+  COMPLETED:       'COMPLETED'
 };
 
 /* ============================================================================
-   DEFAULT CONFIGURATION
+   DEFAULTS  (used only when company config fields are absent)
    ============================================================================ */
 
 const DEFAULT_CONFIG = {
   appointmentDuration: 60,
-  bufferMinutes: 0,
-  advanceBookingDays: 14,
-  requiredFields: ['firstName', 'phone'],
+  bufferMinutes:       0,
+  advanceBookingDays:  14,
+  requiredFields:      ['firstName', 'phone'],
   confirmationMessage: 'Your appointment is confirmed for {date} at {time}. We look forward to seeing you!'
 };
 
@@ -59,21 +63,22 @@ const DEFAULT_CONFIG = {
    ============================================================================ */
 
 /**
- * Process a booking step
- * 
- * @param {Object} params
- * @param {string} params.companyId - Company ID
- * @param {Object} params.payload - Handoff payload from Agent 2.0
- * @param {Object|null} params.bookingCtx - Current booking context (null for first step)
- * @param {string|null} params.userInput - User's response to previous prompt
- * @param {boolean} params.isTest - Whether this is a test step
- * 
- * @returns {Object} { nextPrompt, bookingCtx, completed, calendarEventId?, events[] }
+ * Process a single booking conversation step.
+ *
+ * @param {Object}       params
+ * @param {string}       params.companyId  - Tenant company ID
+ * @param {Object}       params.payload    - Handoff payload from Agent 2.0
+ * @param {Object|null}  params.bookingCtx - Persisted booking context (null on first turn)
+ * @param {string|null}  params.userInput  - Caller's response to the previous prompt
+ * @param {boolean}      params.isTest     - True when called from the UI simulator
+ *
+ * @returns {Promise<{nextPrompt: string, bookingCtx: Object, completed: boolean,
+ *                    calendarEventId?: string, events: Array}>}
  */
 async function processStep({ companyId, payload, bookingCtx, userInput, isTest = false }) {
   const stepId = `step_${Date.now()}`;
   const events = [];
-  
+
   logger.info(`[${ENGINE_ID}] Processing step`, {
     stepId,
     companyId,
@@ -81,40 +86,36 @@ async function processStep({ companyId, payload, bookingCtx, userInput, isTest =
     hasUserInput: !!userInput,
     isTest
   });
-  
+
   try {
     const config = await loadCompanyConfig(companyId);
-    const ctx = bookingCtx ? { ...bookingCtx } : initializeContext(payload, config);
-    
+    const ctx    = bookingCtx ? { ...bookingCtx } : initializeContext(payload, config);
+
     const result = await processCurrentStep(ctx, userInput, config, companyId, isTest, events);
-    
+
     logger.info(`[${ENGINE_ID}] Step processed`, {
       stepId,
-      nextStep: result.bookingCtx.step,
-      completed: result.completed,
+      nextStep:    result.bookingCtx.step,
+      completed:   result.completed,
       eventsCount: events.length
     });
-    
-    return {
-      ...result,
-      events
-    };
-    
+
+    return { ...result, events };
+
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Step processing failed`, {
-      stepId,
-      companyId,
+      stepId, companyId,
       error: error.message,
       stack: error.stack
     });
-    
+
     events.push({ type: 'BL1_ERROR', error: error.message, timestamp: Date.now() });
-    
+
     return {
-      nextPrompt: "I'm sorry, I'm having trouble with the booking system. Would you like me to have someone call you back?",
+      nextPrompt: "I'm sorry, I ran into an issue with the booking system. Would you like me to have someone call you back to schedule?",
       bookingCtx: bookingCtx || {},
-      completed: false,
-      error: error.message,
+      completed:  false,
+      error:      error.message,
       events
     };
   }
@@ -129,24 +130,24 @@ async function loadCompanyConfig(companyId) {
     const company = await v2Company.findById(companyId)
       .select('aiAgentSettings.bookingLogic googleCalendar businessHours companyName')
       .lean();
-    
+
     if (!company) {
       logger.warn(`[${ENGINE_ID}] Company not found, using defaults`, { companyId });
       return { ...DEFAULT_CONFIG, companyName: 'our company', calendarConnected: false };
     }
-    
-    const bookingLogic = company.aiAgentSettings?.bookingLogic || {};
-    
+
+    const bl = company.aiAgentSettings?.bookingLogic || {};
+
     return {
-      companyName: company.companyName || 'our company',
-      appointmentDuration: bookingLogic.appointmentDuration || bookingLogic.slotDuration || DEFAULT_CONFIG.appointmentDuration,
-      bufferMinutes: bookingLogic.bufferMinutes || DEFAULT_CONFIG.bufferMinutes,
-      advanceBookingDays: bookingLogic.advanceBookingDays || DEFAULT_CONFIG.advanceBookingDays,
-      requiredFields: bookingLogic.requiredFields || DEFAULT_CONFIG.requiredFields,
-      confirmationMessage: bookingLogic.confirmationMessage || DEFAULT_CONFIG.confirmationMessage,
-      calendarConnected: !!company.googleCalendar?.accessToken,
-      calendarId: company.googleCalendar?.calendarId,
-      businessHours: company.businessHours
+      companyName:         company.companyName || 'our company',
+      appointmentDuration: bl.appointmentDuration || bl.slotDuration || DEFAULT_CONFIG.appointmentDuration,
+      bufferMinutes:       bl.bufferMinutes       ?? DEFAULT_CONFIG.bufferMinutes,
+      advanceBookingDays:  bl.advanceBookingDays  || DEFAULT_CONFIG.advanceBookingDays,
+      requiredFields:      bl.requiredFields      || DEFAULT_CONFIG.requiredFields,
+      confirmationMessage: bl.confirmationMessage || DEFAULT_CONFIG.confirmationMessage,
+      calendarConnected:   !!(company.googleCalendar?.accessToken),
+      calendarId:          company.googleCalendar?.calendarId || null,
+      businessHours:       company.businessHours || null
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -155,304 +156,608 @@ async function loadCompanyConfig(companyId) {
 }
 
 /* ============================================================================
-   CONTEXT MANAGEMENT
+   CONTEXT INITIALIZATION
    ============================================================================ */
 
 function initializeContext(payload, config) {
   return {
-    step: STEPS.INIT,
+    step:        STEPS.INIT,
     bookingMode: payload?.assumptions?.bookingMode || null,
     collectedFields: {
       firstName: payload?.assumptions?.firstName || null,
-      lastName: payload?.assumptions?.lastName || null,
-      phone: null,
-      address: null
+      lastName:  payload?.assumptions?.lastName  || null,
+      phone:     payload?.assumptions?.phone     || null,
+      address:   payload?.assumptions?.address   || null
     },
-    summary: payload?.summary || {},
-    // V131: Carry forward call context from discovery for contextual responses
-    callContext: payload?.callContext || null,
-    selectedTime: null,
+    summary:              payload?.summary    || {},
+    callContext:          payload?.callContext || null,
     availableTimeOptions: null,
-    calendarEventId: null,
-    completed: false,
-    startedAt: new Date().toISOString()
+    selectedTime:         null,
+    calendarEventId:      null,
+    calendarEventLink:    null,
+    completed:            false,
+    startedAt:            new Date().toISOString()
   };
 }
 
 /* ============================================================================
-   STEP PROCESSING
+   STEP ROUTING
    ============================================================================ */
 
 async function processCurrentStep(ctx, userInput, config, companyId, isTest, events) {
+
+  // ── BOOKING TRIGGER CHECK ─────────────────────────────────────────────────
+  // Run BEFORE the step logic so that keywords/phrases always take priority.
+  // Only fires when caller said something (userInput present) and we are not
+  // at INIT or COMPLETED (no utterance to match on those transitions).
+  if (userInput?.trim() && ctx.step !== STEPS.INIT && ctx.step !== STEPS.COMPLETED) {
+    try {
+      const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, ctx.step);
+
+      if (triggerResult.matched) {
+        const card = triggerResult.card;
+        events.push({
+          type:         'BL2_TRIGGER_MATCHED',
+          ruleId:       card.ruleId,
+          behavior:     triggerResult.behavior,
+          matchType:    triggerResult.matchType,
+          matchedOn:    triggerResult.matchedOn,
+          timestamp:    Date.now()
+        });
+
+        const triggerResponse = await buildTriggerResponse(card, userInput, companyId);
+
+        return handleBookingTriggerHit({
+          ctx,
+          config,
+          companyId,
+          isTest,
+          events,
+          triggerResult,
+          triggerResponse,
+          userInput
+        });
+      }
+    } catch (triggerErr) {
+      // Never let trigger failure kill the booking flow
+      logger.warn(`[${ENGINE_ID}] BookingTriggerMatcher error — continuing without trigger`, {
+        companyId,
+        step:  ctx.step,
+        error: triggerErr.message
+      });
+      events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
+    }
+  }
+  // ── END TRIGGER CHECK ─────────────────────────────────────────────────────
+
   switch (ctx.step) {
-    case STEPS.INIT:
-      return processInit(ctx, config, events);
-    
-    case STEPS.COLLECT_NAME:
-      return processCollectName(ctx, userInput, config, events);
-    
-    case STEPS.COLLECT_PHONE:
-      return processCollectPhone(ctx, userInput, config, events);
-    
-    case STEPS.COLLECT_ADDRESS:
-      return processCollectAddress(ctx, userInput, config, events);
-    
-    case STEPS.OFFER_TIMES:
-      return processOfferTimes(ctx, userInput, config, companyId, isTest, events);
-    
-    case STEPS.CONFIRM:
-      return processConfirm(ctx, userInput, config, companyId, isTest, events);
-    
+    case STEPS.INIT:            return processInit(ctx, config, companyId, isTest, events);
+    case STEPS.COLLECT_NAME:    return processCollectName(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_PHONE:   return processCollectPhone(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_ADDRESS: return processCollectAddress(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.OFFER_TIMES:     return processOfferTimes(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.CONFIRM:         return processConfirm(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COMPLETED:
       return {
-        nextPrompt: 'Your booking is complete. Is there anything else I can help you with?',
+        nextPrompt: 'Your booking is all set. Is there anything else I can help you with?',
         bookingCtx: ctx,
-        completed: true
+        completed:  true
       };
-    
     default:
-      return processInit(ctx, config, events);
+      return processInit(ctx, config, companyId, isTest, events);
   }
 }
 
-function processInit(ctx, config, events) {
+/* ============================================================================
+   STEP: INIT
+   ============================================================================ */
+
+async function processInit(ctx, config, companyId, isTest, events) {
   events.push({ type: 'BL1_INIT', timestamp: Date.now() });
 
-  // V131: Build contextual prefix from discovery call context
-  // If discovery already established the issue, booking acknowledges it
-  const cc = ctx.callContext;
-  let contextPrefix = '';
-  if (cc?.issue?.summary) {
-    const issueNote = cc.issue.summary;
-    const urgencyNote = cc.urgency?.level === 'high' ? " I'll prioritize getting someone out quickly." : '';
-    contextPrefix = `I've got this noted as a ${issueNote}.${urgencyNote} `;
-  }
+  const issuePrefix = buildIssuePrefix(ctx.callContext);
 
   if (!ctx.collectedFields.firstName) {
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_COLLECTING_NAME', timestamp: Date.now() });
     return {
-      nextPrompt: `${contextPrefix}To get started with your booking, may I have your name please?`,
+      nextPrompt: `${issuePrefix}To get started with your booking, may I have your name please?`,
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
 
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
     events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
-    const nameGreeting = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
-    const phonePrompt = contextPrefix
-      ? `${contextPrefix}${nameGreeting}what's the best phone number to reach you at?`
-      : `${nameGreeting ? `Thanks, ${nameGreeting}` : ''}What's the best phone number to reach you at?`;
+    const nameGreet = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
     return {
-      nextPrompt: phonePrompt,
+      nextPrompt: `${issuePrefix}${nameGreet}what's the best phone number to reach you at?`,
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
 
+  if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
+    ctx.step = STEPS.COLLECT_ADDRESS;
+    events.push({ type: 'BL1_COLLECTING_ADDRESS', timestamp: Date.now() });
+    return {
+      nextPrompt: "And what's the service address?",
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // All required fields present — proceed to offer real time options
   ctx.step = STEPS.OFFER_TIMES;
-  return processOfferTimes(ctx, null, config, null, false, events);
+  return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
 
-function processCollectName(ctx, userInput, config, events) {
-  if (!userInput) {
+/* ============================================================================
+   STEP: COLLECT NAME
+   ============================================================================ */
+
+async function processCollectName(ctx, userInput, config, companyId, isTest, events) {
+  if (!userInput?.trim()) {
     return {
       nextPrompt: "I didn't catch that. Could you please tell me your name?",
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
-  
-  const name = extractName(userInput);
-  ctx.collectedFields.firstName = name.firstName;
-  ctx.collectedFields.lastName = name.lastName;
-  
-  events.push({ 
-    type: 'BL1_NAME_COLLECTED', 
-    firstName: name.firstName,
-    timestamp: Date.now() 
-  });
-  
-  ctx.step = STEPS.COLLECT_PHONE;
-  return {
-    nextPrompt: `Thanks, ${name.firstName}! What's the best phone number to reach you at?`,
-    bookingCtx: ctx,
-    completed: false
-  };
+
+  const { firstName, lastName } = parseName(userInput);
+  ctx.collectedFields.firstName = firstName;
+  ctx.collectedFields.lastName  = lastName;
+
+  events.push({ type: 'BL1_NAME_COLLECTED', firstName, timestamp: Date.now() });
+
+  if (!ctx.collectedFields.phone) {
+    ctx.step = STEPS.COLLECT_PHONE;
+    return {
+      nextPrompt: `Thanks, ${firstName}! What's the best phone number to reach you at?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
+    ctx.step = STEPS.COLLECT_ADDRESS;
+    return {
+      nextPrompt: "And what's the service address?",
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  ctx.step = STEPS.OFFER_TIMES;
+  return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
 
-function processCollectPhone(ctx, userInput, config, events) {
-  if (!userInput) {
+/* ============================================================================
+   STEP: COLLECT PHONE
+   ============================================================================ */
+
+async function processCollectPhone(ctx, userInput, config, companyId, isTest, events) {
+  if (!userInput?.trim()) {
     return {
       nextPrompt: "I didn't catch that. What phone number should we use to contact you?",
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
-  
-  const phone = normalizePhone(userInput);
-  ctx.collectedFields.phone = phone;
-  
-  events.push({ 
-    type: 'BL1_PHONE_COLLECTED', 
-    timestamp: Date.now() 
-  });
-  
+
+  ctx.collectedFields.phone = normalizePhone(userInput);
+  events.push({ type: 'BL1_PHONE_COLLECTED', timestamp: Date.now() });
+
+  if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
+    ctx.step = STEPS.COLLECT_ADDRESS;
+    return {
+      nextPrompt: "Got it. And what's the service address?",
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
   ctx.step = STEPS.OFFER_TIMES;
-  return {
-    nextPrompt: `Got it. Let me check our available times... I have openings tomorrow at 10 AM, 2 PM, or Thursday at 9 AM. Which works best for you?`,
-    bookingCtx: ctx,
-    completed: false
-  };
+  return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
 
-function processCollectAddress(ctx, userInput, config, events) {
-  if (!userInput) {
+/* ============================================================================
+   STEP: COLLECT ADDRESS
+   ============================================================================ */
+
+async function processCollectAddress(ctx, userInput, config, companyId, isTest, events) {
+  if (!userInput?.trim()) {
     return {
       nextPrompt: "I didn't catch the address. What's the service address?",
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
-  
-  ctx.collectedFields.address = userInput;
-  
-  events.push({ 
-    type: 'BL1_ADDRESS_COLLECTED', 
-    timestamp: Date.now() 
-  });
-  
+
+  ctx.collectedFields.address = userInput.trim();
+  events.push({ type: 'BL1_ADDRESS_COLLECTED', timestamp: Date.now() });
+
   ctx.step = STEPS.OFFER_TIMES;
-  return {
-    nextPrompt: "Thanks! Let me check our available times...",
-    bookingCtx: ctx,
-    completed: false
-  };
+  return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
+
+/* ============================================================================
+   STEP: OFFER TIMES
+   ============================================================================ */
 
 async function processOfferTimes(ctx, userInput, config, companyId, isTest, events) {
+  // No user input yet — fetch real calendar availability and present options
   if (!userInput) {
-    const timeOptions = await generateAvailableTimeOptions(config, companyId, isTest);
+    const { timeOptions, message } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
     ctx.availableTimeOptions = timeOptions;
-    
-    events.push({ 
-      type: 'BL1_TIMES_GENERATED', 
-      count: timeOptions.length,
-      timestamp: Date.now() 
-    });
-    
-    if (timeOptions.length === 0) {
-      return {
-        nextPrompt: "I'm sorry, I don't see any available times in the next few days. Would you like me to have someone call you to schedule?",
-        bookingCtx: ctx,
-        completed: false
-      };
-    }
-    
-    const timeText = formatTimeOptions(timeOptions);
     return {
-      nextPrompt: `I have the following times available: ${timeText}. Which works best for you?`,
+      nextPrompt: message,
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
-  
-  const selectedTime = matchTimeFromInput(userInput, ctx.availableTimeOptions);
-  
-  if (!selectedTime) {
-    return {
-      nextPrompt: "I didn't catch which time you'd prefer. Would you like morning, afternoon, or a specific day?",
-      bookingCtx: ctx,
-      completed: false
-    };
-  }
-  
-  ctx.selectedTime = selectedTime;
-  ctx.step = STEPS.CONFIRM;
-  
-  events.push({ 
-    type: 'BL1_TIME_SELECTED', 
-    time: selectedTime.formatted,
-    timestamp: Date.now() 
-  });
-  
-  return {
-    nextPrompt: `Great! I have you down for ${selectedTime.formatted}. Should I go ahead and book that for you?`,
-    bookingCtx: ctx,
-    completed: false
-  };
-}
 
-async function processConfirm(ctx, userInput, config, companyId, isTest, events) {
-  if (!userInput) {
+  // Caller is selecting a time — match against stored options
+  if (!ctx.availableTimeOptions?.length) {
+    // Edge case: context was lost — re-fetch
+    const { timeOptions, message } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
+    ctx.availableTimeOptions = timeOptions;
     return {
-      nextPrompt: `Just to confirm - shall I book you for ${ctx.selectedTime?.formatted}?`,
+      nextPrompt: message,
       bookingCtx: ctx,
-      completed: false
+      completed:  false
     };
   }
-  
-  const normalized = userInput.toLowerCase().trim();
-  const confirmPhrases = ['yes', 'yeah', 'sure', 'ok', 'okay', 'please', 'book it', 'sounds good', 'perfect'];
-  
-  if (confirmPhrases.some(p => normalized.includes(p))) {
-    events.push({ type: 'BL1_BOOKING_CONFIRMED', timestamp: Date.now() });
-    
-    if (!isTest && config.calendarConnected) {
-      ctx.calendarEventId = `event_${Date.now()}`;
-      events.push({ type: 'BL1_CALENDAR_EVENT_CREATED', eventId: ctx.calendarEventId, timestamp: Date.now() });
-    }
-    
-    ctx.step = STEPS.COMPLETED;
-    ctx.completed = true;
-    
-    const confirmMsg = config.confirmationMessage
-      .replace('{date}', ctx.selectedTime?.date || 'the scheduled date')
-      .replace('{time}', ctx.selectedTime?.time || 'the scheduled time');
-    
-    events.push({ type: 'BL1_COMPLETED', timestamp: Date.now() });
-    
+
+  const selected = matchTimeFromInput(userInput, ctx.availableTimeOptions);
+
+  if (!selected) {
+    const formatted = formatTimeOptionsList(ctx.availableTimeOptions);
     return {
-      nextPrompt: confirmMsg,
+      nextPrompt: `I didn't catch which time you'd prefer. I have ${formatted} — which works best?`,
       bookingCtx: ctx,
-      completed: true,
-      calendarEventId: ctx.calendarEventId
+      completed:  false
     };
   }
-  
-  if (normalized.includes('no') || normalized.includes('different') || normalized.includes('change')) {
-    ctx.step = STEPS.OFFER_TIMES;
-    events.push({ type: 'BL1_TIME_CHANGE_REQUESTED', timestamp: Date.now() });
-    return {
-      nextPrompt: "No problem! Would you prefer a different time? I can check other options.",
-      bookingCtx: ctx,
-      completed: false
-    };
-  }
-  
+
+  ctx.selectedTime = selected;
+  ctx.step         = STEPS.CONFIRM;
+  events.push({ type: 'BL1_TIME_SELECTED', display: selected.display, timestamp: Date.now() });
+
   return {
-    nextPrompt: `I want to make sure I have this right - should I book ${ctx.selectedTime?.formatted} for you?`,
+    nextPrompt: `Great — I have you down for ${selected.display}. Should I go ahead and book that?`,
     bookingCtx: ctx,
-    completed: false
+    completed:  false
   };
 }
 
 /* ============================================================================
-   HELPER FUNCTIONS
+   STEP: CONFIRM
    ============================================================================ */
 
-function extractName(input) {
-  const words = input.trim().split(/\s+/);
-  
-  if (words.length === 0) {
-    return { firstName: 'Guest', lastName: null };
+async function processConfirm(ctx, userInput, config, companyId, isTest, events) {
+  if (!userInput?.trim()) {
+    return {
+      nextPrompt: `Just to confirm — shall I book you for ${ctx.selectedTime?.display}?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
   }
-  
+
+  const input = userInput.toLowerCase().trim();
+
+  // Positive confirmation
+  if (/\b(yes|yeah|yep|sure|ok|okay|please|go ahead|book it|do it|sounds good|perfect|great|absolutely)\b/.test(input)) {
+    events.push({ type: 'BL1_BOOKING_CONFIRMED', timestamp: Date.now() });
+
+    // Create calendar event for production calls when calendar is connected
+    if (!isTest && config.calendarConnected && ctx.selectedTime?.start) {
+      const eventResult = await createCalendarEvent(companyId, ctx, events);
+      if (eventResult.success) {
+        ctx.calendarEventId   = eventResult.eventId;
+        ctx.calendarEventLink = eventResult.eventLink;
+        events.push({ type: 'BL1_CALENDAR_EVENT_CREATED', eventId: eventResult.eventId, timestamp: Date.now() });
+      } else {
+        // Calendar write failed — booking is still verbally confirmed; log for ops follow-up
+        logger.warn(`[${ENGINE_ID}] Calendar event creation failed — booking verbally confirmed`, {
+          companyId,
+          error: eventResult.error
+        });
+        events.push({ type: 'BL1_CALENDAR_EVENT_FAILED', error: eventResult.error, timestamp: Date.now() });
+      }
+    }
+
+    ctx.step      = STEPS.COMPLETED;
+    ctx.completed = true;
+
+    const confirmMsg = config.confirmationMessage
+      .replace('{date}', ctx.selectedTime?.display?.split(' at ')[0] || 'the scheduled date')
+      .replace('{time}', ctx.selectedTime?.display?.split(' at ')[1] || 'the scheduled time');
+
+    events.push({ type: 'BL1_COMPLETED', timestamp: Date.now() });
+
+    return {
+      nextPrompt:      confirmMsg,
+      bookingCtx:      ctx,
+      completed:       true,
+      calendarEventId: ctx.calendarEventId || null
+    };
+  }
+
+  // Caller wants a different time
+  if (/\b(no|nope|different|change|other|another)\b/.test(input)) {
+    ctx.step                 = STEPS.OFFER_TIMES;
+    ctx.availableTimeOptions = null; // Force fresh calendar fetch
+    events.push({ type: 'BL1_TIME_CHANGE_REQUESTED', timestamp: Date.now() });
+
+    const { timeOptions, message } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
+    ctx.availableTimeOptions = timeOptions;
+
+    return {
+      nextPrompt: `No problem! ${message}`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // Ambiguous — re-ask
+  return {
+    nextPrompt: `I want to make sure I have this right — shall I book you for ${ctx.selectedTime?.display}?`,
+    bookingCtx: ctx,
+    completed:  false
+  };
+}
+
+/* ============================================================================
+   BOOKING TRIGGER EXECUTION
+   ============================================================================
+   Called from processCurrentStep() when BookingTriggerMatcher finds a hit.
+   Three behaviors:
+     INFO     — play trigger response, hold the current step (booking resumes next turn)
+     BLOCK    — play trigger response, freeze step (booking cannot advance until intent changes)
+     REDIRECT — play trigger response, switch bookingMode to redirectMode, clear cached slots,
+                re-run OFFER_TIMES so the agent fetches availability for the new service type
+   ============================================================================ */
+
+/**
+ * Build the text response for a matched booking trigger.
+ * Standard mode: use answerText directly.
+ * LLM mode: fall back to backupAnswer (live LLM not called here — that's the
+ *           TriggerLLMResponseService layer; booking triggers just use the backup
+ *           until that pipeline is wired into the booking lane).
+ *
+ * @param {Object} card - TriggerCardMatcher-compatible card from BookingTriggerMatcher
+ * @returns {string}
+ */
+async function buildTriggerResponse(card) {
+  const answer = card.answer?.answerText?.trim();
+  if (answer) return answer;
+
+  // LLM mode fallback
+  const backup = card.llmFactPack?.backupAnswer?.trim();
+  if (backup) return backup;
+
+  return "I'm sorry, I didn't quite catch what you need. Could you rephrase that?";
+}
+
+/**
+ * Execute a matched booking trigger based on its behavior.
+ *
+ * @param {Object} params
+ * @param {Object} params.ctx             - Current booking context (mutated in place for REDIRECT)
+ * @param {Object} params.config          - Company booking config
+ * @param {string} params.companyId
+ * @param {boolean} params.isTest
+ * @param {Array}  params.events
+ * @param {Object} params.triggerResult   - Result from BookingTriggerMatcher.match()
+ * @param {string} params.triggerResponse - Pre-built response text
+ * @param {string} params.userInput
+ * @returns {Promise<Object>}             - Standard processStep return shape
+ */
+async function handleBookingTriggerHit({ ctx, config, companyId, isTest, events, triggerResult, triggerResponse }) {
+  const { behavior, redirectMode, card } = triggerResult;
+
+  // Append the optional follow-up question to the response text
+  const followUp   = card.followUp?.question?.trim();
+  const fullText   = followUp ? `${triggerResponse} ${followUp}` : triggerResponse;
+
+  // 123RP provenance — CallerVia call-review console will show BOOKING_TRIGGER_MATCHED
+  ctx.lastTriggerRuleId = card.ruleId;
+  ctx.lastTriggerBehavior = behavior;
+  ctx.lastPath = 'BOOKING_TRIGGER_MATCHED';
+
+  switch (behavior) {
+
+    // ── INFO: play response, hold step, resume normally next turn ────────────
+    case 'INFO': {
+      logger.info(`[${ENGINE_ID}] Booking trigger INFO — holding step`, {
+        companyId, step: ctx.step, ruleId: card.ruleId
+      });
+      events.push({ type: 'BL2_TRIGGER_INFO', ruleId: card.ruleId, step: ctx.step, timestamp: Date.now() });
+
+      return {
+        nextPrompt: fullText,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior: 'INFO' }
+      };
+    }
+
+    // ── BLOCK: play response, freeze step — booking cannot advance ──────────
+    case 'BLOCK': {
+      logger.info(`[${ENGINE_ID}] Booking trigger BLOCK — step frozen`, {
+        companyId, step: ctx.step, ruleId: card.ruleId
+      });
+      events.push({ type: 'BL2_TRIGGER_BLOCK', ruleId: card.ruleId, step: ctx.step, timestamp: Date.now() });
+
+      ctx.blocked = true;
+
+      return {
+        nextPrompt: fullText,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior: 'BLOCK' }
+      };
+    }
+
+    // ── REDIRECT: switch service type, clear slots, re-run OFFER_TIMES ──────
+    case 'REDIRECT': {
+      logger.info(`[${ENGINE_ID}] Booking trigger REDIRECT — switching bookingMode`, {
+        companyId, step: ctx.step, ruleId: card.ruleId,
+        oldMode: ctx.bookingMode, newMode: redirectMode
+      });
+      events.push({
+        type: 'BL2_TRIGGER_REDIRECT', ruleId: card.ruleId,
+        oldMode: ctx.bookingMode, newMode: redirectMode, timestamp: Date.now()
+      });
+
+      ctx.bookingMode          = redirectMode;
+      ctx.availableTimeOptions = null;  // Force fresh calendar fetch with new service type
+      ctx.selectedTime         = null;
+      ctx.blocked              = false;
+      ctx.step                 = STEPS.OFFER_TIMES;
+
+      // Fetch availability for new service type immediately
+      const { timeOptions, message: timesMsg } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
+      ctx.availableTimeOptions = timeOptions;
+
+      // Play trigger response first, then present the new time options
+      const combinedPrompt = `${fullText} ${timesMsg}`;
+
+      return {
+        nextPrompt: combinedPrompt,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior: 'REDIRECT', newMode: redirectMode }
+      };
+    }
+
+    // ── Unknown behavior — safe fallback to INFO ────────────────────────────
+    default: {
+      logger.warn(`[${ENGINE_ID}] Unknown booking trigger behavior "${behavior}" — treating as INFO`, {
+        companyId, ruleId: card.ruleId
+      });
+      return {
+        nextPrompt: fullText,
+        bookingCtx: ctx,
+        completed:  false,
+        _triggerHit: { ruleId: card.ruleId, behavior }
+      };
+    }
+  }
+}
+
+/* ============================================================================
+   CALENDAR INTEGRATION
+   ============================================================================ */
+
+/**
+ * Fetch available time options from Google Calendar for this company.
+ * Gracefully falls back to preference-capture mode if the calendar is
+ * disconnected, in test mode, or unavailable.
+ *
+ * @returns {Promise<{timeOptions: Array, message: string}>}
+ */
+async function fetchAvailableTimeOptions(config, companyId, ctx, isTest, events) {
+  if (isTest || !config.calendarConnected) {
+    const reason = isTest ? 'test_mode' : 'calendar_disconnected';
+    events.push({ type: 'BL1_TIMES_PREFERENCE_CAPTURE', reason, timestamp: Date.now() });
+    return {
+      timeOptions: [],
+      message: "What time of day works best for you — morning, afternoon, or evening? We'll confirm the exact appointment time shortly."
+    };
+  }
+
+  try {
+    const serviceType = ctx.summary?.serviceType || ctx.bookingMode || 'service';
+
+    const result = await GoogleCalendarService.findAvailableSlots(companyId, {
+      durationMinutes: config.appointmentDuration,
+      maxSlots:        3,
+      serviceType
+    });
+
+    if (result.fallback || !result.slots?.length) {
+      events.push({ type: 'BL1_CALENDAR_NO_SLOTS', fallback: !!result.fallback, timestamp: Date.now() });
+      return {
+        timeOptions: [],
+        message: "I'm not seeing any open times in the next few days. Would you like me to have someone call you back to find a time that works?"
+      };
+    }
+
+    events.push({ type: 'BL1_TIMES_FETCHED', count: result.slots.length, timestamp: Date.now() });
+
+    // Normalize to internal timeOption shape
+    const timeOptions = result.slots.map(slot => ({
+      start:   slot.start,   // Date object — used for event creation
+      end:     slot.end,     // Date object — used for event creation
+      display: slot.display  // Human-readable: "tomorrow at 10 AM"
+    }));
+
+    return { timeOptions, message: result.message };
+
+  } catch (error) {
+    logger.error(`[${ENGINE_ID}] Calendar availability fetch failed`, { companyId, error: error.message });
+    events.push({ type: 'BL1_CALENDAR_FETCH_ERROR', error: error.message, timestamp: Date.now() });
+    return {
+      timeOptions: [],
+      message: "I'm having trouble pulling up the calendar right now. What time of day generally works best for you?"
+    };
+  }
+}
+
+/**
+ * Write a confirmed appointment to Google Calendar.
+ *
+ * @returns {Promise<{success: boolean, eventId?: string, eventLink?: string, error?: string}>}
+ */
+async function createCalendarEvent(companyId, ctx, events) {
+  const { firstName, lastName, phone, address } = ctx.collectedFields;
+  const customerName = [firstName, lastName].filter(Boolean).join(' ') || 'Customer';
+  const serviceType  = ctx.summary?.serviceType || ctx.bookingMode || 'service';
+
+  try {
+    return await GoogleCalendarService.createBookingEvent(companyId, {
+      customerName,
+      customerPhone:   phone   || null,
+      customerAddress: address || null,
+      serviceType,
+      serviceNotes:    ctx.summary?.issue || null,
+      startTime:       ctx.selectedTime.start,
+      endTime:         ctx.selectedTime.end
+    });
+  } catch (error) {
+    logger.error(`[${ENGINE_ID}] createBookingEvent threw unexpectedly`, { companyId, error: error.message });
+    return { success: false, error: error.message, fallback: true };
+  }
+}
+
+/* ============================================================================
+   HELPERS
+   ============================================================================ */
+
+/**
+ * Build a contextual opening from the discovery call context.
+ * Example output: "I've got this noted as an AC not cooling issue. "
+ */
+function buildIssuePrefix(callContext) {
+  if (!callContext?.issue?.summary) return '';
+  const urgencyNote = callContext.urgency?.level === 'high'
+    ? " I'll prioritize getting someone out quickly."
+    : '';
+  return `I've got this noted as a ${callContext.issue.summary}.${urgencyNote} `;
+}
+
+/**
+ * Parse a raw name string into first and last components.
+ */
+function parseName(input) {
+  const words = input.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return { firstName: 'there', lastName: null };
   const firstName = capitalizeFirst(words[0]);
-  const lastName = words.length > 1 ? words.slice(1).map(capitalizeFirst).join(' ') : null;
-  
+  const lastName  = words.length > 1 ? words.slice(1).map(capitalizeFirst).join(' ') : null;
   return { firstName, lastName };
 }
 
@@ -461,105 +766,71 @@ function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
+/**
+ * Normalize a phone number string to (XXX) XXX-XXXX format when possible.
+ */
 function normalizePhone(input) {
   const digits = input.replace(/\D/g, '');
-  
   if (digits.length === 10) {
-    return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   }
-  
-  return input;
+  return input.trim();
 }
 
-async function generateAvailableTimeOptions(config, companyId, isTest) {
-  // In production, would query Google Calendar
-  // For now, return mock time options
-  const now = new Date();
-  const timeOptions = [];
-  
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  
-  const dayAfter = new Date(now);
-  dayAfter.setDate(dayAfter.getDate() + 2);
-  
-  timeOptions.push({
-    date: formatDate(tomorrow),
-    time: '10:00 AM',
-    endTime: '11:00 AM',
-    formatted: `tomorrow at 10 AM`
-  });
-  
-  timeOptions.push({
-    date: formatDate(tomorrow),
-    time: '2:00 PM',
-    endTime: '3:00 PM',
-    formatted: `tomorrow at 2 PM`
-  });
-  
-  timeOptions.push({
-    date: formatDate(dayAfter),
-    time: '9:00 AM',
-    endTime: '10:00 AM',
-    formatted: `${formatDayName(dayAfter)} at 9 AM`
-  });
-  
-  return timeOptions;
-}
-
-function formatDate(date) {
-  return date.toISOString().split('T')[0];
-}
-
-function formatDayName(date) {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  return days[date.getDay()];
-}
-
-function formatTimeOptions(timeOptions) {
-  if (timeOptions.length === 0) return 'no available times';
-  if (timeOptions.length === 1) return timeOptions[0].formatted;
-  if (timeOptions.length === 2) return `${timeOptions[0].formatted} or ${timeOptions[1].formatted}`;
-  
-  const last = timeOptions[timeOptions.length - 1];
-  const rest = timeOptions.slice(0, -1).map(t => t.formatted).join(', ');
-  return `${rest}, or ${last.formatted}`;
-}
-
+/**
+ * Match a caller's spoken selection against stored time options.
+ * Tries positional words, hour digits, day names, and AM/PM preference.
+ */
 function matchTimeFromInput(input, timeOptions) {
-  if (!timeOptions || timeOptions.length === 0) return null;
-  
-  const normalized = input.toLowerCase();
-  
-  if (normalized.includes('10') || normalized.includes('ten') || normalized.includes('morning')) {
-    return timeOptions.find(t => t.time.includes('10')) || timeOptions[0];
-  }
-  
-  if (normalized.includes('2') || normalized.includes('two') || normalized.includes('afternoon')) {
-    return timeOptions.find(t => t.time.includes('2')) || timeOptions[1];
-  }
-  
-  if (normalized.includes('9') || normalized.includes('nine') || normalized.includes('early')) {
-    return timeOptions.find(t => t.time.includes('9')) || timeOptions[2];
-  }
-  
-  if (normalized.includes('first') || normalized.includes('1st')) {
+  if (!timeOptions?.length) return null;
+
+  const n = input.toLowerCase();
+
+  // Positional references
+  if (/\b(first|1st)\b/.test(n))                  return timeOptions[0];
+  if (/\b(second|2nd)\b/.test(n))                 return timeOptions[1] || null;
+  if (/\b(third|3rd|last)\b/.test(n))             return timeOptions[timeOptions.length - 1];
+
+  // Affirmative on a single option
+  if (timeOptions.length === 1 &&
+      /\b(yes|sure|ok|okay|that works|sounds good)\b/.test(n)) {
     return timeOptions[0];
   }
-  
-  if (normalized.includes('second') || normalized.includes('2nd')) {
-    return timeOptions[1];
+
+  // Match by display string content
+  for (const opt of timeOptions) {
+    const display = opt.display.toLowerCase();
+
+    // Hour digit match ("10", "2", "9", etc.)
+    const hourMatch = display.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (hourMatch && new RegExp(`\\b${hourMatch[1]}\\b`).test(n)) return opt;
+
+    // Day name match ("tomorrow", "monday", "tuesday", etc.)
+    const dayWords = display.split(' at ')[0]; // "tomorrow" or "Monday"
+    if (dayWords && n.includes(dayWords)) return opt;
+
+    // Time-of-day preference
+    if (/\b(morning|am)\b/.test(n)    && /am/i.test(display))  return opt;
+    if (/\b(afternoon|pm)\b/.test(n)  && /pm/i.test(display)) {
+      const pmHour = parseInt((display.match(/(\d+)\s*pm/i) || [])[1] || '0', 10);
+      if (pmHour >= 1 && pmHour <= 6) return opt;
+    }
   }
-  
-  if (normalized.includes('third') || normalized.includes('3rd') || normalized.includes('last')) {
-    return timeOptions[2] || timeOptions[timeOptions.length - 1];
-  }
-  
-  if (normalized.includes('yes') || normalized.includes('ok') || normalized.includes('sure')) {
-    return timeOptions[0];
-  }
-  
+
   return null;
+}
+
+/**
+ * Format a list of time options for spoken output.
+ * Example: "tomorrow at 10 AM, Thursday at 2 PM, or Friday at 9 AM"
+ */
+function formatTimeOptionsList(timeOptions) {
+  if (!timeOptions?.length) return 'no available times';
+  if (timeOptions.length === 1) return timeOptions[0].display;
+  if (timeOptions.length === 2) return `${timeOptions[0].display} or ${timeOptions[1].display}`;
+  const last = timeOptions[timeOptions.length - 1].display;
+  const rest = timeOptions.slice(0, -1).map(t => t.display).join(', ');
+  return `${rest}, or ${last}`;
 }
 
 /* ============================================================================
@@ -567,8 +838,8 @@ function matchTimeFromInput(input, timeOptions) {
    ============================================================================ */
 
 module.exports = {
-  computeStep: processStep,
   processStep,
+  computeStep: processStep, // Alias — retained for any callers using the old name
   STEPS,
   VERSION,
   ENGINE_ID

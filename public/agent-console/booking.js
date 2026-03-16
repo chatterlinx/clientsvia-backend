@@ -47,6 +47,7 @@
     btnBack: document.getElementById('btn-back'),
     btnBackToProfile: document.getElementById('btn-back-to-profile'),
     btnSaveConfig: document.getElementById('btn-save-config'),
+    btnGotoBookingTriggers: document.getElementById('btn-goto-booking-triggers'),
     
     // Calendar Status
     badgeCalendarStatus: document.getElementById('badge-calendar-status'),
@@ -108,6 +109,9 @@
       DOM.headerCompanyId.textContent = truncateId(state.companyId);
       DOM.headerCompanyId.title = state.companyId;
       DOM.btnBack.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
+      if (DOM.btnGotoBookingTriggers) {
+        DOM.btnGotoBookingTriggers.href = `/agent-console/booking-triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+      }
       
       // Update header logo link with companyId
       const logoLink = document.getElementById('header-logo-link');

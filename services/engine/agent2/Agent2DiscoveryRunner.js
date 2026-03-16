@@ -1934,6 +1934,7 @@ class Agent2DiscoveryRunner {
             const yesText = bucketResponse;
 
             if (yesDirection === 'HANDOFF_BOOKING') {
+              nextState.lane = 'BOOKING';
               nextState.sessionMode = 'BOOKING';
               nextState.consent = {
                 pending: false,
@@ -1967,6 +1968,7 @@ class Agent2DiscoveryRunner {
           const choiceText = bucketResponse;
 
           if (direction === 'HANDOFF_BOOKING') {
+            nextState.lane = 'BOOKING';
             nextState.sessionMode = 'BOOKING';
             nextState.consent = {
               pending: false,

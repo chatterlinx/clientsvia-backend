@@ -24,12 +24,58 @@ const CallSummary = require('../../models/CallSummary');
 const Customer = require('../../models/Customer');
 const Vendor = require('../../models/Vendor');
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
+const BookingRequest = require('../../models/BookingRequest');
 
 // Services
 const { classifyCaller, buildCardData, CALLER_TYPES } = require('../../services/CallerClassificationService');
 
 // Auth middleware
 const { authenticateJWT } = require('../../middleware/auth');
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Normalize a BookingRequest document into the card shape expected by the
+ * Kanban frontend (same structure as an enriched CallSummary card).
+ */
+function normalizeBookingToCard(br) {
+    const name = br.slots?.name?.full || br.slots?.name?.first || 'Unknown';
+    const phone = br.slots?.phone || br.callerPhone || '';
+    const address = br.slots?.address?.full || '';
+
+    let timeDisplay = 'Time TBD';
+    if (br.calendarEventStart) {
+        timeDisplay = new Date(br.calendarEventStart).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        });
+    } else if (br.slots?.time?.window || br.slots?.time?.preference) {
+        timeDisplay = br.slots.time.window || br.slots.time.preference;
+    }
+
+    const tags = ['booked'];
+    if (br.calendarEventId) tags.push('calendar');
+    if (br.status === 'COMPLETED') tags.push('confirmed');
+
+    return {
+        _id: br._id,
+        from: phone,
+        callerName: name,
+        callerType: 'customer',
+        callerSubType: 'residential',
+        createdAt: br.createdAt,
+        _isBookingRequest: true,
+        cardData: {
+            color: 'blue',
+            headline: name,
+            brief: `📅 ${timeDisplay}${address ? ` · ${address}` : ''}`,
+            tags,
+            reference: br.caseId || null,
+            pinned: false
+        }
+    };
+}
 
 // ============================================================================
 // GET /api/call-center/:companyId/dashboard
@@ -45,7 +91,7 @@ router.get('/:companyId/dashboard', authenticateJWT, async (req, res) => {
         const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
         
         // Parallel queries for performance
-        const [needsAction, todaysJobs, recentCalls, vendorCalls] = await Promise.all([
+        const [needsAction, todaysJobs, recentCalls, vendorCalls, bookingRequests] = await Promise.all([
             // Column 1: Needs Action (callbacks, urgent, unresolved)
             CallSummary.find({
                 companyId: new mongoose.Types.ObjectId(companyId),
@@ -95,6 +141,16 @@ router.get('/:companyId/dashboard', authenticateJWT, async (req, res) => {
             })
                 .sort({ createdAt: -1 })
                 .limit(15)
+                .lean(),
+
+            // BookingRequests: completed bookings from last 24h for Today's Jobs column
+            BookingRequest.find({
+                companyId: new mongoose.Types.ObjectId(companyId),
+                status: { $in: ['COMPLETED', 'FAKE_CONFIRMED'] },
+                createdAt: { $gte: yesterday }
+            })
+                .sort({ createdAt: -1 })
+                .limit(20)
                 .lean()
         ]);
         
@@ -118,17 +174,23 @@ router.get('/:companyId/dashboard', authenticateJWT, async (req, res) => {
             return call;
         };
         
+        // Merge BookingRequests (normalized) into Today's Jobs — bookings first for visibility
+        const normalizedBookings = bookingRequests.map(normalizeBookingToCard);
+        const todayMerged = [...normalizedBookings, ...todaysJobs.map(enrichCard)].slice(0, 30);
+
         res.json({
             success: true,
             needsAction: needsAction.map(enrichCard),
-            today: todaysJobs.map(enrichCard),
+            today: todayMerged,
             recent: recentCalls.map(enrichCard),
             vendor: vendorCalls.map(enrichCard),
+            bookings: normalizedBookings,
             stats: {
                 needsActionCount: needsAction.length,
-                todayCount: todaysJobs.length,
+                todayCount: todayMerged.length,
                 recentCount: recentCalls.length,
                 vendorCount: vendorCalls.length,
+                bookingCount: normalizedBookings.length,
                 generatedAt: new Date()
             }
         });
