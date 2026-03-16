@@ -298,11 +298,18 @@ function composeSystemPrompt(settings, channel = 'call') {
   const channelInstr = CHANNEL_INSTRUCTIONS[channel] || CHANNEL_INSTRUCTIONS.call;
   parts.push(channelInstr);
 
-  // 6. Purpose — discovery only
+  // 6. Purpose — discovery + consent funnel
   parts.push(
     'Your PRIMARY PURPOSE is DISCOVERY — find out why the customer is calling and route them to the right help.',
     'You do NOT book appointments. You do NOT collect personal information. You do NOT quote prices.',
-    'Once you understand the caller\'s intent, hand off to the appropriate department or booking system.'
+    'Once you understand the caller\'s intent, hand off to the appropriate department or booking system.',
+    '',
+    'CONSENT FUNNEL RULE (critical):',
+    'Every response you give MUST end with ONE natural yes/no question that moves the caller toward',
+    'scheduling or confirms their intent (e.g. "Would you like me to get a technician out there?" or',
+    '"Can I schedule someone to come take a look?"). This gives the caller a clear next step.',
+    'The question must feel warm and natural — never robotic or pushy.',
+    'Do NOT skip this closing question even when acknowledging an issue or answering a query.'
   );
 
   // 7. Guardrails
@@ -439,10 +446,15 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     'Your response MUST:',
     '- Warmly acknowledge what the caller said',
     '- Confirm the MOST IMPORTANT extracted detail (usually callReason or name)',
-    '- End with a forward-moving statement that invites the caller to keep talking ("I can definitely help with that" or "We can take care of that for you"). NEVER say "let me look that up" or "let me pull up your information" — the caller will go silent waiting. Instead, keep the conversation moving.',
+    '- End with ONE natural yes/no question that opens the door to scheduling service',
+    '  (e.g. "Would you like me to get a technician out there to take a look?" or',
+    '   "Can I get someone scheduled to come help with that?" or',
+    '   "Would you like us to send a tech out today?")',
+    '  Keep it warm and conversational — one sentence, no pressure.',
+    '  NEVER say "let me look that up" or "let me pull up your information" — the caller will go silent waiting.',
     'Your response MUST NOT:',
     '- Ask more than ONE question',
-    '- Mention booking, scheduling, or pricing',
+    '- Mention pricing or fees',
     '- Collect PII beyond what was volunteered',
     '- Be longer than 2 sentences',
     '=== END RESPONSE RULES ==='
@@ -526,7 +538,9 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     '    "callReason": "number|null"',
     '  },',
     '  "nextLane": "\\"BOOKING_HANDOFF\\"|\\"DISCOVERY_CONTINUE\\"|\\"TRANSFER\\"|\\"UNKNOWN\\"",',
-    '  "doNotReask": ["array of field names already provided by caller"]',
+    '  "doNotReask": ["array of field names already provided by caller"],',
+    '  "askedConsent": "boolean — true if responseText ended with a yes/no consent question about scheduling or service",',
+    '  "consentQuestion": "string|null — the exact consent question from responseText (copy it verbatim), or null if not asked"',
     '}',
     '=== END OUTPUT FORMAT ==='
   );

@@ -101,6 +101,7 @@ const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
 const { streamWithSentences } = require('../../streaming/SentenceStreamingService');
 const { ConversationMemory } = require('../ConversationMemory');
+const ConsentLoopService     = require('./ConsentLoopService');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -459,6 +460,20 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       noMatchParts.push('If you can identify their intent, acknowledge it and guide them toward the right service.');
       noMatchParts.push('Keep your response concise and natural — this is a phone call.');
       noMatchParts.push('After you respond, the caller\'s next message will go back through normal trigger matching.');
+      noMatchParts.push('');
+      // ── CONSENT FUNNEL INSTRUCTION ─────────────────────────────────────────
+      // Every LLM noMatch response MUST close with a yes/no consent question
+      // so the 7-bucket Follow-up Consent Gate activates on the next turn.
+      // This funnels the caller toward booking instead of looping through
+      // ScrabEngine indefinitely.
+      noMatchParts.push('=== CONSENT FUNNEL (required) ===');
+      noMatchParts.push('CRITICAL: Your response MUST end with ONE natural yes/no question that moves the caller toward scheduling or confirms their intent.');
+      noMatchParts.push('Examples:');
+      noMatchParts.push('- "Would you like me to get a technician scheduled to come take a look?"');
+      noMatchParts.push('- "Can I get someone out there to help with that today?"');
+      noMatchParts.push('- "Would you like us to send a tech out to take care of that?"');
+      noMatchParts.push('The question must feel warm and natural — one sentence, no pressure. NEVER skip this closing question.');
+      noMatchParts.push('=== END CONSENT FUNNEL ===');
       noMatchParts.push('=== END NO-MATCH CONTEXT ===');
     }
 
@@ -1480,6 +1495,28 @@ class Agent2DiscoveryRunner {
           nextState.agent2.discovery.pendingQuestionTurn = turn;
           nextState.agent2.discovery.pendingQuestionSource = 'llm_intake';
 
+          // ══════════════════════════════════════════════════════════════════
+          // CONSENT LOOP — Wire Point A: Intake consent question → PFUQ
+          // ══════════════════════════════════════════════════════════════════
+          // If the intake LLM ended its response with a binary consent question
+          // (askedConsent: true in the JSON output), activate the 7-bucket
+          // Follow-up Consent Gate for Turn 2. This replaces the old "T1 ends
+          // with a forward-moving statement → T2 hits ScrabEngine cold" loop.
+          if (intakeResult.askedConsent && intakeResult.consentQuestion) {
+            ConsentLoopService.setPFUQFromLLM(
+              nextState,
+              intakeResult.consentQuestion,
+              turn,
+              ConsentLoopService.SOURCE_LLM_INTAKE
+            );
+            emit('CONSENT_LOOP_PFUQ_SET', {
+              source:   ConsentLoopService.SOURCE_LLM_INTAKE,
+              question: intakeResult.consentQuestion.substring(0, 100),
+              turn,
+            });
+          }
+          // ══════════════════════════════════════════════════════════════════
+
           // ── Emit extraction details for Call Intelligence ─────────────────
           emit('LLM_INTAKE_EXTRACTION', {
             entities: intakeEntities,
@@ -1984,12 +2021,28 @@ class Agent2DiscoveryRunner {
           if (llmAgentResult) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
             clearPendingFollowUp(nextState);
+            // ── CONSENT LOOP — Wire Point C (LLM path): grace period after NO ──
+            // Caller said NO to the consent question. Give them one turn of breathing
+            // room before the LLM can re-set PFUQ on its next response.
+            ConsentLoopService.setGracePeriod(nextState, turn);
+            emit('CONSENT_LOOP_GRACE_PERIOD_SET', {
+              reason: 'NO bucket — caller declined, setting grace period',
+              turn,
+              graceTurns: ConsentLoopService.GRACE_PERIOD_TURNS,
+            });
             const noLlmResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
             emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(noLlmResponse, 120), source: 'llmAgent' });
             return { response: noLlmResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
           }
           // Tier 3: canned response if LLM Agent disabled/failed
           clearPendingFollowUp(nextState);
+          // ── CONSENT LOOP — Wire Point C (Tier-3 path): grace period after NO ──
+          ConsentLoopService.setGracePeriod(nextState, turn);
+          emit('CONSENT_LOOP_GRACE_PERIOD_SET', {
+            reason: 'NO bucket (Tier-3 canned response) — caller declined, setting grace period',
+            turn,
+            graceTurns: ConsentLoopService.GRACE_PERIOD_TURNS,
+          });
           const noText = bucketResponse;
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
           const noResponse = `${fuqAck} ${noText}`.trim();
@@ -4624,6 +4677,45 @@ class Agent2DiscoveryRunner {
           latencyMs: llmAgentResult.latencyMs,
           llmHandoffPendingSet: !!nextState.agent2.discovery.llmHandoffPending,
         });
+
+        // ══════════════════════════════════════════════════════════════════
+        // CONSENT LOOP — Wire Point B: noMatch LLM consent question → PFUQ
+        // ══════════════════════════════════════════════════════════════════
+        // If the LLM closed its response with a booking consent question AND
+        // the caller isn't in a grace period (recently said NO), activate the
+        // 7-bucket consent gate for the next turn.
+        //
+        // This is the key loop-breaker: instead of returning to ScrabEngine
+        // cold on the next turn, the caller enters the structured consent gate
+        // and their YES/NO routes cleanly to booking or continues with context.
+        //
+        // Skip if llmHandoffPending is already set (booking path already
+        // established via intake BOOKING_HANDOFF lane — avoids double-gate).
+        if (!nextState.agent2.discovery.llmHandoffPending) {
+          if (!ConsentLoopService.isGracePeriodActive(state, turn)) {
+            const consentQ = ConsentLoopService.extractConsentQuestion(llmAgentResult.response);
+            if (consentQ) {
+              ConsentLoopService.setPFUQFromLLM(
+                nextState,
+                consentQ,
+                turn,
+                ConsentLoopService.SOURCE_LLM_NO_MATCH
+              );
+              emit('CONSENT_LOOP_PFUQ_SET', {
+                source:   ConsentLoopService.SOURCE_LLM_NO_MATCH,
+                question: consentQ.substring(0, 100),
+                turn,
+              });
+            }
+          } else {
+            emit('CONSENT_LOOP_GRACE_ACTIVE', {
+              reason: 'Grace period active — skipping PFUQ extraction to avoid pushy re-ask',
+              graceTurn: state?.agent2?.discovery?.consentGracePeriodTurn,
+              turn,
+            });
+          }
+        }
+        // ══════════════════════════════════════════════════════════════════
 
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('LLM_AGENT_NO_MATCH') };
       }
