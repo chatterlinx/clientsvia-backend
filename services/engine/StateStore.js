@@ -152,7 +152,16 @@ class StateStore {
             // ───────────────────────────────────────────────────────────────────
             // AGENT 2.0 - Isolated state namespace (persisted)
             // ───────────────────────────────────────────────────────────────────
-            agent2: clone(callState.agent2 || {})
+            agent2: clone(callState.agent2 || {}),
+
+            // ───────────────────────────────────────────────────────────────────
+            // BOOKING ENGINE CONTEXT (BookingLogicEngine V2.0)
+            // ───────────────────────────────────────────────────────────────────
+            // Carries step, collectedFields, technicianPreference, etc.
+            // Without this, bookingCtx is null every turn → processStep calls
+            // initializeContext() → processInit() runs on every turn →
+            // buildWarmOpening() fires repeatedly and all collected slots are lost.
+            bookingCtx: callState.bookingCtx ? clone(callState.bookingCtx) : null
         };
     }
 
@@ -219,6 +228,14 @@ class StateStore {
 
         // Persist Agent 2.0 isolated state (never interpreted by legacy runtime).
         next.agent2 = clone(state.agent2 || next.agent2 || {});
+
+        // ── BookingLogicEngine context (V2.0) ─────────────────────────────────
+        // CRITICAL: Must be persisted so the booking engine resumes from the
+        // correct step on every turn (COLLECT_PHONE, COLLECT_ADDRESS, etc.) and
+        // retains all previously collected slot values (firstName, phone, address).
+        // Without this, bookingCtx is null on every subsequent turn → processInit
+        // restarts, buildWarmOpening fires again, and phone is re-asked every turn.
+        next.bookingCtx = state.bookingCtx ? clone(state.bookingCtx) : null;
 
         return next;
     }
