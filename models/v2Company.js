@@ -2076,7 +2076,7 @@ const companySchema = new mongoose.Schema({
                     askSummary: { type: String, trim: true, default: "What can I help you with today?" },
                     askOrderNumber: { type: String, trim: true, default: "Do you have an order number or invoice number I should note?" },
                     askCustomerName: { type: String, trim: true, default: "Which customer is this regarding?" },
-                    completion: { type: String, trim: true, default: "Got it. I’ll make sure the team gets this message right away." },
+                    completion: { type: String, trim: true, default: "Got it. I'll make sure the team gets this message right away." },
                     transferMessage: { type: String, trim: true, default: "Thank you. Let me connect you to our team." }
                 }
             },
@@ -2111,11 +2111,11 @@ const companySchema = new mongoose.Schema({
                     // DEFAULT - OVERRIDE IN UI
                     askAddAnotherPrompt: { type: String, trim: true, default: "Is this for just this location, or do you have another location to add today?" },
                     clarifyPrompt: { type: String, trim: true, default: "Just to confirm — do you have another location or job to add today?" },
-                    nextUnitIntro: { type: String, trim: true, default: "Okay — let’s get the details for the next one." },
+                    nextUnitIntro: { type: String, trim: true, default: "Okay — let's get the details for the next one." },
                     // Final message when multiple units were captured (avoid single-address wording)
-                    finalScriptMulti: { type: String, trim: true, default: "Perfect — I’ve got both locations. Our team will take it from here." },
+                    finalScriptMulti: { type: String, trim: true, default: "Perfect — I've got both locations. Our team will take it from here." },
                     yesWords: { type: [String], default: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'] },
-                    noWords: { type: [String], default: ['no', 'nope', 'nah', 'just this', 'only this', 'that’s it', "that's it", 'all set'] }
+                    noWords: { type: [String], default: ['no', 'nope', 'nah', 'just this', 'only this', "that's it", "that's it", 'all set'] }
                 }
             },
 
@@ -2697,8 +2697,8 @@ const companySchema = new mongoose.Schema({
                 openAccessFollowupQuestion: { type: String, trim: true, default: 'Got it. Any gate code, building code, or special access we should know about, or just pull up and knock?' },
                 gateAccessTypeQuestion: { type: String, trim: true, default: 'Perfect. Do you have a gate code, a gate guard, or both?' },
                 gateCodeQuestion: { type: String, trim: true, default: 'Great, what gate code should the technician use?' },
-                gateGuardNotifyPrompt: { type: String, trim: true, default: 'No problem. Since there’s a gate guard, please let them know {companyName} will be coming during your appointment window so they’ll let our technician in without delays.' },
-                gateGuardConfirmPrompt: { type: String, trim: true, default: 'Perfect. I’ll note that the gate guard has been notified for {companyName}.' },
+                gateGuardNotifyPrompt: { type: String, trim: true, default: "No problem. Since there's a gate guard, please let them know {companyName} will be coming during your appointment window so they'll let our technician in without delays." },
+                gateGuardConfirmPrompt: { type: String, trim: true, default: "Perfect. I'll note that the gate guard has been notified for {companyName}." },
                 maxPropertyTypeFollowUps: { type: Number, default: 1, min: 0, max: 2 },
                 maxUnitFollowUps: { type: Number, default: 1, min: 0, max: 2 },
                 maxAccessFollowUps: { type: Number, default: 2, min: 0, max: 5 }
@@ -3687,8 +3687,8 @@ const companySchema = new mongoose.Schema({
             // V78: CONFIRMATION REQUESTS (UI Controlled)
             // ═══════════════════════════════════════════════════════════════════════
             // When caller asks “did you get my phone/address/name right?” during booking,
-            // reply deterministically by repeating what we have using the slot’s confirmPrompt.
-            // This is not off-rails: it’s a booking protocol feature.
+            // reply deterministically by repeating what we have using the slot's confirmPrompt.
+            // This is not off-rails: it's a booking protocol feature.
             confirmationRequests: {
                 enabled: { type: Boolean, default: true },
                 // Trigger phrases (lowercased match) - UI editable
@@ -3943,16 +3943,16 @@ const companySchema = new mongoose.Schema({
                     default: [
                         "Ok \u2014 one moment.",
                         "Got it \u2014 give me just a second.",
-                        "One sec \u2014 I’m pulling that up now.",
+                        "One sec \u2014 I'm pulling that up now.",
                         "Alright \u2014 hang with me for a moment."
                     ]
                 },
-                bookingBridgePhrase: { type: String, default: ‘’ },
-                transferBridgePhrase: { type: String, default: ‘’ },
-                // Turn 1 Welcome Bridge — fires instantly on caller’s first utterance
+                bookingBridgePhrase: { type: String, default: '' },
+                transferBridgePhrase: { type: String, default: '' },
+                // Turn 1 Welcome Bridge — fires instantly on caller's first utterance
                 turn1Welcome: {
                     enabled: { type: Boolean, default: false },
-                    line: { type: String, default: ‘’ },
+                    line: { type: String, default: '' },
                     thresholdMs: { type: Number, default: 0 }
                 }
             },
