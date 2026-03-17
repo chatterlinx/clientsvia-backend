@@ -661,6 +661,94 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// LLM INTAKE — YAML-LIKE FALLBACK EXTRACTOR
+// ────────────────────────────────────────────────────────────────────────────
+// When the LLM emits unquoted key:value lines instead of valid JSON (despite
+// instructions), standard JSON.parse fails even after fence-stripping.
+// This regex extractor recovers the critical fields — especially responseText —
+// so the caller NEVER hears raw JSON keys or code fences spoken by TTS.
+//
+// Typical bad LLM output that triggers this:
+//   ```json
+//     responseText: Hey Marc, I understand you're dealing with a water heater...
+//     extraction:
+//       firstName: Marc
+//       technicianMentioned: Tony
+//       urgency: high
+//     nextLane: BOOKING_HANDOFF
+//   ```
+//
+// Returns a parsed-like object if responseText is found, otherwise null.
+// ────────────────────────────────────────────────────────────────────────────
+
+function extractYamlLike(rawResponse) {
+  if (!rawResponse) return null;
+
+  // Strip markdown fences (opening and closing)
+  const clean = rawResponse
+    .replace(/^```(?:json)?\s*/im, '')
+    .replace(/\s*```\s*$/m, '')
+    .trim();
+
+  const out = {
+    extraction: {},
+    confidence: {},
+    doNotReask: [],
+    nextLane:   'DISCOVERY_CONTINUE',
+  };
+
+  // ── responseText ─────────────────────────────────────────────────────────
+  // Capture value after "responseText:" stopping before the next root-level
+  // key (≤2-space indent) or end of string.
+  const rtMatch = clean.match(
+    /responseText\s*:\s*["']?([\s\S]*?)["']?\s*(?=\n[ \t]{0,2}[a-zA-Z_]\w*\s*:|$)/
+  );
+  if (rtMatch?.[1]) {
+    out.responseText = rtMatch[1]
+      .trim()
+      .replace(/^["']|["',\s]+$/g, '')
+      .trim();
+  }
+
+  // ── nextLane ─────────────────────────────────────────────────────────────
+  const nlMatch = clean.match(/\bnextLane\s*:\s*["']?([A-Z_]+)["']?/i);
+  if (nlMatch?.[1]) {
+    out.nextLane = nlMatch[1].trim().toUpperCase();
+  }
+
+  // ── doNotReask ────────────────────────────────────────────────────────────
+  const dnrMatch = clean.match(/\bdoNotReask\s*:\s*\[?([^\]\n]*)\]?/i);
+  if (dnrMatch?.[1]) {
+    const items = dnrMatch[1]
+      .split(',')
+      .map(s => s.trim().replace(/["'[\]]/g, ''))
+      .filter(Boolean);
+    if (items.length && !(items.length === 1 && !items[0])) {
+      out.doNotReask = items;
+    }
+  }
+
+  // ── Extraction entity fields (nested block or flat) ───────────────────────
+  const ENTITY_FIELDS = [
+    'firstName', 'lastName', 'phone', 'address',
+    'urgency', 'callReason', 'technicianMentioned',
+    'bookingConsent', 'objective',
+  ];
+  for (const field of ENTITY_FIELDS) {
+    const m = clean.match(new RegExp(`\\b${field}\\s*:\\s*["']?([^\\n"',}\\]]+)["']?`, 'i'));
+    if (m?.[1]) {
+      const val = m[1].trim().replace(/^["']|["']$/g, '');
+      if (val && val.toLowerCase() !== 'null' && val !== '') {
+        out.extraction[field] = val;
+      }
+    }
+  }
+
+  // Only return if we salvaged a responseText — otherwise caller uses hard fallback
+  return out.responseText ? out : null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // LLM AGENT — Turn-1 Intake (Entity Extraction + Warm Acknowledgment)
 // ────────────────────────────────────────────────────────────────────────────
 // On turn 1, sends raw caller speech to Claude for structured JSON extraction.
@@ -787,22 +875,52 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     }
 
     if (!parsed || !parsed.responseText) {
-      logger.warn(`${FUNC_TAG} Failed to parse JSON from LLM response`, {
+      logger.warn(`${FUNC_TAG} JSON parse failed — attempting YAML-like extraction`, {
         responsePreview: clip(result.response, 200),
         callSid, turn
       });
-      emit('A2_LLM_INTAKE_PARSE_FAILED', {
-        responsePreview: clip(result.response, 120),
-        latencyMs: result.latencyMs,
-      });
-      // Use raw response as acknowledgment with empty extraction
-      parsed = {
-        responseText: result.response.replace(/[{}"\\]/g, '').trim().substring(0, 300),
-        extraction: {},
-        confidence: {},
-        nextLane: 'DISCOVERY_CONTINUE',
-        doNotReask: []
-      };
+
+      // ── Stage 1: YAML-like regex extraction ───────────────────────────────
+      // LLM emits unquoted key:value lines despite instructions. This rescues
+      // responseText + entities without JSON.parse so TTS gets clean speech.
+      const yamlExtracted = extractYamlLike(result.response);
+
+      if (yamlExtracted) {
+        parsed = yamlExtracted;
+        logger.warn(`${FUNC_TAG} Recovered via YAML-like extraction`, {
+          responseText:  clip(parsed.responseText, 80),
+          entitiesFound: Object.keys(parsed.extraction).length,
+          nextLane:      parsed.nextLane,
+          callSid, turn
+        });
+        emit('A2_LLM_INTAKE_YAML_RECOVERED', {
+          entitiesFound: Object.keys(parsed.extraction).length,
+          nextLane:      parsed.nextLane,
+        });
+      } else {
+        // ── Stage 2: Hard fallback — strip ALL artifacts for speak-safe text ─
+        // Strip fences, bare "json" word, key prefixes, structural chars.
+        // Goal: caller hears actual words, NOT "json response text colon Hey Marc"
+        emit('A2_LLM_INTAKE_PARSE_FAILED', {
+          responsePreview: clip(result.response, 120),
+          latencyMs:       result.latencyMs,
+        });
+        const cleanFallback = (result.response || '')
+          .replace(/^```(?:json)?\s*/im, '')          // strip opening fence
+          .replace(/\s*```\s*$/m, '')                 // strip closing fence
+          .replace(/^[ \t]*json[ \t]*\n/im, '')       // strip bare "json" line
+          .replace(/^[ \t]*responseText\s*:[ \t]*/im, '') // strip "responseText:" prefix
+          .replace(/[{}"\\]/g, '')                    // strip JSON structural chars
+          .trim()
+          .substring(0, 300);
+        parsed = {
+          responseText: cleanFallback || "I'm sorry, could you repeat that?",
+          extraction:   {},
+          confidence:   {},
+          nextLane:     'DISCOVERY_CONTINUE',
+          doNotReask:   []
+        };
+      }
     }
 
     // ── Overwrite streaming result key with clean responseText ──────────
