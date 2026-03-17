@@ -42,13 +42,15 @@ const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
 // ── Model mapping: translate Claude model IDs → closest Groq equivalents ──────
 // Used when a company switches provider without changing modelId.
 // If modelId is already a Groq model (non-Claude), it passes through unchanged.
+// llama-3.1-70b-versatile was decommissioned by Groq on 2025-01-24.
+// All mappings now use llama-3.3-70b-versatile (the official replacement).
 const MODEL_MAP = {
-    'claude-haiku-4-5-20251001': 'llama-3.1-70b-versatile',
-    'claude-haiku-3-5-20241022': 'llama-3.1-70b-versatile',
+    'claude-haiku-4-5-20251001': 'llama-3.3-70b-versatile',
+    'claude-haiku-3-5-20241022': 'llama-3.3-70b-versatile',
     'claude-sonnet-4-5':         'llama-3.3-70b-versatile',
     'claude-sonnet-4-6':         'llama-3.3-70b-versatile',
     'claude-opus-4-6':           'llama-3.3-70b-versatile',
-    default:                     'llama-3.1-70b-versatile',
+    default:                     'llama-3.3-70b-versatile',
 };
 
 /**
