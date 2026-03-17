@@ -38,6 +38,14 @@ const { Agent2DiscoveryRunner } = require('./agent2/Agent2DiscoveryRunner');
 const { sanitizeForSpeech } = require('../../utils/sanitizeForSpeech');
 const BookingLogicEngine = require('./booking/BookingLogicEngine');
 
+// DiscoveryNotes — live in-call context, carried into BookingLogicEngine at handoff
+let DiscoveryNotesService = null;
+try {
+    DiscoveryNotesService = require('../discoveryNotes/DiscoveryNotesService');
+} catch (err) {
+    DiscoveryNotesService = null;
+}
+
 // Agent 2.0 uses CallLogger (not legacy BlackBox name)
 let CallLogger = null;
 try {
@@ -248,6 +256,18 @@ async function runBookingLogicLane({
     // V131: Include structured call context from discovery in handoff
     const callContext = state?.agent2?.callContext || null;
 
+    // Load discoveryNotes from Redis — carries entities, callReason, urgency,
+    // technicianMentioned, and everything else the LLM learned during intake/discovery.
+    // Gracefully degrades to null if DiscoveryNotesService is unavailable.
+    let discoveryNotes = null;
+    if (DiscoveryNotesService && callSid) {
+        try {
+            discoveryNotes = await DiscoveryNotesService.load(companyId, callSid);
+        } catch (_dnErr) {
+            // Non-fatal — booking engine works without it, just loses the pre-fill benefit
+        }
+    }
+
     const handoffPayload = {
         assumptions: {
             firstName: scrabEngineEntities.firstName || state?.callerName || null,
@@ -287,7 +307,10 @@ async function runBookingLogicLane({
             caller: callContext.caller || null,
             questionsAsked: callContext.questionsAsked || [],
             questionsAnswered: callContext.questionsAnswered || [],
-        } : null
+        } : null,
+        // Live in-call discovery state — used to pre-fill known slots (name, phone,
+        // address) and surface technician preference / urgency in the booking opener.
+        discoveryNotes: discoveryNotes || null
     };
     
     const existingBookingCtx = state?.bookingCtx || null;

@@ -160,17 +160,29 @@ async function loadCompanyConfig(companyId) {
    ============================================================================ */
 
 function initializeContext(payload, config) {
+  // discoveryNotes carry everything the LLM learned during intake/discovery —
+  // entities (name, phone, technician preference), urgency, callReason, etc.
+  const dn         = payload?.discoveryNotes || null;
+  const dnEntities = dn?.entities            || {};
+
   return {
     step:        STEPS.INIT,
     bookingMode: payload?.assumptions?.bookingMode || null,
     collectedFields: {
-      firstName: payload?.assumptions?.firstName || null,
-      lastName:  payload?.assumptions?.lastName  || null,
-      phone:     payload?.assumptions?.phone     || null,
-      address:   payload?.assumptions?.address   || null
+      // ScrabEngine assumptions take priority; discoveryNotes entities are fallback.
+      // This prevents re-asking for information the LLM already captured on turn 1.
+      firstName: payload?.assumptions?.firstName || dnEntities.firstName || null,
+      lastName:  payload?.assumptions?.lastName  || dnEntities.lastName  || null,
+      phone:     payload?.assumptions?.phone     || dnEntities.phone     || null,
+      address:   payload?.assumptions?.address   || dnEntities.address   || null
     },
     summary:              payload?.summary    || {},
     callContext:          payload?.callContext || null,
+    // Technician the caller requested by name (e.g. "Tony") — surfaced in the
+    // booking opener and written to the calendar event notes.
+    technicianPreference: dnEntities.technicianMentioned || null,
+    // Full discoveryNotes object kept for downstream use (e.g. urgency surfacing)
+    discoveryNotes:       dn,
     availableTimeOptions: null,
     selectedTime:         null,
     calendarEventId:      null,
@@ -255,7 +267,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
 async function processInit(ctx, config, companyId, isTest, events) {
   events.push({ type: 'BL1_INIT', timestamp: Date.now() });
 
-  const issuePrefix = buildIssuePrefix(ctx.callContext);
+  const issuePrefix = buildWarmOpening(ctx);
 
   if (!ctx.collectedFields.firstName) {
     ctx.step = STEPS.COLLECT_NAME;
@@ -347,8 +359,21 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     };
   }
 
-  ctx.collectedFields.phone = normalizePhone(userInput);
-  events.push({ type: 'BL1_PHONE_COLLECTED', timestamp: Date.now() });
+  const normalizedPhone = normalizePhone(userInput);
+
+  if (!normalizedPhone) {
+    // STT didn't give us 10 recognisable digits — ask the caller to repeat.
+    // This prevents storing garbage like "I just told you" as a phone number.
+    events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+    return {
+      nextPrompt: "I want to make sure I get that right — could you repeat the 10-digit number for me?",
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  ctx.collectedFields.phone = normalizedPhone;
+  events.push({ type: 'BL1_PHONE_COLLECTED', phone: normalizedPhone, timestamp: Date.now() });
 
   if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
     ctx.step = STEPS.COLLECT_ADDRESS;
@@ -718,13 +743,19 @@ async function createCalendarEvent(companyId, ctx, events) {
   const customerName = [firstName, lastName].filter(Boolean).join(' ') || 'Customer';
   const serviceType  = ctx.summary?.serviceType || ctx.bookingMode || 'service';
 
+  // Build service notes: technician preference first, then issue summary.
+  // Both are optional — the field is omitted if neither is set.
+  const techNote    = ctx.technicianPreference ? `Preferred tech: ${ctx.technicianPreference}. ` : '';
+  const issueNote   = ctx.summary?.issue || '';
+  const serviceNotes = (techNote + issueNote).trim() || null;
+
   try {
     return await GoogleCalendarService.createBookingEvent(companyId, {
       customerName,
       customerPhone:   phone   || null,
       customerAddress: address || null,
       serviceType,
-      serviceNotes:    ctx.summary?.issue || null,
+      serviceNotes,
       startTime:       ctx.selectedTime.start,
       endTime:         ctx.selectedTime.end
     });
@@ -739,15 +770,37 @@ async function createCalendarEvent(companyId, ctx, events) {
    ============================================================================ */
 
 /**
- * Build a contextual opening from the discovery call context.
- * Example output: "I've got this noted as an AC not cooling issue. "
+ * Build a warm, context-aware opening sentence for the booking phase.
+ *
+ * Combines three discovery signals into one natural sentence block:
+ *   1. Call reason / issue summary  ("I've got this noted as an AC not cooling issue.")
+ *   2. Technician preference        ("I'll make a note that you'd like Tony to come back out.")
+ *   3. Urgency                      ("I'll prioritize getting someone out quickly.")
+ *
+ * All three are optional — if none are present the function returns ''
+ * and the booking engine falls back to its default prompt.
+ *
+ * @param {Object} ctx  — booking context (has callContext + technicianPreference)
+ * @returns {string}    — trailing space included so it can be directly prepended
  */
-function buildIssuePrefix(callContext) {
-  if (!callContext?.issue?.summary) return '';
-  const urgencyNote = callContext.urgency?.level === 'high'
-    ? " I'll prioritize getting someone out quickly."
-    : '';
-  return `I've got this noted as a ${callContext.issue.summary}.${urgencyNote} `;
+function buildWarmOpening(ctx) {
+  const callContext = ctx?.callContext;
+  const techPref    = ctx?.technicianPreference;
+  const parts       = [];
+
+  if (callContext?.issue?.summary) {
+    parts.push(`I've got this noted as a ${callContext.issue.summary}.`);
+  }
+
+  if (techPref) {
+    parts.push(`I'll make a note that you'd like ${techPref} to come back out.`);
+  }
+
+  if (callContext?.urgency?.level === 'high') {
+    parts.push(`I'll prioritize getting someone out quickly.`);
+  }
+
+  return parts.length > 0 ? parts.join(' ') + ' ' : '';
 }
 
 /**
@@ -767,14 +820,27 @@ function capitalizeFirst(str) {
 }
 
 /**
- * Normalize a phone number string to (XXX) XXX-XXXX format when possible.
+ * Normalize a spoken/STT phone number to (XXX) XXX-XXXX format.
+ *
+ * Handles common STT artifacts:
+ *   - Extra spaces/dashes:  "239 333 7747"   → "(239) 333-7747"
+ *   - US country code:      "1 239 333 7747"  → "(239) 333-7747"
+ *   - Raw digits:           "2393337747"       → "(239) 333-7747"
+ *
+ * Returns null when the digit count is not recoverable to 10 digits,
+ * so processCollectPhone can re-prompt the caller.
+ *
+ * @param  {string}      input — raw STT output
+ * @returns {string|null}      — formatted phone or null if unrecoverable
  */
 function normalizePhone(input) {
-  const digits = input.replace(/\D/g, '');
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  const digits = (input || '').replace(/\D/g, '');
+  // Strip leading country code "1" when total is 11 digits (US: 1-XXX-XXX-XXXX)
+  const local = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+  if (local.length === 10) {
+    return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
   }
-  return input.trim();
+  return null; // unrecognizable — caller should be prompted to repeat
 }
 
 /**
