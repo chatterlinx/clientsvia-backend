@@ -842,7 +842,7 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     });
 
     // ── Sentence-streaming — first sentence fires TTS immediately ───────────
-    const result = await streamWithSentences({
+    let result = await streamWithSentences({
       apiKey,
       provider:    resolvedProvider,  // 'anthropic' | 'groq' — adapter selected per call
       model:       modelId,
@@ -857,6 +857,45 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
       emit,
       onSentence,
     });
+
+    // ── Provider failover: if primary fails with a hard API error, retry on the other key ──
+    // This protects calls when one provider has an expired key, hits a rate limit, or
+    // is temporarily unavailable — without needing a full config change on the company.
+    if (!result?.response && result?.failureReason === 'T2_PROVIDER_ERROR') {
+      const fallbackProvider = resolvedProvider === 'groq' ? 'anthropic' : 'groq';
+      const fallbackKey      = fallbackProvider === 'groq' ? groqKey : claudeKey;
+      // Only fallback if Groq → Anthropic (Claude handles both directions well)
+      // or Anthropic → Groq (when Anthropic key is broken but Groq is set)
+      if (fallbackKey) {
+        const fallbackModel = fallbackProvider === 'groq'
+          ? 'llama-3.3-70b-versatile'
+          : (llmConfig.model?.modelId || 'claude-haiku-4-5-20251001');
+        logger.warn(`${FUNC_TAG} Primary provider "${resolvedProvider}" failed — retrying with "${fallbackProvider}"`, {
+          originalFailure: result.failureReason, callSid, turn,
+        });
+        emit('A2_LLM_INTAKE_PROVIDER_RETRY', {
+          from:    resolvedProvider,
+          to:      fallbackProvider,
+          reason:  result.failureReason,
+          turn,
+        });
+        result = await streamWithSentences({
+          apiKey:      fallbackKey,
+          provider:    fallbackProvider,
+          model:       fallbackModel,
+          maxTokens,
+          temperature,
+          system:      systemPrompt,
+          messages:    [{ role: 'user', content: input }],
+          callSid,
+          turn,
+          token:       bridgeToken,
+          redis,
+          emit,
+          onSentence,
+        });
+      }
+    }
 
     // ── Handle streaming failure ─────────────────────────────────────────
     if (!result?.response) {

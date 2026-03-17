@@ -698,6 +698,38 @@ router.get('/:callSid', async (req, res) => {
       return { totalEvents: trace.length, eventCounts: counts };
     })();
 
+    // ── LLM Diagnostics — expose provider + failure details from stored trace payloads ──
+    // This surfaces the actual error message and HTTP status from A2_LLM_STREAM_FAILED
+    // so we can diagnose failures without needing to dig through Render logs.
+    const llmDiagnostics = (() => {
+      // Intake call event — provider + model used for turn-1 intake
+      const intakeCall = trace.find(t => t.kind === 'A2_LLM_AGENT_CALLED' && t.payload?.mode === 'TIER_2_INTAKE');
+      // All stream failures — includes reason, error message, HTTP status, latency, provider
+      const failures = trace
+        .filter(t => t.kind === 'A2_LLM_STREAM_FAILED')
+        .map(t => ({
+          turn:         t.turnNumber,
+          reason:       t.payload?.reason                                       || null,
+          errorMsg:     t.payload?.errorMsg || t.payload?.error                 || null,
+          httpStatus:   t.payload?.httpStatus                                   || null,
+          latencyMs:    t.payload?.latencyMs                                    || null,
+          partialChars: t.payload?.partialChars                                 || 0,
+          provider:     t.payload?.provider                                     || null,
+        }));
+      // Provider fallback event — fires when Groq configured but key missing
+      const providerFallback = trace.find(t => t.kind === 'A2_LLM_INTAKE_PROVIDER_FALLBACK');
+
+      return {
+        intakeProvider:    intakeCall?.payload?.provider || null,
+        intakeModel:       intakeCall?.payload?.model    || null,
+        streamFailures:    failures.length > 0 ? failures : null,
+        providerFallback:  providerFallback ? {
+          from: providerFallback.payload?.from,
+          to:   providerFallback.payload?.to,
+        } : null,
+      };
+    })();
+
     // If GPT-4 analysis exists, merge callContext, recording & tokens, return
     if (intelligence) {
       const payload = intelligence.toObject ? intelligence.toObject() : intelligence;
@@ -705,6 +737,7 @@ router.get('/:callSid', async (req, res) => {
       payload.recording = recording;
       payload.tokenUsage = tokenUsage;
       payload.traceEventSummary = traceEventSummary;
+      payload.llmDiagnostics = llmDiagnostics;
       return res.json({ success: true, intelligence: payload });
     }
 
@@ -733,7 +766,8 @@ router.get('/:callSid', async (req, res) => {
           },
           callContext,
           tokenUsage,
-          traceEventSummary
+          traceEventSummary,
+          llmDiagnostics
         }
       });
     }
