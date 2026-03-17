@@ -2038,12 +2038,20 @@ class Agent2DiscoveryRunner {
         !isServiceCallFUQ
       );
 
-      // Priority: SERVICE_CALL > MAINTENANCE > YES > NO > HESITANT > REPROMPT > COMPLEX
+      // TIMING AFFIRMATION DETECTION — catches responses like "as early as possible",
+      // "as soon as possible", "first thing", "anytime works", etc.
+      // These are YES answers to a scheduling question, just with a timing preference.
+      // Fires only when no other bucket matched (avoids false-positives).
+      const TIMING_AFFIRMATION_RE = /\b(?:as\s+(?:early|soon|quick)\s+as\s+(?:possible|you\s+can)|asap|first\s+(?:thing|available)|right\s+away|right\s+now|immediately|sooner\s+the\s+better|soonest\s+(?:possible|available)?|anytime(?:\s+works)?|whenever(?:\s+works|\s+you\s+(?:can|are\s+available))?|any\s+(?:day|time)\s+(?:works|is\s+fine)|(?:morning|afternoon|evening|today|tomorrow|this\s+week|next\s+week)\s+(?:works?|is\s+(?:fine|good|great|perfect)))\b/i;
+      const isTimingAffirmationFUQ = !isYesFUQ && !isNoFUQ && !isHesitantFUQ && !isMaintenanceFUQ && !isServiceCallFUQ && TIMING_AFFIRMATION_RE.test(inputLowerCleanFUQ);
+
+      // Priority: SERVICE_CALL > MAINTENANCE > YES > TIMING_AFFIRMATION > NO > HESITANT > REPROMPT > COMPLEX
       let bucket;
       if (hasServiceChoiceConflict) bucket = 'HESITANT';
       else if (isServiceCallFUQ && !isMaintenanceFUQ) bucket = 'SERVICE_CALL';
       else if (isMaintenanceFUQ && !isServiceCallFUQ) bucket = 'MAINTENANCE';
       else if (isYesFUQ && !isNoFUQ) bucket = 'YES';
+      else if (isTimingAffirmationFUQ) bucket = 'YES';   // timing phrases = implicit YES
       else if (isNoFUQ && !isYesFUQ) bucket = 'NO';
       else if (isHesitantFUQ) bucket = 'HESITANT';
       else if (isRepromptFUQ) bucket = 'REPROMPT';
@@ -2085,7 +2093,7 @@ class Agent2DiscoveryRunner {
         bookingMode: bookingMode || null,
         matchedPhrases,
         scrabEngineSkipped: true,
-        markers: { isMaintenanceFUQ, isServiceCallFUQ, isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, hasServiceChoiceConflict }
+        markers: { isMaintenanceFUQ, isServiceCallFUQ, isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, hasServiceChoiceConflict, isTimingAffirmationFUQ }
       });
 
       const { ack: fuqAck } = buildAck(ack);
@@ -2303,7 +2311,7 @@ class Agent2DiscoveryRunner {
             callContext: nextState.agent2?.callContext || null,
             onSentence,
           });
-          if (llmAgentResult) {
+          if (llmAgentResult?.response) {
             nextState.agent2.discovery.lastPath = 'FOLLOWUP_LLM_AGENT';
             clearPendingFollowUp(nextState);
             // ── CONSENT LOOP — Wire Point C (LLM path): grace period after NO ──
@@ -2349,7 +2357,7 @@ class Agent2DiscoveryRunner {
             callContext: nextState.agent2?.callContext || null,
             onSentence,
           });
-          if (llmAgentResult) {
+          if (llmAgentResult?.response) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
 
             if (continuationCount > MAX_FOLLOWUP_CONTINUATIONS) {
@@ -2399,7 +2407,7 @@ class Agent2DiscoveryRunner {
             callContext: nextState.agent2?.callContext || null,
             onSentence,
           });
-          if (llmAgentResult) {
+          if (llmAgentResult?.response) {
             const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
 
             if (continuationCount > MAX_FOLLOWUP_CONTINUATIONS) {
@@ -2449,7 +2457,7 @@ class Agent2DiscoveryRunner {
           callContext: nextState.agent2?.callContext || null,
           onSentence,
         });
-        if (llmAgentResult) {
+        if (llmAgentResult?.response) {
           const continuationCount = (nextState.agent2.discovery.followUpContinuationCount || 0) + 1;
 
           if (continuationCount > MAX_FOLLOWUP_CONTINUATIONS) {

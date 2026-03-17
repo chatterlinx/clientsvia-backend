@@ -4330,9 +4330,18 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       companyID,
       error: error.message
     });
-    const crashText = "I'm connecting you to our team.";
+    // CRASH RECOVERY: neutral text + Gather so the call continues.
+    const crashText = 'I apologize for the interruption. Please go ahead.';
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say(crashText);
+    const crashGather = twiml.gather({
+      input: 'speech',
+      action: `/api/twilio/v2-agent-respond/${companyID}`,
+      method: 'POST',
+      actionOnEmptyResult: true,
+      timeout: 7,
+      speechTimeout: '1.5',
+    });
+    crashGather.say(crashText);
     twimlString = twiml.toString();
 
     if (callSid) {
@@ -5207,6 +5216,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
         return out;
       };
+
+      // ── Internal guard: wrap entire pipeline so computeTurnPromise never rejects ──
+      // An uncaught exception here propagates to `await computeTurnPromise` (no local
+      // try/catch at call sites) → outer route catch → ROUTE_CRASH.  Instead, return a
+      // graceful recovery TwiML with a Gather so the call continues.
+      try {
 
       // ═══════════════════════════════════════════════════════════════════════════
       // PATIENCE MODE CHECK — "Still there?" when timeout expires with no speech
@@ -6527,6 +6542,46 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           })()
         } : null
       };
+
+      } catch (computeErr) {
+        // ── computeTurnPromise internal crash recovery ────────────────────────
+        // Log the full error so it's visible in Render logs + Call Intelligence.
+        logger.error('[V2TWILIO] computeTurnPromise internal crash — returning recovery TwiML', {
+          callSid: callSid?.slice(-8),
+          companyID,
+          turnNumber,
+          error: computeErr.message,
+          stack: computeErr.stack?.substring(0, 500)
+        });
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid, companyId: companyID,
+            type: 'COMPUTE_TURN_CRASH',
+            turn: turnNumber,
+            data: { error: computeErr.message, stack: computeErr.stack?.substring(0, 400) }
+          }).catch(() => {});
+        }
+        // Signal fast-path so any pending race doesn't hang forever
+        _fastPathResolve?.();
+        // Return recovery TwiML with Gather so the call continues
+        const _rcvTwiml = new twilio.twiml.VoiceResponse();
+        const _rcvGather = _rcvTwiml.gather({
+          input: 'speech',
+          action: `/api/twilio/v2-agent-respond/${companyID}`,
+          method: 'POST',
+          actionOnEmptyResult: true,
+          timeout: 7,
+          speechTimeout: '1.5',
+        });
+        _rcvGather.say('I apologize for the interruption. Please go ahead and tell me how I can help.');
+        return {
+          twimlString: _rcvTwiml.toString(),
+          voiceProviderUsed: 'twilio_say',
+          responseText: null,
+          matchSource: 'INTERNAL_ERROR',
+          timings: { totalMs: Date.now() - T0 }
+        };
+      }
     })();
 
     const logTwimlSent = async ({ route, twimlString, voiceProviderUsed, responsePreview, matchSource, isBridge = false, bridgeMeta = null, isFallback = false, fallbackReason = null, timings = null }) => {
@@ -6987,9 +7042,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }).catch(() => {});
     }
     
-    const crashText = "I'm connecting you to our team.";
+    // CRASH RECOVERY: use UI-configured generalError message if available.
+    // Never say "I'm connecting you to our team." — that implies a transfer that
+    // isn't happening. Include a Gather so the call continues, not dead-ends.
+    const crashText = (company ? await getRecoveryMessage(company, 'generalError').catch(() => null) : null)
+      || 'I apologize for the interruption. Please go ahead and tell me how I can help.';
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say(crashText);
+    const crashGather = twiml.gather({
+      input: 'speech',
+      action: `/api/twilio/v2-agent-respond/${companyID}`,
+      method: 'POST',
+      actionOnEmptyResult: true,
+      timeout: 7,
+      speechTimeout: '1.5',
+    });
+    crashGather.say(crashText);
     twimlString = twiml.toString();
 
     // Log to CallTranscriptV2 so crash fallbacks appear in transcripts
@@ -7023,7 +7090,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           section: 'S7_VOICE_PROVIDER',
           route: '/v2-agent-respond',
           twimlLength: twimlString.length,
-          hasGather: false,
+          hasGather: true,
           hasPlay: false,
           hasSay: true,
           voiceProviderUsed: 'twilio_say',
@@ -7032,7 +7099,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
       }).catch(() => {});
     }
-    
+
     res.type('text/xml');
     return res.send(twimlString);
   }
