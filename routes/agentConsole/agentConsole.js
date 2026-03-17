@@ -1592,7 +1592,11 @@ router.patch(
             const regularLines = Array.isArray(bridgeConfig.lines) ? bridgeConfig.lines : [];
             const welcomeLine = bridgeConfig.turn1Welcome?.enabled && bridgeConfig.turn1Welcome?.line?.trim()
               ? [bridgeConfig.turn1Welcome.line.trim()] : [];
-            const linesToCache = [...regularLines, ...welcomeLine].filter(Boolean);
+            const laneLines = [
+              bridgeConfig.bookingBridgePhrase?.trim(),
+              bridgeConfig.transferBridgePhrase?.trim()
+            ].filter(Boolean);
+            const linesToCache = [...regularLines, ...welcomeLine, ...laneLines].filter(Boolean);
             if (linesToCache.length > 0) {
               BridgeAudioService.generateAll({
                 companyId,
