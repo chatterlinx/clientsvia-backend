@@ -833,18 +833,35 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     const temperature = intakeConfig.model?.temperature ?? 0.3;
     const maxTokens = intakeConfig.model?.maxTokens || 600;
 
+    // ── AUTO-DETECT: Override provider when modelId is non-Claude ────────
+    // Catches misconfigured combos like provider='anthropic' + model='llama-3.1-70b-versatile'
+    // which would 404 on Anthropic's API. If model isn't a Claude ID and Groq key exists,
+    // auto-correct to Groq. Log it so the trace shows what happened.
+    let finalProvider = resolvedProvider;
+    let finalApiKey   = apiKey;
+    if (modelId && !modelId.startsWith('claude-') && resolvedProvider !== 'groq' && groqKey) {
+      logger.warn(`${FUNC_TAG} Model "${modelId}" is non-Claude but provider="${resolvedProvider}" — auto-correcting to groq`, {
+        turn, callSid, originalProvider: resolvedProvider,
+      });
+      emit('A2_LLM_INTAKE_PROVIDER_AUTO_CORRECTED', {
+        model: modelId, from: resolvedProvider, to: 'groq', turn,
+      });
+      finalProvider = 'groq';
+      finalApiKey   = groqKey;
+    }
+
     emit('A2_LLM_AGENT_CALLED', {
       mode:         'TIER_2_INTAKE',
       model:        modelId,
-      provider:     resolvedProvider,
+      provider:     finalProvider,
       inputPreview: clip(input, 80),
       turn,
     });
 
     // ── Sentence-streaming — first sentence fires TTS immediately ───────────
     let result = await streamWithSentences({
-      apiKey,
-      provider:    resolvedProvider,  // 'anthropic' | 'groq' — adapter selected per call
+      apiKey:      finalApiKey,
+      provider:    finalProvider,  // 'anthropic' | 'groq' — adapter selected per call
       model:       modelId,
       maxTokens,
       temperature,
@@ -862,7 +879,7 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     // This protects calls when one provider has an expired key, hits a rate limit, or
     // is temporarily unavailable — without needing a full config change on the company.
     if (!result?.response && result?.failureReason === 'T2_PROVIDER_ERROR') {
-      const fallbackProvider = resolvedProvider === 'groq' ? 'anthropic' : 'groq';
+      const fallbackProvider = finalProvider === 'groq' ? 'anthropic' : 'groq';
       const fallbackKey      = fallbackProvider === 'groq' ? groqKey : claudeKey;
       // Only fallback if Groq → Anthropic (Claude handles both directions well)
       // or Anthropic → Groq (when Anthropic key is broken but Groq is set)
@@ -870,11 +887,11 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
         const fallbackModel = fallbackProvider === 'groq'
           ? 'llama-3.3-70b-versatile'
           : (llmConfig.model?.modelId || 'claude-haiku-4-5-20251001');
-        logger.warn(`${FUNC_TAG} Primary provider "${resolvedProvider}" failed — retrying with "${fallbackProvider}"`, {
+        logger.warn(`${FUNC_TAG} Primary provider "${finalProvider}" failed — retrying with "${fallbackProvider}"`, {
           originalFailure: result.failureReason, callSid, turn,
         });
         emit('A2_LLM_INTAKE_PROVIDER_RETRY', {
-          from:    resolvedProvider,
+          from:    finalProvider,
           to:      fallbackProvider,
           reason:  result.failureReason,
           turn,
@@ -974,6 +991,10 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
           .replace(/\s*```\s*$/m, '')                 // strip closing fence
           .replace(/^[ \t]*json[ \t]*\n/im, '')       // strip bare "json" line
           .replace(/^[ \t]*responseText\s*:[ \t]*/im, '') // strip "responseText:" prefix
+          // ── Strip extraction block + ALL bare key:value lines after the response ──
+          // Without this, caller hears "extraction colon firstName colon Mark..."
+          .replace(/,?\s*\n?\s*extraction\s*:[\s\S]*/i, '')  // cut everything from "extraction:" onward
+          .replace(/\b(?:firstName|lastName|phone|email|address|callReason|urgency|nextLane|doNotReask|employeeMentioned|priorVisit|bookingConsent|objective|confidence|sameDayRequested)\s*:\s*\S[^\n]*/gi, '')  // catch stray key:value lines
           .replace(/[{}"\\]/g, '')                    // strip JSON structural chars
           .trim()
           .substring(0, 300);

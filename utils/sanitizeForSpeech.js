@@ -59,6 +59,13 @@ const JSON_LIKE_RE = /\{[\s]*["']?\w+["']?\s*:/;
 const STACK_TRACE_RE = /at\s+\w+\s*\(.*:\d+:\d+\)/;
 
 /**
+ * Detects LLM structured output leaked into speech text.
+ * Catches patterns like "responseText: ... extraction: firstName: Mark"
+ * which happen when the intake parser fails to extract the response.
+ */
+const LLM_STRUCTURED_RE = /\b(?:responseText|extraction|firstName|lastName|nextLane|doNotReask|callReason)\s*:/i;
+
+/**
  * Sanitize text before it reaches TTS output.
  *
  * @param {*} text - The text to validate. Non-strings are rejected.
@@ -108,6 +115,14 @@ function sanitizeForSpeech(text, options = {}) {
   // ── Heuristic: stack trace patterns ───────────────────────────────────
   if (STACK_TRACE_RE.test(cleaned)) {
     if (trap) trap.reason = 'STACK_TRACE';
+    return fallback;
+  }
+
+  // ── Heuristic: LLM structured output leaked into speech ─────────────
+  // Catches intake parser failures where YAML-like key:value text
+  // ("responseText: Hi Mark, extraction: firstName: Mark") slips through
+  if (LLM_STRUCTURED_RE.test(cleaned)) {
+    if (trap) trap.reason = 'LLM_STRUCTURED_LEAK';
     return fallback;
   }
 
