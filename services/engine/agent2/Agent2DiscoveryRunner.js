@@ -5420,8 +5420,13 @@ class Agent2DiscoveryRunner {
       || null;
     const alwaysGreet = nameGreetingConfig.alwaysGreet === true;
 
-    // Need a name or alwaysGreet to fire
-    if (!callerName && !alwaysGreet) return result;
+    // Turn 1 always fires greeting even without a caller name.
+    // turnLastRan is written by run() into state.agent2.discovery.turnLastRan.
+    const turnLastRan = state.agent2?.discovery?.turnLastRan ?? null;
+    const isFirstTurn = turnLastRan === 1;
+
+    // Need a name, alwaysGreet, OR be turn 1 to fire
+    if (!callerName && !alwaysGreet && !isFirstTurn) return result;
 
     // Resolve {name} placeholder
     let resolved;
