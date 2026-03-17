@@ -369,11 +369,22 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   const normalizedPhone = normalizePhone(userInput);
 
   if (!normalizedPhone) {
-    // STT didn't give us 10 recognisable digits — ask the caller to repeat.
-    // This prevents storing garbage like "I just told you" as a phone number.
+    // Detect if caller is asking about last name / missed field rather than giving a number
+    if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
+      // Back up to COLLECT_NAME so we can re-collect their full name properly
+      ctx.step = STEPS.COLLECT_NAME;
+      events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+      return {
+        nextPrompt: `You're right — let me grab your full name. What's your first and last name?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // STT didn't give us 10 recognisable digits — ask the caller to provide it.
     events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
-      nextPrompt: "I want to make sure I get that right — could you repeat the 10-digit number for me?",
+      nextPrompt: "I didn't quite catch a phone number there. What number should we use to reach you?",
       bookingCtx: ctx,
       completed:  false
     };
@@ -817,10 +828,27 @@ function buildWarmOpening(ctx) {
  * Parse a raw name string into first and last components.
  */
 function parseName(input) {
-  const words = input.trim().split(/\s+/).filter(Boolean);
+  let cleaned = input.trim();
+
+  // Strip leading filler words callers say before their name
+  // e.g. "Sure, my name is Mark." → "my name is Mark."
+  cleaned = cleaned.replace(/^(sure|well|um|uh|yeah|yes|ok|okay|so|hi|hey|oh|right|great|alright|certainly|absolutely|of course|no problem)[,.]?\s*/i, '');
+
+  // Strip name-introduction phrases
+  // e.g. "my name is Mark" → "Mark"  |  "I'm John Smith" → "John Smith"
+  cleaned = cleaned.replace(/^(my name'?s?( is)?|i'?m|i am|this is|it'?s|they call me|call me|the name is|name is)\s*/i, '');
+
+  // Clean each word: keep letters, hyphens, apostrophes; remove trailing punctuation
+  const cleanWord = (w) => capitalizeFirst(w.replace(/[^a-zA-Z'\-]/g, ''));
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
   if (!words.length) return { firstName: 'there', lastName: null };
-  const firstName = capitalizeFirst(words[0]);
-  const lastName  = words.length > 1 ? words.slice(1).map(capitalizeFirst).join(' ') : null;
+
+  const firstName = cleanWord(words[0]) || 'there';
+  const lastName  = words.length > 1
+    ? words.slice(1).map(cleanWord).filter(Boolean).join(' ') || null
+    : null;
+
   return { firstName, lastName };
 }
 
