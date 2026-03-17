@@ -859,20 +859,24 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     });
 
     // ── Sentence-streaming — first sentence fires TTS immediately ───────────
+    // skipResultKey=true: intake returns structured JSON/YAML — never write raw
+    // output to a2bridge:result. The overwrite below (after parsing) is the only
+    // write, so bridge-continue always gets clean responseText, never raw YAML.
     let result = await streamWithSentences({
-      apiKey:      finalApiKey,
-      provider:    finalProvider,  // 'anthropic' | 'groq' — adapter selected per call
-      model:       modelId,
+      apiKey:        finalApiKey,
+      provider:      finalProvider,  // 'anthropic' | 'groq' — adapter selected per call
+      model:         modelId,
       maxTokens,
       temperature,
-      system:      systemPrompt,
-      messages:    [{ role: 'user', content: input }],  // Turn 1 = no history
+      system:        systemPrompt,
+      messages:      [{ role: 'user', content: input }],  // Turn 1 = no history
       callSid,
       turn,
-      token:       bridgeToken,
+      token:         bridgeToken,
       redis,
       emit,
       onSentence,
+      skipResultKey: true,  // BUG-29: intake returns JSON — raw output must never reach bridge
     });
 
     // ── Provider failover: if primary fails with a hard API error, retry on the other key ──
@@ -897,19 +901,20 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
           turn,
         });
         result = await streamWithSentences({
-          apiKey:      fallbackKey,
-          provider:    fallbackProvider,
-          model:       fallbackModel,
+          apiKey:        fallbackKey,
+          provider:      fallbackProvider,
+          model:         fallbackModel,
           maxTokens,
           temperature,
-          system:      systemPrompt,
-          messages:    [{ role: 'user', content: input }],
+          system:        systemPrompt,
+          messages:      [{ role: 'user', content: input }],
           callSid,
           turn,
-          token:       bridgeToken,
+          token:         bridgeToken,
           redis,
           emit,
           onSentence,
+          skipResultKey: true,  // same as primary — intake raw output never goes to bridge
         });
       }
     }
@@ -990,12 +995,15 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
           .replace(/^```(?:json)?\s*/im, '')          // strip opening fence
           .replace(/\s*```\s*$/m, '')                 // strip closing fence
           .replace(/^[ \t]*json[ \t]*\n/im, '')       // strip bare "json" line
+          // ── Strip JSON structural chars FIRST ──────────────────────────────
+          // Must run before the responseText prefix strip so that quoted keys like
+          // `"responseText":` become `responseText:` and the prefix regex can match.
+          .replace(/[{}"\\]/g, '')
           .replace(/^[ \t]*responseText\s*:[ \t]*/im, '') // strip "responseText:" prefix
           // ── Strip extraction block + ALL bare key:value lines after the response ──
           // Without this, caller hears "extraction colon firstName colon Mark..."
           .replace(/,?\s*\n?\s*extraction\s*:[\s\S]*/i, '')  // cut everything from "extraction:" onward
           .replace(/\b(?:firstName|lastName|phone|email|address|callReason|urgency|nextLane|doNotReask|employeeMentioned|priorVisit|bookingConsent|objective|confidence|sameDayRequested)\s*:\s*\S[^\n]*/gi, '')  // catch stray key:value lines
-          .replace(/[{}"\\]/g, '')                    // strip JSON structural chars
           .trim()
           .substring(0, 300);
         parsed = {

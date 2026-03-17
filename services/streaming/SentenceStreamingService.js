@@ -149,6 +149,11 @@ class SentenceSplitter {
  * @param {Object}   opts.redis
  * @param {Function} opts.emit
  * @param {Function} [opts.onSentence]   — async (sentence: string, index: number) => void
+ * @param {boolean}  [opts.skipResultKey] — when true, skip writing the final joined
+ *                                          response to a2bridge:result. Use for intake
+ *                                          calls where the parser overwrites the key with
+ *                                          clean responseText — prevents raw JSON/YAML from
+ *                                          racing into bridge-continue before parsing is done.
  * @param {number}   [opts.maxCeilingMs]
  * @param {number}   [opts.heartbeatIntervalMs]
  * @returns {Promise<{ response, tokensUsed, latencyMs, wasPartial, failureReason, sentences }>}
@@ -168,6 +173,7 @@ async function streamWithSentences(opts) {
     redis,
     emit         = () => {},
     onSentence   = null,
+    skipResultKey = false,
     maxCeilingMs = DEFAULTS.maxCeilingMs,
     heartbeatIntervalMs = DEFAULTS.heartbeatIntervalMs,
   } = opts;
@@ -309,8 +315,10 @@ async function streamWithSentences(opts) {
   }
   await heartbeat.stop();
 
-  // Write final result to Redis (bridge-continue picks this up — unchanged)
-  if (redis && callSid && token) {
+  // Write final result to Redis (bridge-continue picks this up).
+  // skipResultKey=true: intake calls skip this write so raw JSON/YAML never races
+  // into bridge-continue. The intake parser overwrites the key with clean responseText.
+  if (redis && callSid && token && !skipResultKey) {
     try {
       const rKey = resultKey(callSid, turn, token);
       await redis.set(rKey, responseText, { EX: DEFAULTS.resultTtlSeconds });

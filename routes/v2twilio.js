@@ -3881,13 +3881,25 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       const twiml = new twilio.twiml.VoiceResponse();
       const _mt_stream = {};
 
+      // ── Sanitizer gate: block structured LLM output from reaching ElevenLabs ──
+      // skipResultKey=true means intake raw JSON/YAML should never be in this key.
+      // But as defense-in-depth, sanitizeForSpeech catches any leak (responseText:,
+      // extraction:, firstName: patterns) BEFORE they reach ElevenLabs synthesis.
+      // If the sanitizer fires, use a neutral bridge phrase rather than SAFE_FALLBACK
+      // (caller has already spoken — a cold generic greeting would be jarring).
+      const _mt_sanity = {};
+      const safeStreamingResult = sanitizeForSpeech(streamingResult, { _trap: _mt_sanity });
+      const deliverText = (_mt_sanity.fired)
+        ? 'One moment, let me pull that up for you.'
+        : safeStreamingResult;
+
       // V-FIX: Attempt ElevenLabs synthesis before falling back to Twilio <Say>
-      const synthUrl = await synthesizeForBridge(streamingResult);
+      const synthUrl = await synthesizeForBridge(deliverText);
       if (synthUrl) {
         twiml.play(synthUrl);
         voiceProviderUsed = 'elevenlabs';
       } else {
-        twiml.say(escapeTwiML(streamingResult, _mt_stream));
+        twiml.say(escapeTwiML(deliverText, _mt_stream));
         voiceProviderUsed = 'twilio_say';
       }
 
@@ -3895,7 +3907,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       if (callSid) {
         try {
           const intended = streamingResult;
-          const actual = _mt_stream.fired ? SAFE_FALLBACK : intended;
+          const actual = _mt_stream.fired ? SAFE_FALLBACK : deliverText;
           const verb = voiceProviderUsed === 'elevenlabs' ? 'PLAY' : 'SAY';
           const CallTranscriptV2_ad = require('../models/CallTranscriptV2');
           await CallTranscriptV2_ad.appendTurns(companyID, callSid, [{
@@ -3911,7 +3923,8 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
               twimlVerb: verb,
               intended: intended.substring(0, 300),
               mismatch: actual !== intended,
-              sanitizerReason: _mt_stream.reason || null
+              sanitizerReason: _mt_stream.reason || _mt_sanity.reason || null,
+              sanitizerIntercept: _mt_sanity.fired || false,
             }
           }]);
         } catch (_) {}
