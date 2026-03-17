@@ -3946,6 +3946,14 @@ const companySchema = new mongoose.Schema({
                         "One sec \u2014 I’m pulling that up now.",
                         "Alright \u2014 hang with me for a moment."
                     ]
+                },
+                bookingBridgePhrase: { type: String, default: ‘’ },
+                transferBridgePhrase: { type: String, default: ‘’ },
+                // Turn 1 Welcome Bridge — fires instantly on caller’s first utterance
+                turn1Welcome: {
+                    enabled: { type: Boolean, default: false },
+                    line: { type: String, default: ‘’ },
+                    thresholdMs: { type: Number, default: 0 }
                 }
             },
             discovery: {
