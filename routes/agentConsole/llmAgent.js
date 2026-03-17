@@ -19,7 +19,7 @@ const logger = require('../../utils/logger');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const cheerio = require('cheerio');
-const { DEFAULT_LLM_AGENT_SETTINGS, AVAILABLE_MODELS, composeSystemPrompt } = require('../../config/llmAgentDefaults');
+const { DEFAULT_LLM_AGENT_SETTINGS, AVAILABLE_MODELS, AVAILABLE_PROVIDERS, composeSystemPrompt } = require('../../config/llmAgentDefaults');
 
 const MODULE_ID = 'LLM_AGENT_ROUTES';
 
@@ -69,9 +69,16 @@ router.get('/:companyId/llm-agent/config', authenticateJWT, async (req, res) => 
 
     res.json({
       companyId,
-      companyName: company.companyName || company.name || '',
-      config: merged,
-      availableModels: AVAILABLE_MODELS,
+      companyName:        company.companyName || company.name || '',
+      config:             merged,
+      availableProviders: AVAILABLE_PROVIDERS,
+      availableModels:    AVAILABLE_MODELS,
+      // providerStatus: tells the UI which providers are wired on this server.
+      // UI should warn / disable Groq selector when groq === false.
+      providerStatus: {
+        anthropic: !!process.env.ANTHROPIC_API_KEY,
+        groq:      !!process.env.GROQ_API_KEY,
+      },
       defaults: DEFAULT_LLM_AGENT_SETTINGS
     });
   } catch (error) {
@@ -156,6 +163,47 @@ router.post('/:companyId/llm-agent/ping', authenticateJWT, async (req, res) => {
     }
 
     res.json({ ok: true, latencyMs, model: DEFAULT_LLM_AGENT_SETTINGS.model.modelId });
+  } catch (error) {
+    res.status(502).json({ ok: false, error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/llm-agent/ping-groq — Verify Groq API is live
+// Sends a minimal request to llama-3.1-8b-instant (fastest model).
+// Returns latencyMs so the UI can display real TTFT to the admin.
+// ════════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/llm-agent/ping-groq', authenticateJWT, async (req, res) => {
+  try {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ ok: false, error: 'GROQ_API_KEY not set on server. Add it to Render env group and redeploy.' });
+    }
+
+    const startMs  = Date.now();
+    const groqRes  = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        model:      'llama-3.1-8b-instant',
+        max_tokens: 5,
+        messages:   [{ role: 'user', content: 'ping' }],
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const latencyMs = Date.now() - startMs;
+
+    if (!groqRes.ok) {
+      const errBody = await groqRes.text().catch(() => '');
+      logger.warn(`[${MODULE_ID}] Groq ping failed`, { status: groqRes.status, companyId: req.params.companyId });
+      return res.status(502).json({ ok: false, error: `Groq API ${groqRes.status}`, details: errBody, latencyMs });
+    }
+
+    logger.info(`[${MODULE_ID}] Groq ping OK`, { latencyMs, companyId: req.params.companyId });
+    res.json({ ok: true, latencyMs, model: 'llama-3.1-8b-instant', provider: 'groq' });
   } catch (error) {
     res.status(502).json({ ok: false, error: error.message });
   }

@@ -37,9 +37,23 @@
 const logger                        = require('../../utils/logger');
 const { HeartbeatWriter, resultKey, DEFAULTS } = require('./ClaudeStreamingService');
 
-// ── Active provider — change this one line to swap providers ─────────────────
-// To use Groq: replace with require('./adapters/GroqStreamAdapter')
-const adapter = require('./adapters/ClaudeStreamAdapter');
+// ── Adapter registry — lazy-loaded, resolved per call for multi-tenant safety ─
+// Never use a module-level constant: different companies may use different
+// providers in the same running process. Lazy-require avoids circular deps
+// and keeps startup fast when only one provider is ever used.
+const _adapterCache = {};
+
+function resolveAdapter(provider) {
+    const key = (provider || 'anthropic').toLowerCase();
+    if (!_adapterCache[key]) {
+        if (key === 'groq') {
+            _adapterCache[key] = require('./adapters/GroqStreamAdapter');
+        } else {
+            _adapterCache[key] = require('./adapters/ClaudeStreamAdapter');
+        }
+    }
+    return _adapterCache[key];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SENTENCE SPLITTER
@@ -123,6 +137,7 @@ class SentenceSplitter {
 /**
  * @param {Object} opts
  * @param {string}   opts.apiKey
+ * @param {string}   [opts.provider]    — 'anthropic' | 'groq' (default: 'anthropic')
  * @param {string}   opts.model
  * @param {number}   opts.maxTokens
  * @param {number}   opts.temperature
@@ -141,6 +156,7 @@ class SentenceSplitter {
 async function streamWithSentences(opts) {
   const {
     apiKey,
+    provider,                    // 'anthropic' | 'groq' — resolved per company
     model,
     maxTokens    = 300,
     temperature  = 0.4,
@@ -155,6 +171,9 @@ async function streamWithSentences(opts) {
     maxCeilingMs = DEFAULTS.maxCeilingMs,
     heartbeatIntervalMs = DEFAULTS.heartbeatIntervalMs,
   } = opts;
+
+  // ── Resolve adapter for this call — multi-tenant safe ─────────────────────
+  const adapter = resolveAdapter(provider);
 
   const startMs      = Date.now();
   const sentences    = [];
@@ -319,5 +338,5 @@ async function streamWithSentences(opts) {
 module.exports = {
   streamWithSentences,
   SentenceSplitter,    // exported for unit tests
-  ACTIVE_PROVIDER: adapter.providerName,
+  ACTIVE_PROVIDER: 'dynamic',  // resolved per-call — see resolveAdapter()
 };

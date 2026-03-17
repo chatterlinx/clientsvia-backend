@@ -789,12 +789,35 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
       return null;
     }
 
-    // ── Gate: API key ────────────────────────────────────────────────────
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // ── Gate: API key — provider-aware with graceful Groq → Claude fallback ──
+    // Priority: intake.model.provider > llmConfig.model.provider > 'anthropic'
+    const intakeProvider = (
+      intakeConfig.model?.provider ||
+      llmConfig.model?.provider    ||
+      'anthropic'
+    ).toLowerCase();
+
+    const groqKey   = process.env.GROQ_API_KEY;
+    const claudeKey = process.env.ANTHROPIC_API_KEY;
+
+    // Graceful degrade: if Groq is configured but GROQ_API_KEY is absent,
+    // fall back to Claude automatically — no outage, just a warning log.
+    const resolvedProvider = (intakeProvider === 'groq' && !groqKey && claudeKey)
+      ? 'anthropic'
+      : intakeProvider;
+
+    const apiKey = resolvedProvider === 'groq' ? groqKey : claudeKey;
+
     if (!apiKey) {
-      logger.warn(`${FUNC_TAG} ANTHROPIC_API_KEY not set — skipping intake`);
-      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'missing_api_key', turn });
+      const missing = resolvedProvider === 'groq' ? 'GROQ_API_KEY' : 'ANTHROPIC_API_KEY';
+      logger.warn(`${FUNC_TAG} ${missing} not set — skipping intake`);
+      emit('T2_INTAKE_GATE_BLOCKED', { reason: 'missing_api_key', turn, provider: resolvedProvider });
       return null;
+    }
+
+    if (intakeProvider === 'groq' && resolvedProvider === 'anthropic') {
+      logger.warn(`${FUNC_TAG} GROQ_API_KEY not set — falling back to Claude for intake`);
+      emit('A2_LLM_INTAKE_PROVIDER_FALLBACK', { from: 'groq', to: 'anthropic', turn });
     }
 
     // ── Gate: Non-empty input ────────────────────────────────────────────
@@ -811,8 +834,9 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     const maxTokens = intakeConfig.model?.maxTokens || 600;
 
     emit('A2_LLM_AGENT_CALLED', {
-      mode: 'TIER_2_INTAKE',
-      model: modelId,
+      mode:         'TIER_2_INTAKE',
+      model:        modelId,
+      provider:     resolvedProvider,
       inputPreview: clip(input, 80),
       turn,
     });
@@ -820,14 +844,15 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     // ── Sentence-streaming — first sentence fires TTS immediately ───────────
     const result = await streamWithSentences({
       apiKey,
-      model: modelId,
+      provider:    resolvedProvider,  // 'anthropic' | 'groq' — adapter selected per call
+      model:       modelId,
       maxTokens,
       temperature,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: input }],  // Turn 1 = no history
+      system:      systemPrompt,
+      messages:    [{ role: 'user', content: input }],  // Turn 1 = no history
       callSid,
       turn,
-      token: bridgeToken,
+      token:       bridgeToken,
       redis,
       emit,
       onSentence,

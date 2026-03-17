@@ -175,11 +175,39 @@ const CHANNEL_INSTRUCTIONS = {
   webchat: 'This is a WEBCHAT conversation. You can be slightly more detailed. Use short paragraphs. Be responsive and helpful.'
 };
 
-// ── Available Models ──────────────────────────────────────────────────────
+// ── Available LLM Providers ────────────────────────────────────────────────
+// Returned by GET /llm-agent/config so the UI can populate the provider
+// dropdown. providerStatus (which keys are configured on the server) is
+// added at the API layer — not here — since it requires env var access.
+const AVAILABLE_PROVIDERS = [
+  {
+    id:          'anthropic',
+    label:       'Anthropic (Claude)',
+    description: 'Industry-leading accuracy — best for complex reasoning and nuanced conversations',
+    envKey:      'ANTHROPIC_API_KEY',
+    models:      ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-6'],
+  },
+  {
+    id:          'groq',
+    label:       'Groq (Llama)',
+    description: 'Ultra-fast LPU inference (~300ms) — eliminates bridge latency on turn 1',
+    envKey:      'GROQ_API_KEY',
+    models:      ['llama-3.1-70b-versatile', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+  },
+];
+
+// ── Available Models ───────────────────────────────────────────────────────
+// provider field: UI uses this to filter model list when provider changes.
+// Groq model IDs pass through GroqStreamAdapter unchanged (no translation).
 const AVAILABLE_MODELS = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  description: 'Fast & affordable — ideal for receptionist work', tier: 'default' },
-  { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', description: 'Smarter — for complex industries (dental, legal)', tier: 'advanced' },
-  { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   description: 'Most capable — for highest accuracy needs', tier: 'premium' }
+  // ── Anthropic (Claude) ──────────────────────────────────────────────────
+  { id: 'claude-haiku-4-5-20251001', provider: 'anthropic', label: 'Claude Haiku 4.5',  description: 'Fast & affordable — ideal for receptionist work', tier: 'default' },
+  { id: 'claude-sonnet-4-6',         provider: 'anthropic', label: 'Claude Sonnet 4.6', description: 'Smarter — for complex industries (dental, legal)', tier: 'advanced' },
+  { id: 'claude-opus-4-6',           provider: 'anthropic', label: 'Claude Opus 4.6',   description: 'Most capable — for highest accuracy needs', tier: 'premium' },
+  // ── Groq (Llama) ────────────────────────────────────────────────────────
+  { id: 'llama-3.1-70b-versatile',   provider: 'groq', label: 'Llama 3.1 70B',       description: 'Ultra-fast ~300ms — best balance of speed and quality', tier: 'groq' },
+  { id: 'llama-3.3-70b-versatile',   provider: 'groq', label: 'Llama 3.3 70B',       description: 'Smartest Groq model — for complex industries', tier: 'groq' },
+  { id: 'llama-3.1-8b-instant',      provider: 'groq', label: 'Llama 3.1 8B Instant', description: 'Absolute fastest Groq model — minimal latency', tier: 'groq' },
 ];
 
 // ── Default Behavior Rules (seeded on onboarding) ───────────────────────────
@@ -558,6 +586,7 @@ module.exports = {
   TONE_DESCRIPTIONS,
   ROLE_DESCRIPTIONS,
   CHANNEL_INSTRUCTIONS,
+  AVAILABLE_PROVIDERS,
   AVAILABLE_MODELS,
   composeSystemPrompt,
   composeIntakeSystemPrompt
