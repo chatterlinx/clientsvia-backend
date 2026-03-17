@@ -6639,8 +6639,38 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     // Post-gather delay elapsed, compute still running — fire bridge.
-    // V131: Per-turn dedup guard only (prevents double-firing within same turn).
-    // Per-call cap REMOVED — bridge is a standard conversational layer, not a rationed backup.
+    // Per-call cap: maxBridgesPerCall (default 1). Only the Turn-1 Welcome fires by
+    // default; all subsequent bridges are blocked once the cap is reached.
+    // Set maxBridgesPerCall=0 to disable all bridges. Set to -1 for uncapped (legacy).
+    const maxBridgesPerCall = Number.isFinite(bridgeCfg.maxBridgesPerCall)
+      ? bridgeCfg.maxBridgesPerCall
+      : 1;
+    const callBridgeCountKey = `a2bridge:callcount:${callSid}`;
+    const currentBridgeCount = parseInt(await redis.get(callBridgeCountKey).catch(() => '0') || '0', 10);
+
+    if (maxBridgesPerCall >= 0 && currentBridgeCount >= maxBridgesPerCall) {
+      // Per-call cap reached — skip bridge, wait for compute
+      bufferEvent('A2_BRIDGE_CAP_REACHED', {
+        maxBridgesPerCall,
+        currentBridgeCount,
+        turnNumber,
+        callSid,
+      });
+      const result = await computeTurnPromise;
+      twimlString = result.twimlString;
+      voiceProviderUsed = result.voiceProviderUsed;
+      await logTwimlSent({
+        route: '/v2-agent-respond',
+        twimlString,
+        voiceProviderUsed,
+        responsePreview: result.responseText,
+        matchSource: result.matchSource,
+        timings: result.timings
+      });
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
     const bridgeTurnKey = `a2bridge:turn:${callSid}:${turnNumber}`;
     const lastLineKey = `a2bridge:lastLine:${callSid}`;
 
@@ -6681,10 +6711,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     await redis.set(lastLineKey, String(idx), { EX: 60 * 60 * 4 }).catch(() => {});
 
-    // V131: Per-call counter removed — bridge is uncapped.
-    // State flag kept for traceability only.
+    // Increment per-call bridge counter (enforces maxBridgesPerCall cap).
     callState.agent2Bridge = callState.agent2Bridge || {};
     callState.agent2Bridge.lastBridgeTurn = turnNumber;
+    callState.agent2Bridge.bridgeCount = (callState.agent2Bridge.bridgeCount || 0) + 1;
+    await redis.incr(callBridgeCountKey).catch(() => {});
+    await redis.expire(callBridgeCountKey, 60 * 60 * 4).catch(() => {});
 
     // Use pre-generated token (matches the one passed to streaming heartbeat)
     const token = preGeneratedBridgeToken;

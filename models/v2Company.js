@@ -3934,8 +3934,8 @@ const companySchema = new mongoose.Schema({
                 heartbeatCyclingEnabled: { type: Boolean, default: true },
                 // Quiet window: ms of silence before first bridge audio plays (staged onset)
                 bridgeQuietWindowMs: { type: Number, default: 500 },
-                // Caps to prevent spam
-                maxBridgesPerCall: { type: Number, default: 2 },
+                // Max bridges per call. 1 = Turn-1 Welcome only. 0 = no bridges. -1 = uncapped.
+                maxBridgesPerCall: { type: Number, default: 1 },
                 maxRedirectAttempts: { type: Number, default: 2 },
                 // Keep bridge lines tight (≈ under ~1.2s spoken time)
                 lines: {
