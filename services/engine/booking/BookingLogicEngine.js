@@ -200,9 +200,16 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
 
   // ── BOOKING TRIGGER CHECK ─────────────────────────────────────────────────
   // Run BEFORE the step logic so that keywords/phrases always take priority.
-  // Only fires when caller said something (userInput present) and we are not
-  // at INIT or COMPLETED (no utterance to match on those transitions).
-  if (userInput?.trim() && ctx.step !== STEPS.INIT && ctx.step !== STEPS.COMPLETED) {
+  //
+  // DATA-ENTRY STEPS ARE EXCLUDED — the caller is providing a value (phone
+  // digits, address), not expressing intent. Keyword matching against phone
+  // numbers or addresses produces dangerous false-positives (e.g. the word
+  // "Other" in "Other 239-565-2202" matching a "second opinion" trigger card).
+  //
+  // Triggers fire on intent steps: COLLECT_NAME, OFFER_TIMES, CONFIRM.
+  // Triggers are SUPPRESSED on: INIT, COMPLETED, COLLECT_PHONE, COLLECT_ADDRESS.
+  const DATA_ENTRY_STEPS = new Set([STEPS.INIT, STEPS.COMPLETED, STEPS.COLLECT_PHONE, STEPS.COLLECT_ADDRESS]);
+  if (userInput?.trim() && !DATA_ENTRY_STEPS.has(ctx.step)) {
     try {
       const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, ctx.step);
 
