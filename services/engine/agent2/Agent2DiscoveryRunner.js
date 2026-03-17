@@ -2752,8 +2752,11 @@ class Agent2DiscoveryRunner {
         const matchedProblems = problemIndicators.filter(p => inputLow.includes(p));
 
         if (matchedProblems.length > 0) {
-          // Build a concise issue summary from the matched indicators
-          const systemKeywords = ['ac', 'air conditioning', 'furnace', 'heater', 'hvac', 'thermostat', 'unit', 'system', 'heat pump', 'duct', 'vent'];
+          // Build a concise issue summary from the matched indicators.
+          // NOTE: bare 'system' excluded from systemKeywords — it's too generic and
+          // fires on conversational phrases like "Mike installed the new system last week".
+          // Specific HVAC equipment words (ac, furnace, unit, etc.) are far safer.
+          const systemKeywords = ['ac', 'air conditioning', 'furnace', 'heater', 'hvac', 'thermostat', 'unit', 'heat pump', 'duct', 'vent', 'air handler', 'compressor'];
           const locationKeywords = ['garage', 'attic', 'basement', 'kitchen', 'bedroom', 'bathroom', 'living room', 'ceiling', 'wall', 'roof', 'closet', 'hallway', 'upstairs', 'downstairs'];
           const riskKeywords = ['damage', 'damaging', 'flooding', 'fire', 'mold', 'dangerous', 'emergency', 'unsafe'];
           const urgencyKeywords = ['today', 'asap', 'right away', 'immediately', 'urgent', 'emergency', 'as soon as possible', 'right now'];
@@ -2763,15 +2766,50 @@ class Agent2DiscoveryRunner {
           const detectedRisk = riskKeywords.find(r => inputLow.includes(r)) || null;
           const hasSameDayUrgency = urgencyKeywords.some(u => inputLow.includes(u));
 
-          // Build summary: "water leaking from AC unit" style
+          // Map raw problem indicators → noun phrases suitable for the booking opener.
+          // "I've got this noted as a ${summary}" requires a noun phrase, not a verb phrase.
+          // Without this, "not cooling" produces "I've got this noted as a not cooling." ❌
+          // Each value is the complete noun phrase that follows "I've got this noted as a/an ___"
+          const PROBLEM_NOUN_PHRASE = {
+            'not cooling': 'AC not cooling issue',
+            'not heating': 'heating issue',
+            'not working': 'system not working issue',
+            'no air':      'no airflow issue',
+            'hot air':     'hot air blowing issue',
+            'cold air':    'cold air issue',
+            'no power':    'no power issue',
+            'frozen':      'frozen system issue',
+            'ice':         'ice buildup issue',
+            'dripping':    'dripping issue',
+            'flooding':    'flooding issue',
+            'smoke':       'smoke issue',
+            'noise':       'unusual noise issue',
+            'smell':       'unusual smell',
+            'damage':      'damage issue',
+            'emergency':   'emergency'
+          };
+
+          // Build summary: "AC not cooling in the attic" style
           const summaryParts = [];
           if (matchedProblems.includes('water') || matchedProblems.includes('leak') || matchedProblems.includes('leaking')) {
             summaryParts.push('water leak');
           } else {
-            summaryParts.push(matchedProblems[0]);
+            const firstProblem = matchedProblems[0];
+            summaryParts.push(PROBLEM_NOUN_PHRASE[firstProblem] || firstProblem);
           }
-          if (detectedSystem) summaryParts.push(`from ${detectedSystem === 'ac' ? 'AC unit' : detectedSystem}`);
-          if (detectedLocation) summaryParts.push(`in ${detectedLocation}`);
+          // Only append the equipment name when the noun phrase doesn't already name it.
+          // e.g. "AC not cooling issue" already names the system — don't add "with the AC unit".
+          // But "unusual noise" doesn't — "unusual noise with the furnace" adds useful context.
+          const noun0 = (summaryParts[0] || '').toLowerCase();
+          // "AC not cooling issue" already names the system — skip adding "with the AC unit"
+          // "heating issue" does NOT name a specific unit — allow "heating issue with the furnace"
+          const nounAlreadyNamesSystem = noun0.startsWith('ac') || noun0.startsWith('air') ||
+            noun0.includes('system') || noun0.includes('hvac');
+          if (detectedSystem && !nounAlreadyNamesSystem) {
+            const systemLabel = detectedSystem === 'ac' ? 'AC unit' : detectedSystem;
+            summaryParts.push(`with the ${systemLabel}`);
+          }
+          if (detectedLocation) summaryParts.push(`in the ${detectedLocation}`);
 
           callContext.issue.summary = summaryParts.join(' ');
           callContext.issue.rawInput = normalizedInput.substring(0, 200);

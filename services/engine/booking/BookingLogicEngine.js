@@ -796,7 +796,10 @@ function buildWarmOpening(ctx) {
   const parts       = [];
 
   if (callContext?.issue?.summary) {
-    parts.push(`I've got this noted as a ${callContext.issue.summary}.`);
+    // Use "an" before vowel sounds (AC, HVAC, air handler) — "an AC not cooling issue" not "a AC..."
+    const summary = callContext.issue.summary;
+    const article = /^[aeiouAEIOU]/.test(summary) ? 'an' : 'a';
+    parts.push(`I've got this noted as ${article} ${summary}.`);
   }
 
   if (techPref) {
