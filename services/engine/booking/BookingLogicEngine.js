@@ -172,10 +172,13 @@ function initializeContext(payload, config) {
     collectedFields: {
       // ScrabEngine assumptions take priority; discoveryNotes entities are fallback.
       // This prevents re-asking for information the LLM already captured on turn 1.
-      firstName: payload?.assumptions?.firstName || dnEntities.firstName || null,
-      lastName:  payload?.assumptions?.lastName  || dnEntities.lastName  || null,
-      phone:     payload?.assumptions?.phone     || dnEntities.phone     || null,
-      address:   payload?.assumptions?.address   || dnEntities.address   || null
+      firstName:      payload?.assumptions?.firstName || dnEntities.firstName || null,
+      lastName:       payload?.assumptions?.lastName  || dnEntities.lastName  || null,
+      phone:          payload?.assumptions?.phone     || dnEntities.phone     || null,
+      address:        payload?.assumptions?.address   || dnEntities.address   || null,
+      // Additional contact number (e.g. "call tech on the way", "notify neighbor", "son's number")
+      altPhone:       null,
+      altPhoneContext: null
     },
     summary:              payload?.summary    || {},
     callContext:          payload?.callContext || null,
@@ -496,22 +499,98 @@ async function advanceAfterName(ctx, config, companyId, isTest, events) {
    ============================================================================ */
 
 async function processCollectPhone(ctx, userInput, config, companyId, isTest, events) {
-  // ── Caller ID confirmation — waiting for yes/no ───────────────────────────
-  if (ctx._confirmingCallerId) {
-    ctx._confirmingCallerId = false;
-    const isYes = /^(yes|yeah|sure|yep|yup|ok|okay|correct|right|that'?s?( fine| good| works?| right| correct)?|go ahead|use that|perfect|sounds good|absolutely|of course)\b/i.test(userInput.trim());
 
-    if (isYes) {
-      const confirmedPhone = normalizePhone(ctx.callerPhone);
-      if (confirmedPhone) {
-        ctx.collectedFields.phone = confirmedPhone;
-        events.push({ type: 'BL1_CALLER_ID_CONFIRMED', phone: confirmedPhone, timestamp: Date.now() });
-        return advanceAfterPhone(ctx, config, companyId, isTest, events);
-      }
+  // ── Sub-step: collecting an additional contact number ─────────────────────
+  // Triggered when caller said something like "yes, but have tech call me at another number"
+  // and we need to get that specific alt number.
+  if (ctx._collectingAltPhone) {
+    ctx._collectingAltPhone = false;
+    const altRaw = extractPhoneFromText(userInput);
+    const altNorm = altRaw ? normalizePhone(altRaw) : null;
+
+    if (altNorm) {
+      const context = ctx._pendingAltPhoneContext || null;
+      delete ctx._pendingAltPhoneContext;
+      ctx.collectedFields.altPhone        = altNorm;
+      ctx.collectedFields.altPhoneContext = context;
+      events.push({ type: 'BL1_ALT_PHONE_COLLECTED', altPhone: altNorm, context, timestamp: Date.now() });
+      const ctxLabel = context ? ` for ${context}` : '';
+      // Acknowledge alt phone then continue to next field
+      const advance = await advanceAfterPhone(ctx, config, companyId, isTest, events);
+      advance.nextPrompt = `Got it — I've noted ${altNorm}${ctxLabel}. ` + advance.nextPrompt;
+      return advance;
     }
 
-    // Declined or we couldn't normalize caller ID — ask for a different number
+    // Couldn't parse a number — re-ask once
+    ctx._collectingAltPhone = true;
+    return {
+      nextPrompt: "I didn't catch that number — could you repeat it?",
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // ── Caller ID confirmation — waiting for caller's yes/no ──────────────────
+  if (ctx._confirmingCallerId) {
+    ctx._confirmingCallerId = false;
+
+    const isYes = isAffirmativeResponse(userInput);
+    const isNo  = /^(no|nope|not really|not that one|actually|different)\b/i.test(userInput.trim());
+
+    // Check if caller mentioned an additional contact number in the same utterance
+    const altRaw     = extractPhoneFromText(userInput);
+    const altNorm    = altRaw ? normalizePhone(altRaw) : null;
+    const altIntent  = detectAltPhoneIntent(userInput);
+    const altContext = detectAltPhoneContext(userInput);
+
+    // callerPhone is ALWAYS kept in ctx.callerPhone — never discarded
+    const confirmedPhone = normalizePhone(ctx.callerPhone);
+
+    if (isYes && confirmedPhone) {
+      // ── YES: use caller ID as primary ──────────────────────────────────────
+      ctx.collectedFields.phone = confirmedPhone;
+      events.push({ type: 'BL1_CALLER_ID_CONFIRMED', phone: confirmedPhone, timestamp: Date.now() });
+
+      if (altNorm) {
+        // "Yes, but have the tech call 239-333-5555 when on the way"
+        ctx.collectedFields.altPhone        = altNorm;
+        ctx.collectedFields.altPhoneContext = altContext;
+        events.push({ type: 'BL1_ALT_PHONE_CAPTURED', altPhone: altNorm, context: altContext, timestamp: Date.now() });
+        const ctxLabel = altContext ? ` for ${altContext}` : '';
+        // Acknowledge alt phone inline, then advance
+        const ackPrompt = `Got it — I've noted ${altNorm}${ctxLabel}. `;
+        const advance = await advanceAfterPhone(ctx, config, companyId, isTest, events);
+        advance.nextPrompt = ackPrompt + advance.nextPrompt;
+        return advance;
+      }
+
+      if (altIntent) {
+        // "Yes, but when the tech is on the way call my son" — no number given yet
+        ctx._collectingAltPhone       = true;
+        ctx._pendingAltPhoneContext   = altContext;
+        const contextPrompt = altContext ? ` for ${altContext}` : '';
+        return {
+          nextPrompt: `Sure — what's that number${contextPrompt}?`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+
+      return advanceAfterPhone(ctx, config, companyId, isTest, events);
+    }
+
+    // ── NO path: caller prefers a different primary number ──────────────────
+    // callerPhone stays silently in ctx.callerPhone as backup
     events.push({ type: 'BL1_CALLER_ID_DECLINED', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+
+    if (altNorm) {
+      // "No, use 239-333-5555 instead"
+      ctx.collectedFields.phone = altNorm;
+      events.push({ type: 'BL1_PHONE_COLLECTED', phone: altNorm, timestamp: Date.now() });
+      return advanceAfterPhone(ctx, config, companyId, isTest, events);
+    }
+
+    // No number given — ask for it
     return {
       nextPrompt: "No problem — what number should we use to reach you?",
       bookingCtx: ctx,
@@ -532,7 +611,7 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
         completed:  false
       };
     }
-    ctx._callerIdAsked = true; // mark so we don't retry with unformattable number
+    ctx._callerIdAsked = true; // unformattable number — skip caller ID offer
   }
 
   // ── Normal phone input ────────────────────────────────────────────────────
@@ -547,7 +626,6 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   const normalizedPhone = normalizePhone(userInput);
 
   if (!normalizedPhone) {
-    // Detect if caller is asking about a missed name field rather than giving a number
     if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
       ctx.step = STEPS.COLLECT_NAME;
       events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
@@ -1081,6 +1159,47 @@ function normalizePhone(input) {
     return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
   }
   return null; // unrecognizable — caller should be prompted to repeat
+}
+
+/**
+ * Check if an utterance is affirmative (yes/sure/ok/that works/etc.)
+ * Handles "yes, but ..." constructions — positive starts with yes even if more follows.
+ */
+function isAffirmativeResponse(text) {
+  return /^(yes|yeah|sure|yep|yup|ok|okay|correct|right|that'?s?( fine| good| works?| right| correct)?|go ahead|use that|perfect|sounds good|absolutely|of course|yup|totally)\b/i.test((text || '').trim());
+}
+
+/**
+ * Extract the first phone number found anywhere inside a natural-language utterance.
+ * Handles "call me at 239-333-5555" or "this number is 239 333 5555".
+ * Returns the raw matched string for normalizePhone() to format.
+ */
+function extractPhoneFromText(text) {
+  if (!text) return null;
+  // Match US phone patterns embedded in text: optional country code, area code, 7-digit local
+  const m = text.match(/(?:\+?1[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}/);
+  return m ? m[0] : null;
+}
+
+/**
+ * Detect whether the caller is mentioning an additional/secondary contact scenario.
+ * Returns true if they describe a reason to have a different number called.
+ */
+function detectAltPhoneIntent(text) {
+  return /\b(on the way|en route|heading over|when (the )?(tech|technician|someone|they|he|she) (is |are )?(coming|on the way|heading)|notify|neighbor|next door|son|daughter|child|kid|wife|husband|spouse|partner|family|another number|different number|second number|also (call|text)|call (them|him|her|my) at|text (them|him|her|my) at|this (is|number))\b/i.test(text || '');
+}
+
+/**
+ * Extract a human-readable context label from the caller's alt-phone utterance.
+ * Used to annotate the altPhone in the booking record and calendar event.
+ */
+function detectAltPhoneContext(text) {
+  const t = (text || '').toLowerCase();
+  if (/on the way|en route|heading over|when (the )?(tech|technician) (is )?coming/.test(t)) return 'tech on the way';
+  if (/neighbor|next door/.test(t))             return 'neighbor notification';
+  if (/\bson\b|\bdaughter\b|\bchild\b|\bkid\b/.test(t)) return 'family member on-site';
+  if (/wife|husband|spouse|partner/.test(t))    return 'spouse/partner on-site';
+  return 'additional contact';
 }
 
 /**
