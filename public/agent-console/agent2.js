@@ -182,6 +182,9 @@
     inputBridgeLines: document.getElementById('input-bridge-lines'),
     inputBridgeBookingPhrase: document.getElementById('input-bridge-booking-phrase'),
     inputBridgeTransferPhrase: document.getElementById('input-bridge-transfer-phrase'),
+    // Turn 1 Welcome Bridge
+    inputBridgeWelcomeEnabled: document.getElementById('input-bridge-welcome-enabled'),
+    inputBridgeWelcomeLine: document.getElementById('input-bridge-welcome-line'),
     
     // Greeting Interceptor
     toggleInterceptorEnabled: document.getElementById('toggle-interceptor-enabled'),
@@ -484,6 +487,10 @@
     if (DOM.inputBridgeLines) DOM.inputBridgeLines.value = (bridge.lines || []).join('\n');
     if (DOM.inputBridgeBookingPhrase) DOM.inputBridgeBookingPhrase.value = bridge.bookingBridgePhrase || '';
     if (DOM.inputBridgeTransferPhrase) DOM.inputBridgeTransferPhrase.value = bridge.transferBridgePhrase || '';
+    // Turn 1 Welcome Bridge
+    const welcome = bridge.turn1Welcome || {};
+    if (DOM.inputBridgeWelcomeEnabled) DOM.inputBridgeWelcomeEnabled.checked = welcome.enabled === true;
+    if (DOM.inputBridgeWelcomeLine) DOM.inputBridgeWelcomeLine.value = welcome.line || '';
     
     // Speech Detection
     const speechDet = config.speechDetection || {};
@@ -689,7 +696,11 @@
         maxCeilingMs: parseInt(DOM.inputBridgeHardcap?.value, 10) || 15000,
         lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean),
         bookingBridgePhrase: DOM.inputBridgeBookingPhrase?.value?.trim() || '',
-        transferBridgePhrase: DOM.inputBridgeTransferPhrase?.value?.trim() || ''
+        transferBridgePhrase: DOM.inputBridgeTransferPhrase?.value?.trim() || '',
+        turn1Welcome: {
+          enabled: DOM.inputBridgeWelcomeEnabled?.checked || false,
+          line: DOM.inputBridgeWelcomeLine?.value?.trim() || ''
+        }
       },
       speechDetection: {
         speechTimeout: parseFloat(DOM.inputSpeechTimeout?.value) || 1.5,
