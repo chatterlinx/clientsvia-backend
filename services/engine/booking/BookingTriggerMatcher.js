@@ -76,10 +76,15 @@ class BookingTriggerMatcher {
 
     // ── Filter to triggers active on this step ─────────────────────────────
     // A trigger fires if its firesOnSteps includes 'ANY' OR the current step.
-    const stepPool = allTriggers.filter(t => {
-      const steps = Array.isArray(t.firesOnSteps) ? t.firesOnSteps : ['ANY'];
-      return steps.includes('ANY') || steps.includes(currentStep);
-    });
+    // Special case: currentStep === 'ANY' means "no step filter" — used by the
+    // test-match UI when the admin wants to evaluate the full trigger pool.
+    // In production calls, currentStep is always a real step name (never 'ANY').
+    const stepPool = currentStep === 'ANY'
+      ? allTriggers
+      : allTriggers.filter(t => {
+          const steps = Array.isArray(t.firesOnSteps) ? t.firesOnSteps : ['ANY'];
+          return steps.includes('ANY') || steps.includes(currentStep);
+        });
 
     logger.debug('[BookingTriggerMatcher] Step pool built', {
       companyId,
@@ -198,7 +203,7 @@ class BookingTriggerMatcher {
 
     // Cache miss — load from DB
     try {
-      const CompanyBookingTrigger = require('../../models/CompanyBookingTrigger');
+      const CompanyBookingTrigger = require('../../../models/CompanyBookingTrigger');
 
       const rawDocs = await CompanyBookingTrigger.findActiveByCompanyId(companyId);
 
