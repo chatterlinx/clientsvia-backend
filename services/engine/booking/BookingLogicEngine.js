@@ -28,6 +28,7 @@ const logger               = require('../../../utils/logger');
 const v2Company            = require('../../../models/v2Company');
 const GoogleCalendarService = require('../../GoogleCalendarService');
 const { BookingTriggerMatcher } = require('./BookingTriggerMatcher');
+const GlobalHubService     = require('../../GlobalHubService');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -178,6 +179,8 @@ function initializeContext(payload, config) {
     },
     summary:              payload?.summary    || {},
     callContext:          payload?.callContext || null,
+    // Twilio caller ID phone — used to offer confirmation instead of asking cold
+    callerPhone:          payload?.assumptions?.callerPhone || null,
     // Technician the caller requested by name (e.g. "Tony") — surfaced in the
     // booking opener and written to the calendar event notes.
     technicianPreference: dnEntities.technicianMentioned || null,
@@ -286,6 +289,19 @@ async function processInit(ctx, config, companyId, isTest, events) {
     };
   }
 
+  // firstName pre-filled (from LLM entities) but no lastName — confirm and ask for last name
+  if (!ctx.collectedFields.lastName) {
+    ctx.step = STEPS.COLLECT_NAME;
+    ctx._nameSubStep = 'CONFIRM_GET_LAST';
+    const preFilledFirst = ctx.collectedFields.firstName;
+    events.push({ type: 'BL1_CONFIRMING_PREFILLED_NAME', firstName: preFilledFirst, timestamp: Date.now() });
+    return {
+      nextPrompt: `${issuePrefix}I have your first name as ${preFilledFirst} — may I also get your last name?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
     events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
@@ -325,21 +341,144 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
     };
   }
 
-  const { firstName, lastName } = parseName(userInput);
-  ctx.collectedFields.firstName = firstName;
-  ctx.collectedFields.lastName  = lastName;
-
-  events.push({ type: 'BL1_NAME_COLLECTED', firstName, timestamp: Date.now() });
-
-  if (!ctx.collectedFields.phone) {
-    ctx.step = STEPS.COLLECT_PHONE;
+  // ── Sub-step: accepting a spelled first name (skip dictionary, accept verbatim) ──
+  if (ctx._nameSubStep === 'SPELL_FIRST') {
+    const cleaned = userInput.trim().replace(/[^a-zA-Z'\- ]/g, '').trim();
+    const spelled = capitalizeFirst(cleaned) || 'there';
+    ctx.collectedFields.firstName = spelled;
+    delete ctx._nameSubStep;
+    events.push({ type: 'BL1_NAME_SPELLED', firstName: spelled, timestamp: Date.now() });
+    // Now ask for last name
+    ctx._nameSubStep = 'GET_LAST';
     return {
-      nextPrompt: `Thanks, ${firstName}! What's the best phone number to reach you at?`,
+      nextPrompt: `Got it — and your last name?`,
       bookingCtx: ctx,
       completed:  false
     };
   }
 
+  // ── Sub-step: accepting a spelled last name ───────────────────────────────
+  if (ctx._nameSubStep === 'SPELL_LAST') {
+    const cleaned = userInput.trim().replace(/[^a-zA-Z'\- ]/g, '').trim();
+    ctx.collectedFields.lastName = capitalizeFirst(cleaned) || null;
+    delete ctx._nameSubStep;
+    events.push({ type: 'BL1_LAST_NAME_SPELLED', lastName: ctx.collectedFields.lastName, timestamp: Date.now() });
+    return advanceAfterName(ctx, config, companyId, isTest, events);
+  }
+
+  // ── Sub-step: collecting last name (firstName already set) ───────────────
+  if (ctx._nameSubStep === 'GET_LAST' || ctx._nameSubStep === 'CONFIRM_GET_LAST') {
+    const isConfirmMode = ctx._nameSubStep === 'CONFIRM_GET_LAST';
+
+    // Caller is correcting the pre-filled first name
+    if (isConfirmMode && /^(no|nope|actually|wait|hold on|that'?s? (not|wrong)|not quite|incorrect)\b/i.test(userInput.trim())) {
+      delete ctx._nameSubStep;
+      ctx.collectedFields.firstName = null;
+      ctx.collectedFields.lastName  = null;
+      return {
+        nextPrompt: "No problem — what's your full name?",
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // Parse input as a last name
+    const rawLast = parseLastName(userInput);
+    if (rawLast) {
+      let resolvedLast = rawLast;
+      try {
+        const lastMatch = await GlobalHubService.matchLastName(rawLast);
+        if (lastMatch.match) {
+          resolvedLast = lastMatch.value; // use canonical casing
+        } else {
+          // Unknown last name — ask to spell
+          ctx._nameSubStep = 'SPELL_LAST';
+          events.push({ type: 'BL1_LAST_NAME_UNKNOWN', raw: rawLast, timestamp: Date.now() });
+          return {
+            nextPrompt: `Could you spell your last name for me?`,
+            bookingCtx: ctx,
+            completed:  false
+          };
+        }
+      } catch (_ghErr) {
+        resolvedLast = rawLast; // GlobalHub unavailable → accept as-is
+      }
+      ctx.collectedFields.lastName = resolvedLast;
+      events.push({ type: 'BL1_LAST_NAME_COLLECTED', lastName: resolvedLast, timestamp: Date.now() });
+    }
+
+    delete ctx._nameSubStep;
+    return advanceAfterName(ctx, config, companyId, isTest, events);
+  }
+
+  // ── Normal case: parse full name from utterance ───────────────────────────
+  const { firstName, lastName } = parseName(userInput);
+
+  // Verify first name against GlobalHub dictionary
+  let resolvedFirst = firstName;
+  try {
+    const firstMatch = await GlobalHubService.matchFirstName(firstName);
+    if (!firstMatch.match && firstMatch.verificationMode === 'unknown') {
+      // Not in dictionary — ask caller to spell it
+      ctx._nameSubStep = 'SPELL_FIRST';
+      events.push({ type: 'BL1_FIRST_NAME_UNKNOWN', raw: firstName, timestamp: Date.now() });
+      return {
+        nextPrompt: `I want to make sure I get that right — could you spell your first name for me?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    if (firstMatch.match) resolvedFirst = firstMatch.value; // accept canonical casing / auto-correction
+  } catch (_ghErr) {
+    // GlobalHub unavailable → proceed with parsed name
+  }
+
+  ctx.collectedFields.firstName = resolvedFirst;
+  events.push({ type: 'BL1_NAME_COLLECTED', firstName: resolvedFirst, timestamp: Date.now() });
+
+  if (lastName) {
+    // Verify last name against GlobalHub dictionary
+    let resolvedLast = lastName;
+    try {
+      const lastMatch = await GlobalHubService.matchLastName(lastName);
+      if (!lastMatch.match && lastMatch.verificationMode === 'unknown') {
+        // Not in dictionary — save firstName, ask to spell last name
+        ctx._nameSubStep = 'SPELL_LAST';
+        events.push({ type: 'BL1_LAST_NAME_UNKNOWN', raw: lastName, timestamp: Date.now() });
+        return {
+          nextPrompt: `Got it — could you spell your last name for me?`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+      if (lastMatch.match) resolvedLast = lastMatch.value;
+    } catch (_ghErr) {
+      // GlobalHub unavailable → accept as parsed
+    }
+    ctx.collectedFields.lastName = resolvedLast;
+    events.push({ type: 'BL1_LAST_NAME_COLLECTED', lastName: resolvedLast, timestamp: Date.now() });
+    return advanceAfterName(ctx, config, companyId, isTest, events);
+  }
+
+  // Got first name only — ask for last name
+  ctx._nameSubStep = 'GET_LAST';
+  return {
+    nextPrompt: `Thanks, ${resolvedFirst}! And your last name?`,
+    bookingCtx: ctx,
+    completed:  false
+  };
+}
+
+/** Shared transition logic after name is fully collected. */
+async function advanceAfterName(ctx, config, companyId, isTest, events) {
+  if (!ctx.collectedFields.phone) {
+    ctx.step = STEPS.COLLECT_PHONE;
+    return {
+      nextPrompt: `Got it, ${ctx.collectedFields.firstName}! What's the best phone number to reach you at?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
   if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
     ctx.step = STEPS.COLLECT_ADDRESS;
     return {
@@ -348,7 +487,6 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
       completed:  false
     };
   }
-
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
@@ -358,6 +496,46 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
    ============================================================================ */
 
 async function processCollectPhone(ctx, userInput, config, companyId, isTest, events) {
+  // ── Caller ID confirmation — waiting for yes/no ───────────────────────────
+  if (ctx._confirmingCallerId) {
+    ctx._confirmingCallerId = false;
+    const isYes = /^(yes|yeah|sure|yep|yup|ok|okay|correct|right|that'?s?( fine| good| works?| right| correct)?|go ahead|use that|perfect|sounds good|absolutely|of course)\b/i.test(userInput.trim());
+
+    if (isYes) {
+      const confirmedPhone = normalizePhone(ctx.callerPhone);
+      if (confirmedPhone) {
+        ctx.collectedFields.phone = confirmedPhone;
+        events.push({ type: 'BL1_CALLER_ID_CONFIRMED', phone: confirmedPhone, timestamp: Date.now() });
+        return advanceAfterPhone(ctx, config, companyId, isTest, events);
+      }
+    }
+
+    // Declined or we couldn't normalize caller ID — ask for a different number
+    events.push({ type: 'BL1_CALLER_ID_DECLINED', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+    return {
+      nextPrompt: "No problem — what number should we use to reach you?",
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // ── Offer caller ID if available and not yet asked ────────────────────────
+  if (!ctx._callerIdAsked && ctx.callerPhone) {
+    const formattedCallerId = normalizePhone(ctx.callerPhone);
+    if (formattedCallerId) {
+      ctx._callerIdAsked      = true;
+      ctx._confirmingCallerId = true;
+      events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
+      return {
+        nextPrompt: `I see your caller ID is ${formattedCallerId} — is that a good number for text notifications and booking confirmations?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    ctx._callerIdAsked = true; // mark so we don't retry with unformattable number
+  }
+
+  // ── Normal phone input ────────────────────────────────────────────────────
   if (!userInput?.trim()) {
     return {
       nextPrompt: "I didn't catch that. What phone number should we use to contact you?",
@@ -369,9 +547,8 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   const normalizedPhone = normalizePhone(userInput);
 
   if (!normalizedPhone) {
-    // Detect if caller is asking about last name / missed field rather than giving a number
+    // Detect if caller is asking about a missed name field rather than giving a number
     if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
-      // Back up to COLLECT_NAME so we can re-collect their full name properly
       ctx.step = STEPS.COLLECT_NAME;
       events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
       return {
@@ -381,7 +558,6 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       };
     }
 
-    // STT didn't give us 10 recognisable digits — ask the caller to provide it.
     events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
       nextPrompt: "I didn't quite catch a phone number there. What number should we use to reach you?",
@@ -392,7 +568,11 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
 
   ctx.collectedFields.phone = normalizedPhone;
   events.push({ type: 'BL1_PHONE_COLLECTED', phone: normalizedPhone, timestamp: Date.now() });
+  return advanceAfterPhone(ctx, config, companyId, isTest, events);
+}
 
+/** Shared transition logic after phone is collected. */
+async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
   if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
     ctx.step = STEPS.COLLECT_ADDRESS;
     return {
@@ -401,7 +581,6 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       completed:  false
     };
   }
-
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
@@ -850,6 +1029,29 @@ function parseName(input) {
     : null;
 
   return { firstName, lastName };
+}
+
+/**
+ * Extract a last name from a "last name only" utterance.
+ * Strips common last-name intro phrases, returns the first significant word.
+ * Returns null if nothing meaningful is left.
+ */
+function parseLastName(input) {
+  let cleaned = input.trim();
+
+  // Strip last-name intro phrases: "my last name is Smith" → "Smith"
+  cleaned = cleaned.replace(/^(my (last|sur)name'?s?( is)?|(last|sur)name is|it'?s|its)\s*/i, '');
+
+  // Strip leading filler: "um, Johnson" → "Johnson"
+  cleaned = cleaned.replace(/^(um|uh|well|so|oh)[,.]?\s*/i, '');
+
+  // Take the first word (last names are usually one token)
+  const word = cleaned.split(/\s+/)[0];
+  if (!word) return null;
+
+  // Clean punctuation — keep hyphens and apostrophes for compound last names
+  const clean = word.replace(/[^a-zA-Z'\-]/g, '');
+  return clean.length >= 1 ? capitalizeFirst(clean) : null;
 }
 
 function capitalizeFirst(str) {
