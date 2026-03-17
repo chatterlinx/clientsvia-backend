@@ -260,6 +260,7 @@ async function streamWithSentences(opts) {
     splitter.end();
   })();
 
+  let caughtErrorMsg = null;
   try {
     await Promise.race([streamPromise, ceilingPromise]);
     clearTimeout(ceilingTimer);
@@ -270,11 +271,13 @@ async function streamWithSentences(opts) {
     if (ceilingHit || err.message === 'CEILING_TIMEOUT') {
       // Flush any remaining buffer as a partial sentence
       splitter.end();
+      failureReason = 'T2_MAX_LATENCY';
     } else {
       // API / network error — flush what we have
       splitter.end();
       failureReason = 'T2_PROVIDER_ERROR';
-      logger.warn('[SENTENCE_STREAM] Provider error', { error: err.message, callSid, turn });
+      caughtErrorMsg = err.message?.substring(0, 200) || null;
+      logger.warn('[SENTENCE_STREAM] Provider error', { error: err.message, callSid, turn, provider: adapter.providerName });
     }
   }
 
@@ -288,7 +291,12 @@ async function streamWithSentences(opts) {
     await heartbeat.stop();
     failureReason = failureReason || 'T2_EMPTY_RESPONSE';
 
-    emit('A2_LLM_STREAM_FAILED', { reason: failureReason, turn, latencyMs });
+    emit('A2_LLM_STREAM_FAILED', {
+      reason: failureReason, turn, latencyMs,
+      provider: adapter.providerName,
+      tokenCount: heartbeat.tokenCount,
+      ...(caughtErrorMsg ? { errorMsg: caughtErrorMsg } : {}),
+    });
     return { response: null, tokensUsed, latencyMs, wasPartial: false, failureReason, sentences: [] };
   }
 

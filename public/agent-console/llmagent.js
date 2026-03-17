@@ -94,6 +94,42 @@ async function loadSettings() {
   }
 }
 
+// ── Intake Provider Ping ─────────────────────────────────────────────────────
+async function pingIntakeProvider() {
+  const btn    = document.getElementById('btn-intake-provider-ping');
+  const result = document.getElementById('intake-provider-ping-result');
+  const sel    = document.getElementById('intake-provider-select');
+  if (!btn || !result) return;
+
+  const provider = sel?.value || 'anthropic';
+  const endpoint = provider === 'groq'
+    ? `/api/agent-console/${state.companyId}/llm-agent/ping-groq`
+    : `/api/agent-console/${state.companyId}/llm-agent/ping`;
+
+  btn.disabled  = true;
+  btn.textContent = '…';
+  result.textContent = '';
+  result.style.color = 'var(--color-gray-500)';
+
+  try {
+    const data = await AgentConsoleAuth.apiFetch(endpoint, { method: 'POST' });
+    if (data.ok) {
+      result.textContent = `✓ ${provider === 'groq' ? 'Groq' : 'Anthropic'} connected · ${data.latencyMs}ms`;
+      result.style.color = 'var(--color-success, #059669)';
+    } else {
+      result.textContent = `✗ ${data.error || 'Connection failed'}`;
+      result.style.color = 'var(--color-danger, #dc2626)';
+    }
+  } catch (err) {
+    result.textContent = `✗ ${err.message || 'Request failed'}`;
+    result.style.color = 'var(--color-danger, #dc2626)';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Test';
+    setTimeout(() => { result.textContent = ''; }, 10000);
+  }
+}
+
 // ── API Health Ping ──────────────────────────────────────────────────────────
 async function pingAnthropicAPI() {
   const btn   = document.getElementById('btn-api-ping');
@@ -407,6 +443,11 @@ function renderIntakePanel() {
   setSlider('intake-conf-reason', 'intake-conf-reason-value', conf.reasonThreshold ?? 0.50);
 
   // Model override
+  const providerSelect = document.getElementById('intake-provider-select');
+  if (providerSelect) {
+    providerSelect.value = intake.model?.provider || '';
+  }
+
   const modelSelect = document.getElementById('intake-model-select');
   if (modelSelect) {
     const models = state.availableModels || [];
@@ -881,6 +922,7 @@ function setupChannelTabs() {
 function setupEventListeners() {
   // API health ping
   document.getElementById('btn-api-ping')?.addEventListener('click', pingAnthropicAPI);
+  document.getElementById('btn-intake-provider-ping')?.addEventListener('click', pingIntakeProvider);
 
   // Back button
   document.getElementById('btn-back')?.addEventListener('click', () => {
@@ -1113,6 +1155,13 @@ function setupEventListeners() {
     if (!state.config.intake) state.config.intake = {};
     if (!state.config.intake.confidence) state.config.intake.confidence = {};
     state.config.intake.confidence.reasonThreshold = parseFloat(v);
+  });
+  listen('intake-provider-select', 'change', (e) => {
+    if (!state.config.intake) state.config.intake = {};
+    if (!state.config.intake.model) state.config.intake.model = {};
+    // Store '' (empty string) to explicitly clear back to default — undefined would be skipped by deepMerge
+    state.config.intake.model.provider = e.target.value;
+    markDirty();
   });
   listen('intake-model-select', 'change', (e) => {
     if (!state.config.intake) state.config.intake = {};

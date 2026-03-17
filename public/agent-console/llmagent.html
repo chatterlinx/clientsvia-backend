@@ -1784,6 +1784,18 @@
               <div class="config-field-group-label">Model (Optional Override)</div>
               <p class="section-hint">Uses the main LLM Agent model by default. Override here for intake-specific tuning.</p>
               <div class="config-field">
+                <label for="intake-provider-select">Provider</label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <select id="intake-provider-select" class="config-select" style="flex:1;">
+                    <option value="">Anthropic (Claude) — default</option>
+                    <option value="groq">Groq (Llama) — ultra-fast, ~150ms TTFT</option>
+                  </select>
+                  <button type="button" id="btn-intake-provider-ping" class="btn btn-secondary btn-sm" style="white-space:nowrap; font-size:0.75rem; padding:4px 10px;">Test</button>
+                </div>
+                <span id="intake-provider-ping-result" style="font-size:0.75rem; color:var(--color-gray-500); margin-top:4px; display:block;"></span>
+                <p class="section-hint" style="margin-top:4px;">Groq delivers the first sentence in ~150ms vs ~400ms for Claude — ideal for turn 1 speed.</p>
+              </div>
+              <div class="config-field">
                 <label for="intake-model-select">Model</label>
                 <select id="intake-model-select" class="config-select">
                   <option value="">Use main model</option>

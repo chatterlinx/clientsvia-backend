@@ -575,7 +575,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
 
     // ── Sentence-streaming with heartbeat — first sentence fires TTS immediately ──
     // Bridge config ceiling can be company-specific via opts.maxCeilingMs
-    const bridgeCfg = company?.voiceSettings?.agent2?.bridge || {};
+    const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
     const maxCeilingMs = bridgeCfg.maxCeilingMs || undefined;  // undefined = use service default (25s)
 
     const result = await streamWithSentences({
