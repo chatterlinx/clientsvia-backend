@@ -61,9 +61,20 @@ const MODEL_MAP = {
  * @param {string} modelId  — Claude or Groq model ID
  * @returns {string}         — Groq model ID
  */
+// ── Decommissioned Groq models → their replacements ────────────────────────
+// Groq periodically retires old model IDs. If a company has a stale model
+// saved in config, auto-correct to the replacement instead of sending a
+// decommissioned ID to the API (which returns 400).
+const DECOMMISSIONED = {
+    'llama-3.1-70b-versatile':  'llama-3.3-70b-versatile',  // retired 2025-01-24
+    'llama-3.1-8b-instant':     'llama-3.3-70b-versatile',  // retired 2025-01-24
+};
+
 function resolveModel(modelId) {
     if (!modelId) return MODEL_MAP.default;
-    if (!modelId.startsWith('claude-')) return modelId;  // already a Groq model
+    // Check decommissioned list first — stale config auto-corrects
+    if (DECOMMISSIONED[modelId]) return DECOMMISSIONED[modelId];
+    if (!modelId.startsWith('claude-')) return modelId;  // already a valid Groq model
     return MODEL_MAP[modelId] || MODEL_MAP.default;
 }
 
