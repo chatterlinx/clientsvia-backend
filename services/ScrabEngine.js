@@ -787,17 +787,32 @@ class EntityExtractionEngine {
           });
         }
 
-        // Return early — spelled input is fully handled
-        ['firstName', 'lastName', 'fullName', 'phone', 'email', 'address'].forEach((key) => {
-          if (entities[key]) handoffEntities[key] = entities[key];
-        });
-        if (entities.firstNameMeta) handoffEntities._firstNameMeta = entities.firstNameMeta;
-        if (entities.lastNameMeta) handoffEntities._lastNameMeta = entities.lastNameMeta;
+        // Confidence gate: if neither dictionary recognized the assembled name AND
+        // the score is below threshold, the spelled-name parser assembled garbage
+        // (e.g. "john"→j, "nice"→n, "mike"→m → "Jahiaiuman"). Reset and fall through
+        // to normal name-extraction patterns instead of committing the garbage name.
+        const bestSpelledScore = Math.max(firstMatch.score, lastMatch.score);
+        if (bestSpelledScore >= 0.65 || firstMatch.match || lastMatch.match) {
+          // Return early — spelled input is fully handled
+          ['firstName', 'lastName', 'fullName', 'phone', 'email', 'address'].forEach((key) => {
+            if (entities[key]) handoffEntities[key] = entities[key];
+          });
+          if (entities.firstNameMeta) handoffEntities._firstNameMeta = entities.firstNameMeta;
+          if (entities.lastNameMeta) handoffEntities._lastNameMeta = entities.lastNameMeta;
 
-        return {
-          entities, handoffEntities, extractions, validations,
-          processingTimeMs: Date.now() - startTime
-        };
+          return {
+            entities, handoffEntities, extractions, validations,
+            processingTimeMs: Date.now() - startTime
+          };
+        }
+
+        // Low confidence, no match — reset entities and fall through to normal patterns
+        entities.firstName = undefined;
+        entities.firstNameMeta = undefined;
+        entities.lastName = undefined;
+        entities.lastNameMeta = undefined;
+        extractions.length = 0;
+        validations.length = 0;
       }
     }
 

@@ -1334,7 +1334,11 @@ async function startServer() {
                     let totalGenerated = 0;
                     for (const co of companies) {
                         const vs = co.aiAgentSettings?.voiceSettings || {};
-                        const lines = co.aiAgentSettings?.agent2?.bridge?.lines || [];
+                        const bridgeCfgWarmup = co.aiAgentSettings?.agent2?.bridge || {};
+                        const regularLines = bridgeCfgWarmup.lines || [];
+                        const welcomeLine = bridgeCfgWarmup.turn1Welcome?.enabled && bridgeCfgWarmup.turn1Welcome?.line?.trim()
+                            ? [bridgeCfgWarmup.turn1Welcome.line.trim()] : [];
+                        const lines = [...regularLines, ...welcomeLine].filter(Boolean);
                         if (!vs.voiceId || lines.length === 0) continue;
                         try {
                             const result = await BridgeAudioService.generateAll({

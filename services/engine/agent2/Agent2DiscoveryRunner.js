@@ -2080,10 +2080,47 @@ class Agent2DiscoveryRunner {
             .trim();
           const hasResidualContent = residualAfterYes.length > 6;
 
+          // ── Split-in-the-road classifier ──────────────────────────────────
+          // Distinguishes caller residual types on a HANDOFF_BOOKING YES:
+          //   • Timing question ("how soon can you come?") → booking engine handles it
+          //   • Diagnostic question ("why is my thermostat blank?") → answer FIRST
+          //   • "Before we book..." preamble → always answer first
+          // This prevents the call from routing to booking while the caller still
+          // has an open diagnostic question that hasn't been answered.
+          const residualHasBookingResistantQuestion = (text) => {
+            if (!text || text.length < 6) return false;
+            const t = text.toLowerCase();
+
+            // "Before we book/schedule/set that" preamble → always answer first
+            if (/before\s+(?:we|i|you)\s+(?:book|schedule|set\s+(?:that|it|up)|do\s+that)/i.test(t)) return true;
+
+            // Timing/scheduling signals → BookingLogicEngine handles these fine
+            if (/\b(?:how\s+soon|when\s+can\s+you|what\s+(?:time|day|date)|how\s+long\s+will\s+it\s+take|can\s+you\s+(?:come|be\s+here)\s+(?:today|tomorrow|this\s+week|next))\b/.test(t)) return false;
+
+            // Diagnostic why/what/how questions about the problem itself
+            if (/\bwhy\s+(?:is|does|would|did|isn'?t|won'?t|doesn'?t)\b/.test(t)) return true;
+            if (/\bwhat\s+(?:causes?|would\s+cause|is\s+causing|is\s+wrong|happened|is\s+making)\b/.test(t)) return true;
+            if (/\bhow\s+(?:does|do|did|would)\s+(?:that|this|it|the)\b/.test(t)) return true;
+
+            // Device/system state that needs explanation (blank, dead, off, broken, weird)
+            if (/\b(?:blank|went\s+(?:out|blank|dead)|stopped\s+working|not\s+(?:working|responding|turning)|won'?t\s+(?:turn|work|come\s+on))\b/.test(t)) return true;
+
+            return false;
+          };
+
+          // Detect diagnostic residual on a HANDOFF_BOOKING YES
+          const hasBookingResistantQuestion = (
+            hasResidualContent &&
+            yesDirection === 'HANDOFF_BOOKING' &&
+            residualHasBookingResistantQuestion(residualAfterYes)
+          );
+
           // When direction is HANDOFF_BOOKING, route to booking EVEN if the caller
           // said "yes + timing question" (e.g. "yes, how soon can you get here?").
           // BookingLogicEngine handles scheduling questions far better than the
           // Discovery LLM — letting LLM handle it traps the call in a loop.
+          // EXCEPTION: diagnostic questions ("why is my thermostat blank?") must
+          // be answered FIRST — the caller has not fully consented to booking yet.
           if (hasResidualContent && yesDirection !== 'HANDOFF_BOOKING') {
             // YES + extra content, non-booking direction → fall through to Tier 2 (LLM Agent)
             emit('A2_FOLLOWUP_YES_WITH_QUESTION', {
@@ -2091,6 +2128,20 @@ class Agent2DiscoveryRunner {
               reason: 'YES with substantive extra content — routing to Tier 2 (LLM Agent)',
               cardId: pfuqSource?.replace('card:', '') || null
             });
+          } else if (hasBookingResistantQuestion) {
+            // YES + diagnostic question → answer the question FIRST before booking.
+            // Preserve the pending follow-up so the next pure YES fires booking.
+            emit('A2_FOLLOWUP_YES_QUESTION_FIRST', {
+              residualPreview: clip(residualAfterYes, 60),
+              reason: 'YES+diagnostic question before booking — answering question first',
+              cardId: pfuqSource?.replace('card:', '') || null,
+              yesDirection
+            });
+            // Keep pendingFollowUp so the NEXT turn YES routes to booking
+            nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+            nextState.agent2.discovery.pendingFollowUpSource = pfuqSource;
+            nextState.agent2.discovery.lastPath = 'FOLLOWUP_YES_QUESTION_FIRST';
+            // Fall through to Tier 2 (LLM Agent handles the diagnostic question)
           } else {
             // Pure YES, OR YES+residual where direction=HANDOFF_BOOKING → execute direction
             clearPendingFollowUp(nextState);

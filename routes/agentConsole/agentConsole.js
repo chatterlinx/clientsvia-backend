@@ -1580,7 +1580,36 @@ router.patch(
       
       // Invalidate Redis cache so runtime sees changes immediately
       await ConfigCacheService.invalidateAgent2Config(companyId);
-      
+
+      // Pre-generate bridge audio (regular lines + turn-1 welcome) — non-blocking.
+      // Runs after save so production always has ElevenLabs MP3s cached before next call.
+      if (updates?.bridge) {
+        try {
+          const BridgeAudioService = require('../../services/bridgeAudio/BridgeAudioService');
+          const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+          if (voiceSettings.voiceId) {
+            const bridgeConfig = company.aiAgentSettings?.agent2?.bridge || {};
+            const regularLines = Array.isArray(bridgeConfig.lines) ? bridgeConfig.lines : [];
+            const welcomeLine = bridgeConfig.turn1Welcome?.enabled && bridgeConfig.turn1Welcome?.line?.trim()
+              ? [bridgeConfig.turn1Welcome.line.trim()] : [];
+            const linesToCache = [...regularLines, ...welcomeLine].filter(Boolean);
+            if (linesToCache.length > 0) {
+              BridgeAudioService.generateAll({
+                companyId,
+                lines: linesToCache,
+                company,
+                voiceSettings,
+                force: false
+              })
+                .then((r) => logger.info(`[${MODULE_ID}] Bridge audio pre-generated`, { companyId, generated: r.generated, total: r.total }))
+                .catch((err) => logger.warn(`[${MODULE_ID}] Bridge audio pre-gen failed (non-blocking)`, { companyId, error: err.message }));
+            }
+          }
+        } catch (err) {
+          logger.warn(`[${MODULE_ID}] Bridge audio pre-gen setup failed (non-blocking)`, { companyId, error: err.message });
+        }
+      }
+
       res.json({
         success: true,
         agent2: company.aiAgentSettings.agent2

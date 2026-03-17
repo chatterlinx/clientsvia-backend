@@ -163,9 +163,12 @@ function isSpelledInput(input) {
         return true;
     }
 
-    // Signal 3: Contains 3+ NATO/common spelling words
+    // Signal 3: Contains 3+ NATO/common spelling words.
+    // Guard: real spelling inputs are short — a 20+ token conversational sentence
+    // containing common names like "john", "mike", "nice" must NOT trigger
+    // spelled-name mode (they fire because those names are also "as in" words).
     const natoCount = tokens.filter(t => KNOWN_SPELLING_WORDS.has(t)).length;
-    if (natoCount >= 3) {
+    if (tokens.length <= 20 && natoCount >= 3) {
         return true;
     }
 

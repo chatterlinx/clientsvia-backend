@@ -5094,11 +5094,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const hostHeader = req.get('host');
     const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
     const bridgeEnabled = bridgeCfg?.enabled === true;
+
+    // Turn-1 welcome: company-configurable branded greeting that plays INSTANTLY
+    // when the caller finishes speaking on turn 1 (e.g. "Hi, thanks for calling!").
+    // Stored at bridge.turn1Welcome = { enabled: bool, line: string, thresholdMs?: number }
+    const turn1WelcomeCfg = bridgeCfg.turn1Welcome || {};
+    const isTurn1Welcome = (
+      turnNumber === 1 &&
+      turn1WelcomeCfg.enabled === true &&
+      typeof turn1WelcomeCfg.line === 'string' &&
+      turn1WelcomeCfg.line.trim().length > 0
+    );
+
     // V131: Post-gather delay replaces the old threshold race.
     // Bridge fires this many ms after gather completes (unless compute already resolved).
     // UI-configurable starting at 200ms. Old thresholdMs kept for backward compat reads.
-    const bridgePostGatherDelayMs = Number.isFinite(bridgeCfg.postGatherDelayMs) ? bridgeCfg.postGatherDelayMs
-      : (Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 200);
+    // Turn-1 welcome overrides to near-zero delay so it fires immediately after gather.
+    const turn1WelcomeDelayMs = Number.isFinite(turn1WelcomeCfg.thresholdMs) ? turn1WelcomeCfg.thresholdMs : 0;
+    const bridgePostGatherDelayMs = isTurn1Welcome ? turn1WelcomeDelayMs
+      : (Number.isFinite(bridgeCfg.postGatherDelayMs) ? bridgeCfg.postGatherDelayMs
+        : (Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 200));
     const bridgeHardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
 
     // V131: Only suppress bridge during active transfers (legitimate).
@@ -5117,7 +5132,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       bridgeEnabled &&
       !!redis &&
       !!callSid &&
-      bridgePostGatherDelayMs >= 50 &&
+      (isTurn1Welcome || bridgePostGatherDelayMs >= 50) &&   // turn1Welcome bypasses 50ms minimum
       !isAlreadyTransferLane &&
       !isAlreadyBookingLane;
 
@@ -6714,7 +6729,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
 
     const elapsedMs = Date.now() - T0;
-    const bridgeLine = usableLines[idx];
+    // Turn-1 welcome overrides the random bridge line with the branded greeting
+    const bridgeLine = isTurn1Welcome ? turn1WelcomeCfg.line.trim() : usableLines[idx];
     const continueUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=0`;
 
     // ═══════════════════════════════════════════════════════════════════════════
