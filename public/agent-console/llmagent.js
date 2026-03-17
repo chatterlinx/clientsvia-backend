@@ -432,7 +432,7 @@ function renderIntakePanel() {
   setChecked('intake-extract-address', extract.address ?? true);
   setChecked('intake-extract-reason', extract.callReason ?? true);
   setChecked('intake-extract-urgency', extract.urgency ?? true);
-  setChecked('intake-extract-technician', extract.technicianMentioned ?? true);
+  setChecked('intake-extract-technician', extract.employeeMentioned ?? true);
   setChecked('intake-extract-priorvisit', extract.priorVisit ?? true);
 
   // Confidence thresholds
@@ -1129,7 +1129,7 @@ function setupEventListeners() {
   listenToggle('intake-extract-technician', (v) => {
     if (!state.config.intake) state.config.intake = {};
     if (!state.config.intake.extract) state.config.intake.extract = {};
-    state.config.intake.extract.technicianMentioned = v;
+    state.config.intake.extract.employeeMentioned = v;
   });
   listenToggle('intake-extract-priorvisit', (v) => {
     if (!state.config.intake) state.config.intake = {};

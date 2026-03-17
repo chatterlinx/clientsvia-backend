@@ -184,9 +184,9 @@ function initializeContext(payload, config) {
     callContext:          payload?.callContext || null,
     // Twilio caller ID phone — used to offer confirmation instead of asking cold
     callerPhone:          payload?.assumptions?.callerPhone || null,
-    // Technician the caller requested by name (e.g. "Tony") — surfaced in the
-    // booking opener and written to the calendar event notes.
-    technicianPreference: dnEntities.technicianMentioned || null,
+    // Employee/technician the caller mentioned by name (e.g. "Tony") — surfaced in
+    // the booking opener and written to the calendar event notes.
+    technicianPreference: dnEntities.employeeMentioned || null,
     // Full discoveryNotes object kept for downstream use (e.g. urgency surfacing)
     discoveryNotes:       dn,
     availableTimeOptions: null,

@@ -242,7 +242,7 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         urgency: ip.urgency,
         nextLane: ip.nextLane,
         doNotReask: ip.doNotReask || [],
-        technicianMentioned: ip.technicianMentioned,
+        employeeMentioned: ip.employeeMentioned,
         priorVisit: ip.priorVisit,
         sameDayRequested: ip.sameDayRequested,
         extractionSummary: ip.extractionSummary || [],

@@ -673,7 +673,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
 //     responseText: Hey Marc, I understand you're dealing with a water heater...
 //     extraction:
 //       firstName: Marc
-//       technicianMentioned: Tony
+//       employeeMentioned: Tony
 //       urgency: high
 //     nextLane: BOOKING_HANDOFF
 //   ```
@@ -731,7 +731,7 @@ function extractYamlLike(rawResponse) {
   // ── Extraction entity fields (nested block or flat) ───────────────────────
   const ENTITY_FIELDS = [
     'firstName', 'lastName', 'phone', 'address',
-    'urgency', 'callReason', 'technicianMentioned',
+    'urgency', 'callReason', 'employeeMentioned',
     'bookingConsent', 'objective',
   ];
   for (const field of ENTITY_FIELDS) {
@@ -1632,7 +1632,7 @@ class Agent2DiscoveryRunner {
           nextState.agent2.discovery.intakeResult = {
             nextLane: intakeResult.nextLane,
             doNotReask: intakeResult.doNotReask || [],
-            technicianMentioned: ext.technicianMentioned || null,
+            employeeMentioned: ext.employeeMentioned || null,
             priorVisit: ext.priorVisit,
             extractionSummary: Object.keys(ext).filter(k => ext[k] != null),
             latencyMs: intakeResult.latencyMs,
@@ -1681,7 +1681,7 @@ class Agent2DiscoveryRunner {
             urgency: ext.urgency || null,
             nextLane: intakeResult.nextLane,
             doNotReask: intakeResult.doNotReask || [],
-            technicianMentioned: ext.technicianMentioned || null,
+            employeeMentioned: ext.employeeMentioned || null,
             priorVisit: ext.priorVisit != null ? ext.priorVisit : null,
             sameDayRequested: ext.sameDayRequested != null ? ext.sameDayRequested : null,
             extractionSummary: Object.keys(ext).filter(k => ext[k] != null),

@@ -122,7 +122,7 @@ const DEFAULT_INTAKE_SETTINGS = {
     email: false,           // Rarely given on turn 1 in phone calls
     address: true,
     callReason: true,
-    technicianMentioned: true,
+    employeeMentioned: true,
     priorVisit: true,
     urgency: true,
     sameDayRequested: true
@@ -130,7 +130,7 @@ const DEFAULT_INTAKE_SETTINGS = {
 
   // Response behavior
   response: {
-    maxSentences: 2,
+    maxSentences: 3,      // 3 sentences: (1) greet by name, (2) acknowledge issue + tech mention, (3) solution offer
     includeConfirmation: true,
     includeForwardMove: true
   },
@@ -450,7 +450,7 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
   if (extract.email !== false)              parts.push('- email: An email address (if they provided one)');
   if (extract.address !== false)            parts.push('- address: A service address or location (if mentioned)');
   if (extract.callReason !== false)         parts.push('- callReason: WHY they are calling, in 2-8 words (e.g., "AC not cooling", "water heater leaking")');
-  if (extract.technicianMentioned !== false) parts.push('- technicianMentioned: Name of a specific technician if they asked for one by name');
+  if (extract.employeeMentioned !== false) parts.push('- employeeMentioned: Name of any employee, technician, or staff member mentioned by the caller — whether from a prior visit (e.g., "Tony was here last week") or requested by name (e.g., "Can I speak to Tony?").');
   if (extract.priorVisit !== false)         parts.push('- priorVisit: true if they mention a previous visit/appointment, false if they explicitly say first time, null if not mentioned');
   if (extract.urgency !== false)            parts.push('- urgency: "emergency" if life/safety/flooding/fire, "high" if same-day/urgent language, "normal" otherwise');
   if (extract.sameDayRequested !== false)   parts.push('- sameDayRequested: true if they explicitly ask for today/ASAP/same-day, false otherwise');
@@ -465,26 +465,39 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     '=== END EXTRACTION RULES ==='
   );
 
-  // 6. Response generation rules
-  const maxSentences = intakeSettings.response?.maxSentences || 2;
+  // 6. Response generation rules — 3-step protocol
+  const maxSentences = intakeSettings.response?.maxSentences || 3;
   parts.push(
     '',
-    '=== RESPONSE RULES ===',
-    `Generate a responseText that is ${maxSentences} sentence(s) MAX (this is a phone call).`,
-    'Your response MUST:',
-    '- Warmly acknowledge what the caller said',
-    '- Confirm the MOST IMPORTANT extracted detail (usually callReason or name)',
-    '- End with ONE natural yes/no question that opens the door to scheduling service',
-    '  (e.g. "Would you like me to get a technician out there to take a look?" or',
-    '   "Can I get someone scheduled to come help with that?" or',
-    '   "Would you like us to send a tech out today?")',
+    '=== RESPONSE RULES — 3-STEP PROTOCOL ===',
+    `Generate a responseText using exactly this 3-step structure (${maxSentences} sentences MAX — this is a phone call):`,
+    '',
+    'STEP 1 — GREETING BY NAME (if caller gave their name):',
+    '  Use their name immediately: "Hi Mark!" or "Hey Mark, thanks for calling!"',
+    '  If no name was given, use a warm opener: "Thanks for calling!" or "Got it!"',
+    '',
+    'STEP 2 — ACKNOWLEDGE THE PROBLEM (include employee/tech name if mentioned):',
+    '  Mirror back what they said in a empathetic, human way.',
+    '  CRITICAL: If an employee or technician was mentioned (employeeMentioned), USE their name here.',
+    '  Examples:',
+    '    With tech + prior visit: "I see Tony was out there about 3 weeks ago — I\'m sorry to hear it stopped cooling again."',
+    '    With tech, no prior visit: "I\'ll make sure to note that you mentioned Tony."',
+    '    Without tech: "I\'m sorry to hear the AC stopped cooling — that\'s no fun in this heat."',
+    '  NEVER re-ask for information the caller already gave (callReason, name, etc.)',
+    '',
+    'STEP 3 — SOLUTION / FORWARD MOVE:',
+    '  Offer to dispatch a technician or take action. End with ONE natural yes/no question.',
+    '  Examples:',
+    '    "Would you like me to get a technician scheduled to come out and take a look?"',
+    '    "Can I get someone out there to diagnose and fix that for you?"',
+    '    "Want me to get that on the schedule for you?"',
     '  Keep it warm and conversational — one sentence, no pressure.',
     '  NEVER say "let me look that up" or "let me pull up your information" — the caller will go silent waiting.',
+    '',
     'Your response MUST NOT:',
     '- Ask more than ONE question',
     '- Mention pricing or fees',
     '- Collect PII beyond what was volunteered',
-    '- Be longer than 2 sentences',
     '=== END RESPONSE RULES ==='
   );
 
@@ -555,7 +568,7 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     '    "email": "string|null",',
     '    "address": "string|null",',
     '    "callReason": "string|null",',
-    '    "technicianMentioned": "string|null",',
+    '    "employeeMentioned": "string|null — name of any employee/technician mentioned by caller",',
     '    "priorVisit": "boolean|null",',
     '    "urgency": "\\"normal\\"|\\"high\\"|\\"emergency\\"|null",',
     '    "sameDayRequested": "boolean|null"',
