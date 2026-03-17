@@ -5107,12 +5107,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // of whether the system is in a "follow-up state."
     const isAlreadyTransferLane = (callState?.sessionMode === 'TRANSFER');
 
+    // BOOKING lane: BookingLogicEngine is deterministic (no LLM inference).
+    // Responses are sub-100ms or served from cache — no bridge filler needed.
+    // Bridging during booking adds dead air + an extra audio clip before the
+    // actual response, making the agent sound robotic and repetitive.
+    const isAlreadyBookingLane = (callState?.sessionMode === 'BOOKING');
+
     const mayBridge =
       bridgeEnabled &&
       !!redis &&
       !!callSid &&
       bridgePostGatherDelayMs >= 50 &&
-      !isAlreadyTransferLane;
+      !isAlreadyTransferLane &&
+      !isAlreadyBookingLane;
 
     // ── Pre-generate bridge token ─────────────────────────────────────────
     // Generated early so streaming heartbeat can write to the same Redis keys
@@ -6335,9 +6342,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             ]);
           }
 
-          // Consent gate diagnostic: log every follow-up consent decision to transcript
+          // Consent gate diagnostic: log the follow-up consent decision to transcript.
+          // GUARD: only write when lastPath CHANGED this turn.
+          // agent2.discovery.lastPath is set to 'FOLLOWUP_YES_HANDOFF_BOOKING' when the
+          // caller first says YES and is carried unchanged through all subsequent booking
+          // turns. Without this guard, a CONSENT_GATE_BOOKING entry is written on every
+          // booking turn (3–10 phantom entries per call that pollute the transcript).
+          const prevLastPath    = callState?.agent2?.discovery?.lastPath || '';
           const runtimeLastPath = persistedState?.agent2?.discovery?.lastPath || '';
-          const isFollowUpPath = runtimeLastPath.startsWith('FOLLOWUP_');
+          const isFollowUpPath  = runtimeLastPath.startsWith('FOLLOWUP_') && runtimeLastPath !== prevLastPath;
           if (isFollowUpPath) {
             const consentCardId = persistedState?.agent2?.discovery?.lastTriggerId || null;
             const consentCardLabel = persistedState?.agent2?.discovery?.lastTriggerLabel || null;
