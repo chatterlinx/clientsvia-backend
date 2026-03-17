@@ -214,6 +214,11 @@ const CRITICAL_EVENTS = new Set([
     'TURN_TRACE_SUMMARY'  // The single source of truth for debugging
 ]);
 
+/** Title-case a phone-context label for display: "tech on the way" → "Tech On The Way" */
+function capitalizeLabel(str) {
+    return (str || '').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function createEvent({ callSid, companyId, turn, type, data }) {
     return {
         callId: callSid,
@@ -403,28 +408,38 @@ async function runBookingLogicLane({
     if (isComplete) {
         setImmediate(async () => {
             try {
-                const BookingRequest         = require('../../models/BookingRequest');
-                const SessionService         = require('../SessionService');
-                const SMSNotificationService = require('../SMSNotificationService');
+                const BookingRequest           = require('../../models/BookingRequest');
+                const SessionService           = require('../SessionService');
+                const SMSNotificationService   = require('../SMSNotificationService');
                 const AdminNotificationService = require('../AdminNotificationService');
+                const Customer                 = require('../../models/Customer');
 
-                const ctx = bookingResult.bookingCtx;
+                const ctx        = bookingResult.bookingCtx;
+                const cf         = ctx.collectedFields || {};
+                const customerId = callState?.callContext?.customerId || state?.callContext?.customerId || null;
 
-                // Core booking data (plain shape — works with SMS even if DB save fails)
+                // Resolved name parts from BookingLogicEngine
+                const firstName  = cf.firstName || null;
+                const lastName   = cf.lastName  || null;
+                const fullName   = [firstName, lastName].filter(Boolean).join(' ') || null;
+
+                // Core booking data — reads from collectedFields (the authoritative source)
                 const bookingData = {
                     companyId,
+                    customerId:         customerId || null,
                     callSid,
-                    callerPhone:        ctx.phone || null,
+                    // callerPhone = Twilio From; stored separately from the collected/confirmed phone
+                    callerPhone:        ctx.callerPhone || cf.phone || null,
                     status:             ctx.calendarEventId ? 'COMPLETED' : 'FAKE_CONFIRMED',
                     outcomeMode:        'confirmed_on_call',
                     slots: {
-                        name: {
-                            full:  ctx.name || null,
-                            first: ctx.name?.split(' ')[0] || null,
-                            last:  ctx.name?.split(' ').slice(1).join(' ') || null
-                        },
-                        phone:   ctx.phone || null,
-                        address: { full: ctx.address || null }
+                        name: { first: firstName, last: lastName, full: fullName },
+                        phone:          cf.phone          || null,
+                        address:        { full: cf.address || null },
+                        // Additional contact number captured during booking
+                        // (e.g. "call tech on the way at this number", "notify my neighbor")
+                        altPhone:       cf.altPhone        || null,
+                        altPhoneContext: cf.altPhoneContext || null
                     },
                     calendarEventId:    ctx.calendarEventId   || null,
                     calendarEventLink:  ctx.calendarEventLink || null,
@@ -443,17 +458,68 @@ async function runBookingLogicLane({
                         br = await BookingRequest.create({ ...bookingData, sessionId: session._id, caseId });
                         logger.info('[CALL_RUNTIME] BookingRequest created', {
                             callSid, brId: br._id, caseId,
-                            calendarEventId: br.calendarEventId
+                            calendarEventId: br.calendarEventId,
+                            hasAltPhone: !!cf.altPhone
                         });
                     } else {
                         logger.warn('[CALL_RUNTIME] No session found for callSid — BookingRequest not persisted', { callSid });
                     }
                 } catch (brErr) {
                     if (brErr.code === 11000) {
-                        // Idempotency guard — duplicate for this session is expected on retries
                         logger.info('[CALL_RUNTIME] BookingRequest already exists for session (idempotent)', { callSid });
                     } else {
                         logger.error('[CALL_RUNTIME] BookingRequest.create failed', { callSid, error: brErr.message });
+                    }
+                }
+
+                // ── Enrich Customer record with booking data ──────────────────────────
+                // Writes name (first+last), status='customer', and any captured altPhone
+                // back to the Customer document so the call center always shows accurate info.
+                if (customerId && (firstName || cf.altPhone)) {
+                    try {
+                        const customerUpdate = { updatedAt: new Date() };
+
+                        if (firstName) {
+                            customerUpdate['name.first'] = firstName;
+                            if (lastName) customerUpdate['name.last']  = lastName;
+                            customerUpdate['name.full']  = fullName;
+                        }
+
+                        // Upgrade status: they booked → they're a customer, not just a lead
+                        customerUpdate.status = 'customer';
+                        customerUpdate['metrics.lastInteractionAt'] = new Date();
+                        customerUpdate['metrics.lastInteractionChannel'] = 'voice';
+
+                        await Customer.findByIdAndUpdate(
+                            customerId,
+                            { $set: customerUpdate },
+                            { new: false }
+                        );
+
+                        // Add altPhone to phoneNumbers array (idempotent — Customer.addPhone checks for dups)
+                        if (cf.altPhone) {
+                            const customer = await Customer.findById(customerId);
+                            if (customer) {
+                                const label = cf.altPhoneContext
+                                    ? capitalizeLabel(cf.altPhoneContext)
+                                    : 'Additional';
+                                customer.addPhone(cf.altPhone, label);
+                                await customer.save();
+                            }
+                        }
+
+                        logger.info('[CALL_RUNTIME] Customer enriched from booking', {
+                            callSid,
+                            customerId,
+                            firstName,
+                            lastName,
+                            hasAltPhone: !!cf.altPhone,
+                            altPhoneContext: cf.altPhoneContext || null
+                        });
+                    } catch (enrichErr) {
+                        logger.warn('[CALL_RUNTIME] Customer enrichment from booking failed (non-blocking)', {
+                            callSid, error: enrichErr.message
+                        });
                     }
                 }
 
@@ -466,12 +532,13 @@ async function runBookingLogicLane({
                     severity:    'INFO',
                     companyId,
                     companyName: company?.companyName || 'Unknown',
-                    message:     `Booking completed for ${ctx.name || 'caller'}`,
+                    message:     `Booking completed for ${fullName || 'caller'}`,
                     details: {
-                        caseId:          br?.caseId         || null,
-                        calendarEventId: ctx.calendarEventId || null,
-                        customerName:    ctx.name            || null,
-                        customerPhone:   ctx.phone           || null,
+                        caseId:          br?.caseId          || null,
+                        calendarEventId: ctx.calendarEventId  || null,
+                        customerName:    fullName              || null,
+                        customerPhone:   cf.phone              || null,
+                        altPhone:        cf.altPhone           || null,
                         callSid
                     }
                 });

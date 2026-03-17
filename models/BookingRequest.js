@@ -129,6 +129,10 @@ const bookingRequestSchema = new mongoose.Schema({
             window: { type: String, default: null, trim: true },      // "8-10", "2025-12-20 10am"
             isAsap: { type: Boolean, default: false }
         },
+        // Additional/alternate contact number captured during booking
+        // (e.g. "call tech when on the way at this number", "notify my neighbor")
+        altPhone:       { type: String, default: null, trim: true },
+        altPhoneContext: { type: String, default: null, trim: true },  // "tech on the way", "neighbor notification", etc.
         // Custom slots (dynamic per company)
         custom: { type: Map, of: String, default: {} }
     },
