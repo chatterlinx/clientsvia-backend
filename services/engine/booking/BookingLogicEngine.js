@@ -129,7 +129,7 @@ async function processStep({ companyId, payload, bookingCtx, userInput, isTest =
 async function loadCompanyConfig(companyId) {
   try {
     const company = await v2Company.findById(companyId)
-      .select('aiAgentSettings.bookingLogic googleCalendar businessHours companyName')
+      .select('aiAgentSettings.bookingLogic aiAgentSettings.agent2.bookingPrompts googleCalendar businessHours companyName')
       .lean();
 
     if (!company) {
@@ -138,6 +138,8 @@ async function loadCompanyConfig(companyId) {
     }
 
     const bl = company.aiAgentSettings?.bookingLogic || {};
+    // UI-configured prompts live at agent2.bookingPrompts (Booking admin page)
+    const bp = company.aiAgentSettings?.agent2?.bookingPrompts || {};
 
     return {
       companyName:         company.companyName || 'our company',
@@ -148,7 +150,10 @@ async function loadCompanyConfig(companyId) {
       confirmationMessage: bl.confirmationMessage || DEFAULT_CONFIG.confirmationMessage,
       calendarConnected:   !!(company.googleCalendar?.accessToken),
       calendarId:          company.googleCalendar?.calendarId || null,
-      businessHours:       company.businessHours || null
+      businessHours:       company.businessHours || null,
+      // UI-configurable prompts — fall back to built-in defaults when not set
+      askNamePrompt:       (bp.askName  || '').trim() || null,
+      askPhonePrompt:      (bp.askPhone || '').trim() || null,
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -285,8 +290,9 @@ async function processInit(ctx, config, companyId, isTest, events) {
   if (!ctx.collectedFields.firstName) {
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_COLLECTING_NAME', timestamp: Date.now() });
+    const namePrompt = config.askNamePrompt || 'To get started with your booking, may I have your name please?';
     return {
-      nextPrompt: `${issuePrefix}To get started with your booking, may I have your name please?`,
+      nextPrompt: `${issuePrefix}${namePrompt}`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -309,8 +315,9 @@ async function processInit(ctx, config, companyId, isTest, events) {
     ctx.step = STEPS.COLLECT_PHONE;
     events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
     const nameGreet = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
+    const phonePrompt = config.askPhonePrompt || `what's the best phone number to reach you at?`;
     return {
-      nextPrompt: `${issuePrefix}${nameGreet}what's the best phone number to reach you at?`,
+      nextPrompt: `${issuePrefix}${nameGreet}${phonePrompt}`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -476,8 +483,9 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
 async function advanceAfterName(ctx, config, companyId, isTest, events) {
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
+    const phonePrompt = config.askPhonePrompt || `What's the best phone number to reach you at?`;
     return {
-      nextPrompt: `Got it, ${ctx.collectedFields.firstName}! What's the best phone number to reach you at?`,
+      nextPrompt: `Got it, ${ctx.collectedFields.firstName}! ${phonePrompt}`,
       bookingCtx: ctx,
       completed:  false
     };
