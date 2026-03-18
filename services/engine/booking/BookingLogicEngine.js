@@ -1453,6 +1453,16 @@ async function processCollectAltContact(ctx, userInput, config, events) {
         completed:  false
       };
     }
+    // Caller wants to provide a different/alternate phone number (skip name — it's the same person)
+    // e.g. "Let's use a different number" / "use another number" / "different number"
+    if (/\b(different|another|other|new)\b.{0,30}\b(number|num|phone)\b|\b(number|num|phone)\b.{0,30}\b(different|another|other)\b/i.test(userInput)) {
+      return {
+        nextPrompt: ac.askPhonePrompt || 'What number would you like to use?',
+        bookingCtx: { ...ctx, altContactStep: 'ASK_PHONE', currentAltContact: {} },
+        completed:  false
+      };
+    }
+
     if (isAffirmativeResponse(userInput)) {
       return {
         nextPrompt: ac.askNamePrompt || "What's the name for that contact?",
@@ -1752,8 +1762,23 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
     };
   }
 
-  // Caller wants a different time
+  // Caller is correcting or declining the confirmed time
   if (/\b(no|nope|different|change|other|another)\b/.test(input)) {
+    // First: check if the caller is correcting to a specific time they already stated
+    // e.g. "No, I said 9" or "No, I said 900" — extract the correction, don't re-fetch
+    const correction = matchTimeFromInput(input, ctx.availableTimeOptions || []);
+    if (correction && correction.display !== ctx.selectedTime?.display) {
+      ctx.selectedTime = correction;
+      ctx.step         = STEPS.CONFIRM;
+      events.push({ type: 'BL1_TIME_CORRECTED', display: correction.display, timestamp: Date.now() });
+      return {
+        nextPrompt: `My apologies — I have you down for ${correction.display}. Shall I go ahead and book that?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // No specific time found — re-offer all slots
     ctx.step                 = STEPS.OFFER_TIMES;
     ctx.availableTimeOptions = null; // Force fresh calendar fetch
     events.push({ type: 'BL1_TIME_CHANGE_REQUESTED', timestamp: Date.now() });
@@ -1768,7 +1793,21 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
     };
   }
 
-  // Ambiguous — re-ask
+  // Ambiguous — check if caller is stating a time correction before re-asking
+  // e.g. "I did say 900" — no "no" but clearly a correction
+  const ambiguousCorrection = matchTimeFromInput(input, ctx.availableTimeOptions || []);
+  if (ambiguousCorrection && ambiguousCorrection.display !== ctx.selectedTime?.display) {
+    ctx.selectedTime = ambiguousCorrection;
+    ctx.step         = STEPS.CONFIRM;
+    events.push({ type: 'BL1_TIME_CORRECTED', display: ambiguousCorrection.display, timestamp: Date.now() });
+    return {
+      nextPrompt: `I have you down for ${ambiguousCorrection.display}. Shall I go ahead and book that?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // Truly ambiguous — re-ask
   return {
     nextPrompt: config.timeAmbiguousPrompt.replace('{time}', ctx.selectedTime?.display),
     bookingCtx: ctx,
@@ -2287,42 +2326,126 @@ function detectAltPhoneContext(text) {
 
 /**
  * Match a caller's spoken selection against stored time options.
- * Tries positional words, hour digits, day names, and AM/PM preference.
+ *
+ * Handles:
+ *  - Positional words ("first", "second", "last")
+ *  - Spoken number words ("nine a.m." → 9 AM)
+ *  - Compact military-style input ("900" → 9:00)
+ *  - Natural-language display strings ("8 in the morning", "2:30 in the afternoon")
+ *  - Legacy AM/PM display strings ("8:00 AM") for backwards compatibility
+ *  - Ambiguous hour (no AM/PM) — tries both clock halves when only one slot fits
+ *  - Time-of-day period fallback as last resort
+ *
+ * NOTE: Day-name matching was intentionally removed — it caused every "tomorrow"
+ * slot to resolve to [0] regardless of which hour the caller stated.
  */
 function matchTimeFromInput(input, timeOptions) {
   if (!timeOptions?.length) return null;
 
   const n = input.toLowerCase();
 
-  // Positional references
-  if (/\b(first|1st)\b/.test(n))                  return timeOptions[0];
-  if (/\b(second|2nd)\b/.test(n))                 return timeOptions[1] || null;
-  if (/\b(third|3rd|last)\b/.test(n))             return timeOptions[timeOptions.length - 1];
+  // ── 1. Positional references ──────────────────────────────────────────────
+  if (/\b(first|1st)\b/.test(n))           return timeOptions[0];
+  if (/\b(second|2nd)\b/.test(n))          return timeOptions[1] ?? null;
+  if (/\b(third|3rd|last)\b/.test(n))      return timeOptions[timeOptions.length - 1];
 
-  // Affirmative on a single option
+  // ── 2. Single-option affirmative ──────────────────────────────────────────
   if (timeOptions.length === 1 &&
       /\b(yes|sure|ok|okay|that works|sounds good)\b/.test(n)) {
     return timeOptions[0];
   }
 
-  // Match by display string content
-  for (const opt of timeOptions) {
-    const display = opt.display.toLowerCase();
+  // ── 3. Normalize input ────────────────────────────────────────────────────
+  // a.m./p.m. → am/pm
+  let norm = n
+    .replace(/\ba\.m\.?\b/gi, 'am')
+    .replace(/\bp\.m\.?\b/gi, 'pm');
 
-    // Hour digit match ("10", "2", "9", etc.)
-    const hourMatch = display.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
-    if (hourMatch && new RegExp(`\\b${hourMatch[1]}\\b`).test(n)) return opt;
+  // Spoken number words → digits ("nine" → "9", etc.)
+  const WORD_TO_NUM = {
+    'one':1, 'two':2, 'three':3, 'four':4, 'five':5, 'six':6,
+    'seven':7, 'eight':8, 'nine':9, 'ten':10, 'eleven':11, 'twelve':12,
+  };
+  for (const [word, digit] of Object.entries(WORD_TO_NUM)) {
+    norm = norm.replace(new RegExp(`\\b${word}\\b`, 'g'), String(digit));
+  }
 
-    // Day name match ("tomorrow", "monday", "tuesday", etc.)
-    const dayWords = display.split(' at ')[0]; // "tomorrow" or "Monday"
-    if (dayWords && n.includes(dayWords)) return opt;
+  // Compact military-style times without colon: "900" → "9:00", "1030" → "10:30"
+  norm = norm.replace(/\b(\d{1,2})(\d{2})\b(?!\d)/g, '$1:$2');
 
-    // Time-of-day preference
-    if (/\b(morning|am)\b/.test(n)    && /am/i.test(display))  return opt;
-    if (/\b(afternoon|pm)\b/.test(n)  && /pm/i.test(display)) {
-      const pmHour = parseInt((display.match(/(\d+)\s*pm/i) || [])[1] || '0', 10);
-      if (pmHour >= 1 && pmHour <= 6) return opt;
+  // ── 4. Parse display strings into 24-hour minutes ─────────────────────────
+  function displayTo24h(display) {
+    const d = display.toLowerCase();
+    if (/\bnoon\b/.test(d))     return 12 * 60;  // word-boundary — "afternoon" must NOT match
+    if (/\bmidnight\b/.test(d)) return 0;
+    // Natural language: "8 in the morning", "2:30 in the afternoon", "6 in the evening"
+    const nl = d.match(/\b(\d{1,2})(?::(\d{2}))?\s+in the\s+(morning|afternoon|evening)/);
+    if (nl) {
+      let h = parseInt(nl[1], 10);
+      const m = parseInt(nl[2] || '0', 10);
+      if ((nl[3] === 'afternoon' || nl[3] === 'evening') && h < 12) h += 12;
+      return h * 60 + m;
     }
+    // Legacy AM/PM: "8:00 am", "2 pm"
+    const ap = d.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+    if (ap) {
+      let h = parseInt(ap[1], 10);
+      const m = parseInt(ap[2] || '0', 10);
+      if (ap[3] === 'pm' && h < 12) h += 12;
+      if (ap[3] === 'am' && h === 12) h = 0;
+      return h * 60 + m;
+    }
+    return null;
+  }
+
+  // ── 5. Parse caller's stated time into 24-hour minutes ───────────────────
+  function inputTo24h(text) {
+    if (/\bnoon\b/.test(text)) return 12 * 60;
+    const m = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    if (h > 23) return null; // invalid
+    const min    = parseInt(m[2] || '0', 10);
+    const hasAm  = m[3] === 'am';
+    const hasPm  = m[3] === 'pm';
+    if (hasPm && h < 12) h += 12;
+    if (hasAm && h === 12) h = 0;
+    // No explicit am/pm — check surrounding words
+    if (!hasAm && !hasPm && /\b(afternoon|evening)\b/.test(text) && h < 12) h += 12;
+    return h * 60 + min;
+  }
+
+  // ── 6. Exact time match, then ambiguous-hour fallback ────────────────────
+  const callerMin = inputTo24h(norm);
+  if (callerMin !== null) {
+    // Exact hour+minute
+    for (const opt of timeOptions) {
+      if (displayTo24h(opt.display) === callerMin) return opt;
+    }
+
+    // If caller gave no explicit AM/PM, also try the other half of the clock.
+    // e.g. caller says "2" with only a 2 PM slot available → resolve to PM.
+    const hasExplicitPeriod = /\b(am|pm|morning|afternoon|evening|tonight)\b/.test(norm);
+    if (!hasExplicitPeriod) {
+      const callerHour = Math.floor(callerMin / 60);
+      if (callerHour < 12) {
+        const altMin = (callerHour + 12) * 60 + (callerMin % 60);
+        for (const opt of timeOptions) {
+          if (displayTo24h(opt.display) === altMin) return opt;
+        }
+      }
+    }
+  }
+
+  // ── 7. Time-of-day period fallback (last resort, no specific hour found) ──
+  if (/\b(morning)\b/.test(norm)) {
+    return timeOptions.find(o => /morning/.test(o.display.toLowerCase())) ?? null;
+  }
+  if (/\b(afternoon)\b/.test(norm)) {
+    return timeOptions.find(o => /afternoon/.test(o.display.toLowerCase())) ?? null;
+  }
+  if (/\b(evening|tonight)\b/.test(norm)) {
+    return timeOptions.find(o => /evening/.test(o.display.toLowerCase())) ?? null;
   }
 
   return null;
