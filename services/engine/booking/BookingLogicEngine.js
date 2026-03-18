@@ -39,6 +39,7 @@ const VERSION   = 'BL2.0';
 
 const STEPS = {
   INIT:                 'INIT',
+  CONFIRM_RECOGNITION:  'CONFIRM_RECOGNITION',  // T0 — confirm CRM-matched caller identity
   COLLECT_NAME:         'COLLECT_NAME',
   COLLECT_PHONE:        'COLLECT_PHONE',
   COLLECT_ADDRESS:      'COLLECT_ADDRESS',
@@ -180,6 +181,10 @@ async function loadCompanyConfig(companyId) {
       // Slot filling / digression (new)
       slotFilling:      bc.slotFilling     || DEFAULT_CONFIG.slotFilling,
 
+      // Bridge phrase — plays at booking entry to eliminate dead silence
+      // Stored at aiAgentSettings.agent2.bridge.bookingBridgePhrase (pre-cached as InstantAudio)
+      bridgePhrase: (company.aiAgentSettings?.agent2?.bridge?.bookingBridgePhrase || '').trim(),
+
       // Caller recognition (new)
       callerRecognition: bc.callerRecognition || { enabled: false },
 
@@ -305,6 +310,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
 
   switch (ctx.step) {
     case STEPS.INIT:                return processInit(ctx, config, companyId, isTest, events);
+    case STEPS.CONFIRM_RECOGNITION: return processConfirmRecognition(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_NAME:        return processCollectName(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_PHONE:       return processCollectPhone(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_ADDRESS:     return processCollectAddress(ctx, userInput, config, companyId, isTest, events);
@@ -335,26 +341,78 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
 async function processInit(ctx, config, companyId, isTest, events) {
   events.push({ type: 'BL1_INIT', timestamp: Date.now() });
 
+  // ── Bridge phrase prefix ───────────────────────────────────────────────────
+  // Plays ONCE at booking entry (this function is only ever called once per
+  // booking flow).  Pre-cached as InstantAudio on admin save for <50 ms play.
+  const bridge = config.bridgePhrase ? `${config.bridgePhrase} ` : '';
+
+  // ── T0: Caller Recognition ─────────────────────────────────────────────────
+  // If enabled and Twilio ANI is present, look up the caller in the CRM.
+  // On a match, offer to confirm their info on file instead of re-collecting.
+  if (config.callerRecognition?.enabled && ctx.callerPhone && !ctx._recognitionChecked) {
+    ctx._recognitionChecked = true;
+    try {
+      const Customer  = require('../../../models/Customer');
+      const rawPhone  = ctx.callerPhone;
+      const tenDigit  = rawPhone.replace(/\D/g, '').slice(-10);
+      const match = await Customer.findOne({
+        companyId,
+        $or: [
+          { phone: rawPhone },
+          { phone: tenDigit },
+          { phone: `+1${tenDigit}` }
+        ]
+      }).select('firstName lastName phone address').lean();
+
+      if (match?.firstName) {
+        const fullName  = [match.firstName, match.lastName].filter(Boolean).join(' ');
+        const recPrompt = (config.callerRecognition.confirmAllPrompt ||
+          'We have {name} on file — is that you and is your contact info still correct?')
+          .replace('{name}',    fullName)
+          .replace('{address}', match.address || '');
+
+        ctx.step                = STEPS.CONFIRM_RECOGNITION;
+        ctx._recognizedCustomer = {
+          firstName: match.firstName,
+          lastName:  match.lastName  || '',
+          phone:     match.phone,
+          address:   match.address   || null
+        };
+        events.push({ type: 'BL0_RECOGNITION_MATCH', firstName: match.firstName, timestamp: Date.now() });
+        return {
+          nextPrompt: `${bridge}${recPrompt}`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+    } catch (recErr) {
+      logger.warn(`[${ENGINE_ID}] Caller recognition lookup failed — continuing`, {
+        companyId, error: recErr.message
+      });
+    }
+  }
+
+  // ── Field collection ───────────────────────────────────────────────────────
   const issuePrefix = buildWarmOpening(ctx);
 
   if (!ctx.collectedFields.firstName) {
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_COLLECTING_NAME', timestamp: Date.now() });
     return {
-      nextPrompt: `${issuePrefix}To get started with your booking, may I have your name please?`,
+      nextPrompt: `${bridge}${config.askNamePrompt || `${issuePrefix}To get started with your booking, may I have your name please?`}`,
       bookingCtx: ctx,
       completed:  false
     };
   }
 
-  // firstName pre-filled (from LLM entities) but no lastName — confirm and ask for last name
+  // firstName pre-filled from LLM entities but no lastName — confirm and ask for last name
   if (!ctx.collectedFields.lastName) {
     ctx.step = STEPS.COLLECT_NAME;
     ctx._nameSubStep = 'CONFIRM_GET_LAST';
     const preFilledFirst = ctx.collectedFields.firstName;
     events.push({ type: 'BL1_CONFIRMING_PREFILLED_NAME', firstName: preFilledFirst, timestamp: Date.now() });
     return {
-      nextPrompt: `${issuePrefix}I have your first name as ${preFilledFirst} — may I also get your last name?`,
+      nextPrompt: `${bridge}${issuePrefix}I have your first name as ${preFilledFirst} — may I also get your last name?`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -365,7 +423,7 @@ async function processInit(ctx, config, companyId, isTest, events) {
     events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
     const nameGreet = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
     return {
-      nextPrompt: `${issuePrefix}${nameGreet}what's the best phone number to reach you at?`,
+      nextPrompt: `${bridge}${config.askPhonePrompt || `${issuePrefix}${nameGreet}what's the best phone number to reach you at?`}`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -375,7 +433,7 @@ async function processInit(ctx, config, companyId, isTest, events) {
     ctx.step = STEPS.COLLECT_ADDRESS;
     events.push({ type: 'BL1_COLLECTING_ADDRESS', timestamp: Date.now() });
     return {
-      nextPrompt: "And what's the service address?",
+      nextPrompt: `${bridge}${config.askAddressPrompt || "And what's the service address?"}`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -388,12 +446,101 @@ async function processInit(ctx, config, companyId, isTest, events) {
     ctx.step = STEPS.COLLECT_CUSTOM;
     ctx.customFieldIndex = 0;
     return {
-      nextPrompt: firstField.prompt || `One more question — what is your ${firstField.label}?`,
+      nextPrompt: `${bridge}${firstField.prompt || `One more question — what is your ${firstField.label}?`}`,
       bookingCtx: ctx,
       completed:  false
     };
   }
   return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
+}
+
+/* ============================================================================
+   STEP: CONFIRM RECOGNITION  (T0 — CRM caller identity confirmation)
+   ============================================================================ */
+
+async function processConfirmRecognition(ctx, userInput, config, companyId, isTest, events) {
+  // Re-ask if no input
+  if (!userInput?.trim()) {
+    const rec      = ctx._recognizedCustomer || {};
+    const fullName = [rec.firstName, rec.lastName].filter(Boolean).join(' ');
+    const prompt   = (config.callerRecognition?.confirmAllPrompt ||
+      'We have {name} on file — is that you and is your contact info still correct?')
+      .replace('{name}',    fullName)
+      .replace('{address}', rec.address || '');
+    return { nextPrompt: prompt, bookingCtx: ctx, completed: false };
+  }
+
+  const lower = userInput.toLowerCase();
+  const isYes = /\b(yes|yeah|yep|correct|right|that'?s me|sure|ok|okay|confirmed|affirmative|uh-?huh)\b/.test(lower);
+  const isNo  = /\b(no|nope|wrong|incorrect|not me|different|changed|update|nah)\b/.test(lower);
+
+  if (isYes) {
+    // Copy recognized fields into collectedFields
+    const rec = ctx._recognizedCustomer || {};
+    if (rec.firstName) ctx.collectedFields.firstName = rec.firstName;
+    if (rec.lastName)  ctx.collectedFields.lastName  = rec.lastName;
+    if (rec.phone)     ctx.collectedFields.phone     = rec.phone;
+    if (rec.address)   ctx.collectedFields.address   = rec.address;
+
+    events.push({ type: 'BL0_RECOGNITION_CONFIRMED', timestamp: Date.now() });
+
+    const onYes = config.callerRecognition?.onConfirmedYes || 'SKIP_TO_CUSTOM';
+
+    // COLLECT_ALL — ignore recognition data, collect fresh
+    if (onYes === 'COLLECT_ALL') {
+      ctx.collectedFields = { firstName: null, lastName: null, phone: null, address: null, altPhone: null, altPhoneContext: null };
+      ctx.step = STEPS.COLLECT_NAME;
+      return {
+        nextPrompt: config.askNamePrompt || 'Let me grab your details fresh. What is your first and last name?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // SKIP_TO_CALENDAR — all data confirmed, go straight to calendar
+    if (onYes === 'SKIP_TO_CALENDAR') {
+      return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
+    }
+
+    // SKIP_TO_CUSTOM (default) — built-in fields confirmed, collect custom fields if any
+    const customFields = config.customFields || [];
+    if (customFields.length > 0) {
+      const firstField = customFields[0];
+      ctx.step = STEPS.COLLECT_CUSTOM;
+      ctx.customFieldIndex = 0;
+      return {
+        nextPrompt: firstField.prompt || `Great! One more thing — ${firstField.label}?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
+  }
+
+  if (isNo) {
+    // Caller's info has changed — clear recognition data, collect fresh
+    ctx._recognizedCustomer = null;
+    ctx.collectedFields.firstName = null;
+    ctx.collectedFields.lastName  = null;
+    ctx.collectedFields.phone     = null;
+    ctx.collectedFields.address   = null;
+    ctx.step = STEPS.COLLECT_NAME;
+    events.push({ type: 'BL0_RECOGNITION_DECLINED', timestamp: Date.now() });
+    return {
+      nextPrompt: config.askNamePrompt || 'No problem! Let me grab your updated info. What is your first and last name?',
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // Ambiguous — re-ask with gentle prompt
+  const rec      = ctx._recognizedCustomer || {};
+  const fullName = [rec.firstName, rec.lastName].filter(Boolean).join(' ');
+  return {
+    nextPrompt: `Just to confirm — are you ${fullName}? A simple yes or no works great.`,
+    bookingCtx: ctx,
+    completed:  false
+  };
 }
 
 /* ============================================================================
@@ -749,10 +896,11 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       // T2 — no trigger matched; gracefully acknowledge and re-anchor
       events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
       return {
-        nextPrompt: "Absolutely — we'll make sure that gets addressed. To continue with the booking, what phone number can we use to reach you?",
-        bookingCtx: ctx,
-        completed:  false,
-        t2Digression: true   // forward-compat: signals LLM layer may embed answer here
+        nextPrompt:     "Absolutely — we'll make sure that gets addressed. To continue with the booking, what phone number can we use to reach you?",
+        bookingCtx:     ctx,
+        completed:      false,
+        t2Digression:   true,          // consumed by CallRuntime Groq handler
+        reAnchorPhrase: config.askPhonePrompt || 'What phone number can we reach you at?'
       };
     }
 
@@ -801,7 +949,7 @@ async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
 async function processCollectAddress(ctx, userInput, config, companyId, isTest, events) {
   if (!userInput?.trim()) {
     return {
-      nextPrompt: "I didn't catch the address. What's the service address?",
+      nextPrompt: config.addressReAnchor || "I didn't catch the address. What's the service address?",
       bookingCtx: ctx,
       completed:  false
     };

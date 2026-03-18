@@ -865,6 +865,52 @@ router.post('/:companyId/booking-config',
       if (!updated) return res.status(404).json({ error: 'Company not found' });
 
       logger.info('[booking-config] Saved', { companyId, fields: Object.keys(updates) });
+
+      // ── Pre-generate InstantAudio for built-in booking prompts ────────────
+      // Fire-and-forget — response is already sent.  Caches bridge, name, phone,
+      // and address prompts as MP3 files so they play in <50 ms at call time.
+      // ─────────────────────────────────────────────────────────────────────
+      (async () => {
+        try {
+          const vs = updated.aiAgentSettings?.voiceSettings;
+          if (!vs?.voiceId) return;   // no voice configured — skip
+
+          const textsToCache = [];
+
+          // Bridge phrase
+          const bridge = (updated.aiAgentSettings?.agent2?.bridge?.bookingBridgePhrase || '').trim();
+          if (bridge) textsToCache.push({ label: 'bridge',   text: bridge });
+
+          // Built-in prompts
+          const bp = updated.aiAgentSettings?.agent2?.bookingConfig?.builtinPrompts || {};
+          if (bp.askName?.trim())    textsToCache.push({ label: 'askName',    text: bp.askName.trim()    });
+          if (bp.askPhone?.trim())   textsToCache.push({ label: 'askPhone',   text: bp.askPhone.trim()   });
+          if (bp.askAddress?.trim()) textsToCache.push({ label: 'askAddress', text: bp.askAddress.trim() });
+
+          for (const item of textsToCache) {
+            try {
+              await InstantAudioService.generate({
+                companyId,
+                kind:          'TRIGGER_RESPONSE',
+                text:          item.text,
+                company:       updated,
+                voiceSettings: vs,
+                force:         true    // re-generate if text changed
+              });
+              logger.info(`[booking-config] ✅ Instant audio cached: ${item.label}`, { companyId });
+            } catch (audioErr) {
+              logger.warn(`[booking-config] Instant audio failed for ${item.label} (non-fatal)`, {
+                companyId, error: audioErr.message, code: audioErr.code
+              });
+            }
+          }
+        } catch (bgErr) {
+          logger.warn('[booking-config] Background audio pre-gen failed (non-fatal)', {
+            companyId, error: bgErr.message
+          });
+        }
+      })();
+
       return res.json({ success: true, message: 'Booking configuration saved' });
     } catch (err) {
       logger.error('[booking-config] POST failed', { error: err.message });
