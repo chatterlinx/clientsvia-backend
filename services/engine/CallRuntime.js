@@ -242,7 +242,8 @@ async function runBookingLogicLane({
     turn,
     bufferEvent,
     callState,
-    state
+    state,
+    callerPhone   // Twilio ANI (From number) — passed through for caller ID confirmation
 }) {
     const startMs = Date.now();
     
@@ -288,7 +289,7 @@ async function runBookingLogicLane({
                       'firstNameMeta', 'lastNameMeta'].includes(key)
                 )
             ),
-            callerPhone: state?.plainSlots?.phone || callState?.callerPhone || null,
+            callerPhone: state?.plainSlots?.phone || callerPhone || callState?.callerPhone || null,
             callReason: state?.plainSlots?.call_reason_detail || null,
             address: state?.plainSlots?.address || null,
             bookingMode: followUpBookingMode
@@ -654,7 +655,8 @@ class CallRuntime {
                     turn,
                     bufferEvent,
                     callState,
-                    state
+                    state,
+                    callerPhone: context.callerPhone || null  // Twilio ANI — enables caller ID confirmation
                 });
                 
             } else {

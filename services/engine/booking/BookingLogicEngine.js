@@ -712,6 +712,50 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       };
     }
 
+    // ── Smart digression detection (T1.5 → T2) ─────────────────────────────
+    // If the input contains fewer than 3 digit characters it is clearly a
+    // question or digression — NOT a phone attempt.  Route through:
+    //   T1.5 → booking trigger (ANY-step or COLLECT_PHONE-targeted)
+    //   T2   → graceful re-anchor (acknowledge + circle back to phone)
+    // Fall through to the blind re-ask only when the input actually looks
+    // like a phone attempt (>= 3 digits, just garbled/incomplete).
+    const phoneDigitCount = (userInput.match(/\d/g) || []).length;
+    if (phoneDigitCount < 3) {
+      // T1.5 — booking trigger check
+      try {
+        const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, STEPS.COLLECT_PHONE);
+        if (triggerResult.matched) {
+          const card = triggerResult.card;
+          events.push({
+            type:      'BL1_PHONE_T1_5_TRIGGER',
+            ruleId:    card.ruleId,
+            behavior:  triggerResult.behavior,
+            matchType: triggerResult.matchType,
+            timestamp: Date.now()
+          });
+          const triggerResponse = await buildTriggerResponse(card, userInput, companyId);
+          return {
+            nextPrompt: `${triggerResponse} What phone number should we use to reach you?`,
+            bookingCtx: ctx,
+            completed:  false
+          };
+        }
+      } catch (tErr) {
+        logger.warn(`[${ENGINE_ID}] COLLECT_PHONE T1.5 trigger error — continuing`, {
+          companyId, error: tErr.message
+        });
+      }
+
+      // T2 — no trigger matched; gracefully acknowledge and re-anchor
+      events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+      return {
+        nextPrompt: "Absolutely — we'll make sure that gets addressed. To continue with the booking, what phone number can we use to reach you?",
+        bookingCtx: ctx,
+        completed:  false,
+        t2Digression: true   // forward-compat: signals LLM layer may embed answer here
+      };
+    }
+
     events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
       nextPrompt: "I didn't quite catch a phone number there. What number should we use to reach you?",
