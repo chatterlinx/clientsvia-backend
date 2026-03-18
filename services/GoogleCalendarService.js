@@ -898,30 +898,44 @@ async function findAvailableSlots(companyId, {
 }
 
 /**
- * Format a slot time for display in conversation
+ * Format a slot time for display in conversation — TTS-friendly natural language.
+ * Produces e.g. "tomorrow at 8 in the morning", "today at 2:30 in the afternoon",
+ * "Friday at 6 in the evening" so ElevenLabs reads cleanly without robotic "A M".
  */
 function formatSlotForDisplay(date, timezone = 'America/New_York') {
-    const options = {
-        weekday: 'long',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: timezone
-    };
-    
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    const dateStr = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: timezone });
-    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: timezone });
-    
-    // Check if it's today or tomorrow for friendlier messaging
+
+    // Extract hour (0-23) and minute in the company's local timezone
+    const parts = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric', minute: '2-digit', hour12: false, timeZone: timezone
+    }).formatToParts(date);
+    const h = parseInt(parts.find(p => p.type === 'hour').value,  10);
+    const m = parseInt(parts.find(p => p.type === 'minute').value, 10);
+
+    // Build natural-language time string
+    const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+    const minuteStr   = m === 0 ? '' : `:${String(m).padStart(2, '0')}`;
+
+    let period;
+    if      (h >= 5  && h < 12) period = 'in the morning';
+    else if (h >= 12 && h < 17) period = 'in the afternoon';
+    else if (h >= 17 && h < 21) period = 'in the evening';
+    else                        period = 'at night';
+
+    // Special cases
+    const timeStr = (h === 12 && m === 0) ? 'noon'
+                  : (h === 0  && m === 0) ? 'midnight'
+                  : `${displayHour}${minuteStr} ${period}`;
+
+    // Today / tomorrow / weekday prefix
     if (date.toDateString() === now.toDateString()) {
         return `today at ${timeStr}`;
     } else if (date.toDateString() === tomorrow.toDateString()) {
         return `tomorrow at ${timeStr}`;
     } else {
+        const dateStr = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: timezone });
         return `${dateStr} at ${timeStr}`;
     }
 }
