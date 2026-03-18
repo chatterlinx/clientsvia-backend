@@ -38,13 +38,15 @@ const VERSION   = 'BL2.0';
    ============================================================================ */
 
 const STEPS = {
-  INIT:            'INIT',
-  COLLECT_NAME:    'COLLECT_NAME',
-  COLLECT_PHONE:   'COLLECT_PHONE',
-  COLLECT_ADDRESS: 'COLLECT_ADDRESS',
-  OFFER_TIMES:     'OFFER_TIMES',
-  CONFIRM:         'CONFIRM',
-  COMPLETED:       'COMPLETED'
+  INIT:                 'INIT',
+  COLLECT_NAME:         'COLLECT_NAME',
+  COLLECT_PHONE:        'COLLECT_PHONE',
+  COLLECT_ADDRESS:      'COLLECT_ADDRESS',
+  COLLECT_CUSTOM:       'COLLECT_CUSTOM',       // iterates bookingConfig.customFields[]
+  COLLECT_ALT_CONTACT:  'COLLECT_ALT_CONTACT',  // optional alt contact collection
+  OFFER_TIMES:          'OFFER_TIMES',
+  CONFIRM:              'CONFIRM',
+  COMPLETED:            'COMPLETED'
 };
 
 /* ============================================================================
@@ -52,11 +54,15 @@ const STEPS = {
    ============================================================================ */
 
 const DEFAULT_CONFIG = {
-  appointmentDuration: 60,
-  bufferMinutes:       0,
-  advanceBookingDays:  14,
-  requiredFields:      ['firstName', 'phone'],
-  confirmationMessage: 'Your appointment is confirmed for {date} at {time}. We look forward to seeing you!'
+  appointmentDuration:   60,
+  bufferMinutes:         0,
+  advanceBookingDays:    14,
+  requiredFields:        ['firstName', 'phone'],
+  confirmationMessage:   'Your appointment is confirmed for {date} at {time}. We look forward to seeing you!',
+  customFields:          [],
+  altContact:            { enabled: false },
+  confirmation:          { enabled: true },
+  slotFilling:           { defaultMaxAttempts: 3, defaultFallbackAction: 'RE_ASK_PLAIN', reAnchorSuffix: 'Now, to get your appointment confirmed \u2014' }
 };
 
 /* ============================================================================
@@ -129,7 +135,7 @@ async function processStep({ companyId, payload, bookingCtx, userInput, isTest =
 async function loadCompanyConfig(companyId) {
   try {
     const company = await v2Company.findById(companyId)
-      .select('aiAgentSettings.bookingLogic aiAgentSettings.agent2.bookingPrompts googleCalendar businessHours companyName')
+      .select('aiAgentSettings.bookingLogic aiAgentSettings.agent2.bookingConfig aiAgentSettings.agent2.bookingPrompts aiAgentSettings.agent2.bridge.bookingBridgePhrase aiAgentSettings.agent2.discovery.holdMessage googleCalendar businessHours companyName')
       .lean();
 
     if (!company) {
@@ -137,23 +143,53 @@ async function loadCompanyConfig(companyId) {
       return { ...DEFAULT_CONFIG, companyName: 'our company', calendarConnected: false };
     }
 
-    const bl = company.aiAgentSettings?.bookingLogic || {};
-    // UI-configured prompts live at agent2.bookingPrompts (Booking admin page)
-    const bp = company.aiAgentSettings?.agent2?.bookingPrompts || {};
+    const bl       = company.aiAgentSettings?.bookingLogic          || {};
+    const bc       = company.aiAgentSettings?.agent2?.bookingConfig  || {};
+    const bp       = company.aiAgentSettings?.agent2?.bookingPrompts || {};  // legacy fallback
+    const discovery = company.aiAgentSettings?.agent2?.discovery     || {};
 
     return {
       companyName:         company.companyName || 'our company',
-      appointmentDuration: bl.appointmentDuration || bl.slotDuration || DEFAULT_CONFIG.appointmentDuration,
-      bufferMinutes:       bl.bufferMinutes       ?? DEFAULT_CONFIG.bufferMinutes,
-      advanceBookingDays:  bl.advanceBookingDays  || DEFAULT_CONFIG.advanceBookingDays,
-      requiredFields:      bl.requiredFields      || DEFAULT_CONFIG.requiredFields,
-      confirmationMessage: bl.confirmationMessage || DEFAULT_CONFIG.confirmationMessage,
-      calendarConnected:   !!(company.googleCalendar?.accessToken),
-      calendarId:          company.googleCalendar?.calendarId || null,
-      businessHours:       company.businessHours || null,
-      // UI-configurable prompts — fall back to built-in defaults when not set
-      askNamePrompt:       (bp.askName  || '').trim() || null,
-      askPhonePrompt:      (bp.askPhone || '').trim() || null,
+
+      // Calendar settings — bookingConfig.calendar is authoritative; bookingLogic is legacy fallback
+      appointmentDuration: bc.calendar?.appointmentDuration  ?? bl.appointmentDuration ?? bl.slotDuration ?? DEFAULT_CONFIG.appointmentDuration,
+      bufferMinutes:       bc.calendar?.bufferMinutes        ?? bl.bufferMinutes        ?? DEFAULT_CONFIG.bufferMinutes,
+      advanceBookingDays:  bc.calendar?.advanceBookingDays   ?? bl.advanceBookingDays   ?? DEFAULT_CONFIG.advanceBookingDays,
+      confirmationMessage: bc.calendar?.confirmationMessage  ||  bl.confirmationMessage  || DEFAULT_CONFIG.confirmationMessage,
+      holdMessage:         bc.calendar?.holdMessage          ||  discovery.holdMessage   || '',
+      offerTimesPrompt:    bc.calendar?.offerTimesPrompt     || '',
+      noTimesPrompt:       bc.calendar?.noTimesPrompt        || '',
+
+      // Built-in field prompts (bookingConfig is authoritative; legacy bookingPrompts fills gaps)
+      askNamePrompt:    bc.builtinPrompts?.askName        || bp.askName    || null,
+      nameReAnchor:     bc.builtinPrompts?.nameReAnchor   || null,
+      askPhonePrompt:   bc.builtinPrompts?.askPhone       || bp.askPhone   || null,
+      phoneReAnchor:    bc.builtinPrompts?.phoneReAnchor  || null,
+      askAddressPrompt: bc.builtinPrompts?.askAddress     || bp.askAddress || null,
+      addressReAnchor:  bc.builtinPrompts?.addressReAnchor || null,
+
+      // Custom fields (new — from bookingConfig)
+      customFields:     bc.customFields    || DEFAULT_CONFIG.customFields,
+
+      // Alt contact (new)
+      altContact:       bc.altContact      || DEFAULT_CONFIG.altContact,
+
+      // Confirmation step (new)
+      confirmation:     bc.confirmation    || DEFAULT_CONFIG.confirmation,
+
+      // Slot filling / digression (new)
+      slotFilling:      bc.slotFilling     || DEFAULT_CONFIG.slotFilling,
+
+      // Caller recognition (new)
+      callerRecognition: bc.callerRecognition || { enabled: false },
+
+      // Calendar connection
+      calendarConnected: !!(company.googleCalendar?.accessToken),
+      calendarId:        company.googleCalendar?.calendarId || null,
+      businessHours:     company.businessHours || null,
+
+      // Legacy
+      requiredFields:    bl.requiredFields || DEFAULT_CONFIG.requiredFields
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -199,7 +235,14 @@ function initializeContext(payload, config) {
     calendarEventId:      null,
     calendarEventLink:    null,
     completed:            false,
-    startedAt:            new Date().toISOString()
+    startedAt:            new Date().toISOString(),
+    // Custom fields slot-filling state
+    customFieldIndex:     0,        // which customFields[] entry we're currently collecting
+    collectedCustomFields: {},      // { fieldKey: value }
+    // Alt contact state
+    altContacts:          [],       // [{ name, phone, notes }]
+    altContactStep:       null,     // null | 'OFFER' | 'ASK_NAME' | 'ASK_PHONE' | 'ASK_NOTES' | 'ASK_MORE'
+    currentAltContact:    null      // partial contact being built
   };
 }
 
@@ -217,7 +260,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // numbers or addresses produces dangerous false-positives (e.g. the word
   // "Other" in "Other 239-565-2202" matching a "second opinion" trigger card).
   //
-  // Triggers fire on intent steps: COLLECT_NAME, OFFER_TIMES, CONFIRM.
+  // Triggers fire on intent steps: COLLECT_NAME, COLLECT_CUSTOM, COLLECT_ALT_CONTACT, OFFER_TIMES, CONFIRM.
   // Triggers are SUPPRESSED on: INIT, COMPLETED, COLLECT_PHONE, COLLECT_ADDRESS.
   const DATA_ENTRY_STEPS = new Set([STEPS.INIT, STEPS.COMPLETED, STEPS.COLLECT_PHONE, STEPS.COLLECT_ADDRESS]);
   if (userInput?.trim() && !DATA_ENTRY_STEPS.has(ctx.step)) {
@@ -261,12 +304,14 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // ── END TRIGGER CHECK ─────────────────────────────────────────────────────
 
   switch (ctx.step) {
-    case STEPS.INIT:            return processInit(ctx, config, companyId, isTest, events);
-    case STEPS.COLLECT_NAME:    return processCollectName(ctx, userInput, config, companyId, isTest, events);
-    case STEPS.COLLECT_PHONE:   return processCollectPhone(ctx, userInput, config, companyId, isTest, events);
-    case STEPS.COLLECT_ADDRESS: return processCollectAddress(ctx, userInput, config, companyId, isTest, events);
-    case STEPS.OFFER_TIMES:     return processOfferTimes(ctx, userInput, config, companyId, isTest, events);
-    case STEPS.CONFIRM:         return processConfirm(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.INIT:                return processInit(ctx, config, companyId, isTest, events);
+    case STEPS.COLLECT_NAME:        return processCollectName(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_PHONE:       return processCollectPhone(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_ADDRESS:     return processCollectAddress(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_CUSTOM:      return processCollectCustom(ctx, userInput, config, companyId, events);
+    case STEPS.COLLECT_ALT_CONTACT: return processCollectAltContact(ctx, userInput, config, events);
+    case STEPS.OFFER_TIMES:         return processOfferTimes(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.CONFIRM:             return processConfirm(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COMPLETED:
       return {
         nextPrompt: 'Your booking is all set. Is there anything else I can help you with?',
@@ -274,7 +319,12 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
         completed:  true
       };
     default:
-      return processInit(ctx, config, companyId, isTest, events);
+      logger.warn(`[${ENGINE_ID}] Unknown step: ${ctx.step}`, { companyId });
+      return {
+        nextPrompt: "I'm sorry, something went wrong with the booking flow. Let me start over.",
+        bookingCtx: { ...ctx, step: STEPS.INIT },
+        completed:  false
+      };
   }
 }
 
@@ -290,9 +340,8 @@ async function processInit(ctx, config, companyId, isTest, events) {
   if (!ctx.collectedFields.firstName) {
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_COLLECTING_NAME', timestamp: Date.now() });
-    const namePrompt = config.askNamePrompt || 'To get started with your booking, may I have your name please?';
     return {
-      nextPrompt: `${issuePrefix}${namePrompt}`,
+      nextPrompt: `${issuePrefix}To get started with your booking, may I have your name please?`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -315,9 +364,8 @@ async function processInit(ctx, config, companyId, isTest, events) {
     ctx.step = STEPS.COLLECT_PHONE;
     events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
     const nameGreet = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
-    const phonePrompt = config.askPhonePrompt || `what's the best phone number to reach you at?`;
     return {
-      nextPrompt: `${issuePrefix}${nameGreet}${phonePrompt}`,
+      nextPrompt: `${issuePrefix}${nameGreet}what's the best phone number to reach you at?`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -333,9 +381,19 @@ async function processInit(ctx, config, companyId, isTest, events) {
     };
   }
 
-  // All required fields present — proceed to offer real time options
-  ctx.step = STEPS.OFFER_TIMES;
-  return processOfferTimes(ctx, null, config, companyId, isTest, events);
+  // All required fields present — route through custom fields if any
+  const customFields = config.customFields || [];
+  if (customFields.length > 0) {
+    const firstField = customFields[0];
+    ctx.step = STEPS.COLLECT_CUSTOM;
+    ctx.customFieldIndex = 0;
+    return {
+      nextPrompt: firstField.prompt || `One more question — what is your ${firstField.label}?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+  return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
 }
 
 /* ============================================================================
@@ -483,9 +541,8 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
 async function advanceAfterName(ctx, config, companyId, isTest, events) {
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
-    const phonePrompt = config.askPhonePrompt || `What's the best phone number to reach you at?`;
     return {
-      nextPrompt: `Got it, ${ctx.collectedFields.firstName}! ${phonePrompt}`,
+      nextPrompt: `Got it, ${ctx.collectedFields.firstName}! What's the best phone number to reach you at?`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -498,8 +555,19 @@ async function advanceAfterName(ctx, config, companyId, isTest, events) {
       completed:  false
     };
   }
-  ctx.step = STEPS.OFFER_TIMES;
-  return processOfferTimes(ctx, null, config, companyId, isTest, events);
+  // Route through custom fields if any
+  const customFields = config.customFields || [];
+  if (customFields.length > 0) {
+    const firstField = customFields[0];
+    ctx.step = STEPS.COLLECT_CUSTOM;
+    ctx.customFieldIndex = 0;
+    return {
+      nextPrompt: firstField.prompt || `One more question — what is your ${firstField.label}?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+  return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
 }
 
 /* ============================================================================
@@ -667,8 +735,19 @@ async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
       completed:  false
     };
   }
-  ctx.step = STEPS.OFFER_TIMES;
-  return processOfferTimes(ctx, null, config, companyId, isTest, events);
+  // Route through custom fields if any
+  const customFields = config.customFields || [];
+  if (customFields.length > 0) {
+    const firstField = customFields[0];
+    ctx.step = STEPS.COLLECT_CUSTOM;
+    ctx.customFieldIndex = 0;
+    return {
+      nextPrompt: firstField.prompt || `One more thing — what is your ${firstField.label}?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+  return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
 }
 
 /* ============================================================================
@@ -687,8 +766,282 @@ async function processCollectAddress(ctx, userInput, config, companyId, isTest, 
   ctx.collectedFields.address = userInput.trim();
   events.push({ type: 'BL1_ADDRESS_COLLECTED', timestamp: Date.now() });
 
+  // Route to COLLECT_CUSTOM if there are custom fields; otherwise continue to alt contact or calendar
+  const customFields = config.customFields || [];
+  if (customFields.length > 0) {
+    const firstField = customFields[0];
+    ctx.step = STEPS.COLLECT_CUSTOM;
+    ctx.customFieldIndex = 0;
+    return {
+      nextPrompt: firstField.prompt || `One more question — what is your ${firstField.label}?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // No custom fields — go to alt contact or calendar
+  return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
+}
+
+/* ============================================================================
+   HELPER: advanceAfterCustomFields
+   Called after all custom fields are done (or if there are none).
+   Routes to alt contact if enabled, else OFFER_TIMES.
+   ============================================================================ */
+
+async function advanceAfterCustomFields(ctx, config, companyId, isTest, events) {
+  if (config.altContact?.enabled) {
+    const offerPrompt = config.altContact.offerPrompt ||
+      'Is this the best number to reach you, or do you have an alternate contact we should have on file?';
+    return {
+      nextPrompt: offerPrompt,
+      bookingCtx: { ...ctx, step: STEPS.COLLECT_ALT_CONTACT, altContactStep: 'OFFER' },
+      completed:  false
+    };
+  }
+  // Skip to calendar
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, companyId, isTest, events);
+}
+
+/* ============================================================================
+   STEP: COLLECT CUSTOM — T1→T1.5→T2→T3 slot-filling for custom fields
+   ============================================================================ */
+
+async function processCollectCustom(ctx, userInput, config, companyId, events) {
+  const allFields  = config.customFields || [];
+  const slotFilling = config.slotFilling  || {};
+  const fieldIndex  = ctx.customFieldIndex || 0;
+
+  // All custom fields collected — advance
+  if (fieldIndex >= allFields.length) {
+    return advanceAfterCustomFields(ctx, config, companyId, false, events);
+  }
+
+  const field          = allFields[fieldIndex];
+  const maxAttempts    = field.maxAttempts    || slotFilling.defaultMaxAttempts    || 3;
+  const fallbackAction = field.fallbackAction || slotFilling.defaultFallbackAction || 'RE_ASK_PLAIN';
+  const reAnchorSuffix = slotFilling.reAnchorSuffix || '';
+
+  // First turn for this field — ask the prompt
+  if (!userInput) {
+    return {
+      nextPrompt: field.prompt || `What is your ${field.label}?`,
+      bookingCtx: { ...ctx, step: STEPS.COLLECT_CUSTOM },
+      completed:  false
+    };
+  }
+
+  // TIER 1 — DETERMINISTIC EXTRACT
+  const extracted = extractCustomFieldValue(userInput, field);
+  if (extracted !== null) {
+    events.push({ type: 'BL2_CUSTOM_FIELD_COLLECTED', fieldKey: field.key, value: extracted, timestamp: Date.now() });
+    const newCtx = {
+      ...ctx,
+      collectedCustomFields: { ...(ctx.collectedCustomFields || {}), [field.key]: extracted },
+      customFieldIndex: fieldIndex + 1
+    };
+
+    // Advance to next custom field or beyond
+    if (fieldIndex + 1 < allFields.length) {
+      const nextField = allFields[fieldIndex + 1];
+      return {
+        nextPrompt: nextField.prompt || `And your ${nextField.label}?`,
+        bookingCtx: { ...newCtx, step: STEPS.COLLECT_CUSTOM },
+        completed:  false
+      };
+    }
+    return advanceAfterCustomFields(newCtx, config, companyId, false, events);
+  }
+
+  // TIER 2/3 — attempt counter
+  const attemptKey   = `_cfAttempt_${field.key}`;
+  const attemptCount = (ctx[attemptKey] || 0) + 1;
+
+  if (attemptCount >= maxAttempts) {
+    // TIER 3 — FALLBACK
+    events.push({ type: 'BL2_CUSTOM_FIELD_FALLBACK', fieldKey: field.key, action: fallbackAction, timestamp: Date.now() });
+
+    if (fallbackAction === 'SKIP' && !field.required) {
+      // Skip this field
+      const newCtx = { ...ctx, customFieldIndex: fieldIndex + 1, [attemptKey]: 0 };
+      if (fieldIndex + 1 < allFields.length) {
+        const nextField = allFields[fieldIndex + 1];
+        return {
+          nextPrompt: nextField.prompt || `And your ${nextField.label}?`,
+          bookingCtx: { ...newCtx, step: STEPS.COLLECT_CUSTOM },
+          completed: false
+        };
+      }
+      return advanceAfterCustomFields(newCtx, config, companyId, false, events);
+    }
+
+    // RE_ASK_PLAIN or other non-SKIP fallback — re-ask plainly
+    return {
+      nextPrompt: `I'm sorry, I just need your ${field.label} to continue. ${field.reAnchorPhrase || `Could you tell me your ${field.label}?`}`,
+      bookingCtx: { ...ctx, [attemptKey]: 0, step: STEPS.COLLECT_CUSTOM },
+      completed: false
+    };
+  }
+
+  // TIER 2 — LLM digression: return re-anchor phrase so the LLM layer can embed it
+  const reAnchor = field.reAnchorPhrase ||
+    `${reAnchorSuffix} what is your ${field.label}?`.trim().replace(/^\s+/, '');
+
+  events.push({ type: 'BL2_CUSTOM_FIELD_T2_DIGRESSION', fieldKey: field.key, attempt: attemptCount, timestamp: Date.now() });
+
+  return {
+    nextPrompt:   reAnchor,
+    bookingCtx:   { ...ctx, [attemptKey]: attemptCount, step: STEPS.COLLECT_CUSTOM },
+    completed:    false,
+    t2Digression: true,     // signal to caller that LLM should handle this turn
+    pendingField: { fieldKey: field.key, fieldLabel: field.label, reAnchorPhrase: reAnchor }
+  };
+}
+
+/**
+ * Tier-1 deterministic extraction for a custom field.
+ * Returns the extracted value or null.
+ */
+function extractCustomFieldValue(userInput, field) {
+  const input = (userInput || '').trim();
+  if (!input) return null;
+
+  switch (field.fieldType) {
+    case 'phone':
+      return extractPhoneFromText(input) || null;
+
+    case 'yesno':
+      if (isAffirmativeResponse(input)) return 'yes';
+      if (/\b(no|nope|nah|negative)\b/i.test(input)) return 'no';
+      return null;
+
+    case 'choice': {
+      if (!field.choices?.length) return input.length > 0 ? input : null;
+      const lower = input.toLowerCase();
+      const match = field.choices.find(c => lower.includes(c.toLowerCase()));
+      return match || null;
+    }
+
+    case 'number': {
+      const numMatch = input.match(/\b\d+\b/);
+      return numMatch ? numMatch[0] : null;
+    }
+
+    case 'text':
+    default:
+      // Accept any non-empty response for free-text fields
+      return input.length > 0 ? input : null;
+  }
+}
+
+/* ============================================================================
+   STEP: COLLECT ALT CONTACT
+   ============================================================================ */
+
+async function processCollectAltContact(ctx, userInput, config, events) {
+  const ac   = config.altContact || {};
+  const step = ctx.altContactStep || 'OFFER';
+
+  if (step === 'OFFER') {
+    if (!userInput) {
+      return {
+        nextPrompt: ac.offerPrompt || 'Do you have an alternate contact we should have on file?',
+        bookingCtx: { ...ctx, step: STEPS.COLLECT_ALT_CONTACT, altContactStep: 'OFFER' },
+        completed:  false
+      };
+    }
+    if (isAffirmativeResponse(userInput)) {
+      return {
+        nextPrompt: ac.askNamePrompt || "What's the name for that contact?",
+        bookingCtx: { ...ctx, altContactStep: 'ASK_NAME', currentAltContact: {} },
+        completed:  false
+      };
+    }
+    // Caller said no — advance to OFFER_TIMES
+    return {
+      nextPrompt: config.holdMessage || 'One moment while I check our available times...',
+      bookingCtx: { ...ctx, step: STEPS.OFFER_TIMES },
+      completed:  false
+    };
+  }
+
+  if (step === 'ASK_NAME') {
+    const name = (userInput || '').trim();
+    if (!name) {
+      return {
+        nextPrompt: ac.askNamePrompt || "What's the name for that contact?",
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    return {
+      nextPrompt: ac.askPhonePrompt || "And their phone number?",
+      bookingCtx: { ...ctx, altContactStep: 'ASK_PHONE', currentAltContact: { name } },
+      completed:  false
+    };
+  }
+
+  if (step === 'ASK_PHONE') {
+    const phone  = extractPhoneFromText(userInput || '') || (userInput || '').trim();
+    const current = { ...(ctx.currentAltContact || {}), phone };
+    if (ac.askNotesPrompt) {
+      return {
+        nextPrompt: ac.askNotesPrompt,
+        bookingCtx: { ...ctx, altContactStep: 'ASK_NOTES', currentAltContact: current },
+        completed:  false
+      };
+    }
+    return finishAltContact(ctx, current, config, events);
+  }
+
+  if (step === 'ASK_NOTES') {
+    const notes   = (userInput || '').trim();
+    const current = { ...(ctx.currentAltContact || {}), notes };
+    return finishAltContact(ctx, current, config, events);
+  }
+
+  if (step === 'ASK_MORE') {
+    if (isAffirmativeResponse(userInput || '')) {
+      return {
+        nextPrompt: ac.askNamePrompt || "What's the name?",
+        bookingCtx: { ...ctx, altContactStep: 'ASK_NAME', currentAltContact: {} },
+        completed:  false
+      };
+    }
+    return {
+      nextPrompt: config.holdMessage || 'One moment while I check our available times...',
+      bookingCtx: { ...ctx, step: STEPS.OFFER_TIMES },
+      completed:  false
+    };
+  }
+
+  // Fallback
+  return {
+    nextPrompt: config.holdMessage || 'One moment...',
+    bookingCtx: { ...ctx, step: STEPS.OFFER_TIMES },
+    completed:  false
+  };
+}
+
+function finishAltContact(ctx, contact, config, events) {
+  const ac         = config.altContact || {};
+  const altContacts = [...(ctx.altContacts || []), contact];
+  events.push({ type: 'BL2_ALT_CONTACT_COLLECTED', contact, timestamp: Date.now() });
+
+  if (ac.allowMultiple) {
+    return {
+      nextPrompt: ac.multiplePrompt || 'Any other contacts you would like us to have on file?',
+      bookingCtx: { ...ctx, altContacts, altContactStep: 'ASK_MORE', currentAltContact: null },
+      completed:  false
+    };
+  }
+
+  return {
+    nextPrompt: config.holdMessage || 'One moment while I check our available times...',
+    bookingCtx: { ...ctx, altContacts, step: STEPS.OFFER_TIMES, currentAltContact: null },
+    completed:  false
+  };
 }
 
 /* ============================================================================

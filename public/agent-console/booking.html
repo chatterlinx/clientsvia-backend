@@ -3,414 +3,1285 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Booking Logic — Agent Console</title>
-  
+  <title>Booking Configuration — ClientsVia Agent Console</title>
+
   <!-- Inter Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <!-- Styles -->
+
+  <!-- Shared stylesheet -->
   <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* =========================================================================
+       BOOKING CONFIG — PAGE-SPECIFIC STYLES
+       ========================================================================= */
+
+    /* ── Layout ─────────────────────────────────────────────────────────────── */
+    body {
+      margin: 0;
+      background: var(--color-gray-50);
+      font-family: var(--font-family);
+      color: var(--color-gray-900);
+    }
+
+    /* ── Top Bar ─────────────────────────────────────────────────────────────── */
+    #top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      padding: 0 24px;
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-gray-200);
+      box-shadow: var(--shadow-xs);
+    }
+
+    #breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-500);
+    }
+
+    #breadcrumb a {
+      color: var(--color-primary-600);
+      text-decoration: none;
+      font-weight: var(--font-weight-medium);
+    }
+
+    #breadcrumb a:hover { text-decoration: underline; }
+
+    #breadcrumb span::before {
+      content: '/';
+      margin-right: 8px;
+      color: var(--color-gray-300);
+    }
+
+    #breadcrumb span {
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-700);
+    }
+
+    #top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #company-name-display {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-600);
+    }
+
+    #save-status {
+      font-size: var(--font-size-xs);
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      font-weight: var(--font-weight-medium);
+      transition: opacity var(--transition-base);
+      opacity: 0;
+    }
+
+    #save-status.visible { opacity: 1; }
+    #save-status.saving  { background: var(--color-primary-50);  color: var(--color-primary-600); }
+    #save-status.saved   { background: var(--color-success-50);  color: var(--color-success-600); }
+    #save-status.error   { background: var(--color-error-50);    color: var(--color-error-600); }
+
+    /* ── Flow Visualizer ─────────────────────────────────────────────────────── */
+    #flow-visualizer {
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-gray-200);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    #flow-visualizer::-webkit-scrollbar { display: none; }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold);
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      cursor: default;
+      transition: background var(--transition-fast);
+    }
+
+    .flow-step.active   { background: var(--color-primary-100); color: var(--color-primary-700); }
+    .flow-step.optional { background: var(--color-gray-100);    color: var(--color-gray-500); border: 1px dashed var(--color-gray-300); }
+    .flow-step.disabled { background: var(--color-gray-100);    color: var(--color-gray-400); opacity: 0.6; }
+
+    .flow-step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .flow-arrow {
+      color: var(--color-gray-300);
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    /* ── Page Body ────────────────────────────────────────────────────────────── */
+    #page-body {
+      display: flex;
+      min-height: calc(100vh - 56px - 45px);
+    }
+
+    /* ── Sidebar Nav ─────────────────────────────────────────────────────────── */
+    #sidebar-nav {
+      width: 220px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 101px; /* topbar + flowvis */
+      height: calc(100vh - 101px);
+      overflow-y: auto;
+      background: var(--color-white);
+      border-right: 1px solid var(--color-gray-200);
+      padding: 16px 0;
+      scrollbar-width: thin;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 20px;
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all var(--transition-fast);
+      font-weight: var(--font-weight-medium);
+    }
+
+    .nav-item:hover {
+      background: var(--color-gray-50);
+      color: var(--color-gray-900);
+    }
+
+    .nav-item.active {
+      color: var(--color-primary-700);
+      background: var(--color-primary-50);
+      border-left-color: var(--color-primary-600);
+    }
+
+    .nav-section-title {
+      padding: 8px 20px 4px;
+      font-size: 10px;
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-gray-400);
+    }
+
+    /* ── Main Content ─────────────────────────────────────────────────────────── */
+    #main-content {
+      flex: 1;
+      padding: 24px 32px 64px;
+      max-width: 900px;
+      min-width: 0;
+    }
+
+    /* ── Sections ─────────────────────────────────────────────────────────────── */
+    .config-section {
+      margin-bottom: 40px;
+      scroll-margin-top: 116px;
+    }
+
+    .section-header {
+      margin-bottom: 16px;
+    }
+
+    .section-header h2 {
+      margin: 0 0 6px;
+      font-size: var(--font-size-xl);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
+    }
+
+    .section-desc {
+      margin: 0;
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-500);
+      line-height: 1.5;
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-bottom: 12px;
+    }
+
+    .card-footer {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-gray-100);
+    }
+
+    /* ── Form Elements ─────────────────────────────────────────────────────────── */
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-700);
+      margin-bottom: 6px;
+    }
+
+    textarea, input[type="text"], select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-family: var(--font-family);
+      color: var(--color-gray-900);
+      background: var(--color-white);
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+      outline: none;
+    }
+
+    textarea:focus, input[type="text"]:focus, select:focus {
+      border-color: var(--color-primary-400);
+      box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+    }
+
+    textarea { resize: vertical; }
+
+    .field-hint {
+      margin-top: 5px;
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-400);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .required-star { color: var(--color-error-500); margin-left: 2px; }
+
+    hr.section-divider {
+      border: none;
+      border-top: 1px solid var(--color-gray-100);
+      margin: 20px 0;
+    }
+
+    /* ── Toggle Switch ──────────────────────────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--color-gray-100);
+    }
+
+    .toggle-row.tight {
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+
+    .toggle-row:last-child { border-bottom: none; margin-bottom: 0; }
+
+    .toggle-label {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-800);
+      margin-bottom: 3px;
+      display: block;
+    }
+
+    .toggle-hint {
+      font-size: var(--font-size-xs);
+      color: var(--color-gray-500);
+      margin-top: 2px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .toggle-switch.small {
+      width: 36px;
+      height: 20px;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: var(--color-gray-300);
+      border-radius: var(--radius-full);
+      transition: background var(--transition-fast);
+    }
+
+    .slider::before {
+      content: '';
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform var(--transition-fast);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .toggle-switch.small .slider::before {
+      height: 14px;
+      width: 14px;
+    }
+
+    input:checked + .slider { background: var(--color-primary-600); }
+    input:checked + .slider::before { transform: translateX(20px); }
+    .toggle-switch.small input:checked + .slider::before { transform: translateX(16px); }
+
+    /* ── Sub-settings (hidden/shown by toggle) ───────────────────────────────── */
+    .sub-settings {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-gray-100);
+    }
+
+    .sub-settings.hidden { display: none; }
+
+    /* ── Radio Group ─────────────────────────────────────────────────────────── */
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: var(--font-weight-normal);
+      color: var(--color-gray-700);
+      cursor: pointer;
+    }
+
+    .radio-group input[type="radio"] {
+      width: auto;
+      accent-color: var(--color-primary-600);
+    }
+
+    /* ── Field Cards (built-in fields collapsible) ───────────────────────────── */
+    .field-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .field-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--transition-fast);
+    }
+
+    .field-card-header:hover { background: var(--color-gray-50); }
+
+    .field-card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-800);
+    }
+
+    .field-type-badge {
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      font-weight: var(--font-weight-bold);
+      letter-spacing: 0.05em;
+      background: var(--color-primary-100);
+      color: var(--color-primary-700);
+    }
+
+    .field-required-badge {
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      font-weight: var(--font-weight-medium);
+      background: var(--color-error-50);
+      color: var(--color-error-600);
+    }
+
+    .field-card-chevron {
+      font-size: 16px;
+      color: var(--color-gray-400);
+      transition: transform var(--transition-fast);
+    }
+
+    .field-card.expanded .field-card-chevron { transform: rotate(180deg); }
+
+    .field-card-body {
+      display: none;
+      padding: 0 20px 20px;
+      border-top: 1px solid var(--color-gray-100);
+    }
+
+    .field-card-body.visible { display: block; }
+
+    /* ── Custom Fields Table ─────────────────────────────────────────────────── */
+    .fields-table {
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .fields-table-header {
+      display: grid;
+      grid-template-columns: 32px 1fr 90px 70px 80px 100px 80px;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--color-gray-50);
+      border-bottom: 1px solid var(--color-gray-200);
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-gray-400);
+    }
+
+    .custom-field-row {
+      display: grid;
+      grid-template-columns: 32px 1fr 90px 70px 80px 100px 80px;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--color-gray-100);
+      font-size: var(--font-size-sm);
+      transition: background var(--transition-fast);
+    }
+
+    .custom-field-row:last-child { border-bottom: none; }
+    .custom-field-row:hover { background: var(--color-gray-50); }
+
+    .drag-handle {
+      cursor: grab;
+      color: var(--color-gray-300);
+      font-size: 16px;
+      text-align: center;
+      user-select: none;
+    }
+
+    .drag-handle:active { cursor: grabbing; }
+    .custom-field-row.dragging { opacity: 0.5; }
+    .custom-field-row.drag-over { border-top: 2px solid var(--color-primary-400); }
+
+    .field-label-cell {
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-800);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .field-type-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      font-weight: var(--font-weight-semibold);
+      background: var(--color-gray-100);
+      color: var(--color-gray-600);
+      text-transform: uppercase;
+    }
+
+    .field-required-pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: var(--font-weight-medium);
+      color: var(--color-gray-500);
+    }
+
+    .field-required-pill.is-required { color: var(--color-error-500); }
+
+    .row-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .empty-state {
+      padding: 32px;
+      text-align: center;
+      color: var(--color-gray-400);
+      font-size: var(--font-size-sm);
+    }
+
+    /* ── Buttons ──────────────────────────────────────────────────────────────── */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      background: var(--color-primary-600);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      cursor: pointer;
+      transition: background var(--transition-fast);
+      white-space: nowrap;
+    }
+
+    .btn-primary:hover  { background: var(--color-primary-700); }
+    .btn-primary:active { background: var(--color-primary-800); }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      background: var(--color-white);
+      color: var(--color-gray-700);
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .btn-secondary:hover { background: var(--color-gray-50); border-color: var(--color-gray-400); }
+
+    .btn-text {
+      background: none;
+      border: none;
+      padding: 6px 10px;
+      font-size: var(--font-size-sm);
+      color: var(--color-primary-600);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      font-weight: var(--font-weight-medium);
+      transition: background var(--transition-fast);
+    }
+
+    .btn-text:hover { background: var(--color-primary-50); }
+
+    .btn-icon {
+      background: none;
+      border: none;
+      padding: 6px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--color-gray-500);
+      transition: all var(--transition-fast);
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .btn-icon:hover { background: var(--color-gray-100); color: var(--color-gray-700); }
+    .btn-icon.danger:hover { background: var(--color-error-50); color: var(--color-error-600); }
+
+    /* ── Slide-out Panel ──────────────────────────────────────────────────────── */
+    .panel-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: 200;
+    }
+
+    .slide-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 480px;
+      background: var(--color-white);
+      box-shadow: var(--shadow-xl);
+      z-index: 201;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(0);
+      transition: transform var(--transition-slow);
+    }
+
+    .slide-panel.hidden {
+      transform: translateX(100%);
+    }
+
+    .panel-overlay.hidden { display: none; }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--color-gray-200);
+      flex-shrink: 0;
+    }
+
+    .panel-header h3 {
+      margin: 0;
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-gray-900);
+    }
+
+    .panel-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--color-gray-400);
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      transition: all var(--transition-fast);
+    }
+
+    .panel-close:hover { background: var(--color-gray-100); color: var(--color-gray-700); }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+
+    .panel-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 24px;
+      border-top: 1px solid var(--color-gray-200);
+      flex-shrink: 0;
+    }
+
+    /* ── Type Selector ────────────────────────────────────────────────────────── */
+    .type-selector {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .type-btn {
+      padding: 7px 14px;
+      border: 1px solid var(--color-gray-300);
+      border-radius: var(--radius-md);
+      background: var(--color-white);
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .type-btn:hover { border-color: var(--color-primary-400); color: var(--color-primary-600); }
+    .type-btn.active { background: var(--color-primary-50); border-color: var(--color-primary-400); color: var(--color-primary-700); font-weight: var(--font-weight-semibold); }
+
+    /* ── Choices list ─────────────────────────────────────────────────────────── */
+    #panel-choices-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+
+    .choice-row { display: flex; gap: 6px; align-items: center; }
+    .choice-row input { flex: 1; }
+
+    /* ── Triggers link card ───────────────────────────────────────────────────── */
+    .triggers-link-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .triggers-stats {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      font-size: var(--font-size-sm);
+      color: var(--color-gray-600);
+    }
+
+    .stat-item strong {
+      font-size: var(--font-size-xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-gray-900);
+      display: block;
+      line-height: 1.2;
+    }
+
+    .triggers-link-btn {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ── Hidden utility ───────────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+
+    /* ── Responsive ───────────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      #sidebar-nav { display: none; }
+      #main-content { padding: 16px; }
+      .form-row { grid-template-columns: 1fr; }
+      .fields-table-header,
+      .custom-field-row { grid-template-columns: 32px 1fr 70px 60px 80px; }
+      .col-attempts, .custom-field-row .col-attempts { display: none; }
+      .slide-panel { width: 100%; }
+    }
+  </style>
 </head>
 <body>
-  <div class="app-container">
-    <!-- ================================================================
-         HEADER
-         ================================================================ -->
-    <header class="header">
-      <div class="header-left">
-        <button class="btn btn-ghost btn-icon" id="btn-back-to-profile" title="Back to Company Profile">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <a href="#" id="header-logo-link" class="header-logo" title="Back to Company Profile">
-          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
-            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-          </svg>
-          <span class="header-logo-text">ClientVia</span>
-        </a>
-        <div class="header-divider"></div>
-        <span class="header-title">Booking Logic</span>
-      </div>
-      
-      <div class="header-center">
-        <span class="company-name" id="header-company-name">Loading...</span>
-        <span class="company-id-pill" id="header-company-id">—</span>
-      </div>
-      
-      <div class="header-right">
-        <button class="btn btn-primary" id="btn-download-truth">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 10V2M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Download Truth JSON
-        </button>
-      </div>
-    </header>
 
-    <!-- ================================================================
-         MAIN CONTENT
-         ================================================================ -->
-    <main class="main-content">
-      <!-- Page Header -->
-      <div class="page-header">
-        <div class="page-header-left">
-          <a href="#" class="back-button" id="btn-back">
-            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Back to Agent Console
-          </a>
-          <div>
-            <h1 class="page-title">Booking Logic Engine</h1>
-            <p class="page-subtitle">Payload → bookingCtx → Deterministic Prompts → Confirmation</p>
+  <!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
+  <div id="top-bar">
+    <div id="breadcrumb">
+      <a href="agent2.html" id="link-back">← Agent 2.0</a>
+      <span>Booking Configuration</span>
+    </div>
+    <div id="top-bar-right">
+      <span id="company-name-display"></span>
+      <span id="save-status"></span>
+      <button id="btn-save-all" class="btn-primary">Save All Changes</button>
+    </div>
+  </div>
+
+  <!-- ── FLOW VISUALIZER ──────────────────────────────────────────────────── -->
+  <div id="flow-visualizer">
+    <!-- Rendered by JS -->
+  </div>
+
+  <!-- ── PAGE BODY ─────────────────────────────────────────────────────────── -->
+  <div id="page-body">
+
+    <!-- LEFT SIDEBAR NAV -->
+    <nav id="sidebar-nav">
+      <div class="nav-section-title">Flow Sections</div>
+      <a href="#section-bridge"       class="nav-item" data-section="bridge">🏁 Bridge</a>
+      <a href="#section-recognition"  class="nav-item" data-section="recognition">📞 Caller Recognition</a>
+      <a href="#section-builtin"      class="nav-item" data-section="builtin">👤 Built-in Fields</a>
+      <a href="#section-custom"       class="nav-item" data-section="custom">📋 Custom Fields</a>
+      <a href="#section-altcontact"   class="nav-item" data-section="altcontact">📱 Alt Contact</a>
+      <a href="#section-confirmation" class="nav-item" data-section="confirmation">✅ Confirmation</a>
+      <a href="#section-calendar"     class="nav-item" data-section="calendar">📅 Calendar</a>
+      <a href="#section-digression"   class="nav-item" data-section="digression">🔄 Digression</a>
+      <a href="#section-triggers"     class="nav-item" data-section="triggers">🎯 Triggers</a>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main id="main-content">
+
+      <!-- ── SECTION 1: BRIDGE ─────────────────────────────────────────────── -->
+      <section id="section-bridge" class="config-section">
+        <div class="section-header">
+          <h2>🏁 Booking Bridge</h2>
+          <p class="section-desc">The first thing the caller hears the moment booking begins — plays instantly as pre-cached audio if configured.</p>
+        </div>
+        <div class="card">
+          <div class="form-group">
+            <label for="bridge-phrase">Bridge Phrase</label>
+            <textarea id="bridge-phrase" rows="2" placeholder="e.g. Alright, let me get that scheduled for you..."></textarea>
+            <div class="field-hint">Keep it under 10 words for instant delivery. Longer phrases are cached as MP3 automatically on save.</div>
           </div>
         </div>
-        <div>
-          <button class="btn btn-secondary" id="btn-save-config">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12.667 14H3.333A1.333 1.333 0 0 1 2 12.667V3.333A1.333 1.333 0 0 1 3.333 2h7.334L14 5.333v7.334A1.333 1.333 0 0 1 12.667 14Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M11.333 14v-4H4.667v4M4.667 2v3.333h5.333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Save Changes
-          </button>
+      </section>
+
+      <!-- ── SECTION 2: CALLER RECOGNITION ────────────────────────────────── -->
+      <section id="section-recognition" class="config-section">
+        <div class="section-header">
+          <h2>📞 Caller Recognition</h2>
+          <p class="section-desc">When an inbound number matches a known contact, confirm their info on file instead of re-collecting everything.</p>
         </div>
-      </div>
-
-      <!-- ═══════════════════════════════════════════════════════════════
-           SINGLE-PAGE LAYOUT — CLEAN CARD-BASED DESIGN (FULL WIDTH)
-           ═══════════════════════════════════════════════════════════════ -->
-      <div class="single-column-layout-full">
-
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: Booking Triggers — nav shortcut
-             ─────────────────────────────────────────────────────────── -->
         <div class="card">
-          <div class="card-header">
+          <div class="toggle-row">
             <div>
-              <h2 class="card-title">Booking Triggers</h2>
-              <p class="form-hint" style="margin:0">Keyword/phrase triggers that fire inside the booking flow — same 123RP engine as Discovery</p>
+              <label class="toggle-label">Enable Caller Recognition</label>
+              <div class="toggle-hint">Looks up the inbound number at booking start. Found → confirm on file. Not found → collect normally.</div>
             </div>
-            <a id="btn-goto-booking-triggers" href="#" class="btn btn-secondary" style="white-space:nowrap">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8H13M9 4L13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Manage Triggers
-            </a>
+            <label class="toggle-switch">
+              <input type="checkbox" id="recognition-enabled">
+              <span class="slider"></span>
+            </label>
           </div>
-          <div class="card-body" style="padding-top:0">
-            <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:0.875rem;color:var(--color-gray-500)">
-              <span>✅ INFO — hold step &amp; answer caller question</span>
-              <span>🚫 BLOCK — freeze step until intent changes</span>
-              <span>🔀 REDIRECT — switch service type mid-booking</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: Calendar Connection Status
-             ─────────────────────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Calendar Connection</h2>
-            <span class="badge" id="badge-calendar-status">Checking...</span>
-          </div>
-          <div class="card-body">
-            <div id="calendar-connected" class="hidden">
-              <div class="flex items-center gap-4">
-                <div style="width: 48px; height: 48px; background: var(--color-success-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="3" y="4" width="18" height="18" rx="2" stroke="#22c55e" stroke-width="2"/>
-                    <path d="M3 10H21" stroke="#22c55e" stroke-width="2"/>
-                    <path d="M8 2V6M16 2V6" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                </div>
-                <div>
-                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Google Calendar Connected</div>
-                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-500); margin-top: var(--space-1);" id="calendar-id-display">Calendar ID: —</div>
-                </div>
-              </div>
-            </div>
-            <div id="calendar-disconnected">
-              <div class="flex items-center gap-4">
-                <div style="width: 48px; height: 48px; background: var(--color-warning-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 3L22 21H2L12 3Z" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
-                    <path d="M12 10V14M12 18V18.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                </div>
-                <div>
-                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Calendar Not Connected</div>
-                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-500); margin-top: var(--space-1);">Connect Google Calendar in Company Profile to enable booking.</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: Booking Parameters
-             ─────────────────────────────────────────────────────────── -->
-        <div class="card" id="booking-prompts">
-          <div class="card-header">
-            <h2 class="card-title">Booking Parameters</h2>
-          </div>
-          <div class="card-body">
+          <div id="recognition-settings" class="sub-settings hidden">
             <div class="form-group">
-              <label class="form-label">Slot Duration (minutes)</label>
-              <select class="form-select" id="input-slot-duration" style="max-width: 300px;">
-                <option value="15">15 minutes</option>
+              <label for="recognition-confirm-prompt">Confirm-All Prompt</label>
+              <textarea id="recognition-confirm-prompt" rows="2" placeholder="We have {name} at {address} on file — is all of that still correct for today's visit?"></textarea>
+              <div class="field-hint">Variables: {name} {phone} {address}</div>
+            </div>
+            <div class="form-group">
+              <label>On Confirmed "Yes"</label>
+              <div class="radio-group">
+                <label><input type="radio" name="recognition-on-yes" value="SKIP_TO_CUSTOM"> Skip to Custom Fields (if any)</label>
+                <label><input type="radio" name="recognition-on-yes" value="SKIP_TO_CALENDAR"> Skip directly to Calendar</label>
+                <label><input type="radio" name="recognition-on-yes" value="COLLECT_ALL"> Collect all fields anyway</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 3: BUILT-IN FIELDS ───────────────────────────────────── -->
+      <section id="section-builtin" class="config-section">
+        <div class="section-header">
+          <h2>👤 Built-in Fields</h2>
+          <p class="section-desc">Name, phone, and address — always collected in this order. Customize the prompts and digression recovery phrases.</p>
+        </div>
+
+        <!-- NAME CARD -->
+        <div class="card field-card" id="field-card-name-wrap">
+          <div class="field-card-header" onclick="toggleFieldCard('name')">
+            <div class="field-card-title">
+              <span class="field-type-badge">NAME</span>
+              <span>Caller Name</span>
+              <span class="field-required-badge">Required</span>
+            </div>
+            <span class="field-card-chevron">▾</span>
+          </div>
+          <div class="field-card-body" id="field-card-name">
+            <div class="form-row" style="margin-top:16px">
+              <div class="form-group">
+                <label for="builtin-ask-name">Ask Prompt</label>
+                <textarea id="builtin-ask-name" rows="2" placeholder="To get started, may I have your name?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="builtin-name-reanchor">Re-Anchor Phrase</label>
+                <textarea id="builtin-name-reanchor" rows="2" placeholder="I just need your full name — what is it?"></textarea>
+                <div class="field-hint">Said after a digression to redirect back to this field.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PHONE CARD -->
+        <div class="card field-card" id="field-card-phone-wrap">
+          <div class="field-card-header" onclick="toggleFieldCard('phone')">
+            <div class="field-card-title">
+              <span class="field-type-badge">PHONE</span>
+              <span>Callback Number</span>
+              <span class="field-required-badge">Required</span>
+            </div>
+            <span class="field-card-chevron">▾</span>
+          </div>
+          <div class="field-card-body" id="field-card-phone">
+            <div class="form-row" style="margin-top:16px">
+              <div class="form-group">
+                <label for="builtin-ask-phone">Ask Prompt</label>
+                <textarea id="builtin-ask-phone" rows="2" placeholder="What's the best callback number for you?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="builtin-phone-reanchor">Re-Anchor Phrase</label>
+                <textarea id="builtin-phone-reanchor" rows="2" placeholder="I still need a callback number — what's the best number to reach you?"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADDRESS CARD -->
+        <div class="card field-card" id="field-card-address-wrap">
+          <div class="field-card-header" onclick="toggleFieldCard('address')">
+            <div class="field-card-title">
+              <span class="field-type-badge">ADDRESS</span>
+              <span>Service Address</span>
+              <span class="field-required-badge">Required</span>
+            </div>
+            <span class="field-card-chevron">▾</span>
+          </div>
+          <div class="field-card-body" id="field-card-address">
+            <div class="form-row" style="margin-top:16px">
+              <div class="form-group">
+                <label for="builtin-ask-address">Ask Prompt</label>
+                <textarea id="builtin-ask-address" rows="2" placeholder="And what address should we send the technician to?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="builtin-address-reanchor">Re-Anchor Phrase</label>
+                <textarea id="builtin-address-reanchor" rows="2" placeholder="I still need the service address — what's the full address?"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 4: CUSTOM FIELDS ─────────────────────────────────────── -->
+      <section id="section-custom" class="config-section">
+        <div class="section-header">
+          <h2>📋 Custom Fields</h2>
+          <p class="section-desc">Collect any additional information your business needs — membership numbers, warranty status, preferred technician, and more. Drag to reorder.</p>
+        </div>
+        <div class="card" style="padding:0">
+          <div id="custom-fields-empty" class="empty-state hidden">
+            <p>No custom fields configured yet. Add one below to collect additional info from callers.</p>
+          </div>
+          <div id="custom-fields-table" class="fields-table">
+            <div class="fields-table-header">
+              <div></div>
+              <div>Label</div>
+              <div>Type</div>
+              <div>Required</div>
+              <div>Attempts</div>
+              <div>Fallback</div>
+              <div>Actions</div>
+            </div>
+            <div id="custom-fields-body">
+              <!-- Rows rendered by JS -->
+            </div>
+          </div>
+          <div class="card-footer" style="padding:12px 16px">
+            <button id="btn-add-custom-field" class="btn-secondary">+ Add Custom Field</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 5: ALT CONTACT ────────────────────────────────────────── -->
+      <section id="section-altcontact" class="config-section">
+        <div class="section-header">
+          <h2>📱 Alt Contact Collection</h2>
+          <p class="section-desc">After collecting the caller's phone, offer to record an alternate contact — a neighbor, spouse, or "Nancy next door".</p>
+        </div>
+        <div class="card">
+          <div class="toggle-row">
+            <div>
+              <label class="toggle-label">Enable Alt Contact Collection</label>
+              <div class="toggle-hint">Agent offers to collect a second contact after the caller's primary phone is saved.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="altcontact-enabled">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div id="altcontact-settings" class="sub-settings hidden">
+            <div class="form-group">
+              <label for="altcontact-offer-prompt">Offer Prompt</label>
+              <textarea id="altcontact-offer-prompt" rows="2" placeholder="Is this the best number to reach you, or do you have an alternate contact we should have on file?"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="altcontact-ask-name">Ask Name Prompt</label>
+                <input type="text" id="altcontact-ask-name" placeholder="What's the name for that contact?">
+              </div>
+              <div class="form-group">
+                <label for="altcontact-ask-phone">Ask Phone Prompt</label>
+                <input type="text" id="altcontact-ask-phone" placeholder="And their phone number?">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="altcontact-ask-notes">Ask Notes Prompt</label>
+              <input type="text" id="altcontact-ask-notes" placeholder="Any notes? e.g. their relationship to you?">
+            </div>
+            <div class="toggle-row tight">
+              <div>
+                <label class="toggle-label">Allow Multiple Alt Contacts</label>
+                <div class="toggle-hint">If enabled, the agent will ask if the caller wants to add another after saving the first.</div>
+              </div>
+              <label class="toggle-switch small">
+                <input type="checkbox" id="altcontact-allow-multiple">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div id="altcontact-multiple-settings" class="sub-settings hidden">
+              <div class="form-group">
+                <label for="altcontact-multiple-prompt">Ask for Another Prompt</label>
+                <input type="text" id="altcontact-multiple-prompt" placeholder="Any other contacts you'd like us to have on file?">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 6: CONFIRMATION STEP ─────────────────────────────────── -->
+      <section id="section-confirmation" class="config-section">
+        <div class="section-header">
+          <h2>✅ Confirmation Step</h2>
+          <p class="section-desc">Before going to calendar lookup, confirm all collected information with the caller in one summary read-back.</p>
+        </div>
+        <div class="card">
+          <div class="toggle-row">
+            <div>
+              <label class="toggle-label">Enable Confirmation Step</label>
+              <div class="toggle-hint">Recommended. Caller confirms all collected info before the calendar lookup begins.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="confirmation-enabled">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div id="confirmation-settings" class="sub-settings">
+            <div class="form-group">
+              <label for="confirmation-template">Confirmation Template</label>
+              <textarea id="confirmation-template" rows="3" placeholder="Just to confirm: {name}, best number {phone}, service at {address} — does that all sound right?"></textarea>
+              <div class="field-hint">Variables: {name} {firstName} {lastName} {phone} {address} {customFields}</div>
+            </div>
+            <div class="form-group">
+              <label>If Caller Says "No"</label>
+              <div class="radio-group">
+                <label><input type="radio" name="confirmation-on-no" value="RECOLLECT_ALL"> Re-collect all fields from the beginning</label>
+                <label><input type="radio" name="confirmation-on-no" value="RETURN_TO_START"> Return to very start of booking</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 7: CALENDAR & SCHEDULING ─────────────────────────────── -->
+      <section id="section-calendar" class="config-section">
+        <div class="section-header">
+          <h2>📅 Calendar & Scheduling</h2>
+          <p class="section-desc">Control what the agent says during calendar lookup and appointment time selection.</p>
+        </div>
+        <div class="card">
+          <div class="form-group">
+            <label for="calendar-hold-message">Hold Message</label>
+            <textarea id="calendar-hold-message" rows="2" placeholder="One moment while I check our available times..."></textarea>
+            <div class="field-hint">Plays while the system queries Google Calendar. Keep it natural and brief.</div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="calendar-offer-times">Offer Times Prompt</label>
+              <textarea id="calendar-offer-times" rows="2" placeholder="I have {t1} or {t2} available — which works better for you?"></textarea>
+              <div class="field-hint">Variables: {t1} {t2} {t3}</div>
+            </div>
+            <div class="form-group">
+              <label for="calendar-no-times">No Times Available Prompt</label>
+              <textarea id="calendar-no-times" rows="2" placeholder="I'm not seeing availability right now — could you do {alternative}?"></textarea>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="calendar-confirmation-msg">Booking Confirmation Message</label>
+            <textarea id="calendar-confirmation-msg" rows="2" placeholder="You're all set! A technician will be out {date} at {time}. You'll receive a confirmation shortly."></textarea>
+            <div class="field-hint">Variables: {name} {date} {time} {endTime}</div>
+          </div>
+          <hr class="section-divider">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="calendar-duration">Appointment Duration</label>
+              <select id="calendar-duration">
                 <option value="30">30 minutes</option>
-                <option value="45">45 minutes</option>
                 <option value="60" selected>60 minutes (1 hour)</option>
                 <option value="90">90 minutes</option>
-                <option value="120">120 minutes (2 hours)</option>
+                <option value="120">2 hours</option>
+                <option value="180">3 hours</option>
+                <option value="240">4 hours</option>
               </select>
-              <p class="form-hint">Default appointment slot length for new bookings.</p>
             </div>
-            
             <div class="form-group">
-              <label class="form-label">Buffer Between Appointments (minutes)</label>
-              <select class="form-select" id="input-buffer-minutes" style="max-width: 300px;">
+              <label for="calendar-buffer">Buffer Between Slots</label>
+              <select id="calendar-buffer">
                 <option value="0" selected>No buffer</option>
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes</option>
-                <option value="60">60 minutes</option>
+                <option value="60">1 hour</option>
               </select>
-              <p class="form-hint">Minimum time between appointment slots.</p>
             </div>
-            
-            <div class="form-group mb-0">
-              <label class="form-label">Advance Booking Window (days)</label>
-              <select class="form-select" id="input-advance-days" style="max-width: 300px;">
+            <div class="form-group">
+              <label for="calendar-advance">Advance Booking Window</label>
+              <select id="calendar-advance">
                 <option value="7">7 days</option>
-                <option value="14" selected>14 days (2 weeks)</option>
-                <option value="21">21 days (3 weeks)</option>
+                <option value="14" selected>14 days</option>
                 <option value="30">30 days</option>
                 <option value="60">60 days</option>
+                <option value="90">90 days</option>
               </select>
-              <p class="form-hint">How far in advance callers can book appointments.</p>
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Booking Prompts -->
+      <!-- ── SECTION 8: DIGRESSION & SLOT FILLING ──────────────────────────── -->
+      <section id="section-digression" class="config-section">
+        <div class="section-header">
+          <h2>🔄 Digression & Slot Filling</h2>
+          <p class="section-desc">Controls how the agent handles callers who go off-topic during field collection. These are global defaults — each custom field can override them individually.</p>
+        </div>
         <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Booking Prompts (Required)</h2>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="slot-max-attempts">Default Max Attempts Per Field</label>
+              <select id="slot-max-attempts">
+                <option value="2">2 attempts</option>
+                <option value="3" selected>3 attempts (recommended)</option>
+                <option value="4">4 attempts</option>
+                <option value="5">5 attempts</option>
+              </select>
+              <div class="field-hint">How many T2 LLM digression turns before the fallback action triggers.</div>
+            </div>
+            <div class="form-group">
+              <label for="slot-fallback-action">Default Fallback Action</label>
+              <select id="slot-fallback-action">
+                <option value="RE_ASK_PLAIN">Re-ask in plain language</option>
+                <option value="SKIP">Skip field (if not required)</option>
+                <option value="TRANSFER">Transfer to human</option>
+                <option value="COLLECT_ASYNC">Offer async collection</option>
+              </select>
+            </div>
           </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Ask Name Prompt</label>
-              <textarea class="form-textarea" id="input-booking-ask-name" rows="2" placeholder="To get started with your booking, may I have your name please?"></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Ask Phone Prompt</label>
-              <textarea class="form-textarea" id="input-booking-ask-phone" rows="2" placeholder="What's the best phone number to reach you at?"></textarea>
-            </div>
-            <div class="form-group mb-0">
-              <label class="form-label">Hold Message</label>
-              <textarea class="form-textarea" id="input-hold-message" rows="2" placeholder="Please hold while I pull up the calendar."></textarea>
-            </div>
+          <div class="form-group">
+            <label for="slot-reanchor-suffix">Re-Anchor Suffix</label>
+            <input type="text" id="slot-reanchor-suffix" placeholder="Now, to get your appointment confirmed —">
+            <div class="field-hint">Appended after a booking trigger fires to steer the caller back to the pending field.</div>
           </div>
         </div>
+      </section>
 
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: Confirmation Settings
-             ─────────────────────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Confirmation Settings</h2>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Confirmation Message</label>
-              <textarea class="form-textarea" id="input-confirmation-message" rows="4" placeholder="Your appointment is confirmed for {date} at {time}. We'll see you then!"></textarea>
-              <p class="form-hint">Spoken after booking is complete. Use {date} and {time} placeholders.</p>
-            </div>
-            
-            <div class="form-group mb-0">
-              <label class="form-label checkbox-label">
-                <input type="checkbox" id="input-sms-confirmation">
-                Send SMS Confirmation
-              </label>
-              <p class="form-hint">Text the caller a confirmation message after booking.</p>
-            </div>
-          </div>
+      <!-- ── SECTION 9: BOOKING TRIGGERS ─────────────────────────────────── -->
+      <section id="section-triggers" class="config-section">
+        <div class="section-header">
+          <h2>🎯 Booking Triggers</h2>
+          <p class="section-desc">Keyword and phrase triggers that fire inside the booking flow — the same 123RP engine as Discovery. Manage them on their dedicated page.</p>
         </div>
-
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: Booking Flow Steps Reference
-             ─────────────────────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Booking Flow Steps</h2>
-          </div>
-          <div class="card-body">
-            <div style="display: flex; flex-direction: column; gap: var(--space-4);">
-              <div class="flex items-start gap-3">
-                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">1</div>
-                <div style="flex: 1;">
-                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Receive Handoff Payload</div>
-                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Accept payload from Agent 2.0 with assumptions & summary</div>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">2</div>
-                <div style="flex: 1;">
-                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Collect Missing Fields</div>
-                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Prompt for name, phone, address if not already captured</div>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">3</div>
-                <div style="flex: 1;">
-                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Offer Available Slots</div>
-                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Query calendar and present open time slots</div>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">4</div>
-                <div style="flex: 1;">
-                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Confirm & Book</div>
-                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Create calendar event and confirm with caller</div>
-                </div>
-              </div>
+        <div class="card triggers-link-card">
+          <div id="triggers-stats" class="triggers-stats">
+            <div class="stat-item">
+              <strong id="triggers-total">—</strong>
+              Total Triggers
+            </div>
+            <div class="stat-item">
+              <strong id="triggers-active">—</strong>
+              Active
+            </div>
+            <div class="stat-item">
+              <strong id="triggers-info">—</strong>
+              INFO
+            </div>
+            <div class="stat-item">
+              <strong id="triggers-block">—</strong>
+              BLOCK
+            </div>
+            <div class="stat-item">
+              <strong id="triggers-redirect">—</strong>
+              REDIRECT
             </div>
           </div>
+          <a id="btn-go-triggers" href="#" class="btn-primary triggers-link-btn">→ Manage Booking Triggers</a>
         </div>
+      </section>
 
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: Booking Flow Simulator
-             ─────────────────────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">
-              <span class="status-dot active"></span>
-              Booking Flow Simulator
-            </h2>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Sample Handoff Payload</label>
-              <div class="json-viewer">
-                <div class="json-viewer-content json-viewer-content-md">
-                  <textarea class="form-textarea" id="test-payload-input" rows="8" style="font-family: 'SF Mono', 'Monaco', 'Consolas', monospace; font-size: var(--font-size-xs); background: var(--color-gray-900); color: var(--color-gray-100); border: none; resize: vertical;">{
-  "handoffContractVersion": "AC1",
-  "companyId": "",
-  "callSid": "TEST_123",
-  "fromPhone": "+15551234567",
-  "assumptions": {
-    "firstName": "John",
-    "lastName": "Smith"
-  },
-  "summary": {
-    "issue": "AC not cooling",
-    "serviceType": "repair",
-    "urgency": "routine"
-  }
-}</textarea>
-                </div>
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label class="form-label">User Input (optional)</label>
-              <input type="text" class="form-input" id="test-user-input" placeholder="Caller response to current prompt...">
-            </div>
-            
-            <div class="flex gap-2 mb-4">
-              <button class="btn btn-primary flex-1" id="btn-test-step">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
-                </svg>
-                Run Step
-              </button>
-              <button class="btn btn-secondary" id="btn-reset-booking">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M13 7C13 10.3137 10.3137 13 7 13C3.68629 13 1 10.3137 1 7C1 3.68629 3.68629 1 7 1C9.22222 1 11.1684 2.21309 12.1892 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <path d="M10 4H12.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Reset
-              </button>
-            </div>
-            
-            <div class="test-output">
-              <div class="test-output-label">Next Prompt</div>
-              <div class="test-output-text empty" id="test-next-prompt">Run a step to see the next prompt...</div>
-            </div>
-
-            <div class="mt-4">
-              <div class="test-output-label">Booking Context (bookingCtx)</div>
-              <div class="json-viewer mt-2">
-                <div class="json-viewer-content json-viewer-content-md">
-                  <pre id="test-booking-ctx">null</pre>
-                </div>
-              </div>
-            </div>
-
-            <div class="trace-log">
-              <pre id="test-booking-trace">[Booking flow trace will appear here]</pre>
-            </div>
-          </div>
-        </div>
-
-        <!-- ───────────────────────────────────────────────────────────
-             CARD: bookingCtx Contract Reference
-             ─────────────────────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">bookingCtx Contract Shape</h2>
-          </div>
-          <div class="card-body">
-            <p class="form-hint mb-4">The booking context object tracks progress through the booking flow:</p>
-            <div class="json-viewer">
-              <div class="json-viewer-content json-viewer-content-lg">
-                <pre>{
-  "step": "COLLECT_NAME|COLLECT_PHONE|OFFER_SLOTS|CONFIRM",
-  "collectedFields": {
-    "firstName": "...",
-    "lastName": "...",
-    "phone": "...",
-    "address": "..."
-  },
-  "selectedSlot": {
-    "date": "2026-02-23",
-    "time": "10:00 AM",
-    "endTime": "11:00 AM"
-  },
-  "calendarEventId": "...",
-  "completed": false
-}</pre>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
     </main>
-
-    <!-- Footer -->
-    <footer class="footer">
-      <span>Agent Console v1.0.0</span>
-      <span> · </span>
-      <span>Booking Logic Engine BL1.0</span>
-    </footer>
-
-    <!-- Toast Container -->
-    <div class="toast-container" id="toast-container"></div>
   </div>
 
-  <!-- JavaScript -->
+  <!-- ── CUSTOM FIELD SLIDE-OUT PANEL ─────────────────────────────────────── -->
+  <div id="field-panel-overlay" class="panel-overlay hidden" onclick="closeFieldPanel()"></div>
+  <div id="field-panel" class="slide-panel hidden">
+    <div class="panel-header">
+      <h3 id="panel-title">Add Custom Field</h3>
+      <button class="panel-close" onclick="closeFieldPanel()">✕</button>
+    </div>
+    <div class="panel-body">
+      <input type="hidden" id="panel-field-index" value="-1">
+
+      <div class="form-group">
+        <label for="panel-label">Label <span class="required-star">*</span></label>
+        <input type="text" id="panel-label" placeholder="e.g. Membership Number">
+      </div>
+      <div class="form-group">
+        <label for="panel-key">Field Key <span class="required-star">*</span></label>
+        <input type="text" id="panel-key" placeholder="e.g. membership_number">
+        <div class="field-hint">Lowercase letters and underscores only. Auto-generated from label.</div>
+      </div>
+      <div class="form-group">
+        <label>Field Type</label>
+        <div class="type-selector" id="panel-type-selector">
+          <button class="type-btn active" data-type="text">📝 Text</button>
+          <button class="type-btn" data-type="phone">📞 Phone</button>
+          <button class="type-btn" data-type="yesno">✓ Yes/No</button>
+          <button class="type-btn" data-type="choice">📋 Choice</button>
+          <button class="type-btn" data-type="number">🔢 Number</button>
+        </div>
+      </div>
+      <div id="panel-choices-group" class="form-group hidden">
+        <label>Answer Choices</label>
+        <div id="panel-choices-list"></div>
+        <button class="btn-text" onclick="addChoice()">+ Add Choice</button>
+      </div>
+      <div class="form-group">
+        <div class="toggle-row tight" style="border:none;margin-bottom:0;padding-bottom:0">
+          <label class="toggle-label" style="margin:0">Required Field</label>
+          <label class="toggle-switch small">
+            <input type="checkbox" id="panel-required">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="panel-prompt">Ask Prompt <span class="required-star">*</span></label>
+        <textarea id="panel-prompt" rows="2" placeholder="e.g. What is your membership number?"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="panel-reanchor">Re-Anchor Phrase</label>
+        <textarea id="panel-reanchor" rows="2" placeholder="e.g. I still need your membership number to continue — what is it?"></textarea>
+        <div class="field-hint">Said after a digression to redirect back to this question.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="panel-max-attempts">Max Attempts</label>
+          <select id="panel-max-attempts">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="panel-fallback">Fallback Action</label>
+          <select id="panel-fallback">
+            <option value="RE_ASK_PLAIN">Re-ask plainly</option>
+            <option value="SKIP">Skip field</option>
+            <option value="TRANSFER">Transfer to human</option>
+            <option value="COLLECT_ASYNC">Collect async</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="panel-confirmation-label">Confirmation Label</label>
+        <input type="text" id="panel-confirmation-label" placeholder="e.g. Membership #">
+        <div class="field-hint">How this field appears in the confirmation step read-back.</div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="btn-text" onclick="closeFieldPanel()">Cancel</button>
+      <button class="btn-primary" onclick="saveFieldPanel()">Save Field</button>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="toast-container" style="position:fixed;bottom:20px;right:20px;z-index:300;display:flex;flex-direction:column;gap:8px;"></div>
+
   <script src="/agent-console/lib/auth.js"></script>
-  <script src="/agent-console/shared/truthButton.js"></script>
   <script src="/agent-console/booking.js"></script>
 </body>
 </html>

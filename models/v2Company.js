@@ -3956,6 +3956,82 @@ const companySchema = new mongoose.Schema({
                     thresholdMs: { type: Number, default: 0 }
                 }
             },
+
+            // ═══════════════════════════════════════════════════════════════
+            // BOOKING CONFIG — Unified booking flow configuration
+            // UI: /agent-console/booking.html
+            // Engine: services/engine/booking/BookingLogicEngine.js
+            // ═══════════════════════════════════════════════════════════════
+            bookingConfig: {
+                // ── CALLER RECOGNITION ─────────────────────────────────────
+                callerRecognition: {
+                    enabled:          { type: Boolean, default: false },
+                    confirmAllPrompt: { type: String, default: "We have {name} at {address} on file — is all of that still correct for today's visit?", trim: true },
+                    onConfirmedYes:   { type: String, enum: ['SKIP_TO_CUSTOM', 'SKIP_TO_CALENDAR', 'COLLECT_ALL'], default: 'SKIP_TO_CUSTOM' }
+                },
+
+                // ── BUILT-IN FIELD PROMPTS ──────────────────────────────────
+                builtinPrompts: {
+                    askName:         { type: String, default: '', trim: true },
+                    nameReAnchor:    { type: String, default: '', trim: true },
+                    askPhone:        { type: String, default: '', trim: true },
+                    phoneReAnchor:   { type: String, default: '', trim: true },
+                    askAddress:      { type: String, default: '', trim: true },
+                    addressReAnchor: { type: String, default: '', trim: true }
+                },
+
+                // ── CUSTOM FIELDS (dynamic, UI-configurable) ────────────────
+                customFields: [{
+                    key:               { type: String, required: true, trim: true },
+                    label:             { type: String, required: true, trim: true },
+                    fieldType:         { type: String, enum: ['text', 'phone', 'yesno', 'choice', 'number'], default: 'text' },
+                    required:          { type: Boolean, default: false },
+                    order:             { type: Number, default: 0 },
+                    prompt:            { type: String, default: '', trim: true },
+                    reAnchorPhrase:    { type: String, default: '', trim: true },
+                    maxAttempts:       { type: Number, default: 3 },
+                    fallbackAction:    { type: String, enum: ['RE_ASK_PLAIN', 'SKIP', 'TRANSFER', 'COLLECT_ASYNC'], default: 'RE_ASK_PLAIN' },
+                    choices:           [{ type: String, trim: true }],
+                    confirmationLabel: { type: String, default: '', trim: true }
+                }],
+
+                // ── ALT CONTACT COLLECTION ──────────────────────────────────
+                altContact: {
+                    enabled:        { type: Boolean, default: false },
+                    offerPrompt:    { type: String, default: '', trim: true },
+                    askNamePrompt:  { type: String, default: '', trim: true },
+                    askPhonePrompt: { type: String, default: '', trim: true },
+                    askNotesPrompt: { type: String, default: '', trim: true },
+                    allowMultiple:  { type: Boolean, default: false },
+                    multiplePrompt: { type: String, default: '', trim: true }
+                },
+
+                // ── CONFIRMATION STEP ───────────────────────────────────────
+                confirmation: {
+                    enabled:  { type: Boolean, default: true },
+                    template: { type: String, default: "Just to confirm: {name}, best number {phone}, service at {address} — does that all sound right?", trim: true },
+                    onNo:     { type: String, enum: ['RECOLLECT_ALL', 'RETURN_TO_START'], default: 'RECOLLECT_ALL' }
+                },
+
+                // ── CALENDAR & SCHEDULING ───────────────────────────────────
+                calendar: {
+                    holdMessage:         { type: String, default: '', trim: true },
+                    offerTimesPrompt:    { type: String, default: '', trim: true },
+                    noTimesPrompt:       { type: String, default: '', trim: true },
+                    appointmentDuration: { type: Number, default: 60 },
+                    bufferMinutes:       { type: Number, default: 0 },
+                    advanceBookingDays:  { type: Number, default: 14 },
+                    confirmationMessage: { type: String, default: '', trim: true }
+                },
+
+                // ── SLOT FILLING & DIGRESSION DEFAULTS ─────────────────────
+                slotFilling: {
+                    defaultMaxAttempts:    { type: Number, default: 3 },
+                    defaultFallbackAction: { type: String, enum: ['RE_ASK_PLAIN', 'SKIP', 'TRANSFER', 'COLLECT_ASYNC'], default: 'RE_ASK_PLAIN' },
+                    reAnchorSuffix:        { type: String, default: 'Now, to get your appointment confirmed —', trim: true }
+                }
+            },
+
             discovery: {
                 enabled: { type: Boolean, default: false },
                 // UI-driven playbook + style blocks (stored as structured JSON)

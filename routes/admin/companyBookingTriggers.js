@@ -745,6 +745,134 @@ router.post('/:companyId/booking-triggers/:ruleId/generate-audio',
   }
 );
 
+// ============================================================================
+// BOOKING CONFIG — Unified booking flow configuration
+// GET  /:companyId/booking-config
+// POST /:companyId/booking-config
+// ============================================================================
+
+router.get('/:companyId/booking-config',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const company = await v2Company.findById(companyId)
+        .select([
+          'aiAgentSettings.agent2.bookingConfig',
+          'aiAgentSettings.agent2.bridge.bookingBridgePhrase',
+          'aiAgentSettings.agent2.discovery.holdMessage',
+          'aiAgentSettings.agent2.bookingPrompts',
+          'aiAgentSettings.bookingLogic',
+          'aiAgentSettings.bookingFields'
+        ].join(' '))
+        .lean();
+
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const a2 = company.aiAgentSettings?.agent2 || {};
+      const bc = a2.bookingConfig || {};
+      const bp = a2.bookingPrompts || {};   // legacy — migrate into response
+      const bl = company.aiAgentSettings?.bookingLogic || {};
+      const bf = company.aiAgentSettings?.bookingFields || [];
+
+      // Build unified response — bookingConfig is authoritative; legacy fields fill gaps
+      const response = {
+        bridgePhrase:      a2.bridge?.bookingBridgePhrase || '',
+        callerRecognition: bc.callerRecognition || {},
+        builtinPrompts: {
+          askName:         bc.builtinPrompts?.askName         || bp.askName         || '',
+          nameReAnchor:    bc.builtinPrompts?.nameReAnchor    || '',
+          askPhone:        bc.builtinPrompts?.askPhone        || bp.askPhone        || '',
+          phoneReAnchor:   bc.builtinPrompts?.phoneReAnchor   || '',
+          askAddress:      bc.builtinPrompts?.askAddress      || bp.askAddress      || '',
+          addressReAnchor: bc.builtinPrompts?.addressReAnchor || ''
+        },
+        customFields: bc.customFields || bf.map(f => ({
+          ...f,
+          reAnchorPhrase:    '',
+          maxAttempts:       3,
+          fallbackAction:    'RE_ASK_PLAIN',
+          choices:           [],
+          confirmationLabel: f.label || ''
+        })) || [],
+        altContact:   bc.altContact   || {},
+        confirmation: bc.confirmation || {},
+        calendar: {
+          holdMessage:         bc.calendar?.holdMessage         || a2.discovery?.holdMessage || '',
+          offerTimesPrompt:    bc.calendar?.offerTimesPrompt    || '',
+          noTimesPrompt:       bc.calendar?.noTimesPrompt       || '',
+          appointmentDuration: bc.calendar?.appointmentDuration ?? bl.appointmentDuration ?? 60,
+          bufferMinutes:       bc.calendar?.bufferMinutes       ?? bl.bufferMinutes       ?? 0,
+          advanceBookingDays:  bc.calendar?.advanceBookingDays  ?? bl.advanceBookingDays  ?? 14,
+          confirmationMessage: bc.calendar?.confirmationMessage || bl.confirmationMessage  || ''
+        },
+        slotFilling: bc.slotFilling || {}
+      };
+
+      return res.json({ success: true, bookingConfig: response });
+    } catch (err) {
+      logger.error('[booking-config] GET failed', { error: err.message });
+      return res.status(500).json({ error: 'Failed to load booking config' });
+    }
+  }
+);
+
+router.post('/:companyId/booking-config',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const body = req.body || {};
+
+      const updates = {};
+
+      // Bridge phrase lives in agent2.bridge.bookingBridgePhrase
+      if (body.bridgePhrase !== undefined) {
+        updates['aiAgentSettings.agent2.bridge.bookingBridgePhrase'] = (body.bridgePhrase || '').trim();
+      }
+
+      // Hold message lives in agent2.discovery.holdMessage (legacy location — keep in sync)
+      if (body.calendar?.holdMessage !== undefined) {
+        updates['aiAgentSettings.agent2.discovery.holdMessage'] = (body.calendar.holdMessage || '').trim();
+      }
+
+      // Keep legacy bookingPrompts in sync (backward compat for old engine reads)
+      if (body.builtinPrompts) {
+        if (body.builtinPrompts.askName  !== undefined) updates['aiAgentSettings.agent2.bookingPrompts.askName']  = (body.builtinPrompts.askName  || '').trim();
+        if (body.builtinPrompts.askPhone !== undefined) updates['aiAgentSettings.agent2.bookingPrompts.askPhone'] = (body.builtinPrompts.askPhone || '').trim();
+      }
+
+      // Write unified bookingConfig
+      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling'];
+      for (const field of bcFields) {
+        if (body[field] !== undefined) {
+          updates[`aiAgentSettings.agent2.bookingConfig.${field}`] = body[field];
+        }
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: 'No valid fields to update' });
+      }
+
+      const updated = await v2Company.findByIdAndUpdate(
+        companyId,
+        { $set: updates },
+        { new: true, runValidators: true }
+      );
+
+      if (!updated) return res.status(404).json({ error: 'Company not found' });
+
+      logger.info('[booking-config] Saved', { companyId, fields: Object.keys(updates) });
+      return res.json({ success: true, message: 'Booking configuration saved' });
+    } catch (err) {
+      logger.error('[booking-config] POST failed', { error: err.message });
+      return res.status(500).json({ error: 'Failed to save booking config' });
+    }
+  }
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORTS
 // ─────────────────────────────────────────────────────────────────────────────
