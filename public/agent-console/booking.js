@@ -113,6 +113,9 @@ function setupEventListeners() {
   // Nested toggle: Allow Multiple Alt Contacts
   setupToggle('altcontact-allow-multiple', 'altcontact-multiple-settings');
 
+  // Scheduling Preference Capture toggle
+  setupToggle('preference-capture-enabled', 'preference-capture-settings');
+
   // Confirmation toggle controls its sub-settings visibility
   const confirmToggle = document.getElementById('confirmation-enabled');
   const confirmSettings = document.getElementById('confirmation-settings');
@@ -302,6 +305,19 @@ function populateForm(config) {
   setSelectValue('calendar-buffer',   String(cal.bufferMinutes   || 0));
   setSelectValue('calendar-advance',  String(cal.advanceBookingDays || 14));
 
+  // Section 3b: Required Fields Config
+  const rfc = config.requiredFieldsConfig || {};
+  setChecked('required-address', rfc.address !== false); // default true
+
+  // Section 3c: Scheduling Preference Capture
+  const pc = config.preferenceCapture || {};
+  const pcEnabled = pc.enabled !== false; // default true
+  setChecked('preference-capture-enabled', pcEnabled);
+  setValue('preference-ask-day',   pc.askDayPrompt       || '');
+  setValue('preference-ask-time',  pc.askTimePrompt      || '');
+  setValue('preference-no-slots',  pc.noSlotsOnDayPrompt || '');
+  document.getElementById('preference-capture-settings')?.classList.toggle('hidden', !pcEnabled);
+
   // Section 8: Slot Filling / Digression
   const sf = config.slotFilling || {};
   setSelectValue('slot-max-attempts',    String(sf.defaultMaxAttempts    || 3));
@@ -369,6 +385,17 @@ function collectForm() {
       appointmentDuration: parseInt(getSelectValue('calendar-duration'), 10) || 60,
       bufferMinutes:       parseInt(getSelectValue('calendar-buffer'),   10) || 0,
       advanceBookingDays:  parseInt(getSelectValue('calendar-advance'),  10) || 14
+    },
+
+    requiredFieldsConfig: {
+      address: getChecked('required-address')
+    },
+
+    preferenceCapture: {
+      enabled:            getChecked('preference-capture-enabled'),
+      askDayPrompt:       getValue('preference-ask-day'),
+      askTimePrompt:      getValue('preference-ask-time'),
+      noSlotsOnDayPrompt: getValue('preference-no-slots')
     },
 
     slotFilling: {

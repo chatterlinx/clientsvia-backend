@@ -795,6 +795,7 @@
       <a href="#section-bridge"       class="nav-item" data-section="bridge">🏁 Bridge</a>
       <a href="#section-recognition"  class="nav-item" data-section="recognition">📞 Caller Recognition</a>
       <a href="#section-builtin"      class="nav-item" data-section="builtin">👤 Built-in Fields</a>
+      <a href="#section-scheduling"   class="nav-item" data-section="scheduling">📅 Scheduling Prefs</a>
       <a href="#section-custom"       class="nav-item" data-section="custom">📋 Custom Fields</a>
       <a href="#section-altcontact"   class="nav-item" data-section="altcontact">📱 Alt Contact</a>
       <a href="#section-confirmation" class="nav-item" data-section="confirmation">✅ Confirmation</a>
@@ -960,12 +961,21 @@
             <div class="field-card-title">
               <span class="field-type-badge">ADDRESS</span>
               <span>Service Address</span>
-              <span class="field-required-badge">Required</span>
             </div>
             <span class="field-card-chevron">▾</span>
           </div>
           <div class="field-card-body" id="field-card-address">
-            <div class="form-row" style="margin-top:16px">
+            <div class="toggle-row" style="margin-top:16px">
+              <div>
+                <label class="toggle-label">Require Service Address</label>
+                <div class="toggle-hint">When enabled, address is collected before calendar lookup. Recommended for field-service businesses.</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="required-address" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="form-row" style="margin-top:12px">
               <div class="form-group">
                 <label for="builtin-ask-address">Ask Prompt</label>
                 <textarea id="builtin-ask-address" rows="2" placeholder="And what address should we send the technician to?"></textarea>
@@ -973,6 +983,44 @@
               <div class="form-group">
                 <label for="builtin-address-reanchor">Re-Anchor Phrase</label>
                 <textarea id="builtin-address-reanchor" rows="2" placeholder="I still need the service address — what's the full address?"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 3b: SCHEDULING PREFERENCES ────────────────────────────── -->
+      <section id="section-scheduling" class="config-section">
+        <div class="section-header">
+          <h2>📅 Scheduling Preferences</h2>
+          <p class="section-desc">Ask the caller their preferred day and time <em>before</em> fetching calendar slots. Produces more natural conversations and better-targeted slot results.</p>
+        </div>
+        <div class="card">
+          <div class="toggle-row">
+            <div>
+              <label class="toggle-label">Ask Preferred Day &amp; Time</label>
+              <div class="toggle-hint">Agent will ask "What day works best?" then "What time?" before presenting available slots.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="preference-capture-enabled" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div id="preference-capture-settings" class="sub-settings">
+            <div class="form-group" style="margin-top:12px">
+              <label for="preference-ask-day">Ask Day Prompt</label>
+              <textarea id="preference-ask-day" rows="2" placeholder="What day works best for you?"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="preference-ask-time">Ask Time Prompt</label>
+                <textarea id="preference-ask-time" rows="2" placeholder="And what time works for you {day}? I'll check our availability."></textarea>
+                <div class="field-hint">Placeholder: <code>{day}</code> = the day they selected</div>
+              </div>
+              <div class="form-group">
+                <label for="preference-no-slots">No Slots on Day Prompt</label>
+                <textarea id="preference-no-slots" rows="2" placeholder="I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work?"></textarea>
+                <div class="field-hint">Placeholders: <code>{day}</code>, <code>{alternative}</code> = nearest open slot</div>
               </div>
             </div>
           </div>

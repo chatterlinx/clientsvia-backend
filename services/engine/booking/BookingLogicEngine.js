@@ -44,9 +44,11 @@ const STEPS = {
   COLLECT_NAME:         'COLLECT_NAME',
   COLLECT_PHONE:        'COLLECT_PHONE',
   COLLECT_ADDRESS:      'COLLECT_ADDRESS',
-  COLLECT_CUSTOM:       'COLLECT_CUSTOM',       // iterates bookingConfig.customFields[]
-  COLLECT_ALT_CONTACT:  'COLLECT_ALT_CONTACT',  // optional alt contact collection
-  OFFER_TIMES:          'OFFER_TIMES',
+  COLLECT_CUSTOM:           'COLLECT_CUSTOM',           // iterates bookingConfig.customFields[]
+  COLLECT_ALT_CONTACT:      'COLLECT_ALT_CONTACT',      // optional alt contact collection
+  COLLECT_PREFERRED_DAY:    'COLLECT_PREFERRED_DAY',    // ask preferred appointment day
+  COLLECT_PREFERRED_TIME:   'COLLECT_PREFERRED_TIME',   // ask preferred time of day
+  OFFER_TIMES:              'OFFER_TIMES',
   CONFIRM:              'CONFIRM',
   COMPLETED:            'COMPLETED'
 };
@@ -59,7 +61,7 @@ const DEFAULT_CONFIG = {
   appointmentDuration:   60,
   bufferMinutes:         0,
   advanceBookingDays:    14,
-  requiredFields:        ['firstName', 'phone'],
+  requiredFields:        ['firstName', 'phone', 'address'],
   confirmationMessage:   'Your appointment is confirmed for {date} at {time}. We look forward to seeing you!',
   customFields:          [],
   altContact:            { enabled: false },
@@ -204,8 +206,24 @@ async function loadCompanyConfig(companyId) {
       calendarId:        company.googleCalendar?.calendarId || null,
       businessHours:     company.businessHours || null,
 
-      // Legacy
-      requiredFields:    bl.requiredFields || DEFAULT_CONFIG.requiredFields
+      // Required fields — bookingConfig.requiredFieldsConfig is authoritative (UI-driven);
+      // legacy bookingLogic.requiredFields fills the gap; default includes address.
+      requiredFields: (() => {
+        if (bc.requiredFieldsConfig) {
+          const fields = ['firstName', 'phone']; // always required
+          if (bc.requiredFieldsConfig.address !== false) fields.push('address');
+          return fields;
+        }
+        return bl.requiredFields || DEFAULT_CONFIG.requiredFields;
+      })(),
+
+      // Scheduling preference capture — ask preferred day/time before fetching slots
+      preferenceCapture: {
+        enabled:            bc.preferenceCapture?.enabled !== false,
+        askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || 'What day works best for you?',
+        askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || "And what time works for you {day}? I'll check our availability.",
+        noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?"
+      }
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -278,7 +296,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   //
   // Triggers fire on intent steps: COLLECT_NAME, COLLECT_CUSTOM, COLLECT_ALT_CONTACT, OFFER_TIMES, CONFIRM.
   // Triggers are SUPPRESSED on: INIT, COMPLETED, COLLECT_PHONE, COLLECT_ADDRESS.
-  const DATA_ENTRY_STEPS = new Set([STEPS.INIT, STEPS.COMPLETED, STEPS.COLLECT_PHONE, STEPS.COLLECT_ADDRESS]);
+  const DATA_ENTRY_STEPS = new Set([STEPS.INIT, STEPS.COMPLETED, STEPS.COLLECT_PHONE, STEPS.COLLECT_ADDRESS, STEPS.COLLECT_PREFERRED_DAY, STEPS.COLLECT_PREFERRED_TIME]);
   if (userInput?.trim() && !DATA_ENTRY_STEPS.has(ctx.step)) {
     try {
       const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, ctx.step);
@@ -327,8 +345,10 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     case STEPS.COLLECT_PHONE:       return processCollectPhone(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_ADDRESS:     return processCollectAddress(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_CUSTOM:      return processCollectCustom(ctx, userInput, config, companyId, events);
-    case STEPS.COLLECT_ALT_CONTACT: return processCollectAltContact(ctx, userInput, config, events);
-    case STEPS.OFFER_TIMES:         return processOfferTimes(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_ALT_CONTACT:    return processCollectAltContact(ctx, userInput, config, events);
+    case STEPS.COLLECT_PREFERRED_DAY:  return processCollectPreferredDay(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.COLLECT_PREFERRED_TIME: return processCollectPreferredTime(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.OFFER_TIMES:            return processOfferTimes(ctx, userInput, config, companyId, isTest, events);
     case STEPS.CONFIRM:             return processConfirm(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COMPLETED:
       return {
@@ -1041,7 +1061,46 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     };
   }
 
-  // ── Offer caller ID if available and not yet asked ────────────────────────
+  // ── Normal phone input ────────────────────────────────────────────────────
+  if (!userInput?.trim()) {
+    // First turn at COLLECT_PHONE with no input — offer caller ID if available
+    if (!ctx._callerIdAsked && ctx.callerPhone) {
+      const formattedCallerId = normalizePhone(ctx.callerPhone);
+      if (formattedCallerId) {
+        ctx._callerIdAsked      = true;
+        ctx._confirmingCallerId = true;
+        events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
+        return {
+          nextPrompt: `I see your caller ID is ${formattedCallerId} — is that a good number for text notifications and booking confirmations?`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+      ctx._callerIdAsked = true;
+    }
+    return {
+      nextPrompt: config.askPhonePrompt,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // ── Try to parse the phone from user input immediately ───────────────────
+  // Must happen BEFORE the caller ID offer logic — if the caller explicitly
+  // gave us a number we use it directly and skip the caller ID offer entirely.
+  // (Prevents double-asking: agent asks "what's your number?" → caller gives
+  //  one → agent still offers caller ID → caller has to answer twice.)
+  const normalizedPhone = normalizePhone(userInput);
+
+  if (normalizedPhone) {
+    // ── Caller gave us a valid phone number explicitly ─────────────────────
+    ctx.collectedFields.phone = normalizedPhone;
+    ctx._callerIdAsked = true; // mark as handled so we never double-ask
+    events.push({ type: 'BL1_PHONE_COLLECTED', phone: normalizedPhone, timestamp: Date.now() });
+    return advanceAfterPhone(ctx, config, companyId, isTest, events);
+  }
+
+  // ── No valid phone in input — offer caller ID if not yet asked ─────────
   if (!ctx._callerIdAsked && ctx.callerPhone) {
     const formattedCallerId = normalizePhone(ctx.callerPhone);
     if (formattedCallerId) {
@@ -1054,87 +1113,71 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
         completed:  false
       };
     }
-    ctx._callerIdAsked = true; // unformattable number — skip caller ID offer
+    ctx._callerIdAsked = true;
   }
 
-  // ── Normal phone input ────────────────────────────────────────────────────
-  if (!userInput?.trim()) {
+  // ── No valid phone found — check for digression / name revisit ────────────
+  if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
+    ctx.step = STEPS.COLLECT_NAME;
+    events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
-      nextPrompt: "I didn't catch that. What phone number should we use to contact you?",
+      nextPrompt: `You're right — let me grab your full name. What's your first and last name?`,
       bookingCtx: ctx,
       completed:  false
     };
   }
 
-  const normalizedPhone = normalizePhone(userInput);
-
-  if (!normalizedPhone) {
-    if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
-      ctx.step = STEPS.COLLECT_NAME;
-      events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
-      return {
-        nextPrompt: `You're right — let me grab your full name. What's your first and last name?`,
-        bookingCtx: ctx,
-        completed:  false
-      };
-    }
-
-    // ── Smart digression detection (T1.5 → T2) ─────────────────────────────
-    // If the input contains fewer than 3 digit characters it is clearly a
-    // question or digression — NOT a phone attempt.  Route through:
-    //   T1.5 → booking trigger (ANY-step or COLLECT_PHONE-targeted)
-    //   T2   → graceful re-anchor (acknowledge + circle back to phone)
-    // Fall through to the blind re-ask only when the input actually looks
-    // like a phone attempt (>= 3 digits, just garbled/incomplete).
-    const phoneDigitCount = (userInput.match(/\d/g) || []).length;
-    if (phoneDigitCount < 3) {
-      // T1.5 — booking trigger check
-      try {
-        const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, STEPS.COLLECT_PHONE);
-        if (triggerResult.matched) {
-          const card = triggerResult.card;
-          events.push({
-            type:      'BL1_PHONE_T1_5_TRIGGER',
-            ruleId:    card.ruleId,
-            behavior:  triggerResult.behavior,
-            matchType: triggerResult.matchType,
-            timestamp: Date.now()
-          });
-          const triggerResponse = await buildTriggerResponse(card, userInput, companyId);
-          return {
-            nextPrompt: `${triggerResponse} What phone number should we use to reach you?`,
-            bookingCtx: ctx,
-            completed:  false
-          };
-        }
-      } catch (tErr) {
-        logger.warn(`[${ENGINE_ID}] COLLECT_PHONE T1.5 trigger error — continuing`, {
-          companyId, error: tErr.message
+  // ── Smart digression detection (T1.5 → T2) ──────────────────────────────
+  // If the input contains fewer than 3 digit characters it is clearly a
+  // question or digression — NOT a phone attempt.  Route through:
+  //   T1.5 → booking trigger (ANY-step or COLLECT_PHONE-targeted)
+  //   T2   → graceful re-anchor (acknowledge + circle back to phone)
+  // Fall through to the blind re-ask only when the input actually looks
+  // like a phone attempt (>= 3 digits, just garbled/incomplete).
+  const phoneDigitCount = (userInput.match(/\d/g) || []).length;
+  if (phoneDigitCount < 3) {
+    // T1.5 — booking trigger check
+    try {
+      const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, STEPS.COLLECT_PHONE);
+      if (triggerResult.matched) {
+        const card = triggerResult.card;
+        events.push({
+          type:      'BL1_PHONE_T1_5_TRIGGER',
+          ruleId:    card.ruleId,
+          behavior:  triggerResult.behavior,
+          matchType: triggerResult.matchType,
+          timestamp: Date.now()
         });
+        const triggerResponse = await buildTriggerResponse(card, userInput, companyId);
+        return {
+          nextPrompt: `${triggerResponse} ${config.phoneReAnchor}`,
+          bookingCtx: ctx,
+          completed:  false
+        };
       }
-
-      // T2 — no trigger matched; gracefully acknowledge and re-anchor
-      events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
-      return {
-        nextPrompt:     `${config.t2DigressionAck} ${config.phoneReAnchor}`,
-        bookingCtx:     ctx,
-        completed:      false,
-        t2Digression:   true,          // consumed by CallRuntime Groq handler
-        reAnchorPhrase: config.phoneReAnchor
-      };
+    } catch (tErr) {
+      logger.warn(`[${ENGINE_ID}] COLLECT_PHONE T1.5 trigger error — continuing`, {
+        companyId, error: tErr.message
+      });
     }
 
-    events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+    // T2 — no trigger matched; gracefully acknowledge and re-anchor
+    events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
-      nextPrompt: config.phoneInvalid,
-      bookingCtx: ctx,
-      completed:  false
+      nextPrompt:     `${config.t2DigressionAck} ${config.phoneReAnchor}`,
+      bookingCtx:     ctx,
+      completed:      false,
+      t2Digression:   true,
+      reAnchorPhrase: config.phoneReAnchor
     };
   }
 
-  ctx.collectedFields.phone = normalizedPhone;
-  events.push({ type: 'BL1_PHONE_COLLECTED', phone: normalizedPhone, timestamp: Date.now() });
-  return advanceAfterPhone(ctx, config, companyId, isTest, events);
+  events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+  return {
+    nextPrompt: config.phoneInvalid,
+    bookingCtx: ctx,
+    completed:  false
+  };
 }
 
 /** Shared transition logic after phone is collected. */
@@ -1211,7 +1254,20 @@ async function advanceAfterCustomFields(ctx, config, companyId, isTest, events) 
       completed:  false
     };
   }
-  // Skip to calendar
+  return advanceToScheduling(ctx, config, companyId, isTest, events);
+}
+
+/** Routes to preferred day capture (if enabled) or directly to OFFER_TIMES. */
+async function advanceToScheduling(ctx, config, companyId, isTest, events) {
+  if (config.preferenceCapture?.enabled) {
+    ctx.step = STEPS.COLLECT_PREFERRED_DAY;
+    events.push({ type: 'BL1_COLLECTING_PREFERRED_DAY', timestamp: Date.now() });
+    return {
+      nextPrompt: config.preferenceCapture.askDayPrompt,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
@@ -1348,6 +1404,27 @@ function extractCustomFieldValue(userInput, field) {
 }
 
 /* ============================================================================
+   HELPER: schedulingTransition
+   Routes to preferred-day capture (if enabled) or OFFER_TIMES holdMessage.
+   Used by any step that hands off to the scheduling phase.
+   ============================================================================ */
+
+function schedulingTransition(ctx, config, extraCtx = {}) {
+  if (config.preferenceCapture?.enabled) {
+    return {
+      nextPrompt: config.preferenceCapture.askDayPrompt,
+      bookingCtx: { ...ctx, ...extraCtx, step: STEPS.COLLECT_PREFERRED_DAY },
+      completed:  false
+    };
+  }
+  return {
+    nextPrompt: config.holdMessage || 'One moment while I check our available times...',
+    bookingCtx: { ...ctx, ...extraCtx, step: STEPS.OFFER_TIMES },
+    completed:  false
+  };
+}
+
+/* ============================================================================
    STEP: COLLECT ALT CONTACT
    ============================================================================ */
 
@@ -1370,12 +1447,8 @@ async function processCollectAltContact(ctx, userInput, config, events) {
         completed:  false
       };
     }
-    // Caller said no — advance to OFFER_TIMES
-    return {
-      nextPrompt: config.holdMessage || 'One moment while I check our available times...',
-      bookingCtx: { ...ctx, step: STEPS.OFFER_TIMES },
-      completed:  false
-    };
+    // Caller said no — advance to scheduling
+    return schedulingTransition(ctx, config);
   }
 
   if (step === 'ASK_NAME') {
@@ -1421,19 +1494,11 @@ async function processCollectAltContact(ctx, userInput, config, events) {
         completed:  false
       };
     }
-    return {
-      nextPrompt: config.holdMessage || 'One moment while I check our available times...',
-      bookingCtx: { ...ctx, step: STEPS.OFFER_TIMES },
-      completed:  false
-    };
+    return schedulingTransition(ctx, config);
   }
 
   // Fallback
-  return {
-    nextPrompt: config.holdMessage || 'One moment...',
-    bookingCtx: { ...ctx, step: STEPS.OFFER_TIMES },
-    completed:  false
-  };
+  return schedulingTransition(ctx, config);
 }
 
 function finishAltContact(ctx, contact, config, events) {
@@ -1449,11 +1514,99 @@ function finishAltContact(ctx, contact, config, events) {
     };
   }
 
+  return schedulingTransition(ctx, config, { altContacts, currentAltContact: null });
+}
+
+/* ============================================================================
+   STEP: COLLECT PREFERRED DAY / TIME
+   ============================================================================ */
+
+async function processCollectPreferredDay(ctx, userInput, config, companyId, isTest, events) {
+  if (!userInput?.trim()) {
+    return {
+      nextPrompt: config.preferenceCapture.askDayPrompt,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  const dayPref  = parseDayPreference(userInput);
+  const timePref = parseTimePreference(userInput);
+
+  ctx.preferredDay = dayPref || userInput.trim();
+  events.push({ type: 'BL1_PREFERRED_DAY_CAPTURED', day: ctx.preferredDay, timestamp: Date.now() });
+
+  if (timePref) {
+    // Caller gave both day and time in one utterance — skip time question
+    ctx.preferredTime = timePref;
+    events.push({ type: 'BL1_PREFERRED_TIME_CAPTURED', time: timePref, timestamp: Date.now() });
+    ctx.step = STEPS.OFFER_TIMES;
+    return processOfferTimes(ctx, null, config, companyId, isTest, events);
+  }
+
+  // Have day — now ask for time
+  ctx.step = STEPS.COLLECT_PREFERRED_TIME;
+  const dayLabel = getDayLabel(ctx.preferredDay);
   return {
-    nextPrompt: config.holdMessage || 'One moment while I check our available times...',
-    bookingCtx: { ...ctx, altContacts, step: STEPS.OFFER_TIMES, currentAltContact: null },
+    nextPrompt: config.preferenceCapture.askTimePrompt.replace('{day}', dayLabel),
+    bookingCtx: ctx,
     completed:  false
   };
+}
+
+async function processCollectPreferredTime(ctx, userInput, config, companyId, isTest, events) {
+  if (!userInput?.trim()) {
+    const dayLabel = getDayLabel(ctx.preferredDay);
+    return {
+      nextPrompt: config.preferenceCapture.askTimePrompt.replace('{day}', dayLabel),
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  ctx.preferredTime = parseTimePreference(userInput) || userInput.trim();
+  events.push({ type: 'BL1_PREFERRED_TIME_CAPTURED', time: ctx.preferredTime, timestamp: Date.now() });
+
+  ctx.step = STEPS.OFFER_TIMES;
+  return processOfferTimes(ctx, null, config, companyId, isTest, events);
+}
+
+/** Parse a caller's day preference from free speech. */
+function parseDayPreference(input) {
+  const n = input.toLowerCase();
+  if (/\b(today|right now|asap|as soon as|same.?day|tonight)\b/.test(n)) return 'today';
+  if (/\btomorrow\b/.test(n)) return 'tomorrow';
+  if (/\bmonday\b|\bmon\b/.test(n))    return 'monday';
+  if (/\btuesday\b|\btue\b/.test(n))   return 'tuesday';
+  if (/\bwednesday\b|\bwed\b/.test(n)) return 'wednesday';
+  if (/\bthursday\b|\bthu\b/.test(n))  return 'thursday';
+  if (/\bfriday\b|\bfri\b/.test(n))    return 'friday';
+  if (/\bsaturday\b|\bsat\b/.test(n))  return 'saturday';
+  if (/\bsunday\b|\bsun\b/.test(n))    return 'sunday';
+  if (/\bnext week\b/.test(n)) return 'next week';
+  if (/\bthis week\b/.test(n)) return 'this week';
+  return null;
+}
+
+/** Parse a caller's time-of-day preference from free speech. */
+function parseTimePreference(input) {
+  const n = input.toLowerCase();
+  if (/\bmorning\b|\nearly\b/.test(n)) return 'morning';
+  if (/\bafternoon\b|\bmidday\b/.test(n)) return 'afternoon';
+  if (/\bevening\b|\bnight\b/.test(n)) return 'evening';
+  const m = n.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+  if (m) {
+    const h = parseInt(m[1]);
+    const min = m[2] || '00';
+    return (h >= 1 && h <= 12) ? `${h}:${min} ${m[3].toUpperCase()}` : null;
+  }
+  return null;
+}
+
+/** Human-readable day label for prompts. */
+function getDayLabel(day) {
+  if (!day) return 'that day';
+  return day; // 'today', 'tomorrow', 'monday', etc. read fine as-is
 }
 
 /* ============================================================================
@@ -1749,14 +1902,23 @@ async function fetchAvailableTimeOptions(config, companyId, ctx, isTest, events)
     const result = await GoogleCalendarService.findAvailableSlots(companyId, {
       durationMinutes: config.appointmentDuration,
       maxSlots:        3,
-      serviceType
+      serviceType,
+      dayPreference:   ctx.preferredDay  || 'asap',
+      timePreference:  ctx.preferredTime || 'anytime'
     });
 
     if (result.fallback || !result.slots?.length) {
       events.push({ type: 'BL1_CALENDAR_NO_SLOTS', fallback: !!result.fallback, timestamp: Date.now() });
+      // If caller had a preference and nothing matched, tell them
+      if (ctx.preferredDay && config.preferenceCapture?.noSlotsOnDayPrompt) {
+        const msg = config.preferenceCapture.noSlotsOnDayPrompt
+          .replace('{day}', getDayLabel(ctx.preferredDay))
+          .replace('{alternative}', 'the next available time');
+        return { timeOptions: [], message: msg };
+      }
       return {
         timeOptions: [],
-        message: "I'm not seeing any open times in the next few days. Would you like me to have someone call you back to find a time that works?"
+        message: config.noTimesPrompt || "I'm not seeing any open times in the next few days. Would you like me to have someone call you back to find a time that works?"
       };
     }
 

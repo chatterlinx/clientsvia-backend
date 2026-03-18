@@ -820,7 +820,14 @@ router.get('/:companyId/booking-config',
           advanceBookingDays:  bc.calendar?.advanceBookingDays  ?? bl.advanceBookingDays  ?? 14,
           confirmationMessage: bc.calendar?.confirmationMessage || bl.confirmationMessage  || ''
         },
-        slotFilling: bc.slotFilling || {}
+        slotFilling:          bc.slotFilling          || {},
+        requiredFieldsConfig: bc.requiredFieldsConfig  || { address: true },
+        preferenceCapture: {
+          enabled:            bc.preferenceCapture?.enabled !== false,
+          askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || '',
+          askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || '',
+          noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || ''
+        }
       };
 
       return res.json({ success: true, bookingConfig: response });
@@ -858,7 +865,7 @@ router.post('/:companyId/booking-config',
       }
 
       // Write unified bookingConfig
-      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling'];
+      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'preferenceCapture'];
       for (const field of bcFields) {
         if (body[field] !== undefined) {
           updates[`aiAgentSettings.agent2.bookingConfig.${field}`] = body[field];

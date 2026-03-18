@@ -4049,6 +4049,22 @@ const companySchema = new mongoose.Schema({
                     defaultMaxAttempts:    { type: Number, default: 3 },
                     defaultFallbackAction: { type: String, enum: ['RE_ASK_PLAIN', 'SKIP', 'TRANSFER', 'COLLECT_ASYNC'], default: 'RE_ASK_PLAIN' },
                     reAnchorSuffix:        { type: String, default: 'Now, to get your appointment confirmed —', trim: true }
+                },
+
+                // ── REQUIRED FIELDS CONFIG ─────────────────────────────────
+                // Toggle which built-in fields are required before scheduling.
+                requiredFieldsConfig: {
+                    address: { type: Boolean, default: true }  // address required by default for home-service
+                },
+
+                // ── SCHEDULING PREFERENCE CAPTURE ──────────────────────────
+                // Ask caller preferred day + time before fetching calendar slots.
+                // Placeholders: {day} in askTimePrompt; {day} {alternative} in noSlotsOnDayPrompt
+                preferenceCapture: {
+                    enabled:            { type: Boolean, default: true },
+                    askDayPrompt:       { type: String, default: 'What day works best for you?', trim: true },
+                    askTimePrompt:      { type: String, default: "And what time works for you {day}? I'll check our availability.", trim: true },
+                    noSlotsOnDayPrompt: { type: String, default: "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?", trim: true }
                 }
             },
 
