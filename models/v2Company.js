@@ -3971,13 +3971,30 @@ const companySchema = new mongoose.Schema({
                 },
 
                 // ── BUILT-IN FIELD PROMPTS ──────────────────────────────────
+                // All fields pre-seeded with optimum defaults.
+                // Admin can customise any phrase per company from the booking UI.
                 builtinPrompts: {
-                    askName:         { type: String, default: '', trim: true },
-                    nameReAnchor:    { type: String, default: '', trim: true },
-                    askPhone:        { type: String, default: '', trim: true },
-                    phoneReAnchor:   { type: String, default: '', trim: true },
-                    askAddress:      { type: String, default: '', trim: true },
-                    addressReAnchor: { type: String, default: '', trim: true }
+                    // NAME — cold ask (no name known at all)
+                    askName:                  { type: String, default: 'To get started, may I have your first and last name?', trim: true },
+                    nameReAnchor:             { type: String, default: 'What is your first and last name?', trim: true },
+                    // NAME — confirmation when LLM pre-filled name from discovery
+                    // Placeholders: {name} = full name, {firstName} = first name only
+                    confirmFullName:          { type: String, default: 'I assume your name is {name}, is that correct?', trim: true },
+                    confirmFirstNameAskLast:  { type: String, default: 'I assume your first name is {firstName}, is that correct? And what is your last name?', trim: true },
+                    askLastNameOnly:          { type: String, default: 'And what is your last name?', trim: true },
+                    // PHONE
+                    askPhone:                 { type: String, default: 'And what is the best phone number to reach you at?', trim: true },
+                    phoneReAnchor:            { type: String, default: 'What phone number can we reach you at?', trim: true },
+                    phoneInvalid:             { type: String, default: "I didn't quite catch a phone number there. What number should we use to reach you?", trim: true },
+                    // ADDRESS
+                    askAddress:               { type: String, default: 'Great. And what is the service address?', trim: true },
+                    addressReAnchor:          { type: String, default: 'What is the service address for this appointment?', trim: true },
+                    // DIGRESSION — acknowledgment prefix before the re-anchor phrase
+                    t2DigressionAck:          { type: String, default: "Absolutely — we'll make sure that gets addressed.", trim: true },
+                    // NAME — re-ask & correction prompts (Placeholders: {name}, {firstName})
+                    confirmNameAmbiguous:         { type: String, default: 'Just to confirm — is your name {name}? A simple yes or no works.', trim: true },
+                    confirmNamePartialCorrected:  { type: String, default: 'Got it, {firstName}! And your last name?', trim: true },
+                    confirmFirstNameGotLastAsk:   { type: String, default: 'Great, {firstName}! And what is your last name?', trim: true }
                 },
 
                 // ── CUSTOM FIELDS (dynamic, UI-configurable) ────────────────
@@ -4008,9 +4025,12 @@ const companySchema = new mongoose.Schema({
 
                 // ── CONFIRMATION STEP ───────────────────────────────────────
                 confirmation: {
-                    enabled:  { type: Boolean, default: true },
-                    template: { type: String, default: "Just to confirm: {name}, best number {phone}, service at {address} — does that all sound right?", trim: true },
-                    onNo:     { type: String, enum: ['RECOLLECT_ALL', 'RETURN_TO_START'], default: 'RECOLLECT_ALL' }
+                    enabled:             { type: Boolean, default: true },
+                    template:            { type: String, default: "Just to confirm: {name}, best number {phone}, service at {address} — does that all sound right?", trim: true },
+                    onNo:                { type: String, enum: ['RECOLLECT_ALL', 'RETURN_TO_START'], default: 'RECOLLECT_ALL' },
+                    // Time slot confirmation prompts (Placeholder: {time})
+                    timeConfirmPrompt:   { type: String, default: 'Just to confirm — shall I book you for {time}?', trim: true },
+                    timeAmbiguousPrompt: { type: String, default: "I want to make sure I have this right — shall I book you for {time}?", trim: true }
                 },
 
                 // ── CALENDAR & SCHEDULING ───────────────────────────────────

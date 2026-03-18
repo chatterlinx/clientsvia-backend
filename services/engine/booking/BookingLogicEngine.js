@@ -162,13 +162,23 @@ async function loadCompanyConfig(companyId) {
       offerTimesPrompt:    bc.calendar?.offerTimesPrompt     || '',
       noTimesPrompt:       bc.calendar?.noTimesPrompt        || '',
 
-      // Built-in field prompts (bookingConfig is authoritative; legacy bookingPrompts fills gaps)
-      askNamePrompt:    bc.builtinPrompts?.askName        || bp.askName    || null,
-      nameReAnchor:     bc.builtinPrompts?.nameReAnchor   || null,
-      askPhonePrompt:   bc.builtinPrompts?.askPhone       || bp.askPhone   || null,
-      phoneReAnchor:    bc.builtinPrompts?.phoneReAnchor  || null,
-      askAddressPrompt: bc.builtinPrompts?.askAddress     || bp.askAddress || null,
-      addressReAnchor:  bc.builtinPrompts?.addressReAnchor || null,
+      // Built-in field prompts — bookingConfig authoritative; legacy fills gaps; hardcoded last resort
+      askNamePrompt:           bc.builtinPrompts?.askName                 || bp.askName    || 'To get started, may I have your first and last name?',
+      nameReAnchor:            bc.builtinPrompts?.nameReAnchor            || 'What is your first and last name?',
+      confirmFullName:         bc.builtinPrompts?.confirmFullName         || 'I assume your name is {name}, is that correct?',
+      confirmFirstNameAskLast: bc.builtinPrompts?.confirmFirstNameAskLast || 'I assume your first name is {firstName}, is that correct? And what is your last name?',
+      askLastNameOnly:         bc.builtinPrompts?.askLastNameOnly         || 'And what is your last name?',
+      askPhonePrompt:          bc.builtinPrompts?.askPhone                || bp.askPhone   || 'And what is the best phone number to reach you at?',
+      phoneReAnchor:           bc.builtinPrompts?.phoneReAnchor           || 'What phone number can we reach you at?',
+      phoneInvalid:            bc.builtinPrompts?.phoneInvalid            || "I didn't quite catch a phone number there. What number should we use to reach you?",
+      askAddressPrompt:        bc.builtinPrompts?.askAddress              || bp.askAddress || 'Great. And what is the service address?',
+      addressReAnchor:         bc.builtinPrompts?.addressReAnchor         || 'What is the service address for this appointment?',
+      t2DigressionAck:              bc.builtinPrompts?.t2DigressionAck             || "Absolutely — we'll make sure that gets addressed.",
+      confirmNameAmbiguous:         bc.builtinPrompts?.confirmNameAmbiguous        || 'Just to confirm — is your name {name}? A simple yes or no works.',
+      confirmNamePartialCorrected:  bc.builtinPrompts?.confirmNamePartialCorrected || 'Got it, {firstName}! And your last name?',
+      confirmFirstNameGotLastAsk:   bc.builtinPrompts?.confirmFirstNameGotLastAsk  || 'Great, {firstName}! And what is your last name?',
+      timeConfirmPrompt:            bc.confirmation?.timeConfirmPrompt              || 'Just to confirm — shall I book you for {time}?',
+      timeAmbiguousPrompt:          bc.confirmation?.timeAmbiguousPrompt            || "I want to make sure I have this right — shall I book you for {time}?",
 
       // Custom fields (new — from bookingConfig)
       customFields:     bc.customFields    || DEFAULT_CONFIG.customFields,
@@ -414,7 +424,7 @@ async function processInit(ctx, config, companyId, isTest, events) {
       const fullName = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
       events.push({ type: 'BL1_CONFIRMING_FULL_NAME', firstName: ctx.collectedFields.firstName, lastName: ctx.collectedFields.lastName, timestamp: Date.now() });
       return {
-        nextPrompt: `${bridge}I assume your name is ${fullName}, is that correct?`,
+        nextPrompt: `${bridge}${config.confirmFullName.replace('{name}', fullName)}`,
         bookingCtx: ctx,
         completed:  false
       };
@@ -426,7 +436,7 @@ async function processInit(ctx, config, companyId, isTest, events) {
       ctx._nameConfirmMode = 'CONFIRM_FIRST_ASK_LAST';
       events.push({ type: 'BL1_CONFIRMING_FIRST_NAME', firstName: ctx.collectedFields.firstName, timestamp: Date.now() });
       return {
-        nextPrompt: `${bridge}I assume your first name is ${ctx.collectedFields.firstName}, is that correct? And what is your last name?`,
+        nextPrompt: `${bridge}${config.confirmFirstNameAskLast.replace('{firstName}', ctx.collectedFields.firstName)}`,
         bookingCtx: ctx,
         completed:  false
       };
@@ -601,13 +611,13 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
   if (!userInput?.trim()) {
     if (mode === 'CONFIRM_FULL') {
       const full = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
-      return { nextPrompt: `I assume your name is ${full}, is that correct?`, bookingCtx: ctx, completed: false };
+      return { nextPrompt: config.confirmFullName.replace('{name}', full), bookingCtx: ctx, completed: false };
     }
     if (mode === 'CONFIRM_FIRST_ASK_LAST') {
-      return { nextPrompt: `I assume your first name is ${ctx.collectedFields.firstName}, is that correct? And what is your last name?`, bookingCtx: ctx, completed: false };
+      return { nextPrompt: config.confirmFirstNameAskLast.replace('{firstName}', ctx.collectedFields.firstName), bookingCtx: ctx, completed: false };
     }
     if (mode === 'ASK_LAST_ONLY') {
-      return { nextPrompt: `And what is your last name?`, bookingCtx: ctx, completed: false };
+      return { nextPrompt: config.askLastNameOnly, bookingCtx: ctx, completed: false };
     }
   }
 
@@ -635,7 +645,7 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
     if (!isNo && tokens.length === 0) {
       // Ambiguous — re-ask
       const full = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
-      return { nextPrompt: `Just to confirm — is your name ${full}? A simple yes or no works.`, bookingCtx: ctx, completed: false };
+      return { nextPrompt: config.confirmNameAmbiguous.replace('{name}', full), bookingCtx: ctx, completed: false };
     }
 
     if (tokens.length >= 2) {
@@ -653,7 +663,7 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
       ctx.collectedFields.lastName  = null;
       ctx._nameConfirmMode = 'ASK_LAST_ONLY';
       events.push({ type: 'BL1_NAME_PARTIAL_CORRECTED', firstName: tokens[0], timestamp: Date.now() });
-      return { nextPrompt: `Got it, ${tokens[0]}! And your last name?`, bookingCtx: ctx, completed: false };
+      return { nextPrompt: config.confirmNamePartialCorrected.replace('{firstName}', tokens[0]), bookingCtx: ctx, completed: false };
     }
 
     // Plain NO with no correction — clear and collect fresh
@@ -662,7 +672,7 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_NAME_DECLINED', timestamp: Date.now() });
     return {
-      nextPrompt: config.askNamePrompt || 'No problem! What is your first and last name?',
+      nextPrompt: config.nameReAnchor,
       bookingCtx: ctx,
       completed:  false
     };
@@ -687,7 +697,7 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
       ctx.step = STEPS.COLLECT_NAME;
       events.push({ type: 'BL1_NAME_DECLINED', timestamp: Date.now() });
       return {
-        nextPrompt: config.askNamePrompt || 'No problem! What is your first and last name?',
+        nextPrompt: config.nameReAnchor,
         bookingCtx: ctx,
         completed:  false
       };
@@ -711,7 +721,7 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
     ctx._nameConfirmMode = 'ASK_LAST_ONLY';
     const first = ctx.collectedFields.firstName;
     return {
-      nextPrompt: `Great, ${first}! And what is your last name?`,
+      nextPrompt: config.confirmFirstNameGotLastAsk.replace('{firstName}', first),
       bookingCtx: ctx,
       completed:  false
     };
@@ -899,7 +909,7 @@ async function advanceAfterName(ctx, config, companyId, isTest, events) {
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
     return {
-      nextPrompt: `Got it, ${ctx.collectedFields.firstName}! What's the best phone number to reach you at?`,
+      nextPrompt: config.askPhonePrompt,
       bookingCtx: ctx,
       completed:  false
     };
@@ -907,7 +917,7 @@ async function advanceAfterName(ctx, config, companyId, isTest, events) {
   if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
     ctx.step = STEPS.COLLECT_ADDRESS;
     return {
-      nextPrompt: "And what's the service address?",
+      nextPrompt: config.askAddressPrompt,
       bookingCtx: ctx,
       completed:  false
     };
@@ -1106,17 +1116,17 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       // T2 — no trigger matched; gracefully acknowledge and re-anchor
       events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
       return {
-        nextPrompt:     "Absolutely — we'll make sure that gets addressed. To continue with the booking, what phone number can we use to reach you?",
+        nextPrompt:     `${config.t2DigressionAck} ${config.phoneReAnchor}`,
         bookingCtx:     ctx,
         completed:      false,
         t2Digression:   true,          // consumed by CallRuntime Groq handler
-        reAnchorPhrase: config.askPhonePrompt || 'What phone number can we reach you at?'
+        reAnchorPhrase: config.phoneReAnchor
       };
     }
 
     events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
-      nextPrompt: "I didn't quite catch a phone number there. What number should we use to reach you?",
+      nextPrompt: config.phoneInvalid,
       bookingCtx: ctx,
       completed:  false
     };
@@ -1132,7 +1142,7 @@ async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
   if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
     ctx.step = STEPS.COLLECT_ADDRESS;
     return {
-      nextPrompt: "Got it. And what's the service address?",
+      nextPrompt: config.askAddressPrompt,
       bookingCtx: ctx,
       completed:  false
     };
@@ -1503,7 +1513,7 @@ async function processOfferTimes(ctx, userInput, config, companyId, isTest, even
 async function processConfirm(ctx, userInput, config, companyId, isTest, events) {
   if (!userInput?.trim()) {
     return {
-      nextPrompt: `Just to confirm — shall I book you for ${ctx.selectedTime?.display}?`,
+      nextPrompt: config.timeConfirmPrompt.replace('{time}', ctx.selectedTime?.display),
       bookingCtx: ctx,
       completed:  false
     };
@@ -1567,7 +1577,7 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
 
   // Ambiguous — re-ask
   return {
-    nextPrompt: `I want to make sure I have this right — shall I book you for ${ctx.selectedTime?.display}?`,
+    nextPrompt: config.timeAmbiguousPrompt.replace('{time}', ctx.selectedTime?.display),
     bookingCtx: ctx,
     completed:  false
   };

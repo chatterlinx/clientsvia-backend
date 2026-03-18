@@ -248,12 +248,24 @@ function populateForm(config) {
 
   // Section 3: Built-in Prompts
   const bp = config.builtinPrompts || {};
-  setValue('builtin-ask-name',        bp.askName        || '');
-  setValue('builtin-name-reanchor',   bp.nameReAnchor   || '');
-  setValue('builtin-ask-phone',       bp.askPhone       || '');
-  setValue('builtin-phone-reanchor',  bp.phoneReAnchor  || '');
-  setValue('builtin-ask-address',     bp.askAddress     || '');
-  setValue('builtin-address-reanchor', bp.addressReAnchor || '');
+  // NAME
+  setValue('builtin-ask-name',                  bp.askName                     || '');
+  setValue('builtin-name-reanchor',             bp.nameReAnchor                || '');
+  setValue('builtin-confirm-full-name',         bp.confirmFullName             || '');
+  setValue('builtin-confirm-first-ask-last',    bp.confirmFirstNameAskLast     || '');
+  setValue('builtin-ask-last-name-only',        bp.askLastNameOnly             || '');
+  setValue('builtin-confirm-name-ambiguous',    bp.confirmNameAmbiguous        || '');
+  setValue('builtin-confirm-name-partial',      bp.confirmNamePartialCorrected || '');
+  setValue('builtin-confirm-first-got-last',    bp.confirmFirstNameGotLastAsk  || '');
+  // PHONE
+  setValue('builtin-ask-phone',                 bp.askPhone                    || '');
+  setValue('builtin-phone-reanchor',            bp.phoneReAnchor               || '');
+  setValue('builtin-phone-invalid',             bp.phoneInvalid                || '');
+  // ADDRESS
+  setValue('builtin-ask-address',              bp.askAddress                  || '');
+  setValue('builtin-address-reanchor',         bp.addressReAnchor             || '');
+  // DIGRESSION
+  setValue('builtin-t2-digression-ack',        bp.t2DigressionAck             || '');
 
   // Section 4: Custom Fields
   renderCustomFields();
@@ -274,8 +286,10 @@ function populateForm(config) {
   const conf = config.confirmation || {};
   const confirmEnabled = conf.enabled !== false; // default true
   setChecked('confirmation-enabled', confirmEnabled);
-  setValue('confirmation-template', conf.template || '');
-  setRadio('confirmation-on-no', conf.onNo || 'RECOLLECT_ALL');
+  setValue('confirmation-template',       conf.template            || '');
+  setRadio('confirmation-on-no',          conf.onNo                || 'RECOLLECT_ALL');
+  setValue('confirmation-time-confirm',   conf.timeConfirmPrompt   || '');
+  setValue('confirmation-time-ambiguous', conf.timeAmbiguousPrompt || '');
   document.getElementById('confirmation-settings')?.classList.toggle('hidden', !confirmEnabled);
 
   // Section 7: Calendar
@@ -307,12 +321,24 @@ function collectForm() {
     },
 
     builtinPrompts: {
-      askName:         getValue('builtin-ask-name'),
-      nameReAnchor:    getValue('builtin-name-reanchor'),
-      askPhone:        getValue('builtin-ask-phone'),
-      phoneReAnchor:   getValue('builtin-phone-reanchor'),
-      askAddress:      getValue('builtin-ask-address'),
-      addressReAnchor: getValue('builtin-address-reanchor')
+      // NAME
+      askName:                     getValue('builtin-ask-name'),
+      nameReAnchor:                getValue('builtin-name-reanchor'),
+      confirmFullName:             getValue('builtin-confirm-full-name'),
+      confirmFirstNameAskLast:     getValue('builtin-confirm-first-ask-last'),
+      askLastNameOnly:             getValue('builtin-ask-last-name-only'),
+      confirmNameAmbiguous:        getValue('builtin-confirm-name-ambiguous'),
+      confirmNamePartialCorrected: getValue('builtin-confirm-name-partial'),
+      confirmFirstNameGotLastAsk:  getValue('builtin-confirm-first-got-last'),
+      // PHONE
+      askPhone:                    getValue('builtin-ask-phone'),
+      phoneReAnchor:               getValue('builtin-phone-reanchor'),
+      phoneInvalid:                getValue('builtin-phone-invalid'),
+      // ADDRESS
+      askAddress:                  getValue('builtin-ask-address'),
+      addressReAnchor:             getValue('builtin-address-reanchor'),
+      // DIGRESSION
+      t2DigressionAck:             getValue('builtin-t2-digression-ack')
     },
 
     customFields: customFields.map((f, i) => ({ ...f, order: i, _order: undefined })),
@@ -328,9 +354,11 @@ function collectForm() {
     },
 
     confirmation: {
-      enabled:  getChecked('confirmation-enabled'),
-      template: getValue('confirmation-template'),
-      onNo:     getRadio('confirmation-on-no') || 'RECOLLECT_ALL'
+      enabled:             getChecked('confirmation-enabled'),
+      template:            getValue('confirmation-template'),
+      onNo:                getRadio('confirmation-on-no')       || 'RECOLLECT_ALL',
+      timeConfirmPrompt:   getValue('confirmation-time-confirm'),
+      timeAmbiguousPrompt: getValue('confirmation-time-ambiguous')
     },
 
     calendar: {

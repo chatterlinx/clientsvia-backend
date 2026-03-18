@@ -881,8 +881,45 @@
               </div>
               <div class="form-group">
                 <label for="builtin-name-reanchor">Re-Anchor Phrase</label>
-                <textarea id="builtin-name-reanchor" rows="2" placeholder="I just need your full name — what is it?"></textarea>
+                <textarea id="builtin-name-reanchor" rows="2" placeholder="What is your first and last name?"></textarea>
                 <div class="field-hint">Said after a digression to redirect back to this field.</div>
+              </div>
+            </div>
+
+            <p class="field-hint" style="margin:12px 0 4px;font-weight:600;color:var(--color-gray-700)">🔍 Smart Confirmation (when name is pre-filled from call discovery)</p>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="builtin-confirm-full-name">Confirm Full Name</label>
+                <textarea id="builtin-confirm-full-name" rows="2" placeholder="I assume your name is {name}, is that correct?"></textarea>
+                <div class="field-hint">Placeholder: <code>{name}</code> = full name</div>
+              </div>
+              <div class="form-group">
+                <label for="builtin-confirm-first-ask-last">Confirm First Name + Ask Last</label>
+                <textarea id="builtin-confirm-first-ask-last" rows="2" placeholder="I assume your first name is {firstName}, is that correct? And your last name?"></textarea>
+                <div class="field-hint">Placeholder: <code>{firstName}</code></div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="builtin-ask-last-name-only">Ask Last Name Only</label>
+                <textarea id="builtin-ask-last-name-only" rows="2" placeholder="And what is your last name?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="builtin-confirm-name-ambiguous">Ambiguous Re-Ask</label>
+                <textarea id="builtin-confirm-name-ambiguous" rows="2" placeholder="Just to confirm — is your name {name}? A simple yes or no works."></textarea>
+                <div class="field-hint">Said when caller's response to name confirmation is unclear. Placeholder: <code>{name}</code></div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="builtin-confirm-name-partial">Partial Correction → Ask Last</label>
+                <textarea id="builtin-confirm-name-partial" rows="2" placeholder="Got it, {firstName}! And your last name?"></textarea>
+                <div class="field-hint">Caller corrected only their first name. Placeholder: <code>{firstName}</code></div>
+              </div>
+              <div class="form-group">
+                <label for="builtin-confirm-first-got-last">Confirmed First → Ask Last</label>
+                <textarea id="builtin-confirm-first-got-last" rows="2" placeholder="Great, {firstName}! And what is your last name?"></textarea>
+                <div class="field-hint">Caller confirmed first name, now collect last name. Placeholder: <code>{firstName}</code></div>
               </div>
             </div>
           </div>
@@ -906,8 +943,13 @@
               </div>
               <div class="form-group">
                 <label for="builtin-phone-reanchor">Re-Anchor Phrase</label>
-                <textarea id="builtin-phone-reanchor" rows="2" placeholder="I still need a callback number — what's the best number to reach you?"></textarea>
+                <textarea id="builtin-phone-reanchor" rows="2" placeholder="What phone number can we reach you at?"></textarea>
               </div>
+            </div>
+            <div class="form-group">
+              <label for="builtin-phone-invalid">Invalid Number Re-Ask</label>
+              <textarea id="builtin-phone-invalid" rows="2" placeholder="I didn't quite catch a phone number there. What number should we use to reach you?"></textarea>
+              <div class="field-hint">Said when caller input can't be parsed as a valid phone number.</div>
             </div>
           </div>
         </div>
@@ -1053,6 +1095,21 @@
                 <label><input type="radio" name="confirmation-on-no" value="RETURN_TO_START"> Return to very start of booking</label>
               </div>
             </div>
+
+            <hr class="section-divider">
+            <p class="field-hint" style="margin:0 0 12px;font-weight:600;color:var(--color-gray-700)">📅 Time Slot Confirmation Prompts</p>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="confirmation-time-confirm">Time Confirm Prompt</label>
+                <textarea id="confirmation-time-confirm" rows="2" placeholder="Just to confirm — shall I book you for {time}?"></textarea>
+                <div class="field-hint">Placeholder: <code>{time}</code> = selected time slot display string</div>
+              </div>
+              <div class="form-group">
+                <label for="confirmation-time-ambiguous">Time Ambiguous Re-Ask</label>
+                <textarea id="confirmation-time-ambiguous" rows="2" placeholder="I want to make sure I have this right — shall I book you for {time}?"></textarea>
+                <div class="field-hint">Said when caller's response to time confirmation is unclear.</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1153,6 +1210,12 @@
             <label for="slot-reanchor-suffix">Re-Anchor Suffix</label>
             <input type="text" id="slot-reanchor-suffix" placeholder="Now, to get your appointment confirmed —">
             <div class="field-hint">Appended after a booking trigger fires to steer the caller back to the pending field.</div>
+          </div>
+          <hr class="section-divider">
+          <div class="form-group">
+            <label for="builtin-t2-digression-ack">T2 Digression Acknowledgment</label>
+            <textarea id="builtin-t2-digression-ack" rows="2" placeholder="Absolutely — we'll make sure that gets addressed."></textarea>
+            <div class="field-hint">Spoken before the re-anchor phrase when Groq handles an off-topic question mid-booking. The re-anchor phrase for each field follows automatically.</div>
           </div>
         </div>
       </section>
