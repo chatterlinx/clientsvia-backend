@@ -4066,7 +4066,66 @@ const companySchema = new mongoose.Schema({
                     askTimePrompt:      { type: String, default: "And what time works for you {day}? I'll check our availability.", trim: true },
                     noSlotsOnDayPrompt: { type: String, default: "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?", trim: true },
                     urgentPrompt:       { type: String, default: "I completely understand — let me pull up the very first opening we have for you.", trim: true }
-                }
+                },
+
+                // ── TECHNICIANS ─────────────────────────────────────────────────────
+                // Each technician owns a Google Calendar. The booking engine queries only
+                // the calendars of techs assigned to the current call's service type.
+                // Multiple techs for the same type → slots merged, first available wins.
+                technicians: [{
+                    id:             { type: String },                    // UUID — set by UI on create
+                    name:           { type: String, trim: true },
+                    active:         { type: Boolean, default: true },
+                    calendarId:     { type: String, trim: true },        // Google Calendar email/ID
+                    color:          { type: String, default: '#3B82F6' },// UI display color
+                    serviceTypeIds: [{ type: String }],                  // which service types this tech handles
+                    priority:       { type: Number, default: 0 }         // lower = preferred when multiple available
+                }],
+
+                // ── SERVICE TYPES ────────────────────────────────────────────────────
+                // Company-defined service classifications (e.g. Service, Maintenance, Emergency).
+                // Each type maps to one or more technicians and drives calendar routing.
+                // isDefault  → fallback when call reason doesn't resolve to a specific type
+                // isEmergency → marks the type used for urgent/asap calls
+                serviceTypes: [{
+                    id:          { type: String },              // slug: 'service', 'maintenance', 'emergency'
+                    label:       { type: String, trim: true },  // display: 'Maintenance'
+                    color:       { type: String, default: '#10B981' },
+                    active:      { type: Boolean, default: true },
+                    isDefault:   { type: Boolean, default: false },
+                    isEmergency: { type: Boolean, default: false },
+                    order:       { type: Number, default: 0 }
+                }],
+
+                // ── EMERGENCY SCHEDULE ───────────────────────────────────────────────
+                // Fully separate schedule from main business hours.
+                // Applies when urgency is detected (asap / right now / first available).
+                // mode = 'inherit' → use main calendar hours (bufferMinutes still applied)
+                // mode = 'custom'  → use windowStart/windowEnd/daysOfWeek below
+                // mode = '24_7'    → no window restrictions, only bufferMinutes applies
+                emergencySchedule: {
+                    enabled:         { type: Boolean, default: false },
+                    serviceTypeId:   { type: String, default: '' },          // links to a serviceType.id
+                    mode:            { type: String, enum: ['inherit', 'custom', '24_7'], default: 'custom' },
+                    // Custom mode fields
+                    daysOfWeek:      [{ type: Number }],                     // 0=Sun … 6=Sat
+                    windowStart:     { type: String, default: '07:00' },     // 24-hr local time
+                    windowEnd:       { type: String, default: '22:00' },
+                    bufferMinutes:   { type: Number, default: 60 },          // lead time: call time + buffer = earliest slot
+                    respectHolidays: { type: Boolean, default: false }       // false = emergency ignores closures
+                },
+
+                // ── HOLIDAYS ─────────────────────────────────────────────────────────
+                // Per-company holiday closure preferences.
+                // Dates are NEVER stored here — computed at runtime from the holiday key
+                // by HolidayService, so they auto-update every year without admin action.
+                // closeRegular   → block regular booking slots on this date
+                // closeEmergency → block emergency slots (only relevant when emergencySchedule.enabled)
+                holidays: [{
+                    key:            { type: String },                // canonical key e.g. 'thanksgiving'
+                    closeRegular:   { type: Boolean, default: false },
+                    closeEmergency: { type: Boolean, default: false }
+                }]
             },
 
             discovery: {

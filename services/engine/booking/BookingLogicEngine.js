@@ -27,6 +27,7 @@
 const logger               = require('../../../utils/logger');
 const v2Company            = require('../../../models/v2Company');
 const GoogleCalendarService = require('../../GoogleCalendarService');
+const HolidayService       = require('../../HolidayService');
 const { BookingTriggerMatcher } = require('./BookingTriggerMatcher');
 const GlobalHubService     = require('../../GlobalHubService');
 
@@ -224,7 +225,18 @@ async function loadCompanyConfig(companyId) {
         askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || "And what time works for you {day}? I'll check our availability.",
         noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?",
         urgentPrompt:       bc.preferenceCapture?.urgentPrompt        || "I completely understand — let me pull up the very first opening we have for you."
-      }
+      },
+
+      // ── TECHNICIANS & SERVICE TYPES ──────────────────────────────────────────
+      // Used by fetchAvailableTimeOptions to route queries to the correct calendar(s).
+      technicians:  (bc.technicians  || []).filter(t => t.active !== false),
+      serviceTypes: (bc.serviceTypes || []).filter(t => t.active !== false),
+
+      // ── EMERGENCY SCHEDULE ────────────────────────────────────────────────────
+      emergencySchedule: bc.emergencySchedule || { enabled: false },
+
+      // ── HOLIDAYS ──────────────────────────────────────────────────────────────
+      holidays: bc.holidays || []
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -1925,20 +1937,128 @@ async function fetchAvailableTimeOptions(config, companyId, ctx, isTest, events)
   }
 
   try {
-    const serviceType = ctx.summary?.serviceType || ctx.bookingMode || 'service';
+    const isUrgent    = ctx.preferredDay === 'asap';
+    const serviceMode = isUrgent ? 'emergency' : 'regular';
+
+    // ── 1. HOLIDAY CHECK ────────────────────────────────────────────────────
+    // For emergency calls, only block if emergencySchedule.respectHolidays is true.
+    // For regular calls, block on any closeRegular holiday.
+    const today = new Date();
+    const skipHolidayCheck = isUrgent && config.emergencySchedule?.enabled &&
+                             !config.emergencySchedule?.respectHolidays;
+
+    if (!skipHolidayCheck) {
+      const { closed, holidayName } = HolidayService.checkHolidayClosure(
+        today, config.holidays, serviceMode
+      );
+      if (closed) {
+        events.push({ type: 'BL1_HOLIDAY_CLOSED', holidayName, serviceMode, timestamp: Date.now() });
+        const nextOpen = HolidayService.nextOpenDate(
+          new Date(today.getTime() + 86_400_000), config.holidays, serviceMode
+        );
+        return {
+          timeOptions: [],
+          message: `We're closed today for ${holidayName}. The next available day is ${nextOpen.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}. Would you like me to check availability for then?`
+        };
+      }
+    }
+
+    // ── 2. SERVICE-TYPE RESOLUTION ─────────────────────────────────────────
+    // Determine service type from call context.
+    // Priority: ctx.serviceTypeId (stamped by trigger) → urgent flag → summary → bookingMode
+    let resolvedServiceTypeId = ctx.serviceTypeId || null;
+    if (!resolvedServiceTypeId && isUrgent && config.emergencySchedule?.enabled) {
+      resolvedServiceTypeId = config.emergencySchedule.serviceTypeId || null;
+    }
+    if (!resolvedServiceTypeId) {
+      // Fall back to matching against service type labels from summary
+      const rawType = (ctx.summary?.serviceType || ctx.bookingMode || '').toLowerCase();
+      const matched = config.serviceTypes?.find(st =>
+        st.id?.toLowerCase() === rawType ||
+        st.label?.toLowerCase().includes(rawType)
+      );
+      resolvedServiceTypeId = matched?.id || null;
+    }
+    // Final fallback: use the default service type
+    if (!resolvedServiceTypeId) {
+      const defaultType = config.serviceTypes?.find(st => st.isDefault);
+      resolvedServiceTypeId = defaultType?.id || null;
+    }
+
+    // ── 3. TECHNICIAN CALENDAR ROUTING ─────────────────────────────────────
+    // Find all active technicians who handle this service type.
+    // If none configured → fall through to company's single default calendar (backward-compat).
+    let calendarIdsOverride = null;
+    if (config.technicians?.length) {
+      const matchedTechs = resolvedServiceTypeId
+        ? config.technicians.filter(t => t.serviceTypeIds?.includes(resolvedServiceTypeId))
+        : config.technicians;  // no service type → all techs
+
+      if (matchedTechs.length > 0) {
+        calendarIdsOverride = matchedTechs
+          .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+          .map(t => t.calendarId)
+          .filter(Boolean);
+        events.push({
+          type: 'BL1_TECH_ROUTING',
+          serviceTypeId: resolvedServiceTypeId,
+          techCount: matchedTechs.length,
+          calendarIds: calendarIdsOverride,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    // ── 4. EMERGENCY SCHEDULE PARAMETERS ───────────────────────────────────
+    let overrideWindowStart    = null;
+    let overrideWindowEnd      = null;
+    let overrideAvailableDays  = null;
+    let overrideLeadTimeMinutes = null;
+
+    if (isUrgent && config.emergencySchedule?.enabled) {
+      const es = config.emergencySchedule;
+      if (es.mode === '24_7') {
+        overrideWindowStart    = '00:00';
+        overrideWindowEnd      = '23:59';
+        overrideAvailableDays  = [0,1,2,3,4,5,6];
+      } else if (es.mode === 'custom') {
+        overrideWindowStart    = es.windowStart   || '07:00';
+        overrideWindowEnd      = es.windowEnd     || '22:00';
+        overrideAvailableDays  = es.daysOfWeek?.length ? es.daysOfWeek : [0,1,2,3,4,5,6];
+      }
+      // 'inherit' mode: no window overrides, use service-type config
+      if (es.bufferMinutes != null) {
+        overrideLeadTimeMinutes = es.bufferMinutes;
+      }
+      events.push({
+        type: 'BL1_EMERGENCY_SCHEDULE_APPLIED',
+        mode: es.mode,
+        bufferMinutes: es.bufferMinutes,
+        windowStart: overrideWindowStart,
+        windowEnd: overrideWindowEnd,
+        timestamp: Date.now()
+      });
+    }
+
+    // ── 5. QUERY CALENDAR ──────────────────────────────────────────────────
+    const serviceType = resolvedServiceTypeId || ctx.summary?.serviceType || ctx.bookingMode || 'service';
 
     const result = await GoogleCalendarService.findAvailableSlots(companyId, {
-      durationMinutes: config.appointmentDuration,
-      maxSlots:        3,
+      durationMinutes:        config.appointmentDuration,
+      maxSlots:               3,
       serviceType,
-      dayPreference:   ctx.preferredDay  || 'asap',
-      timePreference:  ctx.preferredTime || 'anytime'
+      dayPreference:          ctx.preferredDay  || 'asap',
+      timePreference:         ctx.preferredTime || 'anytime',
+      calendarIds:            calendarIdsOverride,
+      overrideWindowStart,
+      overrideWindowEnd,
+      overrideAvailableDays,
+      overrideLeadTimeMinutes
     });
 
     if (result.fallback || !result.slots?.length) {
       events.push({ type: 'BL1_CALENDAR_NO_SLOTS', fallback: !!result.fallback, timestamp: Date.now() });
-      // If caller had a preference and nothing matched, tell them
-      if (ctx.preferredDay && config.preferenceCapture?.noSlotsOnDayPrompt) {
+      if (ctx.preferredDay && ctx.preferredDay !== 'asap' && config.preferenceCapture?.noSlotsOnDayPrompt) {
         const msg = config.preferenceCapture.noSlotsOnDayPrompt
           .replace('{day}', getDayLabel(ctx.preferredDay))
           .replace('{alternative}', 'the next available time');
@@ -1950,7 +2070,7 @@ async function fetchAvailableTimeOptions(config, companyId, ctx, isTest, events)
       };
     }
 
-    events.push({ type: 'BL1_TIMES_FETCHED', count: result.slots.length, timestamp: Date.now() });
+    events.push({ type: 'BL1_TIMES_FETCHED', count: result.slots.length, serviceType, timestamp: Date.now() });
 
     // Normalize to internal timeOption shape
     const timeOptions = result.slots.map(slot => ({

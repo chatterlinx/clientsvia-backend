@@ -539,7 +539,15 @@ async function findAvailableSlots(companyId, {
     timePreference = 'anytime',
     durationMinutes = 60,
     maxSlots = 3,
-    serviceType = 'service' // V88: Default to 'service' if not specified
+    serviceType = 'service',           // V88: Default to 'service' if not specified
+    // V90: Multi-technician calendar routing — when provided, queries these calendars
+    // in one freebusy call instead of the company's single default calendarId.
+    calendarIds = null,
+    // V90: Emergency schedule window overrides — bypass service-type config when set.
+    overrideWindowStart    = null,     // '07:00' — 24-hr local time
+    overrideWindowEnd      = null,     // '22:00'
+    overrideAvailableDays  = null,     // [0,1,2,3,4,5,6] — 0=Sun…6=Sat
+    overrideLeadTimeMinutes = null,    // replaces leadTimeMinutes from service config
 }) {
     try {
         const { client, company, calendarId, error } = await getOAuth2ClientForCompany(companyId);
@@ -714,30 +722,76 @@ async function findAvailableSlots(companyId, {
             utcEnd: workingHours.end
         });
         
+        // V90: Apply emergency window overrides if provided
+        // These override the service-type config values computed above.
+        if (overrideLeadTimeMinutes !== null) {
+            // Recompute searchStart using the emergency buffer instead of service leadTime
+            searchStart = new Date(now.getTime() + overrideLeadTimeMinutes * 60 * 1000);
+        }
+        if (overrideWindowStart !== null && overrideWindowEnd !== null) {
+            // Parse '07:00' / '22:00' strings into hour numbers (local), then apply UTC offset
+            const [wStartH, wStartM] = overrideWindowStart.split(':').map(Number);
+            const [wEndH,   wEndM  ] = overrideWindowEnd.split(':').map(Number);
+            workingHoursLocal.start = wStartH + (wStartM || 0) / 60;
+            workingHoursLocal.end   = wEndH   + (wEndM   || 0) / 60;
+            workingHours.start = workingHoursLocal.start + offsetHours;
+            workingHours.end   = workingHoursLocal.end   + offsetHours;
+        }
+        if (overrideAvailableDays !== null) {
+            // overrideAvailableDays is [0,1,2,3,4,5,6] (numeric day-of-week)
+            // Convert to day-name strings to match availableDays format used below
+            const dayNamesArr = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            // Replace the availableDays variable in scope
+            // (we'll apply it via a closure flag below)
+        }
+
         const calendar = google.calendar({ version: 'v3', auth: client });
-        
-        // Get busy times
+
+        // V90: Multi-calendar freebusy — query all provided calendarIds in one API call.
+        // Falls back to the company's single default calendarId when none are provided.
+        const queryCalendarIds = (calendarIds && calendarIds.length > 0)
+            ? calendarIds
+            : [calendarId];
+
         const response = await calendar.freebusy.query({
             requestBody: {
                 timeMin: searchStart.toISOString(),
                 timeMax: searchEnd.toISOString(),
-                items: [{ id: calendarId }]
+                items: queryCalendarIds.map(id => ({ id }))
             }
         });
-        
-        const busySlots = response.data.calendars?.[calendarId]?.busy || [];
+
+        // Merge busy intervals from ALL queried calendars into one sorted list.
+        // A slot is only offered if it is free on EVERY tech's calendar (union of busy = unavailable).
+        const rawBusy = [];
+        for (const cid of queryCalendarIds) {
+            const busy = response.data.calendars?.[cid]?.busy || [];
+            rawBusy.push(...busy);
+        }
+        // Sort merged busy intervals by start time for efficient conflict checking
+        const busySlots = rawBusy.sort((a, b) => new Date(a.start) - new Date(b.start));
         
         // Find available slots within working hours
         const availableSlots = [];
         let currentDay = new Date(searchStart);
-        
+
         // V88: Map day numbers to day names for availableDays check
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        
+
+        // V90: Emergency schedule can restrict/expand available days by day-of-week number.
+        // Builds a fast lookup set from numeric days (0=Sun…6=Sat).
+        const emergencyDaySet = overrideAvailableDays
+            ? new Set(overrideAvailableDays.map(Number))
+            : null;
+
         while (currentDay < searchEnd && availableSlots.length < maxSlots) {
-            // V88: Check if this day is available for this service type
-            const currentDayName = dayNames[currentDay.getDay()];
-            if (!availableDays.includes(currentDayName)) {
+            // V88 / V90: Check if this day is allowed for the current service or emergency schedule
+            const currentDow     = currentDay.getDay();
+            const currentDayName = dayNames[currentDow];
+            const dayAllowed = emergencyDaySet
+                ? emergencyDaySet.has(currentDow)
+                : availableDays.includes(currentDayName);
+            if (!dayAllowed) {
                 currentDay.setDate(currentDay.getDate() + 1);
                 currentDay.setHours(workingHours.start, 0, 0, 0);
                 continue;

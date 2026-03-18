@@ -45,6 +45,7 @@ const CompanyBookingTrigger   = require('../../models/CompanyBookingTrigger');
 const v2Company               = require('../../models/v2Company');
 const InstantAudioService     = require('../../services/instantAudio/InstantAudioService');
 const { BookingTriggerMatcher } = require('../../services/engine/booking/BookingTriggerMatcher');
+const HolidayService          = require('../../services/HolidayService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -828,7 +829,20 @@ router.get('/:companyId/booking-config',
           askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || '',
           noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || '',
           urgentPrompt:       bc.preferenceCapture?.urgentPrompt        || ''
-        }
+        },
+
+        // ── Team, Emergency Schedule & Holidays ─────────────────────────────
+        technicians:       bc.technicians       || [],
+        serviceTypes:      bc.serviceTypes      || [],
+        emergencySchedule: bc.emergencySchedule || {
+          enabled: false, mode: 'custom',
+          windowStart: '07:00', windowEnd: '22:00',
+          bufferMinutes: 60, daysOfWeek: [1,2,3,4,5,6],
+          respectHolidays: false
+        },
+        // Holidays: merge stored prefs with catalog so UI always sees the full list
+        // with this-year dates computed server-side
+        holidays: HolidayService.mergeWithCompanyPrefs(bc.holidays || [])
       };
 
       return res.json({ success: true, bookingConfig: response });
@@ -866,7 +880,7 @@ router.post('/:companyId/booking-config',
       }
 
       // Write unified bookingConfig
-      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'preferenceCapture'];
+      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'preferenceCapture', 'technicians', 'serviceTypes', 'emergencySchedule', 'holidays'];
       for (const field of bcFields) {
         if (body[field] !== undefined) {
           updates[`aiAgentSettings.agent2.bookingConfig.${field}`] = body[field];

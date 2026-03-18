@@ -324,6 +324,9 @@ function populateForm(config) {
   setSelectValue('slot-max-attempts',    String(sf.defaultMaxAttempts    || 3));
   setSelectValue('slot-fallback-action', sf.defaultFallbackAction        || 'RE_ASK_PLAIN');
   setValue('slot-reanchor-suffix',       sf.reAnchorSuffix               || '');
+
+  // Sections: Team & Calendars, Emergency Schedule, Holiday Schedule
+  populateTeamAndSchedule(config);
 }
 
 // ── FORM COLLECTION ───────────────────────────────────────────────────────────
@@ -835,3 +838,502 @@ window.closeFieldPanel = closeFieldPanel;
 window.saveFieldPanel  = saveFieldPanel;
 window.deleteCustomField = deleteCustomField;
 window.addChoice       = addChoice;
+
+// =============================================================================
+// TEAM & CALENDARS — in-memory state
+// =============================================================================
+let serviceTypes = [];  // [{id, label, color, isDefault, isEmergency, order}]
+let technicians  = [];  // [{id, name, active, calendarId, color, serviceTypeIds, priority}]
+
+const SWATCH_COLORS = [
+  '#3B82F6','#10B981','#EF4444','#F59E0B','#8B5CF6',
+  '#EC4899','#06B6D4','#84CC16','#F97316','#6B7280'
+];
+
+function genId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+// ── SERVICE TYPES ─────────────────────────────────────────────────────────────
+function renderServiceTypes() {
+  const list  = document.getElementById('service-types-list');
+  const empty = document.getElementById('service-types-empty');
+  if (!list) return;
+  // Clear non-empty-hint children
+  [...list.children].forEach(c => { if (c !== empty) c.remove(); });
+  if (!serviceTypes.length) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  serviceTypes.forEach((st, idx) => {
+    const pill = document.createElement('div');
+    pill.className = 'service-type-pill';
+    pill.style.cssText = `background:${st.color}22;border-color:${st.color};color:${st.color}`;
+    pill.dataset.idx = idx;
+    const badges = [
+      st.isDefault   ? '<span class="pill-badge badge-default">Default</span>'   : '',
+      st.isEmergency ? '<span class="pill-badge badge-emergency">Emergency</span>' : ''
+    ].join('');
+    pill.innerHTML = `
+      <span style="width:10px;height:10px;border-radius:50%;background:${st.color};flex-shrink:0"></span>
+      <span>${escHtml(st.label)}</span>
+      ${badges}
+      <div class="pill-actions">
+        <button class="pill-btn" title="Edit" onclick="editServiceType(${idx})">✎</button>
+        <button class="pill-btn" title="Delete" onclick="deleteServiceType(${idx})" style="color:#ef4444">✕</button>
+      </div>`;
+    list.appendChild(pill);
+  });
+
+  // Rebuild emergency service type selector
+  refreshEmergencyServiceTypeSelect();
+}
+
+function refreshEmergencyServiceTypeSelect() {
+  const sel = document.getElementById('emergency-service-type-id');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— use default service type —</option>';
+  serviceTypes.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st.id;
+    opt.textContent = st.label;
+    if (st.id === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function openServiceTypeModal(idx = -1) {
+  const st   = idx >= 0 ? serviceTypes[idx] : null;
+  const color = st?.color || SWATCH_COLORS[serviceTypes.length % SWATCH_COLORS.length];
+  const html = `
+    <div class="modal-overlay" id="st-modal">
+      <div class="modal-box">
+        <div class="modal-title">${st ? 'Edit' : 'Add'} Service Type</div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Label <span style="color:#ef4444">*</span></label>
+          <input id="st-label" class="form-control" value="${escHtml(st?.label || '')}" placeholder="e.g. Maintenance">
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Color</label>
+          <div class="color-picker-row" id="st-color-row">
+            ${SWATCH_COLORS.map(c => `<span class="color-swatch${c===color?' selected':''}" style="background:${c}" data-color="${c}" onclick="selectSwatch('st',this)"></span>`).join('')}
+          </div>
+          <input type="hidden" id="st-color" value="${color}">
+        </div>
+        <div style="display:flex;gap:16px;margin-bottom:4px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="st-is-default" ${st?.isDefault?'checked':''}> Set as Default (used when service type is unknown)
+          </label>
+        </div>
+        <div style="display:flex;gap:16px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="st-is-emergency" ${st?.isEmergency?'checked':''}> Mark as Emergency Service Type
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal('st-modal')">Cancel</button>
+          <button class="btn btn-primary" onclick="saveServiceType(${idx})">Save</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('st-label').focus();
+}
+
+function saveServiceType(idx) {
+  const label = (document.getElementById('st-label')?.value || '').trim();
+  if (!label) { alert('Please enter a label.'); return; }
+  const entry = {
+    id:          idx >= 0 ? serviceTypes[idx].id : slugify(label) || genId(),
+    label,
+    color:       document.getElementById('st-color')?.value || SWATCH_COLORS[0],
+    active:      true,
+    isDefault:   document.getElementById('st-is-default')?.checked || false,
+    isEmergency: document.getElementById('st-is-emergency')?.checked || false,
+    order:       idx >= 0 ? serviceTypes[idx].order : serviceTypes.length
+  };
+  // Enforce single default / single emergency
+  if (entry.isDefault)   serviceTypes.forEach(s => { s.isDefault   = false; });
+  if (entry.isEmergency) serviceTypes.forEach(s => { s.isEmergency = false; });
+  if (idx >= 0) serviceTypes[idx] = entry;
+  else          serviceTypes.push(entry);
+  closeModal('st-modal');
+  renderServiceTypes();
+  renderTechnicians();
+  markDirty();
+}
+
+function editServiceType(idx)   { openServiceTypeModal(idx); }
+function deleteServiceType(idx) {
+  if (!confirm(`Delete "${serviceTypes[idx]?.label}"?`)) return;
+  const deletedId = serviceTypes[idx].id;
+  serviceTypes.splice(idx, 1);
+  // Remove from any tech assignments
+  technicians.forEach(t => {
+    t.serviceTypeIds = (t.serviceTypeIds || []).filter(id => id !== deletedId);
+  });
+  renderServiceTypes();
+  renderTechnicians();
+  markDirty();
+}
+
+// ── TECHNICIANS ───────────────────────────────────────────────────────────────
+function renderTechnicians() {
+  const list  = document.getElementById('technicians-list');
+  const empty = document.getElementById('technicians-empty');
+  if (!list) return;
+  [...list.children].forEach(c => { if (c !== empty) c.remove(); });
+  if (!technicians.length) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  technicians.forEach((t, idx) => {
+    const initials = (t.name || '?').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    const typeTags = (t.serviceTypeIds || []).map(id => {
+      const st = serviceTypes.find(s => s.id === id);
+      return st ? `<span class="tech-type-tag" style="background:${st.color}22;color:${st.color}">${escHtml(st.label)}</span>` : '';
+    }).join('');
+    const card = document.createElement('div');
+    card.className = `tech-card${t.active === false ? ' tech-inactive' : ''}`;
+    card.innerHTML = `
+      <div class="tech-dot" style="background:${t.color || '#3B82F6'}">${initials}</div>
+      <div class="tech-info">
+        <div class="tech-name">${escHtml(t.name)}</div>
+        <div class="tech-cal">${escHtml(t.calendarId || 'No calendar set')}</div>
+        <div class="tech-types">${typeTags || '<span class="tech-type-tag">No service types</span>'}</div>
+      </div>
+      <div class="tech-actions">
+        <button class="btn btn-sm btn-secondary" onclick="editTechnician(${idx})">Edit</button>
+        <label class="toggle-switch" title="${t.active!==false?'Active':'Inactive'}">
+          <input type="checkbox" ${t.active!==false?'checked':''} onchange="toggleTechActive(${idx},this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function openTechnicianModal(idx = -1) {
+  const t = idx >= 0 ? technicians[idx] : null;
+  const color = t?.color || SWATCH_COLORS[technicians.length % SWATCH_COLORS.length];
+  const stCheckboxes = serviceTypes.map(st => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;margin-bottom:6px">
+      <input type="checkbox" name="tech-st" value="${escHtml(st.id)}"
+        ${(t?.serviceTypeIds||[]).includes(st.id)?'checked':''}>
+      <span style="width:10px;height:10px;border-radius:50%;background:${st.color};display:inline-block"></span>
+      ${escHtml(st.label)}
+    </label>`).join('') || '<div class="empty-hint">Add service types first.</div>';
+
+  const html = `
+    <div class="modal-overlay" id="tech-modal">
+      <div class="modal-box">
+        <div class="modal-title">${t ? 'Edit' : 'Add'} Technician</div>
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group">
+            <label>Name <span style="color:#ef4444">*</span></label>
+            <input id="tech-name" class="form-control" value="${escHtml(t?.name||'')}" placeholder="John Smith">
+          </div>
+          <div class="form-group">
+            <label>Color</label>
+            <div class="color-picker-row" id="tech-color-row">
+              ${SWATCH_COLORS.map(c => `<span class="color-swatch${c===color?' selected':''}" style="background:${c}" data-color="${c}" onclick="selectSwatch('tech',this)"></span>`).join('')}
+            </div>
+            <input type="hidden" id="tech-color" value="${color}">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Google Calendar ID (email) <span style="color:#ef4444">*</span></label>
+          <input id="tech-cal" class="form-control" value="${escHtml(t?.calendarId||'')}" placeholder="john@yourcompany.com">
+          <div class="field-hint">The Google account email that owns the technician's calendar.</div>
+        </div>
+        <div class="form-group" style="margin-bottom:4px">
+          <label>Service Types Handled</label>
+          <div style="margin-top:8px">${stCheckboxes}</div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeModal('tech-modal')">Cancel</button>
+          ${idx>=0?`<button class="btn" style="color:#ef4444;border:1.5px solid #fca5a5;margin-right:auto" onclick="deleteTechnician(${idx})">Delete</button>`:''}
+          <button class="btn btn-primary" onclick="saveTechnician(${idx})">Save</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('tech-name').focus();
+}
+
+function saveTechnician(idx) {
+  const name      = (document.getElementById('tech-name')?.value  || '').trim();
+  const calendarId = (document.getElementById('tech-cal')?.value  || '').trim();
+  if (!name)       { alert('Please enter a name.'); return; }
+  if (!calendarId) { alert('Please enter a Google Calendar ID.'); return; }
+  const serviceTypeIds = [...document.querySelectorAll('input[name="tech-st"]:checked')].map(el => el.value);
+  const entry = {
+    id:             idx >= 0 ? technicians[idx].id : genId(),
+    name,
+    calendarId,
+    color:          document.getElementById('tech-color')?.value || SWATCH_COLORS[0],
+    active:         idx >= 0 ? (technicians[idx].active !== false) : true,
+    serviceTypeIds,
+    priority:       idx >= 0 ? technicians[idx].priority : technicians.length
+  };
+  if (idx >= 0) technicians[idx] = entry;
+  else          technicians.push(entry);
+  closeModal('tech-modal');
+  renderTechnicians();
+  markDirty();
+}
+
+function editTechnician(idx)          { openTechnicianModal(idx); }
+function deleteTechnician(idx) {
+  if (!confirm(`Remove "${technicians[idx]?.name}"?`)) return;
+  technicians.splice(idx, 1);
+  closeModal('tech-modal');
+  renderTechnicians();
+  markDirty();
+}
+function toggleTechActive(idx, active) {
+  technicians[idx].active = active;
+  renderTechnicians();
+  markDirty();
+}
+
+// ── SHARED MODAL HELPERS ──────────────────────────────────────────────────────
+function closeModal(id) {
+  document.getElementById(id)?.remove();
+}
+function selectSwatch(prefix, el) {
+  document.querySelectorAll(`#${prefix}-color-row .color-swatch`).forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById(`${prefix}-color`).value = el.dataset.color;
+}
+
+// ── EMERGENCY SCHEDULE ────────────────────────────────────────────────────────
+function setupEmergencyListeners() {
+  // Master toggle
+  setupToggle('emergency-enabled', 'emergency-settings');
+
+  // Mode radio → show/hide custom fields
+  document.querySelectorAll('input[name="emergency-mode"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const custom = document.getElementById('emergency-custom-settings');
+      if (custom) custom.style.display = r.value === 'custom' ? '' : 'none';
+      markDirty();
+    });
+  });
+}
+
+function populateEmergency(es) {
+  setChecked('emergency-enabled', es.enabled !== false);
+  document.getElementById('emergency-settings')?.classList.toggle('hidden', !es.enabled);
+  setRadio('emergency-mode', es.mode || 'custom');
+
+  const custom = document.getElementById('emergency-custom-settings');
+  if (custom) custom.style.display = (es.mode === 'custom' || !es.mode) ? '' : 'none';
+
+  // Days of week
+  const daySet = new Set((es.daysOfWeek || [1,2,3,4,5,6]).map(Number));
+  document.querySelectorAll('#emergency-days input[type=checkbox]').forEach(cb => {
+    cb.checked = daySet.has(parseInt(cb.value));
+  });
+
+  // Window
+  const wsEl = document.getElementById('emergency-window-start');
+  const weEl = document.getElementById('emergency-window-end');
+  if (wsEl) wsEl.value = es.windowStart || '07:00';
+  if (weEl) weEl.value = es.windowEnd   || '22:00';
+
+  // Buffer
+  const bufEl = document.getElementById('emergency-buffer');
+  if (bufEl) bufEl.value = es.bufferMinutes ?? 60;
+
+  // Holiday override
+  setChecked('emergency-override-holidays', !es.respectHolidays);
+
+  // Service type selector
+  const stSel = document.getElementById('emergency-service-type-id');
+  if (stSel) stSel.value = es.serviceTypeId || '';
+}
+
+function collectEmergency() {
+  const mode     = getRadio('emergency-mode') || 'custom';
+  const daysOfWeek = [...document.querySelectorAll('#emergency-days input:checked')].map(c => parseInt(c.value));
+  return {
+    enabled:         getChecked('emergency-enabled'),
+    serviceTypeId:   getSelectValue('emergency-service-type-id') || '',
+    mode,
+    windowStart:     document.getElementById('emergency-window-start')?.value || '07:00',
+    windowEnd:       document.getElementById('emergency-window-end')?.value   || '22:00',
+    bufferMinutes:   parseInt(document.getElementById('emergency-buffer')?.value || '60', 10),
+    daysOfWeek,
+    respectHolidays: !getChecked('emergency-override-holidays')
+  };
+}
+
+// ── HOLIDAY SCHEDULE ──────────────────────────────────────────────────────────
+function renderHolidayTable(holidays) {
+  const tbody = document.getElementById('holidays-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  // Show / hide emergency column based on toggle
+  const emergencyEnabled = getChecked('emergency-enabled');
+  const eHeader = document.getElementById('holiday-emergency-header');
+  if (eHeader) eHeader.style.opacity = emergencyEnabled ? '1' : '.35';
+
+  const groups = [
+    { key: 'federal',    label: 'Federal Holidays' },
+    { key: 'religious',  label: 'Religious / Cultural' },
+    { key: 'observance', label: 'Common Observances' }
+  ];
+
+  groups.forEach(g => {
+    const groupItems = holidays.filter(h => h.group === g.key);
+    if (!groupItems.length) return;
+
+    const hdrRow = document.createElement('tr');
+    hdrRow.className = 'holiday-group-header';
+    hdrRow.innerHTML = `<td colspan="4">${g.label}</td>`;
+    tbody.appendChild(hdrRow);
+
+    groupItems.forEach(h => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td style="padding:12px 20px;font-weight:500;color:var(--color-gray-800)">${escHtml(h.name)}</td>
+        <td style="padding:12px 16px;text-align:center;color:var(--color-gray-500);font-size:13px">${escHtml(h.dateDisplay)}</td>
+        <td class="holiday-toggle-cell" style="padding:8px 16px">
+          <label class="h-toggle">
+            <input type="checkbox" data-holiday="${escHtml(h.key)}" data-field="closeRegular" ${h.closeRegular?'checked':''} onchange="markDirty()">
+            <span class="h-toggle-dot"></span>
+            <span class="h-toggle-lbl">${h.closeRegular?'Closed':'Open'}</span>
+          </label>
+        </td>
+        <td class="holiday-toggle-cell" style="padding:8px 16px;opacity:${emergencyEnabled?1:.3}">
+          <label class="h-toggle" style="${!emergencyEnabled?'pointer-events:none':''}">
+            <input type="checkbox" data-holiday="${escHtml(h.key)}" data-field="closeEmergency" ${h.closeEmergency?'checked':''} onchange="markDirty()">
+            <span class="h-toggle-dot"></span>
+            <span class="h-toggle-lbl">${h.closeEmergency?'Closed':'Open'}</span>
+          </label>
+        </td>`;
+      tbody.appendChild(row);
+    });
+  });
+
+  // Live label update on toggle
+  tbody.querySelectorAll('.h-toggle input').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const lbl = cb.closest('.h-toggle')?.querySelector('.h-toggle-lbl');
+      if (lbl) lbl.textContent = cb.checked ? 'Closed' : 'Open';
+    });
+  });
+}
+
+function collectHolidays() {
+  const rows = document.querySelectorAll('#holidays-body input[data-holiday]');
+  const map  = {};
+  rows.forEach(cb => {
+    const key   = cb.dataset.holiday;
+    const field = cb.dataset.field;
+    if (!map[key]) map[key] = { key, closeRegular: false, closeEmergency: false };
+    map[key][field] = cb.checked;
+  });
+  return Object.values(map);
+}
+
+// ── INIT: wire new sections into setupEventListeners ─────────────────────────
+(function patchSetupEventListeners() {
+  const orig = window._origSetupEL;  // no-op if already done
+  document.getElementById('btn-add-service-type')?.addEventListener('click', () => openServiceTypeModal(-1));
+  document.getElementById('btn-add-technician')  ?.addEventListener('click', () => openTechnicianModal(-1));
+  setupEmergencyListeners();
+  // Re-render holiday emergency column when emergency toggle changes
+  const emergencyToggle = document.getElementById('emergency-enabled');
+  if (emergencyToggle) {
+    emergencyToggle.addEventListener('change', () => {
+      const currentHols = collectHolidays();
+      // Re-render with updated emergency-enabled state
+      const merged = currentHols.map(h => ({
+        ...h,
+        group: (window._holidayCatalogGroups || {})[h.key] || 'federal',
+        dateDisplay: (window._holidayDates || {})[h.key] || '—',
+        name:        (window._holidayNames  || {})[h.key] || h.key
+      }));
+      renderHolidayTable(merged);
+    });
+  }
+})();
+
+// ── PATCH populateForm to include new sections ────────────────────────────────
+const _origPopulateForm = window._populateFormFn || null;
+
+function populateTeamAndSchedule(config) {
+  // Service types
+  serviceTypes = (config.serviceTypes || []).sort((a,b) => (a.order||0)-(b.order||0));
+  renderServiceTypes();
+
+  // Technicians
+  technicians = config.technicians || [];
+  renderTechnicians();
+
+  // Emergency schedule
+  populateEmergency(config.emergencySchedule || {});
+
+  // Holidays — cache meta for re-renders
+  const holidays = config.holidays || [];
+  window._holidayCatalogGroups = {};
+  window._holidayDates         = {};
+  window._holidayNames         = {};
+  holidays.forEach(h => {
+    window._holidayCatalogGroups[h.key] = h.group;
+    window._holidayDates[h.key]         = h.dateDisplay;
+    window._holidayNames[h.key]         = h.name;
+  });
+  renderHolidayTable(holidays);
+}
+
+// ── PATCH collectForm to include new sections ─────────────────────────────────
+// We hook into the existing collectForm by monkey-patching after it's defined.
+// Since collectForm is a named function defined above in the same scope,
+// we extend the save payload directly in saveAll.
+const _origSaveAll = window.saveAll; // reference captured at parse time is undefined; we override below
+
+async function saveAll() {
+  const payload = collectForm();
+
+  // Append team + schedule data
+  payload.serviceTypes      = serviceTypes;
+  payload.technicians       = technicians;
+  payload.emergencySchedule = collectEmergency();
+  payload.holidays          = collectHolidays();
+
+  showSaveStatus('saving', 'Saving...');
+  document.getElementById('btn-save-all').disabled = true;
+
+  try {
+    const result = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${companyId}/booking-config`,
+      { method: 'POST', body: payload }
+    );
+    if (!result.success) throw new Error(result.error || 'Save failed');
+    showSaveStatus('saved', 'Saved');
+    showToast('success', 'Saved', 'Booking configuration saved successfully.');
+    isDirty = false;
+    setTimeout(() => showSaveStatus('', ''), 3000);
+  } catch (err) {
+    console.error('[BookingConfig] Save failed:', err);
+    showSaveStatus('error', 'Error');
+    showToast('error', 'Save failed', err.message || 'Please try again.');
+  } finally {
+    document.getElementById('btn-save-all').disabled = false;
+  }
+}
+
+// Expose for inline onclick usage
+window.editServiceType   = editServiceType;
+window.deleteServiceType = deleteServiceType;
+window.editTechnician    = editTechnician;
+window.deleteTechnician  = deleteTechnician;
+window.toggleTechActive  = toggleTechActive;
+window.selectSwatch      = selectSwatch;
+window.closeModal        = closeModal;
+window.saveServiceType   = saveServiceType;
+window.saveTechnician    = saveTechnician;
+window.saveAll           = saveAll;   // override the earlier definition
