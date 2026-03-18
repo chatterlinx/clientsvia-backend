@@ -1660,6 +1660,54 @@ function getDayLabel(day) {
 }
 
 /* ============================================================================
+   STEP: OFFER TIMES — preference pivot helper
+   ============================================================================ */
+
+/**
+ * Detect whether the caller is pivoting to a new day/time preference rather than
+ * selecting from the slots already offered.
+ *
+ * Examples that should pivot:
+ *   "What about in the afternoon?"
+ *   "Do you have anything this afternoon?"
+ *   "How about tomorrow instead?"
+ *   "What about Friday morning?"
+ *
+ * Examples that should NOT pivot (handled by matchTimeFromInput):
+ *   "Let's do 9 a.m."     ← slot selection
+ *   "The first one"       ← positional selection
+ *
+ * @param {string} userInput
+ * @param {Object} ctx        - booking context (used to compare against current prefs)
+ * @returns {{ newDay: string|null, newTime: string|null } | null}
+ */
+function detectPreferencePivot(userInput, ctx) {
+  const t = userInput.toLowerCase();
+
+  // Must contain asking/alternative language to distinguish pivot from slot selection
+  const isAskingForNew = /\b(what about|how about|do you have|any(thing)?(\s+available)?|instead|different|earlier|later|other time|other day)\b/.test(t);
+
+  // "this morning/afternoon/evening" always means today
+  const impliedToday = /\bthis\s+(morning|afternoon|evening)\b/.test(t);
+
+  const newDay  = parseDayPreference(t) || (impliedToday ? 'today' : null);
+  const newTime = parseTimePreference(t);
+
+  if (!newDay && !newTime) return null; // nothing to pivot to
+
+  const isDifferentDay  = newDay  && newDay  !== ctx.preferredDay;
+  const isDifferentTime = newTime && newTime !== ctx.preferredTime;
+
+  // Pivot when: asking language present with any day/time change,
+  // OR a clearly different day was named even without asking language
+  if ((isAskingForNew && (newDay || newTime)) || isDifferentDay || isDifferentTime) {
+    return { newDay, newTime };
+  }
+
+  return null;
+}
+
+/* ============================================================================
    STEP: OFFER TIMES
    ============================================================================ */
 
@@ -1690,6 +1738,32 @@ async function processOfferTimes(ctx, userInput, config, companyId, isTest, even
   const selected = matchTimeFromInput(userInput, ctx.availableTimeOptions);
 
   if (!selected) {
+    // Before giving up — check if the caller is pivoting to a different day/time preference
+    // e.g. "What about in the afternoon?" or "Do you have anything this afternoon?"
+    const pivot = detectPreferencePivot(userInput, ctx);
+    if (pivot) {
+      if (pivot.newDay)  ctx.preferredDay  = pivot.newDay;
+      if (pivot.newTime) ctx.preferredTime = pivot.newTime;
+      ctx.availableTimeOptions = null; // force fresh fetch with updated prefs
+      events.push({ type: 'BL1_PREFERENCE_PIVOT', newDay: pivot.newDay, newTime: pivot.newTime, timestamp: Date.now() });
+
+      const { timeOptions, message } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
+      ctx.availableTimeOptions = timeOptions;
+
+      // Build a natural acknowledgement: "Of course — let me check today in the afternoon..."
+      const ackParts = [];
+      if (pivot.newDay)  ackParts.push(pivot.newDay);
+      if (pivot.newTime) ackParts.push(`in the ${pivot.newTime}`);
+      const ackStr = ackParts.length ? ackParts.join(' ') : 'that time frame';
+
+      return {
+        nextPrompt: `Of course — let me check ${ackStr} for you. ${message}`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // Truly no match and no pivot — re-ask with current options
     const formatted = formatTimeOptionsList(ctx.availableTimeOptions);
     return {
       nextPrompt: `I didn't catch which time you'd prefer. I have ${formatted} — which works best?`,
