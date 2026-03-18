@@ -1098,6 +1098,13 @@ function clearPendingFollowUp(nextState) {
   nextState.agent2.discovery.pendingFollowUpQuestionSource = null;
   nextState.agent2.discovery.pendingFollowUpQuestionNextAction = null;
   nextState.agent2.discovery.followUpContinuationCount = 0;
+  // Also clear legacy pendingQuestion — this field is set by LLM intake on T1
+  // and is NOT cleared by the PFUQ consent gate path. If left in state it
+  // causes the v2twilio ghost guard to fire on the booking redirect (empty
+  // SpeechResult) and booking never runs.
+  nextState.agent2.discovery.pendingQuestion = null;
+  nextState.agent2.discovery.pendingQuestionTurn = null;
+  nextState.agent2.discovery.pendingQuestionSource = null;
 }
 
 /**

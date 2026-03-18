@@ -5375,8 +5375,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const ghostPQ = callState?.agent2?.discovery?.pendingQuestion || null;
       const ghostPQTurn = callState?.agent2?.discovery?.pendingQuestionTurn;
       const hasAnyPendingQ = !!ghostPFUQ || !!ghostPQ;
+      // Never ghost-guard in BOOKING lane — the booking redirect arrives with
+      // empty SpeechResult and must reach BookingLogicEngine, not be silenced.
+      const ghostGuardIsBookingLane = (
+        callState?.lane === 'BOOKING' || callState?.sessionMode === 'BOOKING'
+      );
 
-      if (speechIsEmpty && hasAnyPendingQ) {
+      if (speechIsEmpty && hasAnyPendingQ && !ghostGuardIsBookingLane) {
         // Bump pending question turns forward so they survive for the next real turn
         if (ghostPFUQ && typeof ghostPFUQTurn === 'number') {
           callState.agent2.discovery.pendingFollowUpQuestionTurn = turnNumber;
@@ -6172,9 +6177,30 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const justTransitionedToBooking = isBookingNow && !wasBookingBefore;
 
       if (justTransitionedToBooking) {
-        // Play handoff phrase then redirect — BookingLogicEngine speaks next
+        // Play consent YES response, then booking bridge phrase, then redirect.
+        // BookingLogicEngine fires on the redirect and immediately asks its
+        // first question — no dead-air gap waiting for caller input.
         if (audioUrl) twiml.play(audioUrl);
         else twiml.say(escapeTwiML(responseText));
+
+        // Play Booking Bridge phrase ("Alright, lets get that scheduled for you..")
+        // configured in Agent 2.0 Settings → Bridge → Booking Bridge.
+        const bookingBridgePhrase = (bridgeCfg.bookingBridgePhrase || '').trim();
+        if (bookingBridgePhrase) {
+          const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
+          const bookingBridgeAudio = BridgeAudioService.getAudioUrl({
+            companyId: companyID,
+            text: bookingBridgePhrase,
+            voiceSettings: company?.aiAgentSettings?.voiceSettings || {},
+            hostHeader
+          });
+          if (bookingBridgeAudio) {
+            twiml.play(bookingBridgeAudio);
+          } else {
+            twiml.say(escapeTwiML(bookingBridgePhrase));
+          }
+        }
+
         twiml.redirect({ method: 'POST' }, `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`);
 
         if (CallLogger && callSid) {
