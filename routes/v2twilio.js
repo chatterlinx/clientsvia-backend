@@ -6751,7 +6751,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     if (maxBridgesPerCall >= 0 && currentBridgeCount >= maxBridgesPerCall) {
       // Per-call cap reached — skip bridge, wait for compute
-      bufferEvent('A2_BRIDGE_CAP_REACHED', {
+      logger.info('A2_BRIDGE_CAP_REACHED', {
         maxBridgesPerCall,
         currentBridgeCount,
         turnNumber,
