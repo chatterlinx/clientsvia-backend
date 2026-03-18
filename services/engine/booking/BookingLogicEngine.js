@@ -40,6 +40,7 @@ const VERSION   = 'BL2.0';
 const STEPS = {
   INIT:                 'INIT',
   CONFIRM_RECOGNITION:  'CONFIRM_RECOGNITION',  // T0 — confirm CRM-matched caller identity
+  CONFIRM_NAME:         'CONFIRM_NAME',          // T0 — confirm LLM-prefilled name from discovery
   COLLECT_NAME:         'COLLECT_NAME',
   COLLECT_PHONE:        'COLLECT_PHONE',
   COLLECT_ADDRESS:      'COLLECT_ADDRESS',
@@ -311,6 +312,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   switch (ctx.step) {
     case STEPS.INIT:                return processInit(ctx, config, companyId, isTest, events);
     case STEPS.CONFIRM_RECOGNITION: return processConfirmRecognition(ctx, userInput, config, companyId, isTest, events);
+    case STEPS.CONFIRM_NAME:        return processConfirmName(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_NAME:        return processCollectName(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_PHONE:       return processCollectPhone(ctx, userInput, config, companyId, isTest, events);
     case STEPS.COLLECT_ADDRESS:     return processCollectAddress(ctx, userInput, config, companyId, isTest, events);
@@ -395,24 +397,46 @@ async function processInit(ctx, config, companyId, isTest, events) {
   // ── Field collection ───────────────────────────────────────────────────────
   const issuePrefix = buildWarmOpening(ctx);
 
-  if (!ctx.collectedFields.firstName) {
+  // ── Name confirmation ──────────────────────────────────────────────────────
+  // If discovery pre-filled a name, confirm it naturally instead of re-asking.
+  //   Full name known  → "I assume your name is Tony Cox, is that correct?"
+  //   First name only  → "I assume your first name is Mark, is that correct?
+  //                       And what is your last name?"
+  //   No name known    → cold ask using askNamePrompt
+  if (!ctx._nameConfirmed) {
+    const hasFirst = !!ctx.collectedFields.firstName;
+    const hasLast  = !!ctx.collectedFields.lastName;
+
+    if (hasFirst && hasLast) {
+      // Both names pre-filled — confirm the full name
+      ctx.step              = STEPS.CONFIRM_NAME;
+      ctx._nameConfirmMode  = 'CONFIRM_FULL';
+      const fullName = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
+      events.push({ type: 'BL1_CONFIRMING_FULL_NAME', firstName: ctx.collectedFields.firstName, lastName: ctx.collectedFields.lastName, timestamp: Date.now() });
+      return {
+        nextPrompt: `${bridge}I assume your name is ${fullName}, is that correct?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    if (hasFirst && !hasLast) {
+      // First name only — confirm it and ask for last name in the same turn
+      ctx.step             = STEPS.CONFIRM_NAME;
+      ctx._nameConfirmMode = 'CONFIRM_FIRST_ASK_LAST';
+      events.push({ type: 'BL1_CONFIRMING_FIRST_NAME', firstName: ctx.collectedFields.firstName, timestamp: Date.now() });
+      return {
+        nextPrompt: `${bridge}I assume your first name is ${ctx.collectedFields.firstName}, is that correct? And what is your last name?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // No name at all — cold ask
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_COLLECTING_NAME', timestamp: Date.now() });
     return {
-      nextPrompt: `${bridge}${config.askNamePrompt || `${issuePrefix}To get started with your booking, may I have your name please?`}`,
-      bookingCtx: ctx,
-      completed:  false
-    };
-  }
-
-  // firstName pre-filled from LLM entities but no lastName — confirm and ask for last name
-  if (!ctx.collectedFields.lastName) {
-    ctx.step = STEPS.COLLECT_NAME;
-    ctx._nameSubStep = 'CONFIRM_GET_LAST';
-    const preFilledFirst = ctx.collectedFields.firstName;
-    events.push({ type: 'BL1_CONFIRMING_PREFILLED_NAME', firstName: preFilledFirst, timestamp: Date.now() });
-    return {
-      nextPrompt: `${bridge}${issuePrefix}I have your first name as ${preFilledFirst} — may I also get your last name?`,
+      nextPrompt: `${bridge}${config.askNamePrompt || `${issuePrefix}To get started with your booking, may I have your first and last name please?`}`,
       bookingCtx: ctx,
       completed:  false
     };
@@ -541,6 +565,192 @@ async function processConfirmRecognition(ctx, userInput, config, companyId, isTe
     bookingCtx: ctx,
     completed:  false
   };
+}
+
+/* ============================================================================
+   STEP: CONFIRM NAME  (T0 — LLM-prefilled name confirmation from discovery)
+   ============================================================================
+   Sub-steps:
+     CONFIRM_FULL          → both names known, confirm full name
+     CONFIRM_FIRST_ASK_LAST → first name only, confirm it + ask for last
+     ASK_LAST_ONLY         → first name confirmed, just need last name now
+   ============================================================================ */
+
+/**
+ * Strip filler words and extract name tokens from a caller utterance.
+ * Returns an array of cleaned word tokens (capitalised).
+ */
+function extractNameTokens(input) {
+  return input
+    .replace(/\b(yes|yeah|yep|no|nope|actually|it'?s|i'?m|my name is|the name is|correct|wrong|right|uh-?huh|just|wait|oh|well|um|uh|sure|ok|okay)\b/gi, ' ')
+    .replace(/[,;.!?]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(w => w.length >= 2)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+async function processConfirmName(ctx, userInput, config, companyId, isTest, events) {
+  const mode  = ctx._nameConfirmMode || 'CONFIRM_FULL';
+  const lower = (userInput || '').toLowerCase().trim();
+
+  const isYes = /\b(yes|yeah|yep|correct|right|that'?s (right|correct|me)|sure|uh-?huh|affirmative|yep|confirmed)\b/.test(lower);
+  const isNo  = /\b(no|nope|wrong|incorrect|not (right|correct)|different|nah|neither)\b/.test(lower);
+
+  // ── Re-ask if empty input ─────────────────────────────────────────────────
+  if (!userInput?.trim()) {
+    if (mode === 'CONFIRM_FULL') {
+      const full = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
+      return { nextPrompt: `I assume your name is ${full}, is that correct?`, bookingCtx: ctx, completed: false };
+    }
+    if (mode === 'CONFIRM_FIRST_ASK_LAST') {
+      return { nextPrompt: `I assume your first name is ${ctx.collectedFields.firstName}, is that correct? And what is your last name?`, bookingCtx: ctx, completed: false };
+    }
+    if (mode === 'ASK_LAST_ONLY') {
+      return { nextPrompt: `And what is your last name?`, bookingCtx: ctx, completed: false };
+    }
+  }
+
+  // ── ASK_LAST_ONLY: just capture whatever they say as last name ────────────
+  if (mode === 'ASK_LAST_ONLY') {
+    const tokens = extractNameTokens(userInput);
+    const lastName = tokens.length > 0 ? tokens[tokens.length - 1] : userInput.trim();
+    ctx.collectedFields.lastName = lastName;
+    ctx._nameConfirmed = true;
+    events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName, timestamp: Date.now() });
+    return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+  }
+
+  // ── CONFIRM_FULL ──────────────────────────────────────────────────────────
+  if (mode === 'CONFIRM_FULL') {
+    if (isYes && !isNo) {
+      // Confirmed — proceed
+      ctx._nameConfirmed = true;
+      events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName: ctx.collectedFields.lastName, timestamp: Date.now() });
+      return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+    }
+
+    // Caller gave a correction — try to extract the name
+    const tokens = extractNameTokens(userInput);
+    if (!isNo && tokens.length === 0) {
+      // Ambiguous — re-ask
+      const full = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
+      return { nextPrompt: `Just to confirm — is your name ${full}? A simple yes or no works.`, bookingCtx: ctx, completed: false };
+    }
+
+    if (tokens.length >= 2) {
+      // Full name correction: "it's Bob Johnson"
+      ctx.collectedFields.firstName = tokens[0];
+      ctx.collectedFields.lastName  = tokens.slice(1).join(' ');
+      ctx._nameConfirmed = true;
+      events.push({ type: 'BL1_NAME_CORRECTED', firstName: tokens[0], lastName: tokens.slice(1).join(' '), timestamp: Date.now() });
+      return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+    }
+
+    if (tokens.length === 1) {
+      // Only first name given: "it's Bob" — keep it, ask for last name
+      ctx.collectedFields.firstName = tokens[0];
+      ctx.collectedFields.lastName  = null;
+      ctx._nameConfirmMode = 'ASK_LAST_ONLY';
+      events.push({ type: 'BL1_NAME_PARTIAL_CORRECTED', firstName: tokens[0], timestamp: Date.now() });
+      return { nextPrompt: `Got it, ${tokens[0]}! And your last name?`, bookingCtx: ctx, completed: false };
+    }
+
+    // Plain NO with no correction — clear and collect fresh
+    ctx.collectedFields.firstName = null;
+    ctx.collectedFields.lastName  = null;
+    ctx.step = STEPS.COLLECT_NAME;
+    events.push({ type: 'BL1_NAME_DECLINED', timestamp: Date.now() });
+    return {
+      nextPrompt: config.askNamePrompt || 'No problem! What is your first and last name?',
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // ── CONFIRM_FIRST_ASK_LAST ────────────────────────────────────────────────
+  if (mode === 'CONFIRM_FIRST_ASK_LAST') {
+    // NO — clear and start fresh
+    if (isNo && !isYes) {
+      const tokens = extractNameTokens(userInput);
+      if (tokens.length >= 2) {
+        // "No, I'm John Cox" — got full correction in same breath
+        ctx.collectedFields.firstName = tokens[0];
+        ctx.collectedFields.lastName  = tokens.slice(1).join(' ');
+        ctx._nameConfirmed = true;
+        events.push({ type: 'BL1_NAME_CORRECTED', firstName: tokens[0], lastName: tokens.slice(1).join(' '), timestamp: Date.now() });
+        return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+      }
+      // Plain NO — clear and ask fresh
+      ctx.collectedFields.firstName = null;
+      ctx.collectedFields.lastName  = null;
+      ctx.step = STEPS.COLLECT_NAME;
+      events.push({ type: 'BL1_NAME_DECLINED', timestamp: Date.now() });
+      return {
+        nextPrompt: config.askNamePrompt || 'No problem! What is your first and last name?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // YES — now check if they also gave a last name in the same response
+    // e.g. "yes, Cox"  or  "yes my last name is Johnson"
+    const tokens = extractNameTokens(userInput);
+    if (tokens.length >= 1) {
+      // Filter out the first name itself if they repeated it
+      const lastName = tokens.find(t => t.toLowerCase() !== ctx.collectedFields.firstName?.toLowerCase());
+      if (lastName) {
+        ctx.collectedFields.lastName = lastName;
+        ctx._nameConfirmed = true;
+        events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName, timestamp: Date.now() });
+        return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+      }
+    }
+
+    // YES but no last name found — ask for it specifically
+    ctx._nameConfirmMode = 'ASK_LAST_ONLY';
+    const first = ctx.collectedFields.firstName;
+    return {
+      nextPrompt: `Great, ${first}! And what is your last name?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // Fallback — shouldn't reach here
+  ctx.step = STEPS.COLLECT_NAME;
+  return { nextPrompt: config.askNamePrompt || 'May I have your first and last name?', bookingCtx: ctx, completed: false };
+}
+
+/**
+ * After name is confirmed (CONFIRM_NAME → success), advance to the next
+ * required field using the same logic as processInit.
+ */
+async function continueAfterNameConfirmed(ctx, config, companyId, isTest, events) {
+  ctx.step = STEPS.COLLECT_PHONE;  // will be overridden below if phone already set
+
+  if (!ctx.collectedFields.phone) {
+    ctx.step = STEPS.COLLECT_PHONE;
+    events.push({ type: 'BL1_COLLECTING_PHONE', timestamp: Date.now() });
+    const nameGreet = ctx.collectedFields.firstName ? `${ctx.collectedFields.firstName}, ` : '';
+    return {
+      nextPrompt: config.askPhonePrompt || `Perfect! ${nameGreet}what's the best phone number to reach you at?`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+  if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
+    ctx.step = STEPS.COLLECT_ADDRESS;
+    return { nextPrompt: config.askAddressPrompt || "And what's the service address?", bookingCtx: ctx, completed: false };
+  }
+  const customFields = config.customFields || [];
+  if (customFields.length > 0) {
+    const firstField = customFields[0];
+    ctx.step = STEPS.COLLECT_CUSTOM;
+    ctx.customFieldIndex = 0;
+    return { nextPrompt: firstField.prompt || `One more thing — ${firstField.label}?`, bookingCtx: ctx, completed: false };
+  }
+  return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
 }
 
 /* ============================================================================
