@@ -6174,7 +6174,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // Play handoff phrase then redirect — BookingLogicEngine speaks next
         if (audioUrl) twiml.play(audioUrl);
         else twiml.say(escapeTwiML(responseText));
-        twiml.redirect({ method: 'POST' }, `/api/twilio/v2-agent-respond/${companyID}`);
+        twiml.redirect({ method: 'POST' }, `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`);
 
         if (CallLogger && callSid) {
           CallLogger.logEvent({

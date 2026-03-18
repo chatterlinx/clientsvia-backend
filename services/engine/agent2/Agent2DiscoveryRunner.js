@@ -876,7 +876,8 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
       redis,
       emit,
       onSentence,
-      skipResultKey: true,  // BUG-29: intake returns JSON — raw output must never reach bridge
+      skipResultKey: true,  // intake returns JSON — raw output must never reach bridge
+      jsonMode:      finalProvider === 'groq',  // force JSON output on Groq to fix PARSE_FAILED
     });
 
     // ── Provider failover: if primary fails with a hard API error, retry on the other key ──
@@ -914,7 +915,8 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
           redis,
           emit,
           onSentence,
-          skipResultKey: true,  // same as primary — intake raw output never goes to bridge
+          skipResultKey: true,   // intake raw output never goes to bridge
+          jsonMode:      fallbackProvider === 'groq',  // JSON mode on Groq failover too
         });
       }
     }

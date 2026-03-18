@@ -110,6 +110,7 @@ async function* streamTokens(opts) {
         callSid,
         turn,
         signal,
+        jsonMode    = false,  // When true: forces JSON output via response_format
     } = opts;
 
     if (!apiKey) throw new Error('GROQ_NO_API_KEY');
@@ -121,6 +122,18 @@ async function* streamTokens(opts) {
     if (system) groqMessages.push({ role: 'system', content: system });
     if (messages?.length) groqMessages.push(...messages);
 
+    // Build request body — only add response_format when explicitly requested.
+    // Groq requires the word "json" to appear in the system prompt when using
+    // json_object mode (otherwise returns 400). Intake system prompt satisfies this.
+    const requestBody = {
+        model:       groqModel,
+        max_tokens:  maxTokens,
+        temperature,
+        messages:    groqMessages,
+        stream:      true,
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    };
+
     let response;
     try {
         response = await fetch(`${GROQ_API_BASE}/chat/completions`, {
@@ -129,13 +142,7 @@ async function* streamTokens(opts) {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type':  'application/json',
             },
-            body: JSON.stringify({
-                model:       groqModel,
-                max_tokens:  maxTokens,
-                temperature,
-                messages:    groqMessages,
-                stream:      true,
-            }),
+            body: JSON.stringify(requestBody),
             signal,
         });
     } catch (err) {

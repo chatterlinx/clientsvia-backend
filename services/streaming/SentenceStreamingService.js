@@ -174,6 +174,7 @@ async function streamWithSentences(opts) {
     emit         = () => {},
     onSentence   = null,
     skipResultKey = false,
+    jsonMode      = false,       // passed through to adapter — Groq JSON mode
     maxCeilingMs = DEFAULTS.maxCeilingMs,
     heartbeatIntervalMs = DEFAULTS.heartbeatIntervalMs,
   } = opts;
@@ -257,7 +258,7 @@ async function streamWithSentences(opts) {
   const streamPromise = (async () => {
     for await (const chunk of adapter.streamTokens({
       apiKey, model, maxTokens, temperature, system, messages,
-      callSid, turn,
+      callSid, turn, jsonMode,
       signal: abortController.signal,
     })) {
       heartbeat.onTokens(chunk);
