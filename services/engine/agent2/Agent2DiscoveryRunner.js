@@ -1993,8 +1993,91 @@ class Agent2DiscoveryRunner {
       const inputWordsFUQ = inputLowerCleanFUQ.split(/\s+/).filter(Boolean);
       const inputLenFUQ = input.trim().length;
 
-      // Load configurable keywords from followUpConsent (company-level)
-      const fuc = safeObj(discoveryCfg?.followUpConsent, {});
+      // Load configurable keywords from followUpConsent (company-level).
+      // Deep-merge saved config on top of built-in defaults so the consent gate
+      // works correctly even if the admin has never clicked "Save Consent Cards".
+      // Without defaults: fuc = {} → no phrases match → everything falls to COMPLEX
+      //   → LLM agent, booking never triggered.
+      const DEFAULT_FUC = {
+        missingResponseAction: 'REASK_FOLLOWUP',
+        yes: {
+          direction: 'HANDOFF_BOOKING',
+          phrases: [
+            'yes','yeah','yep','yea','sure','ok','okay','please',
+            'absolutely','definitely','certainly','correct','thats right',
+            'right','go ahead','do it','lets do it','sounds good',
+            'that works','works for me','schedule','book','book it',
+            'set it up','im ready','perfect','great','yes please',
+            'ya','yup','uh huh','mm hmm'
+          ],
+          response: ''
+        },
+        no: {
+          direction: 'CONTINUE',
+          phrases: [
+            'no','nope','nah','negative','not yet','not now',
+            'not today','maybe later','ill call back','just asking',
+            'just a question','dont schedule','not right now',
+            'another time','later'
+          ],
+          response: ''
+        },
+        maintenance: {
+          direction: 'HANDOFF_BOOKING',
+          bookingMode: 'maintenance',
+          phrases: [
+            'maintenance','tune up','tune-up','tuneup','service plan',
+            'membership','annual','seasonal','check up','checkup',
+            'inspection','preventative','preventive','maintenance visit',
+            'maintenance appointment','maintenance call','spring tune up',
+            'fall tune up','routine service','regular service',
+            'clean and check','clean & check'
+          ],
+          response: ''
+        },
+        service_call: {
+          direction: 'HANDOFF_BOOKING',
+          bookingMode: 'service_call',
+          phrases: [
+            'service call','repair','diagnostic','diagnosis',
+            'troubleshoot','troubleshooting','fix it','technician','tech',
+            'not cooling','no cool','blowing warm','leaking','water',
+            'noise','loud','frozen','ice','wont turn on','not working',
+            'stopped working','broke','broken','error code','emergency',
+            'asap','today'
+          ],
+          response: ''
+        },
+        reprompt: {
+          direction: 'REASK',
+          phrases: [
+            'huh','what','sorry','come again','say that again',
+            'repeat that','i didnt hear','pardon'
+          ],
+          response: ''
+        },
+        hesitant: {
+          direction: 'CLARIFY',
+          phrases: [
+            'i dont know','im not sure','maybe','i think so',
+            'do i have to','not certain','possibly','kind of',
+            'sort of','i guess','hard to say','let me think'
+          ],
+          response: ''
+        },
+        complex: { direction: 'AGENT', phrases: [], response: '' }
+      };
+      const rawFuc = safeObj(discoveryCfg?.followUpConsent, {});
+      const fuc = {
+        missingResponseAction: rawFuc.missingResponseAction || DEFAULT_FUC.missingResponseAction,
+        yes:          { ...DEFAULT_FUC.yes,          ...safeObj(rawFuc.yes,          {}) },
+        no:           { ...DEFAULT_FUC.no,           ...safeObj(rawFuc.no,           {}) },
+        maintenance:  { ...DEFAULT_FUC.maintenance,  ...safeObj(rawFuc.maintenance,  {}) },
+        service_call: { ...DEFAULT_FUC.service_call, ...safeObj(rawFuc.service_call, {}) },
+        reprompt:     { ...DEFAULT_FUC.reprompt,     ...safeObj(rawFuc.reprompt,     {}) },
+        hesitant:     { ...DEFAULT_FUC.hesitant,     ...safeObj(rawFuc.hesitant,     {}) },
+        complex:      { ...DEFAULT_FUC.complex,      ...safeObj(rawFuc.complex,      {}) },
+      };
       const yesPhrases = safeArr(fuc.yes?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
       const noPhrases = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
       const maintenancePhrases = safeArr(fuc.maintenance?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);

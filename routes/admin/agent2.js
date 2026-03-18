@@ -516,7 +516,23 @@ function mergeAgent2Config(saved) {
       clarifiers: {
         ...defaults.discovery.clarifiers,
         ...safeObject(src.discovery?.clarifiers, {})
-      }
+      },
+      // Follow-up consent gate — deep-merge per-bucket so missing buckets get defaults.
+      // Without this, a partially-saved followUpConsent wipes out bucket-level defaults.
+      followUpConsent: (() => {
+        const d = defaults.discovery.followUpConsent;
+        const s = safeObject(src.discovery?.followUpConsent, {});
+        return {
+          missingResponseAction: s.missingResponseAction || d.missingResponseAction,
+          yes:          { ...d.yes,          ...safeObject(s.yes,          {}) },
+          no:           { ...d.no,           ...safeObject(s.no,           {}) },
+          maintenance:  { ...d.maintenance,  ...safeObject(s.maintenance,  {}) },
+          service_call: { ...d.service_call, ...safeObject(s.service_call, {}) },
+          reprompt:     { ...d.reprompt,     ...safeObject(s.reprompt,     {}) },
+          hesitant:     { ...d.hesitant,     ...safeObject(s.hesitant,     {}) },
+          complex:      { ...d.complex,      ...safeObject(s.complex,      {}) },
+        };
+      })()
     },
     // Greetings system (Agent 2.0 owned)
     greetings: {
