@@ -6155,38 +6155,70 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const hasPendingFollowUp = !!persistedState?.agent2?.discovery?.pendingFollowUpQuestion;
       const speechTimeoutValue = hasPendingFollowUp ? '2' : (speechDet.speechTimeout?.toString() || '1.5');
 
-      const gather = twiml.gather({
-        input: 'speech',
-        action: `/api/twilio/v2-agent-respond/${companyID}`,
-        method: 'POST',
-        actionOnEmptyResult: true,
-        timeout: gatherTimeout,
-        speechTimeout: speechTimeoutValue,
-        bargeIn: speechDet.bargeIn ?? false,
-        enhanced: speechDet.enhancedRecognition ?? true,
-        speechModel: speechDet.speechModel || 'phone_call',
-        partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
-        partialResultCallbackMethod: 'POST'
-      });
+      // ── BOOKING HANDOFF REDIRECT ──────────────────────────────────────────────
+      // When this turn JUST transitioned to BOOKING mode (HANDOFF_BOOKING fired),
+      // the agent played "great, one moment — let me pull up our schedule."
+      // Instead of a Gather (which would sit silent for 7s waiting for the caller
+      // to speak), immediately Redirect to v2-agent-respond so BookingLogicEngine
+      // fires and ASKS the first question (name/phone) without any dead-air gap.
+      //
+      // Guards: persistedState has BOOKING but callState (previous turn) did NOT.
+      // This ensures the Redirect only fires once — on the transition turn — and
+      // subsequent BOOKING turns get normal Gather so the caller can respond.
+      // ─────────────────────────────────────────────────────────────────────────
+      const wasBookingBefore = (callState?.sessionMode === 'BOOKING' || callState?.lane === 'BOOKING');
+      const isBookingNow     = (persistedState?.sessionMode === 'BOOKING' || persistedState?.lane === 'BOOKING');
+      const justTransitionedToBooking = isBookingNow && !wasBookingBefore;
 
-      if (audioUrl) gather.play(audioUrl);
-      else gather.say(escapeTwiML(responseText));
+      if (justTransitionedToBooking) {
+        // Play handoff phrase then redirect — BookingLogicEngine speaks next
+        if (audioUrl) twiml.play(audioUrl);
+        else twiml.say(escapeTwiML(responseText));
+        twiml.redirect({ method: 'POST' }, `/api/twilio/v2-agent-respond/${companyID}`);
 
-      // ── BUG-28 FIX: Overwrite preflight gather config with accurate post-LLM values ──
-      // Correct patience timeout and pendingFollowUp speechTimeout now that we have runtimeResult.
-      if (redis && callSid) {
-        redis.set(`a2sentence:gather:${callSid}:${turnNumber}`, JSON.stringify({
-          action:         `/api/twilio/v2-agent-respond/${companyID}`,
-          timeout:        gatherTimeout,
-          speechTimeout:  speechTimeoutValue,
-          bargeIn:        speechDet.bargeIn ?? false,
-          enhanced:       speechDet.enhancedRecognition ?? true,
-          speechModel:    speechDet.speechModel || 'phone_call',
-          hostHeader,
-          companyID,
-          voiceSettings:  _sentenceVoiceSettings,
-          voiceId:        elevenLabsVoice || null,
-        }), { EX: 120 }).catch(() => {});
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid, companyId: companyID,
+            type: 'BOOKING_HANDOFF_REDIRECT',
+            turn: turnNumber,
+            data: { reason: 'Transitioned to BOOKING lane — redirecting immediately so BookingLogicEngine asks first question' }
+          }).catch(() => {});
+        }
+      } else {
+        // Normal path: Gather so caller can respond to agent's question
+        const gather = twiml.gather({
+          input: 'speech',
+          action: `/api/twilio/v2-agent-respond/${companyID}`,
+          method: 'POST',
+          actionOnEmptyResult: true,
+          timeout: gatherTimeout,
+          speechTimeout: speechTimeoutValue,
+          bargeIn: speechDet.bargeIn ?? false,
+          enhanced: speechDet.enhancedRecognition ?? true,
+          speechModel: speechDet.speechModel || 'phone_call',
+          partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+          partialResultCallbackMethod: 'POST'
+        });
+
+        if (audioUrl) gather.play(audioUrl);
+        else gather.say(escapeTwiML(responseText));
+
+        // ── BUG-28 FIX: Overwrite preflight gather config with accurate post-LLM values ──
+        // Correct patience timeout and pendingFollowUp speechTimeout now that we have runtimeResult.
+        if (redis && callSid) {
+          redis.set(`a2sentence:gather:${callSid}:${turnNumber}`, JSON.stringify({
+            action:         `/api/twilio/v2-agent-respond/${companyID}`,
+            timeout:        gatherTimeout,
+            speechTimeout:  speechTimeoutValue,
+            bargeIn:        speechDet.bargeIn ?? false,
+            enhanced:       speechDet.enhancedRecognition ?? true,
+            speechModel:    speechDet.speechModel || 'phone_call',
+            hostHeader,
+            companyID,
+            voiceSettings:  _sentenceVoiceSettings,
+            voiceId:        elevenLabsVoice || null,
+          }), { EX: 120 }).catch(() => {});
+        }
       }
 
       // V-FIX: Voice decision audit log
