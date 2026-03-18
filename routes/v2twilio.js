@@ -4707,11 +4707,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   let voiceProviderUsed = 'twilio_say';
   let twimlString = '';
   let routeError = null;
+  let company = null;  // hoisted so catch block can reference it for UI-configured crashText
 
   try {
     // T1: Company load start
     const T1_start = Date.now();
-    const company = await Company.findById(companyID).lean();
+    company = await Company.findById(companyID).lean();
     timings.companyLoadMs = Date.now() - T1_start;
     if (!company) {
       // CRITICAL: Company not found - cannot resolve UI config
