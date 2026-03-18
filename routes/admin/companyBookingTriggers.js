@@ -781,12 +781,25 @@ router.get('/:companyId/booking-config',
         bridgePhrase:      a2.bridge?.bookingBridgePhrase || '',
         callerRecognition: bc.callerRecognition || {},
         builtinPrompts: {
-          askName:         bc.builtinPrompts?.askName         || bp.askName         || '',
-          nameReAnchor:    bc.builtinPrompts?.nameReAnchor    || '',
-          askPhone:        bc.builtinPrompts?.askPhone        || bp.askPhone        || '',
-          phoneReAnchor:   bc.builtinPrompts?.phoneReAnchor   || '',
-          askAddress:      bc.builtinPrompts?.askAddress      || bp.askAddress      || '',
-          addressReAnchor: bc.builtinPrompts?.addressReAnchor || ''
+          // NAME — cold ask
+          askName:                    bc.builtinPrompts?.askName                    || bp.askName  || '',
+          nameReAnchor:               bc.builtinPrompts?.nameReAnchor               || '',
+          // NAME — smart confirmation (LLM pre-fill)
+          confirmFullName:            bc.builtinPrompts?.confirmFullName            || '',
+          confirmFirstNameAskLast:    bc.builtinPrompts?.confirmFirstNameAskLast    || '',
+          askLastNameOnly:            bc.builtinPrompts?.askLastNameOnly            || '',
+          confirmNameAmbiguous:       bc.builtinPrompts?.confirmNameAmbiguous       || '',
+          confirmNamePartialCorrected: bc.builtinPrompts?.confirmNamePartialCorrected || '',
+          confirmFirstNameGotLastAsk: bc.builtinPrompts?.confirmFirstNameGotLastAsk  || '',
+          // PHONE
+          askPhone:                   bc.builtinPrompts?.askPhone                   || bp.askPhone || '',
+          phoneReAnchor:              bc.builtinPrompts?.phoneReAnchor              || '',
+          phoneInvalid:               bc.builtinPrompts?.phoneInvalid               || '',
+          // ADDRESS
+          askAddress:                 bc.builtinPrompts?.askAddress                 || bp.askAddress || '',
+          addressReAnchor:            bc.builtinPrompts?.addressReAnchor            || '',
+          // DIGRESSION
+          t2DigressionAck:            bc.builtinPrompts?.t2DigressionAck            || ''
         },
         customFields: bc.customFields || bf.map(f => ({
           ...f,
