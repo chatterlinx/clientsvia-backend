@@ -4064,7 +4064,8 @@ const companySchema = new mongoose.Schema({
                     enabled:            { type: Boolean, default: true },
                     askDayPrompt:       { type: String, default: 'What day works best for you?', trim: true },
                     askTimePrompt:      { type: String, default: "And what time works for you {day}? I'll check our availability.", trim: true },
-                    noSlotsOnDayPrompt: { type: String, default: "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?", trim: true }
+                    noSlotsOnDayPrompt: { type: String, default: "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?", trim: true },
+                    urgentPrompt:       { type: String, default: "I completely understand — let me pull up the very first opening we have for you.", trim: true }
                 }
             },
 

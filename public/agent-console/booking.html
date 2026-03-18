@@ -1007,9 +1007,16 @@
             </label>
           </div>
           <div id="preference-capture-settings" class="sub-settings">
-            <div class="form-group" style="margin-top:12px">
-              <label for="preference-ask-day">Ask Day Prompt</label>
-              <textarea id="preference-ask-day" rows="2" placeholder="What day works best for you?"></textarea>
+            <div class="form-row" style="margin-top:12px">
+              <div class="form-group">
+                <label for="preference-ask-day">Ask Day Prompt</label>
+                <textarea id="preference-ask-day" rows="2" placeholder="What day works best for you?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="preference-urgent">Urgency Response <span style="font-size:11px;color:#64748b;font-weight:400">— "asap", "right now", "first available", etc.</span></label>
+                <textarea id="preference-urgent" rows="2" placeholder="I completely understand — let me pull up the very first opening we have for you."></textarea>
+                <div class="field-hint">Caller hears this + slots immediately. Time question is skipped.</div>
+              </div>
             </div>
             <div class="form-row">
               <div class="form-group">

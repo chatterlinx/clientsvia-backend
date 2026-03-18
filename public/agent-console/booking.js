@@ -314,6 +314,7 @@ function populateForm(config) {
   const pcEnabled = pc.enabled !== false; // default true
   setChecked('preference-capture-enabled', pcEnabled);
   setValue('preference-ask-day',   pc.askDayPrompt       || '');
+  setValue('preference-urgent',    pc.urgentPrompt       || '');
   setValue('preference-ask-time',  pc.askTimePrompt      || '');
   setValue('preference-no-slots',  pc.noSlotsOnDayPrompt || '');
   document.getElementById('preference-capture-settings')?.classList.toggle('hidden', !pcEnabled);
@@ -394,6 +395,7 @@ function collectForm() {
     preferenceCapture: {
       enabled:            getChecked('preference-capture-enabled'),
       askDayPrompt:       getValue('preference-ask-day'),
+      urgentPrompt:       getValue('preference-urgent'),
       askTimePrompt:      getValue('preference-ask-time'),
       noSlotsOnDayPrompt: getValue('preference-no-slots')
     },

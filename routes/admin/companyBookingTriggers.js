@@ -826,7 +826,8 @@ router.get('/:companyId/booking-config',
           enabled:            bc.preferenceCapture?.enabled !== false,
           askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || '',
           askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || '',
-          noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || ''
+          noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || '',
+          urgentPrompt:       bc.preferenceCapture?.urgentPrompt        || ''
         }
       };
 

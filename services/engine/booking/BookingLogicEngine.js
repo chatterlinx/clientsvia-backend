@@ -222,7 +222,8 @@ async function loadCompanyConfig(companyId) {
         enabled:            bc.preferenceCapture?.enabled !== false,
         askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || 'What day works best for you?',
         askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || "And what time works for you {day}? I'll check our availability.",
-        noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?"
+        noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?",
+        urgentPrompt:       bc.preferenceCapture?.urgentPrompt        || "I completely understand — let me pull up the very first opening we have for you."
       }
     };
   } catch (error) {
@@ -1530,6 +1531,24 @@ async function processCollectPreferredDay(ctx, userInput, config, companyId, isT
     };
   }
 
+  // ── Urgency short-circuit ────────────────────────────────────────────────
+  // "asap", "right now", "first available", "I need someone now", etc.
+  // Skip day+time questions entirely — show earliest available slots immediately.
+  if (isUrgentRequest(userInput)) {
+    ctx.preferredDay  = 'asap';
+    ctx.preferredTime = 'earliest';
+    events.push({ type: 'BL1_URGENCY_DETECTED', input: userInput.trim(), timestamp: Date.now() });
+    ctx.step = STEPS.OFFER_TIMES;
+    const urgentAck = config.preferenceCapture?.urgentPrompt ||
+      "I completely understand — let me pull up the very first opening we have for you.";
+    const slotsResult = await processOfferTimes(ctx, null, config, companyId, isTest, events);
+    // Prepend the urgency acknowledgement so caller hears empathy + slots in one breath
+    return {
+      ...slotsResult,
+      nextPrompt: `${urgentAck} ${slotsResult.nextPrompt}`
+    };
+  }
+
   const dayPref  = parseDayPreference(userInput);
   const timePref = parseTimePreference(userInput);
 
@@ -1569,6 +1588,15 @@ async function processCollectPreferredTime(ctx, userInput, config, companyId, is
 
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, companyId, isTest, events);
+}
+
+/**
+ * Detect urgency signals — caller wants the EARLIEST possible slot.
+ * When true, skip the "what time?" question and go straight to OFFER_TIMES.
+ */
+function isUrgentRequest(input) {
+  const n = input.toLowerCase();
+  return /\b(asap|a\.s\.a\.p|as soon as possible|as soon as you can|right now|right away|immediately|urgent|urgently|emergency|first available|first opening|earliest available|earliest slot|can'?t wait|cannot wait|no preference|any time|anytime|whatever works|hurry|need.{0,20}now|need.{0,20}today.*fast|soonest)\b/.test(n);
 }
 
 /** Parse a caller's day preference from free speech. */
