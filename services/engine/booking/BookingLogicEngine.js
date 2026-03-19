@@ -28,11 +28,15 @@ const logger               = require('../../../utils/logger');
 const v2Company            = require('../../../models/v2Company');
 const GoogleCalendarService = require('../../GoogleCalendarService');
 const HolidayService       = require('../../HolidayService');
-const { BookingTriggerMatcher } = require('./BookingTriggerMatcher');
+const { BookingTriggerMatcher }      = require('./BookingTriggerMatcher');
+const BookingLLMInterceptService     = require('./BookingLLMInterceptService');
 const GlobalHubService     = require('../../GlobalHubService');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
+
+// ── 123RP: return-to-booking suffix appended to all Tier 1/2 intercept responses ──
+const RETURN_TO_BOOKING_Q = "Does that answer your question? Shall we get back to completing your booking?";
 
 /* ============================================================================
    BOOKING FLOW STEPS
@@ -335,57 +339,264 @@ function initializeContext(payload, config) {
 
 async function processCurrentStep(ctx, userInput, config, companyId, isTest, events) {
 
-  // ── BOOKING TRIGGER CHECK ─────────────────────────────────────────────────
-  // Run BEFORE the step logic so that keywords/phrases always take priority.
+  // ── 123RP: STEP-FIRST ARCHITECTURE ───────────────────────────────────────
   //
-  // DATA-ENTRY STEPS ARE EXCLUDED — the caller is providing a value (phone
-  // digits, address), not expressing intent. Keyword matching against phone
-  // numbers or addresses produces dangerous false-positives (e.g. the word
-  // "Other" in "Other 239-565-2202" matching a "second opinion" trigger card).
+  // 1. Try to process as expected step input (step handler runs first).
+  // 2. If step did NOT advance AND input looks off-topic → 123RP cascade:
+  //      Tier 1: BookingTriggerMatcher (fast, deterministic)
+  //      Tier 2: BookingLLMInterceptService (single-turn LLM answer)
+  //      Tier 3: DigressionAck + current step re-anchor (safe fallback)
+  // 3. Otherwise: return step result as-is.
   //
-  // Triggers fire on intent steps: COLLECT_NAME, COLLECT_CUSTOM, COLLECT_ALT_CONTACT, OFFER_TIMES, CONFIRM.
-  // Triggers are SUPPRESSED on: INIT, COMPLETED, COLLECT_PHONE, COLLECT_ADDRESS.
-  const DATA_ENTRY_STEPS = new Set([STEPS.INIT, STEPS.COMPLETED, STEPS.COLLECT_PHONE, STEPS.COLLECT_ADDRESS, STEPS.COLLECT_PREFERRED_DAY, STEPS.COLLECT_PREFERRED_TIME]);
-  if (userInput?.trim() && !DATA_ENTRY_STEPS.has(ctx.step)) {
-    try {
-      const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, ctx.step);
+  // DATA-ENTRY STEPS (phone, address, preferred day/time) never trigger 123RP —
+  // callers there are providing raw data, not expressing intent. Keyword matching
+  // against phone digits or city names produces dangerous false-positives.
+  //
+  // Why step-first instead of trigger-first?
+  //   "John Smith"   at COLLECT_NAME → step handler extracts name → no 123RP needed.
+  //   "Today at 10"  at OFFER_TIMES  → step handler matches slot  → no 123RP needed.
+  //   "What if I change the battery?" at COLLECT_NAME → step fails → 123RP fires.
+  //   "What do you charge?"           at COLLECT_NAME → step fails → trigger matches → Tier 1.
+  // ─────────────────────────────────────────────────────────────────────────
 
-      if (triggerResult.matched) {
-        const card = triggerResult.card;
-        events.push({
-          type:         'BL2_TRIGGER_MATCHED',
-          ruleId:       card.ruleId,
-          behavior:     triggerResult.behavior,
-          matchType:    triggerResult.matchType,
-          matchedOn:    triggerResult.matchedOn,
-          timestamp:    Date.now()
-        });
+  const DATA_ENTRY_STEPS = new Set([
+    STEPS.INIT,
+    STEPS.COMPLETED,
+    STEPS.COLLECT_PHONE,
+    STEPS.COLLECT_ADDRESS,
+    STEPS.COLLECT_PREFERRED_DAY,
+    STEPS.COLLECT_PREFERRED_TIME,
+  ]);
 
-        const triggerResponse = await buildTriggerResponse(card, userInput, companyId);
+  // ── STEP 1: Run the normal step handler ───────────────────────────────────
+  const prevSnap   = _snapshotCtx(ctx);
+  const stepResult = await _runStepHandler(ctx, userInput, config, companyId, isTest, events);
 
-        return handleBookingTriggerHit({
-          ctx,
-          config,
-          companyId,
-          isTest,
-          events,
-          triggerResult,
-          triggerResponse,
-          userInput
-        });
-      }
-    } catch (triggerErr) {
-      // Never let trigger failure kill the booking flow
-      logger.warn(`[${ENGINE_ID}] BookingTriggerMatcher error — continuing without trigger`, {
-        companyId,
-        step:  ctx.step,
-        error: triggerErr.message
+  // Check if the step made progress (new data captured or step changed)
+  const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
+
+  // If step advanced, or no user input, or this is a data-entry step → return as-is
+  if (advanced || !userInput?.trim() || DATA_ENTRY_STEPS.has(prevSnap.step)) {
+    return stepResult;
+  }
+
+  // If input is short / ambiguous → trust the step re-ask over 123RP
+  // (covers: "hmm", "oh", "sorry", "Tuesday", "10am", "John Smith")
+  if (!_isLikelyOffTopic(userInput, prevSnap.step)) {
+    return stepResult;
+  }
+
+  // ── STEP 2: Off-topic detected — run 123RP cascade ────────────────────────
+  events.push({
+    type:      'BK_123RP_START',
+    step:      prevSnap.step,
+    input:     userInput.substring(0, 100),
+    timestamp: Date.now()
+  });
+
+  // ── Tier 1: Booking triggers ──────────────────────────────────────────────
+  try {
+    const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, prevSnap.step);
+
+    if (triggerResult.matched) {
+      const card            = triggerResult.card;
+      const triggerResponse = await buildTriggerResponse(card);
+
+      events.push({
+        type:      'BK_123RP_TIER1',
+        ruleId:    card.ruleId,
+        behavior:  triggerResult.behavior,
+        timestamp: Date.now()
       });
-      events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
+
+      // INFO / BLOCK — answer + return-to-booking prompt, hold current step
+      if (triggerResult.behavior === 'INFO' || triggerResult.behavior === 'BLOCK') {
+        // Use trigger's own followUpQuestion if configured; otherwise use standard return prompt
+        const followUp  = card.followUp?.question?.trim() || RETURN_TO_BOOKING_Q;
+        const fullText  = `${triggerResponse} ${followUp}`;
+
+        ctx.lastTriggerRuleId   = card.ruleId;
+        ctx.lastTriggerBehavior = triggerResult.behavior;
+        ctx.lastPath            = 'BK_TRIGGER_123RP';
+        if (triggerResult.behavior === 'BLOCK') ctx.blocked = true;
+
+        return {
+          nextPrompt: fullText,
+          bookingCtx: ctx,
+          completed:  false,
+          _triggerHit: { ruleId: card.ruleId, behavior: triggerResult.behavior },
+          _123rp:      { tier: 1, path: 'BK_TRIGGER_INFO' }
+        };
+      }
+
+      // REDIRECT — delegate to full handler (which now has required-field guard)
+      return handleBookingTriggerHit({ ctx, config, companyId, isTest, events, triggerResult, triggerResponse, userInput });
+    }
+  } catch (triggerErr) {
+    logger.warn(`[${ENGINE_ID}] 123RP Tier 1 trigger error — continuing to Tier 2`, {
+      companyId, step: prevSnap.step, error: triggerErr.message
+    });
+    events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
+  }
+
+  // ── Tier 2: LLM intercept ─────────────────────────────────────────────────
+  const llmAnswer = await BookingLLMInterceptService.answer({
+    question:  userInput,
+    companyId,
+    ctx,
+    config
+  });
+
+  if (llmAnswer) {
+    events.push({ type: 'BK_123RP_TIER2', step: prevSnap.step, timestamp: Date.now() });
+    ctx.lastPath = 'BK_LLM_INTERCEPT';
+    return {
+      nextPrompt: `${llmAnswer} ${RETURN_TO_BOOKING_Q}`,
+      bookingCtx: ctx,
+      completed:  false,
+      _123rp:     { tier: 2, path: 'BK_LLM_INTERCEPT' }
+    };
+  }
+
+  // ── Tier 3: Fallback ──────────────────────────────────────────────────────
+  // LLM failed or timed out — acknowledge and re-anchor to current step.
+  events.push({ type: 'BK_123RP_TIER3', step: prevSnap.step, timestamp: Date.now() });
+  ctx.lastPath = 'BK_FALLBACK';
+
+  const reAnchor  = _getStepReAnchor(prevSnap.step, config);
+  const ackPhrase = config.t2DigressionAck || "Absolutely — let me make sure we get that handled.";
+
+  return {
+    nextPrompt: `${ackPhrase} ${reAnchor}`,
+    bookingCtx: ctx,
+    completed:  false,
+    _123rp:     { tier: 3, path: 'BK_FALLBACK' }
+  };
+}
+
+// ── 123RP helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Snapshot the ctx fields that signal "advancement" so we can compare after
+ * the step handler runs.
+ */
+function _snapshotCtx(ctx) {
+  const cf = ctx.collectedFields || {};
+  return {
+    step:          ctx.step,
+    firstName:     cf.firstName     || null,
+    lastName:      cf.lastName      || null,
+    phone:         cf.phone         || null,
+    address:       cf.address       || null,
+    selectedTime:  ctx.selectedTime || null,
+    preferredDay:  ctx.preferredDay || null,
+    preferredTime: ctx.preferredTime || null,
+    addressStep:   ctx.addressStep  || null,
+    _addressStreet: ctx._addressStreet || null,
+    _addressCity:   ctx._addressCity   || null,
+  };
+}
+
+/**
+ * Return true if the step handler made meaningful progress.
+ * A step "advances" when: the step itself changes, OR new data fields are filled.
+ */
+function _didStepAdvance(prevSnap, newCtx) {
+  if (!newCtx) return false;
+  if (prevSnap.step !== newCtx.step) return true;
+
+  const cf = newCtx.collectedFields || {};
+  if (cf.firstName     && !prevSnap.firstName)     return true;
+  if (cf.lastName      && !prevSnap.lastName)      return true;
+  if (cf.phone         && !prevSnap.phone)         return true;
+  if (cf.address       && !prevSnap.address)       return true;
+  if (newCtx.selectedTime  && !prevSnap.selectedTime)  return true;
+  if (newCtx.preferredDay  && !prevSnap.preferredDay)  return true;
+  if (newCtx.preferredTime && !prevSnap.preferredTime) return true;
+  // Multi-sub-step address collection — sub-step or partial data changed
+  if (newCtx.addressStep    !== prevSnap.addressStep)    return true;
+  if (newCtx._addressStreet !== prevSnap._addressStreet) return true;
+  if (newCtx._addressCity   !== prevSnap._addressCity)   return true;
+
+  return false;
+}
+
+/**
+ * Heuristic: does this input look like an off-topic question rather than
+ * a valid answer to the current booking step?
+ *
+ * Conservative thresholds to minimise false-positives on real step answers:
+ *   "John Smith"           → 2 words, no ? → NOT off-topic (let step re-ask)
+ *   "Today at 10 am"       → 4 words, no ? → NOT off-topic
+ *   "What do you charge?"  → 5 words + ?   → OFF-TOPIC
+ *   "What if I change the batteries myself would that work?" → 10 words → OFF-TOPIC
+ */
+function _isLikelyOffTopic(userInput, step) {
+  if (!userInput?.trim()) return false;
+  const trimmed   = userInput.trim();
+  const wordCount = trimmed.split(/\s+/).length;
+
+  // Explicit question mark is the strongest signal
+  if (trimmed.endsWith('?')) return true;
+
+  // Long sentence at a data-collection step — almost certainly not a name/time/etc.
+  if (wordCount >= 6) return true;
+
+  // At CONFIRM step, short ambiguous inputs are still step-relevant ("yes", "no", "actually...")
+  // so we keep the threshold a bit higher there
+  if (step === STEPS.CONFIRM && wordCount < 8) return false;
+
+  return false;
+}
+
+/**
+ * Return the re-ask prompt for the current booking step.
+ * Used by Tier 3 fallback to bring the caller back on track.
+ */
+function _getStepReAnchor(step, config) {
+  switch (step) {
+    case STEPS.COLLECT_NAME:          return config.nameReAnchor    || config.askNamePrompt    || 'Could I get your first and last name?';
+    case STEPS.COLLECT_PHONE:         return config.phoneReAnchor   || config.askPhonePrompt   || 'What phone number should we use to reach you?';
+    case STEPS.COLLECT_ADDRESS:       return config.addressReAnchor || config.askAddressPrompt || 'What is the service address?';
+    case STEPS.OFFER_TIMES:           return 'Which of those times works best for you?';
+    case STEPS.CONFIRM:               return 'Shall I go ahead and confirm that appointment?';
+    case STEPS.COLLECT_CUSTOM:        return 'Could you answer that question for me?';
+    case STEPS.COLLECT_ALT_CONTACT:   return 'Did you want to add an alternate contact?';
+    case STEPS.COLLECT_PREFERRED_DAY: return config.preferenceCapture?.askDayPrompt || 'What day works best for you?';
+    default:                          return 'Could you say that again?';
+  }
+}
+
+/**
+ * Return required fields that have not yet been collected.
+ * Used by the REDIRECT guard to decide whether we can safely jump to OFFER_TIMES.
+ *
+ * @param {Object} ctx    - Current booking context
+ * @param {Object} config - Company booking config (has requiredFields array)
+ * @returns {string[]}    - Ordered list of missing field keys (e.g. ['firstName', 'phone'])
+ */
+function _getMissingRequiredFields(ctx, config) {
+  const required = config.requiredFields || ['firstName', 'phone', 'address'];
+  const cf       = ctx.collectedFields   || {};
+  const missing  = [];
+
+  for (const field of required) {
+    if (field === 'firstName' && !(cf.firstName || cf.lastName)) {
+      missing.push('firstName');
+    } else if (field === 'phone' && !cf.phone) {
+      missing.push('phone');
+    } else if (field === 'address' && !cf.address) {
+      missing.push('address');
     }
   }
-  // ── END TRIGGER CHECK ─────────────────────────────────────────────────────
+  return missing;
+}
 
+/**
+ * Internal step handler dispatcher — the original processCurrentStep switch,
+ * extracted so 123RP can call it cleanly.
+ */
+async function _runStepHandler(ctx, userInput, config, companyId, isTest, events) {
   switch (ctx.step) {
     case STEPS.INIT:                return processInit(ctx, config, companyId, isTest, events);
     case STEPS.CONFIRM_RECOGNITION: return processConfirmRecognition(ctx, userInput, config, companyId, isTest, events);
@@ -2206,14 +2417,13 @@ async function handleBookingTriggerHit({ ctx, config, companyId, isTest, events,
         oldMode: ctx.bookingMode, newMode: redirectMode, timestamp: Date.now()
       });
 
+      // Always stamp the new service type and clear stale slots
       ctx.bookingMode          = redirectMode;
-      ctx.availableTimeOptions = null;  // Force fresh calendar fetch with new service type
+      ctx.availableTimeOptions = null;
       ctx.selectedTime         = null;
       ctx.blocked              = false;
-      ctx.step                 = STEPS.OFFER_TIMES;
 
-      // Stamp the resolved serviceTypeId so technician routing is explicit on all
-      // subsequent turns — avoids re-matching by label on every fetchAvailableTimeOptions call.
+      // Resolve and stamp serviceTypeId for technician routing
       ctx.serviceTypeId = (() => {
         if (!config.serviceTypes?.length) return null;
         const normalized = (redirectMode || '').toLowerCase().trim();
@@ -2223,6 +2433,40 @@ async function handleBookingTriggerHit({ ctx, config, companyId, isTest, events,
         );
         return matched?.id || null;
       })();
+
+      // ── Required-field guard ────────────────────────────────────────────────
+      // If the caller hasn't provided name/phone/address yet, we cannot jump
+      // straight to OFFER_TIMES — that would create a booking with zero contact
+      // info. Stay at (or return to) the earliest uncollected required field.
+      // The trigger response is played first, then the collection resumes naturally.
+      const missingFields = _getMissingRequiredFields(ctx, config);
+      if (missingFields.length > 0) {
+        events.push({
+          type:          'BL2_REDIRECT_FIELD_GUARD',
+          ruleId:        card.ruleId,
+          newMode:       redirectMode,
+          missingFields,
+          timestamp:     Date.now()
+        });
+
+        // Route to the first missing required field
+        const firstMissing = missingFields[0];
+        ctx.step = firstMissing === 'phone'   ? STEPS.COLLECT_PHONE
+                 : firstMissing === 'address' ? STEPS.COLLECT_ADDRESS
+                 :                              STEPS.COLLECT_NAME;
+
+        // Answer the trigger question, then immediately ask for the missing field
+        const collectPrompt = _getStepReAnchor(ctx.step, config);
+        return {
+          nextPrompt: `${fullText} ${RETURN_TO_BOOKING_Q} ${collectPrompt}`,
+          bookingCtx: ctx,
+          completed:  false,
+          _triggerHit: { ruleId: card.ruleId, behavior: 'REDIRECT', newMode: redirectMode }
+        };
+      }
+
+      // All required fields present — safe to jump to OFFER_TIMES
+      ctx.step = STEPS.OFFER_TIMES;
 
       // Fetch availability for new service type immediately
       const { timeOptions, message: timesMsg } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
