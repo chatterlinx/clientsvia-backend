@@ -854,6 +854,10 @@
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000;
       display: flex; align-items: center; justify-content: center;
+      /* Override shared styles.css which hides .modal-overlay until .open is added.
+         Booking modals are injected/removed from the DOM directly — no .open toggle needed. */
+      opacity: 1;
+      visibility: visible;
     }
     .modal-box {
       background: #fff; border-radius: 14px; padding: 28px 32px;
