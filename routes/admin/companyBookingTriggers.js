@@ -823,6 +823,15 @@ router.get('/:companyId/booking-config',
         },
         slotFilling:          bc.slotFilling          || {},
         requiredFieldsConfig: bc.requiredFieldsConfig  || { address: true },
+        // Address collection config — multi-step sub-flow toggles
+        addressConfig: {
+          requireCity:    bc.addressConfig?.requireCity  !== false,    // default: true
+          requireState:   bc.addressConfig?.requireState === true,     // default: false
+          requireZip:     bc.addressConfig?.requireZip   === true,     // default: false
+          askCityPrompt:  bc.addressConfig?.askCityPrompt   || '',
+          askStatePrompt: bc.addressConfig?.askStatePrompt  || '',
+          askZipPrompt:   bc.addressConfig?.askZipPrompt    || ''
+        },
         preferenceCapture: {
           enabled:            bc.preferenceCapture?.enabled !== false,
           askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || '',
@@ -880,7 +889,7 @@ router.post('/:companyId/booking-config',
       }
 
       // Write unified bookingConfig
-      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'preferenceCapture', 'technicians', 'serviceTypes', 'emergencySchedule', 'holidays'];
+      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'addressConfig', 'preferenceCapture', 'technicians', 'serviceTypes', 'emergencySchedule', 'holidays'];
       for (const field of bcFields) {
         if (body[field] !== undefined) {
           updates[`aiAgentSettings.agent2.bookingConfig.${field}`] = body[field];

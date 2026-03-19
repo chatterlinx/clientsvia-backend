@@ -3987,7 +3987,7 @@ const companySchema = new mongoose.Schema({
                     phoneReAnchor:            { type: String, default: 'What phone number can we reach you at?', trim: true },
                     phoneInvalid:             { type: String, default: "I didn't quite catch a phone number there. What number should we use to reach you?", trim: true },
                     // ADDRESS
-                    askAddress:               { type: String, default: 'Great. And what is the service address?', trim: true },
+                    askAddress:               { type: String, default: 'And what is the service address?', trim: true },
                     addressReAnchor:          { type: String, default: 'What is the service address for this appointment?', trim: true },
                     // DIGRESSION — acknowledgment prefix before the re-anchor phrase
                     t2DigressionAck:          { type: String, default: "Absolutely — we'll make sure that gets addressed.", trim: true },
@@ -4055,6 +4055,22 @@ const companySchema = new mongoose.Schema({
                 // Toggle which built-in fields are required before scheduling.
                 requiredFieldsConfig: {
                     address: { type: Boolean, default: true }  // address required by default for home-service
+                },
+
+                // ── ADDRESS COLLECTION CONFIG ───────────────────────────────
+                // Controls the multi-step address sub-flow:
+                //   STREET is always collected.
+                //   requireCity:  true by default — most dispatch needs city.
+                //   requireState: false by default — same-city businesses don't need it.
+                //   requireZip:   false by default — same rationale.
+                // All prompt fields are optional; engine defaults shown in BookingLogicEngine.js.
+                addressConfig: {
+                    requireCity:    { type: Boolean, default: true  },
+                    requireState:   { type: Boolean, default: false },
+                    requireZip:     { type: Boolean, default: false },
+                    askCityPrompt:  { type: String,  default: '',   trim: true },
+                    askStatePrompt: { type: String,  default: '',   trim: true },
+                    askZipPrompt:   { type: String,  default: '',   trim: true }
                 },
 
                 // ── SCHEDULING PREFERENCE CAPTURE ──────────────────────────

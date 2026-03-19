@@ -1075,6 +1075,8 @@
             <span class="field-card-chevron">▾</span>
           </div>
           <div class="field-card-body" id="field-card-address">
+
+            <!-- Require toggle -->
             <div class="toggle-row" style="margin-top:16px">
               <div>
                 <label class="toggle-label">Require Service Address</label>
@@ -1085,16 +1087,82 @@
                 <span class="slider"></span>
               </label>
             </div>
+
+            <!-- Ask / Re-anchor prompts -->
             <div class="form-row" style="margin-top:12px">
               <div class="form-group">
                 <label for="builtin-ask-address">Ask Prompt</label>
-                <textarea id="builtin-ask-address" rows="2" placeholder="And what address should we send the technician to?"></textarea>
+                <textarea id="builtin-ask-address" rows="2" placeholder="And what is the service address?"></textarea>
               </div>
               <div class="form-group">
                 <label for="builtin-address-reanchor">Re-Anchor Phrase</label>
-                <textarea id="builtin-address-reanchor" rows="2" placeholder="I still need the service address — what's the full address?"></textarea>
+                <textarea id="builtin-address-reanchor" rows="2" placeholder="What is the service address for this appointment?"></textarea>
               </div>
             </div>
+
+            <!-- Multi-step address collection toggles -->
+            <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border-color,#e2e8f0)">
+              <div class="toggle-hint" style="margin-bottom:12px; font-weight:600; color:var(--text-primary,#1a202c)">Address Components</div>
+              <div class="toggle-hint" style="margin-bottom:16px">
+                Street is always collected. Enable additional components for businesses that serve
+                multiple cities or need full addresses for routing or CRM.
+              </div>
+
+              <!-- City -->
+              <div class="toggle-row" style="margin-bottom:12px">
+                <div>
+                  <label class="toggle-label">Ask for City</label>
+                  <div class="toggle-hint">Recommended for most businesses. Asks "And what city is that in?" after street.</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="addr-require-city" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div id="addr-city-prompts" class="form-row" style="margin-bottom:16px">
+                <div class="form-group">
+                  <label for="addr-ask-city">City Prompt <span class="field-hint" style="display:inline">(optional)</span></label>
+                  <input type="text" id="addr-ask-city" placeholder="And what city is that in?">
+                </div>
+              </div>
+
+              <!-- State -->
+              <div class="toggle-row" style="margin-bottom:12px">
+                <div>
+                  <label class="toggle-label">Ask for State</label>
+                  <div class="toggle-hint">Turn on for multi-state businesses. Off by default — same-city operations don't need it.</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="addr-require-state">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div id="addr-state-prompts" class="form-row" style="margin-bottom:16px; display:none">
+                <div class="form-group">
+                  <label for="addr-ask-state">State Prompt <span class="field-hint" style="display:inline">(optional)</span></label>
+                  <input type="text" id="addr-ask-state" placeholder="And what state?">
+                </div>
+              </div>
+
+              <!-- Zip -->
+              <div class="toggle-row" style="margin-bottom:12px">
+                <div>
+                  <label class="toggle-label">Ask for Zip Code</label>
+                  <div class="toggle-hint">Turn on when you need zip for routing or dispatch. Off by default.</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="addr-require-zip">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div id="addr-zip-prompts" class="form-row" style="margin-bottom:4px; display:none">
+                <div class="form-group">
+                  <label for="addr-ask-zip">Zip Code Prompt <span class="field-hint" style="display:inline">(optional)</span></label>
+                  <input type="text" id="addr-ask-zip" placeholder="And the zip code?">
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>

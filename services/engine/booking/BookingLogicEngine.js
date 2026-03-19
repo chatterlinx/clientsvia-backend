@@ -174,7 +174,7 @@ async function loadCompanyConfig(companyId) {
       askPhonePrompt:          bc.builtinPrompts?.askPhone                || bp.askPhone   || 'And what is the best phone number to reach you at?',
       phoneReAnchor:           bc.builtinPrompts?.phoneReAnchor           || 'What phone number can we reach you at?',
       phoneInvalid:            bc.builtinPrompts?.phoneInvalid            || "I didn't quite catch a phone number there. What number should we use to reach you?",
-      askAddressPrompt:        bc.builtinPrompts?.askAddress              || bp.askAddress || 'Great. And what is the service address?',
+      askAddressPrompt:        bc.builtinPrompts?.askAddress              || bp.askAddress || 'And what is the service address?',
       addressReAnchor:         bc.builtinPrompts?.addressReAnchor         || 'What is the service address for this appointment?',
       t2DigressionAck:              bc.builtinPrompts?.t2DigressionAck             || "Absolutely — we'll make sure that gets addressed.",
       confirmNameAmbiguous:         bc.builtinPrompts?.confirmNameAmbiguous        || 'Just to confirm — is your name {name}? A simple yes or no works.',
@@ -236,7 +236,20 @@ async function loadCompanyConfig(companyId) {
       emergencySchedule: bc.emergencySchedule || { enabled: false },
 
       // ── HOLIDAYS ──────────────────────────────────────────────────────────────
-      holidays: bc.holidays || []
+      holidays: bc.holidays || [],
+
+      // ── ADDRESS COLLECTION CONFIG ──────────────────────────────────────────
+      // requireCity:  true by default — most service calls need a city for dispatch routing.
+      // requireState: false by default — most companies operate same-city, state is noise.
+      // requireZip:   false by default — same rationale; enable only when routing requires it.
+      addressConfig: {
+        requireCity:    bc.addressConfig?.requireCity  !== false,   // default: true
+        requireState:   bc.addressConfig?.requireState === true,    // default: false
+        requireZip:     bc.addressConfig?.requireZip   === true,    // default: false
+        askCityPrompt:  bc.addressConfig?.askCityPrompt   || 'And what city is that in?',
+        askStatePrompt: bc.addressConfig?.askStatePrompt  || 'And what state?',
+        askZipPrompt:   bc.addressConfig?.askZipPrompt    || 'And the zip code?'
+      }
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -254,18 +267,29 @@ function initializeContext(payload, config) {
   const dn         = payload?.discoveryNotes || null;
   const dnEntities = dn?.entities            || {};
 
+  // ── Urgency pre-seeding ────────────────────────────────────────────────────
+  // If the discovery phase already established urgency/ASAP intent, seed it here
+  // so the booking engine skips the "what day works best?" question entirely and
+  // goes straight to fetching the earliest available slot.
+  // Sources: discoveryNotes.urgency.level | callContext.urgency.level | sameDayRequested
+  const urgencyLevel = dn?.urgency?.level || (typeof dn?.urgency === 'string' ? dn.urgency : null);
+  const callUrgency  = payload?.callContext?.urgency?.level;
+  const seedAsap     = payload?.sameDayRequested === true ||
+                       urgencyLevel === 'high'   || urgencyLevel === 'urgent' ||
+                       callUrgency  === 'high'   || callUrgency  === 'urgent';
+
   return {
     step:        STEPS.INIT,
     bookingMode: payload?.assumptions?.bookingMode || null,
     collectedFields: {
       // ScrabEngine assumptions take priority; discoveryNotes entities are fallback.
       // This prevents re-asking for information the LLM already captured on turn 1.
-      firstName:      payload?.assumptions?.firstName || dnEntities.firstName || null,
-      lastName:       payload?.assumptions?.lastName  || dnEntities.lastName  || null,
-      phone:          payload?.assumptions?.phone     || dnEntities.phone     || null,
-      address:        payload?.assumptions?.address   || dnEntities.address   || null,
+      firstName:       payload?.assumptions?.firstName || dnEntities.firstName || null,
+      lastName:        payload?.assumptions?.lastName  || dnEntities.lastName  || null,
+      phone:           payload?.assumptions?.phone     || dnEntities.phone     || null,
+      address:         payload?.assumptions?.address   || dnEntities.address   || null,
       // Additional contact number (e.g. "call tech on the way", "notify neighbor", "son's number")
-      altPhone:       null,
+      altPhone:        null,
       altPhoneContext: null
     },
     summary:              payload?.summary    || {},
@@ -277,6 +301,9 @@ function initializeContext(payload, config) {
     technicianPreference: dnEntities.employeeMentioned || null,
     // Full discoveryNotes object kept for downstream use (e.g. urgency surfacing)
     discoveryNotes:       dn,
+    // Scheduling preferences — pre-seeded from intake when urgency is known
+    preferredDay:         seedAsap ? 'asap'     : null,
+    preferredTime:        seedAsap ? 'earliest' : null,
     availableTimeOptions: null,
     selectedTime:         null,
     calendarEventId:      null,
@@ -284,12 +311,18 @@ function initializeContext(payload, config) {
     completed:            false,
     startedAt:            new Date().toISOString(),
     // Custom fields slot-filling state
-    customFieldIndex:     0,        // which customFields[] entry we're currently collecting
-    collectedCustomFields: {},      // { fieldKey: value }
+    customFieldIndex:      0,        // which customFields[] entry we're currently collecting
+    collectedCustomFields: {},       // { fieldKey: value }
     // Alt contact state
-    altContacts:          [],       // [{ name, phone, notes }]
-    altContactStep:       null,     // null | 'OFFER' | 'ASK_NAME' | 'ASK_PHONE' | 'ASK_NOTES' | 'ASK_MORE'
-    currentAltContact:    null      // partial contact being built
+    altContacts:           [],       // [{ name, phone, notes }]
+    altContactStep:        null,     // null | 'OFFER' | 'ASK_NAME' | 'ASK_PHONE' | 'ASK_NOTES' | 'ASK_MORE'
+    currentAltContact:     null,     // partial contact being built
+    // Multi-step address collection sub-state
+    addressStep:           null,     // null | 'STREET' | 'CITY' | 'STATE' | 'ZIP'
+    _addressStreet:        null,
+    _addressCity:          null,
+    _addressState:         null,
+    _addressZip:           null
   };
 }
 
@@ -1056,7 +1089,9 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     }
 
     // ── NO path: caller prefers a different primary number ──────────────────
-    // callerPhone stays silently in ctx.callerPhone as backup
+    // callerPhone stays silently in ctx.callerPhone as backup.
+    // Flag set so alt contact step is suppressed — caller already dealt with phone drama.
+    ctx._callerIdDeclined = true;
     events.push({ type: 'BL1_CALLER_ID_DECLINED', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
 
     if (altNorm) {
@@ -1103,7 +1138,13 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   // gave us a number we use it directly and skip the caller ID offer entirely.
   // (Prevents double-asking: agent asks "what's your number?" → caller gives
   //  one → agent still offers caller ID → caller has to answer twice.)
-  const normalizedPhone = normalizePhone(userInput);
+  //
+  // Uses extractCorrectedPhone() instead of normalizePhone(userInput) directly:
+  //   - Handles mid-sentence corrections: "239-565-2202. Actually, wait — 239-333-7747"
+  //     → strips ALL non-digits from the full sentence would yield 20+ digits → null.
+  //   - extractCorrectedPhone() finds all embedded phone numbers via regex substring
+  //     matching, then returns the LAST one when correction language is present.
+  const normalizedPhone = normalizePhone(extractCorrectedPhone(userInput));
 
   if (normalizedPhone) {
     // ── Caller gave us a valid phone number explicitly ─────────────────────
@@ -1220,21 +1261,148 @@ async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
 
 /* ============================================================================
    STEP: COLLECT ADDRESS
+   ============================================================================
+   Multi-step sub-flow driven by config.addressConfig:
+     STREET → CITY (default: required) → STATE (default: off) → ZIP (default: off)
+
+   City is on by default because most service calls need it for dispatch routing.
+   State and zip are off by default — most companies are same-city businesses.
+   Companies that need state/zip enable them per-company in the booking UI.
+
+   All sub-steps strip leading STT filler ("the service address is.", "it's at", etc.)
+   before storing the value, so records are clean regardless of caller phrasing.
    ============================================================================ */
 
 async function processCollectAddress(ctx, userInput, config, companyId, isTest, events) {
-  if (!userInput?.trim()) {
-    return {
-      nextPrompt: config.addressReAnchor || "I didn't catch the address. What's the service address?",
-      bookingCtx: ctx,
-      completed:  false
-    };
+  const ac    = config.addressConfig || {};
+  const aStep = ctx.addressStep || 'STREET';
+
+  // ── SUB-STEP: STREET ────────────────────────────────────────────────────────
+  if (aStep === 'STREET') {
+    if (!userInput?.trim()) {
+      return {
+        nextPrompt: config.addressReAnchor || "What is the service address?",
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    ctx._addressStreet = stripAddressFiller(userInput);
+    events.push({ type: 'BL1_ADDRESS_STREET_COLLECTED', street: ctx._addressStreet, timestamp: Date.now() });
+
+    // City is required unless explicitly disabled
+    if (ac.requireCity !== false) {
+      ctx.addressStep = 'CITY';
+      return {
+        nextPrompt: ac.askCityPrompt || 'And what city is that in?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    return finalizeAddress(ctx, config, companyId, isTest, events);
   }
 
-  ctx.collectedFields.address = userInput.trim();
-  events.push({ type: 'BL1_ADDRESS_COLLECTED', timestamp: Date.now() });
+  // ── SUB-STEP: CITY ──────────────────────────────────────────────────────────
+  if (aStep === 'CITY') {
+    if (!userInput?.trim()) {
+      return {
+        nextPrompt: ac.askCityPrompt || 'What city?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
 
-  // Route to COLLECT_CUSTOM if there are custom fields; otherwise continue to alt contact or calendar
+    ctx._addressCity = stripCityFiller(userInput);
+    events.push({ type: 'BL1_ADDRESS_CITY_COLLECTED', city: ctx._addressCity, timestamp: Date.now() });
+
+    if (ac.requireState) {
+      ctx.addressStep = 'STATE';
+      return {
+        nextPrompt: ac.askStatePrompt || 'And what state?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    if (ac.requireZip) {
+      ctx.addressStep = 'ZIP';
+      return {
+        nextPrompt: ac.askZipPrompt || 'And the zip code?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    return finalizeAddress(ctx, config, companyId, isTest, events);
+  }
+
+  // ── SUB-STEP: STATE ─────────────────────────────────────────────────────────
+  if (aStep === 'STATE') {
+    if (!userInput?.trim()) {
+      return {
+        nextPrompt: ac.askStatePrompt || 'What state?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    // Normalize to 2-letter abbreviation when possible ("Florida" → "FL")
+    const raw   = userInput.trim().replace(/[^a-zA-Z\s]/g, '').trim();
+    const abbr  = STATE_ABBREVIATIONS[raw.toLowerCase()];
+    ctx._addressState = abbr || raw.toUpperCase().slice(0, 2);
+    events.push({ type: 'BL1_ADDRESS_STATE_COLLECTED', state: ctx._addressState, timestamp: Date.now() });
+
+    if (ac.requireZip) {
+      ctx.addressStep = 'ZIP';
+      return {
+        nextPrompt: ac.askZipPrompt || 'And the zip code?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    return finalizeAddress(ctx, config, companyId, isTest, events);
+  }
+
+  // ── SUB-STEP: ZIP ───────────────────────────────────────────────────────────
+  if (aStep === 'ZIP') {
+    if (!userInput?.trim()) {
+      return {
+        nextPrompt: ac.askZipPrompt || 'What is the zip code?',
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    const zipMatch    = userInput.match(/\b\d{5}(?:-\d{4})?\b/);
+    ctx._addressZip   = zipMatch ? zipMatch[0] : userInput.trim().replace(/\D/g, '').slice(0, 5);
+    events.push({ type: 'BL1_ADDRESS_ZIP_COLLECTED', zip: ctx._addressZip, timestamp: Date.now() });
+
+    return finalizeAddress(ctx, config, companyId, isTest, events);
+  }
+
+  // Fallback — state machine gap; finalize whatever we have
+  return finalizeAddress(ctx, config, companyId, isTest, events);
+}
+
+/**
+ * Assemble and store the full address from collected sub-step parts,
+ * reset address sub-state, then continue to custom fields or scheduling.
+ */
+async function finalizeAddress(ctx, config, companyId, isTest, events) {
+  const parts = [ctx._addressStreet, ctx._addressCity, ctx._addressState, ctx._addressZip];
+  ctx.collectedFields.address = parts.filter(Boolean).join(', ');
+
+  // Reset address sub-step state
+  ctx.addressStep    = null;
+  ctx._addressStreet = null;
+  ctx._addressCity   = null;
+  ctx._addressState  = null;
+  ctx._addressZip    = null;
+
+  events.push({ type: 'BL1_ADDRESS_COLLECTED', address: ctx.collectedFields.address, timestamp: Date.now() });
+
   const customFields = config.customFields || [];
   if (customFields.length > 0) {
     const firstField = customFields[0];
@@ -1247,9 +1415,26 @@ async function processCollectAddress(ctx, userInput, config, companyId, isTest, 
     };
   }
 
-  // No custom fields — go to alt contact or calendar
   return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
 }
+
+/**
+ * US state name → 2-letter abbreviation lookup.
+ * Covers all 50 states plus DC/Puerto Rico for robust STT normalization.
+ */
+const STATE_ABBREVIATIONS = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA',
+  'kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
+  'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO',
+  'montana':'MT','nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ',
+  'new mexico':'NM','new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH',
+  'oklahoma':'OK','oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+  'district of columbia':'DC','dc':'DC','puerto rico':'PR'
+};
 
 /* ============================================================================
    HELPER: advanceAfterCustomFields
@@ -1258,7 +1443,10 @@ async function processCollectAddress(ctx, userInput, config, companyId, isTest, 
    ============================================================================ */
 
 async function advanceAfterCustomFields(ctx, config, companyId, isTest, events) {
-  if (config.altContact?.enabled) {
+  // Suppress alt contact when caller already had phone drama (declined caller ID and
+  // had to re-state their number). Offering an alternate contact immediately after
+  // that friction creates a frustrating "you just asked me about phones" experience.
+  if (config.altContact?.enabled && !ctx._callerIdDeclined) {
     const offerPrompt = config.altContact.offerPrompt ||
       'Is this the best number to reach you, or do you have an alternate contact we should have on file?';
     return {
@@ -1272,6 +1460,14 @@ async function advanceAfterCustomFields(ctx, config, companyId, isTest, events) 
 
 /** Routes to preferred day capture (if enabled) or directly to OFFER_TIMES. */
 async function advanceToScheduling(ctx, config, companyId, isTest, events) {
+  // Short-circuit: urgency/ASAP was pre-seeded from intake (discoveryNotes or callContext).
+  // Skip day+time preference questions — go straight to earliest available slot.
+  if (ctx.preferredDay === 'asap') {
+    ctx.step = STEPS.OFFER_TIMES;
+    events.push({ type: 'BL1_ASAP_SEEDED_SKIPPING_PREFERENCE', timestamp: Date.now() });
+    return processOfferTimes(ctx, null, config, companyId, isTest, events);
+  }
+
   if (config.preferenceCapture?.enabled) {
     ctx.step = STEPS.COLLECT_PREFERRED_DAY;
     events.push({ type: 'BL1_COLLECTING_PREFERRED_DAY', timestamp: Date.now() });
@@ -1430,8 +1626,11 @@ function schedulingTransition(ctx, config, extraCtx = {}) {
       completed:  false
     };
   }
+  // capitalizePromptStart guards against config values stored with lowercase first letter
+  // (e.g. holdMessage saved as "great, one moment..." → "Great, one moment...")
+  const hold = capitalizePromptStart(config.holdMessage) || 'One moment while I check our available times...';
   return {
-    nextPrompt: config.holdMessage || 'One moment while I check our available times...',
+    nextPrompt: hold,
     bookingCtx: { ...ctx, ...extraCtx, step: STEPS.OFFER_TIMES },
     completed:  false
   };
@@ -1561,10 +1760,22 @@ async function processCollectPreferredDay(ctx, userInput, config, companyId, isT
     ctx.preferredTime = 'earliest';
     events.push({ type: 'BL1_URGENCY_DETECTED', input: userInput.trim(), timestamp: Date.now() });
     ctx.step = STEPS.OFFER_TIMES;
-    const urgentAck = config.preferenceCapture?.urgentPrompt ||
-      "I completely understand — let me pull up the very first opening we have for you.";
+
     const slotsResult = await processOfferTimes(ctx, null, config, companyId, isTest, events);
-    // Prepend the urgency acknowledgement so caller hears empathy + slots in one breath
+
+    // ── Honest urgency acknowledgement ─────────────────────────────────────
+    // Check if any returned slot is actually today. If not, use a message that
+    // doesn't claim "same-day service" — callers don't want false promises.
+    const todayStr     = new Date().toDateString();
+    const hasTodaySlot = (ctx.availableTimeOptions || []).some(
+      t => t.start && new Date(t.start).toDateString() === todayStr
+    );
+
+    const urgentAck = hasTodaySlot
+      ? (config.preferenceCapture?.urgentPrompt        || "I completely understand — let me pull up the very first opening we have for you.")
+      : (config.preferenceCapture?.urgentNoTodayPrompt || "I completely understand the urgency. Unfortunately I don't have any same-day openings right now —");
+
+    // Prepend the acknowledgement so caller hears empathy + slots in one breath
     return {
       ...slotsResult,
       nextPrompt: `${urgentAck} ${slotsResult.nextPrompt}`
@@ -2375,6 +2586,127 @@ function extractPhoneFromText(text) {
   // Match US phone patterns embedded in text: optional country code, area code, 7-digit local
   const m = text.match(/(?:\+?1[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}/);
   return m ? m[0] : null;
+}
+
+/**
+ * Extract ALL US phone numbers from a natural-language utterance.
+ *
+ * Uses a lenient separator pattern (up to 3 chars between segments) to handle
+ * STT artifacts like "239. 333 7747" where the period+space between area code
+ * and exchange would defeat a strict single-separator regex.
+ *
+ * Each match is validated by digit count (must be 10 or 11 with leading '1').
+ *
+ * @param  {string}   text — raw STT utterance
+ * @returns {string[]}     — array of raw phone strings (empty if none found)
+ */
+function extractAllPhonesFromText(text) {
+  if (!text) return [];
+  const phoneRe = /(?:\+?1[\s\-.]{0,3})?\(?\d{3}\)?[-.\s]{0,3}\d{3}[-.\s]\d{4}/g;
+  const matches = [];
+  let m;
+  while ((m = phoneRe.exec(text)) !== null) {
+    const digits = m[0].replace(/\D/g, '');
+    // Guard: exactly 10 digits, or 11 starting with '1' (US country code)
+    if (digits.length === 10 || (digits.length === 11 && digits.startsWith('1'))) {
+      matches.push(m[0]);
+    }
+  }
+  return matches;
+}
+
+/**
+ * Extract the best phone number from a caller utterance that may contain a
+ * mid-sentence correction ("actually", "wait", "no — I mean").
+ *
+ * Rule:
+ *   - When correction language is detected AND multiple phones found → return LAST phone.
+ *     (The last one is the one the caller corrected TO, not the one they were correcting.)
+ *   - Otherwise → return first phone found.
+ *   - If only one phone found → return it regardless of correction language.
+ *   - If no phone found → return null.
+ *
+ * Example: "239-565-2202. Actually, wait — no, that would be more like 239. 333 7747."
+ *   → extractAllPhonesFromText finds ["239-565-2202", "239. 333 7747"]
+ *   → correction language detected ("actually", "wait", "no")
+ *   → returns "239. 333 7747"
+ *   → normalizePhone("239. 333 7747") → "(239) 333-7747"
+ *
+ * @param  {string}      text — raw STT utterance
+ * @returns {string|null}     — raw phone string for normalizePhone(), or null
+ */
+function extractCorrectedPhone(text) {
+  if (!text) return null;
+  const phones = extractAllPhonesFromText(text);
+  if (phones.length === 0) return null;
+  if (phones.length === 1) return phones[0];
+
+  // Multiple phones found — use LAST when correction language is present
+  const hasCorrectionLanguage = /\b(actually|wait|no|hold on|i mean|sorry|scratch that|not that|oops|let me try|i meant|my mistake|correction|never mind|instead)\b/i.test(text);
+  return hasCorrectionLanguage ? phones[phones.length - 1] : phones[0];
+}
+
+/**
+ * Strip common STT filler phrases from the start of a service address utterance.
+ *
+ * Callers often preface their address with conversational phrases that STT captures
+ * verbatim: "The service address is. 12155 Metro Parkway." → "12155 Metro Parkway"
+ *
+ * Strips:
+ *   - "the service address is."   / "my address is"  / "the address is"
+ *   - "it's at" / "it is at"      / "located at"
+ *   - "that's at" / "that is at"
+ * Also removes a trailing period that STT sometimes appends.
+ *
+ * @param  {string} text — raw STT address utterance
+ * @returns {string}     — cleaned street address
+ */
+function stripAddressFiller(text) {
+  if (!text) return '';
+  return text
+    .trim()
+    .replace(/^(the\s+)?(service\s+)?address\s+is[.,]?\s*/i, '')
+    .replace(/^(my|our|the)\s+address\s+is[.,]?\s*/i, '')
+    .replace(/^it'?s?\s+(at\s+)?/i, '')
+    .replace(/^it\s+is\s+(at\s+)?/i, '')
+    .replace(/^located\s+at\s*/i, '')
+    .replace(/^that'?s?\s+(at\s+)?/i, '')
+    .replace(/^that\s+is\s+(at\s+)?/i, '')
+    .trim()
+    .replace(/\.$/, '')     // remove trailing period from STT
+    .trim();
+}
+
+/**
+ * Strip common STT filler from a city name utterance.
+ * "It's in Fort Myers" → "Fort Myers"
+ * "The city is Naples" → "Naples"
+ *
+ * @param  {string} text
+ * @returns {string}
+ */
+function stripCityFiller(text) {
+  if (!text) return '';
+  return text
+    .trim()
+    .replace(/^(it'?s?\s+)?in\s+/i, '')
+    .replace(/^(it\s+is\s+)?in\s+/i, '')
+    .replace(/^(the\s+)?city(\s+is)?\s*/i, '')
+    .replace(/\.$/, '')
+    .trim();
+}
+
+/**
+ * Capitalize the first character of a prompt string.
+ * Guards against config values stored with an accidental lowercase first letter.
+ * (e.g. holdMessage "great, one moment..." → "Great, one moment...")
+ *
+ * @param  {string} str
+ * @returns {string}
+ */
+function capitalizePromptStart(str) {
+  if (!str || typeof str !== 'string') return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 /**

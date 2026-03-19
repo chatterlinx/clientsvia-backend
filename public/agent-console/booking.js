@@ -116,6 +116,24 @@ function setupEventListeners() {
   // Scheduling Preference Capture toggle
   setupToggle('preference-capture-enabled', 'preference-capture-settings');
 
+  // Address component toggles — show/hide sub-prompt rows when toggled
+  const addrStateToggle = document.getElementById('addr-require-state');
+  if (addrStateToggle) {
+    addrStateToggle.addEventListener('change', () => {
+      const row = document.getElementById('addr-state-prompts');
+      if (row) row.style.display = addrStateToggle.checked ? '' : 'none';
+      markDirty();
+    });
+  }
+  const addrZipToggle = document.getElementById('addr-require-zip');
+  if (addrZipToggle) {
+    addrZipToggle.addEventListener('change', () => {
+      const row = document.getElementById('addr-zip-prompts');
+      if (row) row.style.display = addrZipToggle.checked ? '' : 'none';
+      markDirty();
+    });
+  }
+
   // Confirmation toggle controls its sub-settings visibility
   const confirmToggle = document.getElementById('confirmation-enabled');
   const confirmSettings = document.getElementById('confirmation-settings');
@@ -309,6 +327,20 @@ function populateForm(config) {
   const rfc = config.requiredFieldsConfig || {};
   setChecked('required-address', rfc.address !== false); // default true
 
+  // Section 3b-2: Address Collection Config (multi-step toggles)
+  const addrCfg = config.addressConfig || {};
+  setChecked('addr-require-city',  addrCfg.requireCity  !== false); // default true
+  setChecked('addr-require-state', !!addrCfg.requireState);         // default false
+  setChecked('addr-require-zip',   !!addrCfg.requireZip);           // default false
+  setValue('addr-ask-city',  addrCfg.askCityPrompt  || '');
+  setValue('addr-ask-state', addrCfg.askStatePrompt || '');
+  setValue('addr-ask-zip',   addrCfg.askZipPrompt   || '');
+  // Show/hide sub-prompt rows based on saved toggle state
+  const stateRow = document.getElementById('addr-state-prompts');
+  if (stateRow) stateRow.style.display = addrCfg.requireState ? '' : 'none';
+  const zipRow   = document.getElementById('addr-zip-prompts');
+  if (zipRow)   zipRow.style.display   = addrCfg.requireZip   ? '' : 'none';
+
   // Section 3c: Scheduling Preference Capture
   const pc = config.preferenceCapture || {};
   const pcEnabled = pc.enabled !== false; // default true
@@ -393,6 +425,16 @@ function collectForm() {
 
     requiredFieldsConfig: {
       address: getChecked('required-address')
+    },
+
+    // Address collection config — multi-step sub-flow
+    addressConfig: {
+      requireCity:    getChecked('addr-require-city'),
+      requireState:   getChecked('addr-require-state'),
+      requireZip:     getChecked('addr-require-zip'),
+      askCityPrompt:  getValue('addr-ask-city')  || '',
+      askStatePrompt: getValue('addr-ask-state') || '',
+      askZipPrompt:   getValue('addr-ask-zip')   || ''
     },
 
     preferenceCapture: {
