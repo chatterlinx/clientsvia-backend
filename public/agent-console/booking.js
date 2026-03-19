@@ -98,25 +98,41 @@ function setupSidebarNav() {
 
 // ── EVENT LISTENERS ───────────────────────────────────────────────────────────
 function setupEventListeners() {
-  // Save all button
+  // Save all
   document.getElementById('btn-save-all').addEventListener('click', saveAll);
 
   // Add custom field
   document.getElementById('btn-add-custom-field').addEventListener('click', () => openFieldPanel(-1));
 
-  // Toggle: Caller Recognition
-  setupToggle('recognition-enabled', 'recognition-settings');
+  // ── Team & Calendars ──────────────────────────────────────────────────────
+  document.getElementById('btn-add-service-type').addEventListener('click', () => openServiceTypeModal(-1));
+  document.getElementById('btn-add-technician').addEventListener('click',   () => openTechnicianModal(-1));
 
-  // Toggle: Alt Contact
-  setupToggle('altcontact-enabled', 'altcontact-settings');
+  // ── Emergency schedule ────────────────────────────────────────────────────
+  setupEmergencyListeners();
 
-  // Nested toggle: Allow Multiple Alt Contacts
+  // Re-render holiday emergency column whenever the emergency-enabled toggle changes
+  const emergencyToggle = document.getElementById('emergency-enabled');
+  if (emergencyToggle) {
+    emergencyToggle.addEventListener('change', () => {
+      const currentHols = collectHolidays();
+      const merged = currentHols.map(h => ({
+        ...h,
+        group:       (window._holidayCatalogGroups || {})[h.key] || 'federal',
+        dateDisplay: (window._holidayDates        || {})[h.key] || '—',
+        name:        (window._holidayNames        || {})[h.key] || h.key
+      }));
+      renderHolidayTable(merged);
+    });
+  }
+
+  // ── Section toggles ───────────────────────────────────────────────────────
+  setupToggle('recognition-enabled',       'recognition-settings');
+  setupToggle('altcontact-enabled',        'altcontact-settings');
   setupToggle('altcontact-allow-multiple', 'altcontact-multiple-settings');
+  setupToggle('preference-capture-enabled','preference-capture-settings');
 
-  // Scheduling Preference Capture toggle
-  setupToggle('preference-capture-enabled', 'preference-capture-settings');
-
-  // Address component toggles — show/hide sub-prompt rows when toggled
+  // Address sub-field toggles
   const addrStateToggle = document.getElementById('addr-require-state');
   if (addrStateToggle) {
     addrStateToggle.addEventListener('change', () => {
@@ -134,8 +150,8 @@ function setupEventListeners() {
     });
   }
 
-  // Confirmation toggle controls its sub-settings visibility
-  const confirmToggle = document.getElementById('confirmation-enabled');
+  // Confirmation toggle
+  const confirmToggle   = document.getElementById('confirmation-enabled');
   const confirmSettings = document.getElementById('confirmation-settings');
   if (confirmToggle && confirmSettings) {
     confirmToggle.addEventListener('change', () => {
@@ -144,7 +160,7 @@ function setupEventListeners() {
     });
   }
 
-  // Field panel type buttons
+  // Field panel type selector
   document.querySelectorAll('#panel-type-selector .type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#panel-type-selector .type-btn').forEach(b => b.classList.remove('active'));
@@ -167,7 +183,7 @@ function setupEventListeners() {
     });
   }
 
-  // Mark dirty on any form change
+  // Global dirty-state tracking for all plain form inputs
   document.querySelectorAll('textarea, input[type="text"], select').forEach(el => {
     el.addEventListener('input',  markDirty);
     el.addEventListener('change', markDirty);
@@ -451,41 +467,6 @@ function collectForm() {
       reAnchorSuffix:        getValue('slot-reanchor-suffix')
     }
   };
-}
-
-// ── SAVE ──────────────────────────────────────────────────────────────────────
-async function saveAll() {
-  const payload = collectForm();
-
-  showSaveStatus('saving', 'Saving...');
-  document.getElementById('btn-save-all').disabled = true;
-
-  try {
-    const result = await AgentConsoleAuth.apiFetch(
-      `/api/admin/agent2/company/${companyId}/booking-config`,
-      { method: 'POST', body: payload }
-    );
-
-    if (!result.success) {
-      throw new Error(result.error || 'Save failed');
-    }
-
-    showSaveStatus('saved', 'Saved');
-    showToast('success', 'Saved', 'Booking configuration saved successfully.');
-    isDirty = false;
-
-    // Auto-clear saved status
-    setTimeout(() => showSaveStatus('', ''), 3000);
-
-  } catch (err) {
-    console.error('[BookingConfig] Save failed:', err);
-    showSaveStatus('error', 'Error');
-    showToast('error', 'Save failed', err.message || 'Could not save configuration.');
-    setTimeout(() => showSaveStatus('', ''), 5000);
-
-  } finally {
-    document.getElementById('btn-save-all').disabled = false;
-  }
 }
 
 // ── FLOW VISUALIZER ───────────────────────────────────────────────────────────
@@ -1280,32 +1261,6 @@ function collectHolidays() {
   return Object.values(map);
 }
 
-// ── INIT: wire new sections into setupEventListeners ─────────────────────────
-(function patchSetupEventListeners() {
-  const orig = window._origSetupEL;  // no-op if already done
-  document.getElementById('btn-add-service-type')?.addEventListener('click', () => openServiceTypeModal(-1));
-  document.getElementById('btn-add-technician')  ?.addEventListener('click', () => openTechnicianModal(-1));
-  setupEmergencyListeners();
-  // Re-render holiday emergency column when emergency toggle changes
-  const emergencyToggle = document.getElementById('emergency-enabled');
-  if (emergencyToggle) {
-    emergencyToggle.addEventListener('change', () => {
-      const currentHols = collectHolidays();
-      // Re-render with updated emergency-enabled state
-      const merged = currentHols.map(h => ({
-        ...h,
-        group: (window._holidayCatalogGroups || {})[h.key] || 'federal',
-        dateDisplay: (window._holidayDates || {})[h.key] || '—',
-        name:        (window._holidayNames  || {})[h.key] || h.key
-      }));
-      renderHolidayTable(merged);
-    });
-  }
-})();
-
-// ── PATCH populateForm to include new sections ────────────────────────────────
-const _origPopulateForm = window._populateFormFn || null;
-
 function populateTeamAndSchedule(config) {
   // Service types
   serviceTypes = (config.serviceTypes || []).sort((a,b) => (a.order||0)-(b.order||0));
@@ -1331,12 +1286,7 @@ function populateTeamAndSchedule(config) {
   renderHolidayTable(holidays);
 }
 
-// ── PATCH collectForm to include new sections ─────────────────────────────────
-// We hook into the existing collectForm by monkey-patching after it's defined.
-// Since collectForm is a named function defined above in the same scope,
-// we extend the save payload directly in saveAll.
-const _origSaveAll = window.saveAll; // reference captured at parse time is undefined; we override below
-
+// ── SAVE ──────────────────────────────────────────────────────────────────────
 async function saveAll() {
   const payload = collectForm();
 
@@ -1378,4 +1328,3 @@ window.selectSwatch      = selectSwatch;
 window.closeModal        = closeModal;
 window.saveServiceType   = saveServiceType;
 window.saveTechnician    = saveTechnician;
-window.saveAll           = saveAll;   // override the earlier definition

@@ -301,6 +301,9 @@ function initializeContext(payload, config) {
     technicianPreference: dnEntities.employeeMentioned || null,
     // Full discoveryNotes object kept for downstream use (e.g. urgency surfacing)
     discoveryNotes:       dn,
+    // Service type resolved for this booking session — stamped on first resolution
+    // and persisted so multi-turn calls always route to the correct technician calendars.
+    serviceTypeId:        null,
     // Scheduling preferences — pre-seeded from intake when urgency is known
     preferredDay:         seedAsap ? 'asap'     : null,
     preferredTime:        seedAsap ? 'earliest' : null,
@@ -2209,6 +2212,18 @@ async function handleBookingTriggerHit({ ctx, config, companyId, isTest, events,
       ctx.blocked              = false;
       ctx.step                 = STEPS.OFFER_TIMES;
 
+      // Stamp the resolved serviceTypeId so technician routing is explicit on all
+      // subsequent turns — avoids re-matching by label on every fetchAvailableTimeOptions call.
+      ctx.serviceTypeId = (() => {
+        if (!config.serviceTypes?.length) return null;
+        const normalized = (redirectMode || '').toLowerCase().trim();
+        const matched = config.serviceTypes.find(st =>
+          st.id?.toLowerCase()    === normalized ||
+          st.label?.toLowerCase() === normalized
+        );
+        return matched?.id || null;
+      })();
+
       // Fetch availability for new service type immediately
       const { timeOptions, message: timesMsg } = await fetchAvailableTimeOptions(config, companyId, ctx, isTest, events);
       ctx.availableTimeOptions = timeOptions;
@@ -2288,25 +2303,38 @@ async function fetchAvailableTimeOptions(config, companyId, ctx, isTest, events)
     }
 
     // ── 2. SERVICE-TYPE RESOLUTION ─────────────────────────────────────────
-    // Determine service type from call context.
-    // Priority: ctx.serviceTypeId (stamped by trigger) → urgent flag → summary → bookingMode
+    // Priority order (highest → lowest):
+    //   1. ctx.serviceTypeId  — already resolved & stamped (trigger REDIRECT or prior turn)
+    //   2. Emergency schedule — urgent call + emergency enabled → use its configured type
+    //   3. Summary / bookingMode label match — LLM-derived service category
+    //   4. Default service type — configured isDefault fallback
     let resolvedServiceTypeId = ctx.serviceTypeId || null;
+
     if (!resolvedServiceTypeId && isUrgent && config.emergencySchedule?.enabled) {
       resolvedServiceTypeId = config.emergencySchedule.serviceTypeId || null;
     }
+
     if (!resolvedServiceTypeId) {
-      // Fall back to matching against service type labels from summary
-      const rawType = (ctx.summary?.serviceType || ctx.bookingMode || '').toLowerCase();
-      const matched = config.serviceTypes?.find(st =>
-        st.id?.toLowerCase() === rawType ||
-        st.label?.toLowerCase().includes(rawType)
-      );
-      resolvedServiceTypeId = matched?.id || null;
+      const rawType = (ctx.summary?.serviceType || ctx.bookingMode || '').toLowerCase().trim();
+      if (rawType) {
+        const matched = config.serviceTypes?.find(st =>
+          st.id?.toLowerCase()           === rawType ||
+          st.label?.toLowerCase()        === rawType ||
+          st.label?.toLowerCase().includes(rawType)
+        );
+        resolvedServiceTypeId = matched?.id || null;
+      }
     }
-    // Final fallback: use the default service type
+
     if (!resolvedServiceTypeId) {
       const defaultType = config.serviceTypes?.find(st => st.isDefault);
       resolvedServiceTypeId = defaultType?.id || null;
+    }
+
+    // Persist back to ctx so all subsequent turns use the same resolved type
+    // without re-running the resolution chain.
+    if (resolvedServiceTypeId && !ctx.serviceTypeId) {
+      ctx.serviceTypeId = resolvedServiceTypeId;
     }
 
     // ── 3. TECHNICIAN CALENDAR ROUTING ─────────────────────────────────────
