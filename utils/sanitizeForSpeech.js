@@ -14,8 +14,10 @@
 
 const SAFE_FALLBACK = 'Thank you for calling. How can I help you today?';
 
-// ── Blocklist: terms that should never appear in spoken output ────────────
-const BLOCKED_TERMS = [
+// ── Blocklist: substring terms that should never appear in spoken output ──
+// These are safe as substring matches — they are code/debug artifacts that
+// will never appear as part of a legitimate English word.
+const BLOCKED_SUBSTRINGS = [
   'referenceerror',
   'typeerror',
   'syntaxerror',
@@ -23,11 +25,8 @@ const BLOCKED_TERMS = [
   'urierror',
   'evalerror',
   '[object',
-  'NaN',
   'stacktrace',
   'stack trace',
-  'exception',
-  'placeholder',
   'generalerror',
   'general_error',
   'general error',
@@ -35,9 +34,27 @@ const BLOCKED_TERMS = [
   'console.log',
 ];
 
-// Precompile a single regex from all blocked terms (case-insensitive)
-const BLOCKED_REGEX = new RegExp(
-  BLOCKED_TERMS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+// ── Blocklist: whole-word terms requiring \b boundaries ───────────────────
+// These must be matched as whole words only to avoid false positives on
+// legitimate English words.
+//   'NaN'         → without \b, matches "mai[NaN]ce" (maintenance). NaN is a
+//                   JavaScript arithmetic artifact ("Your cost is NaN dollars").
+//   'placeholder' → without \b, could collide in edge cases; kept whole-word.
+// NOTE: 'exception' was removed — it is a common English word ("with the
+//       exception of...") and produced false positives in LLM responses.
+const BLOCKED_WHOLE_WORDS = [
+  'NaN',
+  'placeholder',
+];
+
+// Precompile both regexes once at startup
+const BLOCKED_SUBSTRING_RE = new RegExp(
+  BLOCKED_SUBSTRINGS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+  'i'
+);
+
+const BLOCKED_WORD_RE = new RegExp(
+  '\\b(?:' + BLOCKED_WHOLE_WORDS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
   'i'
 );
 
@@ -95,7 +112,8 @@ function sanitizeForSpeech(text, options = {}) {
   }
 
   // ── Blocklist check ───────────────────────────────────────────────────
-  if (BLOCKED_REGEX.test(cleaned)) {
+  // Two passes: substring match (code artifacts) + whole-word match (NaN etc.)
+  if (BLOCKED_SUBSTRING_RE.test(cleaned) || BLOCKED_WORD_RE.test(cleaned)) {
     if (trap) trap.reason = 'BLOCKED_TERM';
     return fallback;
   }
