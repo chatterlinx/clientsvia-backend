@@ -101,6 +101,7 @@ const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
 const { streamWithSentences } = require('../../streaming/SentenceStreamingService');
 const { ConversationMemory } = require('../ConversationMemory');
+const DiscoveryGroqFastLane = require('../discovery/DiscoveryGroqFastLane');
 const ConsentLoopService     = require('./ConsentLoopService');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
@@ -401,6 +402,41 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'trigger_fallback_disabled', fallbackInvoked: true, turn });
       return null;
     }
+
+    // ── T1.5: Groq fast lane — factual Q&A from trigger knowledge ────────────
+    // Fires BEFORE the maxTurns gate: even a caller who exhausted Claude's turn
+    // budget can still get a factual answer (pricing, area, promos, coupons).
+    // NEVER fires for empty STT — re-engagement requires Claude's warmth and
+    // conversational memory, not a factual lookup.
+    // Falls through silently on any miss — Claude T2 proceeds as normal.
+    if (!sttEmpty && input?.trim() && process.env.GROQ_API_KEY) {
+      const fastResult = await DiscoveryGroqFastLane.attempt({
+        question:    input,
+        companyId:   company._id,
+        companyName: company.companyName || '',
+        trade:       company.tradeType   || '',
+        callSid,
+      });
+
+      if (fastResult.answered) {
+        emit('A2_T15_GROQ_HIT', {
+          callSid,
+          turn,
+          confidence: fastResult.confidence,
+          latencyMs:  fastResult.latencyMs,
+        });
+        return {
+          response:       fastResult.response,
+          tokensUsed:     { input: 0, output: 0 },
+          latencyMs:      fastResult.latencyMs,
+          wasPartial:     false,
+          usedCallerName: false,
+        };
+      }
+
+      emit('A2_T15_GROQ_MISS', { callSid, turn, reason: fastResult.missReason });
+    }
+    // ── Falls through to T2 (Claude LLM Agent) ───────────────────────────────
 
     // Gate: max turns per session (prevents runaway LLM usage on repeated no-matches)
     const maxTurnsPerSession = config.activation?.maxTurnsPerSession ?? 10;

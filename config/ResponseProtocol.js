@@ -14,15 +14,17 @@
 //
 
 const RESPONSE_TIER = {
-  TIER_1: 1, // Deterministic match
-  TIER_2: 2, // LLM Agent (AI intelligence)
-  TIER_3: 3, // Fallback (safety net)
+  TIER_1:   1,   // Deterministic match
+  TIER_1_5: 1.5, // Groq fast lane — knowledge lookup (between T1 and Claude T2)
+  TIER_2:   2,   // LLM Agent (AI intelligence)
+  TIER_3:   3,   // Fallback (safety net)
 };
 
 const RESPONSE_TIER_LABEL = {
-  1: 'DETERMINISTIC',
-  2: 'LLM_AGENT',
-  3: 'FALLBACK',
+  1:   'DETERMINISTIC',
+  1.5: 'GROQ_FAST_LANE',
+  2:   'LLM_AGENT',
+  3:   'FALLBACK',
 };
 
 // Maps existing lastPath values to their 123RP tier
@@ -48,6 +50,9 @@ const PATH_TO_TIER = {
   'PENDING_REPROMPT':                RESPONSE_TIER.TIER_1,
   'LLM_HANDOFF_CONFIRMED':          RESPONSE_TIER.TIER_1,
   'LLM_HANDOFF_DECLINED':           RESPONSE_TIER.TIER_1,
+
+  // Tier 1.5: Groq fast lane (knowledge lookup — faster than Claude, lighter than T1)
+  'NO_MATCH_GROQ_FAST_LANE': RESPONSE_TIER.TIER_1_5,
 
   // Tier 2: LLM Agent (AI intelligence — NOT fallback)
   'LLM_AGENT_NO_MATCH':     RESPONSE_TIER.TIER_2,
