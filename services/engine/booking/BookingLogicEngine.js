@@ -1124,6 +1124,25 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
       }
       ctx.collectedFields.lastName = resolvedLast;
       events.push({ type: 'BL1_LAST_NAME_COLLECTED', lastName: resolvedLast, timestamp: Date.now() });
+    } else if (/\?/.test(userInput)) {
+      // ── No last name found, but caller asked an off-topic question ──────────
+      // e.g. "Yeah that's correct, but I have a coupon — is that good?"
+      // Caller confirmed first name above but asked a question instead of giving
+      // their last name.  Answer via 123BRP T2 then re-ask for last name.
+      ctx._nameSubStep = 'GET_LAST'; // stay on last name — don't advance
+      events.push({ type: 'BL1_NAME_STEP_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+      const llmAnswer = await BookingLLMInterceptService.answer({
+        question: userInput,
+        companyId,
+        ctx,
+        config,
+      }).catch(() => null);
+      const anchor = `And what is your last name?`;
+      return {
+        nextPrompt: llmAnswer ? `${llmAnswer} ${anchor}` : `${config.t2DigressionAck} ${anchor}`,
+        bookingCtx: ctx,
+        completed:  false,
+      };
     }
 
     delete ctx._nameSubStep;
@@ -1474,22 +1493,6 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     return advanceAfterPhone(ctx, config, companyId, isTest, events);
   }
 
-  // ── No valid phone in input — offer caller ID if not yet asked ─────────
-  if (!ctx._callerIdAsked && ctx.callerPhone) {
-    const formattedCallerId = normalizePhone(ctx.callerPhone);
-    if (formattedCallerId) {
-      ctx._callerIdAsked      = true;
-      ctx._confirmingCallerId = true;
-      events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
-      return {
-        nextPrompt: `I see your caller ID is ${formattedCallerId} — is that a good number for text notifications and booking confirmations?`,
-        bookingCtx: ctx,
-        completed:  false
-      };
-    }
-    ctx._callerIdAsked = true;
-  }
-
   // ── No valid phone found — check for digression / name revisit ────────────
   if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
     ctx.step = STEPS.COLLECT_NAME;
@@ -1502,12 +1505,10 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   }
 
   // ── Smart digression detection (T1.5 → T2) ──────────────────────────────
-  // If the input contains fewer than 3 digit characters it is clearly a
-  // question or digression — NOT a phone attempt.  Route through:
-  //   T1.5 → booking trigger (ANY-step or COLLECT_PHONE-targeted)
-  //   T2   → graceful re-anchor (acknowledge + circle back to phone)
-  // Fall through to the blind re-ask only when the input actually looks
-  // like a phone attempt (>= 3 digits, just garbled/incomplete).
+  // IMPORTANT: Checked BEFORE the caller-ID offer so that off-topic questions
+  // ("Are you listening to me? I have a coupon.") are routed to T1.5 → T2
+  // instead of triggering the caller-ID offer — which caused the caller to feel
+  // completely ignored.  Only inputs with ≥ 3 digits can be a phone attempt.
   const phoneDigitCount = (userInput.match(/\d/g) || []).length;
   if (phoneDigitCount < 3) {
     // T1.5 — booking trigger check
@@ -1544,6 +1545,24 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       t2Digression:   true,
       reAnchorPhrase: config.phoneReAnchor
     };
+  }
+
+  // ── No valid phone in input — offer caller ID if not yet asked ─────────
+  // Placed AFTER the digression check: only offer caller ID when the input
+  // actually looks like a phone attempt (≥ 3 digits, just garbled/incomplete).
+  if (!ctx._callerIdAsked && ctx.callerPhone) {
+    const formattedCallerId = normalizePhone(ctx.callerPhone);
+    if (formattedCallerId) {
+      ctx._callerIdAsked      = true;
+      ctx._confirmingCallerId = true;
+      events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
+      return {
+        nextPrompt: `I see your caller ID is ${formattedCallerId} — is that a good number for text notifications and booking confirmations?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    ctx._callerIdAsked = true;
   }
 
   events.push({ type: 'BL1_PHONE_INVALID', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
