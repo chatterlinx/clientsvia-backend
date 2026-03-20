@@ -401,6 +401,7 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
     // Load trigger models
     const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
     const GlobalTrigger = require('../../models/GlobalTrigger');
+    const CompanyBookingTrigger = require('../../models/CompanyBookingTrigger');
 
     // Get company-specific triggers (enabled, published, not deleted)
     const localTriggers = await CompanyLocalTrigger.find({
@@ -420,6 +421,17 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
         state: 'published'
       }).lean();
     }
+
+    // Get booking INFO triggers — these are knowledge-only (no booking-step side effects)
+    // and must be visible to the discovery LLM Agent so callers can ask about
+    // promotions, coupons, and pricing before/during booking.
+    const bookingInfoTriggers = await CompanyBookingTrigger.find({
+      companyId,
+      enabled: true,
+      isDeleted: { $ne: true },
+      state: 'published',
+      behavior: 'INFO',
+    }).lean();
 
     // Combine and format as card drafts
     const cardDrafts = [];
@@ -446,6 +458,19 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
         content: formatTriggerAsKnowledge(t),
         type: 'trigger',
         source: 'global',
+        autoSynced: true
+      });
+    }
+
+    for (const t of bookingInfoTriggers) {
+      const name = t.label || t.displayName || t.name || 'Booking Info';
+      cardDrafts.push({
+        triggerId: t._id.toString(),
+        triggerName: name,
+        title: name,
+        content: formatTriggerAsKnowledge(t),
+        type: 'booking-trigger',
+        source: 'booking',
         autoSynced: true
       });
     }
