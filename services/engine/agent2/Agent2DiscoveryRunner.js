@@ -2273,6 +2273,20 @@ class Agent2DiscoveryRunner {
             // Device/system state that needs explanation (blank, dead, off, broken, weird)
             if (/\b(?:blank|went\s+(?:out|blank|dead)|stopped\s+working|not\s+(?:working|responding|turning)|won'?t\s+(?:turn|work|come\s+on))\b/.test(t)) return true;
 
+            // Direct question mark anywhere in residual — strongest signal
+            if (/\?/.test(t)) return true;
+
+            // Status/situation questions: "what is the situation", "what's going on", "what's the deal"
+            if (/\bwhat\s+(?:is|'s)\s+(?:the\s+)?(?:situation|deal|going\s+on|happening|wrong|issue|problem)\b/.test(t)) return true;
+            if (/\bwhat(?:'s|\s+is)\s+going\s+on\b/.test(t)) return true;
+
+            // Uncertainty about the problem: "not sure what's going on", "don't know what happened"
+            if (/\b(?:not\s+sure|don'?t\s+know|unsure|not\s+certain)\s+(?:what|why|how|if|whether)\b/.test(t)) return true;
+
+            // Secondary problem being reported alongside the YES
+            if (/\b(?:also|and)\s+(?:have|got|there'?s|there\s+is)\b/.test(t)) return true;
+            if (/\bi\s+(?:also\s+)?(?:have|got|noticed?|see|saw)\s+\w+\s+(?:leak|leaking|drip|dripping|broken|issue|problem|not\s+work)\b/.test(t)) return true;
+
             return false;
           };
 
