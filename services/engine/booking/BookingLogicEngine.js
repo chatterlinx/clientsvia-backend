@@ -904,7 +904,7 @@ async function processConfirmRecognition(ctx, userInput, config, companyId, isTe
  */
 function extractNameTokens(input) {
   return input
-    .replace(/\b(yes|yeah|yep|no|nope|actually|it'?s|i'?m|my name is|the name is|correct|wrong|right|uh-?huh|just|wait|oh|well|um|uh|sure|ok|okay)\b/gi, ' ')
+    .replace(/\b(my last name is|last name is|my first name is|first name is|the last name is|surname is|my name is|the name is|yes|yeah|yep|no|nope|actually|it'?s|i'?m|correct|wrong|right|uh-?huh|just|wait|oh|well|um|uh|sure|ok|okay)\b/gi, ' ')
     .replace(/[,;.!?]/g, ' ')
     .trim()
     .split(/\s+/)
@@ -913,6 +913,19 @@ function extractNameTokens(input) {
 }
 
 async function processConfirmName(ctx, userInput, config, companyId, isTest, events) {
+
+  // ── Sub-step: accepting a spelled last name after GlobalHub rejected it ────
+  // This fires when a previous turn set ctx._nameSubStep = 'SPELL_LAST' while
+  // still in CONFIRM_NAME mode (e.g. from ASK_LAST_ONLY or CONFIRM_FIRST_ASK_LAST).
+  if (ctx._nameSubStep === 'SPELL_LAST') {
+    const cleaned = userInput.trim().replace(/[^a-zA-Z'\- ]/g, '').trim();
+    ctx.collectedFields.lastName = capitalizeFirst(cleaned) || null;
+    delete ctx._nameSubStep;
+    ctx._nameConfirmed = true;
+    events.push({ type: 'BL1_LAST_NAME_SPELLED', lastName: ctx.collectedFields.lastName, timestamp: Date.now() });
+    return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+  }
+
   const mode  = ctx._nameConfirmMode || 'CONFIRM_FULL';
   const lower = (userInput || '').toLowerCase().trim();
 
@@ -933,13 +946,25 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
     }
   }
 
-  // ── ASK_LAST_ONLY: just capture whatever they say as last name ────────────
+  // ── ASK_LAST_ONLY: capture last name + verify against GlobalHub ──────────
   if (mode === 'ASK_LAST_ONLY') {
     const tokens = extractNameTokens(userInput);
-    const lastName = tokens.length > 0 ? tokens[tokens.length - 1] : userInput.trim();
-    ctx.collectedFields.lastName = lastName;
+    const rawLast = tokens.length > 0 ? tokens[tokens.length - 1] : userInput.trim();
+    let resolvedLast = rawLast;
+    try {
+      const lastMatch = await GlobalHubService.matchLastName(rawLast);
+      if (!lastMatch.match && lastMatch.verificationMode === 'unknown') {
+        ctx._nameSubStep = 'SPELL_LAST';
+        events.push({ type: 'BL1_LAST_NAME_UNKNOWN', raw: rawLast, timestamp: Date.now() });
+        return { nextPrompt: `Could you spell your last name for me?`, bookingCtx: ctx, completed: false };
+      }
+      if (lastMatch.match) resolvedLast = lastMatch.value;
+    } catch (_ghErr) {
+      // GlobalHub unavailable → accept as-is
+    }
+    ctx.collectedFields.lastName = resolvedLast;
     ctx._nameConfirmed = true;
-    events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName, timestamp: Date.now() });
+    events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName: resolvedLast, timestamp: Date.now() });
     return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
   }
 
@@ -1019,12 +1044,25 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
     // e.g. "yes, Cox"  or  "yes my last name is Johnson"
     const tokens = extractNameTokens(userInput);
     if (tokens.length >= 1) {
-      // Filter out the first name itself if they repeated it
-      const lastName = tokens.find(t => t.toLowerCase() !== ctx.collectedFields.firstName?.toLowerCase());
-      if (lastName) {
-        ctx.collectedFields.lastName = lastName;
+      // Take the LAST token — avoids mis-picking filler like "My" or "Name" that
+      // survive partial strip (e.g. "Yes. Um, my last name is Gonzalez" → ["Gonzalez"])
+      const rawLast = tokens[tokens.length - 1];
+      if (rawLast && rawLast.toLowerCase() !== ctx.collectedFields.firstName?.toLowerCase()) {
+        let resolvedLast = rawLast;
+        try {
+          const lastMatch = await GlobalHubService.matchLastName(rawLast);
+          if (!lastMatch.match && lastMatch.verificationMode === 'unknown') {
+            ctx._nameSubStep = 'SPELL_LAST';
+            events.push({ type: 'BL1_LAST_NAME_UNKNOWN', raw: rawLast, timestamp: Date.now() });
+            return { nextPrompt: `Could you spell your last name for me?`, bookingCtx: ctx, completed: false };
+          }
+          if (lastMatch.match) resolvedLast = lastMatch.value;
+        } catch (_ghErr) {
+          // GlobalHub unavailable → accept as-is
+        }
+        ctx.collectedFields.lastName = resolvedLast;
         ctx._nameConfirmed = true;
-        events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName, timestamp: Date.now() });
+        events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName: resolvedLast, timestamp: Date.now() });
         return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
       }
     }
@@ -1344,6 +1382,27 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     };
   }
 
+  // ── Name readback confirmation — waiting for caller's yes/no ────────────
+  // Set when we read back the stored name: "I have 'Mark Gonzalez' on file — is that correct?"
+  // Next turn: YES → fall through to normal phone collection
+  //            NO  → restart name collection so caller can re-enter their name
+  if (ctx._awaitingNameReadbackConfirm) {
+    delete ctx._awaitingNameReadbackConfirm;
+    const isNo = /\b(no|nope|wrong|incorrect|not (right|correct)|different|nah)\b/i.test(userInput);
+    if (isNo) {
+      ctx.step = STEPS.COLLECT_NAME;
+      ctx.collectedFields.firstName = null;
+      ctx.collectedFields.lastName  = null;
+      events.push({ type: 'BL1_NAME_READBACK_REJECTED', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+      return {
+        nextPrompt: `No problem — let me get that again. What's your first and last name?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    // YES or unclear — fall through; caller may have given phone in same breath
+  }
+
   // ── Caller ID confirmation — waiting for caller's yes/no ──────────────────
   if (ctx._confirmingCallerId) {
     ctx._confirmingCallerId = false;
@@ -1539,10 +1598,11 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     const isReadback = /\b(read|back|confirm|verify|check|what is|tell me|did you get|have my|you have|got my|what'?s? my|say it|say that|hear)\b/i.test(userInput);
 
     if (isReadback) {
-      // Confirm what we have on file and continue to phone collection
+      // Confirm what we have on file — set flag so next turn can handle YES/NO
       const firstName = ctx.collectedFields?.firstName || '';
       const lastName  = ctx.collectedFields?.lastName  || '';
       const namePart  = [firstName, lastName].filter(Boolean).join(' ');
+      ctx._awaitingNameReadbackConfirm = true;
       events.push({ type: 'BL1_NAME_READBACK_REQUEST', storedName: namePart, timestamp: Date.now() });
       return {
         nextPrompt: namePart
