@@ -390,6 +390,34 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     return stepResult;
   }
 
+  // ── OFFER_TIMES scheduling bypass ────────────────────────────────────────
+  // When the caller is choosing from presented time slots, short inputs or
+  // inputs containing scheduling terms ("day", "time", "now", "when", etc.)
+  // are scheduling clarifications — NOT off-topic intent.  Running them through
+  // BookingTriggerMatcher causes dangerous keyword collisions observed in real
+  // calls:  "now" → emergency redirect,  "time" → service-duration trigger,
+  // "what" → bot-detection trigger.  Reset to day collection so the booking
+  // can retry with a fresh availability fetch, avoiding all false-positives.
+  if (prevSnap.step === STEPS.OFFER_TIMES) {
+    const lc              = (userInput || '').toLowerCase().trim();
+    const wordCount       = lc.split(/\s+/).length;
+    const hasSchedulingTerm = /\b(day|time|when|available|slot|schedule|now|next|morning|afternoon|evening|tomorrow|today|week|first|earliest)\b/.test(lc);
+
+    if (wordCount <= 4 || hasSchedulingTerm) {
+      events.push({ type: 'BK_OFFER_TIMES_SCHEDULING_ANCHOR', rawInput: userInput.substring(0, 60), timestamp: Date.now() });
+      // Reset preferences and fetch state so the next turn is a clean day-selection attempt
+      ctx.step                 = STEPS.COLLECT_PREFERRED_DAY;
+      ctx.preferredDay         = null;
+      ctx.preferredTime        = null;
+      ctx.availableTimeOptions = null;
+      return {
+        nextPrompt: config.preferenceCapture?.askDayPrompt || 'What day works best for you?',
+        bookingCtx: ctx,
+        completed:  false,
+      };
+    }
+  }
+
   // ── STEP 2: Off-topic detected — run 123RP cascade ────────────────────────
   events.push({
     type:      'BK_123RP_START',
@@ -1494,7 +1522,27 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   }
 
   // ── No valid phone found — check for digression / name revisit ────────────
-  if (/\b(last name|surname|full name|my name)\b/i.test(userInput)) {
+  if (/\b(last name|surname|full name|my name|name)\b/i.test(userInput)) {
+    // Distinguish readback requests ("can you read that back?") from corrections
+    // ("my name is...").  Readback = caller wants to HEAR the stored name, not re-enter it.
+    const isReadback = /\b(read|back|confirm|verify|check|what is|tell me|did you get|have my|you have|got my|what'?s? my|say it|say that|hear)\b/i.test(userInput);
+
+    if (isReadback) {
+      // Confirm what we have on file and continue to phone collection
+      const firstName = ctx.collectedFields?.firstName || '';
+      const lastName  = ctx.collectedFields?.lastName  || '';
+      const namePart  = [firstName, lastName].filter(Boolean).join(' ');
+      events.push({ type: 'BL1_NAME_READBACK_REQUEST', storedName: namePart, timestamp: Date.now() });
+      return {
+        nextPrompt: namePart
+          ? `I have "${namePart}" on file — is that correct? ${config.askPhonePrompt || 'And what is the best phone number to reach you at?'}`
+          : `${config.t2DigressionAck} ${config.askPhonePrompt || 'What is the best phone number to reach you at?'}`,
+        bookingCtx: ctx,
+        completed:  false,
+      };
+    }
+
+    // Correction / change: caller wants to give their name again
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
@@ -2869,12 +2917,9 @@ async function fetchAvailableTimeOptions(config, companyId, ctx, isTest, events)
 
     if (result.fallback || !result.slots?.length) {
       events.push({ type: 'BL1_CALENDAR_NO_SLOTS', fallback: !!result.fallback, timestamp: Date.now() });
-      if (ctx.preferredDay && ctx.preferredDay !== 'asap' && config.preferenceCapture?.noSlotsOnDayPrompt) {
-        const msg = config.preferenceCapture.noSlotsOnDayPrompt
-          .replace('{day}', getDayLabel(ctx.preferredDay))
-          .replace('{alternative}', 'the next available time');
-        return { timeOptions: [], message: msg };
-      }
+      // noSlotsOnDayPrompt requires a real alternative slot to fill its {alternative}
+      // template variable.  Since we have no actual slot to offer, always use the
+      // generic noTimesPrompt — never substitute a literal placeholder string.
       return {
         timeOptions: [],
         message: config.noTimesPrompt || "I'm not seeing any open times in the next few days. Would you like me to have someone call you back to find a time that works?"
