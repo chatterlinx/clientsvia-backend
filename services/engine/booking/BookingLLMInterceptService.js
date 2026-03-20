@@ -3,11 +3,16 @@
 /**
  * ============================================================================
  * BOOKING LLM INTERCEPT SERVICE
- * 123RP Tier 2 — mid-booking off-topic question handler
+ * 123BRP Tier 2 — mid-booking off-topic question handler
  *
  * When a caller asks an off-topic question during the booking flow and no
  * booking trigger card matches (Tier 1), this service calls the LLM for a
  * single turn to answer the question intelligently using company knowledge.
+ *
+ * Knowledge injected (parallel DB load, lean projections):
+ *   1. Company scripts + personality (existing)
+ *   2. CompanyLocalTrigger Q&A (discovery triggers — general company knowledge)
+ *   3. CompanyBookingTrigger behavior=INFO (booking-specific: promos, coupons, pricing)
  *
  * The caller (BookingLogicEngine) appends RETURN_TO_BOOKING_Q after this
  * returns — this service intentionally does NOT add it, keeping concerns clean.
@@ -20,12 +25,17 @@
  * ============================================================================
  */
 
-const logger        = require('../../../utils/logger');
-const v2Company     = require('../../../models/v2Company');
-const { callLLM0 }  = require('../../llmRegistry');
+const logger                = require('../../../utils/logger');
+const v2Company             = require('../../../models/v2Company');
+const CompanyLocalTrigger   = require('../../../models/CompanyLocalTrigger');
+const CompanyBookingTrigger = require('../../../models/CompanyBookingTrigger');
+const { callLLM0 }          = require('../../llmRegistry');
 
 const SERVICE_ID           = 'BOOKING_LLM_INTERCEPT';
 const INTERCEPT_TIMEOUT_MS = 4000; // hard ceiling — caller falls to Tier 3 if exceeded
+
+// Projection for trigger queries — only the fields needed for the prompt
+const TRIGGER_PROJECTION = { label: 1, displayName: 1, name: 1, answerText: 1 };
 
 // ── Exports ──────────────────────────────────────────────────────────────────
 
@@ -48,18 +58,28 @@ async function answer({ question, companyId, callId, ctx, config }) {
   if (!question?.trim()) return null;
 
   try {
-    // ── Lean company load for AI knowledge context ────────────────────────────
-    // Only fetch the fields needed for the intercept system prompt.
-    // Booking config already loaded by caller — we just need AI knowledge here.
-    const company = await v2Company.findOne(
-      { _id: companyId },
-      {
-        companyName: 1,
-        tradeType:   1,
-        'aiAgentSettings.agent2.discovery.scripts':           1,
-        'aiAgentSettings.agent2.discovery.agentPersonality':  1,
-      }
-    ).lean();
+    // ── Parallel DB load — all 3 queries fire at once ─────────────────────────
+    const [company, localTriggers, bookingInfoTriggers] = await Promise.all([
+      v2Company.findOne(
+        { _id: companyId },
+        {
+          companyName: 1,
+          tradeType:   1,
+          'aiAgentSettings.agent2.discovery.scripts':           1,
+          'aiAgentSettings.agent2.discovery.agentPersonality':  1,
+        }
+      ).lean(),
+
+      CompanyLocalTrigger.find(
+        { companyId, enabled: true, isDeleted: { $ne: true }, state: 'published' },
+        TRIGGER_PROJECTION
+      ).lean(),
+
+      CompanyBookingTrigger.find(
+        { companyId, enabled: true, isDeleted: { $ne: true }, state: 'published', behavior: 'INFO' },
+        TRIGGER_PROJECTION
+      ).lean(),
+    ]);
 
     const companyName = company?.companyName
                      || config?.companyName
@@ -69,7 +89,10 @@ async function answer({ question, companyId, callId, ctx, config }) {
     const personality = company?.aiAgentSettings?.agent2?.discovery?.agentPersonality?.trim() || '';
 
     // ── Build system prompt ───────────────────────────────────────────────────
-    const systemPrompt = _buildSystemPrompt({ companyName, trade, scripts, personality, ctx });
+    const systemPrompt = _buildSystemPrompt({
+      companyName, trade, scripts, personality, ctx,
+      localTriggers, bookingInfoTriggers,
+    });
 
     // ── LLM call with hard timeout ────────────────────────────────────────────
     const response = await Promise.race([
@@ -101,8 +124,10 @@ async function answer({ question, companyId, callId, ctx, config }) {
 
     logger.info(`[${SERVICE_ID}] LLM intercept answered`, {
       companyId,
-      step:      ctx?.step,
-      latencyMs: response._latencyMs
+      step:             ctx?.step,
+      latencyMs:        response._latencyMs,
+      localTriggers:    localTriggers.length,
+      bookingTriggers:  bookingInfoTriggers.length,
     });
 
     return replyText;
@@ -121,29 +146,56 @@ async function answer({ question, companyId, callId, ctx, config }) {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /**
- * Build the minimal system prompt for a mid-booking intercept turn.
- *
- * Keeps the prompt short and focused — the LLM answers ONE question then stops.
- * The return-to-booking question is added by BookingLogicEngine, NOT here.
+ * Format an array of trigger docs into compact knowledge lines.
+ * "- Trigger Name: answer text"
  */
-function _buildSystemPrompt({ companyName, trade, scripts, personality, ctx }) {
-  const stepLabel  = ctx?.step
+function _formatTriggers(triggers) {
+  return triggers
+    .filter(t => t.answerText?.trim())
+    .map(t => {
+      const name = t.label || t.displayName || t.name || 'Info';
+      return `- ${name}: ${t.answerText.trim()}`;
+    })
+    .join('\n');
+}
+
+/**
+ * Build the system prompt for a mid-booking intercept turn.
+ * Injects all available company knowledge so the LLM never has to guess.
+ */
+function _buildSystemPrompt({ companyName, trade, scripts, personality, ctx, localTriggers, bookingInfoTriggers }) {
+  const stepLabel = ctx?.step
     ? `currently collecting ${ctx.step.replace(/_/g, ' ').toLowerCase()}`
     : 'in the booking flow';
 
-  const lines = [
+  const intro = [
     `You are a helpful booking assistant for ${companyName} (${trade} company).`,
     `A caller is in the middle of scheduling an appointment (${stepLabel}) and asked an off-topic question.`,
     personality ? `Your personality: ${personality}` : null,
     `Answer their question briefly and professionally in 1-2 sentences.`,
     `Do NOT end your answer with any question about returning to booking — the system handles that automatically.`,
-    ctx?.bookingMode ? `Service being booked: ${ctx.bookingMode}.`                            : null,
+    ctx?.bookingMode        ? `Service being booked: ${ctx.bookingMode}.`                     : null,
     ctx?.collectedFields?.firstName ? `Caller name: ${ctx.collectedFields.firstName}.`        : null,
   ].filter(Boolean).join(' ');
 
-  if (scripts) {
-    return `${lines}\n\nCOMPANY KNOWLEDGE:\n${scripts}`;
+  const sections = [intro];
+
+  // Booking-specific knowledge (promotions, coupons, pricing) — highest relevance
+  const bookingKnowledge = _formatTriggers(bookingInfoTriggers);
+  if (bookingKnowledge) {
+    sections.push(`\nBOOKING KNOWLEDGE (promotions, offers, booking policies):\n${bookingKnowledge}`);
   }
 
-  return lines;
+  // General company Q&A from discovery triggers
+  const localKnowledge = _formatTriggers(localTriggers);
+  if (localKnowledge) {
+    sections.push(`\nCOMPANY Q&A:\n${localKnowledge}`);
+  }
+
+  // Freeform scripts (lowest priority — already existed)
+  if (scripts) {
+    sections.push(`\nCOMPANY KNOWLEDGE:\n${scripts}`);
+  }
+
+  return sections.join('');
 }
