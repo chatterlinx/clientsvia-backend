@@ -30,6 +30,7 @@ const GoogleCalendarService = require('../../GoogleCalendarService');
 const HolidayService       = require('../../HolidayService');
 const { BookingTriggerMatcher }      = require('./BookingTriggerMatcher');
 const BookingLLMInterceptService     = require('./BookingLLMInterceptService');
+const GroqFieldExtractorService      = require('./GroqFieldExtractorService');
 const GlobalHubService     = require('../../GlobalHubService');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
@@ -181,6 +182,9 @@ async function loadCompanyConfig(companyId) {
       askAddressPrompt:        bc.builtinPrompts?.askAddress              || bp.askAddress || 'And what is the service address?',
       addressReAnchor:         bc.builtinPrompts?.addressReAnchor         || 'What is the service address for this appointment?',
       t2DigressionAck:              bc.builtinPrompts?.t2DigressionAck             || "Absolutely — we'll make sure that gets addressed.",
+      patiencePhone:                bc.builtinPrompts?.patiencePhone               || 'No problem — go ahead whenever you have it.',
+      patienceAddress:              bc.builtinPrompts?.patienceAddress             || "Take your time — just say the address whenever you're ready.",
+      patienceGeneral:              bc.builtinPrompts?.patienceGeneral             || "Sure, no rush — I'm right here.",
       confirmNameAmbiguous:         bc.builtinPrompts?.confirmNameAmbiguous        || 'Just to confirm — is your name {name}? A simple yes or no works.',
       confirmNamePartialCorrected:  bc.builtinPrompts?.confirmNamePartialCorrected || 'Got it, {firstName}! And your last name?',
       confirmFirstNameGotLastAsk:   bc.builtinPrompts?.confirmFirstNameGotLastAsk  || 'Great, {firstName}! And what is your last name?',
@@ -1127,6 +1131,31 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
   }
 
   // ── Normal case: parse full name from utterance ───────────────────────────
+  // Run Groq only when trigger words suggest something beyond a plain name
+  // (self-correction, compound utterance with embedded question, etc.)
+  // parseName() is still the primary extractor — Groq augments for edge cases.
+  let _embeddedNameQuestion = null;
+  if (GroqFieldExtractorService.hasTriggerWords(userInput)) {
+    const nameExtraction = await GroqFieldExtractorService.parse(
+      GroqFieldExtractorService.FIELD_TYPES.NAME,
+      userInput,
+      { callSid: ctx.callSid, step: STEPS.COLLECT_NAME }
+    );
+    events.push({
+      type:      'BL1_NAME_GROQ_EXTRACT',
+      state:     nameExtraction.state,
+      hasValue:  !!nameExtraction.value,
+      timestamp: Date.now()
+    });
+    const { STATES: NM_STATES } = GroqFieldExtractorService;
+    if (nameExtraction.state === NM_STATES.SEARCHING) {
+      return { nextPrompt: config.patienceGeneral, bookingCtx: ctx, completed: false };
+    }
+    if (nameExtraction.embeddedQuestion) {
+      _embeddedNameQuestion = nameExtraction.embeddedQuestion;
+    }
+  }
+
   const { firstName, lastName } = parseName(userInput);
 
   // Verify first name against GlobalHub dictionary
@@ -1176,9 +1205,13 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
   }
 
   // Got first name only — ask for last name
+  // If caller also asked a question alongside the name, acknowledge it first
   ctx._nameSubStep = 'GET_LAST';
+  const lastNamePrompt = `Thanks, ${resolvedFirst}! And your last name?`;
   return {
-    nextPrompt: `Thanks, ${resolvedFirst}! And your last name?`,
+    nextPrompt: _embeddedNameQuestion
+      ? `${config.t2DigressionAck} ${lastNamePrompt}`
+      : lastNamePrompt,
     bookingCtx: ctx,
     completed:  false
   };
@@ -1358,7 +1391,80 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
   //     → strips ALL non-digits from the full sentence would yield 20+ digits → null.
   //   - extractCorrectedPhone() finds all embedded phone numbers via regex substring
   //     matching, then returns the LAST one when correction language is present.
-  const normalizedPhone = normalizePhone(extractCorrectedPhone(userInput));
+  const regexPhone      = extractCorrectedPhone(userInput);
+  const normalizedPhone = normalizePhone(regexPhone);
+
+  // ── GroqFieldExtractor: engage when caller speech is messy ───────────────
+  // Fast path: regex found a clean number and no uncertainty trigger words →
+  // proceed immediately (zero latency, no Groq call).
+  // Groq path: trigger words present ("wait", "hold on", "let me check") OR
+  // regex found nothing → Groq classifies the caller's state.
+  if (GroqFieldExtractorService.needsGroqPath(userInput, regexPhone)) {
+    const extraction = await GroqFieldExtractorService.parse(
+      GroqFieldExtractorService.FIELD_TYPES.PHONE,
+      userInput,
+      { callSid: ctx.callSid, step: STEPS.COLLECT_PHONE }
+    );
+    events.push({
+      type:      'BL1_PHONE_GROQ_EXTRACT',
+      state:     extraction.state,
+      hasValue:  !!extraction.value,
+      confidence: extraction.confidence,
+      timestamp: Date.now()
+    });
+
+    const { STATES } = GroqFieldExtractorService;
+
+    if (extraction.state === STATES.SEARCHING) {
+      // Caller is looking for their number — be patient, hold the step
+      return {
+        nextPrompt: config.patiencePhone,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    if (extraction.state === STATES.UNCERTAIN && extraction.value) {
+      // Caller gave a tentative number — confirm it back before advancing
+      const tentative = normalizePhone(extraction.value) || extraction.value;
+      ctx._phoneConfirmPending = tentative;
+      return {
+        nextPrompt: `Just to confirm — is your number ${tentative}?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    if (extraction.state === STATES.PROVIDING_WITH_Q && extraction.value) {
+      // Caller gave a number AND asked a question — capture number, handle question via T1.5/T2
+      const captured = normalizePhone(extraction.value);
+      if (captured) {
+        ctx.collectedFields.phone = captured;
+        ctx._callerIdAsked = true;
+        events.push({ type: 'BL1_PHONE_COLLECTED', phone: captured, source: 'groq_with_q', timestamp: Date.now() });
+        // Fall through to T1.5 → T2 below to handle the embedded question
+        // (phoneDigitCount < 3 check won't fire since we already got the number;
+        //  use T2 digression directly then advance after)
+        events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: extraction.embeddedQuestion?.substring(0, 60), timestamp: Date.now() });
+        const advanceResult = await advanceAfterPhone(ctx, config, companyId, isTest, events);
+        return {
+          ...advanceResult,
+          nextPrompt: `${config.t2DigressionAck} ${advanceResult.nextPrompt}`,
+        };
+      }
+    }
+
+    if (extraction.state === STATES.PROVIDING || extraction.state === STATES.CORRECTING) {
+      const groqPhone = normalizePhone(extraction.value);
+      if (groqPhone) {
+        ctx.collectedFields.phone = groqPhone;
+        ctx._callerIdAsked = true;
+        events.push({ type: 'BL1_PHONE_COLLECTED', phone: groqPhone, source: 'groq', timestamp: Date.now() });
+        return advanceAfterPhone(ctx, config, companyId, isTest, events);
+      }
+    }
+    // For OFF_TOPIC or Groq returning no usable value: fall through to existing T1.5/T2 logic below
+  }
 
   if (normalizedPhone) {
     // ── Caller gave us a valid phone number explicitly ─────────────────────
@@ -1500,6 +1606,96 @@ async function processCollectAddress(ctx, userInput, config, companyId, isTest, 
         completed:  false
       };
     }
+
+    // ── GroqFieldExtractor: smart address parsing ───────────────────────────
+    // Always run Groq on STREET (first entry) — address speech is complex enough
+    // to warrant semantic understanding. Groq may return a full address (skips
+    // sub-flow entirely) or partial (jumps straight to the missing component).
+    const addrExtraction = await GroqFieldExtractorService.parse(
+      GroqFieldExtractorService.FIELD_TYPES.ADDRESS,
+      userInput,
+      { callSid: ctx.callSid, step: STEPS.COLLECT_ADDRESS }
+    );
+    events.push({
+      type:              'BL1_ADDRESS_GROQ_EXTRACT',
+      state:             addrExtraction.state,
+      hasValue:          !!addrExtraction.value,
+      confidence:        addrExtraction.confidence,
+      missingComponents: addrExtraction.missingComponents,
+      timestamp:         Date.now()
+    });
+
+    const { STATES: ADDR_STATES } = GroqFieldExtractorService;
+
+    if (addrExtraction.state === ADDR_STATES.SEARCHING) {
+      return {
+        nextPrompt: config.patienceAddress,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    if (addrExtraction.state === ADDR_STATES.OFF_TOPIC) {
+      events.push({ type: 'BL1_ADDRESS_T2_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+      return {
+        nextPrompt:     `${config.t2DigressionAck} ${config.addressReAnchor}`,
+        bookingCtx:     ctx,
+        completed:      false,
+        t2Digression:   true,
+        reAnchorPhrase: config.addressReAnchor
+      };
+    }
+
+    if (addrExtraction.value &&
+        (addrExtraction.state === ADDR_STATES.PROVIDING  ||
+         addrExtraction.state === ADDR_STATES.CORRECTING ||
+         addrExtraction.state === ADDR_STATES.PROVIDING_WITH_Q ||
+         addrExtraction.state === ADDR_STATES.UNCERTAIN)) {
+
+      if (addrExtraction.state === ADDR_STATES.UNCERTAIN) {
+        return {
+          nextPrompt: `Just to confirm — is the service address ${addrExtraction.value}?`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+
+      const missing = addrExtraction.missingComponents || [];
+      ctx._addressStreet = addrExtraction.value.split(',')[0]?.trim() || addrExtraction.value;
+
+      // Pre-populate any components Groq returned beyond street
+      if (addrExtraction.value.includes(',')) {
+        const parts = addrExtraction.value.split(',').map(p => p.trim());
+        if (parts[1] && missing.includes('city')  === false) ctx._addressCity  = parts[1];
+        if (parts[2] && missing.includes('state') === false) ctx._addressState = parts[2];
+        if (parts[3] && missing.includes('zip')   === false) ctx._addressZip   = parts[3];
+      }
+
+      events.push({ type: 'BL1_ADDRESS_STREET_COLLECTED', street: ctx._addressStreet, source: 'groq', timestamp: Date.now() });
+
+      if (missing.length === 0) {
+        ctx.collectedFields.address = addrExtraction.value;
+        ctx.addressStep = null;
+        events.push({ type: 'BL1_ADDRESS_COMPLETE_GROQ', address: ctx.collectedFields.address, timestamp: Date.now() });
+        return finalizeAddress(ctx, config, companyId, isTest, events);
+      }
+
+      if (missing.includes('city') && ac.requireCity !== false) {
+        ctx.addressStep = 'CITY';
+        return { nextPrompt: ac.askCityPrompt || 'And what city is that in?', bookingCtx: ctx, completed: false };
+      }
+      if (missing.includes('state') && ac.requireState) {
+        ctx.addressStep = 'STATE';
+        return { nextPrompt: ac.askStatePrompt || 'And what state?', bookingCtx: ctx, completed: false };
+      }
+      if (missing.includes('zip') && ac.requireZip) {
+        ctx.addressStep = 'ZIP';
+        return { nextPrompt: ac.askZipPrompt || 'And the zip code?', bookingCtx: ctx, completed: false };
+      }
+
+      return finalizeAddress(ctx, config, companyId, isTest, events);
+    }
+    // Groq returned no usable value — fall through to regex-based extraction
 
     ctx._addressStreet = stripAddressFiller(userInput);
     events.push({ type: 'BL1_ADDRESS_STREET_COLLECTED', street: ctx._addressStreet, timestamp: Date.now() });
