@@ -431,6 +431,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
           latencyMs:      fastResult.latencyMs,
           wasPartial:     false,
           usedCallerName: false,
+          _groqFastLane:  true, // signals call site to use T1.5 path/tier, skip Claude turn counter
         };
       }
 
@@ -5074,9 +5075,25 @@ class Agent2DiscoveryRunner {
       });
 
       if (llmAgentResult?.response) {
-        // LLM Agent handled this turn — set state and return
-        nextState.agent2.discovery.lastPath = 'LLM_AGENT_NO_MATCH';
-        nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
+        // ── Resolve tier-specific metadata ──────────────────────────────────
+        // T1.5 (Groq) returns _groqFastLane=true. T2 (Claude) does not.
+        // Everything below runs the same for both — only labels and the
+        // turn counter differ.
+        const isGroqFastLane = !!llmAgentResult._groqFastLane;
+        const resolvedPath   = isGroqFastLane ? 'NO_MATCH_GROQ_FAST_LANE' : 'LLM_AGENT_NO_MATCH';
+        const resolvedTier   = isGroqFastLane ? RESPONSE_TIER.TIER_1_5    : RESPONSE_TIER.TIER_2;
+        const resolvedLabel  = isGroqFastLane ? 'GROQ_FAST_LANE'          : 'LLM_AGENT';
+        const resolvedSource = isGroqFastLane ? 'agent2.groqFastLane'     : 'agent2.llmAgent.noMatch';
+        const resolvedNote   = isGroqFastLane
+          ? '123RP Tier 1.5: Groq fast lane — knowledge lookup response'
+          : '123RP Tier 2: LLM Agent (Claude) — AI intelligence response';
+
+        nextState.agent2.discovery.lastPath = resolvedPath;
+
+        // Only count Claude turns toward maxTurnsPerSession — Groq is free
+        if (!isGroqFastLane) {
+          nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
+        }
         if (llmAgentResult.wasPartial) {
           nextState.agent2.discovery.lastResponseWasPartial = true;
         }
@@ -5118,35 +5135,38 @@ class Agent2DiscoveryRunner {
           ? llmAgentResult.response
           : `${llmAck} ${llmAgentResult.response}`.trim();
 
-        pathSelected = 'LLM_AGENT_NO_MATCH';
-        pathReason = 'No trigger match — LLM Agent (Claude) handled the turn';
+        pathSelected = resolvedPath;
+        pathReason = isGroqFastLane
+          ? 'No trigger match — Groq fast lane (T1.5) answered from trigger knowledge'
+          : 'No trigger match — LLM Agent (Claude) handled the turn';
 
         emit('A2_PATH_SELECTED', {
-          path: 'LLM_AGENT_NO_MATCH',
+          path: resolvedPath,
           reason: pathReason,
-          _123rpTier: RESPONSE_TIER.TIER_2,
-          _123rpLabel: 'LLM_AGENT',
-          model: llmAgentResult.tokensUsed ? 'claude' : null,
+          _123rpTier: resolvedTier,
+          _123rpLabel: resolvedLabel,
+          model: isGroqFastLane ? 'groq' : (llmAgentResult.tokensUsed ? 'claude' : null),
           latencyMs: llmAgentResult.latencyMs,
           tokensInput: llmAgentResult.tokensUsed?.input,
           tokensOutput: llmAgentResult.tokensUsed?.output,
           llmHandoffPendingSet: !!nextState.agent2.discovery.llmHandoffPending,
         });
         emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-          'agent2.llmAgent.noMatch',
-          null, // LLM Agent generates dynamic text — no static UI path
+          resolvedSource,
+          null, // LLM/Groq generates dynamic text — no static UI path
           response,
           null,
-          '123RP Tier 2: LLM Agent (Claude) — AI intelligence response'
+          resolvedNote
         ));
         emit('A2_RESPONSE_READY', {
-          path: 'LLM_AGENT_NO_MATCH',
+          path: resolvedPath,
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: 'llmAgent.noMatch',
+          source: resolvedSource,
           usedCallerName: llmAgentResult.usedCallerName || false,
-          isLLMAgent: true,
+          isLLMAgent: !isGroqFastLane,
+          isGroqFastLane,
           latencyMs: llmAgentResult.latencyMs,
           llmHandoffPendingSet: !!nextState.agent2.discovery.llmHandoffPending,
         });

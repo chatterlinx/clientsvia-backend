@@ -35,7 +35,7 @@ const SERVICE_ID           = 'BOOKING_LLM_INTERCEPT';
 const INTERCEPT_TIMEOUT_MS = 4000; // hard ceiling — caller falls to Tier 3 if exceeded
 
 // Projection for trigger queries — only the fields needed for the prompt
-const TRIGGER_PROJECTION = { label: 1, displayName: 1, name: 1, answerText: 1 };
+const TRIGGER_PROJECTION = Object.freeze({ label: 1, displayName: 1, name: 1, answerText: 1 });
 
 // ── Exports ──────────────────────────────────────────────────────────────────
 

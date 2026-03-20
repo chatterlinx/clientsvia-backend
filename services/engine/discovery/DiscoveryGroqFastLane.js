@@ -49,6 +49,7 @@ const MISS = Object.freeze({
   EMPTY_ANSWER:    'empty_answer',
   TIMEOUT:         'timeout',
   API_ERROR:       'api_error',
+  EMPTY_RESPONSE:  'empty_response',
   PARSE_ERROR:     'parse_error',
   UNEXPECTED:      'unexpected_error',
 });
@@ -136,7 +137,7 @@ async function attempt({ question, companyId, companyName = '', trade = '', call
       return _miss(MISS.TIMEOUT);
     }
 
-    if (!raw?.response) return _miss(MISS.PARSE_ERROR);
+    if (!raw?.response) return _miss(MISS.EMPTY_RESPONSE);
 
     // ── Parse and validate JSON response ─────────────────────────────────────
     let parsed;
@@ -201,7 +202,8 @@ function _buildKnowledgeBlock(triggers) {
  *  - Must include the word "json" for Groq JSON mode
  *  - Short and directive — Groq performs best with clear, tight instructions
  *  - Explicitly instructs Groq NOT to guess beyond the knowledge base
- *  - No scheduling offers — the consent funnel handles that separately
+ *  - MUST include consent funnel closing question — ConsentLoopService.extractConsentQuestion()
+ *    depends on it to set PFUQ for the next turn (Wire Point B at the call site)
  */
 function _buildSystemPrompt({ companyName, trade, knowledgeBlock }) {
   const companyDesc = companyName && trade
@@ -211,7 +213,8 @@ function _buildSystemPrompt({ companyName, trade, knowledgeBlock }) {
   return [
     `You answer caller questions for ${companyDesc} using ONLY the knowledge base below.`,
     'Answer in 1-2 short, natural sentences as if speaking on the phone.',
-    'Do NOT add scheduling offers or closing questions — the system handles that separately.',
+    'After answering, ALWAYS end with one short natural yes/no question that moves the caller toward scheduling.',
+    'Example closings: "Would you like to get a technician scheduled?" or "Can I get someone out there for you?"',
     'If the answer is not covered by the knowledge base, return { "canAnswer": false }.',
     'Return valid json: { "canAnswer": boolean, "answer": string | null, "confidence": "high" | "medium" | "low" }',
     '',
