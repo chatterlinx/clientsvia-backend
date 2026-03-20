@@ -1252,13 +1252,24 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
   }
 
   // Got first name only — ask for last name
-  // If caller also asked a question alongside the name, acknowledge it first
   ctx._nameSubStep = 'GET_LAST';
   const lastNamePrompt = `Thanks, ${resolvedFirst}! And your last name?`;
+
+  // Caller asked a question alongside their name — answer it before asking for last name
+  if (_embeddedNameQuestion) {
+    const nameAnswer = await BookingLLMInterceptService.answer({
+      question: _embeddedNameQuestion,
+      companyId, ctx, config,
+    }).catch(() => null);
+    return {
+      nextPrompt: `${nameAnswer || config.t2DigressionAck} ${lastNamePrompt}`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
   return {
-    nextPrompt: _embeddedNameQuestion
-      ? `${config.t2DigressionAck} ${lastNamePrompt}`
-      : lastNamePrompt,
+    nextPrompt: lastNamePrompt,
     bookingCtx: ctx,
     completed:  false
   };
@@ -1483,20 +1494,20 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     }
 
     if (extraction.state === STATES.PROVIDING_WITH_Q && extraction.value) {
-      // Caller gave a number AND asked a question — capture number, handle question via T1.5/T2
+      // Caller gave a number AND asked a question — capture number, answer question, then advance
       const captured = normalizePhone(extraction.value);
       if (captured) {
         ctx.collectedFields.phone = captured;
         ctx._callerIdAsked = true;
         events.push({ type: 'BL1_PHONE_COLLECTED', phone: captured, source: 'groq_with_q', timestamp: Date.now() });
-        // Fall through to T1.5 → T2 below to handle the embedded question
-        // (phoneDigitCount < 3 check won't fire since we already got the number;
-        //  use T2 digression directly then advance after)
         events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: extraction.embeddedQuestion?.substring(0, 60), timestamp: Date.now() });
+        // Use LLM to actually answer the question — caller asked, we respond
+        const question = extraction.embeddedQuestion || userInput;
+        const llmAnswer = await BookingLLMInterceptService.answer({ question, companyId, ctx, config }).catch(() => null);
         const advanceResult = await advanceAfterPhone(ctx, config, companyId, isTest, events);
         return {
           ...advanceResult,
-          nextPrompt: `${config.t2DigressionAck} ${advanceResult.nextPrompt}`,
+          nextPrompt: `${llmAnswer || config.t2DigressionAck} ${advanceResult.nextPrompt}`,
         };
       }
     }
@@ -1713,10 +1724,52 @@ async function processCollectAddress(ctx, userInput, config, companyId, isTest, 
       };
     }
 
+    // ── PROVIDING_WITH_Q: capture address + answer embedded question ──────────
+    // Handled separately so the caller's question is actually answered (not ignored).
+    if (addrExtraction.state === ADDR_STATES.PROVIDING_WITH_Q && addrExtraction.value) {
+      events.push({ type: 'BL1_ADDRESS_T2_DIGRESSION', rawInput: addrExtraction.embeddedQuestion?.substring(0, 60), timestamp: Date.now() });
+      // Use LLM to actually answer the question — caller asked, we respond
+      const addrQuestion = addrExtraction.embeddedQuestion || userInput;
+      const addrLlmAnswer = await BookingLLMInterceptService.answer({ question: addrQuestion, companyId, ctx, config }).catch(() => null);
+      const addrAck = addrLlmAnswer || config.t2DigressionAck;
+
+      // Process address components (same logic as PROVIDING)
+      const addrMissing = addrExtraction.missingComponents || [];
+      ctx._addressStreet = addrExtraction.value.split(',')[0]?.trim() || addrExtraction.value;
+      if (addrExtraction.value.includes(',')) {
+        const parts = addrExtraction.value.split(',').map(p => p.trim());
+        if (parts[1] && !addrMissing.includes('city'))  ctx._addressCity  = parts[1];
+        if (parts[2] && !addrMissing.includes('state')) ctx._addressState = parts[2];
+        if (parts[3] && !addrMissing.includes('zip'))   ctx._addressZip   = parts[3];
+      }
+      events.push({ type: 'BL1_ADDRESS_STREET_COLLECTED', street: ctx._addressStreet, source: 'groq_with_q', timestamp: Date.now() });
+
+      if (addrMissing.length === 0) {
+        ctx.collectedFields.address = addrExtraction.value;
+        ctx.addressStep = null;
+        events.push({ type: 'BL1_ADDRESS_COMPLETE_GROQ', address: ctx.collectedFields.address, timestamp: Date.now() });
+        const finalResult = await finalizeAddress(ctx, config, companyId, isTest, events);
+        return { ...finalResult, nextPrompt: `${addrAck} ${finalResult.nextPrompt}` };
+      }
+      if (addrMissing.includes('city') && ac.requireCity !== false) {
+        ctx.addressStep = 'CITY';
+        return { nextPrompt: `${addrAck} ${ac.askCityPrompt || 'And what city is that in?'}`, bookingCtx: ctx, completed: false };
+      }
+      if (addrMissing.includes('state') && ac.requireState) {
+        ctx.addressStep = 'STATE';
+        return { nextPrompt: `${addrAck} ${ac.askStatePrompt || 'And what state?'}`, bookingCtx: ctx, completed: false };
+      }
+      if (addrMissing.includes('zip') && ac.requireZip) {
+        ctx.addressStep = 'ZIP';
+        return { nextPrompt: `${addrAck} ${ac.askZipPrompt || 'And the zip code?'}`, bookingCtx: ctx, completed: false };
+      }
+      const finalResult = await finalizeAddress(ctx, config, companyId, isTest, events);
+      return { ...finalResult, nextPrompt: `${addrAck} ${finalResult.nextPrompt}` };
+    }
+
     if (addrExtraction.value &&
         (addrExtraction.state === ADDR_STATES.PROVIDING  ||
          addrExtraction.state === ADDR_STATES.CORRECTING ||
-         addrExtraction.state === ADDR_STATES.PROVIDING_WITH_Q ||
          addrExtraction.state === ADDR_STATES.UNCERTAIN)) {
 
       if (addrExtraction.state === ADDR_STATES.UNCERTAIN) {
