@@ -31,10 +31,11 @@ const GroqStreamAdapter     = require('../../streaming/adapters/GroqStreamAdapte
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SERVICE_ID = 'DISCOVERY_GROQ_FAST_LANE';
-const MODEL      = 'llama-3.3-70b-versatile';
-const MAX_TOKENS = 120;
-const TIMEOUT_MS = 1200; // aggressive ceiling — if Groq takes >1.2s, Claude is a better bet
+const SERVICE_ID    = 'DISCOVERY_GROQ_FAST_LANE';
+const MODEL         = 'llama-3.3-70b-versatile';
+const MAX_TOKENS    = 120;
+const TIMEOUT_MS    = 1200; // aggressive ceiling — if Groq takes >1.2s, Claude is a better bet
+const MAX_TRIGGERS  = 50;   // cap knowledge block size — booking triggers kept first (highest relevance)
 
 // Lean projection — only fields needed to build the knowledge block
 const TRIGGER_PROJECTION = Object.freeze({ label: 1, displayName: 1, name: 1, answerText: 1 });
@@ -91,8 +92,12 @@ async function attempt({ question, companyId, companyName = '', trade = '', call
       ).lean(),
     ]);
 
-    // Filter to triggers that actually have answer text, booking first
-    const allTriggers = [...bookingTriggers, ...localTriggers].filter(t => t.answerText?.trim());
+    // Filter to triggers that actually have answer text, booking first.
+    // Cap at MAX_TRIGGERS to keep the knowledge block tight (Groq handles
+    // oversized prompts poorly — latency grows and 1200ms budget is at risk).
+    const allTriggers = [...bookingTriggers, ...localTriggers]
+      .filter(t => t.answerText?.trim())
+      .slice(0, MAX_TRIGGERS);
 
     if (allTriggers.length === 0) {
       logger.debug(`[${SERVICE_ID}] No trigger knowledge found for company`, { callSid, companyId: companyId?.toString() });

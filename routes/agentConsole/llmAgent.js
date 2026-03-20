@@ -20,6 +20,9 @@ const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const cheerio = require('cheerio');
 const { DEFAULT_LLM_AGENT_SETTINGS, AVAILABLE_MODELS, AVAILABLE_PROVIDERS, composeSystemPrompt } = require('../../config/llmAgentDefaults');
+const CompanyLocalTrigger   = require('../../models/CompanyLocalTrigger');
+const GlobalTrigger         = require('../../models/GlobalTrigger');
+const CompanyBookingTrigger = require('../../models/CompanyBookingTrigger');
 
 const MODULE_ID = 'LLM_AGENT_ROUTES';
 
@@ -398,40 +401,36 @@ router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, r
 
     const activeGroupId = company.aiAgentSettings?.agent2?.activeTriggerGroupId;
 
-    // Load trigger models
-    const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
-    const GlobalTrigger = require('../../models/GlobalTrigger');
-    const CompanyBookingTrigger = require('../../models/CompanyBookingTrigger');
-
-    // Get company-specific triggers (enabled, published, not deleted)
-    const localTriggers = await CompanyLocalTrigger.find({
-      companyId,
-      enabled: true,
-      isDeleted: { $ne: true },
-      state: 'published'
-    }).lean();
-
-    // Get global triggers from active group (enabled, published, not deleted)
-    let globalTriggers = [];
-    if (activeGroupId) {
-      globalTriggers = await GlobalTrigger.find({
-        groupId: activeGroupId,
+    // ── Parallel DB load — all 3 queries fire at once ─────────────────────
+    const [localTriggers, globalTriggers, bookingInfoTriggers] = await Promise.all([
+      // Company-specific triggers (enabled, published, not deleted)
+      CompanyLocalTrigger.find({
+        companyId,
         enabled: true,
         isDeleted: { $ne: true },
-        state: 'published'
-      }).lean();
-    }
+        state: 'published',
+      }).lean(),
 
-    // Get booking INFO triggers — these are knowledge-only (no booking-step side effects)
-    // and must be visible to the discovery LLM Agent so callers can ask about
-    // promotions, coupons, and pricing before/during booking.
-    const bookingInfoTriggers = await CompanyBookingTrigger.find({
-      companyId,
-      enabled: true,
-      isDeleted: { $ne: true },
-      state: 'published',
-      behavior: 'INFO',
-    }).lean();
+      // Global triggers from active group (empty array if no group configured)
+      activeGroupId
+        ? GlobalTrigger.find({
+            groupId: activeGroupId,
+            enabled: true,
+            isDeleted: { $ne: true },
+            state: 'published',
+          }).lean()
+        : Promise.resolve([]),
+
+      // Booking INFO triggers — knowledge-only (promos, coupons, pricing)
+      // Visible to the discovery LLM Agent so callers can ask before/during booking.
+      CompanyBookingTrigger.find({
+        companyId,
+        enabled: true,
+        isDeleted: { $ne: true },
+        state: 'published',
+        behavior: 'INFO',
+      }).lean(),
+    ]);
 
     // Combine and format as card drafts
     const cardDrafts = [];
