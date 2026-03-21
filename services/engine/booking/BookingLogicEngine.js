@@ -174,7 +174,7 @@ async function loadCompanyConfig(companyId) {
       askNamePrompt:           bc.builtinPrompts?.askName                 || bp.askName    || 'To get started, may I have your first and last name?',
       nameReAnchor:            bc.builtinPrompts?.nameReAnchor            || 'What is your first and last name?',
       confirmFullName:         bc.builtinPrompts?.confirmFullName         || 'I assume your name is {name}, is that correct?',
-      confirmFirstNameAskLast: bc.builtinPrompts?.confirmFirstNameAskLast || 'I assume your first name is {firstName}, is that correct? And what is your last name?',
+      confirmFirstNameAskLast: bc.builtinPrompts?.confirmFirstNameAskLast || 'I show your first name as {firstName} — is that right?',
       askLastNameOnly:         bc.builtinPrompts?.askLastNameOnly         || 'And what is your last name?',
       askPhonePrompt:          bc.builtinPrompts?.askPhone                || bp.askPhone   || 'And what is the best phone number to reach you at?',
       phoneReAnchor:           bc.builtinPrompts?.phoneReAnchor           || 'What phone number can we reach you at?',
@@ -1419,6 +1419,35 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     // callerPhone is ALWAYS kept in ctx.callerPhone — never discarded
     const confirmedPhone = normalizePhone(ctx.callerPhone);
 
+    // ── Digression escape hatch ──────────────────────────────────────────────
+    // If the caller asks about their name or says something confusing INSTEAD of
+    // answering yes/no, restore the flag and re-ask rather than silently falling
+    // to the NO path (which would discard the caller ID question).
+    const _isNameReadback    = /\b(my name|what.*(my name|call me|am i))\b/i.test(userInput);
+    const _isGenericConfusion = /^(what|huh|sorry|repeat|again|pardon|excuse me|say that again|what was that)\b[?.]?$/i.test(userInput.trim());
+
+    if (_isNameReadback) {
+      ctx._confirmingCallerId = true; // restore — still waiting for yes/no next turn
+      const _knownName = [ctx.collectedFields?.firstName, ctx.collectedFields?.lastName].filter(Boolean).join(' ');
+      events.push({ type: 'BL1_CALLER_ID_DIGRESSION_NAME', timestamp: Date.now() });
+      return {
+        nextPrompt: `Your name on file is ${_knownName || 'not yet collected'}. Now — is ${confirmedPhone || ctx.callerPhone} a good number for the confirmation text?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
+    if (_isGenericConfusion) {
+      ctx._confirmingCallerId = true; // restore — still waiting for yes/no next turn
+      events.push({ type: 'BL1_CALLER_ID_DIGRESSION_CONFUSION', timestamp: Date.now() });
+      return {
+        nextPrompt: `I was asking: is ${confirmedPhone || ctx.callerPhone} a good number for your confirmation text? Just say yes or no.`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+    // ── End digression escape hatch ──────────────────────────────────────────
+
     if (isYes && confirmedPhone) {
       // ── YES: use caller ID as primary ──────────────────────────────────────
       ctx.collectedFields.phone = confirmedPhone;
@@ -1484,8 +1513,12 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       ctx._callerIdAsked      = true;
       ctx._confirmingCallerId = true;
       events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
+      // Inject discoveryNotes service type for a personalized, context-aware offer
+      const _dn          = ctx.discoveryNotes;
+      const _serviceCtx  = _dn?.callReason || _dn?.entities?.serviceType || null;
+      const _serviceText = _serviceCtx ? `your ${_serviceCtx} ` : '';
       return {
-        nextPrompt: `Is the number you're calling from, ${formattedCallerId}, a good number to receive your text booking confirmation?`,
+        nextPrompt: `Is ${formattedCallerId} a good number for your ${_serviceText}confirmation text?`,
         bookingCtx: ctx,
         completed:  false
       };
@@ -1574,8 +1607,9 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     if (extraction.state === STATES.PROVIDING || extraction.state === STATES.CORRECTING) {
       const groqPhone = normalizePhone(extraction.value);
       if (groqPhone) {
-        ctx.collectedFields.phone = groqPhone;
-        ctx._callerIdAsked = true;
+        ctx.collectedFields.phone    = groqPhone;
+        ctx._callerIdAsked           = true;
+        ctx._phoneJustCollected      = groqPhone; // triggers readback prefix in advanceAfterPhone
         events.push({ type: 'BL1_PHONE_COLLECTED', phone: groqPhone, source: 'groq', timestamp: Date.now() });
         return advanceAfterPhone(ctx, config, companyId, isTest, events);
       }
@@ -1585,8 +1619,9 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
 
   if (normalizedPhone) {
     // ── Caller gave us a valid phone number explicitly ─────────────────────
-    ctx.collectedFields.phone = normalizedPhone;
-    ctx._callerIdAsked = true; // mark as handled so we never double-ask
+    ctx.collectedFields.phone   = normalizedPhone;
+    ctx._callerIdAsked          = true; // mark as handled so we never double-ask
+    ctx._phoneJustCollected     = normalizedPhone; // triggers readback prefix in advanceAfterPhone
     events.push({ type: 'BL1_PHONE_COLLECTED', phone: normalizedPhone, timestamp: Date.now() });
     return advanceAfterPhone(ctx, config, companyId, isTest, events);
   }
@@ -1756,10 +1791,18 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
 
 /** Shared transition logic after phone is collected. */
 async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
+  // Phone readback — only when the caller explicitly gave us a new number
+  // (not when they confirmed their caller ID — that's already verbally acknowledged).
+  const _readbackPhone = ctx._phoneJustCollected || null;
+  delete ctx._phoneJustCollected;
+  const _readbackPrefix = _readbackPhone
+    ? `Got it — I'll send the confirmation to ${_readbackPhone}. `
+    : '';
+
   if (config.requiredFields.includes('address') && !ctx.collectedFields.address) {
     ctx.step = STEPS.COLLECT_ADDRESS;
     return {
-      nextPrompt: config.askAddressPrompt,
+      nextPrompt: _readbackPrefix + config.askAddressPrompt,
       bookingCtx: ctx,
       completed:  false
     };
@@ -1771,12 +1814,16 @@ async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
     ctx.step = STEPS.COLLECT_CUSTOM;
     ctx.customFieldIndex = 0;
     return {
-      nextPrompt: firstField.prompt || `One more thing — what is your ${firstField.label}?`,
+      nextPrompt: _readbackPrefix + (firstField.prompt || `One more thing — what is your ${firstField.label}?`),
       bookingCtx: ctx,
       completed:  false
     };
   }
-  return advanceAfterCustomFields(ctx, config, companyId, isTest, events);
+  const advanceResult = await advanceAfterCustomFields(ctx, config, companyId, isTest, events);
+  if (_readbackPrefix && advanceResult?.nextPrompt) {
+    advanceResult.nextPrompt = _readbackPrefix + advanceResult.nextPrompt;
+  }
+  return advanceResult;
 }
 
 /* ============================================================================
@@ -2639,8 +2686,9 @@ async function processOfferTimes(ctx, userInput, config, companyId, isTest, even
   ctx.step         = STEPS.CONFIRM;
   events.push({ type: 'BL1_TIME_SELECTED', display: selected.display, timestamp: Date.now() });
 
+  // Full-field summary so the caller hears everything before we write to the calendar
   return {
-    nextPrompt: `Great — I have you down for ${selected.display}. Should I go ahead and book that?`,
+    nextPrompt: buildFullConfirmSummary(ctx),
     bookingCtx: ctx,
     completed:  false
   };
@@ -2650,10 +2698,40 @@ async function processOfferTimes(ctx, userInput, config, companyId, isTest, even
    STEP: CONFIRM
    ============================================================================ */
 
+/**
+ * Build a full-field pre-booking summary that the caller hears before we write
+ * to the calendar.  Includes service type (from discoveryNotes), name, phone,
+ * address (if collected), and time slot — so nothing is a surprise.
+ *
+ * Falls back gracefully when any field is absent.
+ */
+function buildFullConfirmSummary(ctx) {
+  const dn      = ctx.discoveryNotes;
+  const service = dn?.callReason || dn?.entities?.serviceType || ctx.bookingMode || null;
+  const first   = ctx.collectedFields?.firstName || '';
+  const last    = ctx.collectedFields?.lastName  || '';
+  const name    = [first, last].filter(Boolean).join(' ');
+  const phone   = ctx.collectedFields?.phone || normalizePhone(ctx.callerPhone) || null;
+  const address = ctx.collectedFields?.address || null;
+  const slot    = ctx.selectedTime?.display   || null;
+
+  const parts = [];
+  if (service) parts.push(service);
+  if (name)    parts.push(`for ${name}`);
+  if (phone)   parts.push(`at ${phone}`);
+  if (address) parts.push(`at ${address}`);
+  if (slot)    parts.push(`on ${slot}`);
+
+  if (parts.length === 0) {
+    return `Shall I go ahead and confirm your appointment?`;
+  }
+  return `Just to confirm — I have ${parts.join(', ')}. Does everything look right?`;
+}
+
 async function processConfirm(ctx, userInput, config, companyId, isTest, events) {
   if (!userInput?.trim()) {
     return {
-      nextPrompt: config.timeConfirmPrompt.replace('{time}', ctx.selectedTime?.display),
+      nextPrompt: buildFullConfirmSummary(ctx),
       bookingCtx: ctx,
       completed:  false
     };
@@ -2685,9 +2763,23 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
     ctx.step      = STEPS.COMPLETED;
     ctx.completed = true;
 
-    const confirmMsg = config.confirmationMessage
-      .replace('{date}', ctx.selectedTime?.display?.split(' at ')[0] || 'the scheduled date')
-      .replace('{time}', ctx.selectedTime?.display?.split(' at ')[1] || 'the scheduled time');
+    // Build a discovery-aware closing that references what was booked and who the caller is.
+    // Falls back to the company-configured confirmationMessage if discoveryNotes are absent.
+    const _closingDn          = ctx.discoveryNotes;
+    const _closingService     = _closingDn?.callReason || _closingDn?.entities?.serviceType || null;
+    const _closingFirstName   = ctx.collectedFields?.firstName || '';
+    const _closingSlot        = ctx.selectedTime?.display || 'the scheduled time';
+
+    let confirmMsg;
+    if (_closingService || _closingFirstName) {
+      const _namePart    = _closingFirstName ? `, ${_closingFirstName}` : '';
+      const _servicePart = _closingService   ? `your ${_closingService} service` : 'your appointment';
+      confirmMsg = `You're all set${_namePart}! ${_servicePart.charAt(0).toUpperCase() + _servicePart.slice(1)} is confirmed for ${_closingSlot}. We'll send you a confirmation text. Is there anything else I can help you with?`;
+    } else {
+      confirmMsg = config.confirmationMessage
+        .replace('{date}', ctx.selectedTime?.display?.split(' at ')[0] || 'the scheduled date')
+        .replace('{time}', ctx.selectedTime?.display?.split(' at ')[1] || 'the scheduled time');
+    }
 
     events.push({ type: 'BL1_COMPLETED', timestamp: Date.now() });
 
@@ -3177,11 +3269,12 @@ function buildWarmOpening(ctx) {
   const techPref    = ctx?.technicianPreference;
   const parts       = [];
 
-  if (callContext?.issue?.summary) {
-    // Use "an" before vowel sounds (AC, HVAC, air handler) — "an AC not cooling issue" not "a AC..."
-    const summary = callContext.issue.summary;
-    const article = /^[aeiouAEIOU]/.test(summary) ? 'an' : 'a';
-    parts.push(`I've got this noted as ${article} ${summary}.`);
+  // Use callContext.issue.summary first (most accurate), fall back to discoveryNotes.callReason
+  // so the opener always references what the caller actually called about.
+  const issueSummary = callContext?.issue?.summary || ctx?.discoveryNotes?.callReason || null;
+  if (issueSummary) {
+    const article = /^[aeiouAEIOU]/.test(issueSummary) ? 'an' : 'a';
+    parts.push(`I understand you're calling about ${article} ${issueSummary} — let me get you booked right away.`);
   }
 
   if (techPref) {

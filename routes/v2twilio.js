@@ -5764,6 +5764,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Resolve response text - use runtimeResult.response, fallback to UI config (not hardcoded)
       let responseText = runtimeResult.response;
       if (!responseText || !responseText.trim()) {
+        // ── SILENT TURN SENTINEL ──────────────────────────────────────────────
+        // If the engine returned empty/null response during a BOOKING turn, log
+        // it immediately — this is the root cause of caller-heard silence.
+        // BLE always returns nextPrompt (never null), so this firing during BOOKING
+        // means a code path upstream failed to set runtimeResult.response.
+        const _isBookingTurn = persistedState?.sessionMode === 'BOOKING' || persistedState?.lane === 'BOOKING';
+        if (_isBookingTurn && CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId:    callSid,
+            companyId: companyID,
+            type:      'BL1_SILENT_TURN_DETECTED',
+            turn:      turnNumber,
+            data: {
+              bookingStep:    persistedState?.bookingCtx?.step || 'UNKNOWN',
+              matchSource:    runtimeResult?.matchSource || null,
+              rawResponse:    runtimeResult?.response   || null,
+              note:           'responseText was empty for a BOOKING turn — caller heard silence'
+            }
+          }).catch(() => {});
+        }
         responseText = (await getRecoveryMessage(company, 'generalError')) || 'I can help you with that.';
       }
       // Strip the hardcoded "Ok."/"Okay." ackWord that Agent2DiscoveryRunner prepends by default.
