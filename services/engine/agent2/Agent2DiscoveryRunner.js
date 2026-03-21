@@ -229,6 +229,19 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       );
     }
 
+    // VOICE BREVITY — re-stated here because the follow-up job description above
+    // otherwise overrides the base prompt's channel instruction.
+    // The caller is on the phone — they cannot read, only listen.
+    if ((channel || 'call') === 'call') {
+      followUpParts.push(
+        '',
+        'VOICE BREVITY — MANDATORY:',
+        'Max 2 SHORT sentences. No essays. No bullet points. No multi-part explanations.',
+        'Pattern: one empathetic sentence that directly answers the question + one closing question.',
+        'Example: "Drain lines can clog up again over time — that\'s exactly why we\'d send a tech to fix the root cause. Can I get someone scheduled for you today?"'
+      );
+    }
+
     followUpParts.push('=== END FOLLOW-UP CONTEXT ===');
 
     const followUpContext = followUpParts.filter(Boolean).join('\n');
