@@ -3893,13 +3893,21 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         ? 'One moment, let me pull that up for you.'
         : safeStreamingResult;
 
+      // Strip markdown (e.g. *italic*, **bold**) from LLM responses before ElevenLabs
+      // synthesis. Every other TTS path runs cleanTextForTTS — streaming_fast must too.
+      const deliverTextClean = cleanTextForTTS(deliverText);
+
+      // Dynamic timeout: flat 4 s is too short for long LLM answers (~95+ words).
+      // Scale at 15 ms/char — Turn 2 (~560 chars) gets ~8.4 s instead of 4 s.
+      const elBridgeTimeoutMs = Math.min(Math.max(5000, deliverTextClean.length * 15), 15000);
+
       // V-FIX: Attempt ElevenLabs synthesis before falling back to Twilio <Say>
-      const synthUrl = await synthesizeForBridge(deliverText);
+      const synthUrl = await synthesizeForBridge(deliverTextClean, { timeoutMs: elBridgeTimeoutMs });
       if (synthUrl) {
         twiml.play(synthUrl);
         voiceProviderUsed = 'elevenlabs';
       } else {
-        twiml.say(escapeTwiML(deliverText, _mt_stream));
+        twiml.say(escapeTwiML(deliverTextClean, _mt_stream));
         voiceProviderUsed = 'twilio_say';
       }
 
