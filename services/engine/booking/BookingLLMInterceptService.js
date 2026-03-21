@@ -179,6 +179,31 @@ function _buildSystemPrompt({ companyName, trade, scripts, personality, ctx, loc
 
   const sections = [intro];
 
+  // ── Call context from discovery phase — anti-amnesia block ───────────────
+  // discoveryNotes is set on ctx by BookingLogicEngine.initializeContext() when
+  // the consent handoff payload includes it. Injecting it here means the LLM
+  // can answer meta-questions ("you didn't even know why I called") and
+  // reference why the caller is scheduling without losing discovery context.
+  const dn = ctx?.discoveryNotes;
+  if (dn) {
+    const callerName = [
+      dn.entities?.firstName,
+      dn.entities?.lastName,
+    ].filter(Boolean).join(' ');
+
+    const contextLines = [
+      callerName                       ? `Caller name: ${callerName}.`                                                          : null,
+      dn.callReason                    ? `Reason for call: ${dn.callReason}.`                                                   : null,
+      dn.urgency === 'high'            ? `Urgency: high — caller needs service as soon as possible.`                            : null,
+      dn.priorVisit                    ? `Prior visit: yes — a technician has been out before.`                                  : null,
+      dn.entities?.employeeMentioned   ? `Technician mentioned by caller: ${dn.entities.employeeMentioned}.`                    : null,
+    ].filter(Boolean);
+
+    if (contextLines.length) {
+      sections.push(`\nCALL CONTEXT (from discovery — use this to stay informed about why the caller scheduled):\n${contextLines.join('\n')}`);
+    }
+  }
+
   // ── Current booking state — lets LLM answer slot/scheduling questions ─────
   // Inject everything collected so far: name, phone, preferred day/time, and
   // any available time slots that were offered. Without this, the LLM has no

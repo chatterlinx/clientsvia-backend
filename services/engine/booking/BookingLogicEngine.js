@@ -1615,21 +1615,64 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
 
     // ── Inline last-name-only correction: "my last name is Gonzalez" ──────────
     // Caller is correcting only their last name mid-flow. Keep firstName intact,
-    // update lastName in-place, stay at COLLECT_PHONE. No GlobalHub check here —
-    // caller is actively correcting, trust the correction and move on.
+    // update lastName in-place, stay at COLLECT_PHONE.
+    //
+    // Guards prevent storing noise words when STT truncates the utterance
+    // (e.g. "you know what, uh, my last name is" → rawLast="What" → re-ask).
     const isLastNameCorrection = /\b(my last name is|last name is|my last name'?s?|surname is)\b/i.test(userInput);
     if (isLastNameCorrection && ctx.collectedFields?.firstName) {
-      const tokens = extractNameTokens(userInput);
+      const tokens  = extractNameTokens(userInput);
       const rawLast = tokens.length > 0 ? tokens[tokens.length - 1] : null;
-      if (rawLast) {
-        ctx.collectedFields.lastName = rawLast;
-        events.push({ type: 'BL1_LAST_NAME_CORRECTED_AT_PHONE', lastName: rawLast, timestamp: Date.now() });
+
+      // Words that survive extractNameTokens() stripping but are never surnames.
+      // Covers interrogatives, pronouns, and common filler that appear when STT
+      // captures only the preamble of a truncated "my last name is ___" utterance.
+      const COMMON_WORD_BLOCKLIST = new Set([
+        'what', 'know', 'you', 'your', 'we', 'they', 'them', 'their',
+        'that', 'this', 'these', 'those', 'where', 'when', 'who', 'why',
+        'how', 'well', 'right', 'just', 'mean', 'said', 'told', 'get',
+        'got', 'and', 'but', 'not', 'for', 'the', 'yes', 'yeah', 'okay',
+        'wait', 'hold', 'look', 'here', 'there', 'then', 'than', 'too',
+        'hmm', 'huh', 'now', 'still', 'again', 'also', 'very', 'like',
+      ]);
+
+      const looksLikeSurname = rawLast
+        && rawLast.length >= 3
+        && !COMMON_WORD_BLOCKLIST.has(rawLast.toLowerCase());
+
+      if (looksLikeSurname) {
+        // GlobalHub dictionary check — prefer canonical casing from the hub.
+        // On hub miss (unusual surname), trust the caller's correction directly.
+        let storedLast = rawLast;
+        let nameSource = 'unverified';
+        try {
+          const hubResult = await GlobalHubService.scanTokensForNames([rawLast], 'last');
+          if (hubResult?.lastName?.match === true) {
+            storedLast = hubResult.lastName.value || rawLast;
+            nameSource = 'hub_confirmed';
+          }
+        } catch { /* GlobalHub unavailable — accept correction as-is */ }
+
+        ctx.collectedFields.lastName = storedLast;
+        events.push({ type: 'BL1_LAST_NAME_CORRECTED_AT_PHONE', lastName: storedLast, source: nameSource, timestamp: Date.now() });
         return {
-          nextPrompt: `Got it — I've updated that to ${rawLast}. ${config.phoneReAnchor || config.askPhonePrompt || 'And what is the best phone number to reach you at?'}`,
+          nextPrompt: `Got it — I've updated that to ${storedLast}. ${config.phoneReAnchor || config.askPhonePrompt || 'And what is the best phone number to reach you at?'}`,
           bookingCtx: ctx,
-          completed:  false
+          completed:  false,
         };
       }
+
+      // ── Guards failed — token is a noise word (likely STT truncation) ───────
+      // Redirect to ASK_LAST_ONLY so the next turn expects a clean last name.
+      // ASK_LAST_ONLY has its own GlobalHub check and SPELL_LAST fallback.
+      events.push({ type: 'BL1_LAST_NAME_CORRECTION_GUARD_FAILED', rawLast: rawLast || null, rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
+      ctx.step             = STEPS.CONFIRM_NAME;
+      ctx._nameConfirmMode = 'ASK_LAST_ONLY';
+      return {
+        nextPrompt: `I didn't quite catch your last name — could you say it one more time?`,
+        bookingCtx: ctx,
+        completed:  false,
+      };
     }
 
     // Full name correction / restart: caller wants to re-enter their full name
