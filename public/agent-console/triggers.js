@@ -3323,7 +3323,8 @@
   /* --------------------------------------------------------------------------
      FOLLOW-UP CONSENT CARDS
      -------------------------------------------------------------------------- */
-  const FUC_BUCKETS = ['yes', 'no', 'maintenance', 'service_call', 'reprompt', 'hesitant', 'complex'];
+  // Five clean consent buckets — service classification is NOT handled here.
+  const FUC_BUCKETS = ['yes', 'no', 'reprompt', 'hesitant', 'complex'];
 
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};
@@ -3343,6 +3344,8 @@
       const modeEl = document.getElementById(`fuc-${bucket}-booking-mode`);
       if (modeEl) modeEl.value = data.bookingMode || '';
     }
+    // Load Question Signals (yes bucket only)
+    renderFucSignals(fuc.yes?.questionSignals || []);
     console.log('[Consent Cards] LOAD — complete');
   }
 
@@ -3389,14 +3392,66 @@
     result.missingResponseAction = (document.getElementById('fuc-missing-response-action')?.value || '').trim();
     for (const bucket of FUC_BUCKETS) {
       result[bucket] = {
-        phrases: getFucPhrases(bucket),
+        phrases:  getFucPhrases(bucket),
         response: (document.getElementById(`fuc-${bucket}-response`)?.value || '').trim(),
-        direction: (document.getElementById(`fuc-${bucket}-direction`)?.value || '').trim(),
-        bookingMode: (document.getElementById(`fuc-${bucket}-booking-mode`)?.value || '').trim()
+        direction:(document.getElementById(`fuc-${bucket}-direction`)?.value || '').trim(),
+        bookingMode:(document.getElementById(`fuc-${bucket}-booking-mode`)?.value || '').trim()
       };
     }
+    // Attach question signals into the yes bucket
+    result.yes.questionSignals = getFucSignals();
     return result;
   }
+
+  // ── Question Signals helpers (yes bucket only) ──────────────────────────────
+  // Renders, reads, and adds phrase chips for the questionSignals field.
+  // Follows the same chip-list pattern as renderFucPhrases / getFucPhrases.
+  function renderFucSignals(signals) {
+    const container = document.getElementById('fuc-yes-question-signals-phrases');
+    if (!container) return;
+    container.innerHTML = '';
+    (signals || []).forEach((signal, idx) => {
+      const tag = document.createElement('span');
+      tag.className = 'phrase-tag';
+      tag.innerHTML = `${escapeHtml(signal)} <button type="button" class="phrase-remove" data-index="${idx}">×</button>`;
+      container.appendChild(tag);
+    });
+    container.querySelectorAll('.phrase-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const i = parseInt(e.target.dataset.index);
+        const arr = getFucSignals();
+        arr.splice(i, 1);
+        renderFucSignals(arr);
+        state.isDirty = true;
+      });
+    });
+  }
+
+  function getFucSignals() {
+    const container = document.getElementById('fuc-yes-question-signals-phrases');
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.phrase-tag')).map(tag => {
+      const clone = tag.cloneNode(true);
+      clone.querySelector('button')?.remove();
+      return clone.textContent.trim();
+    });
+  }
+
+  window._fucAddSignals = function() {
+    const input = document.getElementById('fuc-yes-question-signals-input');
+    if (!input) return;
+    const newSignals = input.value.split(/[,;\n]+/g).map(p => p.trim().toLowerCase()).filter(Boolean);
+    if (newSignals.length === 0) return;
+    const existing = new Set(getFucSignals());
+    let added = 0;
+    for (const s of new Set(newSignals)) {
+      if (!existing.has(s)) { existing.add(s); added++; }
+    }
+    renderFucSignals(Array.from(existing));
+    input.value = '';
+    state.isDirty = true;
+    if (added > 0) showToast('success', 'Added', `Added ${added} signal${added !== 1 ? 's' : ''}.`);
+  };
 
   window._fucAddPhrases = function(bucket) {
     const input = document.getElementById(`fuc-${bucket}-input`);
@@ -3433,7 +3488,7 @@
         const followUpConsent = collectFollowUpConsent();
         console.log('[Consent Cards] CP2 — collectFollowUpConsent() result:', JSON.stringify(followUpConsent, null, 2));
 
-        const requiredBuckets = ['yes', 'no', 'reprompt', 'hesitant', 'maintenance', 'service_call'];
+        const requiredBuckets = ['yes', 'no', 'reprompt', 'hesitant'];
         const missingResponses = requiredBuckets.filter(bucket => {
           const resp = `${followUpConsent[bucket]?.response || ''}`.trim();
           return !resp;

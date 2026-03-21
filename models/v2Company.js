@@ -4390,46 +4390,62 @@ const companySchema = new mongoose.Schema({
                 // trigger card follow-up questions (yes/no/reprompt/hesitant/complex + service choices).
                 // Each bucket has: phrases, response text, and routing direction.
                 // UI-owned — configured in Triggers Console consent card section.
+                // ═══════════════════════════════════════════════════════════
+                // FOLLOW-UP CONSENT — The fork in the road
+                // ═══════════════════════════════════════════════════════════
+                // Classifies every caller response after a trigger fires its
+                // follow-up question. Five clean buckets:
+                //   YES      → caller consents   (route to booking or continue)
+                //   NO       → caller declines   (continue conversation)
+                //   REPROMPT → unclear / re-ask  (re-ask the same question)
+                //   HESITANT → uncertain / guide (clarify, then re-ask)
+                //   COMPLEX  → multi-part / hand → LLM agent
+                //
+                // yes.questionSignals: UI-configurable phrase list.
+                //   When any signal phrase is found in the residual text
+                //   after stripping YES phrases, the engine routes to
+                //   FOLLOWUP_YES_QUESTION_FIRST (answer the question FIRST,
+                //   then re-prompt for booking consent on next YES turn).
+                // ═══════════════════════════════════════════════════════════
                 followUpConsent: {
                     missingResponseAction: { type: String, default: 'REASK_FOLLOWUP', trim: true },
+
+                    // ── YES — Caller confirms ────────────────────────────
                     yes: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true },
-                        bookingMode: { type: String, default: '', trim: true }
+                        phrases:         { type: [String], default: [] },
+                        questionSignals: { type: [String], default: [] }, // phrases → QUESTION_FIRST path
+                        response:        { type: String, default: '', trim: true },
+                        direction:       { type: String, default: 'HANDOFF_BOOKING', trim: true },
+                        bookingMode:     { type: String, default: '', trim: true }
                     },
+
+                    // ── NO — Caller declines ─────────────────────────────
                     no: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'CONTINUE', trim: true },
+                        phrases:     { type: [String], default: [] },
+                        response:    { type: String, default: '', trim: true },
+                        direction:   { type: String, default: 'CONTINUE', trim: true },
                         bookingMode: { type: String, default: '', trim: true }
                     },
-                    maintenance: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true },
-                        bookingMode: { type: String, default: '', trim: true }
-                    },
-                    service_call: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'HANDOFF_BOOKING', trim: true },
-                        bookingMode: { type: String, default: '', trim: true }
-                    },
+
+                    // ── REPROMPT — Unclear, re-ask ───────────────────────
                     reprompt: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
+                        phrases:     { type: [String], default: [] },
+                        response:    { type: String, default: '', trim: true },
                         bookingMode: { type: String, default: '', trim: true }
                     },
+
+                    // ── HESITANT — Uncertain, needs guidance ─────────────
                     hesitant: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
+                        phrases:     { type: [String], default: [] },
+                        response:    { type: String, default: '', trim: true },
                         bookingMode: { type: String, default: '', trim: true }
                     },
+
+                    // ── COMPLEX — Multi-part / hand to LLM agent ─────────
                     complex: {
-                        phrases:   { type: [String], default: [] },
-                        response:  { type: String, default: '', trim: true },
-                        direction: { type: String, default: 'AGENT', trim: true },
+                        phrases:     { type: [String], default: [] },
+                        response:    { type: String, default: '', trim: true },
+                        direction:   { type: String, default: 'AGENT', trim: true },
                         bookingMode: { type: String, default: '', trim: true }
                     }
                 },

@@ -2042,8 +2042,14 @@ class Agent2DiscoveryRunner {
       // works correctly even if the admin has never clicked "Save Consent Cards".
       // Without defaults: fuc = {} → no phrases match → everything falls to COMPLEX
       //   → LLM agent, booking never triggered.
+      // ── Follow-Up Consent Defaults ─────────────────────────────────────────
+      // Deep-merged with per-company DB config so the consent gate works even
+      // if the admin has never saved the Consent Cards UI.
+      // Five clean buckets — service classification is NOT the consent gate's job.
       const DEFAULT_FUC = {
         missingResponseAction: 'REASK_FOLLOWUP',
+
+        // ── YES — Caller confirms ────────────────────────────────────────────
         yes: {
           direction: 'HANDOFF_BOOKING',
           phrases: [
@@ -2054,8 +2060,36 @@ class Agent2DiscoveryRunner {
             'set it up','im ready','perfect','great','yes please',
             'ya','yup','uh huh','mm hmm'
           ],
+          // ── Question Signals ──────────────────────────────────────────────
+          // When any of these phrases is found in the caller's residual text
+          // (text remaining after YES phrases are stripped), the engine routes
+          // to FOLLOWUP_YES_QUESTION_FIRST: it answers the embedded question
+          // first, then re-prompts for booking consent on the next YES turn.
+          // UI-configurable — edit in the Consent Cards console.
+          questionSignals: [
+            // "Before we book / schedule" preambles
+            'before we book','before we schedule','before i book','before i schedule',
+            'before we set that','before we do that','before we go ahead',
+            // "First I want / understand" preambles
+            'first i want','first i like','first like to understand','i first want',
+            'i first need','want to first','i need to understand','i want to know',
+            'understand why','want to understand',
+            // Why questions — diagnostic / continuous-problem signals
+            'why is','why are','why were','why was','why does','why did','why would',
+            'why cant','why dont','why wont','why hasnt','why havent',
+            'why keep','why this','why that','why do',
+            // What / how diagnostic questions
+            'what causes','what is causing','whats causing','what happened',
+            'whats happening','what is wrong','whats wrong','not sure what',
+            'not sure why','wondering why',
+            // Continuous / recurring problem signals
+            'continuous problem','keep having','keeps happening','this keeps',
+            'always happens','never fixed','still happening'
+          ],
           response: ''
         },
+
+        // ── NO — Caller declines ─────────────────────────────────────────────
         no: {
           direction: 'CONTINUE',
           phrases: [
@@ -2066,32 +2100,8 @@ class Agent2DiscoveryRunner {
           ],
           response: ''
         },
-        maintenance: {
-          direction: 'HANDOFF_BOOKING',
-          bookingMode: 'maintenance',
-          phrases: [
-            'maintenance','tune up','tune-up','tuneup','service plan',
-            'membership','annual','seasonal','check up','checkup',
-            'inspection','preventative','preventive','maintenance visit',
-            'maintenance appointment','maintenance call','spring tune up',
-            'fall tune up','routine service','regular service',
-            'clean and check','clean & check'
-          ],
-          response: ''
-        },
-        service_call: {
-          direction: 'HANDOFF_BOOKING',
-          bookingMode: 'service_call',
-          phrases: [
-            'service call','repair','diagnostic','diagnosis',
-            'troubleshoot','troubleshooting','fix it','technician','tech',
-            'not cooling','no cool','blowing warm','leaking','water',
-            'noise','loud','frozen','ice','wont turn on','not working',
-            'stopped working','broke','broken','error code','emergency',
-            'asap','today'
-          ],
-          response: ''
-        },
+
+        // ── REPROMPT — Unclear / re-ask ──────────────────────────────────────
         reprompt: {
           direction: 'REASK',
           phrases: [
@@ -2100,6 +2110,8 @@ class Agent2DiscoveryRunner {
           ],
           response: ''
         },
+
+        // ── HESITANT — Uncertain, needs guidance ─────────────────────────────
         hesitant: {
           direction: 'CLARIFY',
           phrases: [
@@ -2109,25 +2121,40 @@ class Agent2DiscoveryRunner {
           ],
           response: ''
         },
+
+        // ── COMPLEX — Multi-part / hand to LLM agent ─────────────────────────
         complex: { direction: 'AGENT', phrases: [], response: '' }
       };
+      // Deep-merge: DB config on top of defaults.
+      // yes.questionSignals: use DB value if non-empty, else keep rich defaults
+      // (a shallow spread would wipe the default array when DB sends []).
       const rawFuc = safeObj(discoveryCfg?.followUpConsent, {});
       const fuc = {
         missingResponseAction: rawFuc.missingResponseAction || DEFAULT_FUC.missingResponseAction,
-        yes:          { ...DEFAULT_FUC.yes,          ...safeObj(rawFuc.yes,          {}) },
-        no:           { ...DEFAULT_FUC.no,           ...safeObj(rawFuc.no,           {}) },
-        maintenance:  { ...DEFAULT_FUC.maintenance,  ...safeObj(rawFuc.maintenance,  {}) },
-        service_call: { ...DEFAULT_FUC.service_call, ...safeObj(rawFuc.service_call, {}) },
-        reprompt:     { ...DEFAULT_FUC.reprompt,     ...safeObj(rawFuc.reprompt,     {}) },
-        hesitant:     { ...DEFAULT_FUC.hesitant,     ...safeObj(rawFuc.hesitant,     {}) },
-        complex:      { ...DEFAULT_FUC.complex,      ...safeObj(rawFuc.complex,      {}) },
+        yes: {
+          ...DEFAULT_FUC.yes,
+          ...safeObj(rawFuc.yes, {}),
+          questionSignals: safeArr(rawFuc.yes?.questionSignals).length > 0
+            ? safeArr(rawFuc.yes.questionSignals)
+            : DEFAULT_FUC.yes.questionSignals,
+        },
+        no:       { ...DEFAULT_FUC.no,       ...safeObj(rawFuc.no,       {}) },
+        reprompt: { ...DEFAULT_FUC.reprompt, ...safeObj(rawFuc.reprompt, {}) },
+        hesitant: { ...DEFAULT_FUC.hesitant, ...safeObj(rawFuc.hesitant, {}) },
+        complex:  { ...DEFAULT_FUC.complex,  ...safeObj(rawFuc.complex,  {}) },
       };
-      const yesPhrases = safeArr(fuc.yes?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const noPhrases = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const maintenancePhrases = safeArr(fuc.maintenance?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
-      const serviceCallPhrases = safeArr(fuc.service_call?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
+      // ── Normalised phrase lists ────────────────────────────────────────────
+      const yesPhrases      = safeArr(fuc.yes?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+      const noPhrases       = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
       const repromptPhrases = safeArr(fuc.reprompt?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
       const hesitantPhrases = safeArr(fuc.hesitant?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
+      // Question signals: normalised to match against inputLowerCleanFUQ
+      // (which already has all punctuation stripped — no-apostrophe-safe).
+      const questionSignalPhrases = safeArr(fuc.yes?.questionSignals)
+        .map(p => `${p}`.toLowerCase().replace(/[^a-z\s]/g, '').trim())
+        .filter(Boolean);
 
       // Classify: check exact word matches and phrase containment
       const matchesList = (list) => {
@@ -2152,65 +2179,42 @@ class Agent2DiscoveryRunner {
         return matches;
       };
 
-      const isMaintenanceFUQ = matchesList(maintenancePhrases);
-      const isServiceCallFUQ = matchesList(serviceCallPhrases);
-      const isYesFUQ = matchesList(yesPhrases);
-      const isNoFUQ = matchesList(noPhrases);
+      // ── Bucket classification ──────────────────────────────────────────────
+      const isYesFUQ      = matchesList(yesPhrases);
+      const isNoFUQ       = matchesList(noPhrases);
       const isHesitantFUQ = matchesList(hesitantPhrases);
-      const hasServiceChoiceConflict = isMaintenanceFUQ && isServiceCallFUQ;
       const isRepromptFUQ = matchesList(repromptPhrases) || (
-        inputLenFUQ <= 8 &&
-        !isYesFUQ &&
-        !isNoFUQ &&
-        !isHesitantFUQ &&
-        !isMaintenanceFUQ &&
-        !isServiceCallFUQ
+        inputLenFUQ <= 8 && !isYesFUQ && !isNoFUQ && !isHesitantFUQ
       );
 
-      // TIMING AFFIRMATION DETECTION — catches responses like "as early as possible",
+      // TIMING AFFIRMATION — catches implicit YES via scheduling phrases:
       // "as soon as possible", "first thing", "anytime works", etc.
-      // These are YES answers to a scheduling question, just with a timing preference.
-      // Fires only when no other bucket matched (avoids false-positives).
+      // Fires only when no primary bucket matched (avoids false-positives).
       const TIMING_AFFIRMATION_RE = /\b(?:as\s+(?:early|soon|quick)\s+as\s+(?:possible|you\s+can)|asap|first\s+(?:thing|available)|right\s+away|right\s+now|immediately|sooner\s+the\s+better|soonest\s+(?:possible|available)?|anytime(?:\s+works)?|whenever(?:\s+works|\s+you\s+(?:can|are\s+available))?|any\s+(?:day|time)\s+(?:works|is\s+fine)|(?:morning|afternoon|evening|today|tomorrow|this\s+week|next\s+week)\s+(?:works?|is\s+(?:fine|good|great|perfect)))\b/i;
-      const isTimingAffirmationFUQ = !isYesFUQ && !isNoFUQ && !isHesitantFUQ && !isMaintenanceFUQ && !isServiceCallFUQ && TIMING_AFFIRMATION_RE.test(inputLowerCleanFUQ);
+      const isTimingAffirmationFUQ = !isYesFUQ && !isNoFUQ && !isHesitantFUQ && TIMING_AFFIRMATION_RE.test(inputLowerCleanFUQ);
 
-      // Priority: SERVICE_CALL > MAINTENANCE > YES > TIMING_AFFIRMATION > NO > HESITANT > REPROMPT > COMPLEX
+      // Priority: YES > TIMING_AFFIRMATION > NO > HESITANT > REPROMPT > COMPLEX
       let bucket;
-      if (hasServiceChoiceConflict) bucket = 'HESITANT';
-      else if (isServiceCallFUQ && !isMaintenanceFUQ) bucket = 'SERVICE_CALL';
-      else if (isMaintenanceFUQ && !isServiceCallFUQ) bucket = 'MAINTENANCE';
-      else if (isYesFUQ && !isNoFUQ) bucket = 'YES';
-      else if (isTimingAffirmationFUQ) bucket = 'YES';   // timing phrases = implicit YES
-      else if (isNoFUQ && !isYesFUQ) bucket = 'NO';
-      else if (isHesitantFUQ) bucket = 'HESITANT';
-      else if (isRepromptFUQ) bucket = 'REPROMPT';
-      else bucket = 'COMPLEX';
+      if (isYesFUQ && !isNoFUQ)       bucket = 'YES';
+      else if (isTimingAffirmationFUQ) bucket = 'YES';  // timing phrases = implicit YES
+      else if (isNoFUQ && !isYesFUQ)  bucket = 'NO';
+      else if (isHesitantFUQ)          bucket = 'HESITANT';
+      else if (isRepromptFUQ)          bucket = 'REPROMPT';
+      else                             bucket = 'COMPLEX';
 
-      const bucketKey = bucket.toLowerCase();
-      const bucketConfig = safeObj(fuc[bucketKey], {});
-      const inferredBookingMode = bucket === 'MAINTENANCE'
-        ? 'maintenance'
-        : bucket === 'SERVICE_CALL'
-          ? 'service_call'
-          : '';
-      const bookingMode = `${bucketConfig.bookingMode || inferredBookingMode || ''}`.trim().toLowerCase();
-      const defaultDirection = (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL')
-        ? 'HANDOFF_BOOKING'
-        : 'CONTINUE';
-      const direction = `${bucketConfig.direction || defaultDirection}`.toUpperCase();
-      const matchedByBucket = {
-        yes: matchedPhrasesFor(yesPhrases),
-        no: matchedPhrasesFor(noPhrases),
-        maintenance: matchedPhrasesFor(maintenancePhrases),
-        service_call: matchedPhrasesFor(serviceCallPhrases),
+      const bucketKey             = bucket.toLowerCase();
+      const bucketConfig          = safeObj(fuc[bucketKey], {});
+      const bookingMode           = `${bucketConfig.bookingMode || ''}`.trim().toLowerCase();
+      const direction             = `${bucketConfig.direction || 'CONTINUE'}`.toUpperCase();
+      const matchedByBucket       = {
+        yes:      matchedPhrasesFor(yesPhrases),
+        no:       matchedPhrasesFor(noPhrases),
         reprompt: matchedPhrasesFor(repromptPhrases),
         hesitant: matchedPhrasesFor(hesitantPhrases)
       };
-      const matchedPhrases = hasServiceChoiceConflict
-        ? [...new Set([...matchedByBucket.maintenance, ...matchedByBucket.service_call])]
-        : (matchedByBucket[bucketKey] || []);
-      const missingResponseAction = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
-      const responseRequiredBuckets = new Set(['YES', 'NO', 'MAINTENANCE', 'SERVICE_CALL', 'REPROMPT', 'HESITANT']);
+      const matchedPhrases          = matchedByBucket[bucketKey] || [];
+      const missingResponseAction   = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
+      const responseRequiredBuckets = new Set(['YES', 'NO', 'REPROMPT', 'HESITANT']);
       const bucketResponse = `${bucketConfig.response || ''}`.trim();
 
       emit('A2_FOLLOWUP_CONSENT_CLASSIFIED', {
@@ -2222,7 +2226,7 @@ class Agent2DiscoveryRunner {
         bookingMode: bookingMode || null,
         matchedPhrases,
         scrabEngineSkipped: true,
-        markers: { isMaintenanceFUQ, isServiceCallFUQ, isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, hasServiceChoiceConflict, isTimingAffirmationFUQ }
+        markers: { isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, isTimingAffirmationFUQ }
       });
 
       const { ack: fuqAck } = buildAck(ack);
@@ -2281,49 +2285,28 @@ class Agent2DiscoveryRunner {
               return text.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '').trim();
             }, inputLowerCleanFUQ)
             .replace(/^[\s,]+|[\s,]+$/g, '')
-            .replace(/^(but|and|also|however|though|although|i\b)\s*/i, '')
+            .replace(/^(but|and|also|however|though|although|i\b|uh|um|well|you\s+know)\s*/i, '')
             .trim();
           const hasResidualContent = residualAfterYes.length > 6;
 
-          // ── Split-in-the-road classifier ──────────────────────────────────
-          // Distinguishes caller residual types on a HANDOFF_BOOKING YES:
-          //   • Timing question ("how soon can you come?") → booking engine handles it
-          //   • Diagnostic question ("why is my thermostat blank?") → answer FIRST
-          //   • "Before we book..." preamble → always answer first
-          // This prevents the call from routing to booking while the caller still
-          // has an open diagnostic question that hasn't been answered.
-          const residualHasBookingResistantQuestion = (text) => {
-            if (!text || text.length < 6) return false;
-            const t = text.toLowerCase();
-
-            // "Before we book/schedule/set that" preamble → always answer first
-            if (/before\s+(?:we|i|you)\s+(?:book|schedule|set\s+(?:that|it|up)|do\s+that)/i.test(t)) return true;
-
-            // Timing/scheduling signals → BookingLogicEngine handles these fine
-            if (/\b(?:how\s+soon|when\s+can\s+you|what\s+(?:time|day|date)|how\s+long\s+will\s+it\s+take|can\s+you\s+(?:come|be\s+here)\s+(?:today|tomorrow|this\s+week|next))\b/.test(t)) return false;
-
-            // Diagnostic why/what/how questions about the problem itself
-            if (/\bwhy\s+(?:is|does|would|did|isn'?t|won'?t|doesn'?t)\b/.test(t)) return true;
-            if (/\bwhat\s+(?:causes?|would\s+cause|is\s+causing|is\s+wrong|happened|is\s+making)\b/.test(t)) return true;
-            if (/\bhow\s+(?:does|do|did|would)\s+(?:that|this|it|the)\b/.test(t)) return true;
-
-            // Device/system state that needs explanation (blank, dead, off, broken, weird)
-            if (/\b(?:blank|went\s+(?:out|blank|dead)|stopped\s+working|not\s+(?:working|responding|turning)|won'?t\s+(?:turn|work|come\s+on))\b/.test(t)) return true;
-
-            // Direct question mark anywhere in residual — strongest signal
-            if (/\?/.test(t)) return true;
-
-            // Status/situation questions: "what is the situation", "what's going on", "what's the deal"
-            if (/\bwhat\s+(?:is|'s)\s+(?:the\s+)?(?:situation|deal|going\s+on|happening|wrong|issue|problem)\b/.test(t)) return true;
-            if (/\bwhat(?:'s|\s+is)\s+going\s+on\b/.test(t)) return true;
-
-            // Uncertainty about the problem: "not sure what's going on", "don't know what happened"
-            if (/\b(?:not\s+sure|don'?t\s+know|unsure|not\s+certain)\s+(?:what|why|how|if|whether)\b/.test(t)) return true;
-
-            // Secondary problem being reported alongside the YES
-            if (/\b(?:also|and)\s+(?:have|got|there'?s|there\s+is)\b/.test(t)) return true;
-            if (/\bi\s+(?:also\s+)?(?:have|got|noticed?|see|saw)\s+\w+\s+(?:leak|leaking|drip|dripping|broken|issue|problem|not\s+work)\b/.test(t)) return true;
-
+          // ── Question Signal Detector ───────────────────────────────────────
+          // Checks residual text against the UI-configurable questionSignals
+          // phrase list (fuc.yes.questionSignals, pre-normalised above).
+          //
+          // A match routes to FOLLOWUP_YES_QUESTION_FIRST: answer the embedded
+          // question first, then re-prompt for booking on the caller's next YES.
+          //
+          // Phrase list is managed in the Consent Cards console — no code changes
+          // needed when phrases need to be added, edited, or removed.
+          const residualMatchesQuestionSignal = (residual) => {
+            if (!residual || residual.length < 6 || questionSignalPhrases.length === 0) return false;
+            for (const signal of questionSignalPhrases) {
+              if (signal.includes(' ')) {
+                if (residual.includes(signal)) return true;
+              } else {
+                if (residual.split(/\s+/).includes(signal)) return true;
+              }
+            }
             return false;
           };
 
@@ -2331,7 +2314,7 @@ class Agent2DiscoveryRunner {
           const hasBookingResistantQuestion = (
             hasResidualContent &&
             yesDirection === 'HANDOFF_BOOKING' &&
-            residualHasBookingResistantQuestion(residualAfterYes)
+            residualMatchesQuestionSignal(residualAfterYes)
           );
 
           // When direction is HANDOFF_BOOKING, route to booking EVEN if the caller
@@ -2394,48 +2377,6 @@ class Agent2DiscoveryRunner {
             emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
             return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
           }
-        }
-
-        // ── MAINTENANCE / SERVICE_CALL (Tier 1): handoff with booking mode ──
-        if (bucket === 'MAINTENANCE' || bucket === 'SERVICE_CALL') {
-          clearPendingFollowUp(nextState);
-          const choiceText = bucketResponse;
-
-          if (direction === 'HANDOFF_BOOKING') {
-            nextState.lane = 'BOOKING';
-            nextState.sessionMode = 'BOOKING';
-            nextState.consent = {
-              pending: false,
-              given: true,
-              turn,
-              source: 'followup_consent_gate',
-              bookingMode: bookingMode || null,
-              bucket: bucketKey,
-              matchedPhrases,
-              grantedAt: new Date().toISOString()
-            };
-            if (!nextState.agent2.discovery) nextState.agent2.discovery = {};
-            nextState.agent2.discovery.bookingMode = bookingMode || null;
-            nextState.agent2.discovery.lastPath = `FOLLOWUP_${bucket}_HANDOFF_BOOKING`;
-
-            emit('A2_CONSENT_GATE_BOOKING', {
-              reason: `Caller chose ${bookingMode || bucketKey} via follow-up consent → booking handoff`,
-              cardId: pfuqSource?.replace('card:', '') || null,
-              inputPreview: clip(inputLowerCleanFUQ, 60),
-              bookingMode: bookingMode || null
-            });
-          } else {
-            nextState.agent2.discovery.lastPath = `FOLLOWUP_${bucket}`;
-          }
-
-          const choiceResponse = `${fuqAck} ${choiceText}`.trim();
-          emit('A2_RESPONSE_READY', {
-            path: nextState.agent2.discovery.lastPath,
-            responsePreview: clip(choiceResponse, 120),
-            direction,
-            bookingMode: bookingMode || null
-          });
-          return { response: choiceResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
         }
 
         // ────────────────────────────────────────────────────────────────
