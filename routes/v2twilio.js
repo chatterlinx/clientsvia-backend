@@ -5038,6 +5038,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       };
       callState.turns.push(callerTurn);
 
+      // callerTurnWriteOk — captured by the computeTurnPromise closure.
+      // Set to true on successful primary write; safety-net skips if true.
+      let callerTurnWriteOk = false;
       try {
         const CallTranscriptV2 = require('../models/CallTranscriptV2');
         logger.info('[V2TWILIO] CALLER_TURN_WRITE_START', {
@@ -5058,6 +5061,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             trace: { inputTextSource }
           }
         ], { from: fromNumber || null, to: req.body.To || null });
+        callerTurnWriteOk = true;
         logger.info('[V2TWILIO] CALLER_TURN_WRITE_OK', {
           callSid: callSid?.slice(-8),
           turnNumber
@@ -6368,10 +6372,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
 
-          // Safety net: re-write caller turn inside the IIFE.
-          // The original write (before bridge) may fail silently.
-          // Dedup at read-time prevents double entries.
-          if (callerTurn && callerTurn.text) {
+          // Safety net: re-write caller turn only if the primary write failed.
+          // callerTurnWriteOk is set to true after a successful primary write above.
+          // Guarding here prevents duplicate transcript entries on every successful turn.
+          if (callerTurn && callerTurn.text && !callerTurnWriteOk) {
             await CallTranscriptV2.appendTurns(companyID, callSid, [
               {
                 speaker: 'caller',
@@ -6766,12 +6770,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     // Post-gather delay elapsed, compute still running — fire bridge.
-    // Per-call cap: maxBridgesPerCall (default 1). Only the Turn-1 Welcome fires by
-    // default; all subsequent bridges are blocked once the cap is reached.
-    // Set maxBridgesPerCall=0 to disable all bridges. Set to -1 for uncapped (legacy).
+    // Per-call cap: maxBridgesPerCall (default -1 = uncapped).
+    // Set to 0 to disable bridges entirely. Set to a positive integer to cap.
+    // Default is -1 (uncapped) so every turn gets a bridge phrase while the
+    // LLM computes — prevents dead air on turns 2+.
+    // Companies can override via bridgeCfg.maxBridgesPerCall in their DB config.
     const maxBridgesPerCall = Number.isFinite(bridgeCfg.maxBridgesPerCall)
       ? bridgeCfg.maxBridgesPerCall
-      : 1;
+      : -1;
     const callBridgeCountKey = `a2bridge:callcount:${callSid}`;
     const currentBridgeCount = parseInt(await redis.get(callBridgeCountKey).catch(() => '0') || '0', 10);
 

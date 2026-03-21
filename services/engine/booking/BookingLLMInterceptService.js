@@ -174,11 +174,34 @@ function _buildSystemPrompt({ companyName, trade, scripts, personality, ctx, loc
     personality ? `Your personality: ${personality}` : null,
     `Answer their question briefly and professionally in 1-2 sentences.`,
     `Do NOT end your answer with any question about returning to booking — the system handles that automatically.`,
-    ctx?.bookingMode        ? `Service being booked: ${ctx.bookingMode}.`                     : null,
-    ctx?.collectedFields?.firstName ? `Caller name: ${ctx.collectedFields.firstName}.`        : null,
+    ctx?.bookingMode ? `Service being booked: ${ctx.bookingMode}.` : null,
   ].filter(Boolean).join(' ');
 
   const sections = [intro];
+
+  // ── Current booking state — lets LLM answer slot/scheduling questions ─────
+  // Inject everything collected so far: name, phone, preferred day/time, and
+  // any available time slots that were offered. Without this, the LLM has no
+  // way to answer "what times do you have?" or "is Tuesday available?" correctly.
+  const collectedName = [
+    ctx?.collectedFields?.firstName,
+    ctx?.collectedFields?.lastName,
+  ].filter(Boolean).join(' ');
+
+  const stateLines = [
+    collectedName                          ? `Caller name: ${collectedName}`                                         : null,
+    ctx?.collectedFields?.phone            ? `Phone on file: ${ctx.collectedFields.phone}`                           : null,
+    ctx?.collectedFields?.address          ? `Service address: ${ctx.collectedFields.address}`                       : null,
+    ctx?.preferredDay                      ? `Caller's preferred day: ${ctx.preferredDay}`                           : null,
+    ctx?.preferredTime                     ? `Caller's preferred time: ${ctx.preferredTime}`                         : null,
+    ctx?.availableTimeOptions?.length
+      ? `Available time slots offered to caller: ${ctx.availableTimeOptions.join(', ')}`                             : null,
+    ctx?.availableTimeOptions?.length === 0 ? `No time slots are available for the preferred day.`                   : null,
+  ].filter(Boolean);
+
+  if (stateLines.length) {
+    sections.push(`\nCURRENT BOOKING STATE:\n${stateLines.join('\n')}`);
+  }
 
   // Booking-specific knowledge (promotions, coupons, pricing) — highest relevance
   const bookingKnowledge = _formatTriggers(bookingInfoTriggers);

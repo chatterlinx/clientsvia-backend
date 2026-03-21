@@ -1613,7 +1613,26 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       };
     }
 
-    // Correction / change: caller wants to give their name again
+    // ── Inline last-name-only correction: "my last name is Gonzalez" ──────────
+    // Caller is correcting only their last name mid-flow. Keep firstName intact,
+    // update lastName in-place, stay at COLLECT_PHONE. No GlobalHub check here —
+    // caller is actively correcting, trust the correction and move on.
+    const isLastNameCorrection = /\b(my last name is|last name is|my last name'?s?|surname is)\b/i.test(userInput);
+    if (isLastNameCorrection && ctx.collectedFields?.firstName) {
+      const tokens = extractNameTokens(userInput);
+      const rawLast = tokens.length > 0 ? tokens[tokens.length - 1] : null;
+      if (rawLast) {
+        ctx.collectedFields.lastName = rawLast;
+        events.push({ type: 'BL1_LAST_NAME_CORRECTED_AT_PHONE', lastName: rawLast, timestamp: Date.now() });
+        return {
+          nextPrompt: `Got it — I've updated that to ${rawLast}. ${config.phoneReAnchor || config.askPhonePrompt || 'And what is the best phone number to reach you at?'}`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+    }
+
+    // Full name correction / restart: caller wants to re-enter their full name
     ctx.step = STEPS.COLLECT_NAME;
     events.push({ type: 'BL1_NAME_REVISIT', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
     return {
