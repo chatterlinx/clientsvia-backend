@@ -2125,28 +2125,17 @@ class Agent2DiscoveryRunner {
         },
 
         // ── HESITANT — Uncertain, needs guidance ─────────────────────────────
-        // Includes trust-breakdown and "should I leave?" signals so that
-        // callers expressing doubt alongside a YES phrase get routed to
-        // COMPLEX (YES ∩ HESITANT → COMPLEX) rather than straight to booking.
+        // RUNTIME SAFETY NET ONLY — language-level uncertainty constants.
+        // Industry-specific signals (trust breakdown, "should I go elsewhere?",
+        // quality doubt, competitor mentions, etc.) MUST be configured per
+        // company via the Consent Cards UI and stored in MongoDB.
+        // Nothing industry-specific belongs in this code block.
         hesitant: {
           direction: 'CLARIFY',
           phrases: [
-            // Core uncertainty
             'i dont know','im not sure','maybe','i think so',
             'do i have to','not certain','possibly','kind of',
-            'sort of','i guess','hard to say','let me think',
-            // Trust / confidence breakdown
-            'not sure i can trust','cant trust','dont trust','losing trust',
-            'lose trust','not confident','not convinced','not comfortable',
-            'having second thoughts','second thoughts',
-            // "Should I leave / go elsewhere?" signals
-            'should i go with another','go with another company',
-            'go somewhere else','find someone else','use another company',
-            'try someone else','try another',
-            // Quality / competence doubt
-            'you dont know how','you guys cant','you cant fix',
-            'never fixed','cant seem to fix','been out here before',
-            'still not fixed','still happening','still the same problem'
+            'sort of','i guess','hard to say','let me think'
           ],
           response: ''
         },

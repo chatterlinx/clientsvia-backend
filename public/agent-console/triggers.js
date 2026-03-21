@@ -3323,6 +3323,86 @@
   /* --------------------------------------------------------------------------
      FOLLOW-UP CONSENT CARDS
      -------------------------------------------------------------------------- */
+  // ── DEFAULT_FUC_CLIENT — Starter template (UI-visible, per-company) ────────
+  // Shown in the Consent Cards UI when a company has not yet saved their FUC
+  // config.  Admin reviews, trims/adds phrases for their specific industry,
+  // then clicks Save → writes to MongoDB → DB value used at runtime from then on.
+  //
+  // MULTI-TENANT RULE: This is a SUGGESTION template, not hardcoded behavior.
+  // Runtime ALWAYS reads from MongoDB (per companyId).  Nothing here is silently
+  // active without the admin seeing and saving it first.
+  //
+  // Industry customization examples:
+  //   Plumbing: add "pipe still leaking", "same problem again", "drain still clogged"
+  //   HVAC:     add "still not cooling", "unit keeps shutting off", "same error code"
+  //   Roofing:  add "still getting water in", "patch didnt hold", "leak came back"
+  const DEFAULT_FUC_CLIENT = {
+    yes: {
+      phrases: [
+        'yes','yeah','yep','yea','sure','ok','okay','please',
+        'absolutely','definitely','certainly','correct','thats right',
+        'right','go ahead','do it','lets do it','sounds good',
+        'that works','works for me','schedule','book','book it',
+        'set it up','im ready','perfect','great','yes please',
+        'ya','yup','uh huh','mm hmm'
+      ],
+      questionSignals: [
+        // "Before we book / schedule" preambles
+        'before we book','before we schedule','before i book','before i schedule',
+        'before we set that','before we do that','before we go ahead',
+        // "First I want / understand" preambles
+        'first i want','first i like','first like to understand','i first want',
+        'i first need','want to first','i need to understand','i want to know',
+        'understand why','want to understand',
+        // Why questions — diagnostic / continuous-problem signals
+        'why is','why are','why were','why was','why does','why did','why would',
+        'why cant','why dont','why wont','why hasnt','why havent',
+        'why keep','why this','why that','why do',
+        // What / how diagnostic questions
+        'what causes','what is causing','whats causing','what happened',
+        'whats happening','what is wrong','whats wrong','not sure what',
+        'not sure why','wondering why',
+        // Continuous / recurring problem signals
+        'continuous problem','keep having','keeps happening','this keeps',
+        'always happens','never fixed','still happening'
+      ]
+    },
+    no: {
+      phrases: [
+        'no','nope','nah','negative','not yet','not now',
+        'not today','maybe later','ill call back','just asking',
+        'just a question','dont schedule','not right now',
+        'another time','later'
+      ]
+    },
+    reprompt: {
+      phrases: [
+        'huh','what','sorry','come again','say that again',
+        'repeat that','i didnt hear','pardon'
+      ]
+    },
+    hesitant: {
+      phrases: [
+        // Core uncertainty (language constants — keep for any industry)
+        'i dont know','im not sure','maybe','i think so',
+        'do i have to','not certain','possibly','kind of',
+        'sort of','i guess','hard to say','let me think',
+        // Trust / confidence breakdown (customize per industry)
+        'not sure i can trust','cant trust','dont trust','losing trust',
+        'not confident','not convinced','not comfortable',
+        'having second thoughts',
+        // "Should I leave / go elsewhere?" signals
+        'should i go with another','go with another company',
+        'go somewhere else','find someone else','use another company',
+        // Quality / competence doubt (replace with industry-specific phrasing)
+        'you dont know how','you guys cant','you cant fix',
+        'never fixed','cant seem to fix','still not fixed',
+        'still the same problem'
+      ]
+    },
+    complex: { phrases: [] }
+  };
+
   // Five clean consent buckets — service classification is NOT handled here.
   const FUC_BUCKETS = ['yes', 'no', 'reprompt', 'hesitant', 'complex'];
 
@@ -3333,8 +3413,13 @@
     if (missingActionEl) missingActionEl.value = fuc.missingResponseAction || 'REASK_FOLLOWUP';
     for (const bucket of FUC_BUCKETS) {
       const data = fuc[bucket] || {};
-      console.log(`[Consent Cards] LOAD.${bucket} — phrases: ${(data.phrases || []).length}, response: "${data.response || ''}", direction: "${data.direction || ''}"`);
-      renderFucPhrases(bucket, data.phrases || []);
+      // Show starter template when company has not yet saved phrases for this bucket.
+      // Once saved → DB value always wins.  This is the "first open" bootstrap.
+      const phrasesToRender = (data.phrases?.length > 0)
+        ? data.phrases
+        : (DEFAULT_FUC_CLIENT[bucket]?.phrases || []);
+      console.log(`[Consent Cards] LOAD.${bucket} — phrases: ${phrasesToRender.length} (${data.phrases?.length > 0 ? 'from DB' : 'starter template'}), response: "${data.response || ''}", direction: "${data.direction || ''}"`);
+      renderFucPhrases(bucket, phrasesToRender);
       const respEl = document.getElementById(`fuc-${bucket}-response`);
       if (respEl) respEl.value = data.response || '';
       else console.warn(`[Consent Cards] LOAD — fuc-${bucket}-response element NOT found`);
@@ -3344,8 +3429,11 @@
       const modeEl = document.getElementById(`fuc-${bucket}-booking-mode`);
       if (modeEl) modeEl.value = data.bookingMode || '';
     }
-    // Load Question Signals (yes bucket only)
-    renderFucSignals(fuc.yes?.questionSignals || []);
+    // Load Question Signals — starter template when company has not yet saved
+    const signalsToRender = (fuc.yes?.questionSignals?.length > 0)
+      ? fuc.yes.questionSignals
+      : DEFAULT_FUC_CLIENT.yes.questionSignals;
+    renderFucSignals(signalsToRender);
     console.log('[Consent Cards] LOAD — complete');
   }
 
