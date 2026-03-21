@@ -1026,7 +1026,13 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
         ctx.collectedFields.lastName  = tokens.slice(1).join(' ');
         ctx._nameConfirmed = true;
         events.push({ type: 'BL1_NAME_CORRECTED', firstName: tokens[0], lastName: tokens.slice(1).join(' '), timestamp: Date.now() });
-        return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+        // Name readback on correction so caller hears the fix was captured
+        const _correctedFullName = `${tokens[0]} ${tokens.slice(1).join(' ')}`.trim();
+        const _correctedResult = await continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+        if (_correctedResult?.nextPrompt) {
+          _correctedResult.nextPrompt = `Got it — ${_correctedFullName}! ` + _correctedResult.nextPrompt;
+        }
+        return _correctedResult;
       }
       // Plain NO — clear and ask fresh
       ctx.collectedFields.firstName = null;
@@ -1063,7 +1069,15 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
         ctx.collectedFields.lastName = resolvedLast;
         ctx._nameConfirmed = true;
         events.push({ type: 'BL1_NAME_CONFIRMED', firstName: ctx.collectedFields.firstName, lastName: resolvedLast, timestamp: Date.now() });
-        return continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+        // Name readback: confirm the full name before advancing to phone.
+        // Without this, callers who gave their last name have no confirmation
+        // the AI captured it — leading to "what is my name?" loops.
+        const _confirmedFullName = `${ctx.collectedFields.firstName} ${resolvedLast}`.trim();
+        const _continueResult = await continueAfterNameConfirmed(ctx, config, companyId, isTest, events);
+        if (_continueResult?.nextPrompt) {
+          _continueResult.nextPrompt = `Got it — ${_confirmedFullName}! ` + _continueResult.nextPrompt;
+        }
+        return _continueResult;
       }
     }
 
@@ -1500,6 +1514,45 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       bookingCtx: ctx,
       completed:  false
     };
+  }
+
+  // ── Name digression guard — fires before the proactive offer on first entry ─
+  // If the caller asks "what is my name?" on their FIRST turn in COLLECT_PHONE
+  // (before we've asked for their number), answer the name question AND fold the
+  // proactive caller ID offer into the same response.
+  // Without this, the proactive offer fires and completely ignores the caller's
+  // question — making the agent feel deaf.
+  if (!ctx._callerIdAsked && userInput?.trim()) {
+    const _isNameQInPhoneStep = /\b(my name|what.*(name|call me)|who am i)\b/i.test(userInput);
+    if (_isNameQInPhoneStep) {
+      const _pFirst = ctx.collectedFields?.firstName || '';
+      const _pLast  = ctx.collectedFields?.lastName  || '';
+      const _pName  = [_pFirst, _pLast].filter(Boolean).join(' ') || 'not yet collected';
+      if (ctx.callerPhone) {
+        // Answer the name question AND make the proactive offer inline
+        const _pPhone = normalizePhone(ctx.callerPhone);
+        if (_pPhone) {
+          ctx._callerIdAsked      = true;
+          ctx._confirmingCallerId = true;
+          const _pDn   = ctx.discoveryNotes;
+          const _pSvc  = _pDn?.callReason || _pDn?.entities?.serviceType || null;
+          const _pSvcT = _pSvc ? `your ${_pSvc} ` : '';
+          events.push({ type: 'BL1_NAME_Q_IN_PHONE_STEP', knownName: _pName, timestamp: Date.now() });
+          return {
+            nextPrompt: `Your name on file is ${_pName}. Also — is ${_pPhone} a good number for ${_pSvcT}the confirmation text?`,
+            bookingCtx: ctx,
+            completed:  false
+          };
+        }
+      }
+      // No callerPhone — just answer the name and ask for number
+      events.push({ type: 'BL1_NAME_Q_IN_PHONE_STEP', knownName: _pName, timestamp: Date.now() });
+      return {
+        nextPrompt: `Your name on file is ${_pName}. ${config.askPhonePrompt || "What's the best phone number to reach you at?"}`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
   }
 
   // ── Proactive caller ID offer — fires on FIRST entry to COLLECT_PHONE ─────
@@ -3273,16 +3326,20 @@ function buildWarmOpening(ctx) {
   // so the opener always references what the caller actually called about.
   const issueSummary = callContext?.issue?.summary || ctx?.discoveryNotes?.callReason || null;
   if (issueSummary) {
-    const article = /^[aeiouAEIOU]/.test(issueSummary) ? 'an' : 'a';
-    parts.push(`I understand you're calling about ${article} ${issueSummary} — let me get you booked right away.`);
+    // Acknowledge the situation factually — NO "let me" function description.
+    // The caller wants to know their issue is captured, not hear the agent narrate its process.
+    parts.push(`I have the ${issueSummary} noted.`);
   }
 
   if (techPref) {
     parts.push(`I'll make a note that you'd like ${techPref} to come back out.`);
   }
 
-  if (callContext?.urgency?.level === 'high') {
-    parts.push(`I'll prioritize getting someone out quickly.`);
+  // Use discoveryNotes.urgency as fallback so high-urgency calls from discovery are respected
+  const _urgencyHigh = callContext?.urgency?.level === 'high'
+                    || ctx?.discoveryNotes?.urgency === 'high';
+  if (_urgencyHigh) {
+    parts.push(`I'll make sure this gets handled as soon as possible.`);
   }
 
   return parts.length > 0 ? parts.join(' ') + ' ' : '';
