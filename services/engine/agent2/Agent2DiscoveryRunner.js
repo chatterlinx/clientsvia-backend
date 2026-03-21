@@ -2125,12 +2125,28 @@ class Agent2DiscoveryRunner {
         },
 
         // ── HESITANT — Uncertain, needs guidance ─────────────────────────────
+        // Includes trust-breakdown and "should I leave?" signals so that
+        // callers expressing doubt alongside a YES phrase get routed to
+        // COMPLEX (YES ∩ HESITANT → COMPLEX) rather than straight to booking.
         hesitant: {
           direction: 'CLARIFY',
           phrases: [
+            // Core uncertainty
             'i dont know','im not sure','maybe','i think so',
             'do i have to','not certain','possibly','kind of',
-            'sort of','i guess','hard to say','let me think'
+            'sort of','i guess','hard to say','let me think',
+            // Trust / confidence breakdown
+            'not sure i can trust','cant trust','dont trust','losing trust',
+            'lose trust','not confident','not convinced','not comfortable',
+            'having second thoughts','second thoughts',
+            // "Should I leave / go elsewhere?" signals
+            'should i go with another','go with another company',
+            'go somewhere else','find someone else','use another company',
+            'try someone else','try another',
+            // Quality / competence doubt
+            'you dont know how','you guys cant','you cant fix',
+            'never fixed','cant seem to fix','been out here before',
+            'still not fixed','still happening','still the same problem'
           ],
           response: ''
         },
@@ -2206,14 +2222,24 @@ class Agent2DiscoveryRunner {
       const TIMING_AFFIRMATION_RE = /\b(?:as\s+(?:early|soon|quick)\s+as\s+(?:possible|you\s+can)|asap|first\s+(?:thing|available)|right\s+away|right\s+now|immediately|sooner\s+the\s+better|soonest\s+(?:possible|available)?|anytime(?:\s+works)?|whenever(?:\s+works|\s+you\s+(?:can|are\s+available))?|any\s+(?:day|time)\s+(?:works|is\s+fine)|(?:morning|afternoon|evening|today|tomorrow|this\s+week|next\s+week)\s+(?:works?|is\s+(?:fine|good|great|perfect)))\b/i;
       const isTimingAffirmationFUQ = !isYesFUQ && !isNoFUQ && !isHesitantFUQ && TIMING_AFFIRMATION_RE.test(inputLowerCleanFUQ);
 
-      // Priority: YES > TIMING_AFFIRMATION > NO > HESITANT > REPROMPT > COMPLEX
+      // Priority: pure-YES > TIMING > NO > YES+HESITANT(conflict) > HESITANT > REPROMPT > COMPLEX
+      //
+      // KEY RULE — YES ∩ HESITANT → COMPLEX:
+      // When both isYesFUQ AND isHesitantFUQ fire, the caller is sending
+      // contradictory signals: "I really like that BUT I'm not sure I can
+      // trust you guys."  The YES match often comes from a word like "sure"
+      // inside "not sure" — a single-word false-positive.  Rather than
+      // letting YES silently override the hesitancy and jump straight to
+      // booking, we route to COMPLEX so the LLM can address the concern
+      // empathetically before attempting to close.
       let bucket;
-      if (isYesFUQ && !isNoFUQ)       bucket = 'YES';
-      else if (isTimingAffirmationFUQ) bucket = 'YES';  // timing phrases = implicit YES
-      else if (isNoFUQ && !isYesFUQ)  bucket = 'NO';
-      else if (isHesitantFUQ)          bucket = 'HESITANT';
-      else if (isRepromptFUQ)          bucket = 'REPROMPT';
-      else                             bucket = 'COMPLEX';
+      if      (isYesFUQ && !isNoFUQ && !isHesitantFUQ) bucket = 'YES';
+      else if (isTimingAffirmationFUQ && !isHesitantFUQ) bucket = 'YES'; // scheduling = implicit YES
+      else if (isNoFUQ && !isYesFUQ)                    bucket = 'NO';
+      else if (isYesFUQ && isHesitantFUQ)               bucket = 'COMPLEX'; // "yes but..." → LLM resolves
+      else if (isHesitantFUQ)                           bucket = 'HESITANT';
+      else if (isRepromptFUQ)                           bucket = 'REPROMPT';
+      else                                              bucket = 'COMPLEX';
 
       const bucketKey             = bucket.toLowerCase();
       const bucketConfig          = safeObj(fuc[bucketKey], {});
