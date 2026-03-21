@@ -694,6 +694,111 @@ async function _matchName(name, type) {
 
 /**
  * ============================================================================
+ * DICTIONARY-FIRST TOKEN SCAN
+ * ============================================================================
+ *
+ * Scans an array of pre-tokenized words against the name dictionaries using a
+ * single Redis pipeline round trip (all tokens checked simultaneously).
+ *
+ * This is the preferred approach for name extraction from messy speech — the
+ * dictionary hit IS the extraction AND the validation in one step. Filler words
+ * ("my", "name", "is", "um") are naturally ignored because they're not names.
+ *
+ * Algorithm:
+ *   1. Pipeline all tokens into a single Redis MULTI/EXEC (1 round trip)
+ *   2. Any token that hits the firstNames dict → firstName candidate (first hit wins)
+ *   3. Any token that hits the lastNames dict  → lastName candidate (last hit wins —
+ *      surname comes last in natural speech, e.g. "I'm Mark Gonzalez" → Gonzalez)
+ *   4. Graceful degrade: Redis down → sequential memory fallback
+ *
+ * @param {string[]} tokens - Pre-tokenized words (e.g. from extractNameTokens())
+ * @param {'first'|'last'|'both'} [mode='both'] - Which dictionary(ies) to scan
+ * @returns {Promise<{firstName: NameMatchResult|null, lastName: NameMatchResult|null}>}
+ */
+async function scanTokensForNames(tokens, mode = 'both') {
+  if (!tokens || tokens.length === 0) return { firstName: null, lastName: null };
+
+  const cleanTokens = tokens
+    .filter(t => typeof t === 'string' && t.trim().length >= 2)
+    .map(t => t.trim());
+
+  if (cleanTokens.length === 0) return { firstName: null, lastName: null };
+
+  const checkFirst = mode !== 'last';
+  const checkLast  = mode !== 'first';
+
+  // ── Redis pipeline path (single round trip) ──────────────────────────────
+  try {
+    if (redisClient && redisClient.isReady) {
+      const pipeline = redisClient.multi();
+      for (const token of cleanTokens) {
+        const lower = token.toLowerCase();
+        if (checkFirst) pipeline.sIsMember(REDIS_KEYS.FIRST_NAMES, lower);
+        if (checkLast)  pipeline.sIsMember(REDIS_KEYS.LAST_NAMES,  lower);
+      }
+      const results = await pipeline.exec();
+
+      // results layout per token:
+      //   both  → [firstHit, lastHit]  step=2, firstOffset=0, lastOffset=1
+      //   first → [firstHit]           step=1, firstOffset=0
+      //   last  → [lastHit]            step=1, lastOffset=0
+      const step        = (checkFirst ? 1 : 0) + (checkLast ? 1 : 0);
+      const firstOffset = 0;
+      const lastOffset  = checkFirst ? 1 : 0;
+
+      let firstName = null;
+      let lastName  = null;
+
+      for (let i = 0; i < cleanTokens.length; i++) {
+        const token = cleanTokens[i];
+        const lower = token.toLowerCase();
+
+        if (checkFirst && !firstName) {
+          const hit = results[i * step + firstOffset];
+          if (hit === 1 || hit === true) {
+            const canonical = findCanonicalCasing(lower, memoryFallback.firstNamesOriginal) || titleCase(token);
+            firstName = { match: true, value: canonical, raw: token, score: 1.0, verificationMode: 'exact' };
+          }
+        }
+        if (checkLast) {
+          const hit = results[i * step + lastOffset];
+          if (hit === 1 || hit === true) {
+            // Always overwrite — last hit wins (surname is the last name token)
+            const canonical = findCanonicalCasing(lower, memoryFallback.lastNamesOriginal) || titleCase(token);
+            lastName = { match: true, value: canonical, raw: token, score: 1.0, verificationMode: 'exact' };
+          }
+        }
+      }
+
+      return { firstName, lastName };
+    }
+  } catch (err) {
+    logger.warn('[GLOBAL HUB] scanTokensForNames Redis pipeline failed — sequential fallback', {
+      error: err.message
+    });
+  }
+
+  // ── Memory fallback (sequential) ─────────────────────────────────────────
+  let firstName = null;
+  let lastName  = null;
+
+  for (const token of cleanTokens) {
+    const lower = token.toLowerCase();
+    if (checkFirst && !firstName && memoryFallback.firstNames.has(lower)) {
+      const canonical = findCanonicalCasing(lower, memoryFallback.firstNamesOriginal) || titleCase(token);
+      firstName = { match: true, value: canonical, raw: token, score: 1.0, verificationMode: 'exact' };
+    }
+    if (checkLast && memoryFallback.lastNames.has(lower)) {
+      const canonical = findCanonicalCasing(lower, memoryFallback.lastNamesOriginal) || titleCase(token);
+      lastName = { match: true, value: canonical, raw: token, score: 1.0, verificationMode: 'exact' };
+    }
+  }
+
+  return { firstName, lastName };
+}
+
+/**
+ * ============================================================================
  * HEALTH CHECK
  * ============================================================================
  */
@@ -745,6 +850,9 @@ module.exports = {
     // Smart Name Matching - Dictionary-backed verification & correction
     matchFirstName,
     matchLastName,
+
+    // Dictionary-first token scan — single Redis round trip for full utterances
+    scanTokensForNames,
 
     // Sync functions (for admin operations)
     syncFirstNamesToRedis,
