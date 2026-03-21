@@ -1473,23 +1473,28 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     };
   }
 
-  // ── Normal phone input ────────────────────────────────────────────────────
-  if (!userInput?.trim()) {
-    // First turn at COLLECT_PHONE with no input — offer caller ID if available
-    if (!ctx._callerIdAsked && ctx.callerPhone) {
-      const formattedCallerId = normalizePhone(ctx.callerPhone);
-      if (formattedCallerId) {
-        ctx._callerIdAsked      = true;
-        ctx._confirmingCallerId = true;
-        events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
-        return {
-          nextPrompt: `I see your caller ID is ${formattedCallerId} — is that a good number for text notifications and booking confirmations?`,
-          bookingCtx: ctx,
-          completed:  false
-        };
-      }
-      ctx._callerIdAsked = true;
+  // ── Proactive caller ID offer — fires on FIRST entry to COLLECT_PHONE ─────
+  // Offered immediately regardless of what the caller said, so the agent never
+  // goes into a runaround asking for a number the system already knows.
+  // YES → caller ID saved as primary; advance to next field.
+  // NO  → collect a different number in the next turn.
+  if (!ctx._callerIdAsked && ctx.callerPhone) {
+    const formattedCallerId = normalizePhone(ctx.callerPhone);
+    if (formattedCallerId) {
+      ctx._callerIdAsked      = true;
+      ctx._confirmingCallerId = true;
+      events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
+      return {
+        nextPrompt: `Is the number you're calling from, ${formattedCallerId}, a good number to receive your text booking confirmation?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
     }
+    ctx._callerIdAsked = true; // callerPhone present but couldn't normalize — skip offer
+  }
+
+  // ── No input (STT_EMPTY) ───────────────────────────────────────────────────
+  if (!userInput?.trim()) {
     return {
       nextPrompt: config.askPhonePrompt,
       bookingCtx: ctx,
@@ -1497,12 +1502,7 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
     };
   }
 
-  // ── Try to parse the phone from user input immediately ───────────────────
-  // Must happen BEFORE the caller ID offer logic — if the caller explicitly
-  // gave us a number we use it directly and skip the caller ID offer entirely.
-  // (Prevents double-asking: agent asks "what's your number?" → caller gives
-  //  one → agent still offers caller ID → caller has to answer twice.)
-  //
+  // ── Try to parse the phone from user input ───────────────────────────────
   // Uses extractCorrectedPhone() instead of normalizePhone(userInput) directly:
   //   - Handles mid-sentence corrections: "239-565-2202. Actually, wait — 239-333-7747"
   //     → strips ALL non-digits from the full sentence would yield 20+ digits → null.
