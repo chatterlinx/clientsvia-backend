@@ -2647,8 +2647,9 @@ function getDayLabel(day) {
 function detectPreferencePivot(userInput, ctx) {
   const t = userInput.toLowerCase();
 
-  // Must contain asking/alternative language to distinguish pivot from slot selection
-  const isAskingForNew = /\b(what about|how about|do you have|any(thing)?(\s+available)?|instead|different|earlier|later|other time|other day)\b/.test(t);
+  // Must contain asking/alternative language to distinguish pivot from slot selection.
+  // Includes colloquial "what do you got" / "what have you got" and similar STT variants.
+  const isAskingForNew = /\b(what about|how about|do you have|what do you (got|have)|what have you got|anything (for|on|available)|any(thing)?(\s+available)?|instead|different|earlier|later|other time|other day)\b/.test(t);
 
   // "this morning/afternoon/evening" always means today
   const impliedToday = /\bthis\s+(morning|afternoon|evening)\b/.test(t);
@@ -2726,8 +2727,28 @@ async function processOfferTimes(ctx, userInput, config, companyId, isTest, even
       };
     }
 
-    // Truly no match and no pivot — re-ask with current options
+    // Truly no match and no pivot — but first check if caller is echoing their current preference.
+    // "On Monday, I said afternoon." / "I told you — Monday afternoon" — caller feels unheard.
+    // Acknowledge the preference explicitly and re-present the slots instead of robotically
+    // repeating "I didn't catch which time." (which makes the agent sound deaf).
+    const _echoDay  = ctx.preferredDay  && parseDayPreference(userInput)  === ctx.preferredDay;
+    const _echoTime = ctx.preferredTime && parseTimePreference(userInput) === ctx.preferredTime;
     const formatted = formatTimeOptionsList(ctx.availableTimeOptions);
+
+    if (_echoDay || _echoTime) {
+      // Build a natural preference label so the acknowledgement feels personalised
+      const _echoDesc = [
+        _echoDay  ? ctx.preferredDay  : null,
+        _echoTime ? `in the ${ctx.preferredTime}` : null
+      ].filter(Boolean).join(' ');
+      events.push({ type: 'BL1_PREFERENCE_ECHO_ACKNOWLEDGED', desc: _echoDesc, timestamp: Date.now() });
+      return {
+        nextPrompt: `Got it — ${_echoDesc}. Here are the times I have available: ${formatted}. Which one works best for you?`,
+        bookingCtx: ctx,
+        completed:  false
+      };
+    }
+
     return {
       nextPrompt: `I didn't catch which time you'd prefer. I have ${formatted} — which works best?`,
       bookingCtx: ctx,
