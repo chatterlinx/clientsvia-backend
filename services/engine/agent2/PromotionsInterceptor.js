@@ -258,16 +258,24 @@ function resolveClassification(userInput) {
 }
 
 /**
- * buildClarifyingQuestion — Return the spoken question the agent uses when
- * the caller's promo intent is ambiguous (e.g. they just said "coupon").
+ * buildClarifyingQuestion — Return the spoken clarifying question the agent
+ * uses when the caller's promo intent is ambiguous (e.g. they just said "coupon").
  *
+ * If the caller's first name is known (from discoveryNotes / ScrabEngine
+ * entity extraction), it is prepended as a natural greeting:
+ *   "Hi Mark! Let me clarify — ..."
+ * If the name is unknown, the question starts directly:
+ *   "Let me clarify — ..."
+ *
+ * @param {string|null} [callerName]  First name of the caller, if captured
  * @returns {string}
  */
-function buildClarifyingQuestion() {
+function buildClarifyingQuestion(callerName = null) {
+  const greeting = callerName ? `Hi ${callerName}! ` : '';
   return (
-    "Let me clarify — do you have a coupon or promotional code you'd like to " +
-    "apply to your service visit, or are you asking if we have any current " +
-    "specials running?"
+    `${greeting}Let me clarify — do you have a coupon or promotional code ` +
+    "you'd like to apply to your service visit, or are you asking if we have " +
+    "any current specials running?"
   );
 }
 

@@ -2850,7 +2850,7 @@ class Agent2DiscoveryRunner {
             returnPrompt:        null
           });
 
-          const clarifyQ = PromotionsInterceptor.buildClarifyingQuestion();
+          const clarifyQ = PromotionsInterceptor.buildClarifyingQuestion(callerName);
 
           emit('A2_PROMOTIONS_INTERCEPTED', { digressionOrigin, intent: 'AMBIGUOUS', inputPreview: clip(input, 60) });
           emit('A2_PATH_SELECTED',  { path: 'PROMO_CLARIFYING_QUESTION', reason: 'Promo intent ambiguous — asking to clarify' });
