@@ -2097,7 +2097,19 @@ class Agent2DiscoveryRunner {
             'not sure why','wondering why',
             // Continuous / recurring problem signals
             'continuous problem','keep having','keeps happening','this keeps',
-            'always happens','never fixed','still happening'
+            'always happens','never fixed','still happening',
+            // Pricing / billing / coverage — callers ask these before committing
+            // to a visit. Must be answered first or caller loses trust and cancels.
+            // UI-configurable per company (followUpConsent.yes.questionSignals).
+            'would this be covered','is this covered','will this be covered',
+            'do i have to pay','have to pay','cost extra','costs extra',
+            'how much','what does it cost','what is the cost','what will it cost',
+            'how much does','how much will','how much is',
+            'is there a charge','is there a fee','what is the fee','whats the fee',
+            'extra charge','additional charge','out of pocket',
+            'covered under','under warranty','is it under warranty',
+            'warranty cover','does warranty','will my warranty',
+            'is it free','no charge','no cost','free of charge'
           ],
           response: ''
         },

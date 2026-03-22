@@ -41,14 +41,24 @@ const FIELD_TYPES = Object.freeze({
 const GROQ_TIMEOUT_MS = 3000;
 const MODEL = 'llama-3.3-70b-versatile';
 
-// Words that signal the caller is doing something other than cleanly providing data.
-// Presence of any of these forces the Groq path even if regex found a value.
-const TRIGGER_WORDS = [
-  'wait', 'hold on', 'hold a second', 'actually', 'i think', 'let me',
-  'one second', 'hang on', 'not sure', "i'm not sure", 'just moved',
+// ── Hesitation word sets ──────────────────────────────────────────────────────
+//
+// GENUINE HESITATION — signals the caller is searching, self-correcting, or truly
+// unsure of their value. Force Groq even when regex found something.
+// e.g. "wait, actually it was 239-565-2202" → CORRECTING; "let me look for it" → SEARCHING
+const GENUINE_HESITATION_WORDS = [
+  'wait', 'hold on', 'hold a second', 'actually', 'let me',
+  'one second', 'hang on', 'not sure', "i'm not sure",
   'looking for', 'where is', 'i meant', 'scratch that', 'never mind',
   'i need to check', 'let me check', 'let me look', 'i have to look',
-  'i just moved', "i don't know", 'i forgot', 'i can\'t remember',
+  'just moved', 'i just moved', "i don't know", 'i forgot', "i can't remember",
+];
+
+// SPEECH FILLERS — verbal tics that accompany a clean value and do NOT indicate
+// real uncertainty. Do NOT force Groq when regex already found a value.
+// e.g. "I think that would be 239-565-2202" → trust the regex, skip Groq.
+const SPEECH_FILLER_WORDS = [
+  'i think', 'i believe', 'i guess', 'probably', 'should be', 'i suppose',
 ];
 
 // ── System prompts (JSON mode — "json" keyword required by Groq) ─────────────
@@ -81,20 +91,47 @@ const FALLBACK_RESULT = Object.freeze({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Returns true if the input contains trigger words that indicate the caller
- * is doing something other than cleanly providing a value.
+ * Returns true if the input contains genuine hesitation — the caller is
+ * searching, self-correcting, or truly uncertain about their value.
+ * Genuine hesitation forces Groq even when regex found something.
+ *
+ * Excludes SPEECH_FILLER_WORDS ("I think", "I believe") which are verbal tics
+ * that accompany a clean value — those do NOT warrant a Groq call.
+ *
+ * @param {string} input
+ * @returns {boolean}
+ */
+function hasGenuineHesitation(input) {
+  if (!input) return false;
+  const lower = input.toLowerCase();
+  return GENUINE_HESITATION_WORDS.some(w => lower.includes(w));
+}
+
+/**
+ * Backward-compatible alias. External callers that import hasTriggerWords
+ * continue to work; the check now includes both genuine hesitation and
+ * speech fillers so existing callers see no behavioral change.
+ *
  * @param {string} input
  * @returns {boolean}
  */
 function hasTriggerWords(input) {
   if (!input) return false;
   const lower = input.toLowerCase();
-  return TRIGGER_WORDS.some(w => lower.includes(w));
+  return [...GENUINE_HESITATION_WORDS, ...SPEECH_FILLER_WORDS].some(w => lower.includes(w));
 }
 
 /**
- * Determines if the Groq path should be used instead of the fast path.
- * Fast path: regex already found a value AND no trigger words present.
+ * Determines if the Groq path should be used instead of the fast regex path.
+ *
+ * Decision logic:
+ *   - Regex found a value + NO genuine hesitation → fast path (trust regex).
+ *     "I think that would be 239-565-2202" — "I think" is a speech filler,
+ *     not genuine uncertainty. Groq would classify as UNCERTAIN and trigger
+ *     a needless confirm loop, frustrating the caller.
+ *   - Regex found a value + genuine hesitation → Groq (may be CORRECTING).
+ *     "Wait, actually it was 239-565-2202" — self-correction signal.
+ *   - Regex found nothing → Groq (may do better with messy speech).
  *
  * @param {string} input        — raw STT transcript
  * @param {*}      regexResult  — result of existing regex extractor (null = failed)
@@ -102,8 +139,9 @@ function hasTriggerWords(input) {
  */
 function needsGroqPath(input, regexResult) {
   if (!input?.trim()) return false;
-  if (hasTriggerWords(input)) return true;
-  if (!regexResult) return true;  // regex failed, Groq may do better
+  if (regexResult && !hasGenuineHesitation(input)) return false; // fast path
+  if (hasGenuineHesitation(input)) return true;
+  if (!regexResult) return true; // regex failed, Groq may recover
   return false;
 }
 
@@ -207,6 +245,7 @@ module.exports = {
   parse,
   needsGroqPath,
   hasTriggerWords,
+  hasGenuineHesitation,
   STATES,
   FIELD_TYPES,
 };

@@ -226,13 +226,23 @@ async function loadCompanyConfig(companyId) {
         return bl.requiredFields || DEFAULT_CONFIG.requiredFields;
       })(),
 
-      // Scheduling preference capture — ask preferred day/time before fetching slots
+      // Scheduling preference capture — ask preferred day/time before fetching slots.
+      // All keys are UI-configurable per company and stored in MongoDB.
       preferenceCapture: {
-        enabled:            bc.preferenceCapture?.enabled !== false,
-        askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || 'What day works best for you?',
-        askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || "And what time works for you {day}? I'll check our availability.",
-        noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?",
-        urgentPrompt:       bc.preferenceCapture?.urgentPrompt        || "I completely understand — let me pull up the very first opening we have for you."
+        enabled:               bc.preferenceCapture?.enabled !== false,
+        // Day / time capture prompts
+        askDayPrompt:          bc.preferenceCapture?.askDayPrompt          || 'What day works best for you?',
+        askTimePrompt:         bc.preferenceCapture?.askTimePrompt         || "And what time works for you {day}? I'll check our availability.",
+        noSlotsOnDayPrompt:    bc.preferenceCapture?.noSlotsOnDayPrompt    || "I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work for you?",
+        // Urgency acknowledgements
+        urgentPrompt:          bc.preferenceCapture?.urgentPrompt          || "I completely understand — let me pull up the very first opening we have for you.",
+        urgentNoTodayPrompt:   bc.preferenceCapture?.urgentNoTodayPrompt   || "I completely understand the urgency. Unfortunately I don't have any same-day openings right now —",
+        // Address readback — spoken when caller asks "what address do you have?" mid-scheduling.
+        // Placeholders: {address} = collected address, {followUp} = next scheduling prompt.
+        addressReadbackPrompt: bc.preferenceCapture?.addressReadbackPrompt || "I have {address} on file as the service address. {followUp}",
+        // Digression acknowledgement — spoken when a non-scheduling question is answered mid-scheduling.
+        // Leave blank to fall back to config.t2DigressionAck.
+        scheduleDigressionAck: bc.preferenceCapture?.scheduleDigressionAck || '',
       },
 
       // ── TECHNICIANS & SERVICE TYPES ──────────────────────────────────────────
@@ -2496,17 +2506,14 @@ function finishAltContact(ctx, contact, config, events) {
    ============================================================================ */
 
 async function processCollectPreferredDay(ctx, userInput, config, companyId, isTest, events) {
+  // ── STT_EMPTY ──────────────────────────────────────────────────────────────
   if (!userInput?.trim()) {
-    return {
-      nextPrompt: config.preferenceCapture.askDayPrompt,
-      bookingCtx: ctx,
-      completed:  false
-    };
+    return { nextPrompt: config.preferenceCapture.askDayPrompt, bookingCtx: ctx, completed: false };
   }
 
   // ── Urgency short-circuit ────────────────────────────────────────────────
-  // "asap", "right now", "first available", "I need someone now", etc.
-  // Skip day+time questions entirely — show earliest available slots immediately.
+  // "asap", "as soon as possible", "first available", etc.
+  // Skip day+time questions — jump straight to OFFER_TIMES with earliest slots.
   if (isUrgentRequest(userInput)) {
     ctx.preferredDay  = 'asap';
     ctx.preferredTime = 'earliest';
@@ -2515,62 +2522,123 @@ async function processCollectPreferredDay(ctx, userInput, config, companyId, isT
 
     const slotsResult = await processOfferTimes(ctx, null, config, companyId, isTest, events);
 
-    // ── Honest urgency acknowledgement ─────────────────────────────────────
-    // Check if any returned slot is actually today. If not, use a message that
-    // doesn't claim "same-day service" — callers don't want false promises.
+    // Honest acknowledgement: only claim same-day if a today slot actually exists.
     const todayStr     = new Date().toDateString();
     const hasTodaySlot = (ctx.availableTimeOptions || []).some(
       t => t.start && new Date(t.start).toDateString() === todayStr
     );
-
     const urgentAck = hasTodaySlot
-      ? (config.preferenceCapture?.urgentPrompt        || "I completely understand — let me pull up the very first opening we have for you.")
-      : (config.preferenceCapture?.urgentNoTodayPrompt || "I completely understand the urgency. Unfortunately I don't have any same-day openings right now —");
+      ? config.preferenceCapture.urgentPrompt
+      : config.preferenceCapture.urgentNoTodayPrompt;
 
-    // Prepend the acknowledgement so caller hears empathy + slots in one breath
-    return {
-      ...slotsResult,
-      nextPrompt: `${urgentAck} ${slotsResult.nextPrompt}`
-    };
+    return { ...slotsResult, nextPrompt: `${urgentAck} ${slotsResult.nextPrompt}` };
   }
 
+  // ── Address readback digression ─────────────────────────────────────────
+  // Caller asks to verify the address mid-scheduling ("Can you tell me what address you have?").
+  // Read it back from collectedFields and re-ask the day question.
+  const _isAddressQuery = /\b(what|which|tell me|confirm|read back|verify|check).{0,30}(address|street|location|place)\b|\b(address|street|location).{0,25}(you have|on file|did you get|do you have)\b/i.test(userInput);
+  if (_isAddressQuery && ctx.collectedFields?.address) {
+    events.push({ type: 'BL1_SCHEDULE_ADDRESS_READBACK', address: ctx.collectedFields.address, timestamp: Date.now() });
+    const _readback = config.preferenceCapture.addressReadbackPrompt
+      .replace('{address}', ctx.collectedFields.address)
+      .replace('{followUp}', config.preferenceCapture.askDayPrompt);
+    return { nextPrompt: _readback, bookingCtx: ctx, completed: false };
+  }
+
+  // ── General question / digression ───────────────────────────────────────
+  // Caller asked a non-scheduling question mid-booking (pricing, coverage, etc.).
+  // Route to BookingLLMInterceptService to answer it, then re-ask for day.
+  // Detection: input ends with "?" and no parseable day/time preference is present.
   const dayPref  = parseDayPreference(userInput);
   const timePref = parseTimePreference(userInput);
 
-  ctx.preferredDay = dayPref || userInput.trim();
+  if (!dayPref && !timePref && /\?/.test(userInput)) {
+    events.push({ type: 'BL1_SCHEDULE_DIGRESSION', rawInput: userInput.substring(0, 80), timestamp: Date.now() });
+    const _llmAnswer = await BookingLLMInterceptService.answer({
+      question: userInput, companyId, ctx, config
+    }).catch(() => null);
+    const _ack = config.preferenceCapture.scheduleDigressionAck || config.t2DigressionAck;
+    const _answer = _llmAnswer || _ack;
+    return {
+      nextPrompt: `${_answer} ${config.preferenceCapture.askDayPrompt}`,
+      bookingCtx: ctx,
+      completed:  false
+    };
+  }
+
+  // ── Day preference not parseable — re-ask cleanly ───────────────────────
+  // NEVER store raw user input as ctx.preferredDay: it would be injected verbatim
+  // into the askTimePrompt template, producing broken spoken output.
+  if (!dayPref) {
+    events.push({ type: 'BL1_DAY_PARSE_FAILED', rawInput: userInput.substring(0, 80), timestamp: Date.now() });
+    return { nextPrompt: config.preferenceCapture.askDayPrompt, bookingCtx: ctx, completed: false };
+  }
+
+  // ── Day (and optionally time) captured ──────────────────────────────────
+  ctx.preferredDay = dayPref;
   events.push({ type: 'BL1_PREFERRED_DAY_CAPTURED', day: ctx.preferredDay, timestamp: Date.now() });
 
   if (timePref) {
-    // Caller gave both day and time in one utterance — skip time question
+    // Caller gave both day and time in one utterance — skip the time question.
     ctx.preferredTime = timePref;
     events.push({ type: 'BL1_PREFERRED_TIME_CAPTURED', time: timePref, timestamp: Date.now() });
     ctx.step = STEPS.OFFER_TIMES;
     return processOfferTimes(ctx, null, config, companyId, isTest, events);
   }
 
-  // Have day — now ask for time
   ctx.step = STEPS.COLLECT_PREFERRED_TIME;
-  const dayLabel = getDayLabel(ctx.preferredDay);
   return {
-    nextPrompt: config.preferenceCapture.askTimePrompt.replace('{day}', dayLabel),
+    nextPrompt: config.preferenceCapture.askTimePrompt.replace('{day}', getDayLabel(ctx.preferredDay)),
     bookingCtx: ctx,
     completed:  false
   };
 }
 
 async function processCollectPreferredTime(ctx, userInput, config, companyId, isTest, events) {
+  const _askTimePrompt = config.preferenceCapture.askTimePrompt.replace('{day}', getDayLabel(ctx.preferredDay));
+
+  // ── STT_EMPTY ──────────────────────────────────────────────────────────────
   if (!userInput?.trim()) {
-    const dayLabel = getDayLabel(ctx.preferredDay);
+    return { nextPrompt: _askTimePrompt, bookingCtx: ctx, completed: false };
+  }
+
+  // ── Address readback digression ─────────────────────────────────────────
+  const _isAddressQuery = /\b(what|which|tell me|confirm|read back|verify|check).{0,30}(address|street|location|place)\b|\b(address|street|location).{0,25}(you have|on file|did you get|do you have)\b/i.test(userInput);
+  if (_isAddressQuery && ctx.collectedFields?.address) {
+    events.push({ type: 'BL1_SCHEDULE_ADDRESS_READBACK', address: ctx.collectedFields.address, timestamp: Date.now() });
+    const _readback = config.preferenceCapture.addressReadbackPrompt
+      .replace('{address}', ctx.collectedFields.address)
+      .replace('{followUp}', _askTimePrompt);
+    return { nextPrompt: _readback, bookingCtx: ctx, completed: false };
+  }
+
+  // ── General question / digression ───────────────────────────────────────
+  const timePref = parseTimePreference(userInput);
+  if (!timePref && /\?/.test(userInput)) {
+    events.push({ type: 'BL1_SCHEDULE_DIGRESSION', rawInput: userInput.substring(0, 80), timestamp: Date.now() });
+    const _llmAnswer = await BookingLLMInterceptService.answer({
+      question: userInput, companyId, ctx, config
+    }).catch(() => null);
+    const _ack = config.preferenceCapture.scheduleDigressionAck || config.t2DigressionAck;
     return {
-      nextPrompt: config.preferenceCapture.askTimePrompt.replace('{day}', dayLabel),
+      nextPrompt: `${_llmAnswer || _ack} ${_askTimePrompt}`,
       bookingCtx: ctx,
       completed:  false
     };
   }
 
-  ctx.preferredTime = parseTimePreference(userInput) || userInput.trim();
-  events.push({ type: 'BL1_PREFERRED_TIME_CAPTURED', time: ctx.preferredTime, timestamp: Date.now() });
+  // ── Time preference not parseable — re-ask cleanly ──────────────────────
+  // NEVER store raw user input as ctx.preferredTime — same string-injection risk
+  // as ctx.preferredDay. Re-ask instead.
+  if (!timePref) {
+    events.push({ type: 'BL1_TIME_PARSE_FAILED', rawInput: userInput.substring(0, 80), timestamp: Date.now() });
+    return { nextPrompt: _askTimePrompt, bookingCtx: ctx, completed: false };
+  }
 
+  // ── Time captured ────────────────────────────────────────────────────────
+  ctx.preferredTime = timePref;
+  events.push({ type: 'BL1_PREFERRED_TIME_CAPTURED', time: ctx.preferredTime, timestamp: Date.now() });
   ctx.step = STEPS.OFFER_TIMES;
   return processOfferTimes(ctx, null, config, companyId, isTest, events);
 }
@@ -2616,10 +2684,24 @@ function parseTimePreference(input) {
   return null;
 }
 
-/** Human-readable day label for prompts. */
+/**
+ * Human-readable day label for prompt template substitution.
+ *
+ * Guards against raw user input being injected into spoken prompts.
+ * Valid day values are short (≤12 chars) and contain no punctuation — anything
+ * that doesn't match is replaced with the safe fallback "that day".
+ *
+ * @param {string|null} day — parsed day from parseDayPreference()
+ * @returns {string}
+ */
 function getDayLabel(day) {
-  if (!day) return 'that day';
-  return day; // 'today', 'tomorrow', 'monday', etc. read fine as-is
+  if (!day || typeof day !== 'string') return 'that day';
+  // Valid values: 'today', 'tomorrow', 'monday'–'sunday', 'next week', 'this week'
+  // Max length 12 chars; no question marks, digits, or long multi-word phrases.
+  if (day.length > 12 || /[?!.0-9]/.test(day) || day.trim().split(/\s+/).length > 2) {
+    return 'that day';
+  }
+  return day;
 }
 
 /* ============================================================================

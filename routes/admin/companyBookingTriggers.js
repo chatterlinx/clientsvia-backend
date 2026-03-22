@@ -833,11 +833,17 @@ router.get('/:companyId/booking-config',
           askZipPrompt:   bc.addressConfig?.askZipPrompt    || ''
         },
         preferenceCapture: {
-          enabled:            bc.preferenceCapture?.enabled !== false,
-          askDayPrompt:       bc.preferenceCapture?.askDayPrompt        || '',
-          askTimePrompt:      bc.preferenceCapture?.askTimePrompt       || '',
-          noSlotsOnDayPrompt: bc.preferenceCapture?.noSlotsOnDayPrompt  || '',
-          urgentPrompt:       bc.preferenceCapture?.urgentPrompt        || ''
+          enabled:               bc.preferenceCapture?.enabled !== false,
+          // Day / time prompts
+          askDayPrompt:          bc.preferenceCapture?.askDayPrompt          || '',
+          askTimePrompt:         bc.preferenceCapture?.askTimePrompt         || '',
+          noSlotsOnDayPrompt:    bc.preferenceCapture?.noSlotsOnDayPrompt    || '',
+          // Urgency acknowledgements
+          urgentPrompt:          bc.preferenceCapture?.urgentPrompt          || '',
+          urgentNoTodayPrompt:   bc.preferenceCapture?.urgentNoTodayPrompt   || '',
+          // Mid-scheduling digressions
+          addressReadbackPrompt: bc.preferenceCapture?.addressReadbackPrompt || '',
+          scheduleDigressionAck: bc.preferenceCapture?.scheduleDigressionAck || '',
         },
 
         // ── Team, Emergency Schedule & Holidays ─────────────────────────────
