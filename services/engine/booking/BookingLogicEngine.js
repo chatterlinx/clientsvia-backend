@@ -732,8 +732,8 @@ async function processInit(ctx, config, companyId, isTest, events) {
   // ── Name confirmation ──────────────────────────────────────────────────────
   // If discovery pre-filled a name, confirm it naturally instead of re-asking.
   //   Full name known  → "I assume your name is Tony Cox, is that correct?"
-  //   First name only  → "I assume your first name is Mark, is that correct?
-  //                       And what is your last name?"
+  //   First name only  → "I show your first name as Mark — is that right?"
+  //                       (ONE question only — last name collected separately on next turn)
   //   No name known    → cold ask using askNamePrompt
   if (!ctx._nameConfirmed) {
     const hasFirst = !!ctx.collectedFields.firstName;
@@ -753,7 +753,8 @@ async function processInit(ctx, config, companyId, isTest, events) {
     }
 
     if (hasFirst && !hasLast) {
-      // First name only — confirm it and ask for last name in the same turn
+      // First name only — confirm it ONLY (one question per turn rule).
+      // If caller confirms YES, CONFIRM_FIRST_ASK_LAST handler collects last name next.
       ctx.step             = STEPS.CONFIRM_NAME;
       ctx._nameConfirmMode = 'CONFIRM_FIRST_ASK_LAST';
       events.push({ type: 'BL1_CONFIRMING_FIRST_NAME', firstName: ctx.collectedFields.firstName, timestamp: Date.now() });

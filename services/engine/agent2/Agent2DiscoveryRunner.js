@@ -2360,11 +2360,17 @@ class Agent2DiscoveryRunner {
             return false;
           };
 
-          // Detect diagnostic residual on a HANDOFF_BOOKING YES
+          // Detect diagnostic OR promotional residual on a HANDOFF_BOOKING YES.
+          // Two signals can block immediate booking handoff:
+          //   1. questionSignalPhrases — managed list in the Consent Cards console
+          //   2. PromotionsInterceptor.detect() — caller asked about specials/deals/coupons
+          //      while saying YES (e.g. "yeah, do you have any specials on tuneups?")
+          //      In this case we answer the promo question first, then re-prompt for booking.
           const hasBookingResistantQuestion = (
             hasResidualContent &&
             yesDirection === 'HANDOFF_BOOKING' &&
-            residualMatchesQuestionSignal(residualAfterYes)
+            (residualMatchesQuestionSignal(residualAfterYes) ||
+             PromotionsInterceptor.detect(residualAfterYes))
           );
 
           // When direction is HANDOFF_BOOKING, route to booking EVEN if the caller
@@ -2385,7 +2391,9 @@ class Agent2DiscoveryRunner {
             // Preserve the pending follow-up so the next pure YES fires booking.
             emit('A2_FOLLOWUP_YES_QUESTION_FIRST', {
               residualPreview: clip(residualAfterYes, 60),
-              reason: 'YES+diagnostic question before booking — answering question first',
+              reason: PromotionsInterceptor.detect(residualAfterYes)
+                ? 'YES+promo question before booking — answering specials/deals question first, then re-prompting for booking'
+                : 'YES+diagnostic question before booking — answering question first',
               cardId: pfuqSource?.replace('card:', '') || null,
               yesDirection
             });
