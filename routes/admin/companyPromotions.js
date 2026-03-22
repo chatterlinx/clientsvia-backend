@@ -37,12 +37,13 @@
  * ============================================================================
  */
 
-const express            = require('express');
-const router             = express.Router();
-const logger             = require('../../utils/logger');
-const { authenticateJWT } = require('../../middleware/auth');
-const CompanyPromotion   = require('../../models/CompanyPromotion');
-const PromotionsInterceptor = require('../../services/engine/agent2/PromotionsInterceptor');
+const express                     = require('express');
+const router                      = express.Router();
+const logger                      = require('../../utils/logger');
+const { authenticateJWT }         = require('../../middleware/auth');
+const CompanyPromotion            = require('../../models/CompanyPromotion');
+const CompanyPromotionSettings    = require('../../models/CompanyPromotionSettings');
+const PromotionsInterceptor       = require('../../services/engine/agent2/PromotionsInterceptor');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -333,6 +334,85 @@ router.post('/:companyId/promotions/reorder', async (req, res) => {
   } catch (err) {
     logger.error('[CompanyPromotions] reorder failed', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Failed to reorder promotions' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/promotions/settings
+// Load the global voice settings for this company's promotions interceptor.
+// Returns the stored document (or defaults if none saved yet).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/promotions/settings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const settings = await CompanyPromotionSettings.getForCompany(companyId);
+    logger.info(`[CompanyPromotions] GET settings — company ${companyId}`);
+    return res.json({
+      success:  true,
+      settings,
+      defaults: CompanyPromotionSettings.BUILT_IN_DEFAULTS   // UI uses these as placeholder text
+    });
+
+  } catch (err) {
+    logger.error('[CompanyPromotions] GET settings failed', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to load promotion settings' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /:companyId/promotions/settings
+// Update the global voice settings. Partial update — only provided fields change.
+// Invalidates the settings Redis cache after save.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch('/:companyId/promotions/settings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  // Only allow known settings fields — never let arbitrary keys through
+  const ALLOWED_SETTINGS_FIELDS = [
+    'clarifyingQuestion',
+    'askForCodePrompt',
+    'codeRetryPrompt',
+    'validCodePrefix',
+    'validCodeBookingSuffix',
+    'noActiveSpecials',
+    'noActiveSpecialsCta',
+    'enableClarifyingQuestion'
+  ];
+
+  const fields = {};
+  for (const key of ALLOWED_SETTINGS_FIELDS) {
+    if (req.body[key] !== undefined) fields[key] = req.body[key];
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return res.status(400).json({ success: false, error: 'No valid settings fields provided' });
+  }
+
+  try {
+    const updated = await CompanyPromotionSettings.findOneAndUpdate(
+      { companyId },
+      { $set: fields },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    // Invalidate the settings Redis cache so the next runtime call picks up changes
+    PromotionsInterceptor.invalidateSettingsCache(companyId).catch(e =>
+      logger.warn('[CompanyPromotions] PATCH settings — cache invalidation failed (non-fatal)', {
+        companyId, error: e.message
+      })
+    );
+
+    logger.info(`[CompanyPromotions] ✅ Settings updated`, {
+      companyId, fields: Object.keys(fields)
+    });
+    return res.json({ success: true, settings: updated });
+
+  } catch (err) {
+    logger.error('[CompanyPromotions] PATCH settings failed', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to update promotion settings' });
   }
 });
 

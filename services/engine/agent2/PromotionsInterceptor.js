@@ -44,15 +44,17 @@
  * ============================================================================
  */
 
-const logger              = require('../../../utils/logger');
-const CompanyPromotion    = require('../../../models/CompanyPromotion');
+const logger                   = require('../../../utils/logger');
+const CompanyPromotion         = require('../../../models/CompanyPromotion');
+const CompanyPromotionSettings = require('../../../models/CompanyPromotionSettings');
 const { getSharedRedisClient } = require('../../redisClientFactory');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SERVICE_ID       = 'PROMOTIONS_INTERCEPTOR';
-const REDIS_TTL        = 900;   // 15 minutes
-const CACHE_KEY_PREFIX = 'promotions';
+const SERVICE_ID              = 'PROMOTIONS_INTERCEPTOR';
+const REDIS_TTL               = 900;    // 15 minutes — promo list cache
+const CACHE_KEY_PREFIX        = 'promotions';
+const SETTINGS_CACHE_PREFIX   = 'promotions-settings'; // settings cache, same TTL
 
 // ── Intent classification signal tables ───────────────────────────────────────
 //
@@ -258,25 +260,20 @@ function resolveClassification(userInput) {
 }
 
 /**
- * buildClarifyingQuestion — Return the spoken clarifying question the agent
- * uses when the caller's promo intent is ambiguous (e.g. they just said "coupon").
+ * buildClarifyingQuestion — Return the spoken clarifying question.
  *
- * If the caller's first name is known (from discoveryNotes / ScrabEngine
- * entity extraction), it is prepended as a natural greeting:
- *   "Hi Mark! Let me clarify — ..."
- * If the name is unknown, the question starts directly:
- *   "Let me clarify — ..."
+ * Text comes from company settings (UI-configured in promotions.html).
+ * Supports {callerName} placeholder — replaced at runtime with the caller's
+ * first name if captured, stripped cleanly if not.
  *
- * @param {string|null} [callerName]  First name of the caller, if captured
+ * @param {string|null} callerName   Caller's first name, if captured
+ * @param {Object}      settings     Company settings from getCompanySettings()
  * @returns {string}
  */
-function buildClarifyingQuestion(callerName = null) {
-  const greeting = callerName ? `Hi ${callerName}! ` : '';
-  return (
-    `${greeting}Let me clarify — do you have a coupon or promotional code ` +
-    "you'd like to apply to your service visit, or are you asking if we have " +
-    "any current specials running?"
-  );
+function buildClarifyingQuestion(callerName = null, settings = {}) {
+  const template = settings.clarifyingQuestion ||
+    CompanyPromotionSettings.BUILT_IN_DEFAULTS.clarifyingQuestion;
+  return _applyPlaceholders(template, callerName);
 }
 
 /**
@@ -346,7 +343,10 @@ function extractCouponCode(userInput) {
  * @param {string} [returnPrompt]   Booking resume question (BOOKING origin only)
  * @returns {Promise<{ valid: boolean, promo: Object|null, responseText: string }>}
  */
-async function validateCouponCode(code, companyId, origin = 'DISCOVERY', returnPrompt = null) {
+async function validateCouponCode(code, companyId, origin = 'DISCOVERY', returnPrompt = null, settings = null) {
+  // Load settings if not pre-fetched by the caller
+  const s = settings || await getCompanySettings(companyId).catch(() => CompanyPromotionSettings.BUILT_IN_DEFAULTS);
+
   try {
     const now = new Date();
     const promo = await CompanyPromotion.findOne({
@@ -361,17 +361,19 @@ async function validateCouponCode(code, companyId, origin = 'DISCOVERY', returnP
 
     // ── Code not found or expired ──────────────────────────────────────────
     if (!promo) {
-      // Try to load ANY promo for this company to get a custom noCouponResponse
-      const anyPromo = await CompanyPromotion.findOne({ companyId }).sort({ priority: 1 }).lean();
-      const noMatch  = anyPromo?.noCouponResponse?.trim() ||
-        "I'm not finding that code in our system — it may have expired or " +
-        "been entered incorrectly. Let me still get you taken care of.";
+      // Priority: promo.noCouponResponse (per-promo) → settings.noActiveSpecials (company) → built-in
+      const anyPromo   = await CompanyPromotion.findOne({ companyId }).sort({ priority: 1 }).lean();
+      const noMatch    = anyPromo?.noCouponResponse?.trim() ||
+                         s.noActiveSpecials ||
+                         CompanyPromotionSettings.BUILT_IN_DEFAULTS.noActiveSpecials;
+      const noMatchCta = s.noActiveSpecialsCta ||
+                         CompanyPromotionSettings.BUILT_IN_DEFAULTS.noActiveSpecialsCta;
 
       let responseText = noMatch;
       if (origin === 'BOOKING' && returnPrompt) {
         responseText = `${responseText} ${returnPrompt}`;
       } else {
-        responseText = `${responseText} Would you like to go ahead and get scheduled at our standard rate?`;
+        responseText = `${responseText} ${noMatchCta}`;
       }
 
       logger.info(`[${SERVICE_ID}] Coupon NOT found/expired`, { companyId, code });
@@ -379,21 +381,23 @@ async function validateCouponCode(code, companyId, origin = 'DISCOVERY', returnP
     }
 
     // ── Valid code found ───────────────────────────────────────────────────
-    const desc = promo.description?.trim() || _buildFallbackDescription(promo);
-    const cta  = promo.bookingPrompt?.trim() ||
-      'Would you like to go ahead and apply that to your appointment today?';
+    const desc   = promo.description?.trim() || _buildFallbackDescription(promo);
+    const prefix = s.validCodePrefix?.trim() ||
+                   CompanyPromotionSettings.BUILT_IN_DEFAULTS.validCodePrefix;
+    const cta    = promo.bookingPrompt?.trim() ||
+                   'Would you like to go ahead and apply that to your appointment today?';
+    const bookingSuffix = s.validCodeBookingSuffix?.trim() ||
+                          CompanyPromotionSettings.BUILT_IN_DEFAULTS.validCodeBookingSuffix;
 
-    let responseText = `Great news! That code is valid — ${desc}`;
+    let responseText = `${prefix} ${desc}`.trim();
 
     if (origin === 'BOOKING' && returnPrompt) {
-      responseText = `${responseText} I'll make sure we apply that to your service. ${returnPrompt}`;
+      responseText = `${responseText} ${bookingSuffix} ${returnPrompt}`.trim();
     } else {
-      responseText = `${responseText} ${cta}`;
+      responseText = `${responseText} ${cta}`.trim();
     }
 
-    logger.info(`[${SERVICE_ID}] Coupon validated`, {
-      companyId, code, promoName: promo.name
-    });
+    logger.info(`[${SERVICE_ID}] Coupon validated`, { companyId, code, promoName: promo.name });
     return { valid: true, promo, responseText };
 
   } catch (err) {
@@ -460,20 +464,27 @@ async function getActivePromotions(companyId) {
  *   1. Filter by serviceType if caller mentioned a specific service
  *   2. Pick the highest-priority active promo that matches (or first if no filter)
  *   3. If no promos → use noCouponResponse from the first promo's field, or
- *      a sensible platform default (multi-tenant: never hardcode prices/terms)
+ *      company settings (UI-configured in promotions.html, stored per-companyId)
  *   4. Append the bookingPrompt to invite the caller to schedule
  *
- * @param {Array}  promos       Array of active promo objects
- * @param {string} userInput    Original caller utterance (for service-type detection)
- * @param {string} [origin]     'DISCOVERY' | 'BOOKING' — affects what is appended
- * @param {string} [returnPrompt] Booking resume question (BOOKING origin only)
+ * @param {Array}       promos        Array of active promo objects
+ * @param {string}      userInput     Original caller utterance (for service-type detection)
+ * @param {string}      [origin]      'DISCOVERY' | 'BOOKING' — affects what is appended
+ * @param {string|null} [returnPrompt] Booking resume question (BOOKING origin only)
+ * @param {Object|null} [settings]    Company promo settings from getCompanySettings()
+ * @param {string|null} [callContext] Original call reason (from discoveryNotes.callReason)
  * @returns {{ responseText: string, promoUsed: Object|null }}
  */
-function buildResponse(promos, userInput, origin = 'DISCOVERY', returnPrompt = null) {
+function buildResponse(promos, userInput, origin = 'DISCOVERY', returnPrompt = null, settings = null, callContext = null) {
   const normalized = (userInput || '').toLowerCase();
 
+  // Use company-configured settings; fall back to built-in defaults if not pre-loaded
+  const s = settings || CompanyPromotionSettings.BUILT_IN_DEFAULTS;
+
   // ── Step 1: Try to infer the service type caller is asking about ───────────
-  const inferredService = _inferServiceType(normalized);
+  // Check the promo query text first; fall back to the original call reason
+  const callContextNorm = callContext ? callContext.toLowerCase() : null;
+  const inferredService = _inferServiceType(normalized, callContextNorm);
 
   // ── Step 2: Pick the best matching promo ──────────────────────────────────
   let matched = null;
@@ -520,16 +531,17 @@ function buildResponse(promos, userInput, origin = 'DISCOVERY', returnPrompt = n
     }
 
   } else {
-    // ── No active promos — use the first promo's noCouponResponse if any exist ─
-    // (even inactive promos in the collection may have a custom no-promo message)
-    // For now, fall back to the platform default — safe for all tenants.
-    responseText =
-      "We don't have any active specials right now, but I'd be happy to get you scheduled at our standard rate.";
+    // ── No active promos — use company-configured no-specials response ─────────
+    // Source of truth: promotions.html Global Voice Settings → MongoDB → built-in
+    responseText = s.noActiveSpecials ||
+      CompanyPromotionSettings.BUILT_IN_DEFAULTS.noActiveSpecials;
 
     if (origin === 'BOOKING' && returnPrompt) {
       responseText = `${responseText} ${returnPrompt}`.trim();
     } else {
-      responseText = `${responseText} Would you still like to go ahead and schedule?`.trim();
+      const cta = s.noActiveSpecialsCta ||
+        CompanyPromotionSettings.BUILT_IN_DEFAULTS.noActiveSpecialsCta;
+      responseText = `${responseText} ${cta}`.trim();
     }
   }
 
@@ -549,9 +561,80 @@ async function invalidateCache(companyId) {
     if (!redis) return;
     const cacheKey = `${CACHE_KEY_PREFIX}:${companyId}`;
     await redis.del(cacheKey);
-    logger.info(`[${SERVICE_ID}] ✅ Cache invalidated for company ${companyId}`);
+    logger.info(`[${SERVICE_ID}] ✅ Promos cache invalidated for company ${companyId}`);
   } catch (err) {
-    logger.warn(`[${SERVICE_ID}] Cache invalidation failed (non-fatal)`, {
+    logger.warn(`[${SERVICE_ID}] Promos cache invalidation failed (non-fatal)`, {
+      companyId, error: err.message
+    });
+  }
+}
+
+/**
+ * getCompanySettings — Load this company's global promotion voice settings.
+ *
+ * Hot path: Redis first (key: promotions-settings:{companyId} TTL 15min)
+ * Fallback: MongoDB CompanyPromotionSettings.getForCompany()
+ * Fallback: built-in defaults (never throws — call always continues)
+ *
+ * Every string the agent speaks during a promo interaction comes from here.
+ * Nothing is hardcoded. The UI in promotions.html is the source of truth.
+ *
+ * @param {string} companyId
+ * @returns {Promise<Object>}  Settings object (always returns something)
+ */
+async function getCompanySettings(companyId) {
+  const cacheKey = `${SETTINGS_CACHE_PREFIX}:${companyId}`;
+
+  // ── 1. Redis fast path ─────────────────────────────────────────────────────
+  try {
+    const redis = await getSharedRedisClient();
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        logger.debug(`[${SERVICE_ID}] Settings cache HIT for ${companyId}`);
+        return JSON.parse(cached);
+      }
+    }
+  } catch (cacheErr) {
+    logger.warn(`[${SERVICE_ID}] Settings Redis read failed (non-fatal)`, {
+      companyId, error: cacheErr.message
+    });
+  }
+
+  // ── 2. MongoDB fallback ────────────────────────────────────────────────────
+  try {
+    const settings = await CompanyPromotionSettings.getForCompany(companyId);
+
+    // Backfill cache (fire-and-forget)
+    _cacheSettingsFireAndForget(companyId, settings);
+
+    logger.debug(`[${SERVICE_ID}] Settings MongoDB LOAD for ${companyId}`);
+    return settings;
+
+  } catch (dbErr) {
+    logger.warn(`[${SERVICE_ID}] Settings MongoDB load failed — using built-in defaults`, {
+      companyId, error: dbErr.message
+    });
+    return CompanyPromotionSettings.BUILT_IN_DEFAULTS;
+  }
+}
+
+/**
+ * invalidateSettingsCache — Delete the Redis settings cache for a company.
+ * Called by the API on every PATCH to /promotions/settings.
+ *
+ * @param {string} companyId
+ * @returns {Promise<void>}
+ */
+async function invalidateSettingsCache(companyId) {
+  try {
+    const redis = await getSharedRedisClient();
+    if (!redis) return;
+    const cacheKey = `${SETTINGS_CACHE_PREFIX}:${companyId}`;
+    await redis.del(cacheKey);
+    logger.info(`[${SERVICE_ID}] ✅ Settings cache invalidated for company ${companyId}`);
+  } catch (err) {
+    logger.warn(`[${SERVICE_ID}] Settings cache invalidation failed (non-fatal)`, {
       companyId, error: err.message
     });
   }
@@ -563,19 +646,38 @@ async function invalidateCache(companyId) {
 
 /**
  * _inferServiceType — Guess the service the caller wants a promo for.
- * Returns a lowercase slug or null if ambiguous.
  *
- * @param {string} normalized  Lowercased caller input
+ * Checks the caller's PROMO QUERY first (what they mentioned in the promo
+ * question). If no match, falls back to the call context (what service they
+ * originally called about, from discoveryNotes.callReason).
+ *
+ * Expanded to include product-based types that often appear as add-on promos:
+ * thermostat, uv_light, air_purifier, smart_home — so admins can configure
+ * promos like "WiFi Thermostat Special" and have them matched correctly.
+ *
+ * @param {string}      normalized    Lowercased caller promo query
+ * @param {string|null} callContext   Lowercased original callReason (optional)
  * @returns {string|null}
  */
-function _inferServiceType(normalized) {
-  if (/maintenance|tune.?up|annual service/.test(normalized)) return 'maintenance';
-  if (/repair|fix|broken|not working|not cooling|not heating/.test(normalized)) return 'repair';
-  if (/install|replacement|replace|new unit|new system/.test(normalized)) return 'installation';
-  if (/inspection|checkup|check.?up/.test(normalized)) return 'inspection';
-  if (/duct|ducts|ductwork/.test(normalized)) return 'ductwork';
-  if (/diagnostic|diagnosis|assess/.test(normalized)) return 'diagnostic';
-  return null;
+function _inferServiceType(normalized, callContext = null) {
+  // Check the promo query first
+  const infer = (text) => {
+    if (!text) return null;
+    if (/maintenance|tune.?up|annual service/.test(text))            return 'maintenance';
+    if (/repair|fix|broken|not working|not cooling|not heating/.test(text)) return 'repair';
+    if (/install|replacement|replace|new unit|new system/.test(text)) return 'installation';
+    if (/inspection|checkup|check.?up/.test(text))                   return 'inspection';
+    if (/duct|ducts|ductwork/.test(text))                            return 'ductwork';
+    if (/diagnostic|diagnosis|assess/.test(text))                    return 'diagnostic';
+    // ── Product-based promo types (add-ons / accessories) ──
+    if (/thermostat|wifi thermo|smart thermo/.test(text))            return 'thermostat';
+    if (/uv light|uv-light|ultraviolet|germicidal/.test(text))      return 'uv_light';
+    if (/air purif|purifier|air quality|iaq/.test(text))            return 'air_purifier';
+    if (/smart home|smart device|nest|ecobee/.test(text))           return 'smart_home';
+    return null;
+  };
+
+  return infer(normalized) || infer(callContext) || null;
 }
 
 /**
@@ -618,11 +720,51 @@ function _cachePromosFireAndForget(companyId, promos) {
       const cacheKey = `${CACHE_KEY_PREFIX}:${companyId}`;
       await redis.set(cacheKey, JSON.stringify(promos), { EX: REDIS_TTL });
     } catch (err) {
-      logger.warn(`[${SERVICE_ID}] Cache backfill failed (non-fatal)`, {
+      logger.warn(`[${SERVICE_ID}] Promos cache backfill failed (non-fatal)`, {
         companyId, error: err.message
       });
     }
   })();
+}
+
+/**
+ * _cacheSettingsFireAndForget — Write settings to Redis after MongoDB load.
+ * Never awaited — never blocks the hot path.
+ */
+function _cacheSettingsFireAndForget(companyId, settings) {
+  (async () => {
+    try {
+      const redis = await getSharedRedisClient();
+      if (!redis) return;
+      const cacheKey = `${SETTINGS_CACHE_PREFIX}:${companyId}`;
+      await redis.set(cacheKey, JSON.stringify(settings), { EX: REDIS_TTL });
+    } catch (err) {
+      logger.warn(`[${SERVICE_ID}] Settings cache backfill failed (non-fatal)`, {
+        companyId, error: err.message
+      });
+    }
+  })();
+}
+
+/**
+ * _applyPlaceholders — Replace {callerName} in a settings string.
+ * If callerName is null or the placeholder is absent, returns the string as-is.
+ * If callerName is null and the string starts with "Hi {callerName}! ",
+ * the greeting prefix is stripped cleanly.
+ *
+ * @param {string}      template
+ * @param {string|null} callerName
+ * @returns {string}
+ */
+function _applyPlaceholders(template, callerName = null) {
+  if (!template) return '';
+  if (callerName) {
+    return template.replace(/\{callerName\}/g, callerName);
+  }
+  // No name — strip the "Hi {callerName}! " prefix if present
+  return template
+    .replace(/Hi\s+\{callerName\}[!,.]?\s*/gi, '')
+    .trim();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -643,6 +785,10 @@ module.exports = {
   // ── Promo list & response building ─────────────────────────────────────
   getActivePromotions,
   buildResponse,
+
+  // ── Settings management ─────────────────────────────────────────────────
+  getCompanySettings,
+  invalidateSettingsCache,
 
   // ── Cache management ────────────────────────────────────────────────────
   invalidateCache,

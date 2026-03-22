@@ -2663,6 +2663,10 @@ class Agent2DiscoveryRunner {
         try {
           const { classificationState, digressionOrigin, returnPrompt } = pendingDigression;
 
+          // Load company promo settings once — used for all voice lines in this block.
+          // Redis cache (15-min TTL) means this is fast on every turn after first load.
+          const promoSettings = await PromotionsInterceptor.getCompanySettings(companyId).catch(() => ({}));
+
           // ── A1: Caller is responding to the clarifying question ────────────
           if (classificationState === 'AWAITING_COUPON_INTENT') {
             const resolved = PromotionsInterceptor.resolveClassification(input);
@@ -2674,7 +2678,7 @@ class Agent2DiscoveryRunner {
               if (code) {
                 // ✅ Got the code immediately — validate right now
                 const result = await PromotionsInterceptor.validateCouponCode(
-                  code, companyId, digressionOrigin, returnPrompt
+                  code, companyId, digressionOrigin, returnPrompt, promoSettings
                 );
                 await DiscoveryNotesService.popDigression(companyId, callSid);
 
@@ -2701,7 +2705,7 @@ class Agent2DiscoveryRunner {
                   companyId, callSid,
                   { classificationState: 'AWAITING_COUPON_CODE' }
                 );
-                const askCode = "Great! What's the coupon or promo code? I want to make sure we apply that for you.";
+                const askCode = promoSettings.askForCodePrompt || "Sure! What's the coupon or promo code you have? I want to make sure we apply that for you.";
 
                 emit('A2_PATH_SELECTED',  { path: 'PROMO_CLARIFICATION_AWAITING_CODE', reason: 'Caller confirmed HAS_COUPON — waiting for code' });
                 emit('A2_RESPONSE_READY', { path: 'PROMO_CLARIFICATION_AWAITING_CODE', responsePreview: askCode });
@@ -2731,7 +2735,7 @@ class Agent2DiscoveryRunner {
 
               const activePromos = await PromotionsInterceptor.getActivePromotions(companyId);
               const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
-                activePromos, input, digressionOrigin, returnPrompt || null
+                activePromos, input, digressionOrigin, returnPrompt || null, promoSettings, capturedReason
               );
 
               emit('A2_PROMOTIONS_INTERCEPTED', {
@@ -2761,7 +2765,7 @@ class Agent2DiscoveryRunner {
             if (code) {
               // ✅ Got the code — validate it
               const result = await PromotionsInterceptor.validateCouponCode(
-                code, companyId, digressionOrigin, returnPrompt
+                code, companyId, digressionOrigin, returnPrompt, promoSettings
               );
               await DiscoveryNotesService.popDigression(companyId, callSid);
 
@@ -2783,8 +2787,8 @@ class Agent2DiscoveryRunner {
               };
 
             } else {
-              // ❓ Couldn't extract a code — ask once more
-              const retry = "I'm sorry, I didn't quite catch the code — could you read it off for me one more time?";
+              // ❓ Couldn't extract a code — ask once more (uses company-configured retry prompt)
+              const retry = promoSettings.codeRetryPrompt || "I'm sorry, I didn't quite catch that code — could you read it off for me one more time?";
 
               emit('A2_PATH_SELECTED',  { path: 'PROMO_CODE_RETRY', reason: 'Code not extractable from input' });
               emit('A2_RESPONSE_READY', { path: 'PROMO_CODE_RETRY', responsePreview: retry });
@@ -2831,6 +2835,10 @@ class Agent2DiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
     if (input && PromotionsInterceptor.detect(input)) {
       try {
+        // Load company promo settings once — passed to all voice-line functions.
+        // Redis-cached (15-min TTL) so this is fast after first call.
+        const promoSettings = await PromotionsInterceptor.getCompanySettings(companyId).catch(() => ({}));
+
         // Where we are in the call — DISCOVERY or BOOKING
         const digressionOrigin = (
           nextState?.lane === 'BOOKING' || nextState?.sessionMode === 'BOOKING'
@@ -2850,7 +2858,7 @@ class Agent2DiscoveryRunner {
             returnPrompt:        null
           });
 
-          const clarifyQ = PromotionsInterceptor.buildClarifyingQuestion(callerName);
+          const clarifyQ = PromotionsInterceptor.buildClarifyingQuestion(callerName, promoSettings);
 
           emit('A2_PROMOTIONS_INTERCEPTED', { digressionOrigin, intent: 'AMBIGUOUS', inputPreview: clip(input, 60) });
           emit('A2_PATH_SELECTED',  { path: 'PROMO_CLARIFYING_QUESTION', reason: 'Promo intent ambiguous — asking to clarify' });
@@ -2875,7 +2883,7 @@ class Agent2DiscoveryRunner {
           if (code) {
             // ✅ Caller gave us the code in the same utterance — validate now
             const result = await PromotionsInterceptor.validateCouponCode(
-              code, companyId, digressionOrigin, null
+              code, companyId, digressionOrigin, null, promoSettings
             );
 
             emit('A2_PROMOTIONS_COUPON_VALIDATED', {
@@ -2906,7 +2914,7 @@ class Agent2DiscoveryRunner {
               returnPrompt:        null
             });
 
-            const askCode = "Sure! What's the coupon or promo code you have? I want to make sure we apply that for you.";
+            const askCode = promoSettings.askForCodePrompt || "Sure! What's the coupon or promo code you have? I want to make sure we apply that for you.";
 
             emit('A2_PROMOTIONS_INTERCEPTED', { digressionOrigin, intent: 'HAS_COUPON', inputPreview: clip(input, 60) });
             emit('A2_PATH_SELECTED',  { path: 'PROMO_AWAITING_CODE', reason: 'HAS_COUPON intent — no code in utterance' });
@@ -2938,7 +2946,7 @@ class Agent2DiscoveryRunner {
 
           const activePromos = await PromotionsInterceptor.getActivePromotions(companyId);
           const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
-            activePromos, input, digressionOrigin, null
+            activePromos, input, digressionOrigin, null, promoSettings, capturedReason
           );
 
           emit('A2_PROMOTIONS_INTERCEPTED', {
