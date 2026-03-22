@@ -46,10 +46,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!AgentConsoleAuth.requireAuth()) return;
 
   const params = new URLSearchParams(window.location.search);
-  companyId = params.get('companyId') || localStorage.getItem('selectedCompanyId');
+  companyId = params.get('companyId');  // URL-only — NO localStorage fallback (multi-tenant safety)
 
   if (!companyId) {
-    showError('No companyId in URL — add ?companyId=xxx to the URL.');
+    // Hard redirect — never silently inherit a stale companyId from a prior session
+    showError('No companyId in URL — redirecting to directory…');
+    setTimeout(() => { window.location.href = '/directory.html'; }, 2000);
     return;
   }
 

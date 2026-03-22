@@ -1026,15 +1026,19 @@ let STATE = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
-   BOOTSTRAP — Read companyId + token from URL / localStorage
+   BOOTSTRAP — Read companyId + token from URL only (NEVER from localStorage)
+   Multi-tenant rule: companyId MUST come from the URL parameter.
+   Using localStorage here risks silently loading a different tenant's data.
    ══════════════════════════════════════════════════════════════════════════ */
 (function bootstrap() {
   const params    = new URLSearchParams(window.location.search);
-  STATE.companyId = params.get('companyId') || localStorage.getItem('selectedCompanyId');
+  STATE.companyId = params.get('companyId');   // URL-only — NO localStorage fallback
   STATE.token     = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
 
   if (!STATE.companyId) {
-    showToast('No companyId found — please open from the Agent Console', 'error');
+    // Hard redirect — never silently inherit a stale companyId from a prior session
+    showToast('No companyId in URL — redirecting to directory…', 'error');
+    setTimeout(() => { window.location.href = '/directory.html'; }, 2000);
     return;
   }
 
