@@ -115,6 +115,22 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
     // { turn: Number, question: String, answer: String|null, timestamp: ISO }
     qaLog: [],
 
+    // ── Digression stack ─────────────────────────────────────────────────────
+    // Pushed when a caller asks an off-topic question (e.g. "do you have any
+    // specials?") mid-flow.  The interceptor saves exactly where the call was,
+    // answers the question, then pops the stack to resume cleanly.
+    //
+    // Each entry shape:
+    // {
+    //   digressionType:  'PROMOTIONS_QUERY',          // type of digression
+    //   digressionOrigin: 'DISCOVERY' | 'BOOKING',    // where the call was when it fired
+    //   savedStep:        'COLLECT_PREFERRED_TIME',    // BookingLogicEngine step (BOOKING only)
+    //   savedContext:     { preferredDay: 'Monday' },  // snapshot of live ctx (BOOKING only)
+    //   returnPrompt:     'What time works for Monday?', // exact re-ask (BOOKING only)
+    //   timestamp:        ISO string
+    // }
+    digressionStack: [],
+
     // ── Timestamps ──────────────────────────────────────────────────────────
     startedAt: now,
     updatedAt: now
@@ -538,6 +554,155 @@ function _persistToMongoFireAndForget(notes) {
 }
 
 // ============================================================================
+// DIGRESSION STACK HELPERS
+// ============================================================================
+
+/**
+ * pushDigression — Save current call position before answering an off-topic
+ * question (e.g. a promotions query mid-booking or mid-discovery).
+ *
+ * CALLER PATTERN (fire-and-forget — never await in the hot path):
+ *   DiscoveryNotesService.pushDigression(companyId, callSid, data).catch(e => log(e));
+ *
+ * @param {string} companyId
+ * @param {string} callSid
+ * @param {Object} digressionData  — shape documented in _buildEmptyNotes.digressionStack
+ * @returns {Promise<Object|null>}  Updated notes, or null on failure
+ */
+async function pushDigression(companyId, callSid, digressionData) {
+  if (!digressionData || !digressionData.digressionType) {
+    logger.warn('[DISCOVERY NOTES] pushDigression: missing digressionType — skipped', { callSid });
+    return null;
+  }
+
+  const entry = {
+    digressionType:    digressionData.digressionType,
+    digressionOrigin:  digressionData.digressionOrigin  || 'DISCOVERY',
+    savedStep:         digressionData.savedStep         || null,
+    savedContext:      digressionData.savedContext       || {},
+    returnPrompt:      digressionData.returnPrompt      || null,
+    timestamp:         new Date().toISOString()
+  };
+
+  try {
+    const redis = await getSharedRedisClient();
+    if (!redis) {
+      logger.warn('[DISCOVERY NOTES] pushDigression: Redis unavailable — skipped (graceful degrade)', { callSid });
+      return null;
+    }
+
+    const key = _buildKey(companyId, callSid);
+    const raw = await redis.get(key);
+    if (!raw) {
+      logger.warn('[DISCOVERY NOTES] pushDigression: key not found — cannot push', { callSid, key });
+      return null;
+    }
+
+    const current = JSON.parse(raw);
+    const updated = { ...current };
+    updated.digressionStack = [...(current.digressionStack || []), entry];
+    updated.updatedAt = new Date().toISOString();
+
+    await redis.set(key, JSON.stringify(updated), { EX: CONFIG.REDIS_TTL_SECONDS });
+
+    logger.info('[DISCOVERY NOTES] ✅ Digression pushed', {
+      callSid,
+      digressionType:   entry.digressionType,
+      digressionOrigin: entry.digressionOrigin,
+      savedStep:        entry.savedStep,
+      stackDepth:       updated.digressionStack.length
+    });
+
+    return updated;
+
+  } catch (err) {
+    logger.warn('[DISCOVERY NOTES] pushDigression failed (non-fatal)', { callSid, error: err.message });
+    return null;
+  }
+}
+
+/**
+ * popDigression — Retrieve and remove the most recent digression entry.
+ * Called after the agent has answered the off-topic question and the caller
+ * is ready to resume the original flow.
+ *
+ * Returns the popped entry (or null if stack was empty / Redis unavailable).
+ * The caller uses entry.digressionOrigin to decide the return path:
+ *   DISCOVERY → fire FUC ("Would you like to get scheduled?")
+ *   BOOKING   → resume at entry.savedStep with entry.returnPrompt
+ *
+ * @param {string} companyId
+ * @param {string} callSid
+ * @returns {Promise<Object|null>}  The popped digressionStack entry, or null
+ */
+async function popDigression(companyId, callSid) {
+  try {
+    const redis = await getSharedRedisClient();
+    if (!redis) {
+      logger.warn('[DISCOVERY NOTES] popDigression: Redis unavailable — skipped (graceful degrade)', { callSid });
+      return null;
+    }
+
+    const key = _buildKey(companyId, callSid);
+    const raw = await redis.get(key);
+    if (!raw) {
+      logger.warn('[DISCOVERY NOTES] popDigression: key not found', { callSid, key });
+      return null;
+    }
+
+    const current = JSON.parse(raw);
+    const stack   = current.digressionStack || [];
+
+    if (stack.length === 0) {
+      logger.info('[DISCOVERY NOTES] popDigression: stack already empty', { callSid });
+      return null;
+    }
+
+    // Pop from the end (LIFO — supports nested digressions in the future)
+    const popped  = stack[stack.length - 1];
+    const updated = { ...current };
+    updated.digressionStack = stack.slice(0, -1);
+    updated.updatedAt       = new Date().toISOString();
+
+    await redis.set(key, JSON.stringify(updated), { EX: CONFIG.REDIS_TTL_SECONDS });
+
+    logger.info('[DISCOVERY NOTES] ✅ Digression popped', {
+      callSid,
+      digressionType:   popped.digressionType,
+      digressionOrigin: popped.digressionOrigin,
+      savedStep:        popped.savedStep,
+      stackDepthAfter:  updated.digressionStack.length
+    });
+
+    return popped;
+
+  } catch (err) {
+    logger.warn('[DISCOVERY NOTES] popDigression failed (non-fatal)', { callSid, error: err.message });
+    return null;
+  }
+}
+
+/**
+ * peekDigression — Read the top of the stack without removing it.
+ * Used by the return-path router to decide BEFORE committing to the action.
+ *
+ * @param {string} companyId
+ * @param {string} callSid
+ * @returns {Promise<Object|null>}  Top entry, or null if empty / unavailable
+ */
+async function peekDigression(companyId, callSid) {
+  try {
+    const notes = await load(companyId, callSid);
+    if (!notes) return null;
+    const stack = notes.digressionStack || [];
+    return stack.length > 0 ? stack[stack.length - 1] : null;
+  } catch (err) {
+    logger.warn('[DISCOVERY NOTES] peekDigression failed (non-fatal)', { callSid, error: err.message });
+    return null;
+  }
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -548,5 +713,8 @@ module.exports = {
   persist,
   formatForLLM,
   purge,
+  pushDigression,
+  popDigression,
+  peekDigression,
   CONFIG
 };

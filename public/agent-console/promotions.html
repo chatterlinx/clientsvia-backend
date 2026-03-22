@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Promotions & Coupons — ClientVia</title>
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Shared base styles (same as triggers.html) -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ══════════════════════════════════════════════════════════════════════
+       DESIGN TOKENS  (match triggers.html palette exactly)
+       ══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --color-primary:        #3b82f6;
+      --color-primary-dark:   #2563eb;
+      --color-primary-light:  #eff6ff;
+      --color-success:        #22c55e;
+      --color-success-light:  #f0fdf4;
+      --color-warning:        #f59e0b;
+      --color-warning-light:  #fffbeb;
+      --color-danger:         #ef4444;
+      --color-danger-light:   #fef2f2;
+      --color-purple:         #8b5cf6;
+      --color-purple-light:   #f5f3ff;
+      --color-orange:         #f97316;
+      --color-teal:           #14b8a6;
+
+      --bg-page:          #f8fafc;
+      --bg-card:          #ffffff;
+      --bg-modal:         #1a1a1a;
+
+      --text-primary:     #0f172a;
+      --text-secondary:   #475569;
+      --text-muted:       #94a3b8;
+      --text-white:       #ffffff;
+
+      --border-default:   #e2e8f0;
+      --border-focus:     #3b82f6;
+
+      --radius-sm:  6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-modal: 0 25px 60px rgba(0,0,0,0.35);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       PAGE LAYOUT
+       ══════════════════════════════════════════════════════════════════════ */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       STATS BAR
+       ══════════════════════════════════════════════════════════════════════ */
+    .promo-stats-bar {
+      display: flex;
+      gap: 24px;
+      padding: 14px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      margin-bottom: 20px;
+    }
+    .promo-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .promo-stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+    .promo-stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .promo-stat-value.active   { color: var(--color-success); }
+    .promo-stat-value.inactive { color: var(--color-danger); }
+    .promo-stat-value.pending  { color: var(--color-warning); }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       HOW IT WORKS BANNER (collapsible — same pattern as triggers.html)
+       ══════════════════════════════════════════════════════════════════════ */
+    .info-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--color-primary-light);
+      border: 1px solid #bfdbfe;
+      border-radius: var(--radius-sm);
+      color: #1e40af;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 0;
+    }
+    .info-toggle-btn:hover { background: #dbeafe; }
+    .info-content {
+      display: none;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border: 2px solid var(--color-primary);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-top: 12px;
+    }
+    .info-content .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .flow-step {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid #bfdbfe;
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+    .flow-step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: var(--color-primary);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .flow-step-title { font-size: 13px; font-weight: 700; color: #1e40af; margin-bottom: 4px; }
+    .flow-step-desc  { font-size: 12px; color: #1e3a8a; line-height: 1.5; }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       PROMO CARD LIST
+       ══════════════════════════════════════════════════════════════════════ */
+    .promo-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .promo-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .promo-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .promo-card.is-active   { border-left: 4px solid var(--color-success); }
+    .promo-card.is-inactive { border-left: 4px solid var(--color-danger);  opacity: 0.75; }
+    .promo-card.is-expired  { border-left: 4px solid var(--text-muted);    opacity: 0.65; }
+
+    /* Card row layout */
+    .promo-card-row {
+      display: grid;
+      grid-template-columns:
+        44px           /* drag handle */
+        1fr            /* name + service type */
+        180px          /* discount badge */
+        160px          /* validity window */
+        110px          /* status toggle */
+        100px;         /* actions */
+      align-items: center;
+      padding: 14px 18px;
+      gap: 14px;
+    }
+
+    /* Drag handle */
+    .drag-handle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      color: var(--text-muted);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background 0.15s;
+    }
+    .drag-handle:hover { color: var(--text-secondary); background: var(--bg-page); }
+
+    /* Name column */
+    .promo-name { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px; }
+    .promo-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .promo-service-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .promo-code-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: var(--color-purple-light);
+      border: 1px solid #ddd6fe;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-purple);
+      font-family: 'Courier New', monospace;
+    }
+
+    /* Discount column */
+    .discount-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .discount-badge.fixed-price  { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .discount-badge.percent-off  { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .discount-badge.flat-discount{ background: #eff6ff; color: var(--color-primary-dark); border: 1px solid #bfdbfe; }
+    .discount-badge.free-service { background: #fdf4ff; color: #9333ea; border: 1px solid #e9d5ff; }
+    .discount-badge.custom       { background: #f8fafc; color: var(--text-secondary); border: 1px solid var(--border-default); }
+
+    /* Validity column */
+    .validity-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .validity-label strong { color: var(--text-primary); }
+    .validity-expired { color: var(--color-danger); font-weight: 600; }
+    .validity-always  { color: var(--color-success); font-weight: 600; }
+
+    /* Toggle column */
+    .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      cursor: pointer;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #cbd5e1;
+      border-radius: 26px;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--color-success); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(22px); }
+    .toggle-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+
+    /* Actions column */
+    .promo-actions { display: flex; gap: 6px; }
+    .btn-icon-sm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-secondary);
+    }
+    .btn-icon-sm:hover                 { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+    .btn-icon-sm.danger:hover          { border-color: var(--color-danger);  color: var(--color-danger);  background: var(--color-danger-light); }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       EMPTY STATE
+       ══════════════════════════════════════════════════════════════════════ */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state h3   { font-size: 18px; font-weight: 700; color: var(--text-secondary); margin: 0 0 8px; }
+    .empty-state p    { font-size: 14px; margin: 0 0 20px; line-height: 1.6; max-width: 380px; }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       MODAL — DARK THEME (matches triggers.html exactly)
+       ══════════════════════════════════════════════════════════════════════ */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(2px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: var(--bg-modal);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-modal);
+      width: 100%;
+      max-width: 720px;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      color: var(--text-white);
+    }
+
+    /* Modal header */
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 28px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .modal-title   { font-size: 18px; font-weight: 700; }
+    .modal-subtitle{ font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .btn-modal-close {
+      width: 32px;
+      height: 32px;
+      background: rgba(255,255,255,0.08);
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.6);
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-modal-close:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+    /* Modal body */
+    .modal-body { padding: 24px 28px; }
+
+    /* Section dividers inside modal */
+    .modal-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.35);
+      margin: 22px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* Form groups */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.02em;
+    }
+    .form-label .required { color: #f87171; margin-left: 2px; }
+    .form-hint {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
+      width: 100%;
+      padding: 9px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: var(--radius-sm);
+      color: var(--text-white);
+      font-size: 13px;
+      font-family: inherit;
+      transition: border-color 0.15s, background 0.15s;
+      box-sizing: border-box;
+    }
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      background: rgba(59,130,246,0.1);
+    }
+    .form-input::placeholder,
+    .form-textarea::placeholder { color: rgba(255,255,255,0.25); }
+
+    .form-select option { background: #2d2d2d; color: #fff; }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+    .form-textarea.tall { min-height: 120px; }
+
+    /* Character counter */
+    .char-counter {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      text-align: right;
+      margin-top: 2px;
+    }
+    .char-counter.warn { color: var(--color-warning); }
+    .char-counter.over { color: var(--color-danger); }
+
+    /* Inline toggle inside modal */
+    .modal-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius-sm);
+    }
+    .modal-toggle-label { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .modal-toggle-hint  { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+
+    /* Info box inside modal */
+    .modal-info-box {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      background: rgba(59,130,246,0.12);
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: #93c5fd;
+      line-height: 1.5;
+    }
+    .modal-info-box .icon { font-size: 16px; flex-shrink: 0; }
+
+    /* Modal footer */
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px 24px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      gap: 10px;
+    }
+    .modal-footer-right { display: flex; gap: 10px; }
+
+    /* Buttons */
+    .btn-modal-cancel {
+      padding: 9px 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: var(--radius-sm);
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-modal-cancel:hover { background: rgba(255,255,255,0.14); color: #fff; }
+    .btn-modal-save {
+      padding: 9px 22px;
+      background: var(--color-primary);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-modal-save:hover    { background: var(--color-primary-dark); }
+    .btn-modal-save:disabled { background: #334155; cursor: not-allowed; opacity: 0.6; }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       TOAST NOTIFICATIONS
+       ══════════════════════════════════════════════════════════════════════ */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      background: #1e293b;
+      border-radius: var(--radius-md);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      font-size: 13px;
+      font-weight: 600;
+      color: #f8fafc;
+      pointer-events: auto;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.25s, transform 0.25s;
+      min-width: 260px;
+      max-width: 400px;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success .toast-icon { color: var(--color-success); }
+    .toast.error   .toast-icon { color: var(--color-danger); }
+    .toast.warning .toast-icon { color: var(--color-warning); }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       FILTER BAR
+       ══════════════════════════════════════════════════════════════════════ */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border-default);
+      border-radius: 20px;
+      background: var(--bg-card);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn.active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #fff;
+    }
+    .filter-btn:hover:not(.active) { border-color: var(--color-primary); color: var(--color-primary); }
+
+    .search-input-wrap { position: relative; margin-left: auto; }
+    .search-input-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+    .search-input {
+      padding: 7px 12px 7px 34px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      font-size: 13px;
+      color: var(--text-primary);
+      width: 220px;
+      transition: border-color 0.15s;
+    }
+    .search-input:focus { outline: none; border-color: var(--color-primary); }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       RESPONSIVE
+       ══════════════════════════════════════════════════════════════════════ */
+    @media (max-width: 900px) {
+      .promo-card-row { grid-template-columns: 44px 1fr 110px 100px; }
+      .promo-card-row .discount-col,
+      .promo-card-row .validity-col { display: none; }
+      .form-row, .form-row-3 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .promo-stats-bar { flex-wrap: wrap; gap: 14px; }
+      .modal { max-height: 100vh; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       HEADER — STICKY TOP BAR
+       ════════════════════════════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-left">
+      <button class="btn btn-ghost btn-icon" id="btn-back" title="Back to Agent 2.0">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M13 17H16C16.53 17 17.04 16.79 17.41 16.41C17.79 16.04 18 15.53 18 15V5C18 4.47 17.79 3.96 17.41 3.59C17.04 3.21 16.53 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <a href="#" id="header-logo-link" class="header-logo" title="Agent Console Home">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+          <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+        <span class="header-logo-text">ClientVia</span>
+      </a>
+      <div class="header-divider"></div>
+      <span class="header-title">Promotions &amp; Coupons</span>
+    </div>
+
+    <div class="header-center">
+      <span class="company-name" id="header-company-name">Loading...</span>
+      <span class="company-id-pill" id="header-company-id">—</span>
+    </div>
+
+    <div class="header-right" style="display:flex;align-items:center;gap:10px;">
+      <!-- Cache Refresh -->
+      <button class="btn btn-secondary" id="btn-refresh-cache" title="Flush runtime promotions cache">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M12 7A5 5 0 1 1 7 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M12 2v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Refresh Cache
+      </button>
+      <!-- Add Promo — primary CTA -->
+      <button class="btn btn-primary" id="btn-add-promo">
+        + Add Promotion
+      </button>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       MAIN CONTENT
+       ════════════════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-left">
+        <a href="#" class="back-button" id="btn-back-page">
+          <svg viewBox="0 0 16 16" fill="none">
+            <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Back to Agent 2.0
+        </a>
+        <div>
+          <h1 class="page-title">Promotions &amp; Coupons</h1>
+          <p class="page-subtitle">Manage deals the agent presents when callers ask about specials at any point in the call</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HOW IT WORKS (collapsible) ──────────────────────────────────── -->
+    <div style="margin-bottom:20px;">
+      <button class="info-toggle-btn" id="btn-how-it-works">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M8 11.5V7.5M8 5V4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        How Promotions Work In Calls
+      </button>
+      <div class="info-content" id="how-it-works-content">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <span style="font-size:28px;">🎟️</span>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:16px;color:#1e40af;margin-bottom:8px;">
+              Agent handles promo questions at ANY turn — automatically returns to where it was
+            </div>
+            <div class="flow-steps">
+              <div class="flow-step">
+                <div class="flow-step-num">1</div>
+                <div class="flow-step-title">Signal Detected</div>
+                <div class="flow-step-desc">Caller says "do you have any specials?" or "I have a coupon" — interceptor fires <strong>before</strong> trigger matching, at any turn.</div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-step-num">2</div>
+                <div class="flow-step-title">Position Saved</div>
+                <div class="flow-step-desc">The call's current position (Discovery or mid-Booking step) is saved automatically so the agent knows exactly where to resume.</div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-step-num">3</div>
+                <div class="flow-step-title">Promo Answered</div>
+                <div class="flow-step-desc">Agent reads the <strong>Description</strong> you write here, then appends the <strong>Booking Prompt</strong> to invite the caller to act.</div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-step-num">4</div>
+                <div class="flow-step-title">Smart Return</div>
+                <div class="flow-step-desc"><strong>From Discovery:</strong> agent fires the "Would you like to schedule?" consent gate.<br><strong>From Booking:</strong> agent resumes the exact booking step it was on.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STATS BAR ────────────────────────────────────────────────────── -->
+    <div class="promo-stats-bar">
+      <div class="promo-stat">
+        <span class="promo-stat-value" id="stat-total">—</span>
+        <span class="promo-stat-label">Total</span>
+      </div>
+      <div class="promo-stat">
+        <span class="promo-stat-value active" id="stat-active">—</span>
+        <span class="promo-stat-label">Active</span>
+      </div>
+      <div class="promo-stat">
+        <span class="promo-stat-value inactive" id="stat-inactive">—</span>
+        <span class="promo-stat-label">Inactive</span>
+      </div>
+      <div class="promo-stat">
+        <span class="promo-stat-value pending" id="stat-scheduled">—</span>
+        <span class="promo-stat-label">Scheduled</span>
+      </div>
+    </div>
+
+    <!-- ── FILTER BAR ───────────────────────────────────────────────────── -->
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="active">Active Only</button>
+      <button class="filter-btn" data-filter="inactive">Inactive</button>
+      <button class="filter-btn" data-filter="scheduled">Scheduled</button>
+      <div class="search-input-wrap">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M10 10L12.5 12.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <input class="search-input" id="search-input" type="text" placeholder="Search promotions…">
+      </div>
+    </div>
+
+    <!-- ── PROMO LIST CARD ──────────────────────────────────────────────── -->
+    <div class="card" style="padding:0;overflow:hidden;">
+
+      <!-- Table header -->
+      <div style="
+        display:grid;
+        grid-template-columns:44px 1fr 180px 160px 110px 100px;
+        gap:14px;
+        padding:10px 18px;
+        background:#f8fafc;
+        border-bottom:1px solid var(--border-default);
+        font-size:11px;
+        font-weight:700;
+        text-transform:uppercase;
+        letter-spacing:0.06em;
+        color:var(--text-muted);
+        align-items:center;
+      " id="list-header">
+        <span></span>
+        <span>Name / Service</span>
+        <span>Discount</span>
+        <span>Valid Window</span>
+        <span>Status</span>
+        <span>Actions</span>
+      </div>
+
+      <!-- Promo list container -->
+      <div class="promo-list" id="promo-list">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Loading state -->
+      <div id="list-loading" style="display:none;padding:40px;text-align:center;color:var(--text-muted);">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="animation:spin 1s linear infinite;margin-bottom:8px;">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        <div style="font-size:14px;">Loading promotions…</div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <div class="empty-state-icon">🎟️</div>
+        <h3>No promotions yet</h3>
+        <p>Add your first promotion so the agent can present deals when callers ask about specials, coupons, or current pricing.</p>
+        <button class="btn btn-primary" onclick="openModal()">+ Add First Promotion</button>
+      </div>
+
+    </div>
+    <!-- /promo list card -->
+
+  </main>
+  <!-- /main -->
+
+</div>
+<!-- /app-container -->
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     MODAL — ADD / EDIT PROMOTION
+     ════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+
+    <!-- Modal Header -->
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-title">Add Promotion</div>
+        <div class="modal-subtitle" id="modal-subtitle">New deal or coupon for this company</div>
+      </div>
+      <button class="btn-modal-close" id="btn-modal-close" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="modal-body">
+
+      <!-- ── SECTION: Identity ──────────────────────────────────────────── -->
+      <div class="modal-section-label">Promotion Identity</div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group">
+          <label class="form-label" for="f-name">
+            Name <span class="required">*</span>
+          </label>
+          <input class="form-input" id="f-name" type="text" placeholder="e.g. Spring Maintenance Special" maxlength="120">
+          <div class="form-hint">Admin display name — shown in the list and on reports.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-code">Coupon Code <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional)</span></label>
+          <input class="form-input" id="f-code" type="text" placeholder="e.g. SPRING99" maxlength="40" style="font-family:'Courier New',monospace;text-transform:uppercase;">
+          <div class="form-hint">Leave blank if no code — agent will not reference a code.</div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: Service & Discount ──────────────────────────────── -->
+      <div class="modal-section-label">Service &amp; Discount</div>
+
+      <div class="form-row-3" style="margin-bottom:14px;">
+        <div class="form-group">
+          <label class="form-label" for="f-service-type">Service Type</label>
+          <select class="form-select" id="f-service-type">
+            <option value="all">All Services</option>
+            <option value="maintenance">Maintenance / Tune-Up</option>
+            <option value="repair">Repair</option>
+            <option value="installation">Installation / Replacement</option>
+            <option value="inspection">Inspection</option>
+            <option value="diagnostic">Diagnostic</option>
+            <option value="ductwork">Ductwork</option>
+            <option value="other">Other</option>
+          </select>
+          <div class="form-hint">Used to match which promo fits the caller's service question.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-service-label">Service Voice Label</label>
+          <input class="form-input" id="f-service-label" type="text" placeholder="e.g. annual maintenance" maxlength="80">
+          <div class="form-hint">How the agent says the service aloud in the response.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-discount-type">Discount Type</label>
+          <select class="form-select" id="f-discount-type">
+            <option value="custom">Custom (use Description field)</option>
+            <option value="fixed_price">Fixed Price ($)</option>
+            <option value="percent_off">Percent Off (%)</option>
+            <option value="flat_discount">Flat Discount ($)</option>
+            <option value="free_service">Free Service</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;" id="discount-value-row">
+        <div class="form-group" id="discount-value-group">
+          <label class="form-label" for="f-discount-value">Discount Value</label>
+          <input class="form-input" id="f-discount-value" type="number" min="0" step="0.01" placeholder="e.g. 189">
+          <div class="form-hint" id="discount-value-hint">Dollar amount — used to build the agent's voice response if Description is blank.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-priority">Priority</label>
+          <input class="form-input" id="f-priority" type="number" min="1" max="999" placeholder="100" value="100">
+          <div class="form-hint">Lower = shown first when multiple active promos match. Default: 100.</div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: Agent Voice Responses ────────────────────────────── -->
+      <div class="modal-section-label">Agent Voice Responses</div>
+
+      <div class="form-group full" style="margin-bottom:14px;">
+        <label class="form-label" for="f-description">
+          Promo Description <span style="color:rgba(255,255,255,0.3);font-weight:400;">(what the agent reads aloud)</span>
+        </label>
+        <textarea class="form-textarea tall" id="f-description" maxlength="500"
+          placeholder="e.g. We currently have our Spring Maintenance Special at $189 — that includes a full system inspection and two service visits, parts and labor included."></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;">
+          <div class="form-hint">Write this as natural speech. The agent reads it word-for-word. If blank, a minimal line is auto-generated from the discount fields above.</div>
+          <div class="char-counter" id="desc-counter">0 / 500</div>
+        </div>
+      </div>
+
+      <div class="form-group full" style="margin-bottom:14px;">
+        <label class="form-label" for="f-booking-prompt">Booking Prompt <span style="color:rgba(255,255,255,0.3);font-weight:400;">(call-to-action after the deal)</span></label>
+        <textarea class="form-textarea" id="f-booking-prompt" maxlength="300"
+          placeholder="Would you like to go ahead and get that scheduled today?"></textarea>
+        <div class="form-hint" style="margin-top:3px;">
+          <strong style="color:rgba(255,255,255,0.5);">From Discovery:</strong> this IS the FUC — leads to "Would you like to schedule?"<br>
+          <strong style="color:rgba(255,255,255,0.5);">From Booking:</strong> agent adjusts this to "apply that to your appointment" and resumes the booking step.
+        </div>
+      </div>
+
+      <div class="form-group full" style="margin-bottom:14px;">
+        <label class="form-label" for="f-no-coupon-response">No Active Promo Response</label>
+        <textarea class="form-textarea" id="f-no-coupon-response" maxlength="400"
+          placeholder="We don't have any active specials right now, but I'd be happy to get you scheduled at our standard rate."></textarea>
+        <div class="form-hint" style="margin-top:3px;">What the agent says when a caller asks about specials but this promo is inactive or no others exist. Falls back to a platform default if left blank.</div>
+      </div>
+
+      <div class="form-group full" style="margin-bottom:14px;">
+        <label class="form-label" for="f-terms">Terms &amp; Conditions <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional — not spoken unless asked)</span></label>
+        <textarea class="form-textarea" id="f-terms" maxlength="600"
+          placeholder="New customers only. Cannot be combined with other offers. Valid through Dec 31, 2026."></textarea>
+        <div class="form-hint" style="margin-top:3px;">Injected into the LLM's context. If the caller asks "are there any restrictions?", the agent can reference these without you having to script it.</div>
+      </div>
+
+      <!-- ── SECTION: Validity Window ──────────────────────────────────── -->
+      <div class="modal-section-label">Validity Window</div>
+
+      <div class="modal-info-box" style="margin-bottom:14px;">
+        <span class="icon">💡</span>
+        <span>Leave both dates blank to make this promo always active with no expiry. Set only <strong>Valid To</strong> to create a promo that's active now but expires on a date. The toggle below is the master on/off — it overrides the date window.</span>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group">
+          <label class="form-label" for="f-valid-from">Valid From</label>
+          <input class="form-input" id="f-valid-from" type="date">
+          <div class="form-hint">Promo won't be shown before this date. Leave blank = active immediately.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-valid-to">Valid To (Expiry)</label>
+          <input class="form-input" id="f-valid-to" type="date">
+          <div class="form-hint">Promo won't be shown after this date. Leave blank = never expires.</div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: Status ───────────────────────────────────────────── -->
+      <div class="modal-section-label">Status</div>
+
+      <div class="modal-toggle-row" style="margin-bottom:8px;">
+        <div>
+          <div class="modal-toggle-label">Active</div>
+          <div class="modal-toggle-hint">Master toggle — when OFF, agent will never present this promo regardless of dates.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="f-is-active" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+    </div>
+    <!-- /modal-body -->
+
+    <!-- Modal Footer -->
+    <div class="modal-footer">
+      <div id="modal-delete-zone">
+        <!-- Delete button shown only in edit mode -->
+      </div>
+      <div class="modal-footer-right">
+        <button class="btn-modal-cancel" id="btn-modal-cancel">Cancel</button>
+        <button class="btn-modal-save"   id="btn-modal-save">Save Promotion</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- /modal -->
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════════════════════════════ */
+let STATE = {
+  companyId:    null,
+  token:        null,
+  promotions:   [],       // full list from API
+  filtered:     [],       // after filter/search
+  editingId:    null,     // null = add mode, string = edit mode
+  currentFilter: 'all'
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BOOTSTRAP — Read companyId + token from URL / localStorage
+   ══════════════════════════════════════════════════════════════════════════ */
+(function bootstrap() {
+  const params    = new URLSearchParams(window.location.search);
+  STATE.companyId = params.get('companyId') || localStorage.getItem('selectedCompanyId');
+  STATE.token     = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+
+  if (!STATE.companyId) {
+    showToast('No companyId found — please open from the Agent Console', 'error');
+    return;
+  }
+
+  // Back button destinations
+  const agentUrl = `/agent-console/agent2.html?companyId=${STATE.companyId}`;
+  document.getElementById('btn-back').onclick        = () => { window.location.href = agentUrl; };
+  document.getElementById('btn-back-page').href      = agentUrl;
+  document.getElementById('header-logo-link').href   = `/agent-console/index.html?companyId=${STATE.companyId}`;
+
+  document.getElementById('header-company-id').textContent = STATE.companyId;
+
+  loadCompanyName();
+  loadPromotions();
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   API HELPERS
+   ══════════════════════════════════════════════════════════════════════════ */
+function apiHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (STATE.token) h['Authorization'] = `Bearer ${STATE.token}`;
+  return h;
+}
+
+async function apiGet(path) {
+  const res = await fetch(path, { headers: apiHeaders() });
+  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
+  return res.json();
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(path, { method: 'POST', headers: apiHeaders(), body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `POST ${path} → ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiPatch(path, body) {
+  const res = await fetch(path, { method: 'PATCH', headers: apiHeaders(), body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `PATCH ${path} → ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiDelete(path) {
+  const res = await fetch(path, { method: 'DELETE', headers: apiHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `DELETE ${path} → ${res.status}`);
+  }
+  return res.json();
+}
+
+function promoBase() {
+  return `/api/admin/agent2/company/${STATE.companyId}/promotions`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LOAD COMPANY NAME
+   ══════════════════════════════════════════════════════════════════════════ */
+async function loadCompanyName() {
+  try {
+    // Reuse the same pattern as triggers.html — hit agent2 company endpoint
+    const data = await apiGet(`/api/admin/agent2/${STATE.companyId}/config`);
+    const name = data?.company?.companyName || data?.companyName || STATE.companyId;
+    document.getElementById('header-company-name').textContent = name;
+  } catch (_) {
+    document.getElementById('header-company-name').textContent = STATE.companyId;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LOAD PROMOTIONS
+   ══════════════════════════════════════════════════════════════════════════ */
+async function loadPromotions() {
+  setListLoading(true);
+  try {
+    const data = await apiGet(promoBase());
+    STATE.promotions = data.promotions || [];
+    applyFilter();
+    updateStats();
+  } catch (err) {
+    showToast(`Failed to load promotions: ${err.message}`, 'error');
+  } finally {
+    setListLoading(false);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FILTER & SEARCH
+   ══════════════════════════════════════════════════════════════════════════ */
+function applyFilter() {
+  const now   = new Date();
+  const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+
+  STATE.filtered = STATE.promotions.filter(p => {
+    // Text search
+    if (query) {
+      const haystack = [p.name, p.code, p.serviceLabel, p.serviceType, p.description].join(' ').toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    // Status filter
+    const isScheduled = p.validFrom && new Date(p.validFrom) > now;
+    const isExpired   = p.validTo   && new Date(p.validTo)   < now;
+    if (STATE.currentFilter === 'active')    return p.isActive && !isExpired && !isScheduled;
+    if (STATE.currentFilter === 'inactive')  return !p.isActive || isExpired;
+    if (STATE.currentFilter === 'scheduled') return p.isActive && isScheduled;
+    return true; // 'all'
+  });
+
+  renderList();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RENDER LIST
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderList() {
+  const container = document.getElementById('promo-list');
+  const empty     = document.getElementById('empty-state');
+  const header    = document.getElementById('list-header');
+
+  if (STATE.filtered.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = 'flex';
+    header.style.display = 'none';
+    return;
+  }
+
+  empty.style.display  = 'none';
+  header.style.display = 'grid';
+  container.innerHTML  = STATE.filtered.map(p => renderCard(p)).join('');
+
+  // Wire toggle switches
+  container.querySelectorAll('.js-toggle').forEach(el => {
+    el.addEventListener('change', async () => {
+      const id     = el.dataset.id;
+      const active = el.checked;
+      try {
+        await apiPatch(`${promoBase()}/${id}`, { isActive: active });
+        const promo = STATE.promotions.find(p => String(p._id) === id);
+        if (promo) promo.isActive = active;
+        applyFilter();
+        updateStats();
+        showToast(active ? '✅ Promo activated' : 'Promo deactivated', active ? 'success' : 'warning');
+      } catch (err) {
+        el.checked = !active; // revert
+        showToast(`Failed: ${err.message}`, 'error');
+      }
+    });
+  });
+
+  // Wire edit buttons
+  container.querySelectorAll('.js-edit').forEach(el => {
+    el.addEventListener('click', () => openModal(el.dataset.id));
+  });
+
+  // Wire delete buttons
+  container.querySelectorAll('.js-delete').forEach(el => {
+    el.addEventListener('click', () => handleDelete(el.dataset.id, el.dataset.name));
+  });
+}
+
+function renderCard(p) {
+  const now       = new Date();
+  const isExpired = p.validTo   && new Date(p.validTo)   < now;
+  const isFuture  = p.validFrom && new Date(p.validFrom) > now;
+  const statusClass = !p.isActive || isExpired ? 'is-inactive' : isFuture ? 'is-inactive' : 'is-active';
+
+  const discountBadge = buildDiscountBadge(p);
+  const validityHtml  = buildValidityHtml(p, now, isExpired, isFuture);
+
+  return `
+    <div class="promo-card ${statusClass}" data-id="${p._id}">
+      <div class="promo-card-row">
+
+        <!-- Drag handle -->
+        <div class="drag-handle" title="Drag to reorder">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="4.5" cy="3.5" r="1.2" fill="currentColor"/>
+            <circle cx="4.5" cy="7"   r="1.2" fill="currentColor"/>
+            <circle cx="4.5" cy="10.5" r="1.2" fill="currentColor"/>
+            <circle cx="9.5" cy="3.5" r="1.2" fill="currentColor"/>
+            <circle cx="9.5" cy="7"   r="1.2" fill="currentColor"/>
+            <circle cx="9.5" cy="10.5" r="1.2" fill="currentColor"/>
+          </svg>
+        </div>
+
+        <!-- Name / Service -->
+        <div>
+          <div class="promo-name">${esc(p.name)}</div>
+          <div class="promo-meta">
+            <span class="promo-service-badge">
+              🔧 ${esc(p.serviceLabel || p.serviceType || 'all services')}
+            </span>
+            ${p.code ? `<span class="promo-code-badge">🏷️ ${esc(p.code)}</span>` : ''}
+            ${isExpired ? '<span style="font-size:11px;color:#ef4444;font-weight:600;">Expired</span>' : ''}
+            ${isFuture  ? '<span style="font-size:11px;color:#f59e0b;font-weight:600;">Scheduled</span>' : ''}
+          </div>
+        </div>
+
+        <!-- Discount badge -->
+        <div class="discount-col">
+          ${discountBadge}
+        </div>
+
+        <!-- Validity window -->
+        <div class="validity-col">
+          ${validityHtml}
+        </div>
+
+        <!-- Status toggle -->
+        <div class="toggle-wrap">
+          <label class="toggle-switch">
+            <input type="checkbox" class="js-toggle" data-id="${p._id}" ${p.isActive ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">${p.isActive ? 'ON' : 'OFF'}</span>
+        </div>
+
+        <!-- Actions -->
+        <div class="promo-actions">
+          <button class="btn-icon-sm js-edit" data-id="${p._id}" title="Edit">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9.5 2L12 4.5L5 11.5H2.5V9L9.5 2Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="btn-icon-sm danger js-delete" data-id="${p._id}" data-name="${esc(p.name)}" title="Delete">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 3.5H12M5 3.5V2.5H9V3.5M5.5 6V10.5M8.5 6V10.5M3 3.5L3.5 11.5H10.5L11 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+      ${p.description ? `
+      <div style="
+        padding: 0 18px 12px 76px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+        border-top: 1px solid var(--border-default);
+        padding-top: 10px;
+        margin-top: -2px;
+      ">
+        <span style="color:var(--text-muted);font-weight:600;font-size:11px;">AGENT SAYS: </span>
+        ${esc(p.description).substring(0, 160)}${p.description.length > 160 ? '…' : ''}
+      </div>` : ''}
+    </div>
+  `;
+}
+
+function buildDiscountBadge(p) {
+  switch (p.discountType) {
+    case 'fixed_price':   return `<span class="discount-badge fixed-price">💲${p.discountValue} flat rate</span>`;
+    case 'percent_off':   return `<span class="discount-badge percent-off">🏷️ ${p.discountValue}% off</span>`;
+    case 'flat_discount': return `<span class="discount-badge flat-discount">💲${p.discountValue} off</span>`;
+    case 'free_service':  return `<span class="discount-badge free-service">🆓 Free service</span>`;
+    default:              return `<span class="discount-badge custom">✨ Special</span>`;
+  }
+}
+
+function buildValidityHtml(p, now, isExpired, isFuture) {
+  const from = p.validFrom ? new Date(p.validFrom).toLocaleDateString() : null;
+  const to   = p.validTo   ? new Date(p.validTo).toLocaleDateString()   : null;
+
+  if (!from && !to) return `<span class="validity-always validity-label">No expiry</span>`;
+  if (isExpired)    return `<span class="validity-expired validity-label">Expired ${to}</span>`;
+  if (isFuture)     return `<span class="validity-label"><strong>Starts:</strong> ${from}</span>`;
+
+  const lines = [];
+  if (from) lines.push(`<strong>From:</strong> ${from}`);
+  if (to)   lines.push(`<strong>Until:</strong> ${to}`);
+  return `<div class="validity-label">${lines.join('<br>')}</div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STATS
+   ══════════════════════════════════════════════════════════════════════════ */
+function updateStats() {
+  const now       = new Date();
+  const total     = STATE.promotions.length;
+  const active    = STATE.promotions.filter(p => {
+    const expired  = p.validTo   && new Date(p.validTo)   < now;
+    const future   = p.validFrom && new Date(p.validFrom) > now;
+    return p.isActive && !expired && !future;
+  }).length;
+  const inactive  = STATE.promotions.filter(p => !p.isActive).length;
+  const scheduled = STATE.promotions.filter(p => p.isActive && p.validFrom && new Date(p.validFrom) > now).length;
+
+  document.getElementById('stat-total').textContent     = total;
+  document.getElementById('stat-active').textContent    = active;
+  document.getElementById('stat-inactive').textContent  = inactive;
+  document.getElementById('stat-scheduled').textContent = scheduled;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODAL — OPEN / CLOSE / POPULATE
+   ══════════════════════════════════════════════════════════════════════════ */
+function openModal(promoId = null) {
+  STATE.editingId = promoId;
+
+  const isEdit   = !!promoId;
+  const promo    = isEdit ? STATE.promotions.find(p => String(p._id) === promoId) : null;
+
+  document.getElementById('modal-title').textContent    = isEdit ? 'Edit Promotion' : 'Add Promotion';
+  document.getElementById('modal-subtitle').textContent = isEdit
+    ? `Editing: ${promo?.name || promoId}`
+    : 'Create a new deal or coupon for this company';
+
+  // Populate / reset form
+  setField('f-name',             promo?.name             || '');
+  setField('f-code',             promo?.code             || '');
+  setField('f-service-type',     promo?.serviceType      || 'all');
+  setField('f-service-label',    promo?.serviceLabel     || '');
+  setField('f-discount-type',    promo?.discountType     || 'custom');
+  setField('f-discount-value',   promo?.discountValue    ?? '');
+  setField('f-priority',         promo?.priority         ?? 100);
+  setField('f-description',      promo?.description      || '');
+  setField('f-booking-prompt',   promo?.bookingPrompt    || '');
+  setField('f-no-coupon-response', promo?.noCouponResponse || '');
+  setField('f-terms',            promo?.terms            || '');
+  setField('f-valid-from',       formatDateInput(promo?.validFrom));
+  setField('f-valid-to',         formatDateInput(promo?.validTo));
+  document.getElementById('f-is-active').checked = promo ? promo.isActive : true;
+
+  // Char counter
+  updateCharCounter('f-description', 'desc-counter', 500);
+
+  // Discount value visibility
+  updateDiscountValueVisibility();
+
+  // Delete button (edit mode only)
+  const deleteZone = document.getElementById('modal-delete-zone');
+  if (isEdit && promo) {
+    deleteZone.innerHTML = `
+      <button id="btn-modal-delete" style="
+        padding:9px 18px;
+        background:rgba(239,68,68,0.15);
+        border:1px solid rgba(239,68,68,0.4);
+        border-radius:6px;
+        color:#f87171;
+        font-size:13px;font-weight:600;cursor:pointer;
+        transition:all 0.15s;
+      " onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">
+        🗑️ Delete Promotion
+      </button>
+    `;
+    document.getElementById('btn-modal-delete').onclick = () => {
+      closeModal();
+      handleDelete(promoId, promo.name);
+    };
+  } else {
+    deleteZone.innerHTML = '';
+  }
+
+  document.getElementById('modal-backdrop').classList.add('open');
+  document.getElementById('f-name').focus();
+}
+
+function closeModal() {
+  document.getElementById('modal-backdrop').classList.remove('open');
+  STATE.editingId = null;
+}
+
+function setField(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value ?? '';
+}
+
+function formatDateInput(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toISOString().split('T')[0]; } catch (_) { return ''; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODAL — SAVE
+   ══════════════════════════════════════════════════════════════════════════ */
+async function handleSave() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) {
+    showToast('Name is required', 'error');
+    document.getElementById('f-name').focus();
+    return;
+  }
+
+  const btn = document.getElementById('btn-modal-save');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  const body = {
+    name,
+    code:              document.getElementById('f-code').value.trim().toUpperCase() || '',
+    serviceType:       document.getElementById('f-service-type').value,
+    serviceLabel:      document.getElementById('f-service-label').value.trim(),
+    discountType:      document.getElementById('f-discount-type').value,
+    discountValue:     parseFloat(document.getElementById('f-discount-value').value) || 0,
+    priority:          parseInt(document.getElementById('f-priority').value)         || 100,
+    description:       document.getElementById('f-description').value.trim(),
+    bookingPrompt:     document.getElementById('f-booking-prompt').value.trim(),
+    noCouponResponse:  document.getElementById('f-no-coupon-response').value.trim(),
+    terms:             document.getElementById('f-terms').value.trim(),
+    validFrom:         document.getElementById('f-valid-from').value || null,
+    validTo:           document.getElementById('f-valid-to').value   || null,
+    isActive:          document.getElementById('f-is-active').checked
+  };
+
+  try {
+    if (STATE.editingId) {
+      // Edit mode
+      const result = await apiPatch(`${promoBase()}/${STATE.editingId}`, body);
+      const idx = STATE.promotions.findIndex(p => String(p._id) === STATE.editingId);
+      if (idx >= 0) STATE.promotions[idx] = result.promotion;
+      showToast(`✅ "${name}" updated`, 'success');
+    } else {
+      // Add mode
+      const result = await apiPost(promoBase(), body);
+      STATE.promotions.unshift(result.promotion);
+      showToast(`✅ "${name}" created`, 'success');
+    }
+
+    closeModal();
+    applyFilter();
+    updateStats();
+
+  } catch (err) {
+    showToast(`Save failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Save Promotion';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DELETE
+   ══════════════════════════════════════════════════════════════════════════ */
+async function handleDelete(id, name) {
+  if (!confirm(`Deactivate "${name}"?\n\nThis will immediately prevent the agent from presenting this promotion. You can re-activate it from the list.`)) return;
+
+  try {
+    await apiDelete(`${promoBase()}/${id}`);
+    const promo = STATE.promotions.find(p => String(p._id) === id);
+    if (promo) promo.isActive = false;
+    applyFilter();
+    updateStats();
+    showToast(`"${name}" deactivated`, 'warning');
+  } catch (err) {
+    showToast(`Delete failed: ${err.message}`, 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CACHE REFRESH
+   ══════════════════════════════════════════════════════════════════════════ */
+async function handleRefreshCache() {
+  try {
+    // Fetching active endpoint forces cache invalidation + backfill on the server
+    await apiGet(`${promoBase()}/active`);
+    showToast('✅ Promotions cache refreshed — next call reads fresh data', 'success');
+  } catch (err) {
+    showToast(`Cache refresh failed: ${err.message}`, 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UI HELPERS
+   ══════════════════════════════════════════════════════════════════════════ */
+function setListLoading(loading) {
+  document.getElementById('list-loading').style.display  = loading ? 'block' : 'none';
+  document.getElementById('promo-list').style.display    = loading ? 'none'  : 'flex';
+}
+
+function updateCharCounter(fieldId, counterId, max) {
+  const el  = document.getElementById(fieldId);
+  const ctr = document.getElementById(counterId);
+  if (!el || !ctr) return;
+  const len = el.value.length;
+  ctr.textContent = `${len} / ${max}`;
+  ctr.className = 'char-counter' + (len > max ? ' over' : len > max * 0.85 ? ' warn' : '');
+  el.addEventListener('input', () => {
+    const l = el.value.length;
+    ctr.textContent = `${l} / ${max}`;
+    ctr.className = 'char-counter' + (l > max ? ' over' : l > max * 0.85 ? ' warn' : '');
+  });
+}
+
+function updateDiscountValueVisibility() {
+  const type  = document.getElementById('f-discount-type').value;
+  const group = document.getElementById('discount-value-group');
+  const hint  = document.getElementById('discount-value-hint');
+  const row   = document.getElementById('discount-value-row');
+
+  const showValue = type !== 'custom' && type !== 'free_service';
+  group.style.opacity  = showValue ? '1' : '0.4';
+
+  const hints = {
+    fixed_price:   'Dollar price (e.g. 189 = $189 flat rate).',
+    percent_off:   'Percent off (e.g. 15 = 15% off).',
+    flat_discount: 'Dollar amount discounted from regular price.',
+    free_service:  'No numeric value needed — service is free.',
+    custom:        'Description field drives the agent response — value is unused.'
+  };
+  hint.textContent = hints[type] || '';
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOAST
+   ══════════════════════════════════════════════════════════════════════════ */
+function showToast(msg, type = 'success') {
+  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️';
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${esc(msg)}</span>`;
+  container.appendChild(toast);
+  requestAnimationFrame(() => { requestAnimationFrame(() => { toast.classList.add('show'); }); });
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+  }, 3500);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EVENT WIRING
+   ══════════════════════════════════════════════════════════════════════════ */
+// Add Promo button
+document.getElementById('btn-add-promo').addEventListener('click', () => openModal());
+
+// Modal close
+document.getElementById('btn-modal-close').addEventListener('click',  closeModal);
+document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
+document.getElementById('modal-backdrop').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-backdrop')) closeModal();
+});
+
+// Modal save
+document.getElementById('btn-modal-save').addEventListener('click', handleSave);
+
+// Escape key closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// Cache refresh
+document.getElementById('btn-refresh-cache').addEventListener('click', handleRefreshCache);
+
+// How it works toggle
+document.getElementById('btn-how-it-works').addEventListener('click', () => {
+  const content = document.getElementById('how-it-works-content');
+  content.style.display = content.style.display === 'none' ? 'block' : 'none';
+});
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    STATE.currentFilter = btn.dataset.filter;
+    applyFilter();
+  });
+});
+
+// Search
+document.getElementById('search-input').addEventListener('input', applyFilter);
+
+// Discount type changes value hint
+document.getElementById('f-discount-type').addEventListener('change', updateDiscountValueVisibility);
+
+</script>
+</body>
+</html>

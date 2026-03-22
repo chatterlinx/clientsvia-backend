@@ -94,6 +94,16 @@ const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
 // ════════════════════════════════════════════════════════════════════════════
 const { ScrabEngine } = require('../../ScrabEngine');
 const Agent2EchoGuard = require('./Agent2EchoGuard');
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🎟️ PROMOTIONS INTERCEPTOR
+// ════════════════════════════════════════════════════════════════════════════
+// Fires BEFORE ScrabEngine / trigger matching.
+// Detects coupon/specials/promo signals at any turn.
+// Handles mid-call digression + return via DiscoveryNotesService.digressionStack.
+// ════════════════════════════════════════════════════════════════════════════
+const PromotionsInterceptor  = require('./PromotionsInterceptor');
+const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
 const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
@@ -2623,6 +2633,85 @@ class Agent2DiscoveryRunner {
         emit('A2_FOLLOWUP_COMPLEX_FALLTHROUGH', {
           reason: 'Caller gave substantive non-yes/no response — LLM Agent unavailable, routing through normal discovery',
           inputPreview: clip(inputLowerCleanFUQ, 80)
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🎟️ PROMOTIONS INTERCEPTOR — fires BEFORE ScrabEngine / trigger matching
+    // ══════════════════════════════════════════════════════════════════════════
+    // Detects coupon / specials / promo signals at ANY turn.
+    // When detected:
+    //   1. Save current call position to discoveryNotes.digressionStack
+    //   2. Fetch active promotions from Redis → MongoDB
+    //   3. Build & return the spoken promo response
+    //   4. Next-turn return path is handled by peekDigression():
+    //      DISCOVERY origin → FUC fires after caller accepts
+    //      BOOKING   origin → resume exact booking step with returnPrompt
+    // Graceful degrade: if Redis + Mongo both fail, falls through normally.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (input && PromotionsInterceptor.detect(input)) {
+      try {
+        // Determine where we are in the call — DISCOVERY or BOOKING
+        const digressionOrigin = (
+          nextState?.lane === 'BOOKING' || nextState?.sessionMode === 'BOOKING'
+        ) ? 'BOOKING' : 'DISCOVERY';
+
+        // Save current position to the digression stack
+        const digressionData = {
+          digressionType:   'PROMOTIONS_QUERY',
+          digressionOrigin,
+          savedStep:        null,  // BookingLogicEngine writes this when it's in BOOKING mode
+          savedContext:     {},
+          returnPrompt:     null
+        };
+        DiscoveryNotesService.pushDigression(companyId, callSid, digressionData).catch(e =>
+          logger.warn('[A2] Promotions pushDigression failed (non-fatal)', { callSid, error: e.message })
+        );
+
+        // Fetch active promos (Redis → MongoDB, graceful degrade)
+        const activePromos = await PromotionsInterceptor.getActivePromotions(companyId);
+
+        // Build the spoken response for this origin
+        const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
+          activePromos,
+          input,
+          digressionOrigin,
+          null  // returnPrompt — populated by BookingLogicEngine if BOOKING
+        );
+
+        emit('A2_PROMOTIONS_INTERCEPTED', {
+          digressionOrigin,
+          promosFound:   activePromos.length,
+          promoUsed:     promoUsed?.name || null,
+          inputPreview:  clip(input, 60),
+          responsePreview: clip(responseText, 80)
+        });
+        emit('A2_PATH_SELECTED', {
+          path:   'PROMOTIONS_INTERCEPTOR',
+          reason: `Promo signal detected — ${activePromos.length} active promo(s) — origin: ${digressionOrigin}`
+        });
+        emit('A2_RESPONSE_READY', {
+          path:            'PROMOTIONS_INTERCEPTOR',
+          responsePreview: clip(responseText, 120),
+          promoUsed:       promoUsed?.name || null
+        });
+
+        nextState.agent2 = nextState.agent2 || {};
+        nextState.agent2.discovery = nextState.agent2.discovery || {};
+        nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+        return {
+          response:    responseText,
+          matchSource: 'PROMOTIONS_INTERCEPTOR',
+          state:       nextState,
+          _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+        };
+
+      } catch (promoErr) {
+        // Never break a call for a promo failure — fall through to normal pipeline
+        logger.warn('[A2] PromotionsInterceptor error — falling through to normal pipeline', {
+          callSid, error: promoErr.message
         });
       }
     }
