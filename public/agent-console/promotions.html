@@ -1095,9 +1095,9 @@ function promoBase() {
    ══════════════════════════════════════════════════════════════════════════ */
 async function loadCompanyName() {
   try {
-    // Reuse the same pattern as triggers.html — hit agent2 company endpoint
-    const data = await apiGet(`/api/admin/agent2/${STATE.companyId}/config`);
-    const name = data?.company?.companyName || data?.companyName || STATE.companyId;
+    // Same endpoint used by booking-triggers.js — returns companyName
+    const data = await apiGet(`/api/agent-console/${STATE.companyId}/booking/config`);
+    const name = data?.companyName || STATE.companyId;
     document.getElementById('header-company-name').textContent = name;
   } catch (_) {
     document.getElementById('header-company-name').textContent = STATE.companyId;
