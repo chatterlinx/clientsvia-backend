@@ -2638,75 +2638,338 @@ class Agent2DiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 🎟️ PROMOTIONS INTERCEPTOR — fires BEFORE ScrabEngine / trigger matching
     // ══════════════════════════════════════════════════════════════════════════
-    // Detects coupon / specials / promo signals at ANY turn.
-    // When detected:
-    //   1. Save current call position to discoveryNotes.digressionStack
-    //   2. Fetch active promotions from Redis → MongoDB
-    //   3. Build & return the spoken promo response
-    //   4. Next-turn return path is handled by peekDigression():
-    //      DISCOVERY origin → FUC fires after caller accepts
-    //      BOOKING   origin → resume exact booking step with returnPrompt
-    // Graceful degrade: if Redis + Mongo both fail, falls through normally.
+    // 🎟️ PROMOTIONS — CHECKPOINT A: PENDING CLASSIFICATION RESOLVER
+    // ══════════════════════════════════════════════════════════════════════════
+    // Runs FIRST, every turn.
+    //
+    // If the agent previously asked a clarifying question ("do you have a code,
+    // or are you asking about specials?"), the top of the digressionStack holds
+    // a PROMO_CLARIFICATION entry with one of two states:
+    //
+    //   AWAITING_COUPON_INTENT — caller just got the clarifying question.
+    //                            Resolve to HAS_COUPON or ASKING_SPECIALS.
+    //
+    //   AWAITING_COUPON_CODE  — caller confirmed they have a coupon but
+    //                           didn't provide the code yet. Extract & validate,
+    //                           or ask again if we still can't find it.
+    //
+    // Graceful degrade: any error pops the stuck state and falls through.
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+      const pendingDigression = await DiscoveryNotesService.peekDigression(companyId, callSid);
+
+      if (pendingDigression?.digressionType === 'PROMO_CLARIFICATION') {
+        try {
+          const { classificationState, digressionOrigin, returnPrompt } = pendingDigression;
+
+          // ── A1: Caller is responding to the clarifying question ────────────
+          if (classificationState === 'AWAITING_COUPON_INTENT') {
+            const resolved = PromotionsInterceptor.resolveClassification(input);
+
+            if (resolved === 'HAS_COUPON') {
+              // Caller confirmed they have a code — try to extract it from same utterance
+              const code = PromotionsInterceptor.extractCouponCode(input);
+
+              if (code) {
+                // ✅ Got the code immediately — validate right now
+                const result = await PromotionsInterceptor.validateCouponCode(
+                  code, companyId, digressionOrigin, returnPrompt
+                );
+                await DiscoveryNotesService.popDigression(companyId, callSid);
+
+                emit('A2_PROMOTIONS_COUPON_VALIDATED', {
+                  code, valid: result.valid, promoName: result.promo?.name || null, origin: digressionOrigin
+                });
+                emit('A2_PATH_SELECTED',  { path: 'PROMO_CLARIFICATION_RESOLVED', reason: `Code extracted inline: ${code}` });
+                emit('A2_RESPONSE_READY', { path: 'PROMO_CLARIFICATION_RESOLVED', responsePreview: clip(result.responseText, 120) });
+
+                nextState.agent2 = nextState.agent2 || {};
+                nextState.agent2.discovery = nextState.agent2.discovery || {};
+                nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+                return {
+                  response:    result.responseText,
+                  matchSource: 'PROMOTIONS_INTERCEPTOR',
+                  state:       nextState,
+                  _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+                };
+
+              } else {
+                // ✅ Confirmed has a coupon — code not in this turn — ask for it
+                await DiscoveryNotesService.updateDigressionTop(
+                  companyId, callSid,
+                  { classificationState: 'AWAITING_COUPON_CODE' }
+                );
+                const askCode = "Great! What's the coupon or promo code? I want to make sure we apply that for you.";
+
+                emit('A2_PATH_SELECTED',  { path: 'PROMO_CLARIFICATION_AWAITING_CODE', reason: 'Caller confirmed HAS_COUPON — waiting for code' });
+                emit('A2_RESPONSE_READY', { path: 'PROMO_CLARIFICATION_AWAITING_CODE', responsePreview: askCode });
+
+                nextState.agent2 = nextState.agent2 || {};
+                nextState.agent2.discovery = nextState.agent2.discovery || {};
+                nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+                return {
+                  response:    askCode,
+                  matchSource: 'PROMOTIONS_INTERCEPTOR',
+                  state:       nextState,
+                  _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+                };
+              }
+
+            } else {
+              // ✅ ASKING_SPECIALS — pop clarification, push PROMOTIONS_QUERY, list promos
+              await DiscoveryNotesService.popDigression(companyId, callSid);
+              await DiscoveryNotesService.pushDigression(companyId, callSid, {
+                digressionType:   'PROMOTIONS_QUERY',
+                digressionOrigin,
+                savedStep:        null,
+                savedContext:     {},
+                returnPrompt:     returnPrompt || null
+              });
+
+              const activePromos = await PromotionsInterceptor.getActivePromotions(companyId);
+              const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
+                activePromos, input, digressionOrigin, returnPrompt || null
+              );
+
+              emit('A2_PROMOTIONS_INTERCEPTED', {
+                digressionOrigin, promosFound: activePromos.length,
+                promoUsed: promoUsed?.name || null, source: 'CLARIFICATION_RESOLVED_SPECIALS'
+              });
+              emit('A2_PATH_SELECTED',  { path: 'PROMOTIONS_INTERCEPTOR', reason: 'Clarification resolved → ASKING_SPECIALS' });
+              emit('A2_RESPONSE_READY', { path: 'PROMOTIONS_INTERCEPTOR', responsePreview: clip(responseText, 120) });
+
+              nextState.agent2 = nextState.agent2 || {};
+              nextState.agent2.discovery = nextState.agent2.discovery || {};
+              nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+              return {
+                response:    responseText,
+                matchSource: 'PROMOTIONS_INTERCEPTOR',
+                state:       nextState,
+                _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+              };
+            }
+          }
+
+          // ── A2: Caller is giving us the coupon code ────────────────────────
+          if (classificationState === 'AWAITING_COUPON_CODE') {
+            const code = PromotionsInterceptor.extractCouponCode(input);
+
+            if (code) {
+              // ✅ Got the code — validate it
+              const result = await PromotionsInterceptor.validateCouponCode(
+                code, companyId, digressionOrigin, returnPrompt
+              );
+              await DiscoveryNotesService.popDigression(companyId, callSid);
+
+              emit('A2_PROMOTIONS_COUPON_VALIDATED', {
+                code, valid: result.valid, promoName: result.promo?.name || null, origin: digressionOrigin
+              });
+              emit('A2_PATH_SELECTED',  { path: 'PROMO_CODE_VALIDATED', reason: `Code: ${code}` });
+              emit('A2_RESPONSE_READY', { path: 'PROMO_CODE_VALIDATED', responsePreview: clip(result.responseText, 120) });
+
+              nextState.agent2 = nextState.agent2 || {};
+              nextState.agent2.discovery = nextState.agent2.discovery || {};
+              nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+              return {
+                response:    result.responseText,
+                matchSource: 'PROMOTIONS_INTERCEPTOR',
+                state:       nextState,
+                _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+              };
+
+            } else {
+              // ❓ Couldn't extract a code — ask once more
+              const retry = "I'm sorry, I didn't quite catch the code — could you read it off for me one more time?";
+
+              emit('A2_PATH_SELECTED',  { path: 'PROMO_CODE_RETRY', reason: 'Code not extractable from input' });
+              emit('A2_RESPONSE_READY', { path: 'PROMO_CODE_RETRY', responsePreview: retry });
+
+              nextState.agent2 = nextState.agent2 || {};
+              nextState.agent2.discovery = nextState.agent2.discovery || {};
+              nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+              return {
+                response:    retry,
+                matchSource: 'PROMOTIONS_INTERCEPTOR',
+                state:       nextState,
+                _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+              };
+            }
+          }
+
+        } catch (clarifyErr) {
+          // Never break the call — pop the stuck state and fall through
+          logger.warn('[A2] Promo CHECKPOINT A error — clearing stuck state, falling through', {
+            callSid, error: clarifyErr.message
+          });
+          DiscoveryNotesService.popDigression(companyId, callSid).catch(() => {});
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🎟️ PROMOTIONS — CHECKPOINT B: INITIAL SIGNAL DETECTION & INTENT ROUTING
+    // ══════════════════════════════════════════════════════════════════════════
+    // Fires when detect() matches a promo signal in the caller's input.
+    // Classifies intent into three branches:
+    //
+    //   AMBIGUOUS       → Ask the clarifying question (saved as PROMO_CLARIFICATION
+    //                     on the digression stack — resolved next turn via CHECKPOINT A)
+    //
+    //   HAS_COUPON      → Try to extract code inline.
+    //                     If found: validate immediately.
+    //                     If not:   push AWAITING_COUPON_CODE — ask for the code.
+    //
+    //   ASKING_SPECIALS → Existing flow: fetch promos, build spoken response.
+    //
+    // Graceful degrade: any error falls through to normal pipeline.
     // ══════════════════════════════════════════════════════════════════════════
     if (input && PromotionsInterceptor.detect(input)) {
       try {
-        // Determine where we are in the call — DISCOVERY or BOOKING
+        // Where we are in the call — DISCOVERY or BOOKING
         const digressionOrigin = (
           nextState?.lane === 'BOOKING' || nextState?.sessionMode === 'BOOKING'
         ) ? 'BOOKING' : 'DISCOVERY';
 
-        // Save current position to the digression stack
-        const digressionData = {
-          digressionType:   'PROMOTIONS_QUERY',
-          digressionOrigin,
-          savedStep:        null,  // BookingLogicEngine writes this when it's in BOOKING mode
-          savedContext:     {},
-          returnPrompt:     null
-        };
-        DiscoveryNotesService.pushDigression(companyId, callSid, digressionData).catch(e =>
-          logger.warn('[A2] Promotions pushDigression failed (non-fatal)', { callSid, error: e.message })
-        );
+        // Classify intent BEFORE doing anything else
+        const intent = PromotionsInterceptor.classifyIntent(input);
 
-        // Fetch active promos (Redis → MongoDB, graceful degrade)
-        const activePromos = await PromotionsInterceptor.getActivePromotions(companyId);
+        // ── B1: AMBIGUOUS — fire clarifying question ───────────────────────
+        if (intent === 'AMBIGUOUS') {
+          await DiscoveryNotesService.pushDigression(companyId, callSid, {
+            digressionType:      'PROMO_CLARIFICATION',
+            classificationState: 'AWAITING_COUPON_INTENT',
+            digressionOrigin,
+            savedStep:           null,
+            savedContext:        {},
+            returnPrompt:        null
+          });
 
-        // Build the spoken response for this origin
-        const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
-          activePromos,
-          input,
-          digressionOrigin,
-          null  // returnPrompt — populated by BookingLogicEngine if BOOKING
-        );
+          const clarifyQ = PromotionsInterceptor.buildClarifyingQuestion();
 
-        emit('A2_PROMOTIONS_INTERCEPTED', {
-          digressionOrigin,
-          promosFound:   activePromos.length,
-          promoUsed:     promoUsed?.name || null,
-          inputPreview:  clip(input, 60),
-          responsePreview: clip(responseText, 80)
-        });
-        emit('A2_PATH_SELECTED', {
-          path:   'PROMOTIONS_INTERCEPTOR',
-          reason: `Promo signal detected — ${activePromos.length} active promo(s) — origin: ${digressionOrigin}`
-        });
-        emit('A2_RESPONSE_READY', {
-          path:            'PROMOTIONS_INTERCEPTOR',
-          responsePreview: clip(responseText, 120),
-          promoUsed:       promoUsed?.name || null
-        });
+          emit('A2_PROMOTIONS_INTERCEPTED', { digressionOrigin, intent: 'AMBIGUOUS', inputPreview: clip(input, 60) });
+          emit('A2_PATH_SELECTED',  { path: 'PROMO_CLARIFYING_QUESTION', reason: 'Promo intent ambiguous — asking to clarify' });
+          emit('A2_RESPONSE_READY', { path: 'PROMO_CLARIFYING_QUESTION', responsePreview: clip(clarifyQ, 120) });
 
-        nextState.agent2 = nextState.agent2 || {};
-        nextState.agent2.discovery = nextState.agent2.discovery || {};
-        nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+          nextState.agent2 = nextState.agent2 || {};
+          nextState.agent2.discovery = nextState.agent2.discovery || {};
+          nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
 
-        return {
-          response:    responseText,
-          matchSource: 'PROMOTIONS_INTERCEPTOR',
-          state:       nextState,
-          _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
-        };
+          return {
+            response:    clarifyQ,
+            matchSource: 'PROMOTIONS_INTERCEPTOR',
+            state:       nextState,
+            _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+          };
+        }
+
+        // ── B2: HAS_COUPON — validate code or ask for it ──────────────────
+        if (intent === 'HAS_COUPON') {
+          const code = PromotionsInterceptor.extractCouponCode(input);
+
+          if (code) {
+            // ✅ Caller gave us the code in the same utterance — validate now
+            const result = await PromotionsInterceptor.validateCouponCode(
+              code, companyId, digressionOrigin, null
+            );
+
+            emit('A2_PROMOTIONS_COUPON_VALIDATED', {
+              code, valid: result.valid, promoName: result.promo?.name || null, origin: digressionOrigin
+            });
+            emit('A2_PATH_SELECTED',  { path: 'PROMO_CODE_VALIDATED', reason: `Code in utterance: ${code}` });
+            emit('A2_RESPONSE_READY', { path: 'PROMO_CODE_VALIDATED', responsePreview: clip(result.responseText, 120) });
+
+            nextState.agent2 = nextState.agent2 || {};
+            nextState.agent2.discovery = nextState.agent2.discovery || {};
+            nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+            return {
+              response:    result.responseText,
+              matchSource: 'PROMOTIONS_INTERCEPTOR',
+              state:       nextState,
+              _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+            };
+
+          } else {
+            // ✅ Caller mentioned coupon but no code yet — ask for it
+            await DiscoveryNotesService.pushDigression(companyId, callSid, {
+              digressionType:      'PROMO_CLARIFICATION',
+              classificationState: 'AWAITING_COUPON_CODE',
+              digressionOrigin,
+              savedStep:           null,
+              savedContext:        {},
+              returnPrompt:        null
+            });
+
+            const askCode = "Sure! What's the coupon or promo code you have? I want to make sure we apply that for you.";
+
+            emit('A2_PROMOTIONS_INTERCEPTED', { digressionOrigin, intent: 'HAS_COUPON', inputPreview: clip(input, 60) });
+            emit('A2_PATH_SELECTED',  { path: 'PROMO_AWAITING_CODE', reason: 'HAS_COUPON intent — no code in utterance' });
+            emit('A2_RESPONSE_READY', { path: 'PROMO_AWAITING_CODE', responsePreview: askCode });
+
+            nextState.agent2 = nextState.agent2 || {};
+            nextState.agent2.discovery = nextState.agent2.discovery || {};
+            nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+            return {
+              response:    askCode,
+              matchSource: 'PROMOTIONS_INTERCEPTOR',
+              state:       nextState,
+              _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+            };
+          }
+        }
+
+        // ── B3: ASKING_SPECIALS — existing promo listing flow ─────────────
+        // (intent === 'ASKING_SPECIALS' falls through to here)
+        {
+          await DiscoveryNotesService.pushDigression(companyId, callSid, {
+            digressionType:   'PROMOTIONS_QUERY',
+            digressionOrigin,
+            savedStep:        null,
+            savedContext:     {},
+            returnPrompt:     null
+          });
+
+          const activePromos = await PromotionsInterceptor.getActivePromotions(companyId);
+          const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
+            activePromos, input, digressionOrigin, null
+          );
+
+          emit('A2_PROMOTIONS_INTERCEPTED', {
+            digressionOrigin,
+            intent:          'ASKING_SPECIALS',
+            promosFound:     activePromos.length,
+            promoUsed:       promoUsed?.name || null,
+            inputPreview:    clip(input, 60),
+            responsePreview: clip(responseText, 80)
+          });
+          emit('A2_PATH_SELECTED',  {
+            path:   'PROMOTIONS_INTERCEPTOR',
+            reason: `ASKING_SPECIALS — ${activePromos.length} active promo(s) — origin: ${digressionOrigin}`
+          });
+          emit('A2_RESPONSE_READY', {
+            path:            'PROMOTIONS_INTERCEPTOR',
+            responsePreview: clip(responseText, 120),
+            promoUsed:       promoUsed?.name || null
+          });
+
+          nextState.agent2 = nextState.agent2 || {};
+          nextState.agent2.discovery = nextState.agent2.discovery || {};
+          nextState.agent2.discovery.lastPath = 'PROMOTIONS_INTERCEPTOR';
+
+          return {
+            response:    responseText,
+            matchSource: 'PROMOTIONS_INTERCEPTOR',
+            state:       nextState,
+            _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
+          };
+        }
 
       } catch (promoErr) {
         // Never break a call for a promo failure — fall through to normal pipeline

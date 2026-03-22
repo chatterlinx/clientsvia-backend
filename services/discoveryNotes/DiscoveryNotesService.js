@@ -702,6 +702,69 @@ async function peekDigression(companyId, callSid) {
   }
 }
 
+/**
+ * updateDigressionTop — Partially update the top stack entry in-place.
+ *
+ * Used by the promotions clarification flow to transition state on the top
+ * entry without popping + re-pushing (e.g. AWAITING_COUPON_INTENT →
+ * AWAITING_COUPON_CODE once the caller confirms they have a coupon).
+ *
+ * Performs a shallow merge: only the keys in `updates` are changed.
+ * All other top-entry fields are preserved.
+ *
+ * Graceful degrade: if Redis unavailable or stack is empty, returns null
+ * and the call continues. Never throws.
+ *
+ * @param {string} companyId
+ * @param {string} callSid
+ * @param {Object} updates   Partial fields to merge into the top entry
+ * @returns {Promise<Object|null>}  The updated top entry, or null
+ */
+async function updateDigressionTop(companyId, callSid, updates) {
+  try {
+    const redis = await getSharedRedisClient();
+    if (!redis) {
+      logger.warn('[DISCOVERY NOTES] updateDigressionTop: Redis unavailable — skipped', { callSid });
+      return null;
+    }
+
+    const key = `${CONFIG.REDIS_KEY_PREFIX}:${companyId}:${callSid}`;
+    const raw = await redis.get(key);
+    if (!raw) {
+      logger.warn('[DISCOVERY NOTES] updateDigressionTop: key not found', { callSid, key });
+      return null;
+    }
+
+    const notes   = JSON.parse(raw);
+    const stack   = notes.digressionStack || [];
+
+    if (stack.length === 0) {
+      logger.warn('[DISCOVERY NOTES] updateDigressionTop: stack is empty — skipped', { callSid });
+      return null;
+    }
+
+    // Shallow merge updates into the top entry
+    stack[stack.length - 1] = { ...stack[stack.length - 1], ...updates, updatedAt: new Date().toISOString() };
+    notes.digressionStack   = stack;
+
+    await redis.set(key, JSON.stringify(notes), { KEEPTTL: true });
+
+    logger.debug('[DISCOVERY NOTES] updateDigressionTop applied', {
+      callSid,
+      updates: Object.keys(updates),
+      newTop: stack[stack.length - 1]
+    });
+
+    return stack[stack.length - 1];
+
+  } catch (err) {
+    logger.warn('[DISCOVERY NOTES] updateDigressionTop failed (non-fatal)', {
+      callSid, error: err.message
+    });
+    return null;
+  }
+}
+
 // ============================================================================
 // EXPORTS
 // ============================================================================
@@ -716,5 +779,6 @@ module.exports = {
   pushDigression,
   popDigression,
   peekDigression,
+  updateDigressionTop,
   CONFIG
 };
