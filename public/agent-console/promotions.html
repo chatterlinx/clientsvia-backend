@@ -1010,6 +1010,7 @@
 <!-- ════════════════════════════════════════════════════════════════════════
      JAVASCRIPT
      ════════════════════════════════════════════════════════════════════════ -->
+<script src="/agent-console/lib/auth.js"></script>
 <script>
 'use strict';
 
@@ -1017,11 +1018,10 @@
    STATE
    ══════════════════════════════════════════════════════════════════════════ */
 let STATE = {
-  companyId:    null,
-  token:        null,
-  promotions:   [],       // full list from API
-  filtered:     [],       // after filter/search
-  editingId:    null,     // null = add mode, string = edit mode
+  companyId:     null,
+  promotions:    [],       // full list from API
+  filtered:      [],       // after filter/search
+  editingId:     null,     // null = add mode, string = edit mode
   currentFilter: 'all'
 };
 
@@ -1031,9 +1031,11 @@ let STATE = {
    Using localStorage here risks silently loading a different tenant's data.
    ══════════════════════════════════════════════════════════════════════════ */
 (function bootstrap() {
+  // Auth gate — AgentConsoleAuth handles token validation + redirect to login on 401
+  if (!AgentConsoleAuth.requireAuth()) return;
+
   const params    = new URLSearchParams(window.location.search);
   STATE.companyId = params.get('companyId');   // URL-only — NO localStorage fallback
-  STATE.token     = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
 
   if (!STATE.companyId) {
     // Hard redirect — never silently inherit a stale companyId from a prior session
@@ -1055,45 +1057,33 @@ let STATE = {
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════
-   API HELPERS
+   API HELPERS — delegate to AgentConsoleAuth.apiFetch()
+   AgentConsoleAuth handles: Bearer token injection, 401→login redirect,
+   JSON parsing, and error surfacing. Never call fetch() directly here.
    ══════════════════════════════════════════════════════════════════════════ */
-function apiHeaders() {
-  const h = { 'Content-Type': 'application/json' };
-  if (STATE.token) h['Authorization'] = `Bearer ${STATE.token}`;
-  return h;
-}
 
 async function apiGet(path) {
-  const res = await fetch(path, { headers: apiHeaders() });
-  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
-  return res.json();
+  return AgentConsoleAuth.apiFetch(path);
 }
 
 async function apiPost(path, body) {
-  const res = await fetch(path, { method: 'POST', headers: apiHeaders(), body: JSON.stringify(body) });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `POST ${path} → ${res.status}`);
-  }
-  return res.json();
+  return AgentConsoleAuth.apiFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
 }
 
 async function apiPatch(path, body) {
-  const res = await fetch(path, { method: 'PATCH', headers: apiHeaders(), body: JSON.stringify(body) });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `PATCH ${path} → ${res.status}`);
-  }
-  return res.json();
+  return AgentConsoleAuth.apiFetch(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
 }
 
 async function apiDelete(path) {
-  const res = await fetch(path, { method: 'DELETE', headers: apiHeaders() });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `DELETE ${path} → ${res.status}`);
-  }
-  return res.json();
+  return AgentConsoleAuth.apiFetch(path, { method: 'DELETE' });
 }
 
 function promoBase() {
@@ -1624,3 +1614,4 @@ document.getElementById('f-discount-type').addEventListener('change', updateDisc
 </script>
 </body>
 </html>
+
