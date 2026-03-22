@@ -338,6 +338,17 @@
         });
       });
     }
+
+    // Promotions Console link
+    const linkPromotionsConsole = document.getElementById('link-promotions-console');
+    if (linkPromotionsConsole) {
+      linkPromotionsConsole.addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateWithUnsavedGuard(() => {
+          window.location.href = `/agent-console/promotions.html?companyId=${encodeURIComponent(state.companyId)}`;
+        });
+      });
+    }
     
     const statBoxTriggers = document.getElementById('stat-box-triggers');
     if (statBoxTriggers) {

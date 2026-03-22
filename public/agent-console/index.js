@@ -320,6 +320,9 @@
       case 'flow-map':
         window.location.href = `${baseUrl}/flow-map.html${companyParam}`;
         break;
+      case 'promotions':
+        window.location.href = `${baseUrl}/promotions.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }
