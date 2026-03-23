@@ -515,6 +515,14 @@ const S = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS — must be declared before init() IIFE runs
+// ─────────────────────────────────────────────────────────────────────────────
+const LABEL_SUGGESTIONS = [
+  'Price', "What's Included", 'Warranty', 'Duration', 'Availability',
+  'How It Works', 'Who Needs This', 'Requirements', 'Notes', 'FAQs'
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BOOTSTRAP
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
@@ -618,11 +626,6 @@ function _showForm() {
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTIONS
 // ─────────────────────────────────────────────────────────────────────────────
-
-const LABEL_SUGGESTIONS = [
-  'Price', "What's Included", 'Warranty', 'Duration', 'Availability',
-  'How It Works', 'Who Needs This', 'Requirements', 'Notes', 'FAQs'
-];
 
 function addSection(label = '', content = '') {
   const id = ++S.sectionSeq;
