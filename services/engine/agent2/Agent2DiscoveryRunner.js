@@ -2549,13 +2549,12 @@ class Agent2DiscoveryRunner {
                       emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_BOOK', responsePreview: clip(_kcResSpecials.response, 120) });
                       return { response: _kcResSpecials.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_BOOK') };
                     } else {
-                      // Caller asked — answer + re-ask the original FUQ
-                      const _kcReaskResp = `${_kcResSpecials.response} ${pfuq}`.trim();
+                      // Caller asked — answer cleanly, PFUQ gate stays open silently
                       nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
                       nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
                       nextState.agent2.discovery.lastPath                = 'KC_SPECIALS_THEN_REASK';
-                      emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_REASK', responsePreview: clip(_kcReaskResp, 120) });
-                      return { response: _kcReaskResp, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_REASK') };
+                      emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_REASK', responsePreview: clip(_kcResSpecials.response, 120) });
+                      return { response: _kcResSpecials.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_REASK') };
                     }
                   }
                 }
@@ -2619,14 +2618,10 @@ class Agent2DiscoveryRunner {
             } else {
               // ── PROMO_THEN_REASK ────────────────────────────────────────────────
               // Caller asked about specials but did NOT say YES.
-              // Answer the promo question then re-ask the original FUQ.
-              // Pending FUQ is preserved — next YES → booking.
+              // Answer cleanly — PFUQ gate stays open silently, caller responds when ready.
               const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
                 activePromos, input, 'DISCOVERY', null, promoSettings, capturedReason
               );
-
-              // Append the original follow-up question so the caller has a clear next step
-              const reaskResponse = `${responseText} ${pfuq}`.trim();
 
               // Preserve pendingFollowUp — consent gate re-engages on next turn
               nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
@@ -2641,11 +2636,11 @@ class Agent2DiscoveryRunner {
               });
               emit('A2_RESPONSE_READY', {
                 path:            'ASKING_SPECIALS_PROMO_THEN_REASK',
-                responsePreview: clip(reaskResponse, 120)
+                responsePreview: clip(responseText, 120)
               });
 
               return {
-                response:    reaskResponse,
+                response:    responseText,
                 matchSource: 'AGENT2_DISCOVERY',
                 state:       nextState,
                 _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_THEN_REASK')
@@ -2653,9 +2648,7 @@ class Agent2DiscoveryRunner {
             }
 
           } catch (promoErr) {
-            // Graceful degrade: PromotionsInterceptor failed — re-ask the FUQ safely.
-            // If caller also said YES, their consent is still honoured on next turn
-            // because pendingFollowUpQuestion is preserved.
+            // Graceful degrade: PromotionsInterceptor failed — route to LLM Agent (Claude).
             emit('A2_PROMOTIONS_ERROR', {
               source: 'ASKING_SPECIALS_FUQ',
               error:  promoErr?.message || 'unknown',
@@ -2664,21 +2657,23 @@ class Agent2DiscoveryRunner {
 
             nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
             nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
-            nextState.agent2.discovery.lastPath                = 'ASKING_SPECIALS_PROMO_ERROR_REASK';
 
-            const fallbackResponse = `${fuqAck} ${pfuq}`.trim();
-            emit('A2_RESPONSE_READY', {
-              path:            'ASKING_SPECIALS_PROMO_ERROR_REASK',
-              responsePreview: clip(fallbackResponse, 120),
-              isFallback:      true
+            const _llmSpecialsErr = await callLLMAgentForFollowUp({
+              company, input, followUpQuestion: pfuq,
+              triggerSource: pfuqSource?.replace('card:', '') || null,
+              bucket: 'COMPLEX', channel: 'call', emit,
+              callSid, turn, bridgeToken, redis, callerName, onSentence,
             });
+            if (_llmSpecialsErr?.response) {
+              nextState.agent2.discovery.lastPath = 'ASKING_SPECIALS_ERROR_LLM';
+              emit('A2_RESPONSE_READY', { path: 'ASKING_SPECIALS_ERROR_LLM', responsePreview: clip(_llmSpecialsErr.response, 120) });
+              return { response: _llmSpecialsErr.response, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('ASKING_SPECIALS_ERROR_LLM') };
+            }
 
-            return {
-              response:    fallbackResponse,
-              matchSource: 'AGENT2_DISCOVERY',
-              state:       nextState,
-              _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_ERROR_REASK')
-            };
+            // LLM also failed — silent ack, PFUQ gate stays open
+            nextState.agent2.discovery.lastPath = 'ASKING_SPECIALS_PROMO_ERROR_REASK';
+            emit('A2_RESPONSE_READY', { path: 'ASKING_SPECIALS_PROMO_ERROR_REASK', responsePreview: clip(fuqAck, 60), isFallback: true });
+            return { response: fuqAck || 'Sure.', matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('ASKING_SPECIALS_PROMO_ERROR_REASK') };
           }
         }
 
@@ -2734,13 +2729,12 @@ class Agent2DiscoveryRunner {
                       emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_BOOK', responsePreview: clip(_kcResPricing.response, 120) });
                       return { response: _kcResPricing.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_BOOK') };
                     } else {
-                      // Answer + re-ask the original FUQ
-                      const _kcPricingReask = `${_kcResPricing.response} ${pfuq}`.trim();
+                      // Answer cleanly — PFUQ gate stays open silently, caller responds when ready
                       nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
                       nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
                       nextState.agent2.discovery.lastPath                = 'KC_PRICING_THEN_REASK';
-                      emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_REASK', responsePreview: clip(_kcPricingReask, 120) });
-                      return { response: _kcPricingReask, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_REASK') };
+                      emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_REASK', responsePreview: clip(_kcResPricing.response, 120) });
+                      return { response: _kcResPricing.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_REASK') };
                     }
                   }
                 }
@@ -2750,13 +2744,26 @@ class Agent2DiscoveryRunner {
             }
           }
 
-          // KC had no matching container — re-ask the follow-up question
+          // KC had no matching container — route to LLM Agent (Claude) next in 123RP cascade
           nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
           nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
-          nextState.agent2.discovery.lastPath                = 'ASKING_PRICING_KC_REASK';
-          const _noPricingResponse = `${fuqAck} ${pfuq}`.trim();
-          emit('A2_RESPONSE_READY', { path: 'ASKING_PRICING_KC_REASK', responsePreview: clip(_noPricingResponse, 120) });
-          return { response: _noPricingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('ASKING_PRICING_KC_REASK') };
+
+          const _llmPricingFallback = await callLLMAgentForFollowUp({
+            company, input, followUpQuestion: pfuq,
+            triggerSource: pfuqSource?.replace('card:', '') || null,
+            bucket: 'COMPLEX', channel: 'call', emit,
+            callSid, turn, bridgeToken, redis, callerName, onSentence,
+          });
+          if (_llmPricingFallback?.response) {
+            nextState.agent2.discovery.lastPath = 'ASKING_PRICING_LLM';
+            emit('A2_RESPONSE_READY', { path: 'ASKING_PRICING_LLM', responsePreview: clip(_llmPricingFallback.response, 120) });
+            return { response: _llmPricingFallback.response, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('ASKING_PRICING_LLM') };
+          }
+
+          // LLM also failed — silent ack, PFUQ gate stays open
+          nextState.agent2.discovery.lastPath = 'ASKING_PRICING_KC_REASK';
+          emit('A2_RESPONSE_READY', { path: 'ASKING_PRICING_KC_REASK', responsePreview: clip(fuqAck, 60), isFallback: true });
+          return { response: fuqAck || 'Sure.', matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('ASKING_PRICING_KC_REASK') };
         }
 
         // ── YES (Tier 1 or Tier 2 if residual content) ──
