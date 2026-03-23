@@ -810,6 +810,20 @@ const CAT = {
   other:         { label: 'Other',               color: '#94a3b8' }
 };
 
+/* ── API helpers — delegate to AgentConsoleAuth.apiFetch() ─────────────────
+   Declared BEFORE the IIFE so the const is initialized before loadItems() fires.
+   AgentConsoleAuth handles: Bearer token injection, 401→login redirect,
+   JSON parsing, and error surfacing. Never call fetch() directly here.
+   ──────────────────────────────────────────────────────────────────────── */
+const API = `/api/admin/agent2/company/${location.search.match(/companyId=([^&]+)/)?.[1] || ''}/pricing`;
+
+async function apiFetch(path, opts = {}) {
+  return AgentConsoleAuth.apiFetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+}
+
 /* ── Bootstrap — IIFE, runs synchronously after DOM is rendered ─────────── */
 (function bootstrap() {
   // Auth gate — script is at bottom of <body>, DOM is already ready
@@ -887,19 +901,6 @@ function bindEvents() {
       const text = (e.clipboardData || window.clipboardData).getData('text');
       text.split(/[,\n]/).map(t => t.trim()).filter(Boolean).forEach(kw => addKeyword(layer, kw));
     });
-  });
-}
-
-/* ── API helpers — delegate to AgentConsoleAuth.apiFetch() ─────────────────
-   AgentConsoleAuth handles: Bearer token injection, 401→login redirect,
-   JSON parsing, and error surfacing. Never call fetch() directly here.
-   ──────────────────────────────────────────────────────────────────────── */
-const API = `/api/admin/agent2/company/${location.search.match(/companyId=([^&]+)/)?.[1] || ''}/pricing`;
-
-async function apiFetch(path, opts = {}) {
-  return AgentConsoleAuth.apiFetch(path, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
   });
 }
 
