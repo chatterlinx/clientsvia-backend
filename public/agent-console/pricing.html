@@ -236,16 +236,17 @@
     /* ── Modal ───────────────────────────────────────────────────────────── */
     .modal-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,.45);
-      z-index: 1000; display: none; align-items: flex-start;
-      justify-content: center; overflow-y: auto; padding: 24px 16px;
+      z-index: 1000; display: none;
+      align-items: center; justify-content: center;
+      overflow: hidden;   /* backdrop must NOT scroll — lets modal-body own the scroll */
+      padding: 24px 16px;
     }
-    .modal-backdrop.open { display: flex; opacity: 1; visibility: visible; }
-    .modal-backdrop.open .modal { transform: scale(1); }
+    .modal-backdrop.open { display: flex; }
     .modal {
       background: white; border-radius: 16px; width: 100%; max-width: 680px;
-      box-shadow: var(--shadow-modal); margin: auto;
+      box-shadow: var(--shadow-modal);
       display: flex; flex-direction: column;
-      max-height: calc(100vh - 48px); /* never taller than viewport */
+      max-height: calc(100vh - 48px); /* hard cap — body scrolls beyond this */
     }
     .modal-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -262,7 +263,9 @@
     .modal-close:hover { background: #f8fafc; color: var(--text-primary); }
     .modal-body {
       padding: 24px; display: flex; flex-direction: column; gap: 20px;
-      overflow-y: auto; flex: 1; min-height: 0; /* min-height:0 required — flex items default to min-height:auto which blocks overflow */
+      overflow-y: auto;   /* only this element scrolls */
+      flex: 1;
+      min-height: 0;      /* required — flex default is min-height:auto which blocks overflow */
     }
     .modal-footer {
       display: flex; align-items: center; gap: 10px;
