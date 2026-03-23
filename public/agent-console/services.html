@@ -550,6 +550,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════════
      JAVASCRIPT
 ═══════════════════════════════════════════════════════════════════════════ -->
+<script src="/agent-console/lib/auth.js"></script>
 <script>
 'use strict';
 
@@ -583,9 +584,20 @@ const _catColour = (() => {
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// API HELPER — delegates to AgentConsoleAuth (handles token + 401 redirect)
+// ─────────────────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  return AgentConsoleAuth.apiFetch(path, opts);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BOOTSTRAP
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
+  if (typeof AgentConsoleAuth !== 'undefined') {
+    if (!AgentConsoleAuth.requireAuth()) return;
+  }
+
   const params   = new URLSearchParams(location.search);
   S.companyId    = params.get('companyId');
 
@@ -606,11 +618,7 @@ const _catColour = (() => {
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadContainers() {
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge`, {
-      headers: { Authorization: `Bearer ${_getToken()}` }
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
 
     // Fetch company name for header
     _loadCompanyName();
@@ -627,11 +635,7 @@ async function loadContainers() {
 
 async function loadSettings() {
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/settings`, {
-      headers: { Authorization: `Bearer ${_getToken()}` }
-    });
-    if (!r.ok) return;
-    const data = await r.json();
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/settings`);
     S.kbSettings = data.knowledgeBaseSettings || {};
     _renderSettings();
   } catch (_e) { /* Non-fatal — settings load fails gracefully */ }
@@ -639,11 +643,7 @@ async function loadSettings() {
 
 async function _loadCompanyName() {
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}`, {
-      headers: { Authorization: `Bearer ${_getToken()}` }
-    });
-    if (!r.ok) return;
-    const data = await r.json();
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}`);
     const name = data.company?.companyName || data.company?.name || '';
     if (name) document.getElementById('headerCompany').textContent = `— ${name}`;
   } catch (_e) {}
@@ -691,12 +691,10 @@ async function saveSettings() {
   };
 
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/settings`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
-      body:    JSON.stringify(payload),
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/settings`, {
+      method: 'PATCH',
+      body:   JSON.stringify(payload),
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Save failed');
     S.kbSettings = data.knowledgeBaseSettings;
     _toast('Settings saved', 'success');
@@ -878,12 +876,10 @@ function _cardHTML(c) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function toggleActive(id, isActive) {
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${id}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
-      body:    JSON.stringify({ isActive }),
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${id}`, {
+      method: 'PATCH',
+      body:   JSON.stringify({ isActive }),
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Update failed');
     // Update local state
     const idx = S.containers.findIndex(c => c._id === id);
@@ -919,11 +915,9 @@ async function confirmDelete() {
   closeDeleteDialog();
 
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${id}`, {
-      method:  'DELETE',
-      headers: { Authorization: `Bearer ${_getToken()}` },
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${id}`, {
+      method: 'DELETE',
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Delete failed');
     S.containers = S.containers.filter(c => c._id !== id);
     _updateStats();
@@ -963,9 +957,6 @@ function _toast(msg, type = 'info') {
   setTimeout(() => el.remove(), 3500);
 }
 
-function _getToken() {
-  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
-}
 
 function _esc(str) {
   if (!str) return '';

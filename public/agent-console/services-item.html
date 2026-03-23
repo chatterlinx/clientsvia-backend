@@ -492,8 +492,16 @@
 <!-- ══════════════════════════════════════════════════════════════════════════
      JAVASCRIPT
 ══════════════════════════════════════════════════════════════════════════ -->
+<script src="/agent-console/lib/auth.js"></script>
 <script>
 'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API HELPER — delegates to AgentConsoleAuth (handles token + 401 redirect)
+// ─────────────────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  return AgentConsoleAuth.apiFetch(path, opts);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATE
@@ -510,6 +518,10 @@ const S = {
 // BOOTSTRAP
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
+  if (typeof AgentConsoleAuth !== 'undefined') {
+    if (!AgentConsoleAuth.requireAuth()) return;
+  }
+
   const params   = new URLSearchParams(location.search);
   S.companyId    = params.get('companyId');
   S.itemId       = params.get('itemId') || null;
@@ -542,11 +554,7 @@ const S = {
 
 async function _loadCategoryOptions() {
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge`, {
-      headers: { Authorization: `Bearer ${_getToken()}` }
-    });
-    if (!r.ok) return;
-    const data = await r.json();
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
     const cats = [...new Set(
       (data.containers || []).map(c => c.category?.trim()).filter(Boolean)
     )].sort();
@@ -560,11 +568,7 @@ async function _loadCategoryOptions() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadContainer() {
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`, {
-      headers: { Authorization: `Bearer ${_getToken()}` }
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`);
     if (!data.success) throw new Error(data.error || 'Load failed');
     _populateForm(data.container);
     _showForm();
@@ -740,12 +744,10 @@ async function generateKeywords() {
   }
 
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/generate-keywords`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
-      body:    JSON.stringify({ title, sections }),
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/generate-keywords`, {
+      method: 'POST',
+      body:   JSON.stringify({ title, sections }),
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Generation failed');
 
     // Merge new keywords with existing (dedup)
@@ -809,12 +811,10 @@ async function saveContainer() {
       : `/api/admin/agent2/company/${S.companyId}/knowledge`;
     const method = S.isEdit ? 'PATCH' : 'POST';
 
-    const r = await fetch(url, {
+    const data = await apiFetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
-      body:    JSON.stringify(payload),
+      body: JSON.stringify(payload),
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Save failed');
 
     _toast(S.isEdit ? 'Container updated ✓' : 'Container created ✓', 'success');
@@ -832,11 +832,9 @@ async function softDelete() {
   if (!confirm('Deactivate this container? It will be hidden from callers but not deleted.')) return;
   _setLoading(true);
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`, {
-      method:  'DELETE',
-      headers: { Authorization: `Bearer ${_getToken()}` },
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`, {
+      method: 'DELETE',
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Deactivate failed');
     _toast('Container deactivated', 'success');
     setTimeout(() => goBack(), 800);
@@ -850,11 +848,9 @@ async function hardDelete() {
   if (!confirm('PERMANENTLY delete this container? This cannot be undone.')) return;
   _setLoading(true);
   try {
-    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}/hard`, {
-      method:  'DELETE',
-      headers: { Authorization: `Bearer ${_getToken()}` },
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}/hard`, {
+      method: 'DELETE',
     });
-    const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Delete failed');
     _toast('Container permanently deleted', 'success');
     setTimeout(() => goBack(), 600);
@@ -907,9 +903,6 @@ function _toast(msg, type = 'info') {
   setTimeout(() => el.remove(), 3500);
 }
 
-function _getToken() {
-  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
-}
 
 function _esc(str) {
   if (!str) return '';
