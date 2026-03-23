@@ -2275,6 +2275,24 @@ class Agent2DiscoveryRunner {
           ],
           response:    '',
           bookingMode: ''
+        },
+
+        // ── ASKING PRICING — Caller asks cost/fee during consent gate ──────────
+        // Checked AFTER askingSpecials so "any specials on the service call?" hits specials.
+        // Response is built by KnowledgeContainerService (Groq) from live KC data.
+        // Sub-routes: KC_PRICING_THEN_BOOK | KC_PRICING_THEN_REASK | ASKING_PRICING_KC_REASK (no match)
+        askingPricing: {
+          direction: 'HANDLE_PRICING_FIRST',
+          phrases: [
+            'how much', 'how much is', 'how much for', 'how much does', 'how much would',
+            'what does it cost', 'what will it cost', 'what is the cost', 'what would it cost',
+            'what is the fee', 'whats the fee', 'what is the charge', 'whats the charge',
+            'cost', 'price', 'pricing', 'rate', 'rates', 'fee', 'fees',
+            'charge', 'charges', 'service call', 'diagnostic fee', 'service fee',
+            'visit fee', 'trip charge', 'installation cost', 'replacement cost'
+          ],
+          response:    '',
+          bookingMode: ''
         }
       };
       // Deep-merge: DB config on top of defaults.
@@ -2301,6 +2319,13 @@ class Agent2DiscoveryRunner {
           phrases: safeArr(rawFuc.askingSpecials?.phrases).length > 0
             ? safeArr(rawFuc.askingSpecials.phrases)
             : DEFAULT_FUC.askingSpecials.phrases,
+        },
+        askingPricing: {
+          ...DEFAULT_FUC.askingPricing,
+          ...safeObj(rawFuc.askingPricing, {}),
+          phrases: safeArr(rawFuc.askingPricing?.phrases).length > 0
+            ? safeArr(rawFuc.askingPricing.phrases)
+            : DEFAULT_FUC.askingPricing.phrases,
         },
       };
 
@@ -2721,196 +2746,17 @@ class Agent2DiscoveryRunner {
                 }
               }
             } catch (_kcErrPrc) {
-              logger.warn('[A2] KC intercept error in ASKING_PRICING — falling through to PricingInterceptor', { callSid, err: _kcErrPrc?.message });
+              logger.warn('[A2] KC intercept error in ASKING_PRICING — re-asking FUQ', { callSid, err: _kcErrPrc?.message });
             }
           }
-          // ── Fall through to PricingInterceptor (backward compat) ─────────────
 
-          try {
-            const activeItems = await PricingInterceptor.getActivePricingItems(companyId);
-
-            if (activeItems.length) {
-              const result = PricingInterceptor.buildResponse(activeItems, input, 'BOOKING', null);
-
-              if (result) {
-                const { responseText, item, layer } = result;
-
-                if (isYesFUQ) {
-                  // ── PRICING_THEN_BOOK ─────────────────────────────────────────────
-                  // Caller gave consent AND asked about pricing ("yeah, how much is it?").
-                  // Answer the pricing question; transition to booking lane immediately.
-                  clearPendingFollowUp(nextState);
-                  nextState.lane        = 'BOOKING';
-                  nextState.sessionMode = 'BOOKING';
-                  nextState.consent = {
-                    pending:       false,
-                    given:         true,
-                    turn,
-                    source:        'followup_consent_gate',
-                    bucket:        'askingPricing',
-                    matchedPhrases,
-                    grantedAt:     new Date().toISOString()
-                  };
-                  nextState.agent2.discovery.lastPath = 'ASKING_PRICING_THEN_BOOK';
-
-                  emit('A2_PRICING_INTERCEPTED', {
-                    digressionOrigin: 'FOLLOWUP_CONSENT',
-                    itemLabel:         item.label,
-                    layer,
-                    source:            'ASKING_PRICING_FUQ_THEN_BOOK'
-                  });
-                  emit('A2_CONSENT_GATE_BOOKING', {
-                    reason:       'ASKING_PRICING: caller asked pricing + said YES → answered pricing → routing to booking',
-                    cardId:       pfuqSource?.replace('card:', '') || null,
-                    inputPreview: clip(input, 60)
-                  });
-                  emit('A2_RESPONSE_READY', {
-                    path:            'ASKING_PRICING_THEN_BOOK',
-                    responsePreview: clip(responseText, 120)
-                  });
-
-                  return {
-                    response:    responseText,
-                    matchSource: 'AGENT2_DISCOVERY',
-                    state:       nextState,
-                    _123rp:      build123rpMeta('ASKING_PRICING_THEN_BOOK')
-                  };
-
-                } else {
-                  // ── PRICING_THEN_REASK ────────────────────────────────────────────
-                  // Caller asked about pricing but did NOT say YES.
-                  // Answer the pricing question then re-ask the original FUQ.
-                  const reaskResponse = `${responseText} ${pfuq}`.trim();
-
-                  nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
-                  nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
-                  nextState.agent2.discovery.lastPath                = 'ASKING_PRICING_THEN_REASK';
-
-                  emit('A2_PRICING_INTERCEPTED', {
-                    digressionOrigin: 'FOLLOWUP_CONSENT',
-                    itemLabel:         item.label,
-                    layer,
-                    source:            'ASKING_PRICING_FUQ_THEN_REASK'
-                  });
-                  emit('A2_RESPONSE_READY', {
-                    path:            'ASKING_PRICING_THEN_REASK',
-                    responsePreview: clip(reaskResponse, 120)
-                  });
-
-                  return {
-                    response:    reaskResponse,
-                    matchSource: 'AGENT2_DISCOVERY',
-                    state:       nextState,
-                    _123rp:      build123rpMeta('ASKING_PRICING_THEN_REASK')
-                  };
-                }
-              }
-
-              // ── No keyword match — try Groq pricing conversation ────────────────
-              // Items exist but deterministic keyword matching returned null.
-              // Groq receives the full catalog as guardrails — cannot invent prices.
-              const _pricingAiCfg = company?.pricingAiSettings || {};
-              if (_pricingAiCfg.enabled !== false && process.env.GROQ_API_KEY) {
-                const _converseResult = await PricingConversationService.converse({
-                  companyId,
-                  question:      input,
-                  pricingItems:  activeItems,
-                  aiSettings:    _pricingAiCfg,
-                  voiceSettings: company?.pricingVoiceSettings || {},
-                  companyName:   company?.companyName || '',
-                  callerName,
-                  callSid,
-                });
-
-                if (_converseResult.intent !== PricingConversationService.INTENT.ERROR && _converseResult.response) {
-                  emit('A2_PRICING_CONVERSE_HIT', {
-                    source:     'ASKING_PRICING_FUQ',
-                    intent:     _converseResult.intent,
-                    confidence: _converseResult.confidence,
-                    latencyMs:  _converseResult.latencyMs,
-                    callSid,
-                  });
-
-                  if (_converseResult.intent === PricingConversationService.INTENT.BOOKING_READY) {
-                    // Caller ready to book — clear pfuq, route to booking lane
-                    clearPendingFollowUp(nextState);
-                    nextState.lane        = 'BOOKING';
-                    nextState.sessionMode = 'BOOKING';
-                    nextState.consent = {
-                      pending:       false,
-                      given:         true,
-                      turn,
-                      source:        'followup_consent_gate',
-                      bucket:        'askingPricing',
-                      matchedPhrases,
-                      grantedAt:     new Date().toISOString()
-                    };
-                    nextState.agent2.discovery.lastPath = 'PRICING_CONVERSE_BOOK';
-                    emit('A2_CONSENT_GATE_BOOKING', {
-                      reason:       'PRICING_CONVERSE: Groq detected booking-ready intent → routing to booking',
-                      cardId:       pfuqSource?.replace('card:', '') || null,
-                      inputPreview: clip(input, 60)
-                    });
-                    emit('A2_RESPONSE_READY', {
-                      path:            'PRICING_CONVERSE_BOOK',
-                      responsePreview: clip(_converseResult.response, 120)
-                    });
-                    return {
-                      response:    _converseResult.response,
-                      matchSource: 'AGENT2_DISCOVERY',
-                      state:       nextState,
-                      _123rp:      build123rpMeta('PRICING_CONVERSE_BOOK')
-                    };
-                  }
-
-                  // ANSWERED | ADVISOR_NEEDED | NO_DATA — return pricing answer, re-ask pfuq
-                  const _reaskResponse = pfuq ? `${_converseResult.response} ${pfuq}`.trim() : _converseResult.response;
-                  nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
-                  nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
-                  nextState.agent2.discovery.lastPath                = 'PRICING_CONVERSE_REASK';
-                  emit('A2_RESPONSE_READY', {
-                    path:            'PRICING_CONVERSE_REASK',
-                    responsePreview: clip(_reaskResponse, 120)
-                  });
-                  return {
-                    response:    _reaskResponse,
-                    matchSource: 'AGENT2_DISCOVERY',
-                    state:       nextState,
-                    _123rp:      build123rpMeta('PRICING_CONVERSE_REASK')
-                  };
-                }
-              }
-            }
-
-            // No active pricing items OR Groq disabled/missed — fall through to normal bucket handling
-            logger.debug('[A2] ASKING_PRICING: no match + Groq miss — falling through', { companyId, callSid });
-
-          } catch (pricingErr) {
-            // Graceful degrade: PricingInterceptor failed — re-ask the FUQ safely.
-            emit('A2_PRICING_ERROR', {
-              source: 'ASKING_PRICING_FUQ',
-              error:  pricingErr?.message || 'unknown',
-              bucket: 'ASKING_PRICING'
-            });
-
-            nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
-            nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
-            nextState.agent2.discovery.lastPath                = 'ASKING_PRICING_ERROR_REASK';
-
-            const fallbackResponse = `${fuqAck} ${pfuq}`.trim();
-            emit('A2_RESPONSE_READY', {
-              path:            'ASKING_PRICING_ERROR_REASK',
-              responsePreview: clip(fallbackResponse, 120),
-              isFallback:      true
-            });
-
-            return {
-              response:    fallbackResponse,
-              matchSource: 'AGENT2_DISCOVERY',
-              state:       nextState,
-              _123rp:      build123rpMeta('ASKING_PRICING_ERROR_REASK')
-            };
-          }
+          // KC had no matching container — re-ask the follow-up question
+          nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+          nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+          nextState.agent2.discovery.lastPath                = 'ASKING_PRICING_KC_REASK';
+          const _noPricingResponse = `${fuqAck} ${pfuq}`.trim();
+          emit('A2_RESPONSE_READY', { path: 'ASKING_PRICING_KC_REASK', responsePreview: clip(_noPricingResponse, 120) });
+          return { response: _noPricingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('ASKING_PRICING_KC_REASK') };
         }
 
         // ── YES (Tier 1 or Tier 2 if residual content) ──
