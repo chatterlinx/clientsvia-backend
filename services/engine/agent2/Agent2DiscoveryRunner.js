@@ -103,6 +103,7 @@ const Agent2EchoGuard = require('./Agent2EchoGuard');
 // Handles mid-call digression + return via DiscoveryNotesService.digressionStack.
 // ════════════════════════════════════════════════════════════════════════════
 const PromotionsInterceptor  = require('./PromotionsInterceptor');
+const PricingInterceptor     = require('./PricingInterceptor');     // 💰 Service pricing fact intercept
 const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
@@ -3160,6 +3161,115 @@ class Agent2DiscoveryRunner {
         // Never break a call for a promo failure — fall through to normal pipeline
         logger.warn('[A2] PromotionsInterceptor error — falling through to normal pipeline', {
           callSid, error: promoErr.message
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 💰 PRICING — CHECKPOINT C: SERVICE PRICING FACT DETECTION
+    // ══════════════════════════════════════════════════════════════════════════
+    // Fires when detect() matches a pricing signal in the caller's input.
+    // Runs AFTER promotions so "any specials on your service call?" hits promos
+    // first — pricing answers pure cost/inclusion questions.
+    //
+    // Three response routes based on item config + layer matched:
+    //
+    //   RESPOND layer 1   → primary price answer (e.g. "Our service call is $89")
+    //   RESPOND layer 2   → follow-up answer     (e.g. "Yes, credited on repairs >$200")
+    //   RESPOND layer 3   → deep detail          (e.g. "The visit includes a full inspection…")
+    //   ADVISOR_CALLBACK  → agent collects name+phone for specialist call-back
+    //                       (transition to BOOKING lane, bookingType = ADVISOR_CALLBACK)
+    //
+    // BOOKING origin: returnPrompt appended so caller resumes booking flow.
+    // Graceful degrade: any error falls through to normal pipeline — call never breaks.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (input && PricingInterceptor.detect(input)) {
+      try {
+        // Where we are in the call — determines returnPrompt and post-answer routing
+        const digressionOrigin = (
+          nextState?.lane === 'BOOKING' || nextState?.sessionMode === 'BOOKING'
+        ) ? 'BOOKING' : 'DISCOVERY';
+
+        // Redis-cached (15-min TTL) — fast on every turn after first load
+        const activeItems = await PricingInterceptor.getActivePricingItems(companyId);
+
+        if (activeItems.length) {
+          // If mid-booking, capture the pending booking question so we can append it
+          // to the pricing response and caller resumes the booking flow naturally.
+          const returnPrompt = digressionOrigin === 'BOOKING'
+            ? (nextState?.agent2?.booking?.pendingQuestion || null)
+            : null;
+
+          const result = PricingInterceptor.buildResponse(activeItems, input, digressionOrigin, returnPrompt);
+
+          if (result) {
+            const { responseText, item, layer, requiresAdvisor } = result;
+
+            // Save digression so DiscoveryNotesService tracks the interruption
+            await DiscoveryNotesService.pushDigression(companyId, callSid, {
+              digressionType:   'PRICING_QUERY',
+              digressionOrigin,
+              itemLabel:        item.label,
+              itemCategory:     item.category,
+              layer,
+              requiresAdvisor,
+              savedStep:        null,
+              savedContext:     {},
+              returnPrompt:     returnPrompt || null
+            }).catch(e => logger.warn('[A2] pushDigression failed for PRICING_QUERY', { callSid, e: e.message }));
+
+            // ── ADVISOR_CALLBACK: transition to booking lane so BookingLogicEngine
+            //    collects caller name + phone for a specialist call-back.
+            if (requiresAdvisor) {
+              nextState.lane        = 'BOOKING';
+              nextState.sessionMode = 'BOOKING';
+              nextState.booking     = nextState.booking || {};
+              nextState.booking.bookingType    = 'ADVISOR_CALLBACK';
+              nextState.booking.advisorContext = {
+                itemLabel:    item.label,
+                itemCategory: item.category,
+                triggeredAt:  new Date().toISOString()
+              };
+            }
+
+            emit('A2_PRICING_INTERCEPTED', {
+              digressionOrigin,
+              itemLabel:       item.label,
+              category:        item.category,
+              layer,
+              requiresAdvisor,
+              itemsAvailable:  activeItems.length,
+              inputPreview:    clip(input, 60),
+              responsePreview: clip(responseText, 80)
+            });
+            emit('A2_PATH_SELECTED', {
+              path:   'PRICING_INTERCEPTOR',
+              reason: `Pricing question matched — item="${item.label}" layer=${layer} origin=${digressionOrigin}${requiresAdvisor ? ' ADVISOR_CALLBACK' : ''}`
+            });
+            emit('A2_RESPONSE_READY', {
+              path:            'PRICING_INTERCEPTOR',
+              responsePreview: clip(responseText, 120),
+              requiresAdvisor
+            });
+
+            nextState.agent2                         = nextState.agent2 || {};
+            nextState.agent2.discovery               = nextState.agent2.discovery || {};
+            nextState.agent2.discovery.lastPath      = 'PRICING_INTERCEPTOR';
+
+            return {
+              response:    responseText,
+              matchSource: 'PRICING_INTERCEPTOR',
+              state:       nextState,
+              _123rp:      build123rpMeta('PRICING_INTERCEPTOR')
+            };
+          }
+          // No match in active items — fall through silently to normal pipeline
+        }
+        // No items configured — fall through silently
+      } catch (pricingErr) {
+        // Never break a call for a pricing failure — fall through to normal pipeline
+        logger.warn('[A2] PricingInterceptor error — falling through to normal pipeline', {
+          callSid, error: pricingErr.message
         });
       }
     }

@@ -232,6 +232,17 @@
     }
     .btn-icon-sm:hover { border-color: #94a3b8; color: var(--text-primary); }
     .btn-icon-sm.danger:hover { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
+    .btn-icon-sm.voice:hover  { border-color: #6ee7b7; background: #ecfdf5; color: #059669; }
+    .btn-icon-sm.voice.playing { border-color: #6ee7b7; background: #ecfdf5; color: #059669; animation: pulse-voice .9s ease-in-out infinite; }
+    @keyframes pulse-voice { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+    /* ── Voice preview mini-panel ────────────────────────────────────────── */
+    .voice-preview-panel {
+      display: none; margin-top: 10px; padding: 10px 12px;
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+    }
+    .voice-preview-panel.open { display: block; }
+    .voice-preview-panel audio { width: 100%; height: 32px; margin-top: 6px; }
 
     /* ── Empty state ─────────────────────────────────────────────────────── */
     .empty-state {
@@ -1005,6 +1016,13 @@ function renderCard(it) {
         </label>
         <span class="toggle-label">${it.isActive ? 'Active' : 'Inactive'}</span>
       </label>
+      <button class="btn-icon-sm voice" id="vbtn-${it._id}" title="Preview voice" onclick="testVoice('${it._id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
       <button class="btn-icon-sm" title="Edit" onclick="openModal('${it._id}')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1016,6 +1034,10 @@ function renderCard(it) {
           <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
+    </div>
+    <div class="voice-preview-panel" id="vpreview-${it._id}">
+      <div style="font-size:11px;font-weight:600;color:#059669">🔊 Layer 1 Voice Preview</div>
+      <audio id="vaudio-${it._id}" controls style="width:100%;height:32px;margin-top:6px"></audio>
     </div>
   </div>`;
 }
@@ -1210,6 +1232,60 @@ async function quickDelete(id, label) {
     updateStats();
   } catch (err) {
     toast('error', 'Delete failed', err.message);
+  }
+}
+
+/* ── Voice preview ─────────────────────────────────────────────────────── */
+async function testVoice(id) {
+  const it = S.items.find(i => i._id === id);
+  if (!it) return;
+
+  const text = (it.response || '').trim();
+  if (!text) {
+    toast('info', 'No response text', 'Add a Layer 1 response first');
+    return;
+  }
+
+  const btn     = document.getElementById(`vbtn-${id}`);
+  const panel   = document.getElementById(`vpreview-${id}`);
+  const audioEl = document.getElementById(`vaudio-${id}`);
+
+  // Toggle off if already open and not loading
+  if (panel.classList.contains('open') && !btn.classList.contains('playing')) {
+    panel.classList.remove('open');
+    audioEl.pause();
+    audioEl.src = '';
+    return;
+  }
+
+  btn.classList.add('playing');
+  panel.classList.add('open');
+  audioEl.src = '';
+
+  try {
+    // Use raw fetch for audio — AgentConsoleAuth.apiFetch parses JSON but we need a Blob
+    const token  = AgentConsoleAuth.getToken();
+    const rawRes = await fetch(`/api/admin/agent2/company/${S.companyId}/pricing/preview-voice`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ text })
+    });
+
+    if (!rawRes.ok) {
+      const errJson = await rawRes.json().catch(() => ({}));
+      throw new Error(errJson.error || `HTTP ${rawRes.status}`);
+    }
+
+    const blob   = await rawRes.blob();
+    audioEl.src  = URL.createObjectURL(blob);
+    audioEl.play().catch(() => {});
+    toast('success', 'Voice preview ready', `"${it.label}" — Layer 1`);
+
+  } catch (err) {
+    panel.classList.remove('open');
+    toast('error', 'Voice preview failed', err.message);
+  } finally {
+    btn.classList.remove('playing');
   }
 }
 

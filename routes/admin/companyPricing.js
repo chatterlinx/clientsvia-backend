@@ -37,6 +37,9 @@ const logger               = require('../../utils/logger');
 const { authenticateJWT }  = require('../../middleware/auth');
 const CompanyPricingItem   = require('../../models/CompanyPricingItem');
 const PricingInterceptor   = require('../../services/engine/agent2/PricingInterceptor');
+const InstantAudioService  = require('../../services/instantAudio/InstantAudioService');
+const v2Company            = require('../../models/v2Company');
+const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -147,6 +150,10 @@ router.post('/:companyId/pricing', async (req, res) => {
     );
 
     logger.info('[companyPricing] Created pricing item', { companyId, id: item._id, label: item.label });
+
+    // Pre-generate instant audio for all text responses — non-blocking, <50ms call latency at runtime
+    _preGenAudio(companyId, item, 'created');
+
     return res.status(201).json({ success: true, item });
   } catch (err) {
     logger.error('[companyPricing] POST create error', { companyId, err: err.message });
@@ -230,6 +237,12 @@ router.patch('/:companyId/pricing/:id', async (req, res) => {
     );
 
     logger.info('[companyPricing] Updated pricing item', { companyId, id, fields: Object.keys(updates) });
+
+    // Re-generate instant audio if any text field changed — non-blocking
+    const textFields = ['response','layer2Response','layer3Response','advisorCallbackPrompt','includesDetail'];
+    const textChanged = textFields.some(f => f in updates);
+    if (textChanged) _preGenAudio(companyId, item, 'updated');
+
     return res.json({ success: true, item });
   } catch (err) {
     logger.error('[companyPricing] PATCH error', { companyId, id, err: err.message });
@@ -281,5 +294,111 @@ router.delete('/:companyId/pricing/:id/hard', async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to delete pricing item' });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/pricing/preview-voice — Synthesise text for UI playback
+// ─────────────────────────────────────────────────────────────────────────────
+// Used by the 🔊 button in pricing.html. Takes { text } and uses the company's
+// stored voice settings — UI never needs to know voiceId or other params.
+// ⚠️  Register BEFORE /:id routes (literal vs parameterised order rule).
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/pricing/preview-voice', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const text = (req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ success: false, error: 'text is required' });
+  if (text.length > 600) return res.status(400).json({ success: false, error: 'text too long (max 600 chars)' });
+
+  try {
+    const company = await v2Company.findById(companyId).lean();
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+
+    const vs = company?.aiAgentSettings?.voiceSettings;
+    if (!vs?.voiceId) {
+      return res.status(422).json({ success: false, error: 'No voice configured for this company. Set a voice in Voice Settings first.' });
+    }
+
+    const audioBuffer = await synthesizeSpeech({
+      text,
+      voiceId:           vs.voiceId,
+      company,
+      stability:         vs.stability,
+      similarityBoost:   vs.similarityBoost,
+      styleExaggeration: vs.styleExaggeration,
+      speakerBoost:      vs.speakerBoost,
+      aiModel:           vs.aiModel,
+      outputFormat:      vs.outputFormat || 'mp3_44100_128',
+      streamingLatency:  vs.streamingLatency
+    });
+
+    res.set({
+      'Content-Type':        'audio/mpeg',
+      'Content-Length':      audioBuffer.length,
+      'Content-Disposition': `inline; filename="pricing-preview-${Date.now()}.mp3"`,
+      'Cache-Control':       'no-cache'
+    });
+    return res.send(audioBuffer);
+
+  } catch (err) {
+    logger.error('[companyPricing] preview-voice error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to generate voice preview' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INSTANT AUDIO PRE-GENERATION — called fire-and-forget from POST and PATCH
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirrors the pattern in companyTriggers.js — generates MP3s to disk so the
+// runtime can serve <Play> at call time instead of paying ElevenLabs latency.
+// All four text fields are pre-generated independently (each gets its own hash).
+// Graceful: any failure is logged but never surfaces to the caller.
+// ─────────────────────────────────────────────────────────────────────────────
+function _preGenAudio(companyId, item, reason) {
+  const candidates = [
+    { text: item.response,               label: 'layer1_response'   },
+    { text: item.layer2Response,         label: 'layer2_response'   },
+    { text: item.layer3Response,         label: 'layer3_response'   },
+    { text: item.advisorCallbackPrompt,  label: 'advisor_prompt'    },
+    { text: item.includesDetail,         label: 'includes_detail'   }
+  ].filter(c => typeof c.text === 'string' && c.text.trim());
+
+  if (!candidates.length) return;
+
+  (async () => {
+    try {
+      const company = await v2Company.findById(companyId).lean();
+      const vs = company?.aiAgentSettings?.voiceSettings;
+      if (!vs?.voiceId) return; // No voice configured yet — skip silently
+
+      for (const { text, label } of candidates) {
+        try {
+          await InstantAudioService.generate({
+            companyId,
+            kind:          'PRICING_RESPONSE',
+            text:          text.trim(),
+            company,
+            voiceSettings: vs
+          });
+        } catch (lineErr) {
+          logger.warn('[companyPricing] Instant audio failed for one line (non-fatal)', {
+            companyId, label, error: lineErr.message
+          });
+        }
+      }
+
+      logger.info('[companyPricing] Instant audio pre-generated', {
+        companyId,
+        label:      item.label,
+        linesCount: candidates.length,
+        reason
+      });
+    } catch (err) {
+      logger.warn('[companyPricing] Instant audio pre-generation batch failed (non-fatal)', {
+        companyId, label: item.label, error: err.message
+      });
+    }
+  })();
+}
 
 module.exports = router;

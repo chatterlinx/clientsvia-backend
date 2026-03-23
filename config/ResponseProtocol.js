@@ -38,6 +38,8 @@ const PATH_TO_TIER = {
   'SCENARIO_ANSWER':        RESPONSE_TIER.TIER_1,
   'ROBOT_CHALLENGE':        RESPONSE_TIER.TIER_1,
   'PATIENCE_MODE':          RESPONSE_TIER.TIER_1,
+  'PROMOTIONS_INTERCEPTOR': RESPONSE_TIER.TIER_1, // 🎟️ Promo/coupon/specials intercept
+  'PRICING_INTERCEPTOR':    RESPONSE_TIER.TIER_1, // 💰 Service pricing fact intercept
 
   // Follow-up consent paths (Tier 1 — deterministic yes/no/reprompt routing)
   'FOLLOWUP_YES':                    RESPONSE_TIER.TIER_1,
