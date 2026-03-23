@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Base — ClientsVia</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ── Design tokens ───────────────────────────────────────────────────── */
+    :root {
+      --color-primary:    #6366f1;
+      --color-primary-dk: #4f46e5;
+      --color-success:    #10b981;
+      --color-advisor:    #f59e0b;
+      --color-danger:     #ef4444;
+      --bg-page:          #f5f3ff;
+      --bg-card:          #ffffff;
+      --bg-header:        #ffffff;
+      --text-primary:     #0f172a;
+      --text-muted:       #64748b;
+      --text-xs:          #94a3b8;
+      --border:           #e2e8f0;
+      --border-focus:     #6366f1;
+      --radius-card:      12px;
+      --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    }
+
+    /* ── Base ─────────────────────────────────────────────────────────────── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
+
+    /* ── Sticky header ────────────────────────────────────────────────────── */
+    .page-header {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: white;
+      color: var(--text-muted); font-size: 13px; font-weight: 500;
+      cursor: pointer; text-decoration: none;
+      transition: background .15s, color .15s;
+    }
+    .btn-back:hover { background: #f8fafc; color: var(--text-primary); }
+    .header-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-icon { font-size: 20px; }
+    .header-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .header-company { font-size: 13px; color: var(--text-muted); margin-left: 4px; }
+    .header-spacer { flex: 1; }
+    .btn-add {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px;
+      background: var(--color-primary); color: white;
+      border: none; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+      text-decoration: none;
+    }
+    .btn-add:hover { background: var(--color-primary-dk); }
+
+    /* ── How It Works banner (collapsible) ───────────────────────────────── */
+    .banner-wrap { padding: 20px 24px 0; }
+    .info-banner {
+      background: #ede9fe; border: 1px solid #c4b5fd;
+      border-radius: var(--radius-card);
+      overflow: hidden;
+    }
+    .banner-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; cursor: pointer; user-select: none;
+    }
+    .banner-header-left { display: flex; align-items: center; gap: 10px; }
+    .banner-title { font-size: 14px; font-weight: 600; color: #4c1d95; }
+    .banner-subtitle { font-size: 12px; color: #6d28d9; margin-top: 1px; }
+    .banner-body { padding: 0 20px 16px; }
+    .banner-body.collapsed { display: none; }
+    .banner-body p { font-size: 13px; color: #4c1d95; line-height: 1.6; margin-bottom: 10px; }
+    .banner-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .banner-pill {
+      font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+      border: 1px solid;
+    }
+    .banner-pill.groq   { background: #ede9fe; border-color: #a78bfa; color: #5b21b6; }
+    .banner-pill.redis  { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .banner-pill.mongo  { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .banner-pill.check  { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
+
+    /* ── Stats bar ───────────────────────────────────────────────────────── */
+    .stats-bar { display: flex; gap: 10px; flex-wrap: wrap; padding: 16px 24px 0; }
+    .stat-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: white; border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 14px;
+      font-size: 13px; color: var(--text-muted);
+    }
+    .stat-chip strong { color: var(--text-primary); font-weight: 700; }
+    .stat-chip .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ── Global Settings card ────────────────────────────────────────────── */
+    .settings-wrap { padding: 16px 24px 0; }
+    .settings-card {
+      background: white; border: 1px solid var(--border);
+      border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; cursor: pointer; user-select: none;
+      background: #fafafa; border-bottom: 1px solid transparent;
+      transition: border-color .15s;
+    }
+    .settings-header.open { border-bottom-color: var(--border); }
+    .settings-header-left { display: flex; align-items: center; gap: 10px; }
+    .settings-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .settings-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+    .chevron { transition: transform .2s; color: var(--text-xs); }
+    .chevron.open { transform: rotate(180deg); }
+    .settings-body {
+      padding: 20px; display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .settings-body.collapsed { display: none; }
+    .settings-save-row { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: 4px; gap: 10px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .4px;
+    }
+    .form-input, .form-textarea, .form-select {
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 14px; font-family: inherit;
+      outline: none; transition: border-color .15s; background: white;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--border-focus); }
+    .form-hint { font-size: 11px; color: var(--text-xs); }
+
+    /* Toggle large */
+    .toggle-lg { display: flex; align-items: center; gap: 10px; }
+    .toggle-lg input[type="checkbox"] {
+      appearance: none; width: 40px; height: 22px; border-radius: 11px;
+      background: #cbd5e1; cursor: pointer; position: relative;
+      transition: background .2s; flex-shrink: 0;
+    }
+    .toggle-lg input[type="checkbox"]::after {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      background: white; border-radius: 50%; top: 3px; left: 3px;
+      transition: transform .2s;
+    }
+    .toggle-lg input[type="checkbox"]:checked { background: var(--color-primary); }
+    .toggle-lg input[type="checkbox"]:checked::after { transform: translateX(18px); }
+    .toggle-lg label { font-size: 14px; font-weight: 500; cursor: pointer; }
+
+    /* Booking offer mode toggle */
+    .offer-mode-row { display: flex; flex-direction: column; gap: 10px; }
+    .offer-mode-option {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 14px; border-radius: 8px; border: 2px solid var(--border);
+      cursor: pointer; transition: all .15s;
+    }
+    .offer-mode-option.selected { border-color: var(--color-primary); background: #f5f3ff; }
+    .offer-mode-option input { margin-top: 2px; accent-color: var(--color-primary); }
+    .offer-mode-text strong { display: block; font-size: 13px; font-weight: 600; }
+    .offer-mode-text small  { font-size: 11px; color: var(--text-muted); }
+    .offer-fixed-phrase { display: none; }
+    .offer-fixed-phrase.visible { display: block; }
+
+    /* ── Toolbar ─────────────────────────────────────────────────────────── */
+    .toolbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 16px 24px;
+    }
+    .filter-btn {
+      padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      border: 1px solid var(--border); background: white; color: var(--text-muted);
+      cursor: pointer; transition: all .15s;
+    }
+    .filter-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+    .cat-select {
+      padding: 6px 30px 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: white; font-size: 13px;
+      font-family: inherit; outline: none; cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    .search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 300px; }
+    .search-input {
+      width: 100%; padding: 7px 12px 7px 34px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 13px; background: white;
+      outline: none; transition: border-color .15s;
+    }
+    .search-input:focus { border-color: var(--border-focus); }
+    .search-icon {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      color: var(--text-xs); pointer-events: none; font-size: 14px;
+    }
+    .toolbar-spacer { flex: 1; }
+
+    /* ── Container cards grid ────────────────────────────────────────────── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+      padding: 0 24px 40px;
+    }
+
+    /* ── Container card ──────────────────────────────────────────────────── */
+    .kc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      display: flex; flex-direction: column;
+      transition: box-shadow .15s, border-color .15s;
+      overflow: hidden;
+    }
+    .kc-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.10); border-color: #c4b5fd; }
+    .kc-card.inactive { opacity: .6; }
+
+    .kc-card-header {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .kc-cat-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0; margin-top: 5px;
+    }
+    .kc-header-text { flex: 1; min-width: 0; }
+    .kc-title { font-size: 15px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+    .kc-badges { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
+    .badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+      border: 1px solid; text-transform: uppercase; letter-spacing: .4px;
+      white-space: nowrap;
+    }
+    .badge-cat     { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
+    .badge-off     { background: #f8fafc; border-color: #cbd5e1; color: #94a3b8; }
+    .badge-book    { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .badge-advisor { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .badge-none    { background: #f1f5f9; border-color: #cbd5e1; color: #64748b; }
+    .badge-limit   { background: #ede9fe; border-color: #a78bfa; color: #4c1d95; }
+
+    .kc-card-body { padding: 12px 16px; flex: 1; }
+
+    /* Keyword chips */
+    .kc-keywords { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+    .kw-chip { font-size: 11px; background: #f1f5f9; color: #475569; border-radius: 4px; padding: 2px 7px; }
+    .kw-more { font-size: 11px; color: var(--text-xs); align-self: center; }
+    .kc-no-keywords { font-size: 12px; color: var(--text-xs); font-style: italic; }
+
+    /* Sections preview */
+    .kc-sections { margin-bottom: 8px; }
+    .kc-section-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 4px 0; border-bottom: 1px dashed #f1f5f9;
+    }
+    .kc-section-row:last-child { border-bottom: none; }
+    .kc-section-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .4px; color: var(--color-primary);
+      min-width: 70px; padding-top: 1px;
+    }
+    .kc-section-preview { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+    .kc-card-footer {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; border-top: 1px solid var(--border);
+      background: #fafafa;
+    }
+    .toggle-wrap { display: flex; align-items: center; gap: 6px; margin-right: auto; }
+    .toggle { position: relative; width: 34px; height: 18px; cursor: pointer; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: #cbd5e1; border-radius: 9px;
+      transition: background .2s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      left: 3px; top: 3px; background: white; border-radius: 50%;
+      transition: transform .2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--color-primary); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+    .toggle-label { font-size: 12px; color: var(--text-muted); }
+
+    .btn-icon-sm {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 6px;
+      border: 1px solid var(--border); background: white;
+      color: var(--text-muted); cursor: pointer; transition: all .15s;
+    }
+    .btn-icon-sm:hover { border-color: #94a3b8; color: var(--text-primary); }
+    .btn-icon-sm.danger:hover { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn-primary {
+      padding: 9px 20px; border-radius: 8px; border: none;
+      background: var(--color-primary); color: white;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-secondary {
+      padding: 9px 16px; border-radius: 8px;
+      border: 1px solid var(--border); background: white;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      color: var(--text-muted); transition: all .15s;
+    }
+    .btn-secondary:hover { border-color: #94a3b8; color: var(--text-primary); }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty-state {
+      grid-column: 1 / -1; text-align: center; padding: 64px 24px;
+    }
+    .empty-icon { font-size: 52px; margin-bottom: 16px; }
+    .empty-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    .empty-desc  { font-size: 14px; color: var(--text-muted); line-height: 1.6; max-width: 440px; margin: 0 auto 24px; }
+
+    /* ── Loading skeleton ────────────────────────────────────────────────── */
+    .skeleton-card {
+      background: white; border: 1px solid var(--border); border-radius: var(--radius-card);
+      padding: 16px; height: 200px;
+      background: linear-gradient(90deg, #f1f5f9 25%, #e8eef5 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* ── Delete confirm dialog ───────────────────────────────────────────── */
+    .dialog-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .dialog-overlay.open { display: flex; }
+    .dialog-box {
+      background: white; border-radius: 14px; padding: 28px;
+      max-width: 400px; width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    .dialog-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .dialog-desc  { font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px; }
+    .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-danger {
+      padding: 9px 18px; border-radius: 8px; border: 1px solid #fca5a5;
+      background: #fef2f2; color: #dc2626;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+    .btn-danger:hover { background: #fee2e2; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 10px; background: white;
+      border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.12);
+      font-size: 13px; font-weight: 500; min-width: 240px;
+      animation: slideIn .2s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .toast.success { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+    .toast.error   { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
+    .toast.info    { border-color: #c4b5fd; background: #f5f3ff; color: #5b21b6; }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .cards-grid { grid-template-columns: 1fr; }
+      .page-header { padding: 12px 16px; }
+      .stats-bar, .toolbar, .banner-wrap, .settings-wrap { padding-left: 16px; padding-right: 16px; }
+      .cards-grid { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sticky header ──────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <a href="/agent-console/agent2.html" class="btn-back">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Back
+  </a>
+  <div class="header-divider"></div>
+  <span class="header-icon">🧠</span>
+  <div>
+    <div class="header-title">Knowledge Base</div>
+  </div>
+  <span class="header-company" id="headerCompany"></span>
+  <div class="header-spacer"></div>
+  <a href="#" id="btnAdd" class="btn-add">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Add Container
+  </a>
+</header>
+
+<!-- ── How It Works banner (collapsible) ──────────────────────────────────── -->
+<div class="banner-wrap">
+  <div class="info-banner">
+    <div class="banner-header" onclick="toggleBanner()">
+      <div class="banner-header-left">
+        <span style="font-size:20px;">💡</span>
+        <div>
+          <div class="banner-title">How Knowledge Containers Work</div>
+          <div class="banner-subtitle">One card per topic — Groq answers any caller question from it</div>
+        </div>
+      </div>
+      <svg id="bannerChevron" class="chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div id="bannerBody" class="banner-body collapsed">
+      <p>Each Knowledge Container is a rich briefing document for one topic — a service, special, policy, or FAQ. Add as many labelled sections as you need: Price, What's Included, Warranty, Duration, Availability, etc. Write as much as you want.</p>
+      <p>When a caller asks about that topic, Groq reads the full container and synthesises a natural spoken answer within your configured word limit. It then naturally offers to book — or appends your exact fixed phrase — depending on your settings. The caller never hears "I don't know" again.</p>
+      <div class="banner-pills">
+        <span class="banner-pill groq">🤖 Groq-Bounded</span>
+        <span class="banner-pill check">✅ No Hallucination</span>
+        <span class="banner-pill redis">⚡ Redis Cached</span>
+        <span class="banner-pill mongo">🗄️ MongoDB Backed</span>
+        <span class="banner-pill check">🔒 Multi-Tenant Safe</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stats bar ──────────────────────────────────────────────────────────── -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-chip"><strong id="statTotal">–</strong> total</div>
+  <div class="stat-chip"><span class="stat-dot" style="background:#10b981"></span><strong id="statActive">–</strong> active</div>
+  <div class="stat-chip"><strong id="statInactive">–</strong> inactive</div>
+  <div id="statCatChips"></div>
+</div>
+
+<!-- ── Global Settings card ───────────────────────────────────────────────── -->
+<div class="settings-wrap">
+  <div class="settings-card">
+    <div class="settings-header" id="settingsHeader" onclick="toggleSettings()">
+      <div class="settings-header-left">
+        <span style="font-size:18px;">⚙️</span>
+        <div>
+          <div class="settings-title">Global Settings</div>
+          <div class="settings-subtitle">Word limit, booking offer style, enable/disable</div>
+        </div>
+      </div>
+      <svg id="settingsChevron" class="chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div id="settingsBody" class="settings-body collapsed">
+      <!-- Enable toggle -->
+      <div class="form-group">
+        <div class="form-label">Knowledge Base</div>
+        <div class="toggle-lg" style="padding-top:4px;">
+          <input type="checkbox" id="kbEnabled" checked>
+          <label for="kbEnabled">Enable Knowledge Container system</label>
+        </div>
+        <div class="form-hint">When off, all 3 intercept points are skipped and the system falls through to existing behaviour.</div>
+      </div>
+
+      <!-- Default word limit -->
+      <div class="form-group">
+        <label class="form-label" for="kbWordLimit">Default Word Limit</label>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="number" id="kbWordLimit" class="form-input" min="5" max="100" value="20" style="width:80px;">
+          <span style="font-size:13px;color:var(--text-muted);">words per Groq response</span>
+        </div>
+        <div class="form-hint">Per-container override available on each container's edit page.</div>
+      </div>
+
+      <!-- Booking offer mode -->
+      <div class="form-group full">
+        <div class="form-label">Booking Offer Style</div>
+        <div class="offer-mode-row" style="margin-top:6px;">
+          <label class="offer-mode-option selected" id="offerGroqOption" onclick="selectOfferMode('groq')">
+            <input type="radio" name="offerMode" value="groq" checked>
+            <div class="offer-mode-text">
+              <strong>🤖 Let Groq close naturally (recommended)</strong>
+              <small>Groq generates a warm, context-aware booking invitation after every answer. Sounds human, not scripted.</small>
+            </div>
+          </label>
+          <label class="offer-mode-option" id="offerFixedOption" onclick="selectOfferMode('fixed')">
+            <input type="radio" name="offerMode" value="fixed">
+            <div class="offer-mode-text">
+              <strong>📝 Always say this exact phrase</strong>
+              <small>Append a fixed phrase verbatim after every answer. Useful for brand consistency.</small>
+            </div>
+          </label>
+        </div>
+        <div class="offer-fixed-phrase" id="offerFixedPhraseWrap" style="margin-top:10px;">
+          <input type="text" id="kbOfferPhrase" class="form-input" placeholder='e.g. "Would you like to schedule that today?"' maxlength="200">
+          <div class="form-hint">This exact text will be spoken after every Groq answer. Keep it short and natural.</div>
+        </div>
+      </div>
+
+      <div class="settings-save-row">
+        <div id="settingsSaveStatus" style="font-size:13px;color:var(--text-muted);align-self:center;"></div>
+        <button class="btn-secondary" onclick="toggleSettings()">Close</button>
+        <button class="btn-primary" onclick="saveSettings()" id="btnSaveSettings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toolbar ────────────────────────────────────────────────────────────── -->
+<div class="toolbar">
+  <button class="filter-btn active" id="filterAll"   onclick="setFilter('all')">All</button>
+  <button class="filter-btn"        id="filterActive" onclick="setFilter('active')">Active</button>
+  <select class="cat-select" id="catFilter" onchange="applyCatFilter(this.value)">
+    <option value="">All categories</option>
+  </select>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" class="search-input" id="searchInput" placeholder="Search containers…" oninput="applySearch(this.value)">
+  </div>
+  <div class="toolbar-spacer"></div>
+  <span style="font-size:13px;color:var(--text-muted);" id="resultCount"></span>
+</div>
+
+<!-- ── Container cards ────────────────────────────────────────────────────── -->
+<div class="cards-grid" id="cardsGrid">
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+</div>
+
+<!-- ── Delete confirm dialog ──────────────────────────────────────────────── -->
+<div class="dialog-overlay" id="deleteDialog">
+  <div class="dialog-box">
+    <div class="dialog-title">Deactivate container?</div>
+    <div class="dialog-desc" id="deleteDialogDesc">This will hide the container from callers. You can reactivate it from the edit page. To permanently delete, use the edit page.</div>
+    <div class="dialog-actions">
+      <button class="btn-secondary" onclick="closeDeleteDialog()">Cancel</button>
+      <button class="btn-danger" id="btnConfirmDelete" onclick="confirmDelete()">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast container ────────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const S = {
+  companyId:    null,
+  containers:   [],
+  filtered:     [],
+  kbSettings:   {},
+  filter:       'all',
+  catFilter:    '',
+  search:       '',
+  deleteTarget: null,
+};
+
+// Category dot colour palette — cycles through for variety
+const CAT_COLOURS = [
+  '#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6',
+  '#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'
+];
+const _catColour = (() => {
+  const memo = {};
+  let idx = 0;
+  return cat => {
+    if (!cat) return '#94a3b8';
+    if (!memo[cat]) { memo[cat] = CAT_COLOURS[idx++ % CAT_COLOURS.length]; }
+    return memo[cat];
+  };
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOTSTRAP
+// ─────────────────────────────────────────────────────────────────────────────
+(async function init() {
+  const params   = new URLSearchParams(location.search);
+  S.companyId    = params.get('companyId');
+
+  if (!S.companyId) {
+    document.getElementById('cardsGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">No company selected</div><div class="empty-desc">Please navigate here from the Agent Console with a companyId parameter.</div></div>';
+    return;
+  }
+
+  // Wire Add button
+  document.getElementById('btnAdd').href = `/agent-console/services-item.html?companyId=${S.companyId}`;
+
+  // Load in parallel
+  await Promise.all([loadContainers(), loadSettings()]);
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOADING
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadContainers() {
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge`, {
+      headers: { Authorization: `Bearer ${_getToken()}` }
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+
+    // Fetch company name for header
+    _loadCompanyName();
+
+    S.containers = data.containers || [];
+    _updateStats();
+    _populateCatFilter();
+    applyFilters();
+  } catch (err) {
+    console.error('[services.html] loadContainers error:', err);
+    document.getElementById('cardsGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div class="empty-title">Failed to load</div><div class="empty-desc">Could not load knowledge containers. Check your connection and try again.</div></div>';
+  }
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/settings`, {
+      headers: { Authorization: `Bearer ${_getToken()}` }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    S.kbSettings = data.knowledgeBaseSettings || {};
+    _renderSettings();
+  } catch (_e) { /* Non-fatal — settings load fails gracefully */ }
+}
+
+async function _loadCompanyName() {
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}`, {
+      headers: { Authorization: `Bearer ${_getToken()}` }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const name = data.company?.companyName || data.company?.name || '';
+    if (name) document.getElementById('headerCompany').textContent = `— ${name}`;
+  } catch (_e) {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+function _renderSettings() {
+  const s = S.kbSettings;
+  document.getElementById('kbEnabled').checked    = s.enabled !== false;
+  document.getElementById('kbWordLimit').value    = s.defaultWordLimit || 20;
+
+  const mode = s.bookingOfferMode || 'groq';
+  selectOfferMode(mode, true);
+
+  if (mode === 'fixed') {
+    document.getElementById('kbOfferPhrase').value = s.bookingOfferPhrase || '';
+  }
+}
+
+function selectOfferMode(mode, silent) {
+  document.getElementById('offerGroqOption').classList.toggle('selected', mode === 'groq');
+  document.getElementById('offerFixedOption').classList.toggle('selected', mode === 'fixed');
+  document.querySelector('[name="offerMode"][value="groq"]').checked  = mode === 'groq';
+  document.querySelector('[name="offerMode"][value="fixed"]').checked = mode === 'fixed';
+  const wrap = document.getElementById('offerFixedPhraseWrap');
+  wrap.classList.toggle('visible', mode === 'fixed');
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('btnSaveSettings');
+  const status = document.getElementById('settingsSaveStatus');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  status.textContent = '';
+
+  const mode = document.querySelector('[name="offerMode"]:checked')?.value || 'groq';
+
+  const payload = {
+    enabled:            document.getElementById('kbEnabled').checked,
+    defaultWordLimit:   parseInt(document.getElementById('kbWordLimit').value, 10) || 20,
+    bookingOfferMode:   mode,
+    bookingOfferPhrase: mode === 'fixed' ? (document.getElementById('kbOfferPhrase').value || '').trim() : '',
+  };
+
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/settings`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
+      body:    JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Save failed');
+    S.kbSettings = data.knowledgeBaseSettings;
+    _toast('Settings saved', 'success');
+    status.textContent = '✓ Saved';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch (err) {
+    _toast(err.message || 'Failed to save settings', 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Save Settings';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILTER & SEARCH
+// ─────────────────────────────────────────────────────────────────────────────
+function setFilter(f) {
+  S.filter = f;
+  document.getElementById('filterAll').classList.toggle('active', f === 'all');
+  document.getElementById('filterActive').classList.toggle('active', f === 'active');
+  applyFilters();
+}
+
+function applyCatFilter(val) {
+  S.catFilter = val;
+  applyFilters();
+}
+
+function applySearch(val) {
+  S.search = val.toLowerCase();
+  applyFilters();
+}
+
+function applyFilters() {
+  let list = [...S.containers];
+  if (S.filter === 'active') list = list.filter(c => c.isActive);
+  if (S.catFilter) list = list.filter(c => c.category === S.catFilter);
+  if (S.search) {
+    list = list.filter(c =>
+      c.title.toLowerCase().includes(S.search) ||
+      (c.category || '').toLowerCase().includes(S.search) ||
+      (c.keywords || []).some(k => k.includes(S.search))
+    );
+  }
+  S.filtered = list;
+  document.getElementById('resultCount').textContent = `${list.length} container${list.length !== 1 ? 's' : ''}`;
+  _renderCards();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATS & CAT FILTER
+// ─────────────────────────────────────────────────────────────────────────────
+function _updateStats() {
+  const total    = S.containers.length;
+  const active   = S.containers.filter(c => c.isActive).length;
+  const inactive = total - active;
+
+  document.getElementById('statTotal').textContent    = total;
+  document.getElementById('statActive').textContent   = active;
+  document.getElementById('statInactive').textContent = inactive;
+
+  // Category counts
+  const catCounts = {};
+  S.containers.forEach(c => {
+    const cat = c.category?.trim() || '';
+    if (cat) catCounts[cat] = (catCounts[cat] || 0) + 1;
+  });
+  const catChips = document.getElementById('statCatChips');
+  catChips.innerHTML = Object.entries(catCounts).map(([cat, n]) =>
+    `<div class="stat-chip"><span class="stat-dot" style="background:${_catColour(cat)}"></span><strong>${n}</strong> ${_esc(cat)}</div>`
+  ).join('');
+}
+
+function _populateCatFilter() {
+  const cats = [...new Set(S.containers.map(c => c.category?.trim()).filter(Boolean))].sort();
+  const sel  = document.getElementById('catFilter');
+  // Keep first "All categories" option
+  sel.innerHTML = '<option value="">All categories</option>' +
+    cats.map(c => `<option value="${_esc(c)}">${_esc(c)}</option>`).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD RENDERING
+// ─────────────────────────────────────────────────────────────────────────────
+function _renderCards() {
+  const grid = document.getElementById('cardsGrid');
+
+  if (!S.filtered.length) {
+    const isEmpty = !S.containers.length;
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${isEmpty ? '📚' : '🔍'}</div>
+        <div class="empty-title">${isEmpty ? 'No knowledge containers yet' : 'No containers match your filters'}</div>
+        <div class="empty-desc">${isEmpty
+          ? 'Add your first container to start answering caller questions with precision. One container per topic — pricing, specials, warranties, FAQs, anything.'
+          : 'Try adjusting your search or filter settings.'
+        }</div>
+        ${isEmpty ? `<a href="/agent-console/services-item.html?companyId=${S.companyId}" class="btn-add" style="display:inline-flex;">+ Add First Container</a>` : ''}
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = S.filtered.map(c => _cardHTML(c)).join('');
+}
+
+function _cardHTML(c) {
+  const kws     = c.keywords || [];
+  const shown   = kws.slice(0, 5);
+  const more    = kws.length - shown.length;
+  const sections = (c.sections || []).sort((a, b) => (a.order || 0) - (b.order || 0)).slice(0, 3);
+  const sCount  = (c.sections || []).length;
+
+  // Badges
+  const catDot   = c.category ? `<span class="kc-cat-dot" style="background:${_catColour(c.category)}"></span>` : '';
+  const catBadge = c.category ? `<span class="badge badge-cat">${_esc(c.category)}</span>` : '';
+  const offBadge = !c.isActive ? '<span class="badge badge-off">Inactive</span>' : '';
+
+  const actionBadge = c.bookingAction === 'advisor_callback'
+    ? '<span class="badge badge-advisor">📞 Advisor</span>'
+    : c.bookingAction === 'none'
+      ? '<span class="badge badge-none">🚫 No action</span>'
+      : '<span class="badge badge-book">📅 Offer to Book</span>';
+
+  const limitBadge = (typeof c.wordLimit === 'number' && c.wordLimit >= 5)
+    ? `<span class="badge badge-limit">${c.wordLimit}w limit</span>`
+    : '';
+
+  // Keyword chips
+  const kwHtml = kws.length
+    ? shown.map(k => `<span class="kw-chip">${_esc(k)}</span>`).join('') +
+      (more > 0 ? `<span class="kw-more">+${more} more</span>` : '')
+    : '<span class="kc-no-keywords">No keywords yet — add via edit page</span>';
+
+  // Section previews
+  const sectionsHtml = sections.map(s =>
+    `<div class="kc-section-row">
+       <span class="kc-section-label">${_esc(s.label)}</span>
+       <span class="kc-section-preview">${_esc(s.content.slice(0, 80))}${s.content.length > 80 ? '…' : ''}</span>
+     </div>`
+  ).join('');
+
+  return `
+  <div class="kc-card${c.isActive ? '' : ' inactive'}" id="card-${c._id}">
+    <div class="kc-card-header">
+      ${catDot}
+      <div class="kc-header-text">
+        <div class="kc-title">${_esc(c.title)}</div>
+        <div class="kc-badges">
+          ${catBadge}${offBadge}${actionBadge}${limitBadge}
+          <span class="badge" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b;">${sCount} section${sCount !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+    </div>
+    <div class="kc-card-body">
+      <div class="kc-keywords">${kwHtml}</div>
+      <div class="kc-sections">${sectionsHtml}</div>
+    </div>
+    <div class="kc-card-footer">
+      <div class="toggle-wrap">
+        <label class="toggle">
+          <input type="checkbox" ${c.isActive ? 'checked' : ''} onchange="toggleActive('${c._id}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label">${c.isActive ? 'Active' : 'Inactive'}</span>
+      </div>
+      <button class="btn-icon-sm" title="Edit container"
+        onclick="location.href='/agent-console/services-item.html?companyId=${S.companyId}&itemId=${c._id}'">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="btn-icon-sm danger" title="Deactivate container" onclick="openDeleteDialog('${c._id}', '${_esc(c.title).replace(/'/g, "\\'")}')">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOGGLE ACTIVE
+// ─────────────────────────────────────────────────────────────────────────────
+async function toggleActive(id, isActive) {
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
+      body:    JSON.stringify({ isActive }),
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Update failed');
+    // Update local state
+    const idx = S.containers.findIndex(c => c._id === id);
+    if (idx !== -1) S.containers[idx].isActive = isActive;
+    _updateStats();
+    applyFilters();
+    _toast(isActive ? 'Container activated' : 'Container deactivated', 'info');
+  } catch (err) {
+    _toast(err.message || 'Failed to update', 'error');
+    // Re-render to restore the toggle state
+    applyFilters();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE DIALOG
+// ─────────────────────────────────────────────────────────────────────────────
+function openDeleteDialog(id, title) {
+  S.deleteTarget = id;
+  document.getElementById('deleteDialogDesc').textContent =
+    `"${title}" will be hidden from callers. You can reactivate it from the edit page at any time.`;
+  document.getElementById('deleteDialog').classList.add('open');
+}
+
+function closeDeleteDialog() {
+  S.deleteTarget = null;
+  document.getElementById('deleteDialog').classList.remove('open');
+}
+
+async function confirmDelete() {
+  if (!S.deleteTarget) return;
+  const id = S.deleteTarget;
+  closeDeleteDialog();
+
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${id}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${_getToken()}` },
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Delete failed');
+    S.containers = S.containers.filter(c => c._id !== id);
+    _updateStats();
+    _populateCatFilter();
+    applyFilters();
+    _toast('Container deactivated', 'success');
+  } catch (err) {
+    _toast(err.message || 'Failed to deactivate', 'error');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function toggleBanner() {
+  const body = document.getElementById('bannerBody');
+  const chev = document.getElementById('bannerChevron');
+  body.classList.toggle('collapsed');
+  chev.classList.toggle('open');
+}
+
+function toggleSettings() {
+  const body = document.getElementById('settingsBody');
+  const chev = document.getElementById('settingsChevron');
+  const hdr  = document.getElementById('settingsHeader');
+  body.classList.toggle('collapsed');
+  chev.classList.toggle('open');
+  hdr.classList.toggle('open');
+}
+
+function _toast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function _getToken() {
+  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+}
+
+function _esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Close delete dialog on overlay click
+document.getElementById('deleteDialog').addEventListener('click', function(e) {
+  if (e.target === this) closeDeleteDialog();
+});
+</script>
+</body>
+</html>

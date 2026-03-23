@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Container — ClientsVia</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ── Design tokens ───────────────────────────────────────────────────── */
+    :root {
+      --color-primary:    #6366f1;
+      --color-primary-dk: #4f46e5;
+      --bg-page:          #f5f3ff;
+      --bg-card:          #ffffff;
+      --bg-header:        #ffffff;
+      --text-primary:     #0f172a;
+      --text-muted:       #64748b;
+      --text-xs:          #94a3b8;
+      --border:           #e2e8f0;
+      --border-focus:     #6366f1;
+      --radius-card:      12px;
+      --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
+
+    /* ── Sticky header ────────────────────────────────────────────────────── */
+    .page-header {
+      background: var(--bg-header); border-bottom: 1px solid var(--border);
+      padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: white;
+      color: var(--text-muted); font-size: 13px; font-weight: 500;
+      cursor: pointer; text-decoration: none; transition: background .15s, color .15s;
+    }
+    .btn-back:hover { background: #f8fafc; color: var(--text-primary); }
+    .header-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .header-spacer { flex: 1; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Form page wrapper ───────────────────────────────────────────────── */
+    .form-page { max-width: 760px; margin: 28px auto; padding: 0 24px 80px; display: flex; flex-direction: column; gap: 18px; }
+
+    /* ── Form section cards ──────────────────────────────────────────────── */
+    .form-card {
+      border: 1px solid var(--border); border-radius: var(--radius-card);
+      overflow: hidden; background: white; box-shadow: var(--shadow-card);
+    }
+    .form-card-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px; background: #fafafa;
+      border-bottom: 1px solid var(--border);
+    }
+    .form-card-icon { font-size: 18px; }
+    .form-card-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .form-card-subtitle { font-size: 12px; color: var(--text-muted); }
+    .form-card-badge {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; border: 1px solid;
+    }
+    .form-card-badge.required { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+    .form-card-badge.optional { background: #f8fafc; border-color: #cbd5e1; color: #94a3b8; }
+
+    .form-card-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* ── Form elements ───────────────────────────────────────────────────── */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .form-label .required-star { color: #ef4444; font-size: 14px; }
+    .form-input, .form-textarea, .form-select {
+      padding: 9px 12px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 14px; font-family: inherit;
+      outline: none; transition: border-color .15s; background: white;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--border-focus); }
+    .form-textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
+    .form-textarea.tall { min-height: 130px; }
+    .form-hint { font-size: 11px; color: var(--text-xs); }
+    .char-count { font-size: 11px; color: var(--text-xs); text-align: right; }
+    .char-count.warn { color: #f59e0b; }
+    .char-count.over { color: #ef4444; }
+    .form-input.error, .form-textarea.error { border-color: #fca5a5; }
+
+    /* ── Knowledge Sections ──────────────────────────────────────────────── */
+    .sections-list { display: flex; flex-direction: column; gap: 12px; }
+    .section-row {
+      border: 1px solid var(--border); border-radius: 10px;
+      background: #fafafa; overflow: hidden;
+      transition: border-color .15s;
+    }
+    .section-row:focus-within { border-color: var(--color-primary); }
+    .section-row-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-drag-handle {
+      cursor: grab; color: var(--text-xs); padding: 2px;
+      display: flex; align-items: center;
+    }
+    .section-number {
+      font-size: 11px; font-weight: 700; color: var(--color-primary);
+      background: #ede9fe; border-radius: 4px;
+      padding: 1px 7px; min-width: 26px; text-align: center;
+    }
+    .section-label-input {
+      flex: 1; border: none; outline: none; background: transparent;
+      font-size: 13px; font-weight: 600; color: var(--text-primary);
+      font-family: inherit;
+    }
+    .section-label-input::placeholder { color: var(--text-xs); font-weight: 400; }
+    .btn-section-delete {
+      border: none; background: none; cursor: pointer; padding: 4px;
+      color: var(--text-xs); border-radius: 4px; display: flex; align-items: center;
+      transition: color .15s, background .15s;
+    }
+    .btn-section-delete:hover { color: #ef4444; background: #fef2f2; }
+    .section-row-body { padding: 12px 14px; }
+
+    .btn-add-section {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; padding: 10px;
+      border: 2px dashed #c4b5fd; border-radius: 10px; background: #f5f3ff;
+      color: var(--color-primary); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-add-section:hover { background: #ede9fe; border-color: var(--color-primary); }
+
+    /* ── Keyword chip input ──────────────────────────────────────────────── */
+    .keyword-input-wrap {
+      border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+      display: flex; flex-wrap: wrap; gap: 4px; cursor: text;
+      min-height: 44px; transition: border-color .15s; background: white;
+    }
+    .keyword-input-wrap:focus-within { border-color: var(--border-focus); }
+    .kw-tag {
+      display: flex; align-items: center; gap: 4px;
+      background: #ede9fe; color: #5b21b6; border-radius: 4px;
+      padding: 3px 8px; font-size: 12px; font-weight: 500;
+    }
+    .kw-tag button {
+      border: none; background: none; color: #5b21b6; cursor: pointer;
+      padding: 0; font-size: 14px; line-height: 1; display: flex;
+    }
+    .kw-tag button:hover { color: #dc2626; }
+    .kw-input-inner {
+      border: none; outline: none; font-size: 13px; min-width: 120px;
+      flex: 1; padding: 2px 4px; font-family: inherit; background: transparent;
+    }
+    .btn-generate-kw {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 8px; border: 1px solid #c4b5fd;
+      background: #f5f3ff; color: var(--color-primary);
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn-generate-kw:hover { background: #ede9fe; border-color: var(--color-primary); }
+    .btn-generate-kw:disabled { opacity: .6; cursor: not-allowed; }
+    .kw-hint { font-size: 11px; color: var(--text-xs); margin-top: 3px; }
+
+    /* ── Booking action radios ────────────────────────────────────────────── */
+    .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .booking-radio-label {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 14px; border-radius: 8px;
+      border: 2px solid var(--border); cursor: pointer; transition: all .15s;
+    }
+    .booking-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f5f3ff; }
+    .booking-radio-label input { margin-top: 2px; accent-color: var(--color-primary); flex-shrink: 0; }
+    .booking-radio-text strong { display: block; font-size: 13px; font-weight: 600; }
+    .booking-radio-text small  { font-size: 11px; color: var(--text-muted); }
+
+    /* ── Toggle large ─────────────────────────────────────────────────────── */
+    .toggle-lg { display: flex; align-items: center; gap: 10px; }
+    .toggle-lg input[type="checkbox"] {
+      appearance: none; width: 40px; height: 22px; border-radius: 11px;
+      background: #cbd5e1; cursor: pointer; position: relative;
+      transition: background .2s; flex-shrink: 0;
+    }
+    .toggle-lg input[type="checkbox"]::after {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      background: white; border-radius: 50%; top: 3px; left: 3px;
+      transition: transform .2s;
+    }
+    .toggle-lg input[type="checkbox"]:checked { background: var(--color-primary); }
+    .toggle-lg input[type="checkbox"]:checked::after { transform: translateX(18px); }
+    .toggle-lg label { font-size: 14px; font-weight: 500; cursor: pointer; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn-primary {
+      padding: 9px 22px; border-radius: 8px; border: none;
+      background: var(--color-primary); color: white;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-secondary {
+      padding: 9px 18px; border-radius: 8px;
+      border: 1px solid var(--border); background: white;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      color: var(--text-muted); transition: all .15s;
+    }
+    .btn-secondary:hover { border-color: #94a3b8; color: var(--text-primary); }
+    .btn-danger {
+      padding: 9px 18px; border-radius: 8px; border: 1px solid #fca5a5;
+      background: #fef2f2; color: #dc2626;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+    .btn-danger:hover { background: #fee2e2; }
+
+    /* ── Error message ───────────────────────────────────────────────────── */
+    .validation-msg { font-size: 12px; color: #dc2626; margin-top: 3px; }
+    .form-group.has-error .form-input,
+    .form-group.has-error .form-textarea { border-color: #fca5a5; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────── */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 10px; background: white;
+      border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.12);
+      font-size: 13px; font-weight: 500; min-width: 240px;
+      animation: slideIn .2s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .toast.success { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+    .toast.error   { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
+    .toast.info    { border-color: #c4b5fd; background: #f5f3ff; color: #5b21b6; }
+
+    /* ── Loading state ───────────────────────────────────────────────────── */
+    .loading-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(255,255,255,.7); z-index: 900;
+      align-items: center; justify-content: center;
+    }
+    .loading-overlay.visible { display: flex; }
+    .spinner {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 3px solid #e2e8f0; border-top-color: var(--color-primary);
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr; }
+      .form-page { padding: 0 16px 80px; }
+      .page-header { padding: 12px 16px; }
+      .header-actions .btn-secondary { display: none; }
+      .booking-radios { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sticky header ──────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <a id="btnBack" href="#" class="btn-back">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Back
+  </a>
+  <div class="header-divider"></div>
+  <span style="font-size:18px;">🧠</span>
+  <div>
+    <div class="header-title" id="pageTitle">Add Knowledge Container</div>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-actions">
+    <button class="btn-secondary" id="btnCancel" onclick="goBack()">Cancel</button>
+    <button id="btnDeleteHeader" class="btn-danger" style="display:none;" onclick="softDelete()">Deactivate</button>
+    <button class="btn-primary" id="btnSave" onclick="saveContainer()">Save Container</button>
+  </div>
+</header>
+
+<!-- ── Form page ──────────────────────────────────────────────────────────── -->
+<div class="form-page" id="formPage">
+
+  <!-- ── Loading state ────────────────────────────────────────────────────── -->
+  <div id="formLoading" style="text-align:center;padding:64px 0;color:var(--text-muted);">
+    <div class="spinner" style="margin:0 auto 16px;"></div>
+    Loading container…
+  </div>
+
+  <!-- Actual form (hidden while loading) -->
+  <div id="formBody" style="display:none;flex-direction:column;gap:18px;">
+
+  <!-- ── 1. Container Identity ─────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">🏷️</span>
+      <div>
+        <div class="form-card-title">Container Identity</div>
+        <div class="form-card-subtitle">Title and optional category for admin organisation</div>
+      </div>
+      <span class="form-card-badge required">Required</span>
+    </div>
+    <div class="form-card-body">
+      <div class="form-row">
+        <div class="form-group full" id="grpTitle">
+          <label class="form-label" for="fTitle">
+            Title <span class="required-star">*</span>
+          </label>
+          <input type="text" id="fTitle" class="form-input" maxlength="120"
+            placeholder="e.g. Residential Maintenance Visit, Spring Tune-Up Special"
+            oninput="charCount(this, 120, 'ccTitle')">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="validation-msg" id="errTitle"></span>
+            <span class="char-count" id="ccTitle">0 / 120</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fCategory">Category</label>
+          <input type="text" id="fCategory" class="form-input" maxlength="80"
+            list="catDatalist"
+            placeholder="e.g. Services, Specials, Policies"
+            oninput="charCount(this, 80, 'ccCategory')">
+          <datalist id="catDatalist"></datalist>
+          <span class="char-count" id="ccCategory">0 / 80</span>
+          <div class="form-hint">Used for admin grouping — not matched by the agent</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fPriority">Priority</label>
+          <input type="number" id="fPriority" class="form-input" min="1" max="9999" value="100">
+          <div class="form-hint">Lower = higher priority when multiple containers could match</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 2. Knowledge Sections ─────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📝</span>
+      <div>
+        <div class="form-card-title">Knowledge Sections</div>
+        <div class="form-card-subtitle">The rich content Groq reads to answer the caller — add as many sections as needed</div>
+      </div>
+      <span class="form-card-badge required">At least 1</span>
+    </div>
+    <div class="form-card-body">
+      <div class="sections-list" id="sectionsList"></div>
+      <button type="button" class="btn-add-section" onclick="addSection()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Section
+      </button>
+      <div class="form-hint" style="margin-top:6px;">
+        📌 Label ideas: Price, What's Included, Warranty, Duration, Availability, How It Works, Who Needs This, FAQs, Restrictions, Notes
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. Keywords ───────────────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">🔑</span>
+      <div>
+        <div class="form-card-title">Keywords</div>
+        <div class="form-card-subtitle">Phrases callers say that route them to this container</div>
+      </div>
+      <span class="form-card-badge optional">Recommended</span>
+    </div>
+    <div class="form-card-body">
+      <div class="form-group full">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <span class="form-label">Trigger Keywords</span>
+          <button type="button" class="btn-generate-kw" id="btnGenKw" onclick="generateKeywords()">
+            ✨ Auto-Generate from Content
+          </button>
+        </div>
+        <div class="keyword-input-wrap" id="kwWrap" onclick="document.getElementById('kwInner').focus()">
+          <input type="text" id="kwInner" class="kw-input-inner"
+            placeholder="Type keyword and press Enter or comma…"
+            onkeydown="kwKeydown(event)">
+        </div>
+        <div class="kw-hint">Press <strong>Enter</strong> or <strong>,</strong> to add a phrase. Click × to remove. Multi-word phrases score higher than single words.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4. Response Settings ──────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">⚙️</span>
+      <div>
+        <div class="form-card-title">Response Settings</div>
+        <div class="form-card-subtitle">Per-container word limit and booking action override</div>
+      </div>
+      <span class="form-card-badge optional">Optional overrides</span>
+    </div>
+    <div class="form-card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="fWordLimit">Word Limit Override</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="number" id="fWordLimit" class="form-input" min="5" max="200" placeholder="(use global default)"
+              style="width:130px;">
+            <span style="font-size:13px;color:var(--text-muted);">words</span>
+          </div>
+          <div class="form-hint">Leave blank to use the global default. Set here to override for this specific topic (e.g. complex policies need more words).</div>
+        </div>
+      </div>
+
+      <!-- Booking action -->
+      <div class="form-group full">
+        <div class="form-label">After Answering…</div>
+        <div class="booking-radios" style="margin-top:8px;">
+          <label class="booking-radio-label">
+            <input type="radio" name="bookingAction" value="offer_to_book" checked>
+            <div class="booking-radio-text">
+              <strong>📅 Offer to Book</strong>
+              <small>Groq offers to schedule after answering (default)</small>
+            </div>
+          </label>
+          <label class="booking-radio-label">
+            <input type="radio" name="bookingAction" value="advisor_callback">
+            <div class="booking-radio-text">
+              <strong>📞 Advisor Callback</strong>
+              <small>Collect caller name + phone for advisor follow-up</small>
+            </div>
+          </label>
+          <label class="booking-radio-label">
+            <input type="radio" name="bookingAction" value="none">
+            <div class="booking-radio-text">
+              <strong>🚫 Answer Only</strong>
+              <small>No booking offer — answer and wait for caller</small>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. Status ─────────────────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📡</span>
+      <div>
+        <div class="form-card-title">Status</div>
+        <div class="form-card-subtitle">Inactive containers are ignored by the agent</div>
+      </div>
+    </div>
+    <div class="form-card-body">
+      <div class="toggle-lg">
+        <input type="checkbox" id="fActive" checked>
+        <label for="fActive">Container is active</label>
+      </div>
+      <div class="form-hint" style="margin-top:4px;">Inactive containers still exist in the database — reactivate at any time.</div>
+
+      <!-- Permanent delete (only shown for existing containers) -->
+      <div id="hardDeleteSection" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid var(--border);">
+        <div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:6px;">⚠️ Danger Zone</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Permanently deletes this container and all its content. This cannot be undone.</div>
+        <button type="button" class="btn-danger" onclick="hardDelete()">Permanently Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bottom action bar ──────────────────────────────────────────────────── -->
+  <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px;">
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+    <button class="btn-primary" onclick="saveContainer()" id="btnSaveBottom">Save Container</button>
+  </div>
+
+  </div><!-- end #formBody -->
+</div>
+
+<!-- ── Toast container ────────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── Loading overlay ───────────────────────────────────────────────────── -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const S = {
+  companyId:   null,
+  itemId:      null,       // null = create mode; string = edit mode
+  isEdit:      false,
+  keywords:    [],         // current keyword list
+  sectionSeq:  0,          // monotonic ID for section DOM nodes
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOTSTRAP
+// ─────────────────────────────────────────────────────────────────────────────
+(async function init() {
+  const params   = new URLSearchParams(location.search);
+  S.companyId    = params.get('companyId');
+  S.itemId       = params.get('itemId') || null;
+  S.isEdit       = !!S.itemId;
+
+  if (!S.companyId) {
+    document.getElementById('formLoading').innerHTML =
+      '<div style="color:#dc2626;font-size:14px;">⚠️ No companyId in URL. Please navigate here from the Knowledge Base page.</div>';
+    return;
+  }
+
+  // Wire back link
+  const backUrl = `/agent-console/services.html?companyId=${S.companyId}`;
+  document.getElementById('btnBack').href    = backUrl;
+
+  if (S.isEdit) {
+    document.getElementById('pageTitle').textContent   = 'Edit Knowledge Container';
+    document.getElementById('btnDeleteHeader').style.display = '';
+    document.getElementById('hardDeleteSection').style.display = '';
+    await loadContainer();
+  } else {
+    document.getElementById('pageTitle').textContent = 'Add Knowledge Container';
+    _showForm();
+    addSection(); // Start with one empty section
+  }
+
+  // Populate category datalist from existing containers
+  _loadCategoryOptions();
+})();
+
+async function _loadCategoryOptions() {
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge`, {
+      headers: { Authorization: `Bearer ${_getToken()}` }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const cats = [...new Set(
+      (data.containers || []).map(c => c.category?.trim()).filter(Boolean)
+    )].sort();
+    const dl = document.getElementById('catDatalist');
+    dl.innerHTML = cats.map(c => `<option value="${_esc(c)}">`).join('');
+  } catch (_e) {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOAD (EDIT MODE)
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadContainer() {
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`, {
+      headers: { Authorization: `Bearer ${_getToken()}` }
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Load failed');
+    _populateForm(data.container);
+    _showForm();
+  } catch (err) {
+    document.getElementById('formLoading').innerHTML =
+      `<div style="color:#dc2626;font-size:14px;">❌ Failed to load container: ${_esc(err.message)}</div>`;
+  }
+}
+
+function _populateForm(c) {
+  document.getElementById('fTitle').value    = c.title || '';
+  document.getElementById('fCategory').value = c.category || '';
+  document.getElementById('fPriority').value = c.priority || 100;
+  document.getElementById('fActive').checked = c.isActive !== false;
+  charCount(document.getElementById('fTitle'), 120, 'ccTitle');
+  charCount(document.getElementById('fCategory'), 80, 'ccCategory');
+
+  if (typeof c.wordLimit === 'number' && c.wordLimit >= 5) {
+    document.getElementById('fWordLimit').value = c.wordLimit;
+  }
+
+  // Booking action
+  const ba = c.bookingAction || 'offer_to_book';
+  const radio = document.querySelector(`[name="bookingAction"][value="${ba}"]`);
+  if (radio) radio.checked = true;
+
+  // Keywords
+  S.keywords = [...(c.keywords || [])];
+  _renderKeywords();
+
+  // Sections
+  const sorted = [...(c.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+  if (sorted.length) {
+    sorted.forEach(s => addSection(s.label, s.content));
+  } else {
+    addSection();
+  }
+}
+
+function _showForm() {
+  document.getElementById('formLoading').style.display = 'none';
+  const fb = document.getElementById('formBody');
+  fb.style.display = 'flex';
+  fb.style.flexDirection = 'column';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LABEL_SUGGESTIONS = [
+  'Price', "What's Included", 'Warranty', 'Duration', 'Availability',
+  'How It Works', 'Who Needs This', 'Requirements', 'Notes', 'FAQs'
+];
+
+function addSection(label = '', content = '') {
+  const id = ++S.sectionSeq;
+  const list = document.getElementById('sectionsList');
+  const rowCount = list.querySelectorAll('.section-row').length;
+  const suggestion = rowCount < LABEL_SUGGESTIONS.length ? LABEL_SUGGESTIONS[rowCount] : '';
+
+  const row = document.createElement('div');
+  row.className = 'section-row';
+  row.dataset.sid = id;
+  row.innerHTML = `
+    <div class="section-row-header">
+      <span class="section-drag-handle" title="Drag to reorder">
+        <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6a2 2 0 110-4 2 2 0 010 4zM16 6a2 2 0 110-4 2 2 0 010 4zM8 14a2 2 0 110-4 2 2 0 010 4zM16 14a2 2 0 110-4 2 2 0 010 4zM8 22a2 2 0 110-4 2 2 0 010 4zM16 22a2 2 0 110-4 2 2 0 010 4z"/></svg>
+      </span>
+      <span class="section-number">${rowCount + 1}</span>
+      <input type="text" class="section-label-input" placeholder="${suggestion || 'Section label…'}"
+        maxlength="80" value="${_esc(label)}" onchange="updateSectionNumbers()">
+      <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Remove section">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="section-row-body">
+      <textarea class="form-textarea tall" placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
+        oninput="charCount(this, 2000, null)" maxlength="2000">${_esc(content)}</textarea>
+      <div style="display:flex;justify-content:flex-end;">
+        <span class="char-count" style="font-size:11px;">${content.length} / 2000</span>
+      </div>
+    </div>`;
+  list.appendChild(row);
+
+  // Focus the label input if new empty section
+  if (!label) {
+    setTimeout(() => row.querySelector('.section-label-input').focus(), 50);
+  }
+}
+
+function deleteSection(btn) {
+  const row = btn.closest('.section-row');
+  const list = document.getElementById('sectionsList');
+  if (list.querySelectorAll('.section-row').length <= 1) {
+    _toast('At least one section is required', 'error');
+    return;
+  }
+  row.remove();
+  updateSectionNumbers();
+}
+
+function updateSectionNumbers() {
+  document.querySelectorAll('#sectionsList .section-row').forEach((row, idx) => {
+    const num = row.querySelector('.section-number');
+    if (num) num.textContent = idx + 1;
+  });
+}
+
+function _getSections() {
+  const rows = document.querySelectorAll('#sectionsList .section-row');
+  const result = [];
+  rows.forEach((row, idx) => {
+    const label   = row.querySelector('.section-label-input')?.value?.trim() || '';
+    const content = row.querySelector('textarea')?.value?.trim() || '';
+    if (label && content) {
+      result.push({ label, content, order: idx });
+    }
+  });
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYWORDS
+// ─────────────────────────────────────────────────────────────────────────────
+function _renderKeywords() {
+  const wrap = document.getElementById('kwWrap');
+  const input = document.getElementById('kwInner');
+  // Remove existing tags (keep the input)
+  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
+  // Insert tags before the input
+  S.keywords.forEach(kw => {
+    const tag = document.createElement('span');
+    tag.className = 'kw-tag';
+    tag.innerHTML = `${_esc(kw)} <button type="button" onclick="removeKeyword('${_esc(kw).replace(/'/g, "\\'")}')">×</button>`;
+    wrap.insertBefore(tag, input);
+  });
+}
+
+function kwKeydown(e) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.trim().replace(/,/g, '').toLowerCase();
+    if (val && !S.keywords.includes(val)) {
+      S.keywords.push(val);
+      _renderKeywords();
+    }
+    e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && S.keywords.length) {
+    S.keywords.pop();
+    _renderKeywords();
+  }
+}
+
+function removeKeyword(kw) {
+  S.keywords = S.keywords.filter(k => k !== kw);
+  _renderKeywords();
+}
+
+async function generateKeywords() {
+  const btn = document.getElementById('btnGenKw');
+  btn.disabled    = true;
+  btn.textContent = '✨ Generating…';
+
+  const title    = document.getElementById('fTitle').value?.trim() || '';
+  const sections = _getSections();
+
+  if (!title && !sections.length) {
+    _toast('Add a title and at least one section first', 'error');
+    btn.disabled    = false;
+    btn.textContent = '✨ Auto-Generate from Content';
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/generate-keywords`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
+      body:    JSON.stringify({ title, sections }),
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Generation failed');
+
+    // Merge new keywords with existing (dedup)
+    let added = 0;
+    (data.keywords || []).forEach(kw => {
+      if (!S.keywords.includes(kw)) { S.keywords.push(kw); added++; }
+    });
+    _renderKeywords();
+    _toast(`Added ${added} new keyword${added !== 1 ? 's' : ''}`, 'success');
+  } catch (err) {
+    _toast(err.message || 'Keyword generation failed', 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '✨ Auto-Generate from Content';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SAVE
+// ─────────────────────────────────────────────────────────────────────────────
+async function saveContainer() {
+  // Validate
+  const title    = document.getElementById('fTitle').value?.trim() || '';
+  const sections = _getSections();
+
+  let valid = true;
+  if (!title) {
+    document.getElementById('grpTitle').classList.add('has-error');
+    document.getElementById('errTitle').textContent = 'Title is required';
+    valid = false;
+  } else {
+    document.getElementById('grpTitle').classList.remove('has-error');
+    document.getElementById('errTitle').textContent = '';
+  }
+
+  if (!sections.length) {
+    _toast('At least one section with a label and content is required', 'error');
+    valid = false;
+  }
+
+  if (!valid) return;
+
+  // Build payload
+  const wordLimitVal = parseInt(document.getElementById('fWordLimit').value, 10);
+  const payload = {
+    title,
+    category:      document.getElementById('fCategory').value?.trim() || '',
+    sections,
+    keywords:      S.keywords,
+    wordLimit:     (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    bookingAction: document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    isActive:      document.getElementById('fActive').checked,
+    priority:      parseInt(document.getElementById('fPriority').value, 10) || 100,
+  };
+
+  _setLoading(true);
+
+  try {
+    const url    = S.isEdit
+      ? `/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`
+      : `/api/admin/agent2/company/${S.companyId}/knowledge`;
+    const method = S.isEdit ? 'PATCH' : 'POST';
+
+    const r = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_getToken()}` },
+      body:    JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Save failed');
+
+    _toast(S.isEdit ? 'Container updated ✓' : 'Container created ✓', 'success');
+    setTimeout(() => goBack(), 800);
+  } catch (err) {
+    _toast(err.message || 'Failed to save', 'error');
+    _setLoading(false);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE
+// ─────────────────────────────────────────────────────────────────────────────
+async function softDelete() {
+  if (!confirm('Deactivate this container? It will be hidden from callers but not deleted.')) return;
+  _setLoading(true);
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${_getToken()}` },
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Deactivate failed');
+    _toast('Container deactivated', 'success');
+    setTimeout(() => goBack(), 800);
+  } catch (err) {
+    _toast(err.message || 'Failed to deactivate', 'error');
+    _setLoading(false);
+  }
+}
+
+async function hardDelete() {
+  if (!confirm('PERMANENTLY delete this container? This cannot be undone.')) return;
+  _setLoading(true);
+  try {
+    const r = await fetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}/hard`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${_getToken()}` },
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Delete failed');
+    _toast('Container permanently deleted', 'success');
+    setTimeout(() => goBack(), 600);
+  } catch (err) {
+    _toast(err.message || 'Failed to delete', 'error');
+    _setLoading(false);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function goBack() {
+  location.href = `/agent-console/services.html?companyId=${S.companyId}`;
+}
+
+function charCount(el, max, countId) {
+  const len  = el.value.length;
+  const pct  = len / max;
+  if (countId) {
+    const counter = document.getElementById(countId);
+    if (counter) {
+      counter.textContent = `${len} / ${max}`;
+      counter.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
+    }
+  }
+  // Also update inline textarea counters
+  const parent = el.closest('.section-row-body');
+  if (parent) {
+    const span = parent.querySelector('.char-count');
+    if (span) {
+      span.textContent = `${len} / ${max}`;
+      span.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
+    }
+  }
+}
+
+function _setLoading(on) {
+  document.getElementById('loadingOverlay').classList.toggle('visible', on);
+  document.getElementById('btnSave').disabled       = on;
+  document.getElementById('btnSaveBottom').disabled = on;
+}
+
+function _toast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function _getToken() {
+  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+}
+
+function _esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

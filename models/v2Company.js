@@ -5929,6 +5929,47 @@ const companySchema = new mongoose.Schema({
             default: 'concise',
             comment: 'Controls Groq response style: concise (under 20 words) | detailed (with explanation) | friendly (warm tone)'
         }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // KNOWLEDGE BASE — Global Settings
+    // Per-company configuration for the unified Knowledge Container system.
+    // Controls word limit, booking offer behaviour, and global on/off.
+    //
+    // Knowledge Containers are the unified replacement for the fragmented
+    // Pricing / Promotions admin sections — one place for ALL informational
+    // content (prices, specials, inclusions, warranty, policies, FAQs).
+    // Groq reads the full container and answers within the configured word limit.
+    //
+    // UI:  /agent-console/services.html  (Global Settings card)
+    // API: GET/PATCH /api/admin/agent2/company/:companyId/knowledge/settings
+    // ─────────────────────────────────────────────────────────────────────────
+    knowledgeBaseSettings: {
+        enabled: {
+            type:    Boolean,
+            default: true,
+            comment: 'Master toggle — when false, Knowledge Container intercepts are skipped entirely'
+        },
+        defaultWordLimit: {
+            type:    Number,
+            default: 20,
+            min:     5,
+            max:     100,
+            comment: 'Default max words for Groq responses. Per-container wordLimit overrides this when set.'
+        },
+        bookingOfferMode: {
+            type:    String,
+            enum:    ['groq', 'fixed'],
+            default: 'groq',
+            comment: 'groq = Groq generates a natural closing booking invitation. fixed = append bookingOfferPhrase verbatim.'
+        },
+        bookingOfferPhrase: {
+            type:      String,
+            default:   '',
+            trim:      true,
+            maxlength: 200,
+            comment:   'Used only when bookingOfferMode is "fixed". Appended verbatim after Groq answer.'
+        }
     }
 }, { timestamps: true });
 

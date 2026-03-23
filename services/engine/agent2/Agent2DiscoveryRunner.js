@@ -105,6 +105,7 @@ const Agent2EchoGuard = require('./Agent2EchoGuard');
 const PromotionsInterceptor  = require('./PromotionsInterceptor');
 const PricingInterceptor          = require('./PricingInterceptor');          // 💰 Service pricing fact intercept
 const PricingConversationService  = require('./PricingConversationService');   // 🤖 Groq pricing Q&A with catalog guardrails
+const KnowledgeContainerService   = require('./KnowledgeContainerService');    // 🧠 Unified knowledge Q&A — fires first in all intercept paths
 const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
@@ -504,6 +505,51 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
           }
         } catch (_pErr) {
           logger.warn('[LLM_AGENT] Pricing intercept error — falling through to Claude', { callSid, err: _pErr?.message });
+        }
+      }
+    }
+    // ── Knowledge Container Intercept — fires after Pricing, before Claude T2 ──
+    // Handles any informational question (pricing, specials, inclusions, warranty,
+    // policies, FAQs) not caught by T1.5 or PricingConversationService.
+    // All active containers are scored; best keyword match wins.
+    // Graceful degrade: any error falls through to Claude T2. Call never breaks.
+    if (!sttEmpty && input?.trim() && KnowledgeContainerService.detect(input)) {
+      const _kbCfg = company?.knowledgeBaseSettings || {};
+      if (_kbCfg.enabled !== false && process.env.GROQ_API_KEY) {
+        try {
+          const _kcItems = await KnowledgeContainerService.getActiveForCompany(String(company._id));
+          if (_kcItems.length) {
+            const _kcMatch = KnowledgeContainerService.findContainer(_kcItems, input);
+            if (_kcMatch) {
+              const _kcResult = await KnowledgeContainerService.answer({
+                container:  _kcMatch.container,
+                question:   input,
+                kbSettings: _kbCfg,
+                company,
+                callerName,
+                callSid,
+              });
+              if (_kcResult.intent !== KnowledgeContainerService.INTENT.ERROR && _kcResult.response) {
+                emit('A2_KNOWLEDGE_CONTAINER_HIT', {
+                  source:          'T2_INTERCEPT',
+                  containerTitle:  _kcResult.containerTitle,
+                  intent:          _kcResult.intent,
+                  latencyMs:       _kcResult.latencyMs,
+                  callSid,
+                  turn,
+                });
+                return {
+                  response:             _kcResult.response,
+                  tokensUsed:           { input: 0, output: 0 },
+                  latencyMs:            _kcResult.latencyMs,
+                  wasPartial:           false,
+                  _knowledgeContainer:  true,
+                };
+              }
+            }
+          }
+        } catch (_kcErr) {
+          logger.warn('[LLM_AGENT] Knowledge container intercept error — falling through to Claude', { callSid, err: _kcErr?.message });
         }
       }
     }
@@ -2433,6 +2479,68 @@ class Agent2DiscoveryRunner {
         //
         // Graceful degrade: any PromotionsInterceptor error → re-ask pfuq (safe fallback)
         if (bucket === 'ASKING_SPECIALS') {
+          // ── Knowledge Container intercept — fires BEFORE PromotionsInterceptor ──
+          // KnowledgeContainers are the unified informational layer (pricing, specials,
+          // inclusions, warranties, policies). When a match is found, it takes priority
+          // over the legacy PromotionsInterceptor. Falls through to Promotions on miss.
+          const _kcCfgSpecials = company?.knowledgeBaseSettings || {};
+          if (_kcCfgSpecials.enabled !== false && process.env.GROQ_API_KEY) {
+            try {
+              const _kcItemsSpecials = await KnowledgeContainerService.getActiveForCompany(companyId);
+              if (_kcItemsSpecials.length) {
+                const _kcMatchSpecials = KnowledgeContainerService.findContainer(_kcItemsSpecials, input);
+                if (_kcMatchSpecials) {
+                  const _kcResSpecials = await KnowledgeContainerService.answer({
+                    container:  _kcMatchSpecials.container,
+                    question:   input,
+                    kbSettings: _kcCfgSpecials,
+                    company,
+                    callerName,
+                    callSid,
+                  });
+                  if (_kcResSpecials.intent !== KnowledgeContainerService.INTENT.ERROR && _kcResSpecials.response) {
+                    emit('A2_KNOWLEDGE_CONTAINER_HIT', {
+                      source:         'ASKING_SPECIALS',
+                      containerTitle: _kcResSpecials.containerTitle,
+                      intent:         _kcResSpecials.intent,
+                      latencyMs:      _kcResSpecials.latencyMs,
+                      callSid,
+                      turn,
+                    });
+
+                    if (_kcResSpecials.intent === KnowledgeContainerService.INTENT.BOOKING_READY || isYesFUQ) {
+                      // Caller ready to book — answer + route to booking lane
+                      clearPendingFollowUp(nextState);
+                      nextState.lane        = 'BOOKING';
+                      nextState.sessionMode = 'BOOKING';
+                      nextState.consent = {
+                        pending: false, given: true, turn,
+                        source:  'followup_consent_gate',
+                        bucket:  'askingSpecials',
+                        matchedPhrases,
+                        grantedAt: new Date().toISOString()
+                      };
+                      nextState.agent2.discovery.lastPath = 'KC_SPECIALS_THEN_BOOK';
+                      emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_BOOK', responsePreview: clip(_kcResSpecials.response, 120) });
+                      return { response: _kcResSpecials.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_BOOK') };
+                    } else {
+                      // Caller asked — answer + re-ask the original FUQ
+                      const _kcReaskResp = `${_kcResSpecials.response} ${pfuq}`.trim();
+                      nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+                      nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+                      nextState.agent2.discovery.lastPath                = 'KC_SPECIALS_THEN_REASK';
+                      emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_REASK', responsePreview: clip(_kcReaskResp, 120) });
+                      return { response: _kcReaskResp, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_REASK') };
+                    }
+                  }
+                }
+              }
+            } catch (_kcErrSpec) {
+              logger.warn('[A2] KC intercept error in ASKING_SPECIALS — falling through to Promotions', { callSid, err: _kcErrSpec?.message });
+            }
+          }
+          // ── Fall through to PromotionsInterceptor (backward compat) ──────────
+
           try {
             const promoSettings = await PromotionsInterceptor.getCompanySettings(companyId).catch(() => ({}));
             const activePromos  = await PromotionsInterceptor.getActivePromotions(companyId);
@@ -2551,13 +2659,73 @@ class Agent2DiscoveryRunner {
 
         // ── ASKING PRICING ──────────────────────────────────────────────────────
         // Fires when caller asks about cost/fee/pricing mid-consent-flow.
-        // PricingInterceptor answers from live MongoDB data — LLM never reached.
+        // Knowledge Container intercept fires FIRST — covers pricing, specials,
+        // inclusions, etc. Falls through to PricingInterceptor on miss.
         //
-        // PRICING_THEN_BOOK  — isYesFUQ=true  → answer pricing + consent given → booking
-        // PRICING_THEN_REASK — isYesFUQ=false → answer pricing + re-ask the FUQ
+        // PRICING_THEN_BOOK  — isYesFUQ=true  → answer + consent given → booking
+        // PRICING_THEN_REASK — isYesFUQ=false → answer + re-ask the FUQ
         //
-        // Graceful degrade: any PricingInterceptor error → re-ask pfuq (safe fallback)
+        // Graceful degrade: any error → re-ask pfuq (safe fallback)
         if (bucket === 'ASKING_PRICING') {
+          // ── Knowledge Container intercept — fires BEFORE PricingInterceptor ──
+          const _kcCfgPricing = company?.knowledgeBaseSettings || {};
+          if (_kcCfgPricing.enabled !== false && process.env.GROQ_API_KEY) {
+            try {
+              const _kcItemsPricing = await KnowledgeContainerService.getActiveForCompany(companyId);
+              if (_kcItemsPricing.length) {
+                const _kcMatchPricing = KnowledgeContainerService.findContainer(_kcItemsPricing, input);
+                if (_kcMatchPricing) {
+                  const _kcResPricing = await KnowledgeContainerService.answer({
+                    container:  _kcMatchPricing.container,
+                    question:   input,
+                    kbSettings: _kcCfgPricing,
+                    company,
+                    callerName,
+                    callSid,
+                  });
+                  if (_kcResPricing.intent !== KnowledgeContainerService.INTENT.ERROR && _kcResPricing.response) {
+                    emit('A2_KNOWLEDGE_CONTAINER_HIT', {
+                      source:         'ASKING_PRICING',
+                      containerTitle: _kcResPricing.containerTitle,
+                      intent:         _kcResPricing.intent,
+                      latencyMs:      _kcResPricing.latencyMs,
+                      callSid,
+                      turn,
+                    });
+
+                    if (_kcResPricing.intent === KnowledgeContainerService.INTENT.BOOKING_READY || isYesFUQ) {
+                      // Caller ready to book — answer + route to booking
+                      clearPendingFollowUp(nextState);
+                      nextState.lane        = 'BOOKING';
+                      nextState.sessionMode = 'BOOKING';
+                      nextState.consent = {
+                        pending: false, given: true, turn,
+                        source:  'followup_consent_gate',
+                        bucket:  'askingPricing',
+                        matchedPhrases,
+                        grantedAt: new Date().toISOString()
+                      };
+                      nextState.agent2.discovery.lastPath = 'KC_PRICING_THEN_BOOK';
+                      emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_BOOK', responsePreview: clip(_kcResPricing.response, 120) });
+                      return { response: _kcResPricing.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_BOOK') };
+                    } else {
+                      // Answer + re-ask the original FUQ
+                      const _kcPricingReask = `${_kcResPricing.response} ${pfuq}`.trim();
+                      nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+                      nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+                      nextState.agent2.discovery.lastPath                = 'KC_PRICING_THEN_REASK';
+                      emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_REASK', responsePreview: clip(_kcPricingReask, 120) });
+                      return { response: _kcPricingReask, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_REASK') };
+                    }
+                  }
+                }
+              }
+            } catch (_kcErrPrc) {
+              logger.warn('[A2] KC intercept error in ASKING_PRICING — falling through to PricingInterceptor', { callSid, err: _kcErrPrc?.message });
+            }
+          }
+          // ── Fall through to PricingInterceptor (backward compat) ─────────────
+
           try {
             const activeItems = await PricingInterceptor.getActivePricingItems(companyId);
 
