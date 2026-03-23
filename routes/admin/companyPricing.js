@@ -67,7 +67,7 @@ const ALLOWED_FIELDS = [
   'keywords', 'response', 'includesDetail',
   'layer2Keywords', 'layer2Response',
   'layer3Keywords', 'layer3Response',
-  'action', 'advisorCallbackPrompt',
+  'action', 'actionPrompt', 'advisorCallbackPrompt',
   'isActive', 'priority'
 ];
 
@@ -85,7 +85,7 @@ function _sanitiseBody(body) {
     }
   }
   // Trim string fields
-  for (const sf of ['label', 'response', 'includesDetail', 'layer2Response', 'layer3Response', 'advisorCallbackPrompt']) {
+  for (const sf of ['label', 'category', 'response', 'includesDetail', 'layer2Response', 'layer3Response', 'actionPrompt', 'advisorCallbackPrompt']) {
     if (typeof out[sf] === 'string') out[sf] = out[sf].trim();
   }
   return out;
@@ -195,6 +195,65 @@ router.post('/:companyId/pricing/reorder', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET  /:companyId/pricing/voice-settings  — Load company-level pricing voice settings
+// PATCH/:companyId/pricing/voice-settings  — Save company-level pricing voice settings
+// ⚠️ MUST be registered BEFORE /:id — literal segment beats param segment only if registered first
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VOICE_SETTINGS_FIELDS = ['advisorCallbackFallback', 'bookingOfferSuffix', 'notFoundResponse'];
+
+router.get('/:companyId/pricing/voice-settings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const company = await v2Company.findById(companyId, 'pricingVoiceSettings').lean();
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+    return res.json({ success: true, voiceSettings: company.pricingVoiceSettings || {} });
+  } catch (err) {
+    logger.error('[companyPricing] GET voice-settings error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to load voice settings' });
+  }
+});
+
+router.patch('/:companyId/pricing/voice-settings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  // Build the $set payload — only allowed fields, strings trimmed, max 500 chars
+  const updates = {};
+  for (const field of VOICE_SETTINGS_FIELDS) {
+    if (field in req.body) {
+      const val = `${req.body[field] || ''}`.trim().slice(0, 500);
+      updates[`pricingVoiceSettings.${field}`] = val;
+    }
+  }
+
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ success: false, error: 'No valid fields to update' });
+  }
+
+  try {
+    const company = await v2Company.findByIdAndUpdate(
+      companyId,
+      { $set: updates },
+      { new: true, select: 'pricingVoiceSettings' }
+    ).lean();
+
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+
+    // Invalidate pricing cache so runtime picks up new settings immediately
+    PricingInterceptor.invalidateCache(companyId).catch(() => {});
+
+    logger.info('[companyPricing] Voice settings updated', { companyId, fields: Object.keys(updates) });
+    return res.json({ success: true, voiceSettings: company.pricingVoiceSettings || {} });
+  } catch (err) {
+    logger.error('[companyPricing] PATCH voice-settings error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to save voice settings' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/pricing/:id — Get single item
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:companyId/pricing/:id', async (req, res) => {
@@ -239,7 +298,7 @@ router.patch('/:companyId/pricing/:id', async (req, res) => {
     logger.info('[companyPricing] Updated pricing item', { companyId, id, fields: Object.keys(updates) });
 
     // Re-generate instant audio if any text field changed — non-blocking
-    const textFields = ['response','layer2Response','layer3Response','advisorCallbackPrompt','includesDetail'];
+    const textFields = ['response','layer2Response','layer3Response','actionPrompt','advisorCallbackPrompt','includesDetail'];
     const textChanged = textFields.some(f => f in updates);
     if (textChanged) _preGenAudio(companyId, item, 'updated');
 
@@ -359,6 +418,7 @@ function _preGenAudio(companyId, item, reason) {
     { text: item.response,               label: 'layer1_response'   },
     { text: item.layer2Response,         label: 'layer2_response'   },
     { text: item.layer3Response,         label: 'layer3_response'   },
+    { text: item.actionPrompt,           label: 'action_prompt'     },
     { text: item.advisorCallbackPrompt,  label: 'advisor_prompt'    },
     { text: item.includesDetail,         label: 'includes_detail'   }
   ].filter(c => typeof c.text === 'string' && c.text.trim());

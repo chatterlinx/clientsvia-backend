@@ -5846,9 +5846,40 @@ const companySchema = new mongoose.Schema({
     // PURPOSE: Store arbitrary data that doesn't warrant dedicated schema fields
     // EXAMPLES: dismissedScenarioGaps, featureFlags, migrationState
     // ============================================================================
-    metadata: { 
-        type: mongoose.Schema.Types.Mixed, 
-        default: {} 
+    metadata: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SERVICE PRICING — Global Voice Settings
+    // Per-company fallback phrases used by PricingInterceptor at call runtime.
+    // These are global defaults — per-item actionPrompt always wins first.
+    // UI:  /agent-console/pricing.html  (Agent Voice Settings card)
+    // API: PATCH /api/admin/agent2/company/:companyId/pricing/voice-settings
+    // ─────────────────────────────────────────────────────────────────────────
+    pricingVoiceSettings: {
+        advisorCallbackFallback: {
+            type:      String,
+            default:   '',
+            trim:      true,
+            maxlength: 500,
+            comment:   'Fallback spoken phrase for ADVISOR_CALLBACK / SCHEDULE_ESTIMATE / TRANSFER items that have no per-item actionPrompt'
+        },
+        bookingOfferSuffix: {
+            type:      String,
+            default:   '',
+            trim:      true,
+            maxlength: 300,
+            comment:   'Appended to L1 response for RESPOND_THEN_BOOK action (e.g. "Would you like to schedule that today?")'
+        },
+        notFoundResponse: {
+            type:      String,
+            default:   '',
+            trim:      true,
+            maxlength: 500,
+            comment:   'Spoken when no pricing item matches caller query. Leave blank → LLM handles it (safe degrade)'
+        }
     }
 }, { timestamps: true });
 

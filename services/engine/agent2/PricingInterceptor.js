@@ -41,6 +41,7 @@
  */
 
 const CompanyPricingItem = require('../../../models/CompanyPricingItem');
+const Company            = require('../../../models/v2Company');
 const logger             = require('../../../utils/logger');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,20 +78,15 @@ const PRICING_SIGNALS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CATEGORY DISPLAY LABELS (for runtime response building)
+// BUILT-IN ULTIMATE FALLBACKS
+// Used when both per-item actionPrompt AND company-level voice settings are blank.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS = {
-  service_call:  'service call',
-  commercial:    'commercial service call',
-  maintenance:   'maintenance',
-  repair:        'repair',
-  installation:  'installation',
-  duct_cleaning: 'duct cleaning',
-  inspection:    'inspection',
-  emergency:     'emergency service',
-  warranty:      'warranty',
-  other:         'service'
+const BUILT_IN_FALLBACKS = {
+  advisorCallback:    'Pricing for this service varies by job — I can have one of our advisors call you with an accurate quote. Can I get your name and best callback number?',
+  scheduleEstimate:   'This service requires an in-home assessment for accurate pricing. I can schedule a free estimate visit for you — would that work?',
+  transfer:           'Let me connect you with one of our service advisors who can help with pricing. One moment please.',
+  bookingOfferSuffix: 'Would you like to schedule that today?'
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,41 +242,97 @@ function matchItem(items, input) {
 }
 
 /**
+ * getVoiceSettings — Load company-level pricing voice settings.
+ * Separate from item cache — voice settings change infrequently.
+ *
+ * @param {string} companyId
+ * @returns {Promise<Object>} pricingVoiceSettings (empty object on failure)
+ */
+async function getVoiceSettings(companyId) {
+  if (!companyId) return {};
+  try {
+    const company = await Company.findById(companyId, 'pricingVoiceSettings').lean();
+    return company?.pricingVoiceSettings || {};
+  } catch (_e) {
+    return {};
+  }
+}
+
+/**
  * buildResponse — Compose the spoken agent response for a pricing question.
  *
  * Logic:
  *   1. Find the best matching item + layer
- *   2. If action = ADVISOR_CALLBACK → return callback prompt
- *   3. Return the configured response for the matched layer
- *   4. If includesDetail exists and layer 1 matched and input asks "what's included" → append it
- *   5. No match → return null (caller falls through to normal pipeline)
+ *   2. Route by action type (RESPOND | RESPOND_THEN_BOOK | ADVISOR_CALLBACK | SCHEDULE_ESTIMATE | TRANSFER)
+ *   3. No match → check notFoundResponse, otherwise return null (caller falls through to LLM)
  *
- * @param {Array}       items        Active pricing items
- * @param {string}      input        Raw caller utterance
- * @param {string}      [origin]     'DISCOVERY' | 'BOOKING' (affects CTA suffix)
+ * @param {Array}       items          Active pricing items
+ * @param {string}      input          Raw caller utterance
+ * @param {string}      [origin]       'DISCOVERY' | 'BOOKING' (affects CTA suffix)
  * @param {string|null} [returnPrompt] Resume question for BOOKING origin
- * @returns {{ responseText: string, item: Object, layer: number } | null}
+ * @param {Object}      [vs]           pricingVoiceSettings from v2Company (optional, loaded if not provided)
+ * @returns {{ responseText: string, item: Object, layer: number, ... } | null}
  */
-function buildResponse(items, input, origin = 'DISCOVERY', returnPrompt = null) {
+function buildResponse(items, input, origin = 'DISCOVERY', returnPrompt = null, vs = {}) {
   const matched = matchItem(items, input);
-  if (!matched) return null;
+
+  // ── No item matched ────────────────────────────────────────────────────────
+  if (!matched) {
+    const notFound = vs.notFoundResponse?.trim();
+    if (!notFound) return null; // Safe degrade → LLM handles it
+    return {
+      responseText:  notFound,
+      item:          null,
+      layer:         0,
+      requiresAdvisor: false,
+      lastPath:      'PRICING_NOT_FOUND'
+    };
+  }
 
   const { item, layer } = matched;
 
-  // ── Advisor callback path ──────────────────────────────────────────────────
-  if (item.action === 'ADVISOR_CALLBACK') {
-    const prompt = item.advisorCallbackPrompt?.trim() ||
-      `${CATEGORY_LABELS[item.category] || 'that service'} pricing varies by job — I'd have one of our advisors call you with an accurate quote. Can I get your name and best callback number?`;
+  // Helper: resolve the action phrase for non-RESPOND actions
+  // Three-tier: per-item actionPrompt → legacy advisorCallbackPrompt → company fallback → built-in
+  function _resolveActionPhrase(builtIn) {
+    return (
+      item.actionPrompt?.trim() ||
+      item.advisorCallbackPrompt?.trim() ||
+      vs.advisorCallbackFallback?.trim() ||
+      builtIn
+    );
+  }
 
+  // ── ADVISOR_CALLBACK ───────────────────────────────────────────────────────
+  if (item.action === 'ADVISOR_CALLBACK') {
     return {
-      responseText:    prompt,
+      responseText:    _resolveActionPhrase(BUILT_IN_FALLBACKS.advisorCallback),
       item,
       layer:           1,
       requiresAdvisor: true
     };
   }
 
-  // ── Pick response text for matched layer ───────────────────────────────────
+  // ── SCHEDULE_ESTIMATE ─────────────────────────────────────────────────────
+  if (item.action === 'SCHEDULE_ESTIMATE') {
+    return {
+      responseText:     _resolveActionPhrase(BUILT_IN_FALLBACKS.scheduleEstimate),
+      item,
+      layer:            1,
+      requiresEstimate: true
+    };
+  }
+
+  // ── TRANSFER ──────────────────────────────────────────────────────────────
+  if (item.action === 'TRANSFER') {
+    return {
+      responseText:    _resolveActionPhrase(BUILT_IN_FALLBACKS.transfer),
+      item,
+      layer:           1,
+      requiresTransfer: true
+    };
+  }
+
+  // ── Pick response text for matched layer (RESPOND + RESPOND_THEN_BOOK) ─────
   let responseText = '';
 
   if (layer === 1) {
@@ -298,6 +350,17 @@ function buildResponse(items, input, origin = 'DISCOVERY', returnPrompt = null) 
   }
 
   if (!responseText) return null;
+
+  // ── RESPOND_THEN_BOOK: append booking offer ────────────────────────────────
+  if (item.action === 'RESPOND_THEN_BOOK' && layer === 1) {
+    const offer = vs.bookingOfferSuffix?.trim() || BUILT_IN_FALLBACKS.bookingOfferSuffix;
+    responseText = `${responseText} ${offer}`.trim();
+    // If origin is BOOKING, skip the offer (already booking — returnPrompt handles it)
+    if (origin === 'BOOKING' && returnPrompt) {
+      responseText = `${item.response?.trim() || ''} ${returnPrompt}`.trim();
+    }
+    return { responseText, item, layer, requiresAdvisor: false, offerToBook: true };
+  }
 
   // ── BOOKING origin: append returnPrompt to resume booking ──────────────────
   if (origin === 'BOOKING' && returnPrompt) {

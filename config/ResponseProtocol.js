@@ -40,6 +40,7 @@ const PATH_TO_TIER = {
   'PATIENCE_MODE':          RESPONSE_TIER.TIER_1,
   'PROMOTIONS_INTERCEPTOR': RESPONSE_TIER.TIER_1, // 🎟️ Promo/coupon/specials intercept
   'PRICING_INTERCEPTOR':    RESPONSE_TIER.TIER_1, // 💰 Service pricing fact intercept
+  'PRICING_NOT_FOUND':      RESPONSE_TIER.TIER_1, // 💰 Pricing asked, no item matched → company notFoundResponse
 
   // Follow-up consent — ASKING_PRICING intercept paths (Tier 1 — deterministic)
   'ASKING_PRICING_THEN_BOOK':   RESPONSE_TIER.TIER_1, // 💰 Pricing answer → booking lane (YES detected)

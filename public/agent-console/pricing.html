@@ -28,17 +28,6 @@
       --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
       --shadow-modal:     0 20px 60px rgba(0,0,0,.20);
 
-      /* Category colours */
-      --cat-service-call:  #0ea5e9;
-      --cat-commercial:    #8b5cf6;
-      --cat-maintenance:   #10b981;
-      --cat-repair:        #ef4444;
-      --cat-installation:  #f97316;
-      --cat-duct-cleaning: #06b6d4;
-      --cat-inspection:    #6366f1;
-      --cat-emergency:     #dc2626;
-      --cat-warranty:      #84cc16;
-      --cat-other:         #94a3b8;
     }
 
     /* ── Base ────────────────────────────────────────────────────────────── */
@@ -128,15 +117,6 @@
       position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
       color: var(--text-xs); pointer-events: none;
     }
-    .cat-select {
-      padding: 7px 30px 7px 12px; border-radius: 8px;
-      border: 1px solid var(--border); font-size: 13px; background: white;
-      color: var(--text-primary); outline: none; cursor: pointer;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 10px center;
-    }
-
     /* ── Card grid ───────────────────────────────────────────────────────── */
     .items-grid {
       display: grid;
@@ -358,12 +338,12 @@
     }
 
     /* Action radio */
-    .action-radios { display: flex; gap: 10px; }
+    .action-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
     .action-radio-label {
       display: flex; align-items: center; gap: 8px;
-      padding: 10px 16px; border-radius: 8px;
+      padding: 10px 14px; border-radius: 8px;
       border: 2px solid var(--border); cursor: pointer;
-      flex: 1; transition: all .15s;
+      transition: all .15s;
     }
     .action-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f0f9ff; }
     .action-radio-label.adv:has(input:checked) { border-color: var(--color-advisor); background: #fffbeb; }
@@ -439,17 +419,31 @@
     .toast.error   { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
     .toast.info    { border-color: #bae6fd; background: #f0f9ff; color: #0369a1; }
 
-    /* ── Category dot colours ─────────────────────────────────────────────── */
-    .dot-service_call  { background: var(--cat-service-call);  }
-    .dot-commercial    { background: var(--cat-commercial);    }
-    .dot-maintenance   { background: var(--cat-maintenance);   }
-    .dot-repair        { background: var(--cat-repair);        }
-    .dot-installation  { background: var(--cat-installation);  }
-    .dot-duct_cleaning { background: var(--cat-duct-cleaning); }
-    .dot-inspection    { background: var(--cat-inspection);    }
-    .dot-emergency     { background: var(--cat-emergency);     }
-    .dot-warranty      { background: var(--cat-warranty);      }
-    .dot-other         { background: var(--cat-other);         }
+    /* ── Voice Settings card ────────────────────────────────────────────── */
+    .voice-settings-wrap { padding: 16px 24px 0; }
+    .voice-settings-card {
+      background: white; border: 1px solid var(--border);
+      border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .voice-settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; cursor: pointer; user-select: none;
+      background: #fafafa;
+    }
+    .voice-settings-title {
+      font-size: 14px; font-weight: 600; color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .voice-settings-body {
+      padding: 20px; display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .voice-settings-body.collapsed { display: none; }
+    .vs-save-row {
+      grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: 4px;
+    }
 
     @media (max-width: 600px) {
       .items-grid { grid-template-columns: 1fr; padding: 0 12px 24px; }
@@ -494,12 +488,12 @@
 ════════════════════════════════════════════════════════════════════════ -->
 <div class="info-banner">
   <h3>💡 How Service Pricing Works</h3>
-  <p>Each item covers one service type. The agent answers pricing questions from live data — no hardcoding. Three response layers let you handle follow-up questions naturally. Items with <strong>Advisor Callback</strong> collect the caller's contact info for a specialist to call back.</p>
+  <p>Each item covers one service type. The agent answers pricing questions from live data — no hardcoding. Three response layers handle follow-up questions naturally. Choose a <strong>Routing Action</strong> to control what happens after (or instead of) giving a price.</p>
   <div class="layer-pills">
     <span class="layer-pill l1">Layer 1 — Primary answer ("How much is a service call?")</span>
     <span class="layer-pill l2">Layer 2 — Follow-up ("Does that get credited?")</span>
     <span class="layer-pill l3">Layer 3 — Deep follow-up ("What does it include?")</span>
-    <span class="layer-pill adv">Advisor Callback — Custom quotes via specialist call-back</span>
+    <span class="layer-pill adv">📅 Offer to Book · 📞 Advisor Callback · 🗓 Estimate · 🔀 Transfer</span>
   </div>
 </div>
 
@@ -514,6 +508,46 @@
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════════════
+     VOICE SETTINGS CARD
+════════════════════════════════════════════════════════════════════════ -->
+<div class="voice-settings-wrap">
+  <div class="voice-settings-card">
+    <div class="voice-settings-header" onclick="toggleVoiceSettings()">
+      <span class="voice-settings-title">
+        🎙 Agent Voice Settings
+        <span class="section-badge optional">Company-wide defaults</span>
+      </span>
+      <svg class="chevron" id="chevron-vs" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="voice-settings-body collapsed" id="body-vs">
+      <div class="form-group">
+        <label class="form-label">Advisor Callback Phrase</label>
+        <textarea class="form-textarea" id="vs-advisor-callback" maxlength="500" rows="3"
+          placeholder="Pricing for this service varies by job — I can have one of our advisors call you with an accurate quote. Can I get your name and best callback number?"></textarea>
+        <span class="form-hint">Spoken for <strong>Advisor Callback</strong> items that have no item-level custom phrase. Leave blank to use the built-in default.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Booking Offer Suffix</label>
+        <textarea class="form-textarea" id="vs-booking-offer" maxlength="300" rows="2"
+          placeholder="Would you like to schedule that today?"></textarea>
+        <span class="form-hint">Appended after a price quote for <strong>Give Price + Offer to Book</strong> items. Leave blank for built-in default.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">No Pricing Found Response <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+        <textarea class="form-textarea" id="vs-not-found" maxlength="500" rows="2"
+          placeholder="Leave blank — AI handles unmatched pricing questions automatically"></textarea>
+        <span class="form-hint">Spoken when a caller asks about pricing but no item matches. Leave blank → AI handles it.</span>
+      </div>
+      <div class="vs-save-row">
+        <button class="btn-primary" id="btn-save-vs" onclick="saveVoiceSettings()">Save Voice Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
      TOOLBAR
 ════════════════════════════════════════════════════════════════════════ -->
 <div class="toolbar">
@@ -522,19 +556,7 @@
   <button class="filter-btn" data-filter="advisor">Advisor Callback</button>
   <button class="filter-btn" data-filter="inactive">Inactive</button>
 
-  <select class="cat-select" id="cat-filter">
-    <option value="">All Categories</option>
-    <option value="service_call">Service Call</option>
-    <option value="commercial">Commercial</option>
-    <option value="maintenance">Maintenance</option>
-    <option value="repair">Repair</option>
-    <option value="installation">Installation</option>
-    <option value="duct_cleaning">Duct Cleaning</option>
-    <option value="inspection">Inspection</option>
-    <option value="emergency">Emergency</option>
-    <option value="warranty">Warranty</option>
-    <option value="other">Other</option>
-  </select>
+  <input class="search-input" id="cat-filter" type="text" placeholder="Filter by category…" style="width:180px;padding-left:12px">
 
   <div class="search-wrap">
     <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -590,19 +612,10 @@
               <span class="form-hint">Admin display name shown on the card header</span>
             </div>
             <div class="form-group">
-              <label class="form-label">Category</label>
-              <select class="form-select" id="f-category">
-                <option value="service_call">Service Call</option>
-                <option value="commercial">Commercial Service Call</option>
-                <option value="maintenance">Maintenance / Tune-Up</option>
-                <option value="repair">Repair</option>
-                <option value="installation">Installation</option>
-                <option value="duct_cleaning">Duct Cleaning</option>
-                <option value="inspection">Inspection / Assessment</option>
-                <option value="emergency">Emergency / After-Hours</option>
-                <option value="warranty">Warranty / Coverage</option>
-                <option value="other">Other</option>
-              </select>
+              <label class="form-label">Category <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+              <input class="form-input" id="f-category" type="text" maxlength="80"
+                placeholder="e.g. Service Call, Flatbed Tow, Tune-Up…">
+              <span class="form-hint">For your own organisation — not used by the agent for matching</span>
             </div>
             <div class="form-group">
               <label class="form-label">Priority <span class="form-hint" style="text-transform:none">(lower = matched first)</span></label>
@@ -727,8 +740,16 @@
               <input type="radio" name="f-action" id="f-action-respond" value="RESPOND" checked onchange="onActionChange()">
               <span class="radio-dot"></span>
               <span class="radio-text">
-                <strong>💬 Respond</strong>
-                <small>Agent reads the configured responses above</small>
+                <strong>💬 Give Price</strong>
+                <small>Agent reads the price — no follow-up action</small>
+              </span>
+            </label>
+            <label class="action-radio-label">
+              <input type="radio" name="f-action" id="f-action-book" value="RESPOND_THEN_BOOK" onchange="onActionChange()">
+              <span class="radio-dot"></span>
+              <span class="radio-text">
+                <strong>📅 Give Price + Offer to Book</strong>
+                <small>Agent reads price then offers to schedule</small>
               </span>
             </label>
             <label class="action-radio-label adv">
@@ -736,18 +757,34 @@
               <span class="radio-dot"></span>
               <span class="radio-text">
                 <strong>📞 Advisor Callback</strong>
-                <small>Agent collects info for a specialist call-back</small>
+                <small>No price — collects info for specialist call-back</small>
+              </span>
+            </label>
+            <label class="action-radio-label adv">
+              <input type="radio" name="f-action" id="f-action-estimate" value="SCHEDULE_ESTIMATE" onchange="onActionChange()">
+              <span class="radio-dot"></span>
+              <span class="radio-text">
+                <strong>🗓 Schedule Estimate</strong>
+                <small>No price — books a free in-home estimate</small>
+              </span>
+            </label>
+            <label class="action-radio-label adv">
+              <input type="radio" name="f-action" id="f-action-transfer" value="TRANSFER" onchange="onActionChange()">
+              <span class="radio-dot"></span>
+              <span class="radio-text">
+                <strong>🔀 Transfer to Advisor</strong>
+                <small>No price — transfers caller to live agent</small>
               </span>
             </label>
           </div>
 
-          <!-- Advisor prompt — shown only when ADVISOR_CALLBACK selected -->
-          <div id="advisor-prompt-wrap" style="display:none">
+          <!-- Custom phrase — shown for ADVISOR_CALLBACK, SCHEDULE_ESTIMATE, TRANSFER -->
+          <div id="action-prompt-wrap" style="display:none;margin-top:12px">
             <div class="form-group">
-              <label class="form-label">Advisor Callback Prompt</label>
-              <textarea class="form-textarea" id="f-advisor-prompt" maxlength="400" placeholder="e.g. Duct cleaning is priced per system — I'd have one of our advisors call you with an accurate quote. Can I get your name and best callback number?"></textarea>
+              <label class="form-label">Custom Action Phrase <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+              <textarea class="form-textarea" id="f-action-prompt" maxlength="400" placeholder="Leave blank to use the company-level default phrase from Voice Settings above…"></textarea>
               <div style="display:flex;justify-content:space-between">
-                <span class="form-hint">What the agent says before collecting caller contact info</span>
+                <span class="form-hint">Item-level override — spoken instead of the Voice Settings default for this specific item</span>
                 <span class="char-count" id="cc-adv">0 / 400</span>
               </div>
             </div>
@@ -788,27 +825,23 @@
 
 /* ── State ─────────────────────────────────────────────────────────────── */
 const S = {
-  companyId:   null,
-  items:       [],      // full list from API
-  filtered:    [],      // after filter + search
-  editingId:   null,    // null = add mode
-  filter:      'all',
-  catFilter:   '',
-  keywords:    { 1: [], 2: [], 3: [] }  // per-layer keyword arrays in modal
+  companyId:     null,
+  items:         [],      // full list from API
+  filtered:      [],      // after filter + search
+  editingId:     null,    // null = add mode
+  filter:        'all',
+  catFilter:     '',      // free-text category filter
+  keywords:      { 1: [], 2: [], 3: [] },  // per-layer keyword arrays in modal
+  voiceSettings: {}       // pricingVoiceSettings from company doc
 };
 
-/* ── Category metadata ─────────────────────────────────────────────────── */
-const CAT = {
-  service_call:  { label: 'Service Call',       color: '#0ea5e9' },
-  commercial:    { label: 'Commercial',          color: '#8b5cf6' },
-  maintenance:   { label: 'Maintenance',         color: '#10b981' },
-  repair:        { label: 'Repair',              color: '#ef4444' },
-  installation:  { label: 'Installation',        color: '#f97316' },
-  duct_cleaning: { label: 'Duct Cleaning',       color: '#06b6d4' },
-  inspection:    { label: 'Inspection',          color: '#6366f1' },
-  emergency:     { label: 'Emergency',           color: '#dc2626' },
-  warranty:      { label: 'Warranty',            color: '#84cc16' },
-  other:         { label: 'Other',               color: '#94a3b8' }
+/* ── Action metadata ───────────────────────────────────────────────────── */
+const ACTION_META = {
+  RESPOND:          { label: '💬 Give Price',              badge: null,          isNoPrice: false },
+  RESPOND_THEN_BOOK:{ label: '📅 Give Price + Book',       badge: '📅 Offer to Book', isNoPrice: false },
+  ADVISOR_CALLBACK: { label: '📞 Advisor Callback',        badge: '📞 Advisor Callback', isNoPrice: true },
+  SCHEDULE_ESTIMATE:{ label: '🗓 Schedule Estimate',       badge: '🗓 Estimate',  isNoPrice: true },
+  TRANSFER:         { label: '🔀 Transfer',                badge: '🔀 Transfer',  isNoPrice: true }
 };
 
 /* ── API helpers — delegate to AgentConsoleAuth.apiFetch() ─────────────────
@@ -846,6 +879,7 @@ async function apiFetch(path, opts = {}) {
 
   bindEvents();
   loadItems();
+  loadVoiceSettings();
 })();
 
 /* ── Events ────────────────────────────────────────────────────────────── */
@@ -866,9 +900,9 @@ function bindEvents() {
     });
   });
 
-  // Category + search
-  document.getElementById('cat-filter').addEventListener('change', e => {
-    S.catFilter = e.target.value;
+  // Category text filter + search
+  document.getElementById('cat-filter').addEventListener('input', e => {
+    S.catFilter = e.target.value.toLowerCase().trim();
     applyFilter();
   });
   document.getElementById('search').addEventListener('input', applyFilter);
@@ -879,7 +913,7 @@ function bindEvents() {
     ['f-includes', 'cc-includes', 600],
     ['f-layer2response', 'cc-l2r', 500],
     ['f-layer3response', 'cc-l3r', 500],
-    ['f-advisor-prompt', 'cc-adv', 400]
+    ['f-action-prompt', 'cc-adv', 400]
   ].forEach(([fid, cid, max]) => {
     document.getElementById(fid).addEventListener('input', () => updateCharCount(fid, cid, max));
   });
@@ -905,7 +939,47 @@ function bindEvents() {
   });
 }
 
-/* ── Load ──────────────────────────────────────────────────────────────── */
+/* ── Voice Settings card ───────────────────────────────────────────────── */
+function toggleVoiceSettings() {
+  const body    = document.getElementById('body-vs');
+  const chevron = document.getElementById('chevron-vs');
+  const open    = !body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', open);
+  chevron.classList.toggle('open', !open);
+}
+
+async function loadVoiceSettings() {
+  if (!S.companyId) return;
+  try {
+    const data = await apiFetch(`${API}/voice-settings`);
+    S.voiceSettings = data.voiceSettings || {};
+    const vs = S.voiceSettings;
+    document.getElementById('vs-advisor-callback').value = vs.advisorCallbackFallback || '';
+    document.getElementById('vs-booking-offer').value    = vs.bookingOfferSuffix      || '';
+    document.getElementById('vs-not-found').value        = vs.notFoundResponse        || '';
+  } catch (_e) { /* Non-fatal — Voice Settings are optional */ }
+}
+
+async function saveVoiceSettings() {
+  const btn = document.getElementById('btn-save-vs');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const body = {
+      advisorCallbackFallback: document.getElementById('vs-advisor-callback').value.trim(),
+      bookingOfferSuffix:      document.getElementById('vs-booking-offer').value.trim(),
+      notFoundResponse:        document.getElementById('vs-not-found').value.trim()
+    };
+    const data = await apiFetch(`${API}/voice-settings`, { method: 'PATCH', body: JSON.stringify(body) });
+    S.voiceSettings = data.voiceSettings || body;
+    toast('success', 'Voice Settings saved', 'Agent will use updated phrases on next call');
+  } catch (err) {
+    toast('error', 'Save failed', err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Voice Settings';
+  }
+}
+
+/* ── Load items ─────────────────────────────────────────────────────────── */
 async function loadItems() {
   try {
     const data = await apiFetch(API);
@@ -920,15 +994,16 @@ async function loadItems() {
 
 /* ── Filter ────────────────────────────────────────────────────────────── */
 function applyFilter() {
-  const q = (document.getElementById('search').value || '').toLowerCase();
+  const q   = (document.getElementById('search').value || '').toLowerCase();
+  S.catFilter = (document.getElementById('cat-filter').value || '').toLowerCase().trim();
   S.filtered = S.items.filter(it => {
     if (S.filter === 'active'   && !it.isActive) return false;
     if (S.filter === 'inactive' && it.isActive)  return false;
     if (S.filter === 'advisor'  && it.action !== 'ADVISOR_CALLBACK') return false;
-    if (S.catFilter && it.category !== S.catFilter) return false;
+    if (S.catFilter && !(it.category || '').toLowerCase().includes(S.catFilter)) return false;
     if (q) {
       const hay = [
-        it.label, it.category, it.response, it.advisorCallbackPrompt,
+        it.label, it.category, it.response, it.actionPrompt, it.advisorCallbackPrompt,
         ...(it.keywords || []), ...(it.layer2Keywords || []), ...(it.layer3Keywords || [])
       ].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
@@ -970,25 +1045,26 @@ function renderGrid() {
 }
 
 function renderCard(it) {
-  const cat      = CAT[it.category] || CAT.other;
-  const isAdv    = it.action === 'ADVISOR_CALLBACK';
+  const action   = it.action || 'RESPOND';
+  const meta     = ACTION_META[action] || ACTION_META.RESPOND;
+  const isNoPrice= meta.isNoPrice;
+  const catLabel = (it.category || '').trim();
   const hasL2    = it.layer2Response?.trim();
   const hasL3    = it.layer3Response?.trim();
   const kws      = (it.keywords || []).slice(0, 4);
   const kwMore   = (it.keywords || []).length - kws.length;
-  const preview  = isAdv
-    ? (it.advisorCallbackPrompt || 'Advisor callback prompt not set')
+  const preview  = isNoPrice
+    ? (it.actionPrompt || it.advisorCallbackPrompt || '<em style="color:#94a3b8">Using Voice Settings default phrase</em>')
     : (it.response || '<em style="color:#94a3b8">No response configured</em>');
 
   return `
   <div class="pricing-card ${it.isActive ? '' : 'inactive'}" id="card-${it._id}">
     <div class="card-header">
-      <span class="card-cat-dot dot-${it.category || 'other'}" style="background:${cat.color}"></span>
       <div style="flex:1">
         <div class="card-label">${esc(it.label)}</div>
         <div class="card-badges">
-          <span class="badge badge-cat">${esc(cat.label)}</span>
-          ${isAdv  ? `<span class="badge badge-adv">📞 Advisor Callback</span>` : ''}
+          ${catLabel ? `<span class="badge badge-cat">${esc(catLabel)}</span>` : ''}
+          ${meta.badge ? `<span class="badge badge-adv">${esc(meta.badge)}</span>` : ''}
           ${hasL2  ? `<span class="badge badge-l2">L2</span>` : ''}
           ${hasL3  ? `<span class="badge badge-l3">L3</span>` : ''}
           ${!it.isActive ? `<span class="badge badge-off">Inactive</span>` : ''}
@@ -1001,8 +1077,8 @@ function renderCard(it) {
         ${kws.map(k => `<span class="kw-chip">${esc(k)}</span>`).join('')}
         ${kwMore > 0 ? `<span class="kw-more">+${kwMore} more</span>` : ''}
       </div>` : ''}
-      <div class="layer-label">${isAdv ? 'Advisor Prompt' : 'Layer 1 — Primary Response'}</div>
-      <div class="card-response ${isAdv ? 'adv' : ''}">${preview}</div>
+      <div class="layer-label">${isNoPrice ? esc(meta.label) + ' — Custom Phrase' : 'Layer 1 — Primary Response'}</div>
+      <div class="card-response ${isNoPrice ? 'adv' : ''}">${preview}</div>
       ${hasL2 ? `
         <div class="layer-label" style="margin-top:8px">Layer 2 — First Follow-Up</div>
         <div class="card-response">${esc(truncate(it.layer2Response, 100))}</div>` : ''}
@@ -1055,16 +1131,17 @@ function openModal(id = null) {
 
   // Identity
   document.getElementById('f-label').value    = it?.label    || '';
-  document.getElementById('f-category').value = it?.category || 'service_call';
+  document.getElementById('f-category').value = it?.category || '';
   document.getElementById('f-priority').value = it?.priority ?? 100;
   document.getElementById('f-active').checked = it ? it.isActive : true;
 
   // Responses
-  document.getElementById('f-response').value     = it?.response     || '';
-  document.getElementById('f-includes').value     = it?.includesDetail || '';
+  document.getElementById('f-response').value       = it?.response      || '';
+  document.getElementById('f-includes').value       = it?.includesDetail || '';
   document.getElementById('f-layer2response').value = it?.layer2Response || '';
   document.getElementById('f-layer3response').value = it?.layer3Response || '';
-  document.getElementById('f-advisor-prompt').value = it?.advisorCallbackPrompt || '';
+  // Populate action prompt from new field, fall back to legacy for existing items
+  document.getElementById('f-action-prompt').value  = it?.actionPrompt || it?.advisorCallbackPrompt || '';
 
   // Keywords
   S.keywords[1] = [...(it?.keywords       || [])];
@@ -1072,10 +1149,11 @@ function openModal(id = null) {
   S.keywords[3] = [...(it?.layer3Keywords || [])];
   [1, 2, 3].forEach(renderKeywordChips);
 
-  // Action
+  // Action — set the matching radio
   const action = it?.action || 'RESPOND';
-  document.getElementById('f-action-respond').checked = action === 'RESPOND';
-  document.getElementById('f-action-advisor').checked = action === 'ADVISOR_CALLBACK';
+  const radioEl = document.querySelector(`input[name="f-action"][value="${action}"]`);
+  if (radioEl) radioEl.checked = true;
+  else document.getElementById('f-action-respond').checked = true;
   onActionChange();
 
   // Char counts
@@ -1083,7 +1161,7 @@ function openModal(id = null) {
   updateCharCount('f-includes', 'cc-includes', 600);
   updateCharCount('f-layer2response', 'cc-l2r', 500);
   updateCharCount('f-layer3response', 'cc-l3r', 500);
-  updateCharCount('f-advisor-prompt', 'cc-adv', 400);
+  updateCharCount('f-action-prompt', 'cc-adv', 400);
 
   // Expand Layer 1 + action sections; collapse optional if empty
   ensureOpen('identity'); ensureOpen('layer1'); ensureOpen('action');
@@ -1120,8 +1198,9 @@ function ensureCollapsed(name) {
 
 /* ── Action radio change ───────────────────────────────────────────────── */
 function onActionChange() {
-  const isAdv = document.getElementById('f-action-advisor').checked;
-  document.getElementById('advisor-prompt-wrap').style.display = isAdv ? '' : 'none';
+  const action  = document.querySelector('input[name="f-action"]:checked')?.value || 'RESPOND';
+  const needsPrompt = ['ADVISOR_CALLBACK', 'SCHEDULE_ESTIMATE', 'TRANSFER'].includes(action);
+  document.getElementById('action-prompt-wrap').style.display = needsPrompt ? '' : 'none';
 }
 
 /* ── Keyword chips ─────────────────────────────────────────────────────── */
@@ -1169,7 +1248,7 @@ async function handleSave() {
 
   const body = {
     label,
-    category:            document.getElementById('f-category').value,
+    category:            document.getElementById('f-category').value.trim(),
     priority:            parseInt(document.getElementById('f-priority').value) || 100,
     keywords:            S.keywords[1],
     response:            document.getElementById('f-response').value.trim(),
@@ -1178,8 +1257,8 @@ async function handleSave() {
     layer2Response:      document.getElementById('f-layer2response').value.trim(),
     layer3Keywords:      S.keywords[3],
     layer3Response:      document.getElementById('f-layer3response').value.trim(),
-    action:              document.getElementById('f-action-advisor').checked ? 'ADVISOR_CALLBACK' : 'RESPOND',
-    advisorCallbackPrompt: document.getElementById('f-advisor-prompt').value.trim(),
+    action:              document.querySelector('input[name="f-action"]:checked')?.value || 'RESPOND',
+    actionPrompt:        document.getElementById('f-action-prompt').value.trim(),
     isActive:            document.getElementById('f-active').checked
   };
 

@@ -41,16 +41,9 @@
  *   No schema changes required — architecture is front-end ready now.
  *
  * CATEGORIES:
- *   service_call   — Residential diagnostic / service fee
- *   commercial     — Commercial service call / inspection
- *   maintenance    — Maintenance plan / tune-up
- *   repair         — Repair labour / parts
- *   installation   — New equipment installation
- *   duct_cleaning  — Duct / air quality services
- *   inspection     — System inspection / assessment
- *   emergency      — After-hours / emergency call-out
- *   warranty       — Warranty / extended coverage
- *   other          — Catch-all for custom pricing types
+ *   Free-text label — admin types whatever fits their industry.
+ *   Not used by the agent for matching (keyword-based). UI organisation only.
+ *   Examples: "Service Call", "Flatbed Tow", "Jump Start", "Duct Cleaning"
  *
  * ============================================================================
  */
@@ -83,13 +76,9 @@ const companyPricingItemSchema = new mongoose.Schema(
 
     category: {
       type:    String,
-      enum:    [
-        'service_call', 'commercial', 'maintenance', 'repair',
-        'installation', 'duct_cleaning', 'inspection', 'emergency',
-        'warranty', 'other'
-      ],
-      default: 'other',
-      comment: 'Service category — drives badge colour and filter in the UI'
+      default: '',
+      trim:    true,
+      comment: 'Free-text label for admin UI organisation (e.g. "Service Call", "Flatbed Tow") — NOT used by agent for matching'
     },
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -156,24 +145,36 @@ const companyPricingItemSchema = new mongoose.Schema(
     },
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ROUTING ACTION
-    // RESPOND          — Agent reads the configured response layers
-    // ADVISOR_CALLBACK — Agent collects caller info for advisor follow-up
-    //                    (used for custom-quote services like duct cleaning)
+    // ROUTING ACTION — what happens after (or instead of) delivering the price
+    //
+    // RESPOND            — Agent reads configured response layers; no follow-up action
+    // RESPOND_THEN_BOOK  — Agent reads L1 response, then offers to schedule
+    // ADVISOR_CALLBACK   — No price given; agent collects name + phone for advisor call-back
+    // SCHEDULE_ESTIMATE  — No price given; agent pivots to booking for a free in-home estimate
+    // TRANSFER           — No price given; agent speaks actionPrompt then transfers to live agent
     // ─────────────────────────────────────────────────────────────────────────
     action: {
       type:    String,
-      enum:    ['RESPOND', 'ADVISOR_CALLBACK'],
+      enum:    ['RESPOND', 'RESPOND_THEN_BOOK', 'ADVISOR_CALLBACK', 'SCHEDULE_ESTIMATE', 'TRANSFER'],
       default: 'RESPOND',
-      comment: 'RESPOND = agent answers directly; ADVISOR_CALLBACK = collect info for advisor call-back'
+      comment: 'Post-pricing routing action — see inline docs above'
     },
 
+    actionPrompt: {
+      type:      String,
+      trim:      true,
+      default:   '',
+      maxlength: 400,
+      comment:   'Spoken for ADVISOR_CALLBACK / SCHEDULE_ESTIMATE / TRANSFER actions. Falls back to company-level pricingVoiceSettings.advisorCallbackFallback.'
+    },
+
+    // ─ Legacy alias (kept for backward compat — maps to actionPrompt at runtime) ─
     advisorCallbackPrompt: {
       type:      String,
       trim:      true,
       default:   '',
       maxlength: 400,
-      comment:   'Spoken when action=ADVISOR_CALLBACK (e.g. "Duct cleaning is priced per system — I\'d have an advisor call with an exact quote. Can I get your name and best number?")'
+      comment:   'Legacy — use actionPrompt for new items. Checked as fallback if actionPrompt is empty.'
     },
 
     // ─────────────────────────────────────────────────────────────────────────
