@@ -326,6 +326,9 @@
       case 'pricing':
         window.location.href = `${baseUrl}/pricing.html${companyParam}`;
         break;
+      case 'services':
+        window.location.href = `${baseUrl}/services.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }
