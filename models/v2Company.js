@@ -5880,6 +5880,55 @@ const companySchema = new mongoose.Schema({
             maxlength: 500,
             comment:   'Spoken when no pricing item matches caller query. Leave blank → LLM handles it (safe degrade)'
         }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SERVICE PRICING — AI Conversation Settings
+    // Per-company Groq AI settings for the pricing conversation layer.
+    // Groq intercepts pricing questions when keyword matching returns no match,
+    // preventing hallucination by bounding responses to the configured catalog.
+    // UI:  /agent-console/pricing.html  (AI Conversation Settings card)
+    // API: GET/PATCH /api/admin/agent2/company/:companyId/pricing/ai-settings
+    // ─────────────────────────────────────────────────────────────────────────
+    pricingAiSettings: {
+        enabled: {
+            type:    Boolean,
+            default: true,
+            comment: 'When true, Groq handles pricing questions with catalog guardrails. When false, falls through to T2 LLM (hallucination risk)'
+        },
+        model: {
+            type:    String,
+            default: 'llama-3.3-70b-versatile',
+            trim:    true,
+            comment: 'Groq model ID — llama-3.3-70b-versatile recommended for pricing accuracy'
+        },
+        maxConversationTurns: {
+            type:    Number,
+            default: 4,
+            min:     1,
+            max:     10,
+            comment: 'Max consecutive pricing Q&A turns before falling through to LLM'
+        },
+        noPricingDataPhrase: {
+            type:      String,
+            default:   '',
+            trim:      true,
+            maxlength: 300,
+            comment:   'Spoken when no catalog item matches the pricing question. Leave blank → built-in fallback'
+        },
+        tradeContext: {
+            type:      String,
+            default:   '',
+            trim:      true,
+            maxlength: 200,
+            comment:   'Short trade description for Groq system prompt (e.g. "HVAC contractor, residential and commercial")'
+        },
+        conversationStyle: {
+            type:    String,
+            enum:    ['concise', 'detailed', 'friendly'],
+            default: 'concise',
+            comment: 'Controls Groq response style: concise (under 20 words) | detailed (with explanation) | friendly (warm tone)'
+        }
     }
 }, { timestamps: true });
 

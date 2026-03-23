@@ -415,6 +415,42 @@
       grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: 4px;
     }
 
+    /* ── AI Settings card ────────────────────────────────────────────────── */
+    .ai-settings-toggle {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 0 4px;
+    }
+    .ai-settings-toggle input[type="checkbox"] {
+      width: 18px; height: 18px; accent-color: var(--color-primary); cursor: pointer;
+    }
+    .ai-settings-toggle label {
+      font-size: 14px; font-weight: 500; color: var(--text-primary); cursor: pointer;
+    }
+    .ai-toggle-note {
+      font-size: 12px; color: var(--text-muted); margin-top: 2px;
+    }
+    .ai-model-select, .ai-style-select {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; background: white; color: var(--text-primary);
+    }
+    .ai-model-select:focus, .ai-style-select:focus {
+      outline: none; border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(14,165,233,.12);
+    }
+    .ai-turns-input {
+      width: 80px; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; text-align: center;
+    }
+    .ai-turns-input:focus {
+      outline: none; border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(14,165,233,.12);
+    }
+    .groq-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 20px;
+      padding: 2px 8px; font-size: 10px; font-weight: 600; color: #16a34a;
+    }
+
     @media (max-width: 600px) {
       .items-grid { grid-template-columns: 1fr; padding: 0 12px 24px; }
       .toolbar    { padding: 12px; }
@@ -518,6 +554,86 @@
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════════════
+     AI CONVERSATION SETTINGS CARD
+════════════════════════════════════════════════════════════════════════ -->
+<div class="voice-settings-wrap">
+  <div class="voice-settings-card">
+    <div class="voice-settings-header" onclick="toggleAiSettings()">
+      <span class="voice-settings-title">
+        🤖 AI Conversation Settings
+        <span class="groq-badge">⚡ Groq Powered</span>
+        <span class="section-badge optional">Prevents price hallucination</span>
+      </span>
+      <svg class="chevron" id="chevron-ai" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="voice-settings-body collapsed" id="body-ai">
+      <!-- Enable toggle -->
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <div class="ai-settings-toggle">
+          <input type="checkbox" id="ai-enabled" checked>
+          <label for="ai-enabled">Enable Groq AI Pricing Conversations</label>
+        </div>
+        <p class="ai-toggle-note">When enabled, Groq handles pricing questions that keyword matching can't answer — using your catalog as hard guardrails. Groq cannot invent any price not in your catalog. When disabled, Claude handles it (hallucination risk).</p>
+      </div>
+
+      <!-- Trade context -->
+      <div class="form-group">
+        <label class="form-label">Trade Context</label>
+        <textarea class="form-textarea" id="ai-trade-context" maxlength="200" rows="2"
+          placeholder="e.g. HVAC contractor, residential and commercial"></textarea>
+        <span class="form-hint">Short description of your trade — injected into the AI prompt so it understands your business context. Examples: "Plumbing company", "Tow truck and roadside service", "HVAC contractor".</span>
+      </div>
+
+      <!-- No pricing data phrase -->
+      <div class="form-group">
+        <label class="form-label">No Pricing Data Phrase <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+        <textarea class="form-textarea" id="ai-no-data-phrase" maxlength="300" rows="2"
+          placeholder="Pricing for that service varies — I can have one of our advisors reach out to you with an accurate quote."></textarea>
+        <span class="form-hint">Spoken when a caller asks a pricing question but nothing in your catalog matches. Leave blank to use the built-in default phrase.</span>
+      </div>
+
+      <!-- Conversation style -->
+      <div class="form-group">
+        <label class="form-label">Conversation Style</label>
+        <select class="ai-style-select" id="ai-conv-style">
+          <option value="concise">Concise — under 20 words, direct and factual (recommended)</option>
+          <option value="friendly">Friendly — warm tone, under 30 words</option>
+          <option value="detailed">Detailed — up to 40 words, adds context</option>
+        </select>
+        <span class="form-hint">Controls how Groq responds to pricing questions. Concise is recommended for phone calls.</span>
+      </div>
+
+      <!-- Max turns -->
+      <div class="form-group">
+        <label class="form-label">Max Conversation Turns</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="number" class="ai-turns-input" id="ai-max-turns" min="1" max="10" value="4">
+          <span class="form-hint" style="margin-top:0">turns (1–10)</span>
+        </div>
+        <span class="form-hint">Maximum consecutive pricing Q&amp;A exchanges before falling through to the main AI agent. 4 is recommended.</span>
+      </div>
+
+      <!-- Model selector (advanced) -->
+      <div class="form-group">
+        <label class="form-label">Groq Model <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Advanced</span></label>
+        <select class="ai-model-select" id="ai-model">
+          <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile (Recommended)</option>
+          <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Fastest, less accurate)</option>
+          <option value="mixtral-8x7b-32768">Mixtral 8x7B (Alternative)</option>
+        </select>
+        <span class="form-hint">Groq model for pricing Q&amp;A. Llama 3.3 70B is recommended for accuracy and speed.</span>
+      </div>
+
+      <div class="vs-save-row">
+        <button class="btn-primary" id="btn-save-ai" onclick="saveAiSettings()">Save AI Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
      TOOLBAR
 ════════════════════════════════════════════════════════════════════════ -->
 <div class="toolbar">
@@ -567,7 +683,8 @@ const S = {
   filtered:      [],      // after filter + search
   filter:        'all',
   catFilter:     '',      // free-text category filter
-  voiceSettings: {}       // pricingVoiceSettings from company doc
+  voiceSettings: {},      // pricingVoiceSettings from company doc
+  aiSettings:    {}       // pricingAiSettings from company doc
 };
 
 /* ── Action metadata ───────────────────────────────────────────────────── */
@@ -615,6 +732,7 @@ async function apiFetch(path, opts = {}) {
   bindEvents();
   loadItems();
   loadVoiceSettings();
+  loadAiSettings();
 })();
 
 /* ── Events ────────────────────────────────────────────────────────────── */
@@ -680,6 +798,52 @@ async function saveVoiceSettings() {
     toast('error', 'Save failed', err.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Save Voice Settings';
+  }
+}
+
+/* ── AI Settings card ──────────────────────────────────────────────────── */
+function toggleAiSettings() {
+  const body    = document.getElementById('body-ai');
+  const chevron = document.getElementById('chevron-ai');
+  const open    = !body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', open);
+  chevron.classList.toggle('open', !open);
+}
+
+async function loadAiSettings() {
+  if (!S.companyId) return;
+  try {
+    const data = await apiFetch(`${API}/ai-settings`);
+    S.aiSettings = data.pricingAiSettings || {};
+    const ai = S.aiSettings;
+    document.getElementById('ai-enabled').checked      = ai.enabled !== false;
+    document.getElementById('ai-trade-context').value  = ai.tradeContext        || '';
+    document.getElementById('ai-no-data-phrase').value = ai.noPricingDataPhrase || '';
+    document.getElementById('ai-conv-style').value     = ai.conversationStyle   || 'concise';
+    document.getElementById('ai-max-turns').value      = ai.maxConversationTurns != null ? ai.maxConversationTurns : 4;
+    document.getElementById('ai-model').value          = ai.model               || 'llama-3.3-70b-versatile';
+  } catch (_e) { /* Non-fatal — AI Settings are optional */ }
+}
+
+async function saveAiSettings() {
+  const btn = document.getElementById('btn-save-ai');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const body = {
+      enabled:              document.getElementById('ai-enabled').checked,
+      tradeContext:         document.getElementById('ai-trade-context').value.trim(),
+      noPricingDataPhrase:  document.getElementById('ai-no-data-phrase').value.trim(),
+      conversationStyle:    document.getElementById('ai-conv-style').value,
+      maxConversationTurns: parseInt(document.getElementById('ai-max-turns').value, 10) || 4,
+      model:                document.getElementById('ai-model').value
+    };
+    const data = await apiFetch(`${API}/ai-settings`, { method: 'PATCH', body: JSON.stringify(body) });
+    S.aiSettings = data.pricingAiSettings || body;
+    toast('success', 'AI Settings saved', 'Groq pricing AI updated for this company');
+  } catch (err) {
+    toast('error', 'Save failed', err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save AI Settings';
   }
 }
 

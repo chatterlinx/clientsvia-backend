@@ -103,7 +103,8 @@ const Agent2EchoGuard = require('./Agent2EchoGuard');
 // Handles mid-call digression + return via DiscoveryNotesService.digressionStack.
 // ════════════════════════════════════════════════════════════════════════════
 const PromotionsInterceptor  = require('./PromotionsInterceptor');
-const PricingInterceptor     = require('./PricingInterceptor');     // 💰 Service pricing fact intercept
+const PricingInterceptor          = require('./PricingInterceptor');          // 💰 Service pricing fact intercept
+const PricingConversationService  = require('./PricingConversationService');   // 🤖 Groq pricing Q&A with catalog guardrails
 const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
@@ -460,6 +461,51 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       }
 
       emit('A2_T15_GROQ_MISS', { callSid, turn, reason: fastResult.missReason });
+    }
+    // ── Falls through to T2 (Claude LLM Agent) ───────────────────────────────
+
+    // ── Pricing Conversation Intercept — fires before Claude T2 ──────────────
+    // When the caller asks a pricing question and T1.5 (trigger fast lane) missed,
+    // try PricingConversationService with the full catalog as hard guardrails.
+    // This prevents Claude from hallucinating prices it doesn't know.
+    // Falls through silently on miss/error — Claude T2 proceeds as normal.
+    if (!sttEmpty && PricingInterceptor.detect(input)) {
+      const _aiCfg = company?.pricingAiSettings || {};
+      if (_aiCfg.enabled !== false && process.env.GROQ_API_KEY) {
+        try {
+          const _pricingItems = await PricingInterceptor.getActivePricingItems(String(company._id));
+          if (_pricingItems.length) {
+            const _pricingResult = await PricingConversationService.converse({
+              companyId:     String(company._id),
+              question:      input,
+              pricingItems:  _pricingItems,
+              aiSettings:    _aiCfg,
+              voiceSettings: company?.pricingVoiceSettings || {},
+              companyName:   company?.companyName || '',
+              callerName,
+              callSid,
+            });
+            if (_pricingResult.intent !== PricingConversationService.INTENT.ERROR && _pricingResult.response) {
+              emit('A2_PRICING_CONVERSE_HIT', {
+                source:    'T2_INTERCEPT',
+                intent:    _pricingResult.intent,
+                latencyMs: _pricingResult.latencyMs,
+                callSid,
+                turn,
+              });
+              return {
+                response:         _pricingResult.response,
+                tokensUsed:       { input: 0, output: 0 },
+                latencyMs:        _pricingResult.latencyMs,
+                wasPartial:       false,
+                _pricingConverse: true,
+              };
+            }
+          }
+        } catch (_pErr) {
+          logger.warn('[LLM_AGENT] Pricing intercept error — falling through to Claude', { callSid, err: _pErr?.message });
+        }
+      }
     }
     // ── Falls through to T2 (Claude LLM Agent) ───────────────────────────────
 
@@ -2591,10 +2637,85 @@ class Agent2DiscoveryRunner {
                   };
                 }
               }
+
+              // ── No keyword match — try Groq pricing conversation ────────────────
+              // Items exist but deterministic keyword matching returned null.
+              // Groq receives the full catalog as guardrails — cannot invent prices.
+              const _pricingAiCfg = company?.pricingAiSettings || {};
+              if (_pricingAiCfg.enabled !== false && process.env.GROQ_API_KEY) {
+                const _converseResult = await PricingConversationService.converse({
+                  companyId,
+                  question:      input,
+                  pricingItems:  activeItems,
+                  aiSettings:    _pricingAiCfg,
+                  voiceSettings: company?.pricingVoiceSettings || {},
+                  companyName:   company?.companyName || '',
+                  callerName,
+                  callSid,
+                });
+
+                if (_converseResult.intent !== PricingConversationService.INTENT.ERROR && _converseResult.response) {
+                  emit('A2_PRICING_CONVERSE_HIT', {
+                    source:     'ASKING_PRICING_FUQ',
+                    intent:     _converseResult.intent,
+                    confidence: _converseResult.confidence,
+                    latencyMs:  _converseResult.latencyMs,
+                    callSid,
+                  });
+
+                  if (_converseResult.intent === PricingConversationService.INTENT.BOOKING_READY) {
+                    // Caller ready to book — clear pfuq, route to booking lane
+                    clearPendingFollowUp(nextState);
+                    nextState.lane        = 'BOOKING';
+                    nextState.sessionMode = 'BOOKING';
+                    nextState.consent = {
+                      pending:       false,
+                      given:         true,
+                      turn,
+                      source:        'followup_consent_gate',
+                      bucket:        'askingPricing',
+                      matchedPhrases,
+                      grantedAt:     new Date().toISOString()
+                    };
+                    nextState.agent2.discovery.lastPath = 'PRICING_CONVERSE_BOOK';
+                    emit('A2_CONSENT_GATE_BOOKING', {
+                      reason:       'PRICING_CONVERSE: Groq detected booking-ready intent → routing to booking',
+                      cardId:       pfuqSource?.replace('card:', '') || null,
+                      inputPreview: clip(input, 60)
+                    });
+                    emit('A2_RESPONSE_READY', {
+                      path:            'PRICING_CONVERSE_BOOK',
+                      responsePreview: clip(_converseResult.response, 120)
+                    });
+                    return {
+                      response:    _converseResult.response,
+                      matchSource: 'AGENT2_DISCOVERY',
+                      state:       nextState,
+                      _123rp:      build123rpMeta('PRICING_CONVERSE_BOOK')
+                    };
+                  }
+
+                  // ANSWERED | ADVISOR_NEEDED | NO_DATA — return pricing answer, re-ask pfuq
+                  const _reaskResponse = pfuq ? `${_converseResult.response} ${pfuq}`.trim() : _converseResult.response;
+                  nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+                  nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+                  nextState.agent2.discovery.lastPath                = 'PRICING_CONVERSE_REASK';
+                  emit('A2_RESPONSE_READY', {
+                    path:            'PRICING_CONVERSE_REASK',
+                    responsePreview: clip(_reaskResponse, 120)
+                  });
+                  return {
+                    response:    _reaskResponse,
+                    matchSource: 'AGENT2_DISCOVERY',
+                    state:       nextState,
+                    _123rp:      build123rpMeta('PRICING_CONVERSE_REASK')
+                  };
+                }
+              }
             }
 
-            // No active pricing items configured — fall through to normal bucket handling
-            logger.debug('[A2] ASKING_PRICING: no active pricing items — falling through', { companyId, callSid });
+            // No active pricing items OR Groq disabled/missed — fall through to normal bucket handling
+            logger.debug('[A2] ASKING_PRICING: no match + Groq miss — falling through', { companyId, callSid });
 
           } catch (pricingErr) {
             // Graceful degrade: PricingInterceptor failed — re-ask the FUQ safely.

@@ -22,6 +22,10 @@
  *   GET    /:companyId/pricing              — List all items (admin view)
  *   GET    /:companyId/pricing/active       — List only active items (runtime view)
  *   POST   /:companyId/pricing              — Create a new pricing item
+ *   ⚠️ GET    /:companyId/pricing/voice-settings — Voice settings (BEFORE /:id)
+ *   ⚠️ PATCH  /:companyId/pricing/voice-settings — Voice settings (BEFORE /:id)
+ *   ⚠️ GET    /:companyId/pricing/ai-settings    — AI conversation settings (BEFORE /:id)
+ *   ⚠️ PATCH  /:companyId/pricing/ai-settings    — AI conversation settings (BEFORE /:id)
  *   ⚠️ GET    /:companyId/pricing/:id       — Get single item (AFTER literal routes)
  *   PATCH  /:companyId/pricing/:id          — Update item (partial)
  *   DELETE /:companyId/pricing/:id          — Soft-delete (isActive=false)
@@ -250,6 +254,57 @@ router.patch('/:companyId/pricing/voice-settings', async (req, res) => {
   } catch (err) {
     logger.error('[companyPricing] PATCH voice-settings error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Failed to save voice settings' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET  /:companyId/pricing/ai-settings — Load pricing AI conversation settings
+// PATCH/:companyId/pricing/ai-settings — Save pricing AI conversation settings
+// ⚠️ MUST be registered BEFORE /:id
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AI_SETTINGS_FIELDS = [
+  'enabled', 'model', 'maxConversationTurns',
+  'noPricingDataPhrase', 'tradeContext', 'conversationStyle'
+];
+
+router.get('/:companyId/pricing/ai-settings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+  try {
+    const company = await v2Company.findById(companyId, 'pricingAiSettings').lean();
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+    return res.json({ success: true, pricingAiSettings: company.pricingAiSettings || {} });
+  } catch (err) {
+    logger.error('[companyPricing] GET ai-settings error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to load AI settings' });
+  }
+});
+
+router.patch('/:companyId/pricing/ai-settings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const update = {};
+  for (const key of AI_SETTINGS_FIELDS) {
+    if (key in req.body) update[`pricingAiSettings.${key}`] = req.body[key];
+  }
+  if (!Object.keys(update).length) {
+    return res.status(400).json({ success: false, error: 'No valid fields provided' });
+  }
+
+  try {
+    const company = await v2Company.findByIdAndUpdate(
+      companyId,
+      { $set: update },
+      { new: true, select: 'pricingAiSettings', runValidators: true }
+    ).lean();
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+    logger.info('[companyPricing] Updated pricingAiSettings', { companyId, fields: Object.keys(update) });
+    return res.json({ success: true, pricingAiSettings: company.pricingAiSettings });
+  } catch (err) {
+    logger.error('[companyPricing] PATCH ai-settings error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to save AI settings' });
   }
 });
 
