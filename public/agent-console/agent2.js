@@ -349,7 +349,18 @@
         });
       });
     }
-    
+
+    // Service Pricing Console link
+    const linkPricingConsole = document.getElementById('link-pricing-console');
+    if (linkPricingConsole) {
+      linkPricingConsole.addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateWithUnsavedGuard(() => {
+          window.location.href = `/agent-console/pricing.html?companyId=${encodeURIComponent(state.companyId)}`;
+        });
+      });
+    }
+
     const statBoxTriggers = document.getElementById('stat-box-triggers');
     if (statBoxTriggers) {
       statBoxTriggers.addEventListener('click', () => {

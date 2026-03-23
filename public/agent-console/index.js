@@ -323,6 +323,9 @@
       case 'promotions':
         window.location.href = `${baseUrl}/promotions.html${companyParam}`;
         break;
+      case 'pricing':
+        window.location.href = `${baseUrl}/pricing.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }
