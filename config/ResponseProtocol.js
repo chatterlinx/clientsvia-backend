@@ -41,6 +41,11 @@ const PATH_TO_TIER = {
   'PROMOTIONS_INTERCEPTOR': RESPONSE_TIER.TIER_1, // 🎟️ Promo/coupon/specials intercept
   'PRICING_INTERCEPTOR':    RESPONSE_TIER.TIER_1, // 💰 Service pricing fact intercept
 
+  // Follow-up consent — ASKING_PRICING intercept paths (Tier 1 — deterministic)
+  'ASKING_PRICING_THEN_BOOK':   RESPONSE_TIER.TIER_1, // 💰 Pricing answer → booking lane (YES detected)
+  'ASKING_PRICING_THEN_REASK':  RESPONSE_TIER.TIER_1, // 💰 Pricing answer → re-ask FUQ (no YES)
+  'ASKING_PRICING_ERROR_REASK': RESPONSE_TIER.TIER_1, // 💰 Pricing interceptor failed → re-ask FUQ
+
   // Follow-up consent paths (Tier 1 — deterministic yes/no/reprompt routing)
   'FOLLOWUP_YES':                    RESPONSE_TIER.TIER_1,
   'FOLLOWUP_NO':                     RESPONSE_TIER.TIER_1,

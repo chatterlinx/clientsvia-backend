@@ -232,6 +232,25 @@ function defaultAgent2Config() {
           ],
           response:  '',
           direction: 'HANDLE_PROMO_FIRST'
+        },
+
+        // ── ASKING PRICING ────────────────────────────────────────────────────
+        // Intercepts cost/pricing questions mid-consent-flow — BEFORE YES swallows them.
+        // "how much is a service call?" while agent is waiting for YES/NO
+        // → answer with live PricingInterceptor data, then re-ask or proceed to booking.
+        // Phrases are UI-editable per company in triggers.html consent cards.
+        askingPricing: {
+          phrases: [
+            'how much', 'price', 'pricing', 'cost', 'costs', 'service call',
+            'service fee', 'diagnostic', 'diagnostic fee', 'charge', 'charges',
+            'rate', 'rates', 'fee', 'fees', 'quote', 'estimate',
+            'how much is', 'how much does', 'what does it cost', 'what does that cost',
+            'how much for', 'what is the cost', 'what is the fee', 'what is the price',
+            'how much would', 'what is your fee', 'what is your rate',
+            'what do you charge', 'what are your rates'
+          ],
+          response:  '',
+          direction: 'HANDLE_PRICING_FIRST'
         }
       },
       playbook: {
@@ -550,6 +569,7 @@ function mergeAgent2Config(saved) {
           hesitant:      { ...d.hesitant,      ...safeObject(s.hesitant,      {}) },
           complex:       { ...d.complex,       ...safeObject(s.complex,       {}) },
           askingSpecials:{ ...d.askingSpecials, ...safeObject(s.askingSpecials, {}) },
+          askingPricing: { ...d.askingPricing,  ...safeObject(s.askingPricing,  {}) },
         };
       })()
     },

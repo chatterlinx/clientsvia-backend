@@ -3415,13 +3415,28 @@
         'current specials','do you have deals','do you have specials',
         'do you have any specials','do you have any deals'
       ]
+    },
+
+    // ── ASKING PRICING ─────────────────────────────────────────────────────
+    // Checked after ASKING_SPECIALS, before YES/NO in classification.
+    // Response is built from live MongoDB service pricing items — not this field.
+    // Admin adds industry-specific cost/fee terms.
+    askingPricing: {
+      phrases: [
+        'how much','price','pricing','cost','costs','service call',
+        'service fee','diagnostic','diagnostic fee','charge','charges',
+        'rate','rates','fee','fees','quote','estimate',
+        'how much is','how much does','what does it cost','what does that cost',
+        'how much for','what is the cost','what is the fee','what is the price',
+        'how much would','what is your fee','what is your rate',
+        'what do you charge','what are your rates'
+      ]
     }
   };
 
-  // Six consent buckets — askingSpecials added as the promo intercept bucket.
-  // ORDER MATTERS in the UI load/collect loop — askingSpecials last so the
-  // card renders after NO in the Primary Decision grid.
-  const FUC_BUCKETS = ['yes', 'no', 'askingSpecials', 'reprompt', 'hesitant', 'complex'];
+  // Seven consent buckets — askingSpecials and askingPricing added as intercept buckets.
+  // ORDER MATTERS in the UI load/collect loop — intercept buckets render after NO.
+  const FUC_BUCKETS = ['yes', 'no', 'askingSpecials', 'askingPricing', 'reprompt', 'hesitant', 'complex'];
 
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};

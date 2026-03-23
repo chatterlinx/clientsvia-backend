@@ -4465,6 +4465,22 @@ const companySchema = new mongoose.Schema({
                         response:    { type: String, default: '', trim: true },
                         direction:   { type: String, default: 'HANDLE_PROMO_FIRST', trim: true },
                         bookingMode: { type: String, default: '', trim: true }
+                    },
+
+                    // ── ASKING PRICING ─────────────────────────────────────────────────────
+                    // Companion to askingSpecials — catches callers asking about cost/pricing
+                    // mid-consent-flow (e.g. "how much is a service call?" during a YES/NO gate).
+                    // Two sub-routes resolved at runtime:
+                    //   PRICING_THEN_BOOK   — YES also detected → answer pricing → proceed to booking
+                    //   PRICING_THEN_REASK  — no YES detected   → answer pricing → re-ask PFUQ
+                    // Response is built by PricingInterceptor from live MongoDB data — no LLM.
+                    // UI: /agent-console/triggers.html (Follow-up Consent Cards → ASKING PRICING card)
+                    // API: PATCH /api/agent-console/:companyId/agent2/config
+                    askingPricing: {
+                        phrases:     { type: [String], default: [] },
+                        response:    { type: String, default: '', trim: true },
+                        direction:   { type: String, default: 'HANDLE_PRICING_FIRST', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     }
                 },
                 

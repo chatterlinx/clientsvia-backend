@@ -2224,6 +2224,11 @@ class Agent2DiscoveryRunner {
       const askingSpecialsPhrases = safeArr(fuc.askingSpecials?.phrases)
         .map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
 
+      // ASKING PRICING — cost/price/fee queries mid-consent-flow.
+      // Checked AFTER askingSpecials so "any specials on the service call?" hits specials first.
+      const askingPricingPhrases = safeArr(fuc.askingPricing?.phrases)
+        .map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
       // Question signals: normalised to match against inputLowerCleanFUQ
       // (which already has all punctuation stripped — no-apostrophe-safe).
       const questionSignalPhrases = safeArr(fuc.yes?.questionSignals)
@@ -2274,7 +2279,11 @@ class Agent2DiscoveryRunner {
       //   specials only   → PROMO_THEN_REASK (re-ask PFUQ after promo answer)
       const isAskingSpecialsFUQ = askingSpecialsPhrases.length > 0 && matchesList(askingSpecialsPhrases);
 
-      // Priority: ASKING_SPECIALS > pure-YES > TIMING > NO > YES+HESITANT(conflict) > HESITANT > REPROMPT > COMPLEX
+      // ASKING PRICING — checked after ASKING_SPECIALS in priority.
+      // "how much is a service call?" → ASKING_PRICING (isYesFUQ still computed for sub-route)
+      const isAskingPricingFUQ = !isAskingSpecialsFUQ && askingPricingPhrases.length > 0 && matchesList(askingPricingPhrases);
+
+      // Priority: ASKING_SPECIALS > ASKING_PRICING > pure-YES > TIMING > NO > YES+HESITANT(conflict) > HESITANT > REPROMPT > COMPLEX
       //
       // KEY RULE — YES ∩ HESITANT → COMPLEX:
       // When both isYesFUQ AND isHesitantFUQ fire, the caller is sending
@@ -2288,6 +2297,7 @@ class Agent2DiscoveryRunner {
       // ASKING_SPECIALS runs FIRST — intercepts promo queries before YES swallows them.
       // "yeah, any specials?" → ASKING_SPECIALS (isYesFUQ still true for sub-route selection)
       if      (isAskingSpecialsFUQ)                      bucket = 'ASKING_SPECIALS';
+      else if (isAskingPricingFUQ)                       bucket = 'ASKING_PRICING';
       else if (isYesFUQ && !isNoFUQ && !isHesitantFUQ)  bucket = 'YES';
       else if (isTimingAffirmationFUQ && !isHesitantFUQ) bucket = 'YES'; // scheduling = implicit YES
       else if (isNoFUQ && !isYesFUQ)                     bucket = 'NO';
@@ -2296,7 +2306,9 @@ class Agent2DiscoveryRunner {
       else if (isRepromptFUQ)                            bucket = 'REPROMPT';
       else                                               bucket = 'COMPLEX';
 
-      const bucketKey             = bucket === 'ASKING_SPECIALS' ? 'askingSpecials' : bucket.toLowerCase();
+      const bucketKey             = bucket === 'ASKING_SPECIALS' ? 'askingSpecials'
+                                  : bucket === 'ASKING_PRICING'  ? 'askingPricing'
+                                  : bucket.toLowerCase();
       const bucketConfig          = safeObj(fuc[bucketKey], {});
       const bookingMode           = `${bucketConfig.bookingMode || ''}`.trim().toLowerCase();
       const direction             = `${bucketConfig.direction || 'CONTINUE'}`.toUpperCase();
@@ -2305,7 +2317,8 @@ class Agent2DiscoveryRunner {
         no:             matchedPhrasesFor(noPhrases),
         reprompt:       matchedPhrasesFor(repromptPhrases),
         hesitant:       matchedPhrasesFor(hesitantPhrases),
-        askingSpecials: matchedPhrasesFor(askingSpecialsPhrases)
+        askingSpecials: matchedPhrasesFor(askingSpecialsPhrases),
+        askingPricing:  matchedPhrasesFor(askingPricingPhrases)
       };
       const matchedPhrases          = matchedByBucket[bucketKey] || [];
       const missingResponseAction   = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
@@ -2486,6 +2499,127 @@ class Agent2DiscoveryRunner {
               matchSource: 'AGENT2_DISCOVERY',
               state:       nextState,
               _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_ERROR_REASK')
+            };
+          }
+        }
+
+        // ── ASKING PRICING ──────────────────────────────────────────────────────
+        // Fires when caller asks about cost/fee/pricing mid-consent-flow.
+        // PricingInterceptor answers from live MongoDB data — LLM never reached.
+        //
+        // PRICING_THEN_BOOK  — isYesFUQ=true  → answer pricing + consent given → booking
+        // PRICING_THEN_REASK — isYesFUQ=false → answer pricing + re-ask the FUQ
+        //
+        // Graceful degrade: any PricingInterceptor error → re-ask pfuq (safe fallback)
+        if (bucket === 'ASKING_PRICING') {
+          try {
+            const activeItems = await PricingInterceptor.getActivePricingItems(companyId);
+
+            if (activeItems.length) {
+              const result = PricingInterceptor.buildResponse(activeItems, input, 'BOOKING', null);
+
+              if (result) {
+                const { responseText, item, layer } = result;
+
+                if (isYesFUQ) {
+                  // ── PRICING_THEN_BOOK ─────────────────────────────────────────────
+                  // Caller gave consent AND asked about pricing ("yeah, how much is it?").
+                  // Answer the pricing question; transition to booking lane immediately.
+                  clearPendingFollowUp(nextState);
+                  nextState.lane        = 'BOOKING';
+                  nextState.sessionMode = 'BOOKING';
+                  nextState.consent = {
+                    pending:       false,
+                    given:         true,
+                    turn,
+                    source:        'followup_consent_gate',
+                    bucket:        'askingPricing',
+                    matchedPhrases,
+                    grantedAt:     new Date().toISOString()
+                  };
+                  nextState.agent2.discovery.lastPath = 'ASKING_PRICING_THEN_BOOK';
+
+                  emit('A2_PRICING_INTERCEPTED', {
+                    digressionOrigin: 'FOLLOWUP_CONSENT',
+                    itemLabel:         item.label,
+                    layer,
+                    source:            'ASKING_PRICING_FUQ_THEN_BOOK'
+                  });
+                  emit('A2_CONSENT_GATE_BOOKING', {
+                    reason:       'ASKING_PRICING: caller asked pricing + said YES → answered pricing → routing to booking',
+                    cardId:       pfuqSource?.replace('card:', '') || null,
+                    inputPreview: clip(input, 60)
+                  });
+                  emit('A2_RESPONSE_READY', {
+                    path:            'ASKING_PRICING_THEN_BOOK',
+                    responsePreview: clip(responseText, 120)
+                  });
+
+                  return {
+                    response:    responseText,
+                    matchSource: 'AGENT2_DISCOVERY',
+                    state:       nextState,
+                    _123rp:      build123rpMeta('ASKING_PRICING_THEN_BOOK')
+                  };
+
+                } else {
+                  // ── PRICING_THEN_REASK ────────────────────────────────────────────
+                  // Caller asked about pricing but did NOT say YES.
+                  // Answer the pricing question then re-ask the original FUQ.
+                  const reaskResponse = `${responseText} ${pfuq}`.trim();
+
+                  nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+                  nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+                  nextState.agent2.discovery.lastPath                = 'ASKING_PRICING_THEN_REASK';
+
+                  emit('A2_PRICING_INTERCEPTED', {
+                    digressionOrigin: 'FOLLOWUP_CONSENT',
+                    itemLabel:         item.label,
+                    layer,
+                    source:            'ASKING_PRICING_FUQ_THEN_REASK'
+                  });
+                  emit('A2_RESPONSE_READY', {
+                    path:            'ASKING_PRICING_THEN_REASK',
+                    responsePreview: clip(reaskResponse, 120)
+                  });
+
+                  return {
+                    response:    reaskResponse,
+                    matchSource: 'AGENT2_DISCOVERY',
+                    state:       nextState,
+                    _123rp:      build123rpMeta('ASKING_PRICING_THEN_REASK')
+                  };
+                }
+              }
+            }
+
+            // No active pricing items configured — fall through to normal bucket handling
+            logger.debug('[A2] ASKING_PRICING: no active pricing items — falling through', { companyId, callSid });
+
+          } catch (pricingErr) {
+            // Graceful degrade: PricingInterceptor failed — re-ask the FUQ safely.
+            emit('A2_PRICING_ERROR', {
+              source: 'ASKING_PRICING_FUQ',
+              error:  pricingErr?.message || 'unknown',
+              bucket: 'ASKING_PRICING'
+            });
+
+            nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+            nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+            nextState.agent2.discovery.lastPath                = 'ASKING_PRICING_ERROR_REASK';
+
+            const fallbackResponse = `${fuqAck} ${pfuq}`.trim();
+            emit('A2_RESPONSE_READY', {
+              path:            'ASKING_PRICING_ERROR_REASK',
+              responsePreview: clip(fallbackResponse, 120),
+              isFallback:      true
+            });
+
+            return {
+              response:    fallbackResponse,
+              matchSource: 'AGENT2_DISCOVERY',
+              state:       nextState,
+              _123rp:      build123rpMeta('ASKING_PRICING_ERROR_REASK')
             };
           }
         }
