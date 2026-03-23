@@ -214,6 +214,24 @@ function defaultAgent2Config() {
           phrases: [],
           response: '',
           direction: 'AGENT'
+        },
+
+        // ── ASKING SPECIALS ──────────────────────────────────────────────────
+        // Checked FIRST before YES/NO so "yeah, any specials?" is intercepted
+        // here instead of being swallowed by the YES bucket.
+        // Phrases are UI-editable per company — these are the platform defaults.
+        // Runtime handler calls PromotionsInterceptor — no LLM, no hallucination.
+        askingSpecials: {
+          phrases: [
+            'specials', 'special', 'deals', 'deal', 'promotions', 'promotion',
+            'promo', 'coupons', 'coupon', 'discount', 'discounts', 'offer', 'offers',
+            'sale', 'savings', 'running any', 'any deals', 'any specials',
+            'any promotions', 'any coupons', 'what about deals', 'current deals',
+            'current specials', 'do you have deals', 'do you have specials',
+            'do you have any specials', 'do you have any deals'
+          ],
+          response:  '',
+          direction: 'HANDLE_PROMO_FIRST'
         }
       },
       playbook: {
@@ -528,9 +546,10 @@ function mergeAgent2Config(saved) {
           no:           { ...d.no,           ...safeObject(s.no,           {}) },
           maintenance:  { ...d.maintenance,  ...safeObject(s.maintenance,  {}) },
           service_call: { ...d.service_call, ...safeObject(s.service_call, {}) },
-          reprompt:     { ...d.reprompt,     ...safeObject(s.reprompt,     {}) },
-          hesitant:     { ...d.hesitant,     ...safeObject(s.hesitant,     {}) },
-          complex:      { ...d.complex,      ...safeObject(s.complex,      {}) },
+          reprompt:      { ...d.reprompt,      ...safeObject(s.reprompt,      {}) },
+          hesitant:      { ...d.hesitant,      ...safeObject(s.hesitant,      {}) },
+          complex:       { ...d.complex,       ...safeObject(s.complex,       {}) },
+          askingSpecials:{ ...d.askingSpecials, ...safeObject(s.askingSpecials, {}) },
         };
       })()
     },

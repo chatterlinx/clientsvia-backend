@@ -1076,13 +1076,14 @@
     .consent-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
 
     /* Left accent bar approach via top border */
-    .consent-card.fuc-yes    { border-top: 3px solid #22c55e; }
-    .consent-card.fuc-no     { border-top: 3px solid #ef4444; }
-    .consent-card.fuc-maint  { border-top: 3px solid #0ea5e9; }
-    .consent-card.fuc-svc    { border-top: 3px solid #f97316; }
-    .consent-card.fuc-reprompt { border-top: 3px solid #f59e0b; }
-    .consent-card.fuc-hesitant { border-top: 3px solid #8b5cf6; }
-    .consent-card.fuc-complex  { border-top: 3px solid #64748b; }
+    .consent-card.fuc-yes           { border-top: 3px solid #22c55e; }
+    .consent-card.fuc-no            { border-top: 3px solid #ef4444; }
+    .consent-card.fuc-askingSpecials{ border-top: 3px solid #06b6d4; }
+    .consent-card.fuc-maint         { border-top: 3px solid #0ea5e9; }
+    .consent-card.fuc-svc           { border-top: 3px solid #f97316; }
+    .consent-card.fuc-reprompt      { border-top: 3px solid #f59e0b; }
+    .consent-card.fuc-hesitant      { border-top: 3px solid #8b5cf6; }
+    .consent-card.fuc-complex       { border-top: 3px solid #64748b; }
 
     /* Card header */
     .fuc-card-header {
@@ -1102,13 +1103,14 @@
       justify-content: center;
       flex-shrink: 0;
     }
-    .fuc-yes    .fuc-card-icon { background: #f0fdf4; color: #16a34a; }
-    .fuc-no     .fuc-card-icon { background: #fef2f2; color: #dc2626; }
-    .fuc-maint  .fuc-card-icon { background: #f0f9ff; color: #0284c7; }
-    .fuc-svc    .fuc-card-icon { background: #fff7ed; color: #ea580c; }
-    .fuc-reprompt .fuc-card-icon { background: #fffbeb; color: #d97706; }
-    .fuc-hesitant .fuc-card-icon { background: #f5f3ff; color: #7c3aed; }
-    .fuc-complex  .fuc-card-icon { background: #f8fafc; color: #475569; }
+    .fuc-yes             .fuc-card-icon { background: #f0fdf4; color: #16a34a; }
+    .fuc-no              .fuc-card-icon { background: #fef2f2; color: #dc2626; }
+    .fuc-askingSpecials  .fuc-card-icon { background: #ecfeff; color: #0891b2; }
+    .fuc-maint           .fuc-card-icon { background: #f0f9ff; color: #0284c7; }
+    .fuc-svc             .fuc-card-icon { background: #fff7ed; color: #ea580c; }
+    .fuc-reprompt        .fuc-card-icon { background: #fffbeb; color: #d97706; }
+    .fuc-hesitant        .fuc-card-icon { background: #f5f3ff; color: #7c3aed; }
+    .fuc-complex         .fuc-card-icon { background: #f8fafc; color: #475569; }
 
     .fuc-card-title {
       font-size: 12px;
@@ -1802,7 +1804,7 @@ Only toggle to GLOBAL if this trigger should be shared across all HVAC companies
             <span>Primary Decision</span>
             <div class="fuc-section-label-line"></div>
           </div>
-          <div class="fuc-grid-2">
+          <div class="fuc-grid-3">
 
             <!-- YES -->
             <div class="consent-card fuc-yes" data-bucket="yes">
@@ -1876,6 +1878,34 @@ Only toggle to GLOBAL if this trigger should be shared across all HVAC companies
                 </div>
               </div>
             </div>
+
+            <!-- ASKING SPECIALS -->
+            <div class="consent-card fuc-askingSpecials" data-bucket="askingSpecials">
+              <div class="fuc-card-header">
+                <div class="fuc-card-icon">
+                  <!-- Tag / price-tag icon -->
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M1.5 1.5h4.25a1 1 0 0 1 .707.293l5.75 5.75a1 1 0 0 1 0 1.414l-3.25 3.25a1 1 0 0 1-1.414 0l-5.75-5.75A1 1 0 0 1 1.5 5.75V1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                    <circle cx="4" cy="4" r="0.75" fill="currentColor"/>
+                  </svg>
+                </div>
+                <span class="fuc-card-title">ASKING SPECIALS</span>
+                <span class="fuc-card-subtitle">Caller wants deals / promos</span>
+              </div>
+              <div class="fuc-card-body">
+                <p style="font-size:11px;color:#0891b2;background:#ecfeff;border:1px solid #a5f3fc;border-radius:6px;padding:6px 9px;margin:0 0 10px;line-height:1.45;">
+                  🎟️ <strong>Live data:</strong> Response is built from your active promotions — no LLM, no guessing.
+                  If YES was also said, booking proceeds after the promo answer.
+                  Otherwise the follow-up question is re-asked.
+                </p>
+                <div class="tag-list" id="fuc-askingSpecials-phrases"></div>
+                <div class="fuc-add-row">
+                  <input type="text" class="form-input" id="fuc-askingSpecials-input" placeholder="Add keywords (comma-separated)…">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window._fucAddPhrases('askingSpecials')">Add</button>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <!-- FALLBACKS -->

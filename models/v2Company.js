@@ -4447,6 +4447,24 @@ const companySchema = new mongoose.Schema({
                         response:    { type: String, default: '', trim: true },
                         direction:   { type: String, default: 'AGENT', trim: true },
                         bookingMode: { type: String, default: '', trim: true }
+                    },
+
+                    // ── ASKING SPECIALS — Caller asks about deals/promos ──
+                    // Checked FIRST in classification (before YES/NO) so
+                    // "yeah, any specials?" is caught here, not swallowed by YES.
+                    // Two sub-routes resolved at runtime:
+                    //   PROMO_THEN_BOOK   — YES also detected → answer promos → proceed to booking
+                    //   PROMO_THEN_REASK  — no YES detected   → answer promos → re-ask PFUQ
+                    // Response is built by PromotionsInterceptor from live MongoDB data.
+                    // The `response` field here is unused (overridden by PromotionsInterceptor)
+                    // but retained for UI consistency with other buckets.
+                    // UI: /agent-console/triggers.html (Follow-up Consent Cards)
+                    // API: PATCH /api/agent-console/:companyId/agent2/config
+                    askingSpecials: {
+                        phrases:     { type: [String], default: [] },
+                        response:    { type: String, default: '', trim: true },
+                        direction:   { type: String, default: 'HANDLE_PROMO_FIRST', trim: true },
+                        bookingMode: { type: String, default: '', trim: true }
                     }
                 },
                 

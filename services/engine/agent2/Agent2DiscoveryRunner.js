@@ -2163,7 +2163,26 @@ class Agent2DiscoveryRunner {
         },
 
         // ── COMPLEX — Multi-part / hand to LLM agent ─────────────────────────
-        complex: { direction: 'AGENT', phrases: [], response: '' }
+        complex: { direction: 'AGENT', phrases: [], response: '' },
+
+        // ── ASKING SPECIALS — Caller wants promo/deal info during consent gate ─
+        // Checked FIRST (before YES/NO) so "yeah, any specials?" hits this bucket.
+        // Response is built by PromotionsInterceptor from live MongoDB data —
+        // no static response string needed. UI-configurable phrases per company.
+        // Sub-routes: PROMO_THEN_BOOK (YES+specials) | PROMO_THEN_REASK (specials only)
+        askingSpecials: {
+          direction: 'HANDLE_PROMO_FIRST',
+          phrases: [
+            'specials', 'special', 'deals', 'deal', 'promotions', 'promotion',
+            'promo', 'coupons', 'coupon', 'discount', 'discounts', 'offer', 'offers',
+            'sale', 'savings', 'running any', 'any deals', 'any specials',
+            'any promotions', 'any coupons', 'what about deals', 'current deals',
+            'current specials', 'do you have deals', 'do you have specials',
+            'do you have any specials', 'do you have any deals'
+          ],
+          response:    '',
+          bookingMode: ''
+        }
       };
       // Deep-merge: DB config on top of defaults.
       // yes.questionSignals: use DB value if non-empty, else keep rich defaults
@@ -2178,10 +2197,18 @@ class Agent2DiscoveryRunner {
             ? safeArr(rawFuc.yes.questionSignals)
             : DEFAULT_FUC.yes.questionSignals,
         },
-        no:       { ...DEFAULT_FUC.no,       ...safeObj(rawFuc.no,       {}) },
-        reprompt: { ...DEFAULT_FUC.reprompt, ...safeObj(rawFuc.reprompt, {}) },
-        hesitant: { ...DEFAULT_FUC.hesitant, ...safeObj(rawFuc.hesitant, {}) },
-        complex:  { ...DEFAULT_FUC.complex,  ...safeObj(rawFuc.complex,  {}) },
+        no:            { ...DEFAULT_FUC.no,            ...safeObj(rawFuc.no,            {}) },
+        reprompt:      { ...DEFAULT_FUC.reprompt,      ...safeObj(rawFuc.reprompt,      {}) },
+        hesitant:      { ...DEFAULT_FUC.hesitant,      ...safeObj(rawFuc.hesitant,      {}) },
+        complex:       { ...DEFAULT_FUC.complex,       ...safeObj(rawFuc.complex,       {}) },
+        askingSpecials: {
+          ...DEFAULT_FUC.askingSpecials,
+          ...safeObj(rawFuc.askingSpecials, {}),
+          // Always prefer DB phrases if non-empty; else keep rich defaults
+          phrases: safeArr(rawFuc.askingSpecials?.phrases).length > 0
+            ? safeArr(rawFuc.askingSpecials.phrases)
+            : DEFAULT_FUC.askingSpecials.phrases,
+        },
       };
 
       // ── Normalised phrase lists ────────────────────────────────────────────
@@ -2189,6 +2216,12 @@ class Agent2DiscoveryRunner {
       const noPhrases       = safeArr(fuc.no?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
       const repromptPhrases = safeArr(fuc.reprompt?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
       const hesitantPhrases = safeArr(fuc.hesitant?.phrases).map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
+
+      // ASKING SPECIALS — checked FIRST in classification (before YES/NO)
+      // so "yeah, any specials?" hits this bucket, not the YES bucket.
+      // Phrases are per-company UI-configurable in the Consent Cards console.
+      const askingSpecialsPhrases = safeArr(fuc.askingSpecials?.phrases)
+        .map(p => `${p}`.toLowerCase().trim()).filter(Boolean);
 
       // Question signals: normalised to match against inputLowerCleanFUQ
       // (which already has all punctuation stripped — no-apostrophe-safe).
@@ -2233,7 +2266,14 @@ class Agent2DiscoveryRunner {
       const TIMING_AFFIRMATION_RE = /\b(?:as\s+(?:early|soon|quick)\s+as\s+(?:possible|you\s+can)|asap|first\s+(?:thing|available)|right\s+away|right\s+now|immediately|sooner\s+the\s+better|soonest\s+(?:possible|available)?|anytime(?:\s+works)?|whenever(?:\s+works|\s+you\s+(?:can|are\s+available))?|any\s+(?:day|time)\s+(?:works|is\s+fine)|(?:morning|afternoon|evening|today|tomorrow|this\s+week|next\s+week)\s+(?:works?|is\s+(?:fine|good|great|perfect)))\b/i;
       const isTimingAffirmationFUQ = !isYesFUQ && !isNoFUQ && !isHesitantFUQ && TIMING_AFFIRMATION_RE.test(inputLowerCleanFUQ);
 
-      // Priority: pure-YES > TIMING > NO > YES+HESITANT(conflict) > HESITANT > REPROMPT > COMPLEX
+      // ASKING SPECIALS — checked independently of YES/NO so it fires even when
+      // YES was also said ("yeah, any specials running?").
+      // isYesFUQ remains computed — the handler uses it to choose sub-route:
+      //   YES + specials  → PROMO_THEN_BOOK  (consent captured, proceed after promo answer)
+      //   specials only   → PROMO_THEN_REASK (re-ask PFUQ after promo answer)
+      const isAskingSpecialsFUQ = askingSpecialsPhrases.length > 0 && matchesList(askingSpecialsPhrases);
+
+      // Priority: ASKING_SPECIALS > pure-YES > TIMING > NO > YES+HESITANT(conflict) > HESITANT > REPROMPT > COMPLEX
       //
       // KEY RULE — YES ∩ HESITANT → COMPLEX:
       // When both isYesFUQ AND isHesitantFUQ fire, the caller is sending
@@ -2244,23 +2284,27 @@ class Agent2DiscoveryRunner {
       // booking, we route to COMPLEX so the LLM can address the concern
       // empathetically before attempting to close.
       let bucket;
-      if      (isYesFUQ && !isNoFUQ && !isHesitantFUQ) bucket = 'YES';
+      // ASKING_SPECIALS runs FIRST — intercepts promo queries before YES swallows them.
+      // "yeah, any specials?" → ASKING_SPECIALS (isYesFUQ still true for sub-route selection)
+      if      (isAskingSpecialsFUQ)                      bucket = 'ASKING_SPECIALS';
+      else if (isYesFUQ && !isNoFUQ && !isHesitantFUQ)  bucket = 'YES';
       else if (isTimingAffirmationFUQ && !isHesitantFUQ) bucket = 'YES'; // scheduling = implicit YES
-      else if (isNoFUQ && !isYesFUQ)                    bucket = 'NO';
-      else if (isYesFUQ && isHesitantFUQ)               bucket = 'COMPLEX'; // "yes but..." → LLM resolves
-      else if (isHesitantFUQ)                           bucket = 'HESITANT';
-      else if (isRepromptFUQ)                           bucket = 'REPROMPT';
-      else                                              bucket = 'COMPLEX';
+      else if (isNoFUQ && !isYesFUQ)                     bucket = 'NO';
+      else if (isYesFUQ && isHesitantFUQ)                bucket = 'COMPLEX'; // "yes but..." → LLM resolves
+      else if (isHesitantFUQ)                            bucket = 'HESITANT';
+      else if (isRepromptFUQ)                            bucket = 'REPROMPT';
+      else                                               bucket = 'COMPLEX';
 
-      const bucketKey             = bucket.toLowerCase();
+      const bucketKey             = bucket === 'ASKING_SPECIALS' ? 'askingSpecials' : bucket.toLowerCase();
       const bucketConfig          = safeObj(fuc[bucketKey], {});
       const bookingMode           = `${bucketConfig.bookingMode || ''}`.trim().toLowerCase();
       const direction             = `${bucketConfig.direction || 'CONTINUE'}`.toUpperCase();
       const matchedByBucket       = {
-        yes:      matchedPhrasesFor(yesPhrases),
-        no:       matchedPhrasesFor(noPhrases),
-        reprompt: matchedPhrasesFor(repromptPhrases),
-        hesitant: matchedPhrasesFor(hesitantPhrases)
+        yes:            matchedPhrasesFor(yesPhrases),
+        no:             matchedPhrasesFor(noPhrases),
+        reprompt:       matchedPhrasesFor(repromptPhrases),
+        hesitant:       matchedPhrasesFor(hesitantPhrases),
+        askingSpecials: matchedPhrasesFor(askingSpecialsPhrases)
       };
       const matchedPhrases          = matchedByBucket[bucketKey] || [];
       const missingResponseAction   = `${fuc.missingResponseAction || 'REASK_FOLLOWUP'}`.trim().toUpperCase();
@@ -2276,7 +2320,7 @@ class Agent2DiscoveryRunner {
         bookingMode: bookingMode || null,
         matchedPhrases,
         scrabEngineSkipped: true,
-        markers: { isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, isTimingAffirmationFUQ }
+        markers: { isYesFUQ, isNoFUQ, isHesitantFUQ, isRepromptFUQ, isTimingAffirmationFUQ, isAskingSpecialsFUQ }
       });
 
       const { ack: fuqAck } = buildAck(ack);
@@ -2319,6 +2363,131 @@ class Agent2DiscoveryRunner {
         // ────────────────────────────────────────────────────────────────
         // 123RP TIER 1: Deterministic phrase-match buckets
         // ────────────────────────────────────────────────────────────────
+
+        // ── ASKING SPECIALS (checked FIRST — before YES/NO) ───────────────────
+        // Caller asked about promos/deals/specials during the consent gate.
+        // PromotionsInterceptor answers from live MongoDB data — LLM never reached.
+        //
+        // PROMO_THEN_BOOK  — isYesFUQ=true  → answer promo + consent given → booking
+        // PROMO_THEN_REASK — isYesFUQ=false → answer promo + re-ask the FUQ
+        //
+        // Graceful degrade: any PromotionsInterceptor error → re-ask pfuq (safe fallback)
+        if (bucket === 'ASKING_SPECIALS') {
+          try {
+            const promoSettings = await PromotionsInterceptor.getCompanySettings(companyId).catch(() => ({}));
+            const activePromos  = await PromotionsInterceptor.getActivePromotions(companyId);
+
+            if (isYesFUQ) {
+              // ── PROMO_THEN_BOOK ─────────────────────────────────────────────────
+              // Caller gave consent AND asked about specials (e.g. "yeah, any specials?").
+              // Answer the promo question; transition to booking lane immediately.
+              const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
+                activePromos, input, 'DISCOVERY', null, promoSettings, capturedReason
+              );
+
+              // Consent is given — clear FUQ, route to booking lane
+              clearPendingFollowUp(nextState);
+              nextState.lane        = 'BOOKING';
+              nextState.sessionMode = 'BOOKING';
+              nextState.consent = {
+                pending:       false,
+                given:         true,
+                turn,
+                source:        'followup_consent_gate',
+                bucket:        'askingSpecials',
+                matchedPhrases,
+                grantedAt:     new Date().toISOString()
+              };
+              nextState.agent2.discovery.lastPath = 'ASKING_SPECIALS_PROMO_THEN_BOOK';
+
+              emit('A2_PROMOTIONS_INTERCEPTED', {
+                digressionOrigin: 'FOLLOWUP_CONSENT',
+                promosFound:       activePromos.length,
+                promoUsed:         promoUsed?.name || null,
+                source:            'ASKING_SPECIALS_FUQ_PROMO_THEN_BOOK'
+              });
+              emit('A2_CONSENT_GATE_BOOKING', {
+                reason:       'ASKING_SPECIALS: caller asked specials + said YES → answered promo → routing to booking',
+                cardId:       pfuqSource?.replace('card:', '') || null,
+                inputPreview: clip(input, 60)
+              });
+              emit('A2_RESPONSE_READY', {
+                path:            'ASKING_SPECIALS_PROMO_THEN_BOOK',
+                responsePreview: clip(responseText, 120)
+              });
+
+              return {
+                response:    responseText,
+                matchSource: 'AGENT2_DISCOVERY',
+                state:       nextState,
+                _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_THEN_BOOK')
+              };
+
+            } else {
+              // ── PROMO_THEN_REASK ────────────────────────────────────────────────
+              // Caller asked about specials but did NOT say YES.
+              // Answer the promo question then re-ask the original FUQ.
+              // Pending FUQ is preserved — next YES → booking.
+              const { responseText, promoUsed } = PromotionsInterceptor.buildResponse(
+                activePromos, input, 'DISCOVERY', null, promoSettings, capturedReason
+              );
+
+              // Append the original follow-up question so the caller has a clear next step
+              const reaskResponse = `${responseText} ${pfuq}`.trim();
+
+              // Preserve pendingFollowUp — consent gate re-engages on next turn
+              nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+              nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+              nextState.agent2.discovery.lastPath                = 'ASKING_SPECIALS_PROMO_THEN_REASK';
+
+              emit('A2_PROMOTIONS_INTERCEPTED', {
+                digressionOrigin: 'FOLLOWUP_CONSENT',
+                promosFound:       activePromos.length,
+                promoUsed:         promoUsed?.name || null,
+                source:            'ASKING_SPECIALS_FUQ_PROMO_THEN_REASK'
+              });
+              emit('A2_RESPONSE_READY', {
+                path:            'ASKING_SPECIALS_PROMO_THEN_REASK',
+                responsePreview: clip(reaskResponse, 120)
+              });
+
+              return {
+                response:    reaskResponse,
+                matchSource: 'AGENT2_DISCOVERY',
+                state:       nextState,
+                _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_THEN_REASK')
+              };
+            }
+
+          } catch (promoErr) {
+            // Graceful degrade: PromotionsInterceptor failed — re-ask the FUQ safely.
+            // If caller also said YES, their consent is still honoured on next turn
+            // because pendingFollowUpQuestion is preserved.
+            emit('A2_PROMOTIONS_ERROR', {
+              source: 'ASKING_SPECIALS_FUQ',
+              error:  promoErr?.message || 'unknown',
+              bucket: 'ASKING_SPECIALS'
+            });
+
+            nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
+            nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
+            nextState.agent2.discovery.lastPath                = 'ASKING_SPECIALS_PROMO_ERROR_REASK';
+
+            const fallbackResponse = `${fuqAck} ${pfuq}`.trim();
+            emit('A2_RESPONSE_READY', {
+              path:            'ASKING_SPECIALS_PROMO_ERROR_REASK',
+              responsePreview: clip(fallbackResponse, 120),
+              isFallback:      true
+            });
+
+            return {
+              response:    fallbackResponse,
+              matchSource: 'AGENT2_DISCOVERY',
+              state:       nextState,
+              _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_ERROR_REASK')
+            };
+          }
+        }
 
         // ── YES (Tier 1 or Tier 2 if residual content) ──
         if (bucket === 'YES') {

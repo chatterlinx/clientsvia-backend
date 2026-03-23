@@ -3400,11 +3400,28 @@
         'still the same problem'
       ]
     },
-    complex: { phrases: [] }
+    complex: { phrases: [] },
+
+    // ── ASKING SPECIALS ────────────────────────────────────────────────────
+    // Checked FIRST before YES/NO in classification.
+    // Response is built from live MongoDB promotions data — not this field.
+    // Admin adds industry-specific terms (e.g. "summer package", "warranty deal").
+    askingSpecials: {
+      phrases: [
+        'specials','special','deals','deal','promotions','promotion',
+        'promo','coupons','coupon','discount','discounts','offer','offers',
+        'sale','savings','running any','any deals','any specials',
+        'any promotions','any coupons','what about deals','current deals',
+        'current specials','do you have deals','do you have specials',
+        'do you have any specials','do you have any deals'
+      ]
+    }
   };
 
-  // Five clean consent buckets — service classification is NOT handled here.
-  const FUC_BUCKETS = ['yes', 'no', 'reprompt', 'hesitant', 'complex'];
+  // Six consent buckets — askingSpecials added as the promo intercept bucket.
+  // ORDER MATTERS in the UI load/collect loop — askingSpecials last so the
+  // card renders after NO in the Primary Decision grid.
+  const FUC_BUCKETS = ['yes', 'no', 'askingSpecials', 'reprompt', 'hesitant', 'complex'];
 
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};
