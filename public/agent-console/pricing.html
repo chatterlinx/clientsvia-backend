@@ -770,6 +770,7 @@
 <!-- ════════════════════════════════════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════════════════════════════════════ -->
+<script src="/agent-console/lib/auth.js"></script>
 <script>
 'use strict';
 
@@ -800,6 +801,9 @@ const CAT = {
 
 /* ── Bootstrap ─────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  // Auth gate — AgentConsoleAuth handles token validation + redirect to login on 401
+  if (!AgentConsoleAuth.requireAuth()) return;
+
   const params = new URLSearchParams(window.location.search);
   S.companyId  = params.get('companyId') || '';
 
@@ -873,22 +877,17 @@ function bindEvents() {
   });
 }
 
-/* ── API helpers ───────────────────────────────────────────────────────── */
+/* ── API helpers — delegate to AgentConsoleAuth.apiFetch() ─────────────────
+   AgentConsoleAuth handles: Bearer token injection, 401→login redirect,
+   JSON parsing, and error surfacing. Never call fetch() directly here.
+   ──────────────────────────────────────────────────────────────────────── */
 const API = `/api/admin/agent2/company/${location.search.match(/companyId=([^&]+)/)?.[1] || ''}/pricing`;
 
 async function apiFetch(path, opts = {}) {
-  const token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
-  const res = await fetch(path, {
+  return AgentConsoleAuth.apiFetch(path, {
     ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      ...(opts.headers || {})
-    }
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
   });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-  return json;
 }
 
 /* ── Load ──────────────────────────────────────────────────────────────── */
