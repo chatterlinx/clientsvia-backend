@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing Item — ClientVia</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ── Design tokens ───────────────────────────────────────────────────── */
+    :root {
+      --color-primary:    #0ea5e9;
+      --color-primary-dk: #0284c7;
+      --color-advisor:    #f59e0b;
+      --bg-page:          #f0f9ff;
+      --bg-card:          #ffffff;
+      --bg-header:        #ffffff;
+      --text-primary:     #0f172a;
+      --text-muted:       #64748b;
+      --text-xs:          #94a3b8;
+      --border:           #e2e8f0;
+      --border-focus:     #0ea5e9;
+      --radius-card:      12px;
+      --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    }
+
+    /* ── Base ────────────────────────────────────────────────────────────── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    .page-header {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: white;
+      color: var(--text-muted); font-size: 13px; font-weight: 500;
+      cursor: pointer; text-decoration: none;
+      transition: background .15s, color .15s;
+    }
+    .btn-back:hover { background: #f8fafc; color: var(--text-primary); }
+    .header-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+    .header-company { font-size: 13px; color: var(--text-muted); margin-left: 4px; }
+    .header-spacer { flex: 1; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Form page wrapper ───────────────────────────────────────────────── */
+    .form-page {
+      max-width: 720px;
+      margin: 32px auto;
+      padding: 0 24px 64px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* ── Form sections ───────────────────────────────────────────────────── */
+    .form-section {
+      border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; background: white;
+      box-shadow: var(--shadow-card);
+    }
+    .form-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: #f8fafc;
+      cursor: pointer; user-select: none;
+    }
+    .form-section-title {
+      font-size: 13px; font-weight: 600; color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 20px; border: 1px solid;
+    }
+    .section-badge.optional { background: #f8fafc; border-color: #cbd5e1; color: #94a3b8; }
+    .section-badge.layer1   { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
+    .section-badge.layer2   { background: #dcfce7; border-color: #86efac; color: #15803d; }
+    .section-badge.layer3   { background: #fef9c3; border-color: #fde047; color: #92400e; }
+    .section-badge.advisor  { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+
+    .chevron { transition: transform .2s; color: var(--text-xs); }
+    .chevron.open { transform: rotate(180deg); }
+
+    .form-section-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .form-section-body.collapsed { display: none; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .4px;
+    }
+    .form-input, .form-textarea {
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 14px; font-family: inherit;
+      outline: none; transition: border-color .15s; background: white;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--border-focus); }
+    .form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+    .form-hint { font-size: 11px; color: var(--text-xs); margin-top: 2px; }
+    .char-count { font-size: 11px; color: var(--text-xs); text-align: right; }
+    .char-count.warn { color: #f59e0b; }
+    .char-count.over { color: #ef4444; }
+
+    /* Keyword chip input */
+    .keyword-input-wrap {
+      border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+      display: flex; flex-wrap: wrap; gap: 4px; cursor: text;
+      min-height: 42px; transition: border-color .15s; background: white;
+    }
+    .keyword-input-wrap:focus-within { border-color: var(--border-focus); }
+    .kw-tag {
+      display: flex; align-items: center; gap: 4px;
+      background: #e0f2fe; color: #0369a1; border-radius: 4px;
+      padding: 2px 8px; font-size: 12px; font-weight: 500;
+    }
+    .kw-tag button {
+      border: none; background: none; color: #0369a1; cursor: pointer;
+      padding: 0; font-size: 14px; line-height: 1; display: flex;
+    }
+    .kw-tag button:hover { color: #dc2626; }
+    .kw-input-inner {
+      border: none; outline: none; font-size: 13px; min-width: 120px;
+      flex: 1; padding: 2px 4px; font-family: inherit; background: transparent;
+    }
+
+    /* Action radios */
+    .action-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .action-radio-label {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 8px;
+      border: 2px solid var(--border); cursor: pointer;
+      transition: all .15s;
+    }
+    .action-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f0f9ff; }
+    .action-radio-label.adv:has(input:checked) { border-color: var(--color-advisor); background: #fffbeb; }
+    .action-radio-label input { display: none; }
+    .action-radio-label .radio-dot {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid var(--border); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .action-radio-label:has(input:checked) .radio-dot {
+      border-color: var(--color-primary); background: var(--color-primary);
+    }
+    .action-radio-label.adv:has(input:checked) .radio-dot {
+      border-color: var(--color-advisor); background: var(--color-advisor);
+    }
+    .radio-dot::after {
+      content: ''; width: 6px; height: 6px; border-radius: 50%; background: white;
+    }
+    .radio-text strong { display: block; font-size: 13px; font-weight: 600; }
+    .radio-text small  { font-size: 11px; color: var(--text-muted); }
+
+    /* Active toggle */
+    .settings-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .toggle-lg { display: flex; align-items: center; gap: 8px; }
+    .toggle-lg input[type="checkbox"] {
+      appearance: none; width: 40px; height: 22px; border-radius: 11px;
+      background: #cbd5e1; cursor: pointer; position: relative;
+      transition: background .2s; flex-shrink: 0;
+    }
+    .toggle-lg input[type="checkbox"]::after {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      background: white; border-radius: 50%; top: 3px; left: 3px;
+      transition: transform .2s;
+    }
+    .toggle-lg input[type="checkbox"]:checked { background: var(--color-primary); }
+    .toggle-lg input[type="checkbox"]:checked::after { transform: translateX(18px); }
+    .toggle-lg label { font-size: 13px; font-weight: 500; cursor: pointer; }
+
+    /* Buttons */
+    .btn-primary {
+      padding: 9px 20px; border-radius: 8px; border: none;
+      background: var(--color-primary); color: white;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-secondary {
+      padding: 9px 16px; border-radius: 8px;
+      border: 1px solid var(--border); background: white;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      color: var(--text-muted); transition: all .15s;
+    }
+    .btn-secondary:hover { border-color: #94a3b8; color: var(--text-primary); }
+    .btn-danger {
+      padding: 9px 16px; border-radius: 8px; border: 1px solid #fca5a5;
+      background: #fef2f2; color: #dc2626;
+      font-size: 14px; font-weight: 500; cursor: pointer; transition: all .15s;
+    }
+    .btn-danger:hover { background: #fee2e2; }
+
+    /* Toast */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 10px; background: white;
+      border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.12);
+      font-size: 13px; font-weight: 500; min-width: 240px;
+      animation: slideIn .2s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .toast.success { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+    .toast.error   { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
+    .toast.info    { border-color: #bae6fd; background: #f0f9ff; color: #0369a1; }
+
+    @media (max-width: 600px) {
+      .form-page  { margin: 16px auto; padding: 0 12px 48px; }
+      .form-row   { grid-template-columns: 1fr; }
+      .header-actions .btn-secondary { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <a href="#" class="btn-back" id="btn-back">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    Back
+  </a>
+  <div class="header-divider"></div>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:#0ea5e9">
+    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+    <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 15h8M9 18h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <span class="header-title" id="page-title">Add Pricing Item</span>
+  <span class="header-company" id="header-company">—</span>
+  <div class="header-spacer"></div>
+  <div class="header-actions">
+    <button class="btn-danger" id="btn-delete" style="display:none" onclick="handleDelete()">Delete</button>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+    <button class="btn-primary" id="btn-save" onclick="handleSave()">Save Pricing Item</button>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     FORM PAGE
+════════════════════════════════════════════════════════════════════════ -->
+<div class="form-page">
+
+  <!-- ── SECTION: Service Identity ──────────────────────────────────────── -->
+  <div class="form-section">
+    <div class="form-section-header" onclick="toggleSection('identity')">
+      <span class="form-section-title">
+        🏷️ Service Identity
+        <span class="section-badge layer1">Required</span>
+      </span>
+      <svg class="chevron open" id="chevron-identity" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="form-section-body" id="body-identity">
+      <div class="form-row">
+        <div class="form-group full">
+          <label class="form-label">Service Label <span style="color:#ef4444">*</span></label>
+          <input class="form-input" id="f-label" type="text" placeholder="e.g. Residential Service Call" maxlength="120">
+          <span class="form-hint">Admin display name shown on the card header</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+          <input class="form-input" id="f-category" type="text" maxlength="80"
+            placeholder="e.g. Service Call, Flatbed Tow, Tune-Up…">
+          <span class="form-hint">For your own organisation — not used by the agent for matching</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Priority <span class="form-hint" style="text-transform:none">(lower = matched first)</span></label>
+          <input class="form-input" id="f-priority" type="number" min="1" max="999" value="100">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION: Keywords + Layer 1 ───────────────────────────────────── -->
+  <div class="form-section">
+    <div class="form-section-header" onclick="toggleSection('layer1')">
+      <span class="form-section-title">
+        🔑 Keywords &amp; Primary Answer
+        <span class="section-badge layer1">Layer 1</span>
+      </span>
+      <svg class="chevron open" id="chevron-layer1" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="form-section-body" id="body-layer1">
+      <div class="form-group">
+        <label class="form-label">Trigger Keywords <span class="form-hint" style="text-transform:none">(press Enter or comma to add)</span></label>
+        <div class="keyword-input-wrap" id="kw-wrap-1" onclick="document.getElementById('kw-input-1').focus()">
+          <input class="kw-input-inner" id="kw-input-1" type="text" placeholder="Type keyword and press Enter…">
+        </div>
+        <span class="form-hint">Phrases that trigger this pricing item (e.g. "service call", "diagnostic fee", "how much is a service call")</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Primary Response</label>
+        <textarea class="form-textarea" id="f-response" maxlength="500" placeholder="e.g. Our residential service call and diagnostic fee is $89."></textarea>
+        <div style="display:flex;justify-content:space-between">
+          <span class="form-hint">What the agent says when the caller asks about this service's cost</span>
+          <span class="char-count" id="cc-response">0 / 500</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">What's Included Detail <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+        <textarea class="form-textarea" id="f-includes" maxlength="600" style="min-height:60px" placeholder="e.g. The diagnostic includes a full system inspection, fault identification, and a written estimate before any work begins."></textarea>
+        <div style="display:flex;justify-content:space-between">
+          <span class="form-hint">Spoken when caller asks "what does that include?" — used if Layer 3 is not configured</span>
+          <span class="char-count" id="cc-includes">0 / 600</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION: Layer 2 ───────────────────────────────────────────────── -->
+  <div class="form-section">
+    <div class="form-section-header" onclick="toggleSection('layer2')">
+      <span class="form-section-title">
+        💬 First Follow-Up
+        <span class="section-badge layer2">Layer 2 — Optional</span>
+      </span>
+      <svg class="chevron" id="chevron-layer2" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="form-section-body collapsed" id="body-layer2">
+      <div class="form-group">
+        <label class="form-label">Layer 2 Keywords</label>
+        <div class="keyword-input-wrap" id="kw-wrap-2" onclick="document.getElementById('kw-input-2').focus()">
+          <input class="kw-input-inner" id="kw-input-2" type="text" placeholder="e.g. credited, applied to repair, go towards, waived…">
+        </div>
+        <span class="form-hint">Phrases that trigger this follow-up answer (e.g. "does that get credited?", "does it go towards the repair?")</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Layer 2 Response</label>
+        <textarea class="form-textarea" id="f-layer2response" maxlength="500" placeholder="e.g. Yes — for any repair over $200 we waive the diagnostic fee entirely."></textarea>
+        <div style="display:flex;justify-content:space-between">
+          <span class="form-hint">What the agent says for this follow-up question</span>
+          <span class="char-count" id="cc-l2r">0 / 500</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION: Layer 3 ───────────────────────────────────────────────── -->
+  <div class="form-section">
+    <div class="form-section-header" onclick="toggleSection('layer3')">
+      <span class="form-section-title">
+        🔍 Second Follow-Up
+        <span class="section-badge layer3">Layer 3 — Optional</span>
+      </span>
+      <svg class="chevron" id="chevron-layer3" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="form-section-body collapsed" id="body-layer3">
+      <div class="form-group">
+        <label class="form-label">Layer 3 Keywords</label>
+        <div class="keyword-input-wrap" id="kw-wrap-3" onclick="document.getElementById('kw-input-3').focus()">
+          <input class="kw-input-inner" id="kw-input-3" type="text" placeholder="e.g. what does it include, what comes with, what do you do…">
+        </div>
+        <span class="form-hint">Deep follow-up phrases ("what does the service include?", "what do your technicians do?")</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Layer 3 Response</label>
+        <textarea class="form-textarea" id="f-layer3response" maxlength="500" placeholder="e.g. The diagnostic includes a full system inspection, fault identification, and a written estimate before any work begins."></textarea>
+        <div style="display:flex;justify-content:space-between">
+          <span class="form-hint">Detailed inclusion or procedure answer</span>
+          <span class="char-count" id="cc-l3r">0 / 500</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION: Routing Action ────────────────────────────────────────── -->
+  <div class="form-section">
+    <div class="form-section-header" onclick="toggleSection('action')">
+      <span class="form-section-title">
+        ⚡ Routing Action
+        <span class="section-badge layer1">Required</span>
+      </span>
+      <svg class="chevron open" id="chevron-action" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="form-section-body" id="body-action">
+      <div class="action-radios">
+        <label class="action-radio-label">
+          <input type="radio" name="f-action" id="f-action-respond" value="RESPOND" checked onchange="onActionChange()">
+          <span class="radio-dot"></span>
+          <span class="radio-text">
+            <strong>💬 Give Price</strong>
+            <small>Agent reads the price — no follow-up action</small>
+          </span>
+        </label>
+        <label class="action-radio-label">
+          <input type="radio" name="f-action" id="f-action-book" value="RESPOND_THEN_BOOK" onchange="onActionChange()">
+          <span class="radio-dot"></span>
+          <span class="radio-text">
+            <strong>📅 Give Price + Offer to Book</strong>
+            <small>Agent reads price then offers to schedule</small>
+          </span>
+        </label>
+        <label class="action-radio-label adv">
+          <input type="radio" name="f-action" id="f-action-advisor" value="ADVISOR_CALLBACK" onchange="onActionChange()">
+          <span class="radio-dot"></span>
+          <span class="radio-text">
+            <strong>📞 Advisor Callback</strong>
+            <small>No price — collects info for specialist call-back</small>
+          </span>
+        </label>
+        <label class="action-radio-label adv">
+          <input type="radio" name="f-action" id="f-action-estimate" value="SCHEDULE_ESTIMATE" onchange="onActionChange()">
+          <span class="radio-dot"></span>
+          <span class="radio-text">
+            <strong>🗓 Schedule Estimate</strong>
+            <small>No price — books a free in-home estimate</small>
+          </span>
+        </label>
+        <label class="action-radio-label adv">
+          <input type="radio" name="f-action" id="f-action-transfer" value="TRANSFER" onchange="onActionChange()">
+          <span class="radio-dot"></span>
+          <span class="radio-text">
+            <strong>🔀 Transfer to Advisor</strong>
+            <small>No price — transfers caller to live agent</small>
+          </span>
+        </label>
+      </div>
+
+      <!-- Custom phrase — shown for ADVISOR_CALLBACK, SCHEDULE_ESTIMATE, TRANSFER -->
+      <div id="action-prompt-wrap" style="display:none;margin-top:12px">
+        <div class="form-group">
+          <label class="form-label">Custom Action Phrase <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
+          <textarea class="form-textarea" id="f-action-prompt" maxlength="400" placeholder="Leave blank to use the company-level default phrase from Voice Settings…"></textarea>
+          <div style="display:flex;justify-content:space-between">
+            <span class="form-hint">Item-level override — spoken instead of the Voice Settings default for this specific item</span>
+            <span class="char-count" id="cc-adv">0 / 400</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Active toggle ──────────────────────────────────────────────────── -->
+  <div class="settings-row" style="background:white;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow-card)">
+    <div class="toggle-lg">
+      <input type="checkbox" id="f-active" checked>
+      <label for="f-active">Active (agent will use this item)</label>
+    </div>
+  </div>
+
+</div><!-- /form-page -->
+
+<div class="toast-container" id="toasts"></div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════════════════ -->
+<script src="/agent-console/lib/auth.js"></script>
+<script>
+'use strict';
+
+/* ── State ──────────────────────────────────────────────────────────────── */
+const S = {
+  companyId: null,
+  itemId:    null,   // null = add mode
+  keywords:  { 1: [], 2: [], 3: [] }
+};
+
+/* ── API base ───────────────────────────────────────────────────────────── */
+let API = '';
+
+async function apiFetch(path, opts = {}) {
+  return AgentConsoleAuth.apiFetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+}
+
+/* ── Bootstrap ──────────────────────────────────────────────────────────── */
+(function bootstrap() {
+  if (typeof AgentConsoleAuth !== 'undefined') {
+    if (!AgentConsoleAuth.requireAuth()) return;
+  }
+
+  const params    = new URLSearchParams(window.location.search);
+  S.companyId     = params.get('companyId') || '';
+  S.itemId        = params.get('itemId')    || null;
+  API             = `/api/admin/agent2/company/${S.companyId}/pricing`;
+
+  if (!S.companyId) {
+    toast('error', 'No company selected', 'Add ?companyId=... to the URL');
+    return;
+  }
+
+  document.getElementById('header-company').textContent = `— ${S.companyId}`;
+  document.getElementById('btn-back').href = `/agent-console/pricing.html?companyId=${encodeURIComponent(S.companyId)}`;
+
+  if (S.itemId) {
+    document.getElementById('page-title').textContent = 'Edit Pricing Item';
+    document.getElementById('btn-delete').style.display = '';
+    loadItem();
+  } else {
+    document.getElementById('page-title').textContent = 'Add Pricing Item';
+    initEmptyForm();
+    document.getElementById('f-label').focus();
+  }
+
+  bindEvents();
+})();
+
+/* ── Load item for edit mode ────────────────────────────────────────────── */
+async function loadItem() {
+  try {
+    const data = await apiFetch(`${API}/${S.itemId}`);
+    const it   = data.item;
+    populateForm(it);
+    document.getElementById('f-label').focus();
+  } catch (err) {
+    toast('error', 'Failed to load item', err.message);
+  }
+}
+
+/* ── Populate form ──────────────────────────────────────────────────────── */
+function populateForm(it) {
+  document.getElementById('f-label').value    = it?.label    || '';
+  document.getElementById('f-category').value = it?.category || '';
+  document.getElementById('f-priority').value = it?.priority ?? 100;
+  document.getElementById('f-active').checked = it ? it.isActive : true;
+
+  document.getElementById('f-response').value       = it?.response      || '';
+  document.getElementById('f-includes').value       = it?.includesDetail || '';
+  document.getElementById('f-layer2response').value = it?.layer2Response || '';
+  document.getElementById('f-layer3response').value = it?.layer3Response || '';
+  document.getElementById('f-action-prompt').value  = it?.actionPrompt || it?.advisorCallbackPrompt || '';
+
+  S.keywords[1] = [...(it?.keywords       || [])];
+  S.keywords[2] = [...(it?.layer2Keywords || [])];
+  S.keywords[3] = [...(it?.layer3Keywords || [])];
+  [1, 2, 3].forEach(renderKeywordChips);
+
+  const action  = it?.action || 'RESPOND';
+  const radioEl = document.querySelector(`input[name="f-action"][value="${action}"]`);
+  if (radioEl) radioEl.checked = true;
+  else document.getElementById('f-action-respond').checked = true;
+  onActionChange();
+
+  updateCharCount('f-response',       'cc-response', 500);
+  updateCharCount('f-includes',       'cc-includes', 600);
+  updateCharCount('f-layer2response', 'cc-l2r',      500);
+  updateCharCount('f-layer3response', 'cc-l3r',      500);
+  updateCharCount('f-action-prompt',  'cc-adv',      400);
+
+  ensureOpen('identity'); ensureOpen('layer1'); ensureOpen('action');
+  if (!S.keywords[2].length && !it?.layer2Response) ensureCollapsed('layer2');
+  else ensureOpen('layer2');
+  if (!S.keywords[3].length && !it?.layer3Response) ensureCollapsed('layer3');
+  else ensureOpen('layer3');
+}
+
+function initEmptyForm() {
+  document.getElementById('f-priority').value = 100;
+  document.getElementById('f-active').checked = true;
+  ensureOpen('identity'); ensureOpen('layer1'); ensureOpen('action');
+  ensureCollapsed('layer2'); ensureCollapsed('layer3');
+}
+
+/* ── Events ─────────────────────────────────────────────────────────────── */
+function bindEvents() {
+  [
+    ['f-response',       'cc-response', 500],
+    ['f-includes',       'cc-includes', 600],
+    ['f-layer2response', 'cc-l2r',      500],
+    ['f-layer3response', 'cc-l3r',      500],
+    ['f-action-prompt',  'cc-adv',      400]
+  ].forEach(([fid, cid, max]) => {
+    document.getElementById(fid).addEventListener('input', () => updateCharCount(fid, cid, max));
+  });
+
+  [1, 2, 3].forEach(layer => {
+    const inp = document.getElementById(`kw-input-${layer}`);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        addKeyword(layer, inp.value.trim().replace(/,$/, ''));
+        inp.value = '';
+      } else if (e.key === 'Backspace' && !inp.value) {
+        const kws = S.keywords[layer];
+        if (kws.length) removeKeyword(layer, kws[kws.length - 1]);
+      }
+    });
+    inp.addEventListener('paste', e => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      text.split(/[,\n]/).map(t => t.trim()).filter(Boolean).forEach(kw => addKeyword(layer, kw));
+    });
+  });
+}
+
+/* ── Section collapse ───────────────────────────────────────────────────── */
+function toggleSection(name) {
+  const body    = document.getElementById(`body-${name}`);
+  const chevron = document.getElementById(`chevron-${name}`);
+  const open    = !body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', open);
+  chevron.classList.toggle('open', !open);
+}
+function ensureOpen(name) {
+  document.getElementById(`body-${name}`).classList.remove('collapsed');
+  document.getElementById(`chevron-${name}`).classList.add('open');
+}
+function ensureCollapsed(name) {
+  document.getElementById(`body-${name}`).classList.add('collapsed');
+  document.getElementById(`chevron-${name}`).classList.remove('open');
+}
+
+/* ── Action radio change ────────────────────────────────────────────────── */
+function onActionChange() {
+  const action      = document.querySelector('input[name="f-action"]:checked')?.value || 'RESPOND';
+  const needsPrompt = ['ADVISOR_CALLBACK', 'SCHEDULE_ESTIMATE', 'TRANSFER'].includes(action);
+  document.getElementById('action-prompt-wrap').style.display = needsPrompt ? '' : 'none';
+}
+
+/* ── Keyword chips ──────────────────────────────────────────────────────── */
+function addKeyword(layer, kw) {
+  const val = kw.toLowerCase().trim();
+  if (!val || S.keywords[layer].includes(val)) return;
+  S.keywords[layer].push(val);
+  renderKeywordChips(layer);
+}
+
+function removeKeyword(layer, kw) {
+  S.keywords[layer] = S.keywords[layer].filter(k => k !== kw);
+  renderKeywordChips(layer);
+}
+
+function renderKeywordChips(layer) {
+  const wrap = document.getElementById(`kw-wrap-${layer}`);
+  const inp  = document.getElementById(`kw-input-${layer}`);
+  wrap.querySelectorAll('.kw-tag').forEach(el => el.remove());
+  S.keywords[layer].forEach(kw => {
+    const tag = document.createElement('span');
+    tag.className = 'kw-tag';
+    tag.innerHTML = `${esc(kw)}<button onclick="removeKeyword(${layer},'${esc(kw)}')" title="Remove">×</button>`;
+    wrap.insertBefore(tag, inp);
+  });
+}
+
+/* ── Char counters ──────────────────────────────────────────────────────── */
+function updateCharCount(fid, cid, max) {
+  const len = document.getElementById(fid).value.length;
+  const el  = document.getElementById(cid);
+  el.textContent = `${len} / ${max}`;
+  el.className   = 'char-count' + (len > max ? ' over' : len > max * 0.85 ? ' warn' : '');
+}
+
+/* ── Save ───────────────────────────────────────────────────────────────── */
+async function handleSave() {
+  const label = document.getElementById('f-label').value.trim();
+  if (!label) { toast('error', 'Label required', 'Please enter a service label'); return; }
+
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const body = {
+    label,
+    category:       document.getElementById('f-category').value.trim(),
+    priority:       parseInt(document.getElementById('f-priority').value) || 100,
+    keywords:       S.keywords[1],
+    response:       document.getElementById('f-response').value.trim(),
+    includesDetail: document.getElementById('f-includes').value.trim(),
+    layer2Keywords: S.keywords[2],
+    layer2Response: document.getElementById('f-layer2response').value.trim(),
+    layer3Keywords: S.keywords[3],
+    layer3Response: document.getElementById('f-layer3response').value.trim(),
+    action:         document.querySelector('input[name="f-action"]:checked')?.value || 'RESPOND',
+    actionPrompt:   document.getElementById('f-action-prompt').value.trim(),
+    isActive:       document.getElementById('f-active').checked
+  };
+
+  try {
+    if (S.itemId) {
+      await apiFetch(`${API}/${S.itemId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      toast('success', 'Updated', `"${label}" saved`);
+    } else {
+      await apiFetch(API, { method: 'POST', body: JSON.stringify(body) });
+      toast('success', 'Created', `"${label}" added`);
+    }
+    setTimeout(goBack, 800);
+  } catch (err) {
+    toast('error', 'Save failed', err.message);
+    btn.disabled = false; btn.textContent = 'Save Pricing Item';
+  }
+}
+
+/* ── Delete ─────────────────────────────────────────────────────────────── */
+async function handleDelete() {
+  if (!S.itemId) return;
+  const label = document.getElementById('f-label').value.trim() || 'this item';
+  if (!confirm(`Delete "${label}"?\n\nThis will permanently remove it.`)) return;
+  try {
+    await apiFetch(`${API}/${S.itemId}/hard`, { method: 'DELETE' });
+    toast('info', 'Deleted', `"${label}" removed`);
+    setTimeout(goBack, 800);
+  } catch (err) {
+    toast('error', 'Delete failed', err.message);
+  }
+}
+
+/* ── Navigation ─────────────────────────────────────────────────────────── */
+function goBack() {
+  window.location.href = `/agent-console/pricing.html?companyId=${encodeURIComponent(S.companyId)}`;
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+function toast(type, title, msg) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<strong>${esc(title)}</strong>${msg ? ` — ${esc(msg)}` : ''}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

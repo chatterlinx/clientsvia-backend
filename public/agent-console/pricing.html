@@ -233,45 +233,6 @@
     .empty-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
     .empty-desc  { font-size: 14px; color: var(--text-muted); line-height: 1.6; max-width: 400px; margin: 0 auto 24px; }
 
-    /* ── Modal ───────────────────────────────────────────────────────────── */
-    .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,.45);
-      z-index: 1000; display: none; align-items: flex-start;
-      justify-content: center; overflow-y: auto; padding: 24px 16px;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal {
-      background: white; border-radius: 16px; width: 100%; max-width: 680px;
-      box-shadow: var(--shadow-modal); margin: auto;
-      display: flex; flex-direction: column;
-      max-height: calc(100vh - 48px);
-    }
-    .modal-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 20px 24px; border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .modal-title { font-size: 17px; font-weight: 700; }
-    .modal-close {
-      display: flex; align-items: center; justify-content: center;
-      width: 32px; height: 32px; border-radius: 8px;
-      border: 1px solid var(--border); background: white;
-      cursor: pointer; color: var(--text-muted); transition: all .15s;
-    }
-    .modal-close:hover { background: #f8fafc; color: var(--text-primary); }
-    .modal-body {
-      padding: 24px; display: flex; flex-direction: column; gap: 20px;
-      overflow-y: auto;
-      flex: 1;
-      min-height: 0;               /* flex default min-height:auto blocks overflow — must be 0 */
-      overscroll-behavior: contain; /* stops scroll events bubbling up to the backdrop */
-    }
-    .modal-footer {
-      display: flex; align-items: center; gap: 10px;
-      padding: 16px 24px; border-top: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .modal-spacer { flex: 1; }
 
     /* Form sections */
     .form-section {
@@ -484,7 +445,7 @@
   <span class="header-title">Service Pricing</span>
   <span class="header-company" id="header-company">—</span>
   <div class="header-spacer"></div>
-  <button class="btn-add" id="btn-add" onclick="openModal()">
+  <button class="btn-add" id="btn-add" onclick="gotoItemPage()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
     </svg>
@@ -586,239 +547,6 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════════════
-     ADD / EDIT MODAL
-════════════════════════════════════════════════════════════════════════ -->
-<div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this)closeModal()">
-  <div class="modal" id="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modal-title">Add Pricing Item</span>
-      <button class="modal-close" id="modal-close" onclick="closeModal()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class="modal-body">
-
-      <!-- ── SECTION: Service Identity ───────────────────────────────────── -->
-      <div class="form-section">
-        <div class="form-section-header" onclick="toggleSection('identity')">
-          <span class="form-section-title">
-            🏷️ Service Identity
-            <span class="section-badge layer1">Required</span>
-          </span>
-          <svg class="chevron open" id="chevron-identity" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="form-section-body" id="body-identity">
-          <div class="form-row">
-            <div class="form-group full">
-              <label class="form-label">Service Label <span style="color:#ef4444">*</span></label>
-              <input class="form-input" id="f-label" type="text" placeholder="e.g. Residential Service Call" maxlength="120">
-              <span class="form-hint">Admin display name shown on the card header</span>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Category <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
-              <input class="form-input" id="f-category" type="text" maxlength="80"
-                placeholder="e.g. Service Call, Flatbed Tow, Tune-Up…">
-              <span class="form-hint">For your own organisation — not used by the agent for matching</span>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Priority <span class="form-hint" style="text-transform:none">(lower = matched first)</span></label>
-              <input class="form-input" id="f-priority" type="number" min="1" max="999" value="100">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── SECTION: Keywords + Layer 1 ────────────────────────────────── -->
-      <div class="form-section">
-        <div class="form-section-header" onclick="toggleSection('layer1')">
-          <span class="form-section-title">
-            🔑 Keywords &amp; Primary Answer
-            <span class="section-badge layer1">Layer 1</span>
-          </span>
-          <svg class="chevron open" id="chevron-layer1" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="form-section-body" id="body-layer1">
-          <div class="form-group">
-            <label class="form-label">Trigger Keywords <span class="form-hint" style="text-transform:none">(press Enter or comma to add)</span></label>
-            <div class="keyword-input-wrap" id="kw-wrap-1" onclick="document.getElementById('kw-input-1').focus()">
-              <input class="kw-input-inner" id="kw-input-1" type="text" placeholder="Type keyword and press Enter…">
-            </div>
-            <span class="form-hint">Phrases that trigger this pricing item (e.g. "service call", "diagnostic fee", "how much is a service call")</span>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Primary Response</label>
-            <textarea class="form-textarea" id="f-response" maxlength="500" placeholder="e.g. Our residential service call and diagnostic fee is $89."></textarea>
-            <div style="display:flex;justify-content:space-between">
-              <span class="form-hint">What the agent says when the caller asks about this service's cost</span>
-              <span class="char-count" id="cc-response">0 / 500</span>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">What's Included Detail <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
-            <textarea class="form-textarea" id="f-includes" maxlength="600" style="min-height:60px" placeholder="e.g. The diagnostic includes a full system inspection, fault identification, and a written estimate before any work begins."></textarea>
-            <div style="display:flex;justify-content:space-between">
-              <span class="form-hint">Spoken when caller asks "what does that include?" — used if Layer 3 is not configured</span>
-              <span class="char-count" id="cc-includes">0 / 600</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── SECTION: Layer 2 ────────────────────────────────────────────── -->
-      <div class="form-section">
-        <div class="form-section-header" onclick="toggleSection('layer2')">
-          <span class="form-section-title">
-            💬 First Follow-Up
-            <span class="section-badge layer2">Layer 2 — Optional</span>
-          </span>
-          <svg class="chevron" id="chevron-layer2" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="form-section-body collapsed" id="body-layer2">
-          <div class="form-group">
-            <label class="form-label">Layer 2 Keywords</label>
-            <div class="keyword-input-wrap" id="kw-wrap-2" onclick="document.getElementById('kw-input-2').focus()">
-              <input class="kw-input-inner" id="kw-input-2" type="text" placeholder="e.g. credited, applied to repair, go towards, waived…">
-            </div>
-            <span class="form-hint">Phrases that trigger this follow-up answer (e.g. "does that get credited?", "does it go towards the repair?")</span>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Layer 2 Response</label>
-            <textarea class="form-textarea" id="f-layer2response" maxlength="500" placeholder="e.g. Yes — for any repair over $200 we waive the diagnostic fee entirely."></textarea>
-            <div style="display:flex;justify-content:space-between">
-              <span class="form-hint">What the agent says for this follow-up question</span>
-              <span class="char-count" id="cc-l2r">0 / 500</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── SECTION: Layer 3 ────────────────────────────────────────────── -->
-      <div class="form-section">
-        <div class="form-section-header" onclick="toggleSection('layer3')">
-          <span class="form-section-title">
-            🔍 Second Follow-Up
-            <span class="section-badge layer3">Layer 3 — Optional</span>
-          </span>
-          <svg class="chevron" id="chevron-layer3" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="form-section-body collapsed" id="body-layer3">
-          <div class="form-group">
-            <label class="form-label">Layer 3 Keywords</label>
-            <div class="keyword-input-wrap" id="kw-wrap-3" onclick="document.getElementById('kw-input-3').focus()">
-              <input class="kw-input-inner" id="kw-input-3" type="text" placeholder="e.g. what does it include, what comes with, what do you do…">
-            </div>
-            <span class="form-hint">Deep follow-up phrases ("what does the service include?", "what do your technicians do?")</span>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Layer 3 Response</label>
-            <textarea class="form-textarea" id="f-layer3response" maxlength="500" placeholder="e.g. The diagnostic includes a full system inspection, fault identification, and a written estimate before any work begins."></textarea>
-            <div style="display:flex;justify-content:space-between">
-              <span class="form-hint">Detailed inclusion or procedure answer</span>
-              <span class="char-count" id="cc-l3r">0 / 500</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── SECTION: Routing Action ─────────────────────────────────────── -->
-      <div class="form-section">
-        <div class="form-section-header" onclick="toggleSection('action')">
-          <span class="form-section-title">
-            ⚡ Routing Action
-            <span class="section-badge layer1">Required</span>
-          </span>
-          <svg class="chevron open" id="chevron-action" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="form-section-body" id="body-action">
-          <div class="action-radios">
-            <label class="action-radio-label">
-              <input type="radio" name="f-action" id="f-action-respond" value="RESPOND" checked onchange="onActionChange()">
-              <span class="radio-dot"></span>
-              <span class="radio-text">
-                <strong>💬 Give Price</strong>
-                <small>Agent reads the price — no follow-up action</small>
-              </span>
-            </label>
-            <label class="action-radio-label">
-              <input type="radio" name="f-action" id="f-action-book" value="RESPOND_THEN_BOOK" onchange="onActionChange()">
-              <span class="radio-dot"></span>
-              <span class="radio-text">
-                <strong>📅 Give Price + Offer to Book</strong>
-                <small>Agent reads price then offers to schedule</small>
-              </span>
-            </label>
-            <label class="action-radio-label adv">
-              <input type="radio" name="f-action" id="f-action-advisor" value="ADVISOR_CALLBACK" onchange="onActionChange()">
-              <span class="radio-dot"></span>
-              <span class="radio-text">
-                <strong>📞 Advisor Callback</strong>
-                <small>No price — collects info for specialist call-back</small>
-              </span>
-            </label>
-            <label class="action-radio-label adv">
-              <input type="radio" name="f-action" id="f-action-estimate" value="SCHEDULE_ESTIMATE" onchange="onActionChange()">
-              <span class="radio-dot"></span>
-              <span class="radio-text">
-                <strong>🗓 Schedule Estimate</strong>
-                <small>No price — books a free in-home estimate</small>
-              </span>
-            </label>
-            <label class="action-radio-label adv">
-              <input type="radio" name="f-action" id="f-action-transfer" value="TRANSFER" onchange="onActionChange()">
-              <span class="radio-dot"></span>
-              <span class="radio-text">
-                <strong>🔀 Transfer to Advisor</strong>
-                <small>No price — transfers caller to live agent</small>
-              </span>
-            </label>
-          </div>
-
-          <!-- Custom phrase — shown for ADVISOR_CALLBACK, SCHEDULE_ESTIMATE, TRANSFER -->
-          <div id="action-prompt-wrap" style="display:none;margin-top:12px">
-            <div class="form-group">
-              <label class="form-label">Custom Action Phrase <span class="section-badge optional" style="font-size:9px;vertical-align:middle">Optional</span></label>
-              <textarea class="form-textarea" id="f-action-prompt" maxlength="400" placeholder="Leave blank to use the company-level default phrase from Voice Settings above…"></textarea>
-              <div style="display:flex;justify-content:space-between">
-                <span class="form-hint">Item-level override — spoken instead of the Voice Settings default for this specific item</span>
-                <span class="char-count" id="cc-adv">0 / 400</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Settings row ────────────────────────────────────────────────── -->
-      <div class="settings-row">
-        <div class="toggle-lg">
-          <input type="checkbox" id="f-active" checked>
-          <label for="f-active">Active (agent will use this item)</label>
-        </div>
-      </div>
-
-    </div><!-- /modal-body -->
-
-    <div class="modal-footer">
-      <button class="btn-danger" id="btn-delete" style="display:none" onclick="handleDelete()">Delete</button>
-      <div class="modal-spacer"></div>
-      <button class="btn-secondary" id="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-primary" id="btn-save" onclick="handleSave()">Save Pricing Item</button>
-    </div>
-  </div>
-</div>
 
 <!-- ════════════════════════════════════════════════════════════════════════
      TOAST CONTAINER
@@ -837,10 +565,8 @@ const S = {
   companyId:     null,
   items:         [],      // full list from API
   filtered:      [],      // after filter + search
-  editingId:     null,    // null = add mode
   filter:        'all',
   catFilter:     '',      // free-text category filter
-  keywords:      { 1: [], 2: [], 3: [] },  // per-layer keyword arrays in modal
   voiceSettings: {}       // pricingVoiceSettings from company doc
 };
 
@@ -893,12 +619,6 @@ async function apiFetch(path, opts = {}) {
 
 /* ── Events ────────────────────────────────────────────────────────────── */
 function bindEvents() {
-  document.getElementById('btn-add').addEventListener('click', () => openModal());
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', e => {
-    if (e.target === document.getElementById('modal-backdrop')) closeModal();
-  });
-
   // Filter buttons
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -915,37 +635,12 @@ function bindEvents() {
     applyFilter();
   });
   document.getElementById('search').addEventListener('input', applyFilter);
+}
 
-  // Char counters
-  [
-    ['f-response', 'cc-response', 500],
-    ['f-includes', 'cc-includes', 600],
-    ['f-layer2response', 'cc-l2r', 500],
-    ['f-layer3response', 'cc-l3r', 500],
-    ['f-action-prompt', 'cc-adv', 400]
-  ].forEach(([fid, cid, max]) => {
-    document.getElementById(fid).addEventListener('input', () => updateCharCount(fid, cid, max));
-  });
-
-  // Keyword inputs (all three layers)
-  [1, 2, 3].forEach(layer => {
-    const inp = document.getElementById(`kw-input-${layer}`);
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ',') {
-        e.preventDefault();
-        addKeyword(layer, inp.value.trim().replace(/,$/, ''));
-        inp.value = '';
-      } else if (e.key === 'Backspace' && !inp.value) {
-        const kws = S.keywords[layer];
-        if (kws.length) removeKeyword(layer, kws[kws.length - 1]);
-      }
-    });
-    inp.addEventListener('paste', e => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      text.split(/[,\n]/).map(t => t.trim()).filter(Boolean).forEach(kw => addKeyword(layer, kw));
-    });
-  });
+/* ── Navigate to item page ─────────────────────────────────────────────── */
+function gotoItemPage(id = null) {
+  const base = `/agent-console/pricing-item.html?companyId=${encodeURIComponent(S.companyId)}`;
+  window.location.href = id ? `${base}&itemId=${encodeURIComponent(id)}` : base;
 }
 
 /* ── Voice Settings card ───────────────────────────────────────────────── */
@@ -1046,7 +741,7 @@ function renderGrid() {
           ? 'Try adjusting your filters or search term.'
           : 'Add your first service pricing item to get started. The agent will use these facts to answer callers instantly.'
         }</div>
-        ${!S.items.length ? `<button class="btn-add" onclick="openModal()" style="margin:0 auto">Add First Pricing Item</button>` : ''}
+        ${!S.items.length ? `<button class="btn-add" onclick="gotoItemPage()" style="margin:0 auto">Add First Pricing Item</button>` : ''}
       </div>`;
     return;
   }
@@ -1110,7 +805,7 @@ function renderCard(it) {
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-      <button class="btn-icon-sm" title="Edit" onclick="openModal('${it._id}')">
+      <button class="btn-icon-sm" title="Edit" onclick="gotoItemPage('${it._id}')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1127,189 +822,6 @@ function renderCard(it) {
       <audio id="vaudio-${it._id}" controls style="width:100%;height:32px;margin-top:6px"></audio>
     </div>
   </div>`;
-}
-
-/* ── Modal ─────────────────────────────────────────────────────────────── */
-function openModal(id = null) {
-  S.editingId = id;
-  const isEdit = !!id;
-  const it     = isEdit ? S.items.find(i => i._id === id) : null;
-
-  document.getElementById('modal-title').textContent = isEdit ? 'Edit Pricing Item' : 'Add Pricing Item';
-  document.getElementById('btn-delete').style.display = isEdit ? '' : 'none';
-
-  // Identity
-  document.getElementById('f-label').value    = it?.label    || '';
-  document.getElementById('f-category').value = it?.category || '';
-  document.getElementById('f-priority').value = it?.priority ?? 100;
-  document.getElementById('f-active').checked = it ? it.isActive : true;
-
-  // Responses
-  document.getElementById('f-response').value       = it?.response      || '';
-  document.getElementById('f-includes').value       = it?.includesDetail || '';
-  document.getElementById('f-layer2response').value = it?.layer2Response || '';
-  document.getElementById('f-layer3response').value = it?.layer3Response || '';
-  // Populate action prompt from new field, fall back to legacy for existing items
-  document.getElementById('f-action-prompt').value  = it?.actionPrompt || it?.advisorCallbackPrompt || '';
-
-  // Keywords
-  S.keywords[1] = [...(it?.keywords       || [])];
-  S.keywords[2] = [...(it?.layer2Keywords || [])];
-  S.keywords[3] = [...(it?.layer3Keywords || [])];
-  [1, 2, 3].forEach(renderKeywordChips);
-
-  // Action — set the matching radio
-  const action = it?.action || 'RESPOND';
-  const radioEl = document.querySelector(`input[name="f-action"][value="${action}"]`);
-  if (radioEl) radioEl.checked = true;
-  else document.getElementById('f-action-respond').checked = true;
-  onActionChange();
-
-  // Char counts
-  updateCharCount('f-response', 'cc-response', 500);
-  updateCharCount('f-includes', 'cc-includes', 600);
-  updateCharCount('f-layer2response', 'cc-l2r', 500);
-  updateCharCount('f-layer3response', 'cc-l3r', 500);
-  updateCharCount('f-action-prompt', 'cc-adv', 400);
-
-  // Expand Layer 1 + action sections; collapse optional if empty
-  ensureOpen('identity'); ensureOpen('layer1'); ensureOpen('action');
-  if (!S.keywords[2].length && !it?.layer2Response) ensureCollapsed('layer2');
-  else ensureOpen('layer2');
-  if (!S.keywords[3].length && !it?.layer3Response) ensureCollapsed('layer3');
-  else ensureOpen('layer3');
-
-  document.getElementById('modal-backdrop').classList.add('open');
-  document.getElementById('f-label').focus();
-}
-
-function closeModal() {
-  document.getElementById('modal-backdrop').classList.remove('open');
-  S.editingId = null;
-}
-
-/* ── Section collapse ──────────────────────────────────────────────────── */
-function toggleSection(name) {
-  const body    = document.getElementById(`body-${name}`);
-  const chevron = document.getElementById(`chevron-${name}`);
-  const open    = !body.classList.contains('collapsed');
-  body.classList.toggle('collapsed', open);
-  chevron.classList.toggle('open', !open);
-}
-function ensureOpen(name) {
-  document.getElementById(`body-${name}`).classList.remove('collapsed');
-  document.getElementById(`chevron-${name}`).classList.add('open');
-}
-function ensureCollapsed(name) {
-  document.getElementById(`body-${name}`).classList.add('collapsed');
-  document.getElementById(`chevron-${name}`).classList.remove('open');
-}
-
-/* ── Action radio change ───────────────────────────────────────────────── */
-function onActionChange() {
-  const action  = document.querySelector('input[name="f-action"]:checked')?.value || 'RESPOND';
-  const needsPrompt = ['ADVISOR_CALLBACK', 'SCHEDULE_ESTIMATE', 'TRANSFER'].includes(action);
-  document.getElementById('action-prompt-wrap').style.display = needsPrompt ? '' : 'none';
-}
-
-/* ── Keyword chips ─────────────────────────────────────────────────────── */
-function addKeyword(layer, kw) {
-  const val = kw.toLowerCase().trim();
-  if (!val || S.keywords[layer].includes(val)) return;
-  S.keywords[layer].push(val);
-  renderKeywordChips(layer);
-}
-
-function removeKeyword(layer, kw) {
-  S.keywords[layer] = S.keywords[layer].filter(k => k !== kw);
-  renderKeywordChips(layer);
-}
-
-function renderKeywordChips(layer) {
-  const wrap = document.getElementById(`kw-wrap-${layer}`);
-  const inp  = document.getElementById(`kw-input-${layer}`);
-  // Remove old tags
-  wrap.querySelectorAll('.kw-tag').forEach(el => el.remove());
-  // Re-insert before the input
-  S.keywords[layer].forEach(kw => {
-    const tag = document.createElement('span');
-    tag.className = 'kw-tag';
-    tag.innerHTML = `${esc(kw)}<button onclick="removeKeyword(${layer},'${esc(kw)}')" title="Remove">×</button>`;
-    wrap.insertBefore(tag, inp);
-  });
-}
-
-/* ── Char counters ─────────────────────────────────────────────────────── */
-function updateCharCount(fid, cid, max) {
-  const len = document.getElementById(fid).value.length;
-  const el  = document.getElementById(cid);
-  el.textContent = `${len} / ${max}`;
-  el.className   = 'char-count' + (len > max ? ' over' : len > max * 0.85 ? ' warn' : '');
-}
-
-/* ── Save ──────────────────────────────────────────────────────────────── */
-async function handleSave() {
-  const label = document.getElementById('f-label').value.trim();
-  if (!label) { toast('error', 'Label required', 'Please enter a service label'); return; }
-
-  const btn = document.getElementById('btn-save');
-  btn.disabled = true; btn.textContent = 'Saving…';
-
-  const body = {
-    label,
-    category:            document.getElementById('f-category').value.trim(),
-    priority:            parseInt(document.getElementById('f-priority').value) || 100,
-    keywords:            S.keywords[1],
-    response:            document.getElementById('f-response').value.trim(),
-    includesDetail:      document.getElementById('f-includes').value.trim(),
-    layer2Keywords:      S.keywords[2],
-    layer2Response:      document.getElementById('f-layer2response').value.trim(),
-    layer3Keywords:      S.keywords[3],
-    layer3Response:      document.getElementById('f-layer3response').value.trim(),
-    action:              document.querySelector('input[name="f-action"]:checked')?.value || 'RESPOND',
-    actionPrompt:        document.getElementById('f-action-prompt').value.trim(),
-    isActive:            document.getElementById('f-active').checked
-  };
-
-  try {
-    let item;
-    if (S.editingId) {
-      const data = await apiFetch(`${API}/${S.editingId}`, { method: 'PATCH', body: JSON.stringify(body) });
-      item = data.item;
-      const idx = S.items.findIndex(i => i._id === S.editingId);
-      if (idx !== -1) S.items[idx] = item;
-      toast('success', 'Updated', `"${item.label}" saved`);
-    } else {
-      const data = await apiFetch(API, { method: 'POST', body: JSON.stringify(body) });
-      item = data.item;
-      S.items.unshift(item);
-      toast('success', 'Created', `"${item.label}" added`);
-    }
-    closeModal();
-    applyFilter();
-    updateStats();
-  } catch (err) {
-    toast('error', 'Save failed', err.message);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Save Pricing Item';
-  }
-}
-
-/* ── Delete ────────────────────────────────────────────────────────────── */
-async function handleDelete() {
-  if (!S.editingId) return;
-  const it = S.items.find(i => i._id === S.editingId);
-  if (!confirm(`Delete "${it?.label || 'this item'}"?\n\nThis will permanently remove it.`)) return;
-  try {
-    await apiFetch(`${API}/${S.editingId}/hard`, { method: 'DELETE' });
-    S.items = S.items.filter(i => i._id !== S.editingId);
-    toast('info', 'Deleted', `"${it?.label}" removed`);
-    closeModal();
-    applyFilter();
-    updateStats();
-  } catch (err) {
-    toast('error', 'Delete failed', err.message);
-  }
 }
 
 async function quickDelete(id, label) {
