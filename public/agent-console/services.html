@@ -620,9 +620,6 @@ async function loadContainers() {
   try {
     const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
 
-    // Fetch company name for header
-    _loadCompanyName();
-
     S.containers = data.containers || [];
     _updateStats();
     _populateCatFilter();
@@ -639,14 +636,6 @@ async function loadSettings() {
     S.kbSettings = data.knowledgeBaseSettings || {};
     _renderSettings();
   } catch (_e) { /* Non-fatal — settings load fails gracefully */ }
-}
-
-async function _loadCompanyName() {
-  try {
-    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}`);
-    const name = data.company?.companyName || data.company?.name || '';
-    if (name) document.getElementById('headerCompany').textContent = `— ${name}`;
-  } catch (_e) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
