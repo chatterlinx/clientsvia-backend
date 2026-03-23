@@ -469,11 +469,11 @@
   <span class="header-title">Service Pricing</span>
   <span class="header-company" id="header-company">—</span>
   <div class="header-spacer"></div>
-  <button class="btn-add" id="btn-add">
+  <button class="btn-add" id="btn-add" onclick="openModal()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
     </svg>
-    Add Pricing Item
+    + Add Pricing Item
   </button>
 </header>
 
@@ -546,11 +546,11 @@
 <!-- ════════════════════════════════════════════════════════════════════════
      ADD / EDIT MODAL
 ════════════════════════════════════════════════════════════════════════ -->
-<div class="modal-backdrop" id="modal-backdrop">
+<div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal">
     <div class="modal-header">
       <span class="modal-title" id="modal-title">Add Pricing Item</span>
-      <button class="modal-close" id="modal-close">
+      <button class="modal-close" id="modal-close" onclick="closeModal()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
           <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
@@ -799,16 +799,18 @@ const CAT = {
   other:         { label: 'Other',               color: '#94a3b8' }
 };
 
-/* ── Bootstrap ─────────────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  // Auth gate — AgentConsoleAuth handles token validation + redirect to login on 401
-  if (!AgentConsoleAuth.requireAuth()) return;
+/* ── Bootstrap — IIFE, runs synchronously after DOM is rendered ─────────── */
+(function bootstrap() {
+  // Auth gate — script is at bottom of <body>, DOM is already ready
+  // typeof guard: if auth.js hiccups, UI still boots (bindEvents still runs)
+  if (typeof AgentConsoleAuth !== 'undefined') {
+    if (!AgentConsoleAuth.requireAuth()) return;
+  }
 
   const params = new URLSearchParams(window.location.search);
   S.companyId  = params.get('companyId') || '';
 
   if (!S.companyId) {
-    showGrid([]);
     toast('error', 'No company selected', 'Add ?companyId=... to the URL');
     return;
   }
@@ -818,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   bindEvents();
   loadItems();
-});
+})();
 
 /* ── Events ────────────────────────────────────────────────────────────── */
 function bindEvents() {
