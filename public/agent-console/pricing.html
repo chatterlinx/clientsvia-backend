@@ -244,10 +244,13 @@
     .modal {
       background: white; border-radius: 16px; width: 100%; max-width: 680px;
       box-shadow: var(--shadow-modal); margin: auto;
+      display: flex; flex-direction: column;
+      max-height: calc(100vh - 48px); /* never taller than viewport */
     }
     .modal-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 20px 24px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
     .modal-title { font-size: 17px; font-weight: 700; }
     .modal-close {
@@ -257,10 +260,14 @@
       cursor: pointer; color: var(--text-muted); transition: all .15s;
     }
     .modal-close:hover { background: #f8fafc; color: var(--text-primary); }
-    .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .modal-body {
+      padding: 24px; display: flex; flex-direction: column; gap: 20px;
+      overflow-y: auto; flex: 1; /* fills space between header and footer, scrolls */
+    }
     .modal-footer {
       display: flex; align-items: center; gap: 10px;
       padding: 16px 24px; border-top: 1px solid var(--border);
+      flex-shrink: 0;
     }
     .modal-spacer { flex: 1; }
 
