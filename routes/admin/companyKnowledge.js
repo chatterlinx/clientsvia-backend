@@ -73,6 +73,7 @@ const ALLOWED_FIELDS = [
   'keywords',
   'wordLimit',
   'bookingAction',
+  'closingPrompt',
   'isActive',
   'priority'
 ];

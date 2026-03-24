@@ -171,6 +171,7 @@ function _buildSystemPrompt({
   bookingOfferMode,
   bookingOfferPhrase,
   bookingAction,
+  closingPrompt,
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -181,6 +182,9 @@ function _buildSystemPrompt({
   } else if (bookingOfferMode === 'fixed' && bookingOfferPhrase?.trim()) {
     const phrase = bookingOfferPhrase.trim();
     bookingInstruction = `5. After your answer, append this EXACT phrase — do not change a single word: "${phrase}"`;
+  } else if (closingPrompt?.trim()) {
+    // Admin-authored follow-up guidance — Groq adapts it naturally, not verbatim
+    bookingInstruction = `5. After answering, close with a follow-up in the spirit of this suggested phrase (adapt naturally — do not copy word for word): "${closingPrompt.trim()}"`;
   } else {
     // Groq natural close (default)
     bookingInstruction = '5. After answering, naturally invite the caller to schedule a visit. One warm, conversational sentence. Do not be repetitive if it doesn\'t fit the context.';
@@ -415,6 +419,7 @@ async function answer(opts) {
     bookingOfferMode:   kbSettings.bookingOfferMode   || 'groq',
     bookingOfferPhrase: kbSettings.bookingOfferPhrase || BUILT_IN_BOOKING_OFFER,
     bookingAction:      container.bookingAction        || 'offer_to_book',
+    closingPrompt:      container.closingPrompt        || '',
   });
 
   // User message — personalise with caller name if known

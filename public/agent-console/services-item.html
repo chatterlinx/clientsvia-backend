@@ -477,7 +477,32 @@
     </div>
   </div>
 
-  <!-- ── 5. Status ─────────────────────────────────────────────────────────── -->
+  <!-- ── 5. Suggested Follow-Up ───────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">💬</span>
+      <div>
+        <div class="form-card-title">Suggested Follow-Up</div>
+        <div class="form-card-subtitle">Optional closing language Groq adapts after answering — leave blank for Groq's natural close</div>
+      </div>
+      <span class="form-card-badge optional">Optional</span>
+    </div>
+    <div class="form-card-body">
+      <div class="form-group full">
+        <textarea id="fClosingPrompt" class="form-textarea" rows="3" maxlength="400"
+          placeholder='e.g. "Want me to get you signed up today, or do you have any questions about what&apos;s covered?"'
+          oninput="charCount(this, 400, 'ccClosingPrompt')"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:4px;gap:12px;">
+          <div class="form-hint" style="margin:0;">
+            Groq will adapt this naturally — it won't read it word-for-word. Only applies when Booking Action is <strong>Offer to Book</strong>. Ignored for fixed phrases, advisor callbacks, and answer-only.
+          </div>
+          <span class="char-count" id="ccClosingPrompt" style="flex-shrink:0;">0 / 400</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 6. Status ─────────────────────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">📡</span>
@@ -632,6 +657,12 @@ function _populateForm(c) {
 
   if (typeof c.wordLimit === 'number' && c.wordLimit >= 5) {
     document.getElementById('fWordLimit').value = c.wordLimit;
+  }
+
+  if (c.closingPrompt) {
+    const el = document.getElementById('fClosingPrompt');
+    el.value = c.closingPrompt;
+    charCount(el, 400, 'ccClosingPrompt');
   }
 
   // Booking action
@@ -837,8 +868,9 @@ async function saveContainer() {
     sections,
     keywords:      S.keywords,
     wordLimit:     (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
-    bookingAction: document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
-    isActive:      document.getElementById('fActive').checked,
+    bookingAction:  document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    closingPrompt:  (document.getElementById('fClosingPrompt')?.value || '').trim(),
+    isActive:       document.getElementById('fActive').checked,
     priority:      parseInt(document.getElementById('fPriority').value, 10) || 100,
   };
 

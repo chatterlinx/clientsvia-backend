@@ -168,6 +168,18 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'What happens after Groq answers: offer booking, collect callback info, or nothing.'
     },
 
+    // Optional follow-up guidance for Groq. When set, Groq closes in the spirit
+    // of this phrase instead of its generic "invite to schedule" default.
+    // Ignored when bookingAction = 'none' or 'fixed'.
+    // Example: "Want me to get you signed up today, or do you have any questions?"
+    closingPrompt: {
+      type:      String,
+      default:   '',
+      trim:      true,
+      maxlength: 400,
+      comment:   'Suggested closing / follow-up language for Groq to adapt after answering. Leave blank for Groq default.'
+    },
+
     // ─────────────────────────────────────────────────────────────────────────
     // STATE & ORDERING
     // ─────────────────────────────────────────────────────────────────────────
