@@ -376,6 +376,49 @@
     }
     @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
+    /* ── Priority optimizer modal ────────────────────────────────────────── */
+    .popt-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5); z-index: 1000;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .popt-overlay.open { display: flex; }
+    .popt-box {
+      background: white; border-radius: 16px; padding: 28px;
+      width: 100%; max-width: 620px; max-height: 80vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.22);
+    }
+    .popt-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .popt-title  { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+    .popt-sub    { font-size: 13px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5; }
+    .popt-table  { flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .popt-row {
+      display: grid; grid-template-columns: 1fr 72px 28px 72px;
+      align-items: center; gap: 8px;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .popt-row:last-child { border-bottom: none; }
+    .popt-row-head { background: #f8fafc; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .popt-card-name { font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .popt-card-name small { font-weight: 400; color: var(--text-xs); display: block; font-size: 11px; }
+    .popt-old { color: var(--text-muted); text-align: center; }
+    .popt-arrow { color: #94a3b8; text-align: center; font-size: 11px; }
+    .popt-new { font-weight: 700; color: #0284c7; text-align: center; }
+    .popt-new.changed { color: #0284c7; }
+    .popt-new.same    { color: var(--text-muted); font-weight: 400; }
+    .popt-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    .btn-optimize {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px;
+      border: 1px solid #bae6fd; background: #f0f9ff;
+      color: #0284c7; font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    .btn-optimize:hover    { background: #e0f2fe; border-color: #7dd3fc; }
+    .btn-optimize:disabled { opacity: .5; cursor: not-allowed; }
+
     /* ── Delete confirm dialog ───────────────────────────────────────────── */
     .dialog-overlay {
       display: none; position: fixed; inset: 0;
@@ -570,6 +613,9 @@
     <input type="text" class="search-input" id="searchInput" placeholder="Search containers…" oninput="applySearch(this.value)">
   </div>
   <div class="toolbar-spacer"></div>
+  <button class="btn-optimize" id="btnOptimize" onclick="optimizePriorities()" title="AI analyzes all cards and suggests optimal priority numbers">
+    🎯 Optimize Priorities
+  </button>
   <span style="font-size:13px;color:var(--text-muted);" id="resultCount"></span>
 </div>
 
@@ -588,6 +634,26 @@
     <div class="dialog-actions">
       <button class="btn-secondary" onclick="closeDeleteDialog()">Cancel</button>
       <button class="btn-danger" id="btnConfirmDelete" onclick="confirmDelete()">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Priority optimizer modal ───────────────────────────────────────────── -->
+<div class="popt-overlay" id="poptOverlay">
+  <div class="popt-box">
+    <div class="popt-header">
+      <span style="font-size:22px;">🎯</span>
+      <div class="popt-title">AI Priority Optimizer</div>
+    </div>
+    <div class="popt-sub" id="poptSub">Analyzing all cards and finding the optimal priority order…</div>
+    <div class="popt-table" id="poptTable">
+      <div class="popt-row popt-row-head">
+        <div>Container</div><div style="text-align:center">Current</div><div></div><div style="text-align:center">Suggested</div>
+      </div>
+    </div>
+    <div class="popt-footer">
+      <button class="btn-secondary" onclick="closePoptModal()">Cancel</button>
+      <button class="btn-primary" id="btnApplyOpt" onclick="applyPriorityOptimization()" disabled>Apply Suggestions</button>
     </div>
   </div>
 </div>
@@ -969,6 +1035,111 @@ async function toggleActive(id, isActive) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE DIALOG
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PRIORITY OPTIMIZER
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _poptProposals = [];
+
+async function optimizePriorities() {
+  const btn = document.getElementById('btnOptimize');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing…';
+
+  // Open modal in loading state
+  document.getElementById('poptSub').textContent   = 'AI is analyzing all cards and resolving keyword conflicts…';
+  document.getElementById('btnApplyOpt').disabled  = true;
+  const table = document.getElementById('poptTable');
+  table.innerHTML = `
+    <div class="popt-row popt-row-head">
+      <div>Container</div><div style="text-align:center">Current</div><div></div><div style="text-align:center">Suggested</div>
+    </div>
+    <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;">Thinking…</div>`;
+  document.getElementById('poptOverlay').classList.add('open');
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/optimize-priorities`,
+      { method: 'POST' }
+    );
+
+    if (!data.success) throw new Error(data.error || 'Optimization failed');
+
+    _poptProposals = data.proposals || [];
+    const changedCount = _poptProposals.filter(p => p.newPriority !== p.oldPriority).length;
+
+    // Render proposal table
+    const rows = _poptProposals.map(p => {
+      const changed   = p.newPriority !== p.oldPriority;
+      const newClass  = changed ? 'popt-new changed' : 'popt-new same';
+      const kcBadge   = p.kcId ? `<small>${p.kcId}</small>` : '';
+      const inactive  = !p.isActive ? ' <span style="color:#94a3b8;font-size:10px;">(inactive)</span>' : '';
+      return `
+        <div class="popt-row">
+          <div class="popt-card-name">${_esc(p.title)}${inactive}${kcBadge}</div>
+          <div class="popt-old">${p.oldPriority}</div>
+          <div class="popt-arrow">→</div>
+          <div class="${newClass}">${p.newPriority}</div>
+        </div>`;
+    }).join('');
+
+    table.innerHTML = `
+      <div class="popt-row popt-row-head">
+        <div>Container</div><div style="text-align:center">Current</div><div></div><div style="text-align:center">Suggested</div>
+      </div>
+      ${rows}`;
+
+    document.getElementById('poptSub').textContent =
+      changedCount > 0
+        ? `${changedCount} of ${_poptProposals.length} containers will be re-prioritized. Review and apply.`
+        : `All ${_poptProposals.length} containers already have optimal priorities — no changes needed.`;
+
+    document.getElementById('btnApplyOpt').disabled = (changedCount === 0);
+
+  } catch (err) {
+    document.getElementById('poptSub').textContent = `Error: ${err.message}`;
+    table.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-size:13px;">${_esc(err.message)}</div>`;
+  } finally {
+    btn.disabled    = false;
+    btn.innerHTML   = '🎯 Optimize Priorities';
+  }
+}
+
+function closePoptModal() {
+  document.getElementById('poptOverlay').classList.remove('open');
+  _poptProposals = [];
+}
+
+async function applyPriorityOptimization() {
+  if (!_poptProposals.length) return;
+  const btn = document.getElementById('btnApplyOpt');
+  btn.disabled = true;
+  btn.textContent = 'Applying…';
+
+  try {
+    const order = _poptProposals.map(p => ({ id: p.id, priority: p.newPriority }));
+    const data  = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/reorder`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order }) }
+    );
+    if (!data.success) throw new Error(data.error || 'Apply failed');
+
+    // Refresh local state so card priorities update immediately
+    order.forEach(o => {
+      const c = S.containers.find(c => c._id === o.id);
+      if (c) c.priority = o.priority;
+    });
+
+    closePoptModal();
+    _toast(`Priorities optimized — ${order.length} cards updated ✓`, 'success');
+  } catch (err) {
+    _toast(err.message || 'Apply failed', 'error');
+    btn.disabled    = false;
+    btn.textContent = 'Apply Suggestions';
+  }
+}
+
 function openDeleteDialog(id, title) {
   S.deleteTarget = id;
   document.getElementById('deleteDialogDesc').textContent =

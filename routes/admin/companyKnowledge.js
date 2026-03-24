@@ -511,6 +511,101 @@ router.post('/:companyId/knowledge/:id/generate-keywords', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/optimize-priorities
+// Analyzes ALL containers for the company and returns AI-proposed priority
+// numbers. Does NOT write — caller applies via POST /reorder when confirmed.
+// Returns: { success, proposals: [{ id, title, kcId, oldPriority, newPriority }] }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/optimize-priorities', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
+  }
+
+  try {
+    const containers = await CompanyKnowledgeContainer.find({ companyId })
+      .select('_id title category keywords kcId priority isActive')
+      .sort({ priority: 1, createdAt: 1 })
+      .lean();
+
+    if (!containers.length) {
+      return res.status(400).json({ success: false, error: 'No containers found for this company' });
+    }
+
+    // Compact summary for Groq — titles, categories, sample keywords only
+    const summary = containers.map((c, i) => {
+      const kwSample = (c.keywords || []).slice(0, 6).join(', ');
+      const kwExtra  = (c.keywords || []).length > 6 ? ` +${(c.keywords||[]).length - 6} more` : '';
+      return `${i + 1}. ID:${c._id} | "${c.title}" | cat:${c.category || 'none'} | kw:[${kwSample}${kwExtra}]`;
+    }).join('\n');
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   400,
+      temperature: 0.15,
+      system: `You are a priority optimizer for a phone AI knowledge base used by home-service companies.
+Given a list of Knowledge Containers, assign each a priority number so the most relevant container wins when a caller's question could match multiple containers.
+
+PRIORITY RULES:
+- Lower number = higher priority = wins tie-breaks when two containers score equally on keyword matching
+- Use multiples of 10 ONLY (10, 20, 30 … 990) — leaves room for future manual adjustments
+- SPECIFIC topic beats GENERAL: "Refrigerant Recharge (Freon)" beats "General Service Pricing"
+- Unique-keyword containers (little overlap risk) → higher numbers (200–500) — they rarely compete
+- High-overlap broad containers (general pricing, FAQs) → lower numbers so they serve as catch-all last resort
+- Promotions/Specials → medium range (40–100), specific trigger words reduce overlap risk
+- If only 1 container, assign priority 10
+
+Return ONLY a valid JSON array — no markdown, no explanation:
+[{"id":"...","priority":10},{"id":"...","priority":20}]`,
+      messages: [{ role: 'user', content: `CONTAINERS:\n${summary}` }],
+      jsonMode: false,
+    });
+
+    if (!result.response) {
+      return res.status(500).json({ success: false, error: 'Groq returned no response' });
+    }
+
+    // Strip any accidental markdown fences then parse
+    const raw = result.response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    let proposed;
+    try {
+      proposed = JSON.parse(raw);
+      if (!Array.isArray(proposed)) throw new Error('not an array');
+    } catch (_e) {
+      return res.status(500).json({ success: false, error: 'Groq returned unparseable priority list' });
+    }
+
+    // Build before/after proposals for the preview modal
+    const idToContainer = Object.fromEntries(containers.map(c => [String(c._id), c]));
+    const proposals = proposed
+      .filter(p => p.id && typeof p.priority === 'number' && idToContainer[String(p.id)])
+      .map(p => {
+        const c = idToContainer[String(p.id)];
+        return {
+          id:          String(p.id),
+          title:       c.title,
+          kcId:        c.kcId   || null,
+          isActive:    c.isActive,
+          oldPriority: c.priority ?? 100,
+          newPriority: Math.max(10, Math.round(p.priority / 10) * 10),
+        };
+      })
+      .sort((a, b) => a.newPriority - b.newPriority);
+
+    logger.info('[companyKnowledge] optimize-priorities', { companyId, count: proposals.length });
+    return res.json({ success: true, proposals });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] optimize-priorities error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to optimize priorities' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/suggest-label
 // Body: { content: string }   — one section's text content
 // Returns: { success, suggestion }
