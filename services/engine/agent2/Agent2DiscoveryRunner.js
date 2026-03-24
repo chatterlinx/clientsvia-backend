@@ -2152,47 +2152,46 @@ class Agent2DiscoveryRunner {
       // ════════════════════════════════════════════════════════════════════
       // SPFUQ × PFUQ INTERLOCK GATE
       // ════════════════════════════════════════════════════════════════════
-      // When both PFUQ (booking consent pending) AND SPFUQ (KC topic anchor)
-      // are active, the KC engine owns the turn — it answers the follow-up
-      // from the anchored container, then re-appends the booking question.
+      // When KC engine is active (default — engine !== 'scrabengine'), it
+      // owns ALL non-pure-YES turns inside the PFUQ block.
+      //
+      // Why: The KC engine switch at line ~3644 is never reached when PFUQ
+      // is active (PFUQ block returns early). This gate is the KC engine's
+      // entry point for PFUQ turns.
+      //
+      // KC engine handles SPFUQ internally:
+      //   - SPFUQ anchor exists  → KC_SPFUQ_CONTINUE (stays in topic)
+      //   - No anchor / new topic → KC_DIRECT_ANSWER (fresh container match)
+      //   - No KC match           → KC_LLM_FALLBACK (Claude COMPLEX)
+      // In all paths: Groq answer + pendingBookingQuestion appended + PFUQ
+      // re-asserted in state so consent fires cleanly next turn.
       //
       // Exception: pure booking YES (no embedded question or topic signal)
       // falls through to the bucket classifier below → YES → HANDOFF_BOOKING.
-      //
-      // This prevents "Okay, and what does it cover?" from being consumed
-      // by the PFUQ classifier as a bare YES and jumping straight to booking.
       // ════════════════════════════════════════════════════════════════════
-      {
-        let _spfuqAnchor = null;
-        try {
-          const SPFUQService = require('../kc/SPFUQService');
-          _spfuqAnchor = await SPFUQService.load(companyId, callSid);
-        } catch (_spfuqErr) { /* Redis miss — fall through */ }
+      if (discoveryCfg.engine !== 'scrabengine') {
+        const _lc = (input || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
+        const _hasQ = _lc.includes('?') ||
+          /\b(what|how|why|when|which|where|does|can you|do you|is it|is there|include|cover|tell me|explain|about|more)\b/.test(_lc);
+        const _pureYes = !_hasQ &&
+          /\b(yes|yeah|yep|yup|sure|ok|okay|book|schedule|go ahead|absolutely|lets do|set it up|sounds good|perfect|great|alright|do it|ready)\b/.test(_lc);
 
-        if (_spfuqAnchor) {
-          const _lc = (input || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
-          const _hasQ = _lc.includes('?') ||
-            /\b(what|how|why|when|which|where|does|can you|do you|is it|is there|include|cover|tell me|explain|about|more)\b/.test(_lc);
-          const _pureYes = !_hasQ &&
-            /\b(yes|yeah|yep|yup|sure|ok|okay|book|schedule|go ahead|absolutely|lets do|set it up|sounds good|perfect|great|alright|do it|ready)\b/.test(_lc);
-
-          if (!_pureYes) {
-            // KC engine owns this turn — answer from anchored container,
-            // then re-append PFUQ so consent is asked again next turn.
-            emit('SPFUQ_PFUQ_INTERLOCK_KC_ROUTE', {
-              anchor:       _spfuqAnchor.containerTitle,
-              inputPreview: clip(input, 60),
-              turn,
-            });
-            const KCDiscoveryRunner = require('../kc/KCDiscoveryRunner');
-            return KCDiscoveryRunner.run({
-              company, companyId, callSid, userInput: input,
-              state, emitEvent, turn, bridgeToken, redis, onSentence,
-              pendingBookingQuestion: pfuq,
-            });
-          }
-          // Pure YES (no question embedded) → fall through to bucket classifier
+        if (!_pureYes) {
+          // KC engine owns this PFUQ turn — answers question, re-appends PFUQ,
+          // re-asserts pendingFollowUpQuestion in state for next consent check.
+          emit('SPFUQ_PFUQ_INTERLOCK_KC_ROUTE', {
+            inputPreview: clip(input, 60),
+            hasQ: _hasQ,
+            turn,
+          });
+          const KCDiscoveryRunner = require('../kc/KCDiscoveryRunner');
+          return KCDiscoveryRunner.run({
+            company, companyId, callSid, userInput: input,
+            state, emitEvent, turn, bridgeToken, redis, onSentence,
+            pendingBookingQuestion: pfuq,
+          });
         }
+        // Pure YES (no embedded question) → fall through to bucket classifier → booking
       }
 
       const inputLowerCleanFUQ = inputLower.replace(/[^a-z\s]/g, '').trim();
