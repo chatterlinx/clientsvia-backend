@@ -510,4 +510,60 @@ router.post('/:companyId/knowledge/:id/generate-keywords', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/suggest-label
+// Body: { content: string }   — one section's text content
+// Returns: { success, suggestion }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { content } = req.body;
+  if (!content?.trim()) {
+    return res.status(400).json({ success: false, error: 'No content provided' });
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
+  }
+
+  try {
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   40,
+      temperature: 0.3,
+      system: `You are a label writer for a phone AI knowledge base used by service companies.
+Given a section's content, write a short label (5-10 words max) that describes the scenario or question this section answers.
+Rules:
+- Plain English only — no markdown, no asterisks, no brackets
+- Describe the situation or caller's question, NOT the answer
+- Be specific and descriptive
+- Use title-case or sentence-case (not ALL CAPS)
+Examples of good labels:
+  "Cost Objection — Caller Pushes Back on Price"
+  "What's Included in Each Tune-Up Visit"
+  "Monthly vs Annual Payment Options"
+  "Caller Asks What the Technician Does On-Site"
+  "General Pricing — How Much Is the Plan"
+Return ONLY the label text. No quotes. No extra text.`,
+      messages: [{ role: 'user', content: content.trim().slice(0, 600) }],
+      jsonMode: false,
+    });
+
+    const suggestion = (result.response || '').trim().replace(/^["'`]|["'`]$/g, '');
+    if (!suggestion) {
+      return res.status(500).json({ success: false, error: 'Groq returned no suggestion' });
+    }
+
+    logger.debug('[companyKnowledge] suggest-label', { companyId, suggestion });
+    return res.json({ success: true, suggestion });
+  } catch (err) {
+    logger.error('[companyKnowledge] suggest-label error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to generate label suggestion' });
+  }
+});
+
 module.exports = router;

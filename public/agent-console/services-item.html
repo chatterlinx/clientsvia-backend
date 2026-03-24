@@ -126,6 +126,18 @@
       font-family: inherit;
     }
     .section-label-input::placeholder { color: var(--text-xs); font-weight: 400; }
+    .btn-suggest-label {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 9px;
+      font-size: 11px; font-weight: 500;
+      color: #0284c7; background: #f0f9ff;
+      border: 1px solid #bae6fd; border-radius: 6px;
+      cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-suggest-label:hover { background: #e0f2fe; border-color: #7dd3fc; }
+    .btn-suggest-label:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-section-delete {
       border: none; background: none; cursor: pointer; padding: 4px;
       color: var(--text-xs); border-radius: 4px; display: flex; align-items: center;
@@ -711,6 +723,7 @@ function addSection(label = '', content = '') {
       <span class="section-number">${rowCount + 1}</span>
       <input type="text" class="section-label-input" placeholder="${suggestion || 'Section label…'}"
         maxlength="80" value="${_esc(label)}" onchange="updateSectionNumbers()">
+      <button type="button" class="btn-suggest-label" onclick="suggestLabel(this)" title="Auto-generate label from content">✨ Auto-label</button>
       <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Remove section">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -727,6 +740,40 @@ function addSection(label = '', content = '') {
   // Focus the label input if new empty section
   if (!label) {
     setTimeout(() => row.querySelector('.section-label-input').focus(), 50);
+  }
+}
+
+async function suggestLabel(btn) {
+  const row        = btn.closest('.section-row');
+  const textarea   = row.querySelector('textarea');
+  const labelInput = row.querySelector('.section-label-input');
+
+  const content = textarea?.value?.trim();
+  if (!content) {
+    _toast('Add some content first, then auto-label it', 'error');
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/suggest-label`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }) }
+    );
+    if (data.success && data.suggestion) {
+      labelInput.value = data.suggestion;
+      _toast('Label generated ✓', 'success');
+    } else {
+      _toast(data.error || 'Could not generate label', 'error');
+    }
+  } catch (_e) {
+    _toast('Could not generate label', 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '✨ Auto-label';
   }
 }
 
