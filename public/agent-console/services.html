@@ -95,6 +95,12 @@
 
     /* ── Stats bar ───────────────────────────────────────────────────────── */
     .stats-bar { display: flex; gap: 10px; flex-wrap: wrap; padding: 16px 24px 0; }
+    #statCatChips {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
     .stat-chip {
       display: flex; align-items: center; gap: 6px;
       background: white; border: 1px solid var(--border);
