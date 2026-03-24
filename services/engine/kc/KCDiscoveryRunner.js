@@ -1,0 +1,586 @@
+'use strict';
+
+/**
+ * ============================================================================
+ * KC DISCOVERY RUNNER  (v1.0)
+ * ============================================================================
+ *
+ * PURPOSE:
+ *   Enterprise-grade Knowledge Container-first discovery engine. Replaces the
+ *   ScrabEngine → Triggers → LLM cascade with a cleaner, more conversational
+ *   KC → SPFUQ → Groq → LLM pipeline.
+ *
+ *   Activated by:  company.aiAgentSettings.agent2.discovery.engine = 'kc'
+ *   Toggled from:  agent2.html > "🧠 Discovery Engine" card
+ *   Switch point:  Agent2DiscoveryRunner.js (before ScrabEngine)
+ *
+ * PIPELINE (in order):
+ *   1. Booking intent check   (KCBookingIntentDetector — synchronous, ~0ms)
+ *   2. SPFUQ anchor load      (SPFUQService / Redis — ~1ms)
+ *   3. KC container match     (KnowledgeContainerService.findContainer — ~2ms)
+ *   4. Groq answer            (KnowledgeContainerService.answer — ~500ms)
+ *   5. LLM fallback           (callLLMAgentForFollowUp — ~800ms, only if no KC)
+ *   6. Graceful ACK           (canned response, only if LLM also unavailable)
+ *
+ * PATH CONSTANTS (visible in Call Review Console trace):
+ *   KC_DIRECT_ANSWER    — KC matched, Groq answered, conversation continues
+ *   KC_BOOKING_INTENT   — Booking signal detected → PFUQ/booking on next turn
+ *   KC_SPFUQ_CONTINUE   — Active anchor, same topic, Groq re-answers with context
+ *   KC_TOPIC_HOP        — Active anchor, new topic matched → clear + re-anchor
+ *   KC_LLM_FALLBACK     — No KC match → callLLMAgentForFollowUp (Claude, COMPLEX)
+ *   KC_GRACEFUL_ACK     — No KC + LLM unavailable → canned acknowledgment
+ *
+ * MULTI-TENANT SAFETY:
+ *   All Redis keys and MongoDB queries are scoped by companyId.
+ *   No cross-tenant leakage possible.
+ *
+ * GRACEFUL DEGRADE CHAIN:
+ *   KC match fails → LLM fallback
+ *   LLM unavailable → Graceful ACK
+ *   Redis down → no SPFUQ (call continues, no anchor, works fine)
+ *   Groq down → NO_DATA / ERROR intent → LLM fallback
+ *
+ * WIRING:
+ *   Called from Agent2DiscoveryRunner.js when engine === 'kc'.
+ *   Not imported anywhere else. Clean isolation.
+ *
+ * ============================================================================
+ */
+
+const SPFUQService            = require('./SPFUQService');
+const KCBookingIntentDetector = require('./KCBookingIntentDetector');
+const KCS                     = require('../agent2/KnowledgeContainerService');
+const { callLLMAgentForFollowUp } = require('../agent2/Agent2DiscoveryRunner');
+const logger                  = require('../../../utils/logger');
+
+// ============================================================================
+// PATH CONSTANTS
+// ============================================================================
+
+const PATH = {
+  KC_DIRECT_ANSWER:  'KC_DIRECT_ANSWER',   // KC match → Groq answered
+  KC_BOOKING_INTENT: 'KC_BOOKING_INTENT',  // Booking signal detected
+  KC_SPFUQ_CONTINUE: 'KC_SPFUQ_CONTINUE', // Same-topic SPFUQ continuation
+  KC_TOPIC_HOP:      'KC_TOPIC_HOP',       // SPFUQ active, new container matched
+  KC_LLM_FALLBACK:   'KC_LLM_FALLBACK',   // No KC match → Claude LLM
+  KC_GRACEFUL_ACK:   'KC_GRACEFUL_ACK',   // No KC + LLM unavailable
+};
+
+// ============================================================================
+// GRACEFUL ACK RESPONSES  (canned, used only when all AI paths unavailable)
+// ============================================================================
+
+const GRACEFUL_ACK_RESPONSES = [
+  "I want to make sure I get you the right information on that. Let me have someone follow up with you directly.",
+  "That's a great question — I'll make sure one of our team members reaches out to give you the full details.",
+  "I don't have the specifics on that right away, but I'll make sure someone follows up with you.",
+];
+
+function _gracefulAck() {
+  return GRACEFUL_ACK_RESPONSES[Math.floor(Math.random() * GRACEFUL_ACK_RESPONSES.length)];
+}
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/** Clip a string to maxLen characters for safe logging. */
+function _clip(str, maxLen = 80) {
+  if (!str) return '';
+  return str.length <= maxLen ? str : `${str.slice(0, maxLen)}…`;
+}
+
+/** Build a safe _123rp metadata object for the Call Review Console. */
+function _build123rp(path, extra = {}) {
+  return {
+    tier:   'T1',
+    source: 'KC_ENGINE',
+    path,
+    ...extra,
+  };
+}
+
+/** Deep-clone state safely to avoid mutating the live state object. */
+function _cloneState(state) {
+  try {
+    return JSON.parse(JSON.stringify(state || {}));
+  } catch (_e) {
+    return state || {};
+  }
+}
+
+// ============================================================================
+// MAIN ORCHESTRATOR
+// ============================================================================
+
+class KCDiscoveryRunner {
+  /**
+   * run — Main entry point. Signature mirrors Agent2DiscoveryRunner.run() exactly.
+   *
+   * @param {Object}   opts
+   * @param {Object}   opts.company       — Full company document
+   * @param {string}   opts.companyId     — Company ID (string)
+   * @param {string}   opts.callSid       — Twilio call SID
+   * @param {string}   opts.userInput     — Raw caller utterance
+   * @param {Object}   opts.state         — Current call state
+   * @param {Function} opts.emitEvent     — Observability emitter
+   * @param {number}   opts.turn          — Turn counter
+   * @param {string}   [opts.bridgeToken] — Bridge token (unused in KC path)
+   * @param {Object}   [opts.redis]       — Shared Redis client (optional)
+   * @param {Function} [opts.onSentence]  — Streaming sentence callback
+   *
+   * @returns {Promise<{ response: string, matchSource: string, state: Object, _123rp: Object }>}
+   */
+  static async run({
+    company,
+    companyId,
+    callSid,
+    userInput,
+    state,
+    emitEvent,
+    turn       = null,
+    bridgeToken = null,
+    redis       = null,
+    onSentence  = null,
+  }) {
+    const startMs   = Date.now();
+    const nextState = _cloneState(state);
+
+    // ── SAFE EMITTER ─────────────────────────────────────────────────────────
+    const emit = (type, data = {}) => {
+      try {
+        if (typeof emitEvent === 'function') emitEvent(type, data);
+      } catch (_e) {
+        // Observability must never break the call path.
+      }
+    };
+
+    // ── COMPANY / CONFIG ──────────────────────────────────────────────────────
+    const companyName  = company?.companyName || company?.name || 'our company';
+    const kbSettings   = company?.knowledgeBaseSettings || {};
+    const callerName   = state?.caller?.firstName || state?.caller?.name || null;
+    const channel      = 'call';
+
+    logger.info('[KC_ENGINE] 🚀 RUN START', {
+      companyId, callSid, turn, inputPreview: _clip(userInput, 60),
+    });
+
+    emit('KC_RUNNER_START', {
+      companyId, callSid, turn, inputPreview: _clip(userInput, 60),
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 1 — BOOKING INTENT CHECK  (~0ms, synchronous)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Checked FIRST before any KC work. If the caller says "let's book it",
+    // we don't need to answer another question — just route to booking.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    if (KCBookingIntentDetector.isBookingIntent(userInput)) {
+      logger.info('[KC_ENGINE] Booking intent detected — routing to KC_BOOKING_INTENT', {
+        companyId, callSid, turn, inputPreview: _clip(userInput, 40),
+      });
+
+      emit('KC_BOOKING_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_BOOKING_INTENT });
+
+      // Signal booking intent in state — booking engine picks this up next turn
+      nextState.agent2                          = nextState.agent2 || {};
+      nextState.agent2.discovery                = nextState.agent2.discovery || {};
+      nextState.agent2.discovery.pendingBookingFromKC = true;
+      nextState.agent2.discovery.lastPath       = PATH.KC_BOOKING_INTENT;
+
+      // Clear any active SPFUQ — booking intent ends the topic anchor
+      SPFUQService.clear(companyId, callSid).catch(() => {});
+
+      const bookingResponse = "Great! Let me get that scheduled for you.";
+
+      return {
+        response:    bookingResponse,
+        matchSource: 'KC_ENGINE',
+        state:       nextState,
+        _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, { latencyMs: Date.now() - startMs }),
+      };
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 2 — LOAD SPFUQ ANCHOR  (~1ms, Redis)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    let spfuq = null;
+    try {
+      spfuq = await SPFUQService.load(companyId, callSid);
+    } catch (_e) {
+      // Redis timeout — continue without anchor
+    }
+
+    if (spfuq) {
+      logger.info('[KC_ENGINE] SPFUQ anchor loaded', {
+        companyId, callSid, containerId: spfuq.containerId,
+        containerTitle: spfuq.containerTitle, lastTurn: spfuq.lastTurn,
+      });
+      emit('KC_SPFUQ_LOADED', {
+        containerId: spfuq.containerId, containerTitle: spfuq.containerTitle,
+        lastTurn: spfuq.lastTurn,
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 3 — KNOWLEDGE CONTAINER MATCH  (~2ms, Redis/MongoDB)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    let containers = [];
+    try {
+      containers = await KCS.getActiveForCompany(companyId, redis);
+    } catch (_e) {
+      logger.warn('[KC_ENGINE] Failed to load containers — falling to LLM', { companyId, callSid, err: _e.message });
+    }
+
+    const match = KCS.findContainer(containers, userInput);
+
+    // ── SPFUQ ACTIVE + NEW CONTAINER MATCHED → TOPIC HOP ────────────────────
+    if (spfuq && match && match.container) {
+      const matchedId  = String(match.container._id || match.container.title || '');
+      const anchoredId = String(spfuq.containerId || '');
+
+      if (matchedId && anchoredId && matchedId !== anchoredId) {
+        // Caller moved to a different topic — clear old anchor, set new one
+        logger.info('[KC_ENGINE] Topic hop detected — clearing SPFUQ, switching container', {
+          companyId, callSid, from: spfuq.containerTitle, to: match.container.title,
+        });
+        emit('KC_CONTAINER_MATCHED', { containerTitle: match.container.title, score: match.score, path: PATH.KC_TOPIC_HOP });
+
+        SPFUQService.clear(companyId, callSid).catch(() => {});
+        spfuq = null; // Treat as fresh match below (falls into direct-answer path)
+      }
+    }
+
+    // ── SPFUQ ACTIVE + NO NEW MATCH (OR SAME CONTAINER) → CONTINUE ──────────
+    if (spfuq && (!match || !match.container)) {
+      // Caller asked a follow-up, no new container matched — stay in SPFUQ topic
+      return await _handleSPFUQContinue({
+        spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
+        channel, nextState, emit, startMs, turn,
+      });
+    }
+
+    // ── NEW MATCH (or same container after hop cleared) → DIRECT ANSWER ──────
+    if (match && match.container) {
+      return await _handleKCMatch({
+        match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
+        channel, nextState, emit, startMs, turn, onSentence,
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 4 — NO KC MATCH → LLM FALLBACK (Claude, bucket=COMPLEX)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    return await _handleLLMFallback({
+      userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
+      bridgeToken, redis, callerName, onSentence,
+    });
+  }
+}
+
+// ============================================================================
+// HANDLER: KC SPFUQ CONTINUE
+// ============================================================================
+
+async function _handleSPFUQContinue({
+  spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
+  channel, nextState, emit, startMs, turn,
+}) {
+  const containerTitle = spfuq.containerTitle || 'this topic';
+
+  logger.info('[KC_ENGINE] SPFUQ_CONTINUE — re-answering in existing topic', {
+    companyId, callSid, containerTitle, turn,
+  });
+
+  // We need to reload the actual container document for Groq
+  let containers = [];
+  try {
+    containers = await KCS.getActiveForCompany(companyId, null);
+  } catch (_e) { /* graceful */ }
+
+  const anchorMatch = containers.find(c =>
+    String(c._id || c.title || '') === String(spfuq.containerId || '') ||
+    (c.title && c.title === spfuq.containerTitle)
+  );
+
+  if (!anchorMatch) {
+    // Anchored container no longer exists — clear anchor, fall to LLM
+    logger.warn('[KC_ENGINE] SPFUQ container no longer found — clearing anchor, falling to LLM', {
+      companyId, callSid, containerId: spfuq.containerId,
+    });
+    SPFUQService.clear(companyId, callSid).catch(() => {});
+    return await _handleLLMFallback({
+      userInput, companyId, callSid, company, channel: 'call', nextState, emit,
+      startMs, turn, bridgeToken: null, redis: null, callerName, onSentence: null,
+    });
+  }
+
+  // Inject prior context into the question for Groq
+  const contextualQuestion = spfuq.subjectBrief
+    ? `[Earlier context: ${spfuq.subjectBrief}] Caller now asks: ${userInput}`
+    : userInput;
+
+  emit('KC_CONTAINER_MATCHED', {
+    containerTitle: anchorMatch.title, score: 'spfuq', path: PATH.KC_SPFUQ_CONTINUE,
+  });
+
+  let kcResult;
+  try {
+    kcResult = await KCS.answer({
+      container:  anchorMatch,
+      question:   contextualQuestion,
+      kbSettings,
+      company,
+      callerName,
+      callSid,
+    });
+  } catch (_e) {
+    logger.error('[KC_ENGINE] Groq error on SPFUQ_CONTINUE', { companyId, callSid, err: _e.message });
+    kcResult = { response: null, intent: KCS.INTENT.ERROR };
+  }
+
+  if (!kcResult?.response) {
+    // Groq couldn't answer even with context — fall to LLM
+    return await _handleLLMFallback({
+      userInput, companyId, callSid, company, channel: 'call', nextState, emit,
+      startMs, turn, bridgeToken: null, redis: null, callerName, onSentence: null,
+    });
+  }
+
+  // Update SPFUQ anchor with new Q&A context
+  const updatedBrief = SPFUQService.buildBrief(spfuq, userInput, kcResult.response);
+  SPFUQService.set(companyId, callSid, {
+    ...spfuq,
+    lastTurn:     turn ?? spfuq.lastTurn,
+    lastQuestion: userInput,
+    lastAnswer:   kcResult.response,
+    subjectBrief: updatedBrief,
+  }).catch(() => {});
+
+  nextState.agent2            = nextState.agent2 || {};
+  nextState.agent2.discovery  = nextState.agent2.discovery || {};
+  nextState.agent2.discovery.lastPath     = PATH.KC_SPFUQ_CONTINUE;
+  nextState.agent2.discovery.lastKCTitle  = anchorMatch.title;
+
+  emit('KC_GROQ_ANSWERED', {
+    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: PATH.KC_SPFUQ_CONTINUE,
+  });
+
+  logger.info('[KC_ENGINE] ✅ KC_SPFUQ_CONTINUE complete', {
+    companyId, callSid, containerTitle: anchorMatch.title,
+    intent: kcResult.intent, latencyMs: Date.now() - startMs,
+  });
+
+  return {
+    response:    kcResult.response,
+    matchSource: 'KC_ENGINE',
+    state:       nextState,
+    _123rp:      _build123rp(PATH.KC_SPFUQ_CONTINUE, {
+      containerId:    String(anchorMatch._id || anchorMatch.title || ''),
+      containerTitle: anchorMatch.title,
+      intent:         kcResult.intent,
+      latencyMs:      Date.now() - startMs,
+      spfuqActive:    true,
+    }),
+  };
+}
+
+// ============================================================================
+// HANDLER: KC DIRECT ANSWER / TOPIC HOP
+// ============================================================================
+
+async function _handleKCMatch({
+  match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
+  channel, nextState, emit, startMs, turn,
+}) {
+  const container      = match.container;
+  const containerTitle = container.title || 'Knowledge Container';
+  const containerId    = String(container._id || containerTitle);
+  const isHop         = spfuq && !spfuq; // already cleared above if hop — always false here; explicit label
+  const path           = PATH.KC_DIRECT_ANSWER;
+
+  logger.info('[KC_ENGINE] Container matched', {
+    companyId, callSid, containerTitle, score: match.score, turn,
+  });
+
+  emit('KC_CONTAINER_MATCHED', { containerTitle, score: match.score, path });
+
+  let kcResult;
+  try {
+    kcResult = await KCS.answer({
+      container,
+      question: userInput,
+      kbSettings,
+      company,
+      callerName,
+      callSid,
+    });
+  } catch (_e) {
+    logger.error('[KC_ENGINE] Groq error on direct answer', { companyId, callSid, containerId, err: _e.message });
+    kcResult = { response: null, intent: KCS.INTENT.ERROR };
+  }
+
+  // ── Groq returned no answer (NO_DATA or ERROR) → fall to LLM ────────────
+  if (!kcResult?.response) {
+    logger.info('[KC_ENGINE] KC had no answer — falling to LLM', {
+      companyId, callSid, containerTitle, intent: kcResult?.intent,
+    });
+    return await _handleLLMFallback({
+      userInput, companyId, callSid, company, channel: 'call', nextState, emit,
+      startMs, turn, bridgeToken: null, redis: null, callerName, onSentence: null,
+    });
+  }
+
+  // ── BOOKING_READY from Groq → signal booking intent ──────────────────────
+  if (kcResult.intent === KCS.INTENT.BOOKING_READY) {
+    logger.info('[KC_ENGINE] BOOKING_READY from Groq — routing to KC_BOOKING_INTENT', {
+      companyId, callSid, containerTitle,
+    });
+
+    emit('KC_BOOKING_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_BOOKING_INTENT, source: 'groq' });
+
+    nextState.agent2                          = nextState.agent2 || {};
+    nextState.agent2.discovery                = nextState.agent2.discovery || {};
+    nextState.agent2.discovery.pendingBookingFromKC = true;
+    nextState.agent2.discovery.lastPath       = PATH.KC_BOOKING_INTENT;
+
+    SPFUQService.clear(companyId, callSid).catch(() => {});
+
+    return {
+      response:    kcResult.response,
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, {
+        containerId, containerTitle,
+        intent: kcResult.intent, latencyMs: Date.now() - startMs,
+      }),
+    };
+  }
+
+  // ── ANSWERED — set/update SPFUQ anchor and return ────────────────────────
+  const newBrief = SPFUQService.buildBrief(null, userInput, kcResult.response);
+  SPFUQService.set(companyId, callSid, {
+    containerId,
+    containerTitle,
+    containerKeywords: container.keywords || [],
+    anchoredAt:        new Date().toISOString(),
+    lastTurn:          turn ?? 0,
+    lastQuestion:      userInput,
+    lastAnswer:        kcResult.response,
+    subjectBrief:      newBrief,
+  }).catch(() => {});
+
+  nextState.agent2            = nextState.agent2 || {};
+  nextState.agent2.discovery  = nextState.agent2.discovery || {};
+  nextState.agent2.discovery.lastPath     = PATH.KC_DIRECT_ANSWER;
+  nextState.agent2.discovery.lastKCTitle  = containerTitle;
+
+  emit('KC_GROQ_ANSWERED', {
+    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: PATH.KC_DIRECT_ANSWER,
+  });
+
+  logger.info('[KC_ENGINE] ✅ KC_DIRECT_ANSWER complete', {
+    companyId, callSid, containerTitle,
+    intent: kcResult.intent, latencyMs: Date.now() - startMs,
+  });
+
+  return {
+    response:    kcResult.response,
+    matchSource: 'KC_ENGINE',
+    state:       nextState,
+    _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, {
+      containerId, containerTitle,
+      intent:      kcResult.intent,
+      latencyMs:   Date.now() - startMs,
+      spfuqActive: false,
+    }),
+  };
+}
+
+// ============================================================================
+// HANDLER: LLM FALLBACK (Claude, bucket=COMPLEX)
+// ============================================================================
+
+async function _handleLLMFallback({
+  userInput, companyId, callSid, company, channel, nextState, emit,
+  startMs, turn, bridgeToken, redis, callerName, onSentence,
+}) {
+  logger.info('[KC_ENGINE] No KC match — firing LLM fallback (Claude COMPLEX)', {
+    companyId, callSid, turn, inputPreview: _clip(userInput, 40),
+  });
+
+  emit('KC_LLM_FALLBACK_FIRED', { companyId, callSid, turn, reason: 'no_kc_match' });
+
+  let llmResult = null;
+  try {
+    llmResult = await callLLMAgentForFollowUp({
+      company,
+      input:               userInput,
+      followUpQuestion:    '',        // No pending FUQ in KC mode
+      triggerSource:       'KC_ENGINE_FALLBACK',
+      bucket:              'COMPLEX',
+      channel,
+      emit,
+      callSid,
+      turn,
+      bridgeToken,
+      redis,
+      callerName,
+      onSentence,
+    });
+  } catch (_e) {
+    logger.error('[KC_ENGINE] LLM fallback threw — routing to graceful ACK', {
+      companyId, callSid, err: _e.message,
+    });
+  }
+
+  if (llmResult?.response) {
+    nextState.agent2            = nextState.agent2 || {};
+    nextState.agent2.discovery  = nextState.agent2.discovery || {};
+    nextState.agent2.discovery.lastPath = PATH.KC_LLM_FALLBACK;
+
+    logger.info('[KC_ENGINE] ✅ KC_LLM_FALLBACK complete', {
+      companyId, callSid, latencyMs: Date.now() - startMs,
+    });
+
+    return {
+      response:    llmResult.response,
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_LLM_FALLBACK, {
+        latencyMs:   Date.now() - startMs,
+        tokensUsed:  llmResult.tokensUsed,
+      }),
+    };
+  }
+
+  // ── ALL PATHS EXHAUSTED — GRACEFUL ACK ───────────────────────────────────
+  logger.warn('[KC_ENGINE] KC_GRACEFUL_ACK — all AI paths unavailable', {
+    companyId, callSid, turn,
+  });
+
+  emit('KC_GRACEFUL_ACK_FIRED', { companyId, callSid, turn });
+
+  const ackResponse = _gracefulAck();
+
+  nextState.agent2            = nextState.agent2 || {};
+  nextState.agent2.discovery  = nextState.agent2.discovery || {};
+  nextState.agent2.discovery.lastPath = PATH.KC_GRACEFUL_ACK;
+
+  return {
+    response:    ackResponse,
+    matchSource: 'KC_ENGINE',
+    state:       nextState,
+    _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { latencyMs: Date.now() - startMs }),
+  };
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+module.exports = KCDiscoveryRunner;

@@ -220,6 +220,9 @@
     inputEscalationPhrase: document.getElementById('input-escalation-phrase'),
     btnAddEscalationPhrase: document.getElementById('btn-add-escalation-phrase'),
     
+    // Discovery Engine toggle (KC vs ScrabEngine)
+    toggleKCEngineEnabled: document.getElementById('toggle-kc-engine-enabled'),
+
     // Discovery Style
     inputAckWord: document.getElementById('input-ack-word'),
     inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
@@ -492,6 +495,9 @@
       DOM.inputGreetingReturn.value = returnCallerText;
     }
     
+    // Discovery Engine toggle (KC vs ScrabEngine)
+    if (DOM.toggleKCEngineEnabled) DOM.toggleKCEngineEnabled.checked = config.discovery?.engine === 'kc';
+
     // Discovery style
     if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
     if (DOM.inputRobotChallengeEnabled) DOM.inputRobotChallengeEnabled.checked = config.discovery?.style?.robotChallenge?.enabled || false;
@@ -690,6 +696,7 @@
       // Do not write partial greetings here, or we risk overwriting callStart/interceptor/audio fields.
       discovery: {
         ...state.config.discovery,
+        engine: DOM.toggleKCEngineEnabled?.checked ? 'kc' : 'scrabengine',
         style: {
           ackWord: DOM.inputAckWord.value.trim() || 'Ok.',
           robotChallenge: {

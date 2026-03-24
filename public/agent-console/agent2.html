@@ -631,6 +631,34 @@
           </div>
         </div>
 
+        <!-- Discovery Engine -->
+        <div class="card" id="card-discovery-engine">
+          <div class="card-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <h2 class="card-title" style="margin: 0;">🧠 Discovery Engine</h2>
+              <label class="toggle-switch" style="margin: 0;">
+                <input type="checkbox" id="toggle-kc-engine-enabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="card-body">
+            <p class="text-muted text-sm" style="margin-bottom: 12px;">
+              <strong>OFF (default):</strong> ScrabEngine — fast keyword-based discovery pipeline. Trigger cards + interceptors drive all responses.<br>
+              <strong>ON:</strong> KC Discovery Engine <em>(Beta)</em> — Groq-powered, Knowledge Container-first, with SPFUQ subject anchoring for natural multi-turn conversation.
+            </p>
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 6px;">
+              <div style="font-weight: 600; color: #92400e; margin-bottom: 4px; font-size: 13px;">⚠️ Beta — Prerequisites</div>
+              <div style="font-size: 12px; color: #78350f; line-height: 1.6;">
+                Before enabling:<br>
+                • Populate Knowledge Containers in <strong>Services</strong> with relevant keywords and content.<br>
+                • Verify at least one container matches your most common caller questions.<br>
+                • ScrabEngine is automatically used as the crash-safe fallback if the KC engine fails to load.
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Live Test Turn Panel -->
         <div class="card">
           <div class="card-header">

@@ -3568,6 +3568,39 @@ class Agent2DiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // 🧠 KC DISCOVERY ENGINE SWITCH
+    // ══════════════════════════════════════════════════════════════════════════
+    // When company.aiAgentSettings.agent2.discovery.engine === 'kc', bypass
+    // ScrabEngine + all legacy trigger/interceptor logic entirely and route
+    // through the KC Discovery Engine (Groq-powered, SPFUQ-anchored).
+    //
+    // Toggle:     agent2.html > "🧠 Discovery Engine" card
+    // Config:     company.aiAgentSettings.agent2.discovery.engine
+    // Values:     'scrabengine' (default, unchanged) | 'kc' (new engine)
+    //
+    // Safety:     If KCDiscoveryRunner fails to load, logs error and falls
+    //             through to ScrabEngine below — call never breaks.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (discoveryCfg.engine === 'kc') {
+      try {
+        const KCDiscoveryRunner = require('../kc/KCDiscoveryRunner');
+        emit('KC_ENGINE_ACTIVATED', { companyId, callSid, turn });
+        logger.info('[KC_ENGINE] 🧠 KC Discovery Engine activated', { companyId, callSid, turn });
+        return KCDiscoveryRunner.run({
+          company, companyId, callSid,
+          userInput: input,
+          state, emitEvent, turn, bridgeToken, redis, onSentence,
+        });
+      } catch (_kcErr) {
+        logger.error('[KC_ENGINE] KCDiscoveryRunner load failed — falling through to ScrabEngine', {
+          companyId, callSid, err: _kcErr.message,
+        });
+        emit('KC_ENGINE_LOAD_FAILED', { companyId, callSid, error: _kcErr.message });
+        // Falls through to ScrabEngine below
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // 🔍 SCRABENGINE - UNIFIED TEXT PROCESSING PIPELINE
     // ══════════════════════════════════════════════════════════════════════════
     // ✅ V125 SEQUENCE FIX: ScrabEngine moved BEFORE greeting interceptor
@@ -6625,3 +6658,9 @@ class Agent2DiscoveryRunner {
 }
 
 module.exports = { Agent2DiscoveryRunner };
+
+// ── KC ENGINE INTEROP ─────────────────────────────────────────────────────────
+// Export callLLMAgentForFollowUp so KCDiscoveryRunner can use it as its LLM
+// fallback without duplicating logic. This is the only cross-module coupling
+// between the legacy engine and the new KC engine.
+module.exports.callLLMAgentForFollowUp = callLLMAgentForFollowUp;
