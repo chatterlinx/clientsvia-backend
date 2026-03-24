@@ -65,6 +65,7 @@ const PATH = {
   KC_TOPIC_HOP:      'KC_TOPIC_HOP',       // SPFUQ active, new container matched
   KC_LLM_FALLBACK:   'KC_LLM_FALLBACK',   // No KC match → Claude LLM
   KC_GRACEFUL_ACK:   'KC_GRACEFUL_ACK',   // No KC + LLM unavailable
+  KC_PFUQ_REASK:     'KC_PFUQ_REASK',     // KC answered follow-up, re-asked booking Q
 };
 
 // ============================================================================
@@ -166,10 +167,11 @@ class KCDiscoveryRunner {
     userInput,
     state,
     emitEvent,
-    turn       = null,
-    bridgeToken = null,
-    redis       = null,
-    onSentence  = null,
+    turn                  = null,
+    bridgeToken           = null,
+    redis                 = null,
+    onSentence            = null,
+    pendingBookingQuestion = null,  // PFUQ question to re-append after KC answers
   }) {
     const startMs   = Date.now();
     const nextState = _cloneState(state);
@@ -299,7 +301,7 @@ class KCDiscoveryRunner {
       // Caller asked a follow-up, no new container matched — stay in SPFUQ topic
       return await _handleSPFUQContinue({
         spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
-        channel, nextState, emit, startMs, turn,
+        channel, nextState, emit, startMs, turn, pendingBookingQuestion,
       });
     }
 
@@ -307,7 +309,7 @@ class KCDiscoveryRunner {
     if (match && match.container) {
       return await _handleKCMatch({
         match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
-        channel, nextState, emit, startMs, turn, onSentence,
+        channel, nextState, emit, startMs, turn, onSentence, pendingBookingQuestion,
       });
     }
 
@@ -329,6 +331,7 @@ class KCDiscoveryRunner {
 async function _handleSPFUQContinue({
   spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
   channel, nextState, emit, startMs, turn,
+  pendingBookingQuestion = null,
 }) {
   const containerTitle = spfuq.containerTitle || 'this topic';
 
@@ -415,31 +418,51 @@ async function _handleSPFUQContinue({
     }],
   }).catch(() => {});
 
+  // ── PFUQ re-assert: if booking question was pending, append + re-set ──────
+  const _finalPathSC     = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_SPFUQ_CONTINUE;
+  const _finalResponseSC = pendingBookingQuestion
+    ? `${kcResult.response} ${pendingBookingQuestion}`
+    : kcResult.response;
+
   nextState.agent2            = nextState.agent2 || {};
   nextState.agent2.discovery  = nextState.agent2.discovery || {};
-  nextState.agent2.discovery.lastPath     = PATH.KC_SPFUQ_CONTINUE;
-  nextState.agent2.discovery.lastKCTitle  = anchorMatch.title;
+  nextState.agent2.discovery.lastPath    = _finalPathSC;
+  nextState.agent2.discovery.lastKCTitle = anchorMatch.title;
+
+  if (pendingBookingQuestion) {
+    // Re-assert PFUQ so the consent gate fires again next turn
+    nextState.agent2.discovery.pendingFollowUpQuestion     = pendingBookingQuestion;
+    nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn ?? 0;
+    emit('KC_PFUQ_REASK_FIRED', {
+      containerId:    String(anchorMatch._id || anchorMatch.title || ''),
+      containerTitle: anchorMatch.title,
+      turn,
+      path:           _finalPathSC,
+    });
+  }
 
   emit('KC_GROQ_ANSWERED', {
-    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: PATH.KC_SPFUQ_CONTINUE,
+    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: _finalPathSC,
   });
 
   logger.info('[KC_ENGINE] ✅ KC_SPFUQ_CONTINUE complete', {
     companyId, callSid, containerTitle: anchorMatch.title,
     intent: kcResult.intent, latencyMs: Date.now() - startMs,
+    pfuqReask: !!pendingBookingQuestion,
   });
 
   return {
-    response:    kcResult.response,
+    response:    _finalResponseSC,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(PATH.KC_SPFUQ_CONTINUE, {
+    _123rp:      _build123rp(_finalPathSC, {
       containerId:    String(anchorMatch._id || anchorMatch.title || ''),
       containerTitle: anchorMatch.title,
       kcId:           anchorMatch.kcId || null,
       intent:         kcResult.intent,
       latencyMs:      Date.now() - startMs,
       spfuqActive:    true,
+      pfuqReask:      !!pendingBookingQuestion,
     }),
   };
 }
@@ -451,6 +474,7 @@ async function _handleSPFUQContinue({
 async function _handleKCMatch({
   match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
   channel, nextState, emit, startMs, turn,
+  pendingBookingQuestion = null,
 }) {
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
@@ -557,29 +581,44 @@ async function _handleKCMatch({
     }],
   }).catch(() => {});
 
+  // ── PFUQ re-assert: if booking question was pending, append + re-set ──────
+  const _finalPathDA     = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_DIRECT_ANSWER;
+  const _finalResponseDA = pendingBookingQuestion
+    ? `${kcResult.response} ${pendingBookingQuestion}`
+    : kcResult.response;
+
   nextState.agent2            = nextState.agent2 || {};
   nextState.agent2.discovery  = nextState.agent2.discovery || {};
-  nextState.agent2.discovery.lastPath     = PATH.KC_DIRECT_ANSWER;
-  nextState.agent2.discovery.lastKCTitle  = containerTitle;
+  nextState.agent2.discovery.lastPath    = _finalPathDA;
+  nextState.agent2.discovery.lastKCTitle = containerTitle;
+
+  if (pendingBookingQuestion) {
+    // Re-assert PFUQ so the consent gate fires again next turn
+    nextState.agent2.discovery.pendingFollowUpQuestion     = pendingBookingQuestion;
+    nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn ?? 0;
+    emit('KC_PFUQ_REASK_FIRED', { containerId, containerTitle, turn, path: _finalPathDA });
+  }
 
   emit('KC_GROQ_ANSWERED', {
-    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: PATH.KC_DIRECT_ANSWER,
+    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: _finalPathDA,
   });
 
   logger.info('[KC_ENGINE] ✅ KC_DIRECT_ANSWER complete', {
     companyId, callSid, containerTitle,
     intent: kcResult.intent, latencyMs: Date.now() - startMs,
+    pfuqReask: !!pendingBookingQuestion,
   });
 
   return {
-    response:    kcResult.response,
+    response:    _finalResponseDA,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, {
+    _123rp:      _build123rp(_finalPathDA, {
       containerId, containerTitle, kcId: container.kcId || null,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
       spfuqActive: false,
+      pfuqReask:   !!pendingBookingQuestion,
     }),
   };
 }
