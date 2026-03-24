@@ -918,6 +918,21 @@ const companySchema = new mongoose.Schema({
             // Example: "Fixture installation including chandeliers, ceiling fans,
             // decorative lighting, and custom electrical work"
         },
+
+        // -------------------------------------------------------------------
+        // KC SEQUENCE COUNTER — auto-incrementing Knowledge Container ID
+        // -------------------------------------------------------------------
+        // Atomic counter used to generate human-readable KC IDs.
+        // Format: {last5charsOfCompanyId}-{seq padded to 2 digits}
+        // Example: "700c4-01", "700c4-02", ...
+        // NEVER reset. Deleted KC numbers are never reused.
+        // Incremented atomically via $inc on every POST /knowledge
+        // -------------------------------------------------------------------
+        kcSeq: {
+            type:    Number,
+            default: 0,
+            min:     0,
+        },
         
         // -------------------------------------------------------------------
         // SERVICE TOGGLES - Enable/disable services per company

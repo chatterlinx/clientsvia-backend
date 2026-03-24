@@ -224,14 +224,28 @@ router.post('/:companyId/knowledge', async (req, res) => {
   }
 
   try {
-    const container = await CompanyKnowledgeContainer.create({ companyId, ...body });
+    // ── Atomic KC ID generation ──────────────────────────────────────────────
+    // $inc guarantees no two containers ever share a seq number, even under
+    // concurrent POSTs. Counter never resets — deleted numbers are never reused.
+    // Format: {last5charsOfCompanyId}-{seq padded to 2 digits}  e.g. "700c4-01"
+    const updatedCompany = await v2Company.findOneAndUpdate(
+      { _id: companyId },
+      { $inc: { 'aiAgentSettings.kcSeq': 1 } },
+      { new: true, select: 'aiAgentSettings.kcSeq' }
+    );
+    const seq    = updatedCompany?.aiAgentSettings?.kcSeq ?? 1;
+    const prefix = String(companyId).slice(-5);
+    const kcId   = `${prefix}-${String(seq).padStart(2, '0')}`;
+    // ────────────────────────────────────────────────────────────────────────
+
+    const container = await CompanyKnowledgeContainer.create({ companyId, kcId, ...body });
 
     // Invalidate runtime cache — next call sees fresh data
     KnowledgeContainerService.invalidateCache(companyId).catch(e =>
       logger.warn('[companyKnowledge] cache invalidation failed on POST', { companyId, e: e.message })
     );
 
-    logger.info('[companyKnowledge] Created container', { companyId, id: container._id, title: container.title });
+    logger.info('[companyKnowledge] Created container', { companyId, id: container._id, kcId, title: container.title });
     return res.status(201).json({ success: true, container });
   } catch (err) {
     logger.error('[companyKnowledge] POST create error', { companyId, err: err.message });

@@ -258,6 +258,28 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── KC ID readonly display ──────────────────────────────────────────── */
+    .kc-id-row {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 16px; padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .kc-id-row-label {
+      font-size: 12px; color: var(--text-muted); font-weight: 500;
+      min-width: 90px;
+    }
+    .kc-id-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 11px; font-weight: 600; color: #6366f1;
+      background: #eef2ff; border: 1px solid #c7d2fe;
+      padding: 3px 10px; border-radius: 5px;
+      user-select: all; letter-spacing: 0.03em;
+    }
+    .kc-id-note {
+      font-size: 11px; color: var(--text-xs);
+    }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .form-row { grid-template-columns: 1fr; }
@@ -312,6 +334,14 @@
       <span class="form-card-badge required">Required</span>
     </div>
     <div class="form-card-body">
+
+      <!-- KC ID — shown in edit mode only, after container is created -->
+      <div id="kcIdSection" class="kc-id-row" style="display:none;">
+        <span class="kc-id-row-label">Container ID</span>
+        <span class="kc-id-tag" id="fKcId" title="Unique, immutable ID for this Knowledge Container">🏷 —</span>
+        <span class="kc-id-note">Immutable · Never reused · Identifies this card across all tools</span>
+      </div>
+
       <div class="form-row">
         <div class="form-group full" id="grpTitle">
           <label class="form-label" for="fTitle">
@@ -587,6 +617,12 @@ async function loadContainer() {
 }
 
 function _populateForm(c) {
+  // KC ID — immutable tag shown in edit mode only
+  if (c.kcId) {
+    document.getElementById('fKcId').textContent     = `🏷 ${c.kcId}`;
+    document.getElementById('kcIdSection').style.display = 'flex';
+  }
+
   document.getElementById('fTitle').value    = c.title || '';
   document.getElementById('fCategory').value = c.category || '';
   document.getElementById('fPriority').value = c.priority || 100;

@@ -102,6 +102,18 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
     // ─────────────────────────────────────────────────────────────────────────
     // CONTAINER IDENTITY
     // ─────────────────────────────────────────────────────────────────────────
+
+    // Human-readable, auto-generated ID for this container.
+    // Format: {last5charsOfCompanyId}-{seq} e.g. "700c4-01"
+    // Generated atomically via $inc on v2Company.aiAgentSettings.kcSeq at POST time.
+    // IMMUTABLE after creation — never reused even if container is deleted.
+    kcId: {
+      type:   String,
+      trim:   true,
+      index:  true,
+      comment: 'Auto-generated human-readable ID: {last5ofCompanyId}-{seq}. Immutable after creation.'
+    },
+
     title: {
       type:      String,
       required:  true,
@@ -192,6 +204,9 @@ companyKnowledgeContainerSchema.index({ companyId: 1, title: 1 });
 
 // Category filter — UI organisation and analytics
 companyKnowledgeContainerSchema.index({ companyId: 1, category: 1 });
+
+// kcId lookup — unique per company (sparse: containers created before this feature have no kcId)
+companyKnowledgeContainerSchema.index({ companyId: 1, kcId: 1 }, { unique: true, sparse: true });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATIC HELPERS
