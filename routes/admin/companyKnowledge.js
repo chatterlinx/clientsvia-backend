@@ -42,6 +42,7 @@ const logger                       = require('../../utils/logger');
 const { authenticateJWT }          = require('../../middleware/auth');
 const CompanyKnowledgeContainer    = require('../../models/CompanyKnowledgeContainer');
 const KnowledgeContainerService    = require('../../services/engine/agent2/KnowledgeContainerService');
+const CompanyTriggerSettings       = require('../../models/CompanyTriggerSettings');
 const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
 
@@ -177,14 +178,22 @@ router.patch('/:companyId/knowledge/settings', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge — List ALL containers (admin view, includes inactive)
+// Also returns companyVariables so services.html can render the same auto-detected
+// variables table as triggers.html — same store, same PUT /variables endpoint.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:companyId/knowledge', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    const containers = await CompanyKnowledgeContainer.findAllForCompany(companyId);
-    return res.json({ success: true, containers, total: containers.length });
+    const [containers, triggerSettings] = await Promise.all([
+      CompanyKnowledgeContainer.findAllForCompany(companyId),
+      CompanyTriggerSettings.findOne({ companyId }).lean().catch(() => null),
+    ]);
+    const companyVariables = triggerSettings?.companyVariables instanceof Map
+      ? Object.fromEntries(triggerSettings.companyVariables)
+      : (triggerSettings?.companyVariables || {});
+    return res.json({ success: true, containers, total: containers.length, companyVariables });
   } catch (err) {
     logger.error('[companyKnowledge] GET list error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Failed to load knowledge containers' });

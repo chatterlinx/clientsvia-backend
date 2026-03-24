@@ -533,6 +533,38 @@
   <div id="statCatChips"></div>
 </div>
 
+<!-- ── Company Variables card (auto-detected from KC section content) ─────── -->
+<div id="kcVariablesCard" style="display:none; margin: 0 0 16px 0; background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06); overflow:hidden;">
+  <div style="padding:16px 20px 10px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <h2 style="margin:0;font-size:1rem;font-weight:700;color:#111827;">Company Variables</h2>
+      <span style="background:#fef3c7;color:#92400e;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;">AUTO-DETECTED</span>
+    </div>
+    <p style="margin:4px 0 0;color:#6b7280;font-size:0.875rem;">
+      Variables found in your KC sections. <span style="color:#dc2626;font-weight:600;">Red variables require values!</span>
+    </p>
+  </div>
+  <div style="padding:0;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f3f4f6;border-bottom:2px solid #d1d5db;">
+          <th style="padding:10px 16px;text-align:left;font-size:0.75rem;font-weight:700;color:#111827;text-transform:uppercase;">Variable</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.75rem;font-weight:700;color:#111827;text-transform:uppercase;">Value</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.75rem;font-weight:700;color:#111827;text-transform:uppercase;width:100px;">Status</th>
+        </tr>
+      </thead>
+      <tbody id="kcVariablesTableBody">
+        <!-- Populated by renderKCVariables() -->
+      </tbody>
+    </table>
+    <div id="kcVariablesEmpty" style="padding:40px;text-align:center;color:#9ca3af;display:none;">
+      <div style="font-size:2rem;margin-bottom:12px;">📝</div>
+      <div style="font-weight:500;margin-bottom:4px;">No variables detected</div>
+      <div style="font-size:0.875rem;">Use {variableName} in your KC section content to create dynamic placeholders</div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Global Settings card ───────────────────────────────────────────────── -->
 <div class="settings-wrap">
   <div class="settings-card">
@@ -672,14 +704,16 @@
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
 const S = {
-  companyId:    null,
-  containers:   [],
-  filtered:     [],
-  kbSettings:   {},
-  filter:       'all',
-  catFilter:    '',
-  search:       '',
-  deleteTarget: null,
+  companyId:        null,
+  containers:       [],
+  filtered:         [],
+  kbSettings:       {},
+  filter:           'all',
+  catFilter:        '',
+  search:           '',
+  deleteTarget:     null,
+  companyVariables: new Map(),  // {varName → value} — same store as trigger card variables
+  detectedVars:     new Set(),  // variable names found in KC section content
 };
 
 // Category dot colour palette — cycles through for variety
@@ -737,10 +771,12 @@ async function loadContainers() {
   try {
     const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
 
-    S.containers = data.containers || [];
+    S.containers       = data.containers || [];
+    S.companyVariables = new Map(Object.entries(data.companyVariables || {}));
     _updateStats();
     _populateCatFilter();
     applyFilters();
+    extractAndRenderKCVariables();  // scan sections for {placeholders} and show table
   } catch (err) {
     console.error('[services.html] loadContainers error:', err);
     document.getElementById('cardsGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div class="empty-title">Failed to load</div><div class="empty-desc">Could not load knowledge containers. Check your connection and try again.</div></div>';
@@ -849,6 +885,131 @@ function applyFilters() {
   S.filtered = list;
   document.getElementById('resultCount').textContent = `${list.length} container${list.length !== 1 ? 's' : ''}`;
   _renderCards();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KC VARIABLES — auto-detect {placeholders} in section content, render table
+// Same store as trigger card variables (CompanyTriggerSettings.companyVariables)
+// PUT /api/admin/agent2/company/:id/variables — identical to triggers.html flow
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Variables that are runtime-resolved, not admin-set */
+const KC_RUNTIME_VARIABLES = new Set(['name']);
+const KC_RUNTIME_INFO = {
+  name: 'Auto-filled from caller name extraction at runtime. Leave empty for auto, or type a static override.',
+};
+
+function _extractVarsFromText(text) {
+  if (!text) return [];
+  const found = [];
+  const re = /\{(\w+)\}/g;
+  let m;
+  while ((m = re.exec(text)) !== null) found.push(m[1]);
+  return found;
+}
+
+function extractAndRenderKCVariables() {
+  S.detectedVars.clear();
+  for (const c of S.containers) {
+    for (const sec of (c.sections || [])) {
+      _extractVarsFromText(sec.content).forEach(v => S.detectedVars.add(v));
+      _extractVarsFromText(sec.label).forEach(v => S.detectedVars.add(v));
+    }
+    // Also scan closing prompt / booking phrase
+    _extractVarsFromText(c.closingPrompt).forEach(v => S.detectedVars.add(v));
+  }
+  renderKCVariables();
+}
+
+function renderKCVariables() {
+  const card  = document.getElementById('kcVariablesCard');
+  const tbody = document.getElementById('kcVariablesTableBody');
+  const empty = document.getElementById('kcVariablesEmpty');
+  if (!card || !tbody) return;
+
+  if (S.detectedVars.size === 0) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'block';
+  empty.style.display = 'none';
+
+  const sorted = Array.from(S.detectedVars).sort();
+  tbody.innerHTML = sorted.map(varName => {
+    const isRuntime = KC_RUNTIME_VARIABLES.has(varName);
+    const value     = S.companyVariables.get(varName) || '';
+    const hasValue  = value.trim().length > 0;
+
+    if (isRuntime) {
+      return `<tr style="border-bottom:1px solid #e5e7eb;background:#f0fdf4;">
+        <td style="padding:12px 16px;">
+          <code style="background:#dcfce7;padding:4px 8px;border-radius:4px;color:#166534;font-weight:600;font-size:0.875rem;">{${_esc(varName)}}</code>
+        </td>
+        <td style="padding:12px 16px;">
+          <input type="text" class="form-input kc-var-input" data-variable="${_esc(varName)}"
+            value="${_esc(value)}" placeholder="Leave empty for auto, or type override..."
+            style="margin:0;border-color:#86efac;background:#f0fdf4;"/>
+          <div style="font-size:11px;color:#15803d;margin-top:4px;">${_esc(KC_RUNTIME_INFO[varName] || 'Resolved at call time')}</div>
+        </td>
+        <td style="padding:12px 16px;">
+          <span style="color:#166534;font-weight:600;font-size:0.875rem;">${hasValue ? '✅ Override' : '⚡ Auto'}</span>
+        </td>
+      </tr>`;
+    }
+
+    const statusColour = hasValue ? '#16a34a' : '#dc2626';
+    const statusText   = hasValue ? '✅ Set'   : '🔴 Required';
+    const codeColour   = hasValue ? '#111827'  : '#dc2626';
+    const borderStyle  = hasValue ? '' : 'border-color:#dc2626;background:#fef2f2;';
+    return `<tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:12px 16px;">
+        <code style="background:#f3f4f6;padding:4px 8px;border-radius:4px;color:${codeColour};font-weight:600;font-size:0.875rem;">{${_esc(varName)}}</code>
+      </td>
+      <td style="padding:12px 16px;">
+        <input type="text" class="form-input kc-var-input" data-variable="${_esc(varName)}"
+          value="${_esc(value)}" placeholder="Enter value..."
+          style="margin:0;${borderStyle}"/>
+      </td>
+      <td style="padding:12px 16px;">
+        <span style="color:${statusColour};font-weight:600;font-size:0.875rem;">${statusText}</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Event delegation — re-attach on every render to avoid stale handlers
+  tbody.onchange = null;
+  tbody.addEventListener('change', _kcVarChange);
+  tbody.addEventListener('blur',   _kcVarBlur, true);
+}
+
+function _kcVarChange(e) {
+  if (e.target.classList.contains('kc-var-input')) {
+    saveKCVariable(e.target.dataset.variable, e.target.value.trim());
+  }
+}
+function _kcVarBlur(e) {
+  if (e.target.classList.contains('kc-var-input')) {
+    saveKCVariable(e.target.dataset.variable, e.target.value.trim());
+  }
+}
+
+async function saveKCVariable(varName, value) {
+  try {
+    S.companyVariables.set(varName, value);
+    const result = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/variables`,
+      { method: 'PUT', body: { variables: Object.fromEntries(S.companyVariables) } }
+    );
+    renderKCVariables();
+    _toast(`{${varName}} saved`, 'success');
+    if (result.audioInvalidated && result.invalidatedRuleIds?.length > 0) {
+      _toast(`${result.invalidatedRuleIds.length} trigger audio(s) need regeneration — variable changed`, 'info');
+    }
+  } catch (err) {
+    console.error('[KC Variables] Save failed:', err);
+    _toast('Could not save variable', 'error');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
