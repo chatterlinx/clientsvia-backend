@@ -389,8 +389,16 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // Check if the step made progress (new data captured or step changed)
   const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
 
-  // If step advanced, or no user input, or this is a data-entry step → return as-is
-  if (advanced || !userInput?.trim() || DATA_ENTRY_STEPS.has(prevSnap.step)) {
+  // If step advanced or no user input → return as-is
+  if (advanced || !userInput?.trim()) {
+    return stepResult;
+  }
+
+  // DATA-ENTRY STEPS bypass 123RP to prevent false-positives on phone digits,
+  // address names, etc. — UNLESS the input is clearly a question/confusion
+  // signal that couldn't possibly be raw data. Example: "what are you booking?"
+  // at COLLECT_PHONE step — ignore the step result, let 123RP answer it.
+  if (DATA_ENTRY_STEPS.has(prevSnap.step) && !_isClearQuestion(userInput)) {
     return stepResult;
   }
 
@@ -589,6 +597,49 @@ function _isLikelyOffTopic(userInput, step) {
   if (step === STEPS.CONFIRM && wordCount < 8) return false;
 
   return false;
+}
+
+/**
+ * _isClearQuestion — true when input is unmistakably a question or expression
+ * of confusion/doubt, not raw data being provided for a booking step.
+ *
+ * This is the narrow exception that allows 123RP to fire even at DATA_ENTRY_STEPS
+ * (phone, address, etc.) so caller questions during booking are answered rather
+ * than silently swallowed.
+ *
+ * Conservative: must match unambiguous signals only. "10" or "Smith" must NOT match.
+ * Examples that fire:
+ *   "What are you booking? I mean are you able to do the maintenance?"
+ *   "Wait, what is this for?"
+ *   "I'm confused — what are we scheduling?"
+ *   "Actually hold on, do you do maintenance?"
+ * Examples that do NOT fire:
+ *   "555-1234"  → phone number
+ *   "123 Main Street" → address
+ *   "yeah"  → short ambiguous input
+ */
+function _isClearQuestion(userInput) {
+  if (!userInput?.trim()) return false;
+  const lc = userInput.toLowerCase().trim();
+
+  // Explicit question mark anywhere → caller is asking a question
+  if (lc.includes('?')) return true;
+
+  // Strong question/confusion lead-ins
+  const CLEAR_SIGNALS = [
+    'what are you booking', 'what are you scheduling', 'what is this for',
+    'what do you mean',     'what does that mean',
+    'i want to ask',        'i was wondering',        'wondering if',
+    'are you able to',      'can you do',             'do you do',
+    'do you offer',         'is that something',      'is this something',
+    'hold on',              'wait a minute',          'wait wait',
+    'actually wait',        'actually hold on',
+    'i am confused',        'im confused',            "i don't understand",
+    'i dont understand',    'not sure what',          'not sure why',
+    'what exactly',         'why are you',            'why do you',
+  ];
+
+  return CLEAR_SIGNALS.some(signal => lc.includes(signal));
 }
 
 /**

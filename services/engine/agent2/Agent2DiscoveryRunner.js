@@ -2217,7 +2217,19 @@ class Agent2DiscoveryRunner {
             'what is the price','whats the price','what is the rate','whats the rate',
             // "First I want/like/need to know" — caller is info-gathering, not committing
             'first like to know','first want to know','first need to know',
-            'like to know','need to know first','want to know first'
+            'like to know','need to know first','want to know first',
+            // "I was wondering / wondering if" — polite question preface
+            // e.g. "yes I would, I was wondering if we can do a maintenance"
+            'i was wondering','was wondering','wondering if','i wonder',
+            // "Is that something / is this something" — questioning capability
+            // e.g. "is that something we can do?", "is this something you offer?"
+            'is that something','is this something','is that possible','is this possible',
+            // "Are you able to / can you do" — asking about service availability
+            // e.g. "are you able to do the maintenance?", "can you do a tune-up?"
+            'are you able to','can you do','can you still','can you also',
+            'do you do','do you offer','do you still do','do you also do',
+            // "Is it possible / would it be possible" — conditional question
+            'is it possible','would it be possible','would that be possible'
           ],
           response: ''
         },
