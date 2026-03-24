@@ -418,51 +418,48 @@ async function _handleSPFUQContinue({
     }],
   }).catch(() => {});
 
-  // ── PFUQ re-assert: if booking question was pending, append + re-set ──────
-  const _finalPathSC     = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_SPFUQ_CONTINUE;
-  const _finalResponseSC = pendingBookingQuestion
-    ? `${kcResult.response} ${pendingBookingQuestion}`
-    : kcResult.response;
+  // ── Path: KC_PFUQ_REASK when booking consent was pending ──────────────────
+  // Groq's closingPrompt already asked the booking question naturally as part
+  // of its response. We re-assert PFUQ in state ONLY — no second question is
+  // appended to the spoken response. The consent gate catches yes/no next turn.
+  const finalPath = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_SPFUQ_CONTINUE;
 
   nextState.agent2            = nextState.agent2 || {};
   nextState.agent2.discovery  = nextState.agent2.discovery || {};
-  nextState.agent2.discovery.lastPath    = _finalPathSC;
+  nextState.agent2.discovery.lastPath    = finalPath;
   nextState.agent2.discovery.lastKCTitle = anchorMatch.title;
 
   if (pendingBookingQuestion) {
-    // Re-assert PFUQ so the consent gate fires again next turn
     nextState.agent2.discovery.pendingFollowUpQuestion     = pendingBookingQuestion;
     nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn ?? 0;
     emit('KC_PFUQ_REASK_FIRED', {
       containerId:    String(anchorMatch._id || anchorMatch.title || ''),
       containerTitle: anchorMatch.title,
       turn,
-      path:           _finalPathSC,
+      path:           finalPath,
     });
   }
 
   emit('KC_GROQ_ANSWERED', {
-    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: _finalPathSC,
+    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: finalPath,
   });
 
   logger.info('[KC_ENGINE] ✅ KC_SPFUQ_CONTINUE complete', {
     companyId, callSid, containerTitle: anchorMatch.title,
     intent: kcResult.intent, latencyMs: Date.now() - startMs,
-    pfuqReask: !!pendingBookingQuestion,
   });
 
   return {
-    response:    _finalResponseSC,
+    response:    kcResult.response,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(_finalPathSC, {
+    _123rp:      _build123rp(finalPath, {
       containerId:    String(anchorMatch._id || anchorMatch.title || ''),
       containerTitle: anchorMatch.title,
       kcId:           anchorMatch.kcId || null,
       intent:         kcResult.intent,
       latencyMs:      Date.now() - startMs,
       spfuqActive:    true,
-      pfuqReask:      !!pendingBookingQuestion,
     }),
   };
 }
@@ -479,14 +476,12 @@ async function _handleKCMatch({
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
   const containerId    = String(container._id || containerTitle);
-  const isHop         = spfuq && !spfuq; // already cleared above if hop — always false here; explicit label
-  const path           = PATH.KC_DIRECT_ANSWER;
 
   logger.info('[KC_ENGINE] Container matched', {
     companyId, callSid, containerTitle, score: match.score, turn,
   });
 
-  emit('KC_CONTAINER_MATCHED', { containerTitle, score: match.score, path });
+  emit('KC_CONTAINER_MATCHED', { containerTitle, score: match.score, path: PATH.KC_DIRECT_ANSWER });
 
   let kcResult;
   try {
@@ -581,44 +576,41 @@ async function _handleKCMatch({
     }],
   }).catch(() => {});
 
-  // ── PFUQ re-assert: if booking question was pending, append + re-set ──────
-  const _finalPathDA     = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_DIRECT_ANSWER;
-  const _finalResponseDA = pendingBookingQuestion
-    ? `${kcResult.response} ${pendingBookingQuestion}`
-    : kcResult.response;
+  // ── Path: KC_PFUQ_REASK when booking consent was pending ──────────────────
+  // Groq's closingPrompt already asked the booking question naturally as part
+  // of its response. We re-assert PFUQ in state ONLY — no second question is
+  // appended to the spoken response. The consent gate catches yes/no next turn.
+  const finalPath = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_DIRECT_ANSWER;
 
   nextState.agent2            = nextState.agent2 || {};
   nextState.agent2.discovery  = nextState.agent2.discovery || {};
-  nextState.agent2.discovery.lastPath    = _finalPathDA;
+  nextState.agent2.discovery.lastPath    = finalPath;
   nextState.agent2.discovery.lastKCTitle = containerTitle;
 
   if (pendingBookingQuestion) {
-    // Re-assert PFUQ so the consent gate fires again next turn
     nextState.agent2.discovery.pendingFollowUpQuestion     = pendingBookingQuestion;
     nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn ?? 0;
-    emit('KC_PFUQ_REASK_FIRED', { containerId, containerTitle, turn, path: _finalPathDA });
+    emit('KC_PFUQ_REASK_FIRED', { containerId, containerTitle, turn, path: finalPath });
   }
 
   emit('KC_GROQ_ANSWERED', {
-    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: _finalPathDA,
+    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: finalPath,
   });
 
   logger.info('[KC_ENGINE] ✅ KC_DIRECT_ANSWER complete', {
     companyId, callSid, containerTitle,
     intent: kcResult.intent, latencyMs: Date.now() - startMs,
-    pfuqReask: !!pendingBookingQuestion,
   });
 
   return {
-    response:    _finalResponseDA,
+    response:    kcResult.response,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(_finalPathDA, {
+    _123rp:      _build123rp(finalPath, {
       containerId, containerTitle, kcId: container.kcId || null,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
       spfuqActive: false,
-      pfuqReask:   !!pendingBookingQuestion,
     }),
   };
 }

@@ -40,24 +40,45 @@
  * Keep phrases in lowercase. Normalization is applied before matching.
  */
 const BOOKING_PHRASES = [
-  // Direct affirmations
+  // ── Direct affirmations (single-word whole-word boundary match) ───────────
   'yes',
   'yeah',
   'yep',
   'yup',
   'sure',
+  'ok',
+  'okay',
+  'alright',
   'absolutely',
   'definitely',
   'of course',
   'for sure',
 
-  // Explicit booking signals
+  // ── Composite affirmations (multi-word substring match) ───────────────────
+  'ok go ahead',
+  'ok sounds good',
+  'okay go ahead',
+  'okay sounds good',
+  'alright go ahead',
+  'alright sounds good',
+  'sounds great',
+  'that works',
+  'works for me',
+  'yes please',
+  'please do',
+
+  // ── Explicit booking signals ───────────────────────────────────────────────
   'book it',
+  'book a visit',
+  'book a service',
+  'book a service call',
   'book the appointment',
   'book an appointment',
   'schedule',
   'schedule it',
   'schedule a visit',
+  'schedule a service',
+  'schedule a service call',
   'schedule an appointment',
   'make an appointment',
   'set up a visit',
@@ -70,9 +91,17 @@ const BOOKING_PHRASES = [
   'i\'m ready',
   'ready to book',
   'ready to schedule',
+
+  // ── Availability / service visit requests ─────────────────────────────────
   'when can you come',
   'when can someone come',
   'when are you available',
+  'when can you come out',
+  'send someone out',
+  'have someone come out',
+  'need someone to come',
+
+  // ── Request forms ──────────────────────────────────────────────────────────
   'please schedule',
   'please book',
   'i want to book',
