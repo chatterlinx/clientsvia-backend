@@ -13,16 +13,16 @@
   <style>
     /* ── Design tokens ───────────────────────────────────────────────────── */
     :root {
-      --color-primary:    #6366f1;
-      --color-primary-dk: #4f46e5;
-      --bg-page:          #f5f3ff;
+      --color-primary:    #0ea5e9;
+      --color-primary-dk: #0284c7;
+      --bg-page:          #f0f9ff;
       --bg-card:          #ffffff;
       --bg-header:        #ffffff;
       --text-primary:     #0f172a;
       --text-muted:       #64748b;
       --text-xs:          #94a3b8;
       --border:           #e2e8f0;
-      --border-focus:     #6366f1;
+      --border-focus:     #0ea5e9;
       --radius-card:      12px;
       --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
     }
@@ -117,7 +117,7 @@
     }
     .section-number {
       font-size: 11px; font-weight: 700; color: var(--color-primary);
-      background: #ede9fe; border-radius: 4px;
+      background: #e0f2fe; border-radius: 4px;
       padding: 1px 7px; min-width: 26px; text-align: center;
     }
     .section-label-input {
@@ -137,11 +137,11 @@
     .btn-add-section {
       display: flex; align-items: center; justify-content: center; gap: 6px;
       width: 100%; padding: 10px;
-      border: 2px dashed #c4b5fd; border-radius: 10px; background: #f5f3ff;
+      border: 2px dashed #7dd3fc; border-radius: 10px; background: #f0f9ff;
       color: var(--color-primary); font-size: 13px; font-weight: 600;
       cursor: pointer; transition: all .15s;
     }
-    .btn-add-section:hover { background: #ede9fe; border-color: var(--color-primary); }
+    .btn-add-section:hover { background: #e0f2fe; border-color: var(--color-primary); }
 
     /* ── Keyword chip input ──────────────────────────────────────────────── */
     .keyword-input-wrap {
@@ -152,11 +152,11 @@
     .keyword-input-wrap:focus-within { border-color: var(--border-focus); }
     .kw-tag {
       display: flex; align-items: center; gap: 4px;
-      background: #ede9fe; color: #5b21b6; border-radius: 4px;
+      background: #e0f2fe; color: #075985; border-radius: 4px;
       padding: 3px 8px; font-size: 12px; font-weight: 500;
     }
     .kw-tag button {
-      border: none; background: none; color: #5b21b6; cursor: pointer;
+      border: none; background: none; color: #075985; cursor: pointer;
       padding: 0; font-size: 14px; line-height: 1; display: flex;
     }
     .kw-tag button:hover { color: #dc2626; }
@@ -166,12 +166,12 @@
     }
     .btn-generate-kw {
       display: flex; align-items: center; gap: 6px;
-      padding: 7px 14px; border-radius: 8px; border: 1px solid #c4b5fd;
-      background: #f5f3ff; color: var(--color-primary);
+      padding: 7px 14px; border-radius: 8px; border: 1px solid #7dd3fc;
+      background: #f0f9ff; color: var(--color-primary);
       font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
       white-space: nowrap;
     }
-    .btn-generate-kw:hover { background: #ede9fe; border-color: var(--color-primary); }
+    .btn-generate-kw:hover { background: #e0f2fe; border-color: var(--color-primary); }
     .btn-generate-kw:disabled { opacity: .6; cursor: not-allowed; }
     .kw-hint { font-size: 11px; color: var(--text-xs); margin-top: 3px; }
 
@@ -182,7 +182,7 @@
       padding: 12px 14px; border-radius: 8px;
       border: 2px solid var(--border); cursor: pointer; transition: all .15s;
     }
-    .booking-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f5f3ff; }
+    .booking-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f0f9ff; }
     .booking-radio-label input { margin-top: 2px; accent-color: var(--color-primary); flex-shrink: 0; }
     .booking-radio-text strong { display: block; font-size: 13px; font-weight: 600; }
     .booking-radio-text small  { font-size: 11px; color: var(--text-muted); }
@@ -242,7 +242,7 @@
     @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .toast.success { border-color: #86efac; background: #f0fdf4; color: #15803d; }
     .toast.error   { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
-    .toast.info    { border-color: #c4b5fd; background: #f5f3ff; color: #5b21b6; }
+    .toast.info    { border-color: #7dd3fc; background: #f0f9ff; color: #075985; }
 
     /* ── Loading state ───────────────────────────────────────────────────── */
     .loading-overlay {
@@ -271,8 +271,8 @@
     .kc-id-tag {
       display: inline-flex; align-items: center; gap: 4px;
       font-family: 'SFMono-Regular', Consolas, monospace;
-      font-size: 11px; font-weight: 600; color: #6366f1;
-      background: #eef2ff; border: 1px solid #c7d2fe;
+      font-size: 11px; font-weight: 600; color: #0ea5e9;
+      background: #f0f9ff; border: 1px solid #bae6fd;
       padding: 3px 10px; border-radius: 5px;
       user-select: all; letter-spacing: 0.03em;
     }

@@ -13,19 +13,19 @@
   <style>
     /* ── Design tokens ───────────────────────────────────────────────────── */
     :root {
-      --color-primary:    #6366f1;
-      --color-primary-dk: #4f46e5;
+      --color-primary:    #0ea5e9;
+      --color-primary-dk: #0284c7;
       --color-success:    #10b981;
       --color-advisor:    #f59e0b;
       --color-danger:     #ef4444;
-      --bg-page:          #f5f3ff;
+      --bg-page:          #f0f9ff;
       --bg-card:          #ffffff;
       --bg-header:        #ffffff;
       --text-primary:     #0f172a;
       --text-muted:       #64748b;
       --text-xs:          #94a3b8;
       --border:           #e2e8f0;
-      --border-focus:     #6366f1;
+      --border-focus:     #0ea5e9;
       --radius-card:      12px;
       --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
     }
@@ -69,7 +69,7 @@
     /* ── How It Works banner (collapsible) ───────────────────────────────── */
     .banner-wrap { padding: 20px 24px 0; }
     .info-banner {
-      background: #ede9fe; border: 1px solid #c4b5fd;
+      background: #e0f2fe; border: 1px solid #7dd3fc;
       border-radius: var(--radius-card);
       overflow: hidden;
     }
@@ -78,17 +78,17 @@
       padding: 14px 20px; cursor: pointer; user-select: none;
     }
     .banner-header-left { display: flex; align-items: center; gap: 10px; }
-    .banner-title { font-size: 14px; font-weight: 600; color: #4c1d95; }
+    .banner-title { font-size: 14px; font-weight: 600; color: #0c4a6e; }
     .banner-subtitle { font-size: 12px; color: #6d28d9; margin-top: 1px; }
     .banner-body { padding: 0 20px 16px; }
     .banner-body.collapsed { display: none; }
-    .banner-body p { font-size: 13px; color: #4c1d95; line-height: 1.6; margin-bottom: 10px; }
+    .banner-body p { font-size: 13px; color: #0c4a6e; line-height: 1.6; margin-bottom: 10px; }
     .banner-pills { display: flex; gap: 8px; flex-wrap: wrap; }
     .banner-pill {
       font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
       border: 1px solid;
     }
-    .banner-pill.groq   { background: #ede9fe; border-color: #a78bfa; color: #5b21b6; }
+    .banner-pill.groq   { background: #e0f2fe; border-color: #38bdf8; color: #075985; }
     .banner-pill.redis  { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
     .banner-pill.mongo  { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
     .banner-pill.check  { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
@@ -168,7 +168,7 @@
       padding: 12px 14px; border-radius: 8px; border: 2px solid var(--border);
       cursor: pointer; transition: all .15s;
     }
-    .offer-mode-option.selected { border-color: var(--color-primary); background: #f5f3ff; }
+    .offer-mode-option.selected { border-color: var(--color-primary); background: #f0f9ff; }
     .offer-mode-option input { margin-top: 2px; accent-color: var(--color-primary); }
     .offer-mode-text strong { display: block; font-size: 13px; font-weight: 600; }
     .offer-mode-text small  { font-size: 11px; color: var(--text-muted); }
@@ -246,7 +246,7 @@
       transition: box-shadow .15s, border-color .15s;
       overflow: hidden;
     }
-    .kc-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.10); border-color: #c4b5fd; }
+    .kc-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.10); border-color: #7dd3fc; }
     .kc-card.inactive { opacity: .6; }
 
     .kc-card-header {
@@ -263,13 +263,13 @@
     .kc-id {
       display: inline-flex; align-items: center; gap: 5px;
       font-family: 'SFMono-Regular', Consolas, monospace;
-      font-size: 10px; font-weight: 600; color: #6366f1;
-      background: #eef2ff; border: 1px solid #c7d2fe;
+      font-size: 10px; font-weight: 600; color: #0ea5e9;
+      background: #f0f9ff; border: 1px solid #bae6fd;
       padding: 2px 7px; border-radius: 4px; margin-top: 4px;
       cursor: pointer; user-select: none; width: fit-content;
       transition: background .15s;
     }
-    .kc-id:hover { background: #e0e7ff; }
+    .kc-id:hover { background: #e0f2fe; }
     .kc-id svg { flex-shrink: 0; }
     .kc-badges { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
     .badge {
@@ -277,12 +277,12 @@
       border: 1px solid; text-transform: uppercase; letter-spacing: .4px;
       white-space: nowrap;
     }
-    .badge-cat     { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
+    .badge-cat     { background: #f0f9ff; border-color: #7dd3fc; color: #075985; }
     .badge-off     { background: #f8fafc; border-color: #cbd5e1; color: #94a3b8; }
     .badge-book    { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
     .badge-advisor { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
     .badge-none    { background: #f1f5f9; border-color: #cbd5e1; color: #64748b; }
-    .badge-limit   { background: #ede9fe; border-color: #a78bfa; color: #4c1d95; }
+    .badge-limit   { background: #e0f2fe; border-color: #38bdf8; color: #0c4a6e; }
 
     .kc-card-body { padding: 12px 16px; flex: 1; }
 
@@ -407,14 +407,14 @@
     @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .toast.success { border-color: #86efac; background: #f0fdf4; color: #15803d; }
     .toast.error   { border-color: #fca5a5; background: #fef2f2; color: #dc2626; }
-    .toast.info    { border-color: #c4b5fd; background: #f5f3ff; color: #5b21b6; }
+    .toast.info    { border-color: #7dd3fc; background: #f0f9ff; color: #075985; }
 
     /* ── KC ID badge ─────────────────────────────────────────────────────── */
     .kc-id {
       display: inline-flex; align-items: center; gap: 4px;
       font-family: 'SFMono-Regular', Consolas, monospace;
-      font-size: 10px; font-weight: 600; color: #6366f1;
-      background: #eef2ff; border: 1px solid #c7d2fe;
+      font-size: 10px; font-weight: 600; color: #0ea5e9;
+      background: #f0f9ff; border: 1px solid #bae6fd;
       padding: 2px 7px; border-radius: 4px; margin-top: 4px;
       cursor: default; user-select: all; width: fit-content;
       letter-spacing: 0.02em;
@@ -612,7 +612,7 @@ const S = {
 
 // Category dot colour palette — cycles through for variety
 const CAT_COLOURS = [
-  '#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6',
+  '#0ea5e9','#10b981','#f59e0b','#ef4444','#3b82f6',
   '#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'
 ];
 const _catColour = (() => {
