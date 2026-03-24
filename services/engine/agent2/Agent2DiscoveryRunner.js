@@ -2212,7 +2212,12 @@ class Agent2DiscoveryRunner {
             'extra charge','additional charge','out of pocket',
             'covered under','under warranty','is it under warranty',
             'warranty cover','does warranty','will my warranty',
-            'is it free','no charge','no cost','free of charge'
+            'is it free','no charge','no cost','free of charge',
+            'pricing','prices','what is your pricing','what are your prices',
+            'what is the price','whats the price','what is the rate','whats the rate',
+            // "First I want/like/need to know" — caller is info-gathering, not committing
+            'first like to know','first want to know','first need to know',
+            'like to know','need to know first','want to know first'
           ],
           response: ''
         },
@@ -2383,6 +2388,18 @@ class Agent2DiscoveryRunner {
         inputLenFUQ <= 8 && !isYesFUQ && !isNoFUQ && !isHesitantFUQ
       );
 
+      // ── Genuine YES vs qualified YES ───────────────────────────────────────
+      // "yeah I really like that but I first like to know about pricing" is NOT
+      // booking consent — the "yeah" is conversational, not a commitment.
+      // If questionSignal phrases appear alongside a YES word, the caller is
+      // info-gathering first. Used by ASKING_SPECIALS/ASKING_PRICING to decide
+      // BOOK vs REASK. (YES bucket uses its own residual-based check.)
+      const _isGenuineYesFUQ = isYesFUQ && !questionSignalPhrases.some(signal =>
+        signal.includes(' ')
+          ? inputLowerCleanFUQ.includes(signal)
+          : inputLowerCleanFUQ.split(/\s+/).includes(signal)
+      );
+
       // TIMING AFFIRMATION — catches implicit YES via scheduling phrases:
       // "as soon as possible", "first thing", "anytime works", etc.
       // Fires only when no primary bucket matched (avoids false-positives).
@@ -2533,7 +2550,7 @@ class Agent2DiscoveryRunner {
                       turn,
                     });
 
-                    if (_kcResSpecials.intent === KnowledgeContainerService.INTENT.BOOKING_READY || isYesFUQ) {
+                    if (_kcResSpecials.intent === KnowledgeContainerService.INTENT.BOOKING_READY || _isGenuineYesFUQ) {
                       // Caller ready to book — answer + route to booking lane
                       clearPendingFollowUp(nextState);
                       nextState.lane        = 'BOOKING';
@@ -2569,7 +2586,7 @@ class Agent2DiscoveryRunner {
             const promoSettings = await PromotionsInterceptor.getCompanySettings(companyId).catch(() => ({}));
             const activePromos  = await PromotionsInterceptor.getActivePromotions(companyId);
 
-            if (isYesFUQ) {
+            if (_isGenuineYesFUQ) {
               // ── PROMO_THEN_BOOK ─────────────────────────────────────────────────
               // Caller gave consent AND asked about specials (e.g. "yeah, any specials?").
               // Answer the promo question; transition to booking lane immediately.
@@ -2713,7 +2730,7 @@ class Agent2DiscoveryRunner {
                       turn,
                     });
 
-                    if (_kcResPricing.intent === KnowledgeContainerService.INTENT.BOOKING_READY || isYesFUQ) {
+                    if (_kcResPricing.intent === KnowledgeContainerService.INTENT.BOOKING_READY || _isGenuineYesFUQ) {
                       // Caller ready to book — answer + route to booking
                       clearPendingFollowUp(nextState);
                       nextState.lane        = 'BOOKING';
