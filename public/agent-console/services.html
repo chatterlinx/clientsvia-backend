@@ -390,7 +390,7 @@
 
 <!-- ── Sticky header ──────────────────────────────────────────────────────── -->
 <header class="page-header">
-  <a href="/agent-console/agent2.html" class="btn-back">
+  <a href="#" class="btn-back" id="btn-back">
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
     Back
   </a>
@@ -605,6 +605,9 @@ async function apiFetch(path, opts = {}) {
     document.getElementById('cardsGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">No company selected</div><div class="empty-desc">Please navigate here from the Agent Console with a companyId parameter.</div></div>';
     return;
   }
+
+  // Wire Back button — always returns to index with companyId preserved
+  document.getElementById('btn-back').href = `/agent-console/index.html?companyId=${S.companyId}`;
 
   // Wire Add button
   document.getElementById('btnAdd').href = `/agent-console/services-item.html?companyId=${S.companyId}`;
