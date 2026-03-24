@@ -209,10 +209,31 @@
 
     /* ── Container cards grid ────────────────────────────────────────────── */
     .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
       padding: 0 24px 40px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Category section divider ─────────────────────────────────────────── */
+    .cat-divider {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 8px; margin-bottom: 2px;
+    }
+    .cat-divider-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .cat-divider-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--text-muted);
+    }
+    .cat-divider-line {
+      flex: 1; height: 1px; background: var(--border);
+    }
+    .cat-divider-count {
+      font-size: 11px; color: var(--text-xs); font-weight: 500;
     }
 
     /* ── Container card ──────────────────────────────────────────────────── */
@@ -401,7 +422,6 @@
 
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
-      .cards-grid { grid-template-columns: 1fr; }
       .page-header { padding: 12px 16px; }
       .stats-bar, .toolbar, .banner-wrap, .settings-wrap { padding-left: 16px; padding-right: 16px; }
       .cards-grid { padding-left: 16px; padding-right: 16px; }
@@ -811,7 +831,37 @@ function _renderCards() {
     return;
   }
 
-  grid.innerHTML = S.filtered.map(c => _cardHTML(c)).join('');
+  // Group by category, preserving display order
+  // Uncategorised containers go into a "" bucket rendered last
+  const grouped = {};
+  const catOrder = [];
+  S.filtered.forEach(c => {
+    const cat = (c.category || '').trim();
+    if (!grouped[cat]) { grouped[cat] = []; catOrder.push(cat); }
+    grouped[cat].push(c);
+  });
+
+  // Only show category dividers when more than one distinct category present
+  const showDividers = Object.keys(grouped).length > 1;
+
+  const parts = [];
+  catOrder.forEach(cat => {
+    const cards = grouped[cat];
+    if (showDividers) {
+      const colour = _catColour(cat || null);
+      const label  = cat || 'Uncategorised';
+      parts.push(`
+        <div class="cat-divider">
+          <span class="cat-divider-dot" style="background:${colour}"></span>
+          <span class="cat-divider-label">${_esc(label)}</span>
+          <span class="cat-divider-line"></span>
+          <span class="cat-divider-count">${cards.length} container${cards.length !== 1 ? 's' : ''}</span>
+        </div>`);
+    }
+    parts.push(...cards.map(c => _cardHTML(c)));
+  });
+
+  grid.innerHTML = parts.join('');
 }
 
 function _cardHTML(c) {
