@@ -1764,6 +1764,42 @@ class Agent2DiscoveryRunner {
         // ── Response text MUST be declared first (used by pendingQuestion + return) ──
         const response = intakeResult.responseText;
 
+        // ══════════════════════════════════════════════════════════════════════════
+        // CALLER SCREENING GATE
+        // ══════════════════════════════════════════════════════════════════════════
+        // If Groq identifies the caller as a vendor, delivery person, or wrong
+        // number — AND the company has screening enabled — speak the configured
+        // message and hang up. Prevents discovery/booking pipeline from running
+        // for non-customer callers. endCallAfterResponse tells v2twilio to
+        // <Hangup> instead of <Gather> after speaking the response.
+        // ══════════════════════════════════════════════════════════════════════════
+        const _callerType = intakeResult.callerType || 'CUSTOMER';
+        const _screening  = safeObj(company?.knowledgeBaseSettings?.callerScreening, {});
+        if (_callerType !== 'CUSTOMER' && _screening.enabled) {
+          const _screenMsg =
+            (_callerType === 'VENDOR_SALES'  && _screening.vendorResponse?.trim())    ? _screening.vendorResponse.trim()      :
+            (_callerType === 'DELIVERY'      && _screening.deliveryResponse?.trim())   ? _screening.deliveryResponse.trim()    :
+            (_callerType === 'WRONG_NUMBER'  && _screening.wrongNumberResponse?.trim()) ? _screening.wrongNumberResponse.trim() :
+            (_screening.defaultResponse?.trim() || 'I\'m sorry, this line is for our customers. Please have a nice day.');
+
+          nextState.endCallAfterResponse = true;
+          emit('CALLER_SCREENING_INTERCEPT', { callerType: _callerType, turn, companyId, callSid });
+          logger.info('[INTAKE] Caller screening intercept', { callerType: _callerType, companyId, callSid });
+
+          return {
+            response:    _screenMsg,
+            matchSource: 'INTAKE_SCREENING',
+            state:       nextState,
+            _123rp: {
+              tier:      RESPONSE_TIER.TIER_2,
+              path:      'CALLER_SCREENING',
+              source:    'INTAKE_SCREENING',
+              latencyMs: intakeResult.latencyMs,
+            },
+          };
+        }
+        // ── END CALLER SCREENING GATE ─────────────────────────────────────────
+
         try {
           // ── SUCCESS: Write extracted entities into ScrabEngine state format ──
           const ext = intakeResult.extraction || {};

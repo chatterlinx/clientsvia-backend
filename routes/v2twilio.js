@@ -6208,7 +6208,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const isBookingNow     = (persistedState?.sessionMode === 'BOOKING' || persistedState?.lane === 'BOOKING');
       const justTransitionedToBooking = isBookingNow && !wasBookingBefore;
 
-      if (justTransitionedToBooking) {
+      // ── CALLER SCREENING: speak response then end the call ────────────────────
+      // Set when Agent2DiscoveryRunner's caller screening gate intercepts a
+      // non-customer caller (VENDOR_SALES, DELIVERY, WRONG_NUMBER).
+      // Play/say the screening message and hang up — no Gather, no booking.
+      if (persistedState?.endCallAfterResponse === true) {
+        if (audioUrl) twiml.play(audioUrl);
+        else twiml.say(escapeTwiML(responseText));
+        twiml.hangup();
+
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid, companyId: companyID,
+            type: 'CALLER_SCREENING_HANGUP',
+            turn: turnNumber,
+            data: { reason: 'endCallAfterResponse — caller screening intercept' }
+          }).catch(() => {});
+        }
+      } else if (justTransitionedToBooking) {
         // Play consent YES response, then booking bridge phrase, then redirect.
         // BookingLogicEngine fires on the redirect and immediately asks its
         // first question — no dead-air gap waiting for caller input.

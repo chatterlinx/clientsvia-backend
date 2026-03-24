@@ -679,7 +679,8 @@ async function _handleLLMFallback({
 
   emit('KC_GRACEFUL_ACK_FIRED', { companyId, callSid, turn });
 
-  const ackResponse = _gracefulAck();
+  const ackResponse = (company?.knowledgeBaseSettings?.fallbackResponse || '').trim()
+    || _gracefulAck();
 
   nextState.agent2            = nextState.agent2 || {};
   nextState.agent2.discovery  = nextState.agent2.discovery || {};

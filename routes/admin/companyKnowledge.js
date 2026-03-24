@@ -81,7 +81,9 @@ const ALLOWED_FIELDS = [
 
 // Allowed fields for settings PATCH
 const SETTINGS_FIELDS = [
-  'enabled', 'defaultWordLimit', 'bookingOfferMode', 'bookingOfferPhrase'
+  'enabled', 'defaultWordLimit', 'bookingOfferMode', 'bookingOfferPhrase',
+  'fallbackResponse',   // String — spoken by KC_GRACEFUL_ACK when all AI paths fail
+  'callerScreening',    // Object — { enabled, vendorResponse, deliveryResponse, wrongNumberResponse, defaultResponse }
 ];
 
 /**

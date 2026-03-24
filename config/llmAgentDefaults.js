@@ -454,6 +454,12 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
   if (extract.priorVisit !== false)         parts.push('- priorVisit: true if they mention a previous visit/appointment, false if they explicitly say first time, null if not mentioned');
   if (extract.urgency !== false)            parts.push('- urgency: "emergency" if life/safety/flooding/fire, "high" if same-day/urgent language, "normal" otherwise');
   if (extract.sameDayRequested !== false)   parts.push('- sameDayRequested: true if they explicitly ask for today/ASAP/same-day, false otherwise');
+  parts.push('- callerType: Classify who is calling — use ONLY these exact values:');
+  parts.push('    CUSTOMER      = a real customer or potential customer calling about service (DEFAULT — use this when in doubt)');
+  parts.push('    VENDOR_SALES  = someone trying to sell something to the business (ads, software, supplies, SEO, etc.)');
+  parts.push('    DELIVERY      = a delivery driver, courier, or logistics person making or scheduling a delivery');
+  parts.push('    WRONG_NUMBER  = they clearly reached the wrong business');
+  parts.push('  IMPORTANT: Default to CUSTOMER. Only use the other values when it is completely unambiguous.');
 
   parts.push(
     '',
@@ -573,7 +579,8 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     '    "employeeMentioned": "string|null — name of any employee/technician mentioned by caller",',
     '    "priorVisit": "boolean|null",',
     '    "urgency": "\\"normal\\"|\\"high\\"|\\"emergency\\"|null",',
-    '    "sameDayRequested": "boolean|null"',
+    '    "sameDayRequested": "boolean|null",',
+    '    "callerType": "\\"CUSTOMER\\"|\\"VENDOR_SALES\\"|\\"DELIVERY\\"|\\"WRONG_NUMBER\\""',
     '  },',
     '  "confidence": {',
     '    "firstName": "number|null (0.0-1.0)",',
