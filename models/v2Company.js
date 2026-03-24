@@ -4146,6 +4146,12 @@ const companySchema = new mongoose.Schema({
 
             discovery: {
                 enabled: { type: Boolean, default: false },
+                // ── DISCOVERY ENGINE SELECTION ──────────────────────────────
+                // 'kc'          → KC Discovery Engine (Groq-powered, SPFUQ anchoring)
+                // 'scrabengine' → Legacy keyword pipeline (triggers + interceptors)
+                // Default: 'kc'  Toggle: agent2.html > "🧠 Discovery Engine"
+                // ──────────────────────────────────────────────────────────
+                engine: { type: String, default: 'kc', enum: ['kc', 'scrabengine'] },
                 // UI-driven playbook + style blocks (stored as structured JSON)
                 style: { type: mongoose.Schema.Types.Mixed, default: {} },
                 playbook: { type: mongoose.Schema.Types.Mixed, default: {} },

@@ -428,10 +428,31 @@
     if (DOM.inputBridgeEnabled) {
       DOM.inputBridgeEnabled.addEventListener('change', () => { state.isDirty = true; });
     }
+    if (DOM.toggleKCEngineEnabled) {
+      DOM.toggleKCEngineEnabled.addEventListener('change', () => {
+        state.isDirty = true;
+        _updateEnginebadge();
+      });
+    }
 
     // Optimal defaults reset buttons
     document.getElementById('btn-reset-speech')?.addEventListener('click', resetSpeechToDefaults);
     document.getElementById('btn-reset-bridge')?.addEventListener('click', resetBridgeToDefaults);
+  }
+
+  /* --------------------------------------------------------------------------
+     DISCOVERY ENGINE BADGE
+     Updates the KC / SE pill badge next to the Discovery Engine toggle.
+     Called on: initial config load + toggle change.
+     -------------------------------------------------------------------------- */
+  function _updateEnginebadge() {
+    const badge = document.getElementById('discovery-engine-badge');
+    if (!badge) return;
+    const isKC = DOM.toggleKCEngineEnabled?.checked !== false; // default ON = KC
+    badge.textContent    = isKC ? 'KC' : 'SE';
+    badge.style.background    = isKC ? '#d1fae5' : '#f3f4f6';
+    badge.style.color         = isKC ? '#065f46' : '#374151';
+    badge.style.borderColor   = isKC ? '#6ee7b7' : '#d1d5db';
   }
 
   /* --------------------------------------------------------------------------
@@ -496,7 +517,9 @@
     }
     
     // Discovery Engine toggle (KC vs ScrabEngine)
-    if (DOM.toggleKCEngineEnabled) DOM.toggleKCEngineEnabled.checked = config.discovery?.engine === 'kc';
+    // Default: KC is ON unless engine is explicitly 'scrabengine'
+    if (DOM.toggleKCEngineEnabled) DOM.toggleKCEngineEnabled.checked = config.discovery?.engine !== 'scrabengine';
+    _updateEnginebadge();
 
     // Discovery style
     if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';

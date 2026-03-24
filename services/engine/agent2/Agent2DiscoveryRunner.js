@@ -3570,18 +3570,20 @@ class Agent2DiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
     // 🧠 KC DISCOVERY ENGINE SWITCH
     // ══════════════════════════════════════════════════════════════════════════
-    // When company.aiAgentSettings.agent2.discovery.engine === 'kc', bypass
-    // ScrabEngine + all legacy trigger/interceptor logic entirely and route
+    // Bypasses ScrabEngine + all legacy trigger/interceptor logic and routes
     // through the KC Discovery Engine (Groq-powered, SPFUQ-anchored).
     //
     // Toggle:     agent2.html > "🧠 Discovery Engine" card
     // Config:     company.aiAgentSettings.agent2.discovery.engine
-    // Values:     'scrabengine' (default, unchanged) | 'kc' (new engine)
+    // Values:     'kc' (DEFAULT) | 'scrabengine' (explicit opt-in to legacy)
+    //
+    // DEFAULT IS KC: Undefined / null / 'kc' all activate KC engine.
+    //   Only explicit 'scrabengine' bypasses to the legacy pipeline.
     //
     // Safety:     If KCDiscoveryRunner fails to load, logs error and falls
     //             through to ScrabEngine below — call never breaks.
     // ══════════════════════════════════════════════════════════════════════════
-    if (discoveryCfg.engine === 'kc') {
+    if (discoveryCfg.engine !== 'scrabengine') {
       try {
         const KCDiscoveryRunner = require('../kc/KCDiscoveryRunner');
         emit('KC_ENGINE_ACTIVATED', { companyId, callSid, turn });
