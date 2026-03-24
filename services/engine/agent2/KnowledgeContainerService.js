@@ -41,6 +41,7 @@
 
 const GroqStreamAdapter          = require('../../streaming/adapters/GroqStreamAdapter');
 const CompanyKnowledgeContainer  = require('../../../models/CompanyKnowledgeContainer');
+const CompanyTriggerSettings     = require('../../../models/CompanyTriggerSettings');
 const logger                     = require('../../../utils/logger');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,6 +126,60 @@ function _getRedis() {
 
 function _cacheKey(companyId) {
   return `knowledge:${companyId}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VARIABLE SUBSTITUTION
+// {placeholder} → real value, resolved from CompanyTriggerSettings.companyVariables
+// Same store as trigger card variables (triggers.html). Zero extra UI needed —
+// any variable defined there is automatically available in KC section content.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Per-process lazy cache — same pattern as triggerVariablesCache in Agent2DiscoveryRunner */
+const _kcVarCache = new Map();
+
+/**
+ * _resolveKCVariables — Substitute {placeholders} in KC section content
+ * with company-defined variables before the block reaches Groq.
+ *
+ * Example:  "Service call fee: {servicecallfee}" → "Service call fee: $69"
+ *
+ * Graceful degrade: if CompanyTriggerSettings is unavailable, returns text unchanged.
+ *
+ * @param {string} companyId
+ * @param {string} text — containerBlock string (assembled from sections)
+ * @returns {Promise<string>}
+ */
+async function _resolveKCVariables(companyId, text) {
+  if (!text || !companyId || !text.includes('{')) return text;
+  try {
+    let vars = _kcVarCache.get(companyId);
+    if (!vars) {
+      const settings = await CompanyTriggerSettings.findOne({ companyId }).lean();
+      vars = settings?.companyVariables instanceof Map
+        ? Object.fromEntries(settings.companyVariables)
+        : (settings?.companyVariables || {});
+      _kcVarCache.set(companyId, vars);
+    }
+    let result = text;
+    for (const [k, v] of Object.entries(vars)) {
+      if (!v) continue;
+      result = result.replace(new RegExp(`\\{${k}\\}`, 'gi'), v);
+    }
+    return result;
+  } catch (_e) {
+    return text; // non-fatal — Groq still fires, just sees raw placeholder
+  }
+}
+
+/**
+ * invalidateKCVariablesCache — Call this when company variables are saved
+ * so the next KC answer picks up the new values immediately.
+ *
+ * @param {string} companyId
+ */
+function invalidateKCVariablesCache(companyId) {
+  if (companyId) _kcVarCache.delete(companyId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -409,8 +464,8 @@ async function answer(opts) {
       ? kbSettings.defaultWordLimit
       : 20;
 
-  // Build prompt components
-  const containerBlock = _buildContainerBlock(container);
+  // Build prompt components — resolve {variables} so Groq sees real values
+  const containerBlock = await _resolveKCVariables(companyId, _buildContainerBlock(container));
   const systemPrompt   = _buildSystemPrompt({
     companyName,
     containerTitle,
@@ -480,6 +535,7 @@ module.exports = {
   detect,
   getActiveForCompany,
   invalidateCache,
+  invalidateKCVariablesCache,
   findContainer,
   answer,
   // Exported for tests
