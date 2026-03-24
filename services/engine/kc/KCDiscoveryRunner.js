@@ -382,6 +382,7 @@ async function _handleSPFUQContinue({
     _123rp:      _build123rp(PATH.KC_SPFUQ_CONTINUE, {
       containerId:    String(anchorMatch._id || anchorMatch.title || ''),
       containerTitle: anchorMatch.title,
+      kcId:           anchorMatch.kcId || null,
       intent:         kcResult.intent,
       latencyMs:      Date.now() - startMs,
       spfuqActive:    true,
@@ -455,7 +456,7 @@ async function _handleKCMatch({
       matchSource: 'KC_ENGINE',
       state:       nextState,
       _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, {
-        containerId, containerTitle,
+        containerId, containerTitle, kcId: container.kcId || null,
         intent: kcResult.intent, latencyMs: Date.now() - startMs,
       }),
     };
@@ -493,7 +494,7 @@ async function _handleKCMatch({
     matchSource: 'KC_ENGINE',
     state:       nextState,
     _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, {
-      containerId, containerTitle,
+      containerId, containerTitle, kcId: container.kcId || null,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
       spfuqActive: false,

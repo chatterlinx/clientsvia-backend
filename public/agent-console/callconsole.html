@@ -1097,6 +1097,67 @@
     }
 
     /* ─────────────────────────────────────────────────────────────────────
+       KC ENGINE BLOCK — Shown when KC Discovery Engine handled the turn
+       ───────────────────────────────────────────────────────────────────── */
+    .trace-kc-block {
+      background: rgba(99, 102, 241, 0.12);
+      border-left: 3px solid #6366f1;
+      border-radius: 4px;
+      padding: 6px 10px;
+      flex-direction: column !important;
+      gap: 5px !important;
+      align-items: flex-start !important;
+    }
+    .trace-kc-row1 {
+      display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    }
+    .trace-kc-row2 {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-left: 2px;
+    }
+    .trace-kc-engine-label {
+      color: #a78bfa; font-weight: 700; font-size: 11px;
+      text-transform: uppercase; letter-spacing: .05em;
+      min-width: unset; flex-shrink: 0;
+    }
+    .trace-kc-path {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 11px; font-weight: 700; color: #c4b5fd;
+      background: rgba(167, 139, 250, 0.18);
+      padding: 1px 7px; border-radius: 3px; letter-spacing: .02em;
+    }
+    .trace-kc-id {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 11px; font-weight: 600; color: #818cf8;
+      background: rgba(129, 140, 248, 0.18);
+      padding: 1px 7px; border-radius: 3px; letter-spacing: .05em;
+    }
+    .trace-kc-open-link {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 11px; font-weight: 600; color: #6366f1;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      padding: 1px 8px; border-radius: 3px;
+      text-decoration: none; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .trace-kc-open-link:hover {
+      background: rgba(99, 102, 241, 0.28); color: #a5b4fc;
+    }
+    .trace-kc-title {
+      color: #e2e8f0; font-size: 12px;
+    }
+    .trace-kc-latency {
+      color: #64748b; font-size: 11px;
+    }
+    .trace-kc-spfuq {
+      font-size: 10px; font-weight: 600; color: #fbbf24;
+      background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+      padding: 1px 6px; border-radius: 3px;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────────
        FLOW CHECKPOINTS — Pipeline step visibility
        Shows exactly which flow steps fired/skipped/failed per turn.
        ───────────────────────────────────────────────────────────────────── */

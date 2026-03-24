@@ -1338,8 +1338,12 @@
     const crashSection = summary.crashSection;
     const crashError = summary.crashError;
 
+    // Extract KC engine data (_123rp) — present when KC Discovery Engine handled the turn
+    const rp = summary._123rp || null;
+
     // Determine status class based on outcome
-    const isHealthy = triggerMatched || (responseSource.type === 'UI_OWNED' && !crashError);
+    const isKCHealthy = rp?.source === 'KC_ENGINE' && rp?.path !== 'KC_LLM_FALLBACK' && rp?.path !== 'KC_GRACEFUL_ACK';
+    const isHealthy = triggerMatched || isKCHealthy || (responseSource.type === 'UI_OWNED' && !crashError);
     const isCrash = exitReason === 'RUNTIME_CRASH' || crashError;
     const isWarning = !isHealthy && !isCrash && (fallbackUsed || exitReason);
     
@@ -1353,6 +1357,56 @@
 
     // Verdict (headline)
     rows.push(`<div class="trace-row trace-verdict ${statusClass}"><span class="trace-label">Verdict:</span> <span class="trace-value">${statusIcon} ${escapeHtml(verdict)}</span></div>`);
+
+    // ── KC ENGINE BLOCK — shown when KC Discovery Engine handled this turn ──
+    if (rp?.source === 'KC_ENGINE') {
+      const KC_PATH_LABELS = {
+        KC_DIRECT_ANSWER:  'Direct Answer',
+        KC_SPFUQ_CONTINUE: 'Follow-Up (SPFUQ)',
+        KC_TOPIC_HOP:      'Topic Hop',
+        KC_BOOKING_INTENT: 'Booking Intent',
+        KC_LLM_FALLBACK:   'LLM Fallback',
+        KC_GRACEFUL_ACK:   'Graceful Ack',
+      };
+      const kcPath      = rp.path || '';
+      const pathLabel   = KC_PATH_LABELS[kcPath] || kcPath;
+      const kcTitle     = rp.containerTitle || '—';
+      const kcId        = rp.kcId   || '';          // human ID: "700c4-01"
+      const objectId    = rp.containerId || '';     // MongoDB _id: for the link
+      const latencyMs   = typeof rp.latencyMs === 'number' ? rp.latencyMs : null;
+      const spfuqActive = rp.spfuqActive === true;
+
+      // Direct link to the KC card edit page
+      const openLink = (objectId && state.companyId)
+        ? `<a class="trace-kc-open-link"
+              href="/agent-console/services-item.html?companyId=${encodeURIComponent(state.companyId)}&itemId=${encodeURIComponent(objectId)}"
+              target="_blank"
+              title="Open this Knowledge Container in a new tab">
+             ✏️ Open KC
+           </a>`
+        : '';
+
+      const spfuqHtml  = spfuqActive
+        ? `<span class="trace-kc-spfuq">⚓ SPFUQ active</span>` : '';
+      const latencyHtml = latencyMs !== null
+        ? `<span class="trace-kc-latency">${latencyMs}ms</span>` : '';
+
+      rows.push(`
+        <div class="trace-row trace-kc-block">
+          <div class="trace-kc-row1">
+            <span class="trace-kc-engine-label">🧠 KC Engine</span>
+            <span class="trace-kc-path">${escapeHtml(pathLabel)}</span>
+            ${kcId ? `<span class="trace-kc-id">${escapeHtml(kcId)}</span>` : ''}
+            ${openLink}
+          </div>
+          <div class="trace-kc-row2">
+            <span class="trace-kc-title">${escapeHtml(kcTitle)}</span>
+            ${latencyHtml}
+            ${spfuqHtml}
+          </div>
+        </div>`);
+    }
+    // ── end KC ENGINE BLOCK ─────────────────────────────────────────────────
 
     // Owner
     rows.push(`<div class="trace-row"><span class="trace-label">Mic Owner:</span> <span class="trace-value">${escapeHtml(ownerSelected)}</span></div>`);
