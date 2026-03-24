@@ -769,6 +769,7 @@ function applyFilters() {
   if (S.search) {
     list = list.filter(c =>
       c.title.toLowerCase().includes(S.search) ||
+      (c.kcId || '').toLowerCase().includes(S.search) ||
       (c.category || '').toLowerCase().includes(S.search) ||
       (c.keywords || []).some(k => k.includes(S.search))
     );
