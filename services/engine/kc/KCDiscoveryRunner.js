@@ -51,6 +51,7 @@ const SPFUQService            = require('./SPFUQService');
 const KCBookingIntentDetector = require('./KCBookingIntentDetector');
 const KCS                     = require('../agent2/KnowledgeContainerService');
 const { callLLMAgentForFollowUp } = require('../agent2/Agent2DiscoveryRunner');
+const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesService');
 const logger                  = require('../../../utils/logger');
 
 // ============================================================================
@@ -106,6 +107,33 @@ function _cloneState(state) {
     return JSON.parse(JSON.stringify(state || {}));
   } catch (_e) {
     return state || {};
+  }
+}
+
+/**
+ * _writeDiscoveryNotes — Fire-and-forget write to DiscoveryNotesService.
+ *
+ * Tries update() first (normal path — notes already exist from intake/greeting).
+ * If the key isn't found yet (KC was the first thing this call hit), init()
+ * creates an empty record then update() merges the patch in.
+ *
+ * NEVER await this in the hot path — always call as:
+ *   _writeDiscoveryNotes(...).catch(() => {});
+ *
+ * Graceful degrade: any failure is swallowed — call continues, booking engine
+ * just starts without pre-filled context (already the current behaviour).
+ */
+async function _writeDiscoveryNotes(companyId, callSid, patch) {
+  try {
+    const result = await DiscoveryNotesService.update(companyId, callSid, patch);
+    if (result) return; // Notes existed — patch merged successfully
+
+    // Key not found — KC is the first handler this call hit (no prior intake).
+    // Init creates an empty record, then update merges our patch in.
+    await DiscoveryNotesService.init(companyId, callSid, null);
+    await DiscoveryNotesService.update(companyId, callSid, patch);
+  } catch (_e) {
+    // Non-fatal — booking engine degrades gracefully without discoveryNotes
   }
 }
 
@@ -188,6 +216,18 @@ class KCDiscoveryRunner {
       nextState.agent2.discovery                = nextState.agent2.discovery || {};
       nextState.agent2.discovery.pendingBookingFromKC = true;
       nextState.agent2.discovery.lastPath       = PATH.KC_BOOKING_INTENT;
+
+      // ── BOOKING HANDOFF: flip lane so v2twilio triggers the redirect ────────
+      nextState.lane        = 'BOOKING';
+      nextState.sessionMode = 'BOOKING';
+
+      // ── discoveryNotes: mark objective as BOOKING so BookingLogicEngine
+      //    has context on handoff (callReason already written on first KC match)
+      _writeDiscoveryNotes(companyId, callSid, {
+        objective:  'BOOKING',
+        turnNumber: turn ?? 0,
+        ...(callerName ? { entities: { firstName: callerName } } : {}),
+      }).catch(() => {});
 
       // Clear any active SPFUQ — booking intent ends the topic anchor
       SPFUQService.clear(companyId, callSid).catch(() => {});
@@ -361,6 +401,20 @@ async function _handleSPFUQContinue({
     subjectBrief: updatedBrief,
   }).catch(() => {});
 
+  // ── discoveryNotes: keep callReason + Q&A log current across SPFUQ turns ─
+  _writeDiscoveryNotes(companyId, callSid, {
+    callReason:         anchorMatch.title,
+    objective:          'DISCOVERY',
+    turnNumber:         turn ?? 0,
+    lastMeaningfulInput: userInput?.slice(0, 200) || null,
+    qaLog: [{
+      turn:      turn ?? 0,
+      question:  userInput,
+      answer:    kcResult.response?.slice(0, 200) || null,
+      timestamp: new Date().toISOString(),
+    }],
+  }).catch(() => {});
+
   nextState.agent2            = nextState.agent2 || {};
   nextState.agent2.discovery  = nextState.agent2.discovery || {};
   nextState.agent2.discovery.lastPath     = PATH.KC_SPFUQ_CONTINUE;
@@ -449,6 +503,18 @@ async function _handleKCMatch({
     nextState.agent2.discovery.pendingBookingFromKC = true;
     nextState.agent2.discovery.lastPath       = PATH.KC_BOOKING_INTENT;
 
+    // ── BOOKING HANDOFF: flip lane so v2twilio triggers the redirect ────────
+    nextState.lane        = 'BOOKING';
+    nextState.sessionMode = 'BOOKING';
+
+    // ── discoveryNotes: callReason + objective BOOKING for BookingLogicEngine
+    _writeDiscoveryNotes(companyId, callSid, {
+      callReason: containerTitle,
+      objective:  'BOOKING',
+      turnNumber: turn ?? 0,
+      ...(callerName ? { entities: { firstName: callerName } } : {}),
+    }).catch(() => {});
+
     SPFUQService.clear(companyId, callSid).catch(() => {});
 
     return {
@@ -473,6 +539,22 @@ async function _handleKCMatch({
     lastQuestion:      userInput,
     lastAnswer:        kcResult.response,
     subjectBrief:      newBrief,
+  }).catch(() => {});
+
+  // ── discoveryNotes: record callReason + Q&A so BookingLogicEngine knows
+  //    what the call was about when the caller eventually says "let's book" ──
+  _writeDiscoveryNotes(companyId, callSid, {
+    callReason:         containerTitle,
+    objective:          'DISCOVERY',
+    turnNumber:         turn ?? 0,
+    lastMeaningfulInput: userInput?.slice(0, 200) || null,
+    ...(callerName ? { entities: { firstName: callerName } } : {}),
+    qaLog: [{
+      turn:      turn ?? 0,
+      question:  userInput,
+      answer:    kcResult.response?.slice(0, 200) || null,
+      timestamp: new Date().toISOString(),
+    }],
   }).catch(() => {});
 
   nextState.agent2            = nextState.agent2 || {};
