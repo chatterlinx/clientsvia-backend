@@ -52,6 +52,7 @@ const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
 const { resolveAudioUrl } = require('../../services/engine/agent2/TriggerService');
 const InstantAudioService = require('../../services/instantAudio/InstantAudioService');
+const { invalidateKCVariablesCache } = require('../../services/engine/agent2/KnowledgeContainerService');
 
 // Helper to clear Redis cache after company config changes
 async function clearCompanyCache(companyId, context = '') {
@@ -1755,8 +1756,10 @@ router.put('/:companyId/variables',
       await settings.save();
 
       // If any variables changed, invalidate audio that uses them
+      // Also clear the KC variable cache so the next KC answer picks up new values
       let invalidationResult = { invalidatedCount: 0, invalidatedRuleIds: [] };
       if (changedVarNames.length > 0) {
+        invalidateKCVariablesCache(companyId);  // KC sections re-read on next call
         invalidationResult = await TriggerAudio.invalidateAudioUsingVariables(companyId, changedVarNames);
         
         if (invalidationResult.invalidatedCount > 0) {
