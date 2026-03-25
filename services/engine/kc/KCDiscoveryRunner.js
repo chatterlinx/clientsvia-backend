@@ -202,11 +202,22 @@ class KCDiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
     // GATE 1 — BOOKING INTENT CHECK  (~0ms, synchronous)
     // ══════════════════════════════════════════════════════════════════════════
-    // Checked FIRST before any KC work. If the caller says "let's book it",
-    // we don't need to answer another question — just route to booking.
+    // Only fires on PURE booking signals. If the caller's utterance also
+    // contains a question ("yeah but do you offer maintenance?"), the question
+    // takes priority — answer it first, let Groq's closingPrompt naturally
+    // re-offer booking. This mirrors the _pureYes filter in the SPFUQ×PFUQ
+    // interlock gate (Agent2DiscoveryRunner.js).
+    //
+    // Without this filter, "yeah I'd like to know if you offer maintenance"
+    // would fire KC_BOOKING_INTENT on "yeah" and the caller's question would
+    // never be answered — booking would hijack the call.
     // ══════════════════════════════════════════════════════════════════════════
 
-    if (KCBookingIntentDetector.isBookingIntent(userInput)) {
+    const _norm = (userInput || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
+    const _inputHasQuestion = _norm.includes('?') ||
+      /\b(what|how|why|when|which|where|does|do you|can you|is it|is there|include|cover|tell me|explain|about|more|offer|know)\b/.test(_norm);
+
+    if (!_inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput)) {
       logger.info('[KC_ENGINE] Booking intent detected — routing to KC_BOOKING_INTENT', {
         companyId, callSid, turn, inputPreview: _clip(userInput, 40),
       });

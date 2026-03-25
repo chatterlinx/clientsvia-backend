@@ -2208,7 +2208,7 @@ class Agent2DiscoveryRunner {
       if (discoveryCfg.engine !== 'scrabengine') {
         const _lc = (input || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
         const _hasQ = _lc.includes('?') ||
-          /\b(what|how|why|when|which|where|does|can you|do you|is it|is there|include|cover|tell me|explain|about|more)\b/.test(_lc);
+          /\b(what|how|why|when|which|where|does|can you|do you|is it|is there|include|cover|tell me|explain|about|more|offer|know)\b/.test(_lc);
         const _pureYes = !_hasQ &&
           /\b(yes|yeah|yep|yup|sure|ok|okay|book|schedule|go ahead|absolutely|lets do|set it up|sounds good|perfect|great|alright|do it|ready)\b/.test(_lc);
 
