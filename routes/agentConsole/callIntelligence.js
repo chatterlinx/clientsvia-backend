@@ -305,15 +305,106 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
     }
 
+    // ── BOOKING ENGINE DATA ──────────────────────────────────────────────
+    // BOOKING_LOGIC_STEP_RESULT → nextPromptPreview, currentStep, isComplete, latencyMs
+    // BOOKING_LOGIC_TRACE.payload.steps[] → BK_* events from BookingLogicEngine.events[]
+    // Booking turns do NOT emit A2_RESPONSE_READY / KC_GROQ_ANSWERED, so we
+    // read booking-specific trace events to populate agentResponse, routingTier,
+    // kcEngine (Tier 1.5 KC digression), and bookingStep details.
+    // ─────────────────────────────────────────────────────────────────────
+    const bookingStepResult = traceByKind.get(`${turnNum}:BOOKING_LOGIC_STEP_RESULT`);
+    const bookingTrace      = traceByKind.get(`${turnNum}:BOOKING_LOGIC_TRACE`);
+
+    if (bookingStepResult?.payload) {
+      const bsp   = bookingStepResult.payload;
+      const steps = bookingTrace?.payload?.steps || [];
+
+      // ── Booking step metadata ────────────────────────────────────────
+      turnData.bookingStep = {
+        currentStep: bsp.currentStep || null,
+        nameStage:   bsp.nameStage   || null,
+        isComplete:  bsp.isComplete  ?? false,
+        latencyMs:   bsp.latencyMs   ?? null,
+      };
+
+      // ── Parse BK_* step events to determine routing tier ────────────
+      const bpfuqGate   = steps.find(s => s.type === 'BK_BPFUQ_GATE');
+      const tier1Step   = steps.find(s => s.type === 'BK_123RP_TIER1');
+      const tier1_5Step = steps.find(s => s.type === 'BK_123RP_TIER1_5_KC');
+      const tier2Step   = steps.find(s => s.type === 'BK_123RP_TIER2');
+      const tier3Step   = steps.find(s => s.type === 'BK_123RP_TIER3');
+
+      // Highest tier wins (T2 > T1.5 > T1 > T3 > BPFUQ > normal)
+      let routingPath = 'BK_STEP_NORMAL';
+      let routingTierNum = 0;
+      if (bpfuqGate) {
+        const c = bpfuqGate.consent;
+        routingPath = c === 'YES' ? 'BK_BPFUQ_RESUME' : c === 'AMBIGUOUS' ? 'BK_BPFUQ_REASK' : 'BK_STEP_NORMAL';
+      }
+      if (tier3Step)   { routingPath = 'BK_CANNED_FALLBACK'; routingTierNum = 3; }
+      if (tier1Step)   { routingPath = 'BK_TRIGGER_MATCH';   routingTierNum = 1; }
+      if (tier1_5Step) { routingPath = 'BK_KC_DIGRESSION';   routingTierNum = 1.5; }
+      if (tier2Step)   { routingPath = 'BK_LLM_INTERCEPT';   routingTierNum = 2; }
+
+      turnData.routingTier = {
+        tier:   routingTierNum,
+        path:   routingPath,
+        source: 'BOOKING_ENGINE',
+      };
+
+      // ── KC digression (Tier 1.5) — container + KC ID ────────────────
+      if (tier1_5Step) {
+        turnData.kcEngine = {
+          containerTitle: tier1_5Step.containerTitle || null,
+          containerId:    tier1_5Step.containerId    || null,
+          kcId:           tier1_5Step.kcId           || null,
+          matchScore:     null,    // keyword match in booking path — no numeric score
+          groqIntent:     'ANSWERED',
+          groqLatencyMs:  null,
+          groqResponse:   (bsp.nextPromptPreview || '').substring(0, 500) || null,
+          path:           'BK_KC_DIGRESSION',
+          spfuqActive:    false,
+          bpfuqActive:    true,
+          llmFallback:    false,
+          gracefulAck:    false,
+        };
+      }
+
+      // ── BPFUQ consent gate state ─────────────────────────────────────
+      if (bpfuqGate) {
+        turnData.bpfuqState = {
+          consent:    bpfuqGate.consent,
+          pausedStep: bpfuqGate.step || null,
+        };
+      }
+
+      // ── Agent response from booking prompt preview ───────────────────
+      // Booking turns write the agent reply to the transcript, so prefer
+      // that; fall back to nextPromptPreview (500-char window).
+      const agentTurnBk = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
+      if (!turnData.agentResponse) {
+        const responseText = agentTurnBk?.text || bsp.nextPromptPreview || '';
+        if (responseText) {
+          turnData.agentResponse = {
+            text:           responseText.substring(0, 500),
+            source:         tier1_5Step ? 'KC_ENGINE (booking digression)' : 'BOOKING_ENGINE',
+            usedCallerName: false,
+            timestamp:      agentTurnBk?.timestamp || null,
+          };
+        }
+      }
+    }
+
     // ── AGENT RESPONSE ───────────────────────────────────────────────────
     // Sources (in priority order):
     //   1. Transcript turn with speaker='agent' + matching turnNumber
     //   2. A2_RESPONSE_READY trace event (ScrabEngine / trigger path)
     //   3. KC_GROQ_ANSWERED trace event (KC engine path — responsePreview)
+    //   NOTE: Booking turns are handled above in the BOOKING ENGINE block.
     // ─────────────────────────────────────────────────────────────────────
     const responseReady = traceByKind.get(`${turnNum}:A2_RESPONSE_READY`);
     const agentTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
-    if (responseReady?.payload || kcGroqAnswered?.payload || agentTurn) {
+    if (!turnData.agentResponse && (responseReady?.payload || kcGroqAnswered?.payload || agentTurn)) {
       turnData.agentResponse = {
         text: (agentTurn?.text || responseReady?.payload?.responsePreview || kcGroqAnswered?.payload?.responsePreview || '').substring(0, 500),
         source: responseReady?.payload?.source || (kcGroqAnswered ? 'KC_ENGINE' : null),
@@ -524,6 +615,19 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     turnData.turnOutcome = (() => {
       if (turnData.ghostTurnInfo?.type === 'PFUQ_GHOST') return 'GHOST_SKIPPED';
       if (turnData.ghostTurnInfo?.type === 'STT_EMPTY')  return 'STT_EMPTY';
+
+      // ── BOOKING ENGINE lane outcomes (most specific — checked first) ──
+      if (turnData.bookingStep) {
+        if (turnData.bookingStep.isComplete)               return 'BOOKING_COMPLETE';
+        const rp = turnData.routingTier?.path;
+        if (rp === 'BK_KC_DIGRESSION')                    return 'BOOKING_KC_DIGRESSION';
+        if (rp === 'BK_TRIGGER_MATCH')                    return 'BOOKING_TRIGGER';
+        if (rp === 'BK_LLM_INTERCEPT')                    return 'BOOKING_LLM';
+        if (rp === 'BK_BPFUQ_RESUME')                     return 'BPFUQ_RESUME';
+        if (rp === 'BK_BPFUQ_REASK')                      return 'BPFUQ_REASK';
+        return 'BOOKING_STEP';
+      }
+
       const src = turnData.routingTier?.source;
       if (src === 'KC_ENGINE') {
         if (turnData.kcEngine?.llmFallback) return 'KC_LLM_FALLBACK';

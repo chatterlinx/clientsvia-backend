@@ -559,7 +559,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           if (kcResult?.response) {
             // Store BPFUQ — Gate 0 will handle the return-to-booking consent next turn
             BPFUQService.set(ctx, { step: prevSnap.step });
-            events.push({ type: 'BK_123RP_TIER1_5_KC', step: prevSnap.step, containerTitle: match.container.title, timestamp: Date.now() });
+            events.push({ type: 'BK_123RP_TIER1_5_KC', step: prevSnap.step, containerTitle: match.container.title, containerId: String(match.container._id), kcId: match.container.kcId || null, timestamp: Date.now() });
             ctx.lastPath = 'BK_KC_DIGRESSION';
             return {
               nextPrompt: kcResult.response,   // Groq already closed with return-to-booking invite

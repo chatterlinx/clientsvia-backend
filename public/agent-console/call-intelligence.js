@@ -697,8 +697,10 @@
           const counts = intel.callContext?.turnOutcomeCounts;
           if (!counts || Object.keys(counts).length === 0) return '';
           const ORDER = ['KC_ANSWERED','KC_LLM_FALLBACK','TRIGGER_ANSWERED','LLM_ANSWERED',
-                         'INTAKE','BOOKING_HANDOFF','GRACEFUL_ACK','GHOST_SKIPPED','STT_EMPTY',
-                         'TRACE_ONLY','UNKNOWN'];
+                         'INTAKE','BOOKING_STEP','BOOKING_KC_DIGRESSION','BOOKING_TRIGGER',
+                         'BOOKING_LLM','BOOKING_COMPLETE','BOOKING_HANDOFF',
+                         'BPFUQ_RESUME','BPFUQ_REASK',
+                         'GRACEFUL_ACK','GHOST_SKIPPED','STT_EMPTY','TRACE_ONLY','UNKNOWN'];
           const chips = ORDER
             .filter(k => counts[k])
             .map(k => `${getTurnOutcomeBadge(k)}<span class="outcome-count">${counts[k]}</span>`)
@@ -1406,6 +1408,7 @@
                   '<span class="step-icon">🧠</span>' +
                   '<strong>KC ENGINE</strong>' +
                   (kc.spfuqActive ? '<span class="spfuq-badge">SPFUQ</span>' : '') +
+                  (kc.bpfuqActive ? '<span class="booking-badge">BPFUQ ↩</span>' : '') +
                   (kc.pfuqReask ? '<span class="pfuq-badge">PFUQ</span>' : '') +
                   (kc.bookingFired ? '<span class="booking-badge">BOOKING</span>' : '') +
                   (kc.llmFallback ? '<span class="fallback-badge">LLM FALLBACK</span>' : '') +
@@ -1456,6 +1459,51 @@
                 '</div>' +
               '</div>';
             })() : ''}
+
+            ${turn.bookingStep ? `
+              <div class="flow-step" style="border-left:3px solid #6366f1;padding-left:10px;">
+                <div class="step-label">
+                  <span class="step-icon">📅</span>
+                  <strong>BOOKING STEP</strong>
+                  <span class="kc-badge" style="background:#eef2ff;color:#4f46e5;">${turn.bookingStep.currentStep || '?'}</span>
+                  ${turn.bookingStep.isComplete ? '<span class="kc-badge" style="background:#dcfce7;color:#16a34a;">✓ COMPLETE</span>' : ''}
+                </div>
+                <div class="step-content">
+                  ${turn.bookingStep.nameStage ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Name Stage:</span>
+                    <span class="detail-value"><code>${turn.bookingStep.nameStage}</code></span>
+                  </div>` : ''}
+                  ${turn.bookingStep.latencyMs != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Engine Latency:</span>
+                    <span class="detail-value">${turn.bookingStep.latencyMs}ms</span>
+                  </div>` : ''}
+                  ${turn.routingTier?.path && turn.routingTier.path !== 'BK_STEP_NORMAL' ? `
+                  <div class="step-detail">
+                    <span class="detail-label">123RP Path:</span>
+                    <span class="detail-value"><code>${turn.routingTier.path}</code></span>
+                  </div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.bpfuqState ? `
+              <div class="flow-step" style="border-left:3px solid #f59e0b;padding-left:10px;">
+                <div class="step-label">
+                  <span class="step-icon">🔄</span>
+                  <strong>BPFUQ CONSENT GATE</strong>
+                  <span class="kc-badge" style="background:${turn.bpfuqState.consent === 'YES' ? '#dcfce7;color:#16a34a' : turn.bpfuqState.consent === 'NO' ? '#fee2e2;color:#dc2626' : '#fef3c7;color:#d97706'};">${turn.bpfuqState.consent}</span>
+                </div>
+                <div class="step-content">
+                  ${turn.bpfuqState.pausedStep ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Paused At Step:</span>
+                    <span class="detail-value"><code>${turn.bpfuqState.pausedStep}</code></span>
+                  </div>` : ''}
+                </div>
+              </div>
+            ` : ''}
 
             ${turn.pfuqState ? `
               <div class="flow-step pfuq-step">
@@ -2415,17 +2463,24 @@
 
   function getTurnOutcomeBadge(outcome) {
     const map = {
-      'INTAKE':           { label: 'INTAKE',    cls: 'outcome-intake'   },
-      'KC_ANSWERED':      { label: 'KC',         cls: 'outcome-kc'       },
-      'KC_LLM_FALLBACK':  { label: 'KC→LLM',     cls: 'outcome-kc-llm'  },
-      'BOOKING_HANDOFF':  { label: 'BOOKING',    cls: 'outcome-booking'  },
-      'LLM_ANSWERED':     { label: 'LLM',        cls: 'outcome-llm'      },
-      'TRIGGER_ANSWERED': { label: 'TRIGGER',    cls: 'outcome-trigger'  },
-      'GHOST_SKIPPED':    { label: 'GHOST',      cls: 'outcome-ghost'    },
-      'STT_EMPTY':        { label: 'SILENCE',    cls: 'outcome-stt'      },
-      'GRACEFUL_ACK':     { label: 'ACK',        cls: 'outcome-ack'      },
-      'TRACE_ONLY':       { label: 'TRACE',      cls: 'outcome-trace'    },
-      'UNKNOWN':          { label: '?',          cls: 'outcome-unknown'  },
+      'INTAKE':                { label: 'INTAKE',       cls: 'outcome-intake'    },
+      'KC_ANSWERED':           { label: 'KC',            cls: 'outcome-kc'        },
+      'KC_LLM_FALLBACK':       { label: 'KC→LLM',        cls: 'outcome-kc-llm'   },
+      'BOOKING_HANDOFF':       { label: 'BOOKING',       cls: 'outcome-booking'   },
+      'BOOKING_STEP':          { label: 'BK STEP',       cls: 'outcome-booking'   },
+      'BOOKING_COMPLETE':      { label: 'BK DONE ✓',     cls: 'outcome-bk-done'   },
+      'BOOKING_KC_DIGRESSION': { label: 'BK KC',         cls: 'outcome-kc'        },
+      'BOOKING_TRIGGER':       { label: 'BK T1',         cls: 'outcome-trigger'   },
+      'BOOKING_LLM':           { label: 'BK T2',         cls: 'outcome-llm'       },
+      'BPFUQ_RESUME':          { label: 'BPFUQ ↩',       cls: 'outcome-booking'   },
+      'BPFUQ_REASK':           { label: 'BPFUQ ?',       cls: 'outcome-ghost'     },
+      'LLM_ANSWERED':          { label: 'LLM',           cls: 'outcome-llm'       },
+      'TRIGGER_ANSWERED':      { label: 'TRIGGER',       cls: 'outcome-trigger'   },
+      'GHOST_SKIPPED':         { label: 'GHOST',         cls: 'outcome-ghost'     },
+      'STT_EMPTY':             { label: 'SILENCE',       cls: 'outcome-stt'       },
+      'GRACEFUL_ACK':          { label: 'ACK',           cls: 'outcome-ack'       },
+      'TRACE_ONLY':            { label: 'TRACE',         cls: 'outcome-trace'     },
+      'UNKNOWN':               { label: '?',             cls: 'outcome-unknown'   },
     };
     if (!outcome) return '';
     const info = map[outcome] || { label: outcome, cls: 'outcome-unknown' };

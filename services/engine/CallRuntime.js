@@ -362,7 +362,7 @@ async function runBookingLogicLane({
     if (bookingResult.error) {
         bufferEvent('BOOKING_LOGIC_REJECTED', {
             error: bookingResult.error,
-            trace: bookingResult.trace,
+            trace: bookingResult.events,
             latencyMs
         });
         
@@ -387,18 +387,18 @@ async function runBookingLogicLane({
     const isComplete = bookingResult.completed === true;
     
     bufferEvent('BOOKING_LOGIC_STEP_RESULT', {
-        nextPromptPreview: (bookingResult.nextPrompt || '').substring(0, 120),
+        nextPromptPreview: (bookingResult.nextPrompt || '').substring(0, 500),
         currentStep: bookingResult.bookingCtx?.step || 'UNKNOWN',
         nameStage: bookingResult.bookingCtx?.name?.stage || null,
         isComplete,
-        traceCount: bookingResult.trace?.length || 0,
+        traceCount: bookingResult.events?.length || 0,
         cacheHit: bookingResult.cacheHit,
         latencyMs
     });
-    
-    if (bookingResult.trace && bookingResult.trace.length > 0) {
+
+    if (bookingResult.events && bookingResult.events.length > 0) {
         bufferEvent('BOOKING_LOGIC_TRACE', {
-            steps: bookingResult.trace
+            steps: bookingResult.events
         });
     }
 
