@@ -415,9 +415,24 @@ function findContainer(containers, input) {
       let score   = 0;
 
       if (kwNorm.includes(' ')) {
-        // Multi-word phrase: exact substring match, score rewards length
-        matched = norm.includes(kwNorm);
-        score   = matched ? kwNorm.length * 2 : 0;
+        if (norm.includes(kwNorm)) {
+          // Exact substring match — highest score, rewards specificity
+          matched = true;
+          score   = kwNorm.length * 2;
+        } else {
+          // Word-overlap fallback: extract content words (≥5 chars) from the
+          // keyword phrase and check how many appear as whole words in the input.
+          // This lets "maintenance charges" match keyword
+          // "how much is the maintenance plan" via the shared word "maintenance".
+          // Score is always lower than any exact match so exact always wins.
+          const inputWords   = new Set(norm.split(/\s+/));
+          const contentWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
+          const hits         = contentWords.filter(w => inputWords.has(w));
+          if (hits.length >= 1) {
+            matched = true;
+            score   = hits.reduce((s, w) => s + w.length, 0); // < exact match score
+          }
+        }
       } else {
         // Single word: whole-word match
         matched = norm.split(/\s+/).includes(kwNorm);
