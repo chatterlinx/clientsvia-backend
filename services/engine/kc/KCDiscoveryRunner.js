@@ -453,6 +453,7 @@ async function _handleSPFUQContinue({
 
   emit('KC_GROQ_ANSWERED', {
     intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: finalPath,
+    responsePreview: _clip(kcResult.response, 200),
   });
 
   logger.info('[KC_ENGINE] ✅ KC_SPFUQ_CONTINUE complete', {
@@ -606,6 +607,7 @@ async function _handleKCMatch({
 
   emit('KC_GROQ_ANSWERED', {
     intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: finalPath,
+    responsePreview: _clip(kcResult.response, 200),
   });
 
   logger.info('[KC_ENGINE] ✅ KC_DIRECT_ANSWER complete', {

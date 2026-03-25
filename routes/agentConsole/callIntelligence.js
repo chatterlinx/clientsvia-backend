@@ -252,12 +252,59 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
     }
 
+    // ── KC ENGINE DATA ───────────────────────────────────────────────────
+    // Populate per-turn KC engine details from trace events emitted by
+    // KCDiscoveryRunner. Shows container match, SPFUQ state, Groq answer,
+    // booking intent, LLM fallback, caller screening — everything needed
+    // to understand what the KC engine did on this turn.
+    // ─────────────────────────────────────────────────────────────────────
+    const kcContainerMatched = traceByKind.get(`${turnNum}:KC_CONTAINER_MATCHED`);
+    const kcGroqAnswered     = traceByKind.get(`${turnNum}:KC_GROQ_ANSWERED`);
+    const kcSpfuqLoaded      = traceByKind.get(`${turnNum}:KC_SPFUQ_LOADED`);
+    const kcPfuqReask        = traceByKind.get(`${turnNum}:KC_PFUQ_REASK_FIRED`);
+    const kcBookingFired     = traceByKind.get(`${turnNum}:KC_BOOKING_INTENT_FIRED`);
+    const kcLlmFallback      = traceByKind.get(`${turnNum}:KC_LLM_FALLBACK_FIRED`);
+    const kcGracefulAck      = traceByKind.get(`${turnNum}:KC_GRACEFUL_ACK_FIRED`);
+    const callerScreening    = traceByKind.get(`${turnNum}:CALLER_SCREENING_INTERCEPT`);
+
+    if (kcContainerMatched || kcGroqAnswered || kcBookingFired || kcLlmFallback || kcGracefulAck) {
+      turnData.kcEngine = {
+        containerTitle:  kcContainerMatched?.payload?.containerTitle || kcPfuqReask?.payload?.containerTitle || null,
+        containerId:     kcContainerMatched?.payload?.containerId || kcPfuqReask?.payload?.containerId || null,
+        matchScore:      kcContainerMatched?.payload?.score ?? null,
+        groqIntent:      kcGroqAnswered?.payload?.intent || null,
+        groqLatencyMs:   kcGroqAnswered?.payload?.latencyMs ?? null,
+        groqResponse:    kcGroqAnswered?.payload?.responsePreview || null,
+        path:            kcGroqAnswered?.payload?.path || kcBookingFired?.payload?.path || null,
+        spfuqActive:     !!kcSpfuqLoaded,
+        spfuqContainer:  kcSpfuqLoaded?.payload?.containerTitle || null,
+        pfuqReask:       !!kcPfuqReask,
+        bookingFired:    !!kcBookingFired,
+        llmFallback:     !!kcLlmFallback,
+        llmFallbackReason: kcLlmFallback?.payload?.reason || null,
+        gracefulAck:     !!kcGracefulAck,
+      };
+    }
+
+    if (callerScreening?.payload) {
+      turnData.callerScreening = {
+        callerType:  callerScreening.payload.callerType,
+        intercepted: true,
+      };
+    }
+
+    // ── AGENT RESPONSE ───────────────────────────────────────────────────
+    // Sources (in priority order):
+    //   1. Transcript turn with speaker='agent' + matching turnNumber
+    //   2. A2_RESPONSE_READY trace event (ScrabEngine / trigger path)
+    //   3. KC_GROQ_ANSWERED trace event (KC engine path — responsePreview)
+    // ─────────────────────────────────────────────────────────────────────
     const responseReady = traceByKind.get(`${turnNum}:A2_RESPONSE_READY`);
     const agentTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
-    if (responseReady?.payload || agentTurn) {
+    if (responseReady?.payload || kcGroqAnswered?.payload || agentTurn) {
       turnData.agentResponse = {
-        text: (agentTurn?.text || responseReady?.payload?.responsePreview || '').substring(0, 500),
-        source: responseReady?.payload?.source,
+        text: (agentTurn?.text || responseReady?.payload?.responsePreview || kcGroqAnswered?.payload?.responsePreview || '').substring(0, 500),
+        source: responseReady?.payload?.source || (kcGroqAnswered ? 'KC_ENGINE' : null),
         usedCallerName: responseReady?.payload?.usedCallerName,
         timestamp: agentTurn?.timestamp || null
       };
@@ -759,7 +806,7 @@ router.get('/:callSid', async (req, res) => {
           recording,
           callMetadata: {
             duration: summary?.durationSeconds || 0,
-            turns: summary?.turnCount || turns.filter(t => t.speaker === 'caller').length || 0,
+            turns: Math.max(summary?.turnCount || 0, callContext?.turnByTurnFlow?.length || 0, turns.filter(t => t.speaker === 'caller').length || 0),
             fromPhone: summary?.phone || null,
             startTime: summary?.startedAt || transcript?.firstTurnTs || null,
             routingTier: summary?.routingTier || null
