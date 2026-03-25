@@ -517,6 +517,11 @@ async function answer(opts) {
       confidence:     parsed.confidence,
       latencyMs:      result.latencyMs,
       containerTitle,
+      // ── Provenance: the section text Groq read to generate its answer ────
+      // Clipped to 500 chars for trace events — full text stays in Groq prompt only.
+      containerBlockPreview: containerBlock.length > 500
+        ? containerBlock.slice(0, 500) + '…'
+        : containerBlock,
     };
 
   } catch (err) {

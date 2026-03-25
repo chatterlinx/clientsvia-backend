@@ -62,15 +62,25 @@ const PATH_TO_TIER = {
   // Tier 1.5: Groq fast lane (knowledge lookup — faster than Claude, lighter than T1)
   'NO_MATCH_GROQ_FAST_LANE': RESPONSE_TIER.TIER_1_5,
 
+  // Tier 1.5: KC Engine — Groq answers from Knowledge Containers
+  'KC_DIRECT_ANSWER':    RESPONSE_TIER.TIER_1_5,  // 🧠 KC container matched → Groq answered
+  'KC_SPFUQ_CONTINUE':  RESPONSE_TIER.TIER_1_5,  // 🧠 SPFUQ anchor → follow-up answered by Groq
+  'KC_TOPIC_HOP':        RESPONSE_TIER.TIER_1_5,  // 🧠 Caller switched topics → new container → Groq answered
+  'KC_BOOKING_INTENT':   RESPONSE_TIER.TIER_1_5,  // 🧠 Groq detected BOOKING_READY → booking handoff
+  'KC_PFUQ_REASK':       RESPONSE_TIER.TIER_1_5,  // 🧠 KC answered + PFUQ re-asserted for booking consent
+  'CALLER_SCREENING':    RESPONSE_TIER.TIER_1_5,  // 🧠 Caller screening intercept (vendor/delivery/wrong number)
+
   // Tier 2: LLM Agent (AI intelligence — NOT fallback)
   'LLM_AGENT_NO_MATCH':     RESPONSE_TIER.TIER_2,
   'FOLLOWUP_LLM_AGENT':     RESPONSE_TIER.TIER_2,
   'LLM_INTAKE_TURN_1':      RESPONSE_TIER.TIER_2,
   'STT_EMPTY_LLM_RECOVERY': RESPONSE_TIER.TIER_2, // Empty STT Protocol — LLM re-engagement
+  'KC_LLM_FALLBACK':        RESPONSE_TIER.TIER_2,  // 🧠 KC engine → no match → Claude COMPLEX fallback
 
   // Tier 3: Fallback (safety net)
   'FALLBACK_REASON_CAPTURED': RESPONSE_TIER.TIER_3,
   'FALLBACK_NO_MATCH':        RESPONSE_TIER.TIER_3,
+  'KC_GRACEFUL_ACK':           RESPONSE_TIER.TIER_3,  // 🧠 KC engine → all AI paths exhausted → graceful ack
 };
 
 /**
@@ -84,6 +94,8 @@ function resolveTier(lastPath) {
   if (lastPath.startsWith('FOLLOWUP_') && lastPath.includes('LLM_AGENT')) return RESPONSE_TIER.TIER_2;
   if (lastPath.startsWith('FOLLOWUP_')) return RESPONSE_TIER.TIER_1;
   if (lastPath.startsWith('FALLBACK_')) return RESPONSE_TIER.TIER_3;
+  // KC engine paths not explicitly listed — treat as Tier 1.5 (Groq fast lane)
+  if (lastPath.startsWith('KC_')) return RESPONSE_TIER.TIER_1_5;
   return null;
 }
 

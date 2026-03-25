@@ -92,12 +92,30 @@ function _clip(str, maxLen = 80) {
   return str.length <= maxLen ? str : `${str.slice(0, maxLen)}…`;
 }
 
-/** Build a safe _123rp metadata object for the Call Review Console. */
+/**
+ * Build a safe _123rp metadata object for the Call Review Console.
+ *
+ * IMPORTANT: `tier` must be NUMERIC (1, 1.5, 2, 3) to match ResponseProtocol
+ * format. The call-intelligence.js frontend switches on numeric values.
+ * `lastPath` is the canonical field name; `path` kept for backward compat.
+ */
 function _build123rp(path, extra = {}) {
+  // KC paths that use Groq = Tier 1.5 (Groq fast lane)
+  // LLM fallback (Claude) = Tier 2
+  // Graceful ACK = Tier 3
+  const tier = path === PATH.KC_LLM_FALLBACK ? 2
+    : path === PATH.KC_GRACEFUL_ACK ? 3
+    : 1.5;
+  const tierLabel = tier === 1.5 ? 'GROQ_FAST_LANE'
+    : tier === 2 ? 'LLM_AGENT'
+    : 'FALLBACK';
+
   return {
-    tier:   'T1',
-    source: 'KC_ENGINE',
+    tier,
+    tierLabel,
+    source:   'KC_ENGINE',
     path,
+    lastPath: path,         // canonical name — call-intelligence.js reads this
     ...extra,
   };
 }
@@ -300,7 +318,13 @@ class KCDiscoveryRunner {
         logger.info('[KC_ENGINE] Topic hop detected — clearing SPFUQ, switching container', {
           companyId, callSid, from: spfuq.containerTitle, to: match.container.title,
         });
-        emit('KC_CONTAINER_MATCHED', { containerTitle: match.container.title, score: match.score, path: PATH.KC_TOPIC_HOP });
+        emit('KC_CONTAINER_MATCHED', {
+          containerTitle: match.container.title,
+          containerId:    String(match.container._id || match.container.title || ''),
+          kcId:           match.container.kcId || null,
+          score:          match.score,
+          path:           PATH.KC_TOPIC_HOP,
+        });
 
         SPFUQService.clear(companyId, callSid).catch(() => {});
         spfuq = null; // Treat as fresh match below (falls into direct-answer path)
@@ -379,7 +403,11 @@ async function _handleSPFUQContinue({
     : userInput;
 
   emit('KC_CONTAINER_MATCHED', {
-    containerTitle: anchorMatch.title, score: 'spfuq', path: PATH.KC_SPFUQ_CONTINUE,
+    containerTitle: anchorMatch.title,
+    containerId:    String(anchorMatch._id || anchorMatch.title || ''),
+    kcId:           anchorMatch.kcId || null,
+    score:          'spfuq',
+    path:           PATH.KC_SPFUQ_CONTINUE,
   });
 
   let kcResult;
@@ -452,8 +480,15 @@ async function _handleSPFUQContinue({
   }
 
   emit('KC_GROQ_ANSWERED', {
-    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: finalPath,
-    responsePreview: _clip(kcResult.response, 200),
+    intent:                kcResult.intent,
+    confidence:            kcResult.confidence ?? null,
+    latencyMs:             kcResult.latencyMs,
+    path:                  finalPath,
+    responsePreview:       _clip(kcResult.response, 200),
+    containerTitle:        anchorMatch.title,
+    containerId:           String(anchorMatch._id || anchorMatch.title || ''),
+    kcId:                  anchorMatch.kcId || null,
+    containerBlockPreview: kcResult.containerBlockPreview || null,
   });
 
   logger.info('[KC_ENGINE] ✅ KC_SPFUQ_CONTINUE complete', {
@@ -493,7 +528,13 @@ async function _handleKCMatch({
     companyId, callSid, containerTitle, score: match.score, turn,
   });
 
-  emit('KC_CONTAINER_MATCHED', { containerTitle, score: match.score, path: PATH.KC_DIRECT_ANSWER });
+  emit('KC_CONTAINER_MATCHED', {
+    containerTitle,
+    containerId:  String(container._id || containerTitle),
+    kcId:         container.kcId || null,
+    score:        match.score,
+    path:         PATH.KC_DIRECT_ANSWER,
+  });
 
   let kcResult;
   try {
@@ -606,8 +647,15 @@ async function _handleKCMatch({
   }
 
   emit('KC_GROQ_ANSWERED', {
-    intent: kcResult.intent, latencyMs: kcResult.latencyMs, path: finalPath,
-    responsePreview: _clip(kcResult.response, 200),
+    intent:                kcResult.intent,
+    confidence:            kcResult.confidence ?? null,
+    latencyMs:             kcResult.latencyMs,
+    path:                  finalPath,
+    responsePreview:       _clip(kcResult.response, 200),
+    containerTitle,
+    containerId,
+    kcId:                  container.kcId || null,
+    containerBlockPreview: kcResult.containerBlockPreview || null,
   });
 
   logger.info('[KC_ENGINE] ✅ KC_DIRECT_ANSWER complete', {

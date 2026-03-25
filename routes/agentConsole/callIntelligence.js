@@ -269,13 +269,25 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
 
     if (kcContainerMatched || kcGroqAnswered || kcBookingFired || kcLlmFallback || kcGracefulAck) {
       turnData.kcEngine = {
-        containerTitle:  kcContainerMatched?.payload?.containerTitle || kcPfuqReask?.payload?.containerTitle || null,
-        containerId:     kcContainerMatched?.payload?.containerId || kcPfuqReask?.payload?.containerId || null,
+        // ── Container identity ────────────────────────────────────────────
+        containerTitle:  kcGroqAnswered?.payload?.containerTitle || kcContainerMatched?.payload?.containerTitle || kcPfuqReask?.payload?.containerTitle || null,
+        containerId:     kcGroqAnswered?.payload?.containerId || kcContainerMatched?.payload?.containerId || kcPfuqReask?.payload?.containerId || null,
+        kcId:            kcGroqAnswered?.payload?.kcId || kcContainerMatched?.payload?.kcId || null,
         matchScore:      kcContainerMatched?.payload?.score ?? null,
+
+        // ── Groq answer details ───────────────────────────────────────────
         groqIntent:      kcGroqAnswered?.payload?.intent || null,
+        groqConfidence:  kcGroqAnswered?.payload?.confidence ?? null,
         groqLatencyMs:   kcGroqAnswered?.payload?.latencyMs ?? null,
         groqResponse:    kcGroqAnswered?.payload?.responsePreview || null,
         path:            kcGroqAnswered?.payload?.path || kcBookingFired?.payload?.path || null,
+
+        // ── Source material — what Groq READ to generate its answer ───────
+        // This is the formatted LABEL: content sections from the KC container
+        // that were injected into Groq's system prompt. Full provenance.
+        containerBlockPreview: kcGroqAnswered?.payload?.containerBlockPreview || null,
+
+        // ── State flags ───────────────────────────────────────────────────
         spfuqActive:     !!kcSpfuqLoaded,
         spfuqContainer:  kcSpfuqLoaded?.payload?.containerTitle || null,
         pfuqReask:       !!kcPfuqReask,

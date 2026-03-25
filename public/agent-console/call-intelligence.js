@@ -879,9 +879,10 @@
     function getTierBadgeSmall(tier) {
       if (!tier) return '';
       switch (tier) {
-        case 'T1': return '<span class="tier-badge-sm tier-1-sm">T1</span>';
-        case 'T2': return '<span class="tier-badge-sm tier-2-sm">T2</span>';
-        case 'T3': return '<span class="tier-badge-sm tier-3-sm">T3</span>';
+        case 'T1':  return '<span class="tier-badge-sm tier-1-sm">T1</span>';
+        case 'T1.5': return '<span class="tier-badge-sm tier-1-5-sm">T1.5</span>';
+        case 'T2':  return '<span class="tier-badge-sm tier-2-sm">T2</span>';
+        case 'T3':  return '<span class="tier-badge-sm tier-3-sm">T3</span>';
         default: return `<span class="tier-badge-sm">${tier}</span>`;
       }
     }
@@ -1340,6 +1341,70 @@
               </div>
             ` : ''}
 
+            ${turn.kcEngine ? (() => {
+              const kc = turn.kcEngine;
+              const _cid = new URLSearchParams(window.location.search).get('companyId') || '';
+              const _kcEditHref = kc.containerId && _cid
+                ? '/agent-console/services-item.html?companyId=' + _cid + '&containerId=' + encodeURIComponent(kc.containerId)
+                : null;
+              const _kcEditLink = _kcEditHref
+                ? '<a href="' + _kcEditHref + '" target="_blank" class="ci-card-link">Edit container ↗</a>'
+                : '';
+              return '<div class="flow-step kc-engine-step">' +
+                '<div class="step-label">' +
+                  '<span class="step-icon">🧠</span>' +
+                  '<strong>KC ENGINE</strong>' +
+                  (kc.spfuqActive ? '<span class="spfuq-badge">SPFUQ</span>' : '') +
+                  (kc.pfuqReask ? '<span class="pfuq-badge">PFUQ</span>' : '') +
+                  (kc.bookingFired ? '<span class="booking-badge">BOOKING</span>' : '') +
+                  (kc.llmFallback ? '<span class="fallback-badge">LLM FALLBACK</span>' : '') +
+                  (kc.gracefulAck ? '<span class="ack-badge">GRACEFUL ACK</span>' : '') +
+                '</div>' +
+                '<div class="step-content">' +
+                  '<div class="step-detail">' +
+                    '<span class="detail-label">Container:</span>' +
+                    '<span class="detail-value"><strong>' + (kc.containerTitle || 'Unknown') + '</strong> ' + _kcEditLink + '</span>' +
+                  '</div>' +
+                  (kc.kcId ? '<div class="step-detail">' +
+                    '<span class="detail-label">KC ID:</span>' +
+                    '<span class="detail-value"><code>' + kc.kcId + '</code></span>' +
+                  '</div>' : '') +
+                  '<div class="step-detail">' +
+                    '<span class="detail-label">Match Score:</span>' +
+                    '<span class="detail-value">' + (kc.matchScore != null ? kc.matchScore : 'N/A') + '</span>' +
+                  '</div>' +
+                  '<div class="step-detail">' +
+                    '<span class="detail-label">Path:</span>' +
+                    '<span class="detail-value"><code>' + (kc.path || 'N/A') + '</code></span>' +
+                  '</div>' +
+                  (kc.containerBlockPreview ? '<div class="step-detail full-width">' +
+                    '<span class="detail-label">📄 Source Material (what Groq read):</span>' +
+                    '<pre class="code-block kc-source-block">' + kc.containerBlockPreview + '</pre>' +
+                  '</div>' : '') +
+                  '<div class="step-detail">' +
+                    '<span class="detail-label">Groq Intent:</span>' +
+                    '<span class="detail-value">' + (kc.groqIntent || 'N/A') + '</span>' +
+                  '</div>' +
+                  (kc.groqConfidence != null ? '<div class="step-detail">' +
+                    '<span class="detail-label">Confidence:</span>' +
+                    '<span class="detail-value">' + kc.groqConfidence + '</span>' +
+                  '</div>' : '') +
+                  '<div class="step-detail">' +
+                    '<span class="detail-label">Groq Latency:</span>' +
+                    '<span class="detail-value">' + (kc.groqLatencyMs != null ? kc.groqLatencyMs + 'ms' : 'N/A') + '</span>' +
+                  '</div>' +
+                  (kc.groqResponse ? '<div class="step-detail full-width">' +
+                    '<span class="detail-label">Groq Response:</span>' +
+                    '<pre class="code-block">' + kc.groqResponse + '</pre>' +
+                  '</div>' : '') +
+                  (kc.spfuqContainer ? '<div class="step-detail">' +
+                    '<span class="detail-label">SPFUQ Anchor:</span>' +
+                    '<span class="detail-value">' + kc.spfuqContainer + '</span>' +
+                  '</div>' : '') +
+                '</div>' +
+              '</div>';
+            })() : ''}
+
             ${turn.agentResponse ? `
               <div class="flow-step response-step">
                 <div class="step-label">
@@ -1433,8 +1498,13 @@
                   </div>
                   <div class="step-detail">
                     <span class="detail-label">Last Path:</span>
-                    <span class="detail-value"><code>${turn.routingTier.lastPath || 'Unknown'}</code></span>
+                    <span class="detail-value"><code>${turn.routingTier.lastPath || turn.routingTier.path || 'Unknown'}</code></span>
                   </div>
+                  ${turn.routingTier.source === 'KC_ENGINE' && turn.routingTier.containerTitle ? `
+                  <div class="step-detail">
+                    <span class="detail-label">KC Container:</span>
+                    <span class="detail-value">${turn.routingTier.containerTitle}</span>
+                  </div>` : ''}
                 </div>
               </div>
             ` : ''}
@@ -2158,20 +2228,22 @@
 
   function getTierBadge(tier) {
     switch (tier) {
-      case 1: return '<span class="tier-badge tier-1">T1 DETERMINISTIC</span>';
-      case 2: return '<span class="tier-badge tier-2">T2 LLM AGENT</span>';
-      case 3: return '<span class="tier-badge tier-3">T3 FALLBACK</span>';
-      default: return '<span class="tier-badge tier-unknown">--</span>';
+      case 1:   return '<span class="tier-badge tier-1">T1 DETERMINISTIC</span>';
+      case 1.5: return '<span class="tier-badge tier-1-5">T1.5 KC ENGINE</span>';
+      case 2:   return '<span class="tier-badge tier-2">T2 LLM AGENT</span>';
+      case 3:   return '<span class="tier-badge tier-3">T3 FALLBACK</span>';
+      default:  return '<span class="tier-badge tier-unknown">--</span>';
     }
   }
 
   function getTierBadgeCompact(tierObj) {
     if (!tierObj) return '';
     switch (tierObj.tier) {
-      case 1: return '<span class="tier-badge tier-1">T1</span>';
-      case 2: return '<span class="tier-badge tier-2">T2</span>';
-      case 3: return '<span class="tier-badge tier-3">T3</span>';
-      default: return '';
+      case 1:   return '<span class="tier-badge tier-1">T1</span>';
+      case 1.5: return '<span class="tier-badge tier-1-5">T1.5</span>';
+      case 2:   return '<span class="tier-badge tier-2">T2</span>';
+      case 3:   return '<span class="tier-badge tier-3">T3</span>';
+      default:  return '';
     }
   }
 
@@ -2179,7 +2251,7 @@
     let t1 = 0, t2 = 0, t3 = 0;
     for (const call of calls) {
       const tier = call.callMetadata?.routingTier;
-      if (tier === 1) t1++;
+      if (tier === 1 || tier === 1.5) t1++;   // T1 and T1.5 (KC Engine) both count as deterministic
       else if (tier === 2) t2++;
       else if (tier === 3) t3++;
     }

@@ -1469,6 +1469,59 @@ body {
   border-left-color: #A855F7;
 }
 
+.kc-engine-step {
+  background: #FEF9C3;
+  border-left-color: #EAB308;
+}
+
+.kc-engine-step .step-label {
+  flex-wrap: wrap;
+}
+
+.kc-source-block {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  color: #78350F;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.spfuq-badge, .pfuq-badge, .booking-badge, .fallback-badge, .ack-badge {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.spfuq-badge {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.pfuq-badge {
+  background: #E0E7FF;
+  color: #3730A3;
+}
+
+.booking-badge {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.fallback-badge {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.ack-badge {
+  background: #F3F4F6;
+  color: #6B7280;
+}
+
 .response-step {
   background: #ECFDF5;
   border-left-color: #10B981;
@@ -2002,6 +2055,12 @@ input:disabled + .toggle-slider {
   border: 1px solid #FCA5A5;
 }
 
+.tier-1-5 {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FCD34D;
+}
+
 .tier-unknown {
   background: #F3F4F6;
   color: #6B7280;
@@ -2522,6 +2581,7 @@ input:disabled + .toggle-slider {
 }
 
 .tier-1-sm { background: #DBEAFE; color: #1E40AF; }
+.tier-1-5-sm { background: #FEF3C7; color: #92400E; }
 .tier-2-sm { background: #EDE9FE; color: #5B21B6; }
 .tier-3-sm { background: #FEE2E2; color: #991B1B; }
 
