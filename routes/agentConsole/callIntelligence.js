@@ -444,6 +444,107 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
     }
 
+    // ── TURN VERDICT + OWNER from TURN_TRACE_SUMMARY ─────────────────────────
+    // verdict is a one-liner like "[T1]KC_DIRECT_ANSWER" or "[T2]LLM_AGENT:COMPLEX"
+    if (turnTraceSummary?.payload) {
+      const tsp = turnTraceSummary.payload;
+      if (tsp.verdict)       turnData.turnVerdict   = tsp.verdict;
+      if (tsp.ownerSelected) turnData.ownerSelected = tsp.ownerSelected;
+      if (tsp.sectionTrail)  turnData.sectionTrail  = tsp.sectionTrail;
+    }
+
+    // ── LLM AGENT CALL details (A2_LLM_AGENT_CALLED) ─────────────────────────
+    // mode: TIER_2_INTAKE | TIER_2_NO_MATCH | TIER_2_FOLLOW_UP | STT_EMPTY_RECOVERY
+    const llmAgentCalledTrace = traceByKind.get(`${turnNum}:A2_LLM_AGENT_CALLED`);
+    if (llmAgentCalledTrace?.payload) {
+      const p = llmAgentCalledTrace.payload;
+      turnData.llmAgentCall = {
+        mode:         p.mode         || null,
+        model:        p.model        || null,
+        provider:     p.provider     || null,  // 'anthropic' | 'groq'
+        bucket:       p.bucket       || null,
+        historyTurns: p.historyTurns ?? null,
+        isSttEmpty:   p.isSttEmpty   ?? false,
+        isRecovery:   p.isRecovery   ?? false,
+      };
+    }
+
+    // ── LLM STREAM METRICS (A2_LLM_STREAM_COMPLETE) ──────────────────────────
+    // latencyMs = total streaming time; firstSentenceMs = approx time to first sentence
+    const llmStreamTrace = traceByKind.get(`${turnNum}:A2_LLM_STREAM_COMPLETE`);
+    if (llmStreamTrace?.payload) {
+      const p = llmStreamTrace.payload;
+      turnData.llmStreamMetrics = {
+        latencyMs:       p.latencyMs       ?? null,
+        firstSentenceMs: p.firstSentenceMs ?? null,
+        tokensOutput:    p.tokensOutput    ?? p.tokenCount ?? null,
+        tokensInput:     p.tokensInput     ?? null,
+        sentenceCount:   p.sentenceCount   ?? null,
+        wasPartial:      p.wasPartial      ?? false,
+        provider:        p.provider        || null,
+      };
+    }
+
+    // ── PFUQ STATE (PFUQ_SCRABENGINE_BYPASSED or CONSENT_LOOP_PFUQ_SET) ──────
+    // Bypassed = an active PFUQ question caused ScrabEngine to be skipped this turn.
+    // Newly set = LLM Intake installed a new pending question for the next turn.
+    const pfuqBypassed    = traceByKind.get(`${turnNum}:PFUQ_SCRABENGINE_BYPASSED`);
+    const consentPfuqSet  = traceByKind.get(`${turnNum}:CONSENT_LOOP_PFUQ_SET`);
+    if (pfuqBypassed?.payload || consentPfuqSet?.payload) {
+      const pb = pfuqBypassed?.payload;
+      const cp = consentPfuqSet?.payload;
+      turnData.pfuqState = {
+        type:     pb ? 'BYPASSED' : 'NEWLY_SET',
+        question: ((pb?.question || cp?.question) || '').substring(0, 120),
+        reason:   pb?.reason  || null,
+        source:   cp?.source  || null,
+        setTurn:  cp?.turn    ?? null,
+      };
+    }
+
+    // ── GHOST TURN / STT EMPTY details ────────────────────────────────────────
+    // Ghost = bridge empty turn while PFUQ was pending — question preserved.
+    // STT_EMPTY = caller was silent / timed out — protocol engaged.
+    const pfuqGhost  = traceByKind.get(`${turnNum}:PFUQ_GHOST_TURN_SKIPPED`);
+    const sttEmpty   = traceByKind.get(`${turnNum}:STT_EMPTY_PROTOCOL_ENGAGED`);
+    if (pfuqGhost?.payload || sttEmpty?.payload) {
+      const pg = pfuqGhost?.payload;
+      const se = sttEmpty?.payload;
+      turnData.ghostTurnInfo = {
+        type:              pg ? 'PFUQ_GHOST' : 'STT_EMPTY',
+        reason:            pg?.reason || se?.reason || 'Empty STT input',
+        preservedQuestion: pg?.question     || null,
+        pfuqTurn:          pg?.pfuqTurn     ?? null,
+        isSilence:         se?.isSilence    ?? null,
+        isTimeout:         se?.isTimeout    ?? null,
+      };
+    }
+
+    // ── TURN OUTCOME (computed last — depends on all fields above) ────────────
+    turnData.turnOutcome = (() => {
+      if (turnData.ghostTurnInfo?.type === 'PFUQ_GHOST') return 'GHOST_SKIPPED';
+      if (turnData.ghostTurnInfo?.type === 'STT_EMPTY')  return 'STT_EMPTY';
+      const src = turnData.routingTier?.source;
+      if (src === 'KC_ENGINE') {
+        if (turnData.kcEngine?.llmFallback) return 'KC_LLM_FALLBACK';
+        if (turnData.kcEngine?.gracefulAck) return 'GRACEFUL_ACK';
+        if (turnData.routingTier?.path === 'KC_BOOKING_INTENT') return 'BOOKING_HANDOFF';
+        return 'KC_ANSWERED';
+      }
+      const llmMode = turnData.llmAgentCall?.mode;
+      if (llmMode === 'TIER_2_INTAKE')       return 'INTAKE';
+      if (llmMode === 'TIER_2_NO_MATCH')     return 'LLM_ANSWERED';
+      if (llmMode === 'TIER_2_FOLLOW_UP')    return 'LLM_ANSWERED';
+      if (llmMode === 'STT_EMPTY_RECOVERY')  return 'STT_EMPTY';
+      if (turnData.intakeExtraction)         return 'INTAKE';
+      if (turnData.triggerEvaluation?.matched) return 'TRIGGER_ANSWERED';
+      const verdict = turnData.turnVerdict || '';
+      if (verdict.includes('BOOKING_ENGINE')) return 'BOOKING_HANDOFF';
+      if (turnData.agentResponse?.source?.toLowerCase().includes('fallback')) return 'GRACEFUL_ACK';
+      if (turnData.traceOnly) return 'TRACE_ONLY';
+      return 'UNKNOWN';
+    })();
+
     flowSteps.push(turnData);
   }
 
@@ -511,12 +612,22 @@ function buildGreeting(turns = []) {
 function buildCallContext(turns = [], trace = []) {
   const scrabHandoff = findLastTrace(trace, 'SCRABENGINE_HANDOFF_TO_TRIGGERS');
 
+  const flow = buildTurnByTurnFlow(turns, trace);
+
+  // Aggregate outcome counts for overview summary bar
+  const turnOutcomeCounts = {};
+  for (const step of flow) {
+    const o = step.turnOutcome || 'UNKNOWN';
+    turnOutcomeCounts[o] = (turnOutcomeCounts[o] || 0) + 1;
+  }
+
   return {
     transcript: buildTranscript(turns),
     response: buildResponseContext(trace),
     scrabEngineHandoff: scrabHandoff?.payload || null,
     greeting: buildGreeting(turns),
-    turnByTurnFlow: buildTurnByTurnFlow(turns, trace),
+    turnByTurnFlow: flow,
+    turnOutcomeCounts,
     voiceDelivery: buildVoiceDeliverySummary(turns)
   };
 }

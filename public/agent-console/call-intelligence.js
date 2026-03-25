@@ -694,6 +694,18 @@
           ` : '')}
         </div>
         ${(() => {
+          const counts = intel.callContext?.turnOutcomeCounts;
+          if (!counts || Object.keys(counts).length === 0) return '';
+          const ORDER = ['KC_ANSWERED','KC_LLM_FALLBACK','TRIGGER_ANSWERED','LLM_ANSWERED',
+                         'INTAKE','BOOKING_HANDOFF','GRACEFUL_ACK','GHOST_SKIPPED','STT_EMPTY',
+                         'TRACE_ONLY','UNKNOWN'];
+          const chips = ORDER
+            .filter(k => counts[k])
+            .map(k => `${getTurnOutcomeBadge(k)}<span class="outcome-count">${counts[k]}</span>`)
+            .join('');
+          return `<div class="turn-outcome-bar"><span class="outcome-bar-label">TURN OUTCOMES</span>${chips}</div>`;
+        })()}
+        ${(() => {
           const rec = intel.recording || {};
           const audioSrc = rec.sid
             ? '/api/call-intelligence/recording/' + rec.sid + '/audio'
@@ -1191,9 +1203,13 @@
               <div class="turn-flow-header-row">
                 <span class="turn-num">Turn ${turn.turnNumber}</span>
                 ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''}
+                ${getTurnOutcomeBadge(turn.turnOutcome)}
+                ${turn.turnVerdict ? `<span class="verdict-pill">${turn.turnVerdict}</span>` : ''}
+                ${turn.ownerSelected ? `<span class="owner-pill">${turn.ownerSelected}</span>` : ''}
                 ${turn.pathSelected?.path ? `<span class="turn-path-pill">${turn.pathSelected.path}</span>` : ''}
                 ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}
               </div>
+              ${turn.sectionTrail ? `<div class="turn-section-trail">⬌ ${turn.sectionTrail}</div>` : ''}
               ${turn.pathSelected?.reason ? `<div class="turn-path-reason">↳ ${turn.pathSelected.reason}</div>` : ''}
             </div>
 
@@ -1205,6 +1221,41 @@
                 </div>
                 <div class="step-content">
                   <pre class="code-block">${turn.callerInput.raw}</pre>
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.ghostTurnInfo ? `
+              <div class="flow-step ghost-step ${turn.ghostTurnInfo.type === 'PFUQ_GHOST' ? 'ghost-pfuq' : 'ghost-stt'}">
+                <div class="step-label">
+                  <span class="step-icon">${turn.ghostTurnInfo.type === 'PFUQ_GHOST' ? '👻' : '🔇'}</span>
+                  <strong>${turn.ghostTurnInfo.type === 'PFUQ_GHOST' ? 'GHOST TURN — PFUQ PENDING' : 'SILENT TURN — STT EMPTY'}</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Reason:</span>
+                    <span class="detail-value">${turn.ghostTurnInfo.reason}</span>
+                  </div>
+                  ${turn.ghostTurnInfo.preservedQuestion ? `
+                  <div class="step-detail full-width">
+                    <span class="detail-label">Preserved Question:</span>
+                    <pre class="code-block">${turn.ghostTurnInfo.preservedQuestion}</pre>
+                  </div>` : ''}
+                  ${turn.ghostTurnInfo.pfuqTurn != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">PFUQ Set On Turn:</span>
+                    <span class="detail-value">${turn.ghostTurnInfo.pfuqTurn}</span>
+                  </div>` : ''}
+                  ${turn.ghostTurnInfo.isSilence != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Was Silence:</span>
+                    <span class="detail-value">${turn.ghostTurnInfo.isSilence ? '🔇 Yes' : 'No'}</span>
+                  </div>` : ''}
+                  ${turn.ghostTurnInfo.isTimeout != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Was Timeout:</span>
+                    <span class="detail-value">${turn.ghostTurnInfo.isTimeout ? '⏱️ Yes' : 'No'}</span>
+                  </div>` : ''}
                 </div>
               </div>
             ` : ''}
@@ -1405,6 +1456,115 @@
                 '</div>' +
               '</div>';
             })() : ''}
+
+            ${turn.pfuqState ? `
+              <div class="flow-step pfuq-step">
+                <div class="step-label">
+                  <span class="step-icon">❓</span>
+                  <strong>PFUQ STATE</strong>
+                  <span class="kc-badge ${turn.pfuqState.type === 'BYPASSED' ? 'pfuq-bypassed-badge' : 'pfuq-set-badge'}">${turn.pfuqState.type}</span>
+                </div>
+                <div class="step-content">
+                  ${turn.pfuqState.question ? `
+                  <div class="step-detail full-width">
+                    <span class="detail-label">Question:</span>
+                    <pre class="code-block">${turn.pfuqState.question}</pre>
+                  </div>` : ''}
+                  ${turn.pfuqState.reason ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Bypass Reason:</span>
+                    <span class="detail-value">${turn.pfuqState.reason}</span>
+                  </div>` : ''}
+                  ${turn.pfuqState.source ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Source:</span>
+                    <span class="detail-value"><code>${turn.pfuqState.source}</code></span>
+                  </div>` : ''}
+                  ${turn.pfuqState.setTurn != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Set On Turn:</span>
+                    <span class="detail-value">${turn.pfuqState.setTurn}</span>
+                  </div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.llmAgentCall ? `
+              <div class="flow-step llm-call-step">
+                <div class="step-label">
+                  <span class="step-icon">🤖</span>
+                  <strong>LLM AGENT CALLED</strong>
+                  ${turn.llmAgentCall.provider ? `<span class="kc-badge kc-llm-badge">${turn.llmAgentCall.provider}</span>` : ''}
+                  ${turn.llmAgentCall.bucket ? `<span class="kc-badge">${turn.llmAgentCall.bucket}</span>` : ''}
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Mode:</span>
+                    <span class="detail-value"><code>${turn.llmAgentCall.mode || 'N/A'}</code></span>
+                  </div>
+                  ${turn.llmAgentCall.model ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Model:</span>
+                    <span class="detail-value"><code>${turn.llmAgentCall.model}</code></span>
+                  </div>` : ''}
+                  ${turn.llmAgentCall.historyTurns != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">History Turns:</span>
+                    <span class="detail-value">${turn.llmAgentCall.historyTurns}</span>
+                  </div>` : ''}
+                  ${turn.llmAgentCall.isSttEmpty ? `
+                  <div class="step-detail">
+                    <span class="detail-label">STT Empty Recovery:</span>
+                    <span class="detail-value">⚠️ Yes</span>
+                  </div>` : ''}
+                  ${turn.llmAgentCall.isRecovery ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Recovery Mode:</span>
+                    <span class="detail-value">⚠️ Yes</span>
+                  </div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            ${turn.llmStreamMetrics ? `
+              <div class="flow-step llm-metrics-step">
+                <div class="step-label">
+                  <span class="step-icon">📡</span>
+                  <strong>LLM STREAM METRICS</strong>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Total Latency:</span>
+                    <span class="detail-value latency-value">${turn.llmStreamMetrics.latencyMs != null ? turn.llmStreamMetrics.latencyMs + 'ms' : 'N/A'}</span>
+                  </div>
+                  ${turn.llmStreamMetrics.firstSentenceMs != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">1st Sentence:</span>
+                    <span class="detail-value">${turn.llmStreamMetrics.firstSentenceMs}ms</span>
+                  </div>` : ''}
+                  ${turn.llmStreamMetrics.tokensOutput != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Tokens Out:</span>
+                    <span class="detail-value">${turn.llmStreamMetrics.tokensOutput}</span>
+                  </div>` : ''}
+                  ${turn.llmStreamMetrics.tokensInput != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Tokens In:</span>
+                    <span class="detail-value">${turn.llmStreamMetrics.tokensInput}</span>
+                  </div>` : ''}
+                  ${turn.llmStreamMetrics.sentenceCount != null ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Sentences:</span>
+                    <span class="detail-value">${turn.llmStreamMetrics.sentenceCount}</span>
+                  </div>` : ''}
+                  ${turn.llmStreamMetrics.wasPartial ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Partial Stream:</span>
+                    <span class="detail-value">⚠️ Yes — truncated</span>
+                  </div>` : ''}
+                </div>
+              </div>
+            ` : ''}
 
             ${turn.agentResponse ? `
               <div class="flow-step response-step">
@@ -2251,6 +2411,25 @@
       case 3:   return '<span class="tier-badge tier-3">T3</span>';
       default:  return '';
     }
+  }
+
+  function getTurnOutcomeBadge(outcome) {
+    const map = {
+      'INTAKE':           { label: 'INTAKE',    cls: 'outcome-intake'   },
+      'KC_ANSWERED':      { label: 'KC',         cls: 'outcome-kc'       },
+      'KC_LLM_FALLBACK':  { label: 'KC→LLM',     cls: 'outcome-kc-llm'  },
+      'BOOKING_HANDOFF':  { label: 'BOOKING',    cls: 'outcome-booking'  },
+      'LLM_ANSWERED':     { label: 'LLM',        cls: 'outcome-llm'      },
+      'TRIGGER_ANSWERED': { label: 'TRIGGER',    cls: 'outcome-trigger'  },
+      'GHOST_SKIPPED':    { label: 'GHOST',      cls: 'outcome-ghost'    },
+      'STT_EMPTY':        { label: 'SILENCE',    cls: 'outcome-stt'      },
+      'GRACEFUL_ACK':     { label: 'ACK',        cls: 'outcome-ack'      },
+      'TRACE_ONLY':       { label: 'TRACE',      cls: 'outcome-trace'    },
+      'UNKNOWN':          { label: '?',          cls: 'outcome-unknown'  },
+    };
+    if (!outcome) return '';
+    const info = map[outcome] || { label: outcome, cls: 'outcome-unknown' };
+    return `<span class="outcome-badge ${info.cls}">${info.label}</span>`;
   }
 
   function updateTierStats(calls) {

@@ -2894,3 +2894,139 @@ input:disabled + .toggle-slider {
     padding: 1rem;
   }
 }
+
+/* =============================================================================
+   ENTERPRISE CALL INTELLIGENCE — TURN OUTCOME BADGES
+   ============================================================================= */
+
+.outcome-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.outcome-intake        { background: #1e3a5f; color: #7ec8e3; }
+.outcome-kc            { background: #1a3a2a; color: #4ade80; }
+.outcome-kc-llm        { background: #2d2a1a; color: #fbbf24; }
+.outcome-booking       { background: #1a2a3a; color: #60a5fa; }
+.outcome-llm           { background: #2a1a3a; color: #c084fc; }
+.outcome-trigger       { background: #1a3a3a; color: #2dd4bf; }
+.outcome-ghost         { background: #2a2a2a; color: #9ca3af; border: 1px dashed #555; }
+.outcome-stt           { background: #2a1a1a; color: #f87171; }
+.outcome-ack           { background: #1a2a1a; color: #86efac; }
+.outcome-trace         { background: #1a1a2a; color: #818cf8; }
+.outcome-unknown       { background: #1f1f1f; color: #6b7280; border: 1px dashed #444; }
+
+/* Turn outcome count chip */
+.outcome-count {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #9ca3af;
+  margin-left: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* Turn outcome bar in Call Overview */
+.turn-outcome-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  margin-top: 12px;
+}
+.outcome-bar-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-right: 6px;
+}
+
+/* Verdict + owner pills in turn header */
+.verdict-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.4);
+  color: #818cf8;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.owner-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(20,184,166,0.12);
+  border: 1px solid rgba(20,184,166,0.3);
+  color: #2dd4bf;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.turn-section-trail {
+  font-size: 0.7rem;
+  color: #6b7280;
+  margin-top: 4px;
+  font-family: var(--font-mono, monospace);
+}
+
+/* Ghost turn step */
+.ghost-step {
+  border-left-color: #4b5563;
+  background: rgba(75,85,99,0.06);
+}
+.ghost-pfuq {
+  border-left-color: #6366f1;
+  background: rgba(99,102,241,0.06);
+}
+.ghost-stt {
+  border-left-color: #ef4444;
+  background: rgba(239,68,68,0.06);
+}
+
+/* PFUQ state step */
+.pfuq-step {
+  border-left-color: #f59e0b;
+  background: rgba(245,158,11,0.05);
+}
+.pfuq-bypassed-badge {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.3);
+}
+.pfuq-set-badge {
+  background: rgba(245,158,11,0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245,158,11,0.3);
+}
+
+/* LLM agent call step */
+.llm-call-step {
+  border-left-color: #8b5cf6;
+  background: rgba(139,92,246,0.05);
+}
+
+/* LLM stream metrics step */
+.llm-metrics-step {
+  border-left-color: #3b82f6;
+  background: rgba(59,130,246,0.05);
+}
+.latency-value {
+  font-weight: 700;
+  color: #60a5fa;
+  font-family: var(--font-mono, monospace);
+}
