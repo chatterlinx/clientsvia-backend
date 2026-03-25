@@ -505,15 +505,15 @@
     <div class="form-card-body">
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="fWordLimit">Word Limit Override</label>
+          <label class="form-label" for="fWordLimit">Caller Response Budget</label>
           <div style="display:flex;align-items:center;gap:10px;">
             <input type="number" id="fWordLimit" class="form-input" min="5" max="300" placeholder="(use global default)"
               style="width:130px;" oninput="_updateWordLimitHint()">
-            <span style="font-size:13px;color:var(--text-muted);">words</span>
+            <span style="font-size:13px;color:var(--text-muted);">words Groq speaks</span>
           </div>
-          <div class="form-hint">Leave blank to use the global default. For complex topics (pricing tiers, policies, multi-step processes) set 60–120+.</div>
+          <div class="form-hint">How many words Groq says OUT LOUD to the caller — not the section content. Simple answers: 30–50. Complex topics (pricing tiers, multi-step, warranties): 60–120+.</div>
           <div id="wordLimitHint" class="form-hint" style="margin-top:4px;font-style:italic;"></div>
-          <div id="complexityIndicator" style="margin-top:6px;display:none;"></div>
+          <div id="complexityIndicator" style="margin-top:8px;display:none;"></div>
         </div>
       </div>
 
@@ -1291,30 +1291,44 @@ function _updateWordLimitHint() {
   if (!hint || !input) return;
   const val = parseInt(input.value, 10);
   if (!isNaN(val) && val >= 5) {
-    hint.textContent = `✓ This container: ${val} words`;
+    hint.textContent = `Groq speaks up to ${val} words to the caller per answer`;
   } else {
-    hint.textContent = 'Using company default (falls back to 40 words if not set)';
+    hint.textContent = 'Groq response budget: company default (falls back to 40 words)';
   }
   _updateComplexityIndicator();
 }
 
 function _updateComplexityIndicator() {
+  // Shows per-section knowledge depth — independent of the word limit.
+  // The word limit controls Groq's OUTPUT (spoken answer).
+  // Section content is Groq's INPUT (knowledge to draw from).
+  // Rich sections = good. These are never "compressed" — Groq selects from them.
   const el = document.getElementById('complexityIndicator');
   if (!el) return;
-  const textareas = document.querySelectorAll('#sectionsList textarea');
-  let totalWords = 0;
-  textareas.forEach(ta => { totalWords += _wordCount(ta.value); });
-  if (totalWords === 0) { el.style.display = 'none'; return; }
-  const limitInput    = document.getElementById('fWordLimit');
-  const limitVal      = parseInt(limitInput?.value, 10);
-  const effectiveLimit = (!isNaN(limitVal) && limitVal >= 5) ? limitVal : 40;
-  const ratio = totalWords / effectiveLimit;
-  let color = '#16a34a', icon = '✓', note = 'fits within limit';
-  if (ratio > 3)       { color = '#dc2626'; icon = '⚠️'; note = `${Math.round(ratio)}× limit — Groq will heavily compress`; }
-  else if (ratio > 1.5){ color = '#f59e0b'; icon = '⚡'; note = `${Math.round(ratio)}× limit — Groq will summarise`; }
-  else if (ratio > 1)  { color = '#f59e0b'; icon = '⚡'; note = 'slight compression'; }
+  const rows = document.querySelectorAll('#sectionsList .section-row');
+  const sections = [];
+  rows.forEach(row => {
+    const label   = row.querySelector('.section-label-input')?.value?.trim() || '(unlabelled)';
+    const content = row.querySelector('textarea')?.value || '';
+    sections.push({ label, words: _wordCount(content) });
+  });
+  const hasContent = sections.some(s => s.words > 0);
+  if (!hasContent) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = `<span style="color:${color};font-size:11px;">${icon} ${totalWords} section words · limit ${effectiveLimit} words${ratio > 1 ? ' — ' + note : ' — ' + note}</span>`;
+  const chips = sections.map(s => {
+    // Health: < 10 words = too thin for Groq; > 300 = very dense but still fine
+    let bg = '#dcfce7', color = '#16a34a', tip = '';
+    if (s.words === 0)       { bg = '#f3f4f6'; color = '#9ca3af'; }
+    else if (s.words < 10)   { bg = '#fef3c7'; color = '#b45309'; tip = ' ⚠'; }
+    else if (s.words > 300)  { bg = '#eff6ff'; color = '#2563eb'; tip = ' ↑'; }
+    const display = s.label.length > 20 ? s.label.slice(0, 20) + '…' : s.label;
+    return `<span style="font-size:11px;color:${color};background:${bg};padding:2px 8px;border-radius:12px;white-space:nowrap;">${_esc(display)}: ${s.words}w${tip}</span>`;
+  });
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+    <span style="font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Knowledge depth:</span>
+    ${chips.join('')}
+    <span style="font-size:10px;color:var(--text-xs);">⚠=thin&nbsp;&nbsp;↑=dense</span>
+  </div>`;
 }
 
 function _setLoading(on) {
