@@ -32,6 +32,7 @@ const { BookingTriggerMatcher }      = require('./BookingTriggerMatcher');
 const BookingLLMInterceptService     = require('./BookingLLMInterceptService');
 const GroqFieldExtractorService      = require('./GroqFieldExtractorService');
 const GlobalHubService     = require('../../GlobalHubService');
+const KCS                  = require('../agent2/KnowledgeContainerService');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -145,7 +146,7 @@ async function processStep({ companyId, payload, bookingCtx, userInput, isTest =
 async function loadCompanyConfig(companyId) {
   try {
     const company = await v2Company.findById(companyId)
-      .select('aiAgentSettings.bookingLogic aiAgentSettings.agent2.bookingConfig aiAgentSettings.agent2.bookingPrompts aiAgentSettings.agent2.bridge.bookingBridgePhrase aiAgentSettings.agent2.discovery.holdMessage googleCalendar businessHours companyName')
+      .select('aiAgentSettings.bookingLogic aiAgentSettings.agent2.bookingConfig aiAgentSettings.agent2.bookingPrompts aiAgentSettings.agent2.bridge.bookingBridgePhrase aiAgentSettings.agent2.discovery.holdMessage aiAgentSettings.agent2.knowledgeBaseSettings googleCalendar businessHours companyName')
       .lean();
 
     if (!company) {
@@ -267,7 +268,10 @@ async function loadCompanyConfig(companyId) {
         askCityPrompt:  bc.addressConfig?.askCityPrompt   || 'And what city is that in?',
         askStatePrompt: bc.addressConfig?.askStatePrompt  || 'And what state?',
         askZipPrompt:   bc.addressConfig?.askZipPrompt    || 'And the zip code?'
-      }
+      },
+
+      // KB settings — used by Tier 1.5 KC digression to resolve word limit and offer mode
+      knowledgeBaseSettings: company.aiAgentSettings?.agent2?.knowledgeBaseSettings || {},
     };
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Config load failed`, { companyId, error: error.message });
@@ -487,6 +491,44 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
       companyId, step: prevSnap.step, error: triggerErr.message
     });
     events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
+  }
+
+  // ── Tier 1.5: KC knowledge digression ────────────────────────────────────
+  // Caller asked a knowledge/pricing question mid-booking (e.g. "how much is the maintenance?").
+  // Answer via KC engine with booking offer suppressed, then re-anchor to current step so
+  // booking resumes next turn. Runs AFTER Tier 1 (triggers) so triggers still take priority.
+  // Calls KCS.answer() directly — NOT KCDiscoveryRunner — to stay inside booking context.
+  try {
+    if (KCS.detect(userInput)) {
+      const containers = await KCS.getActiveForCompany(companyId);
+      if (containers.length) {
+        const match = KCS.findContainer(containers, userInput);
+        if (match) {
+          const kcResult = await KCS.answer({
+            container:  match.container,
+            question:   userInput,
+            kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
+            company:    { _id: companyId, companyName: config.companyName },
+          });
+          if (kcResult?.response) {
+            const reAnchor = _getStepReAnchor(prevSnap.step, config);
+            events.push({ type: 'BK_123RP_TIER1_5_KC', step: prevSnap.step, containerTitle: match.container.title, timestamp: Date.now() });
+            ctx.lastPath = 'BK_KC_DIGRESSION';
+            return {
+              nextPrompt: `${kcResult.response} ${reAnchor}`,
+              bookingCtx: ctx,
+              completed:  false,
+              _123rp:     { tier: 1.5, path: 'BK_KC_DIGRESSION', containerTitle: match.container.title }
+            };
+          }
+        }
+      }
+    }
+  } catch (kcErr) {
+    logger.warn(`[${ENGINE_ID}] 123RP Tier 1.5 KC digression error — continuing to Tier 2`, {
+      companyId, step: prevSnap.step, error: kcErr.message
+    });
+    events.push({ type: 'BL2_KC_DIGRESSION_ERROR', error: kcErr.message, timestamp: Date.now() });
   }
 
   // ── Tier 2: LLM intercept ─────────────────────────────────────────────────
