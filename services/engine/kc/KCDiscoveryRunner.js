@@ -393,6 +393,7 @@ class KCDiscoveryRunner {
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
       bridgeToken, redis, callerName, onSentence,
+      containers,   // passed so fallback event records what was searched
     });
   }
 }
@@ -738,12 +739,22 @@ async function _handleKCMatch({
 async function _handleLLMFallback({
   userInput, companyId, callSid, company, channel, nextState, emit,
   startMs, turn, bridgeToken, redis, callerName, onSentence,
+  containers = [],
 }) {
   logger.info('[KC_ENGINE] No KC match — firing LLM fallback (Claude COMPLEX)', {
     companyId, callSid, turn, inputPreview: _clip(userInput, 40),
+    containerCount: containers.length,
   });
 
-  emit('KC_LLM_FALLBACK_FIRED', { companyId, callSid, turn, reason: 'no_kc_match' });
+  // Emit rich diagnostic payload so Call Intelligence can explain WHY KC
+  // fell back and which containers were searched — critical for debugging.
+  emit('KC_LLM_FALLBACK_FIRED', {
+    companyId, callSid, turn,
+    reason:          containers.length ? 'no_kc_match' : 'no_containers_configured',
+    inputPreview:    _clip(userInput, 100),
+    containerCount:  containers.length,
+    containerTitles: containers.map(c => c.title).slice(0, 8),
+  });
 
   let llmResult = null;
   try {

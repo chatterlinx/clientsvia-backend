@@ -293,8 +293,17 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         pfuqReask:       !!kcPfuqReask,
         bookingFired:    !!kcBookingFired,
         llmFallback:     !!kcLlmFallback,
-        llmFallbackReason: kcLlmFallback?.payload?.reason || null,
         gracefulAck:     !!kcGracefulAck,
+
+        // ── LLM fallback diagnostics — WHY no KC container matched ────────
+        // llmFallbackReason: 'no_kc_match' (containers exist, none matched)
+        //                    'no_containers_configured' (company has zero KC containers)
+        // llmFallbackInput: what the caller said that triggered KC
+        // containerCount/containerTitles: which containers were searched
+        llmFallbackReason:     kcLlmFallback?.payload?.reason || null,
+        llmFallbackInput:      kcLlmFallback?.payload?.inputPreview || null,
+        containerCount:        kcLlmFallback?.payload?.containerCount ?? null,
+        containerTitles:       kcLlmFallback?.payload?.containerTitles || [],
       };
     }
 
@@ -405,9 +414,17 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     const responseReady = traceByKind.get(`${turnNum}:A2_RESPONSE_READY`);
     const agentTurn = turns.find(t => t.turnNumber === turnNum && t.speaker === 'agent');
     if (!turnData.agentResponse && (responseReady?.payload || kcGroqAnswered?.payload || agentTurn)) {
+      // Clarify source label for KC→LLM turns: answer came from Claude (own knowledge),
+      // not from a KC container — so the user knows Groq is NOT reading from services.html.
+      const kcLlmFallbackForSource = traceByKind.get(`${turnNum}:KC_LLM_FALLBACK_FIRED`);
+      const baseSource = responseReady?.payload?.source || (kcGroqAnswered ? 'KC_ENGINE' : null);
+      const resolvedSource = kcLlmFallbackForSource
+        ? 'LLM (no KC container matched — Claude own knowledge)'
+        : baseSource;
+
       turnData.agentResponse = {
         text: (agentTurn?.text || responseReady?.payload?.responsePreview || kcGroqAnswered?.payload?.responsePreview || '').substring(0, 500),
-        source: responseReady?.payload?.source || (kcGroqAnswered ? 'KC_ENGINE' : null),
+        source: resolvedSource,
         usedCallerName: responseReady?.payload?.usedCallerName,
         timestamp: agentTurn?.timestamp || null
       };

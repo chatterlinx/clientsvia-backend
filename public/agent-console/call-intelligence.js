@@ -1403,7 +1403,16 @@
               const _kcEditLink = _kcEditHref
                 ? '<a href="' + _kcEditHref + '" target="_blank" class="ci-card-link">Edit container ↗</a>'
                 : '';
-              return '<div class="flow-step kc-engine-step">' +
+              // ── LLM Fallback: no container matched ──────────────────────────────
+              // When KC fires but no container has keywords for what the caller said,
+              // the agent answers from Claude's own model knowledge (NOT a KC container).
+              // Show a diagnostic so the user knows WHERE the answer came from and HOW to fix.
+              const _isNoMatch = kc.llmFallback && !kc.containerTitle;
+              const _cidsLink = _cid
+                ? '<a href="/agent-console/services.html?companyId=' + _cid + '" target="_blank" class="ci-card-link" style="color:#dc2626;font-weight:600;">→ Add KC container ↗</a>'
+                : '';
+
+              return '<div class="flow-step kc-engine-step' + (_isNoMatch ? ' kc-no-match-step' : '') + '">' +
                 '<div class="step-label">' +
                   '<span class="step-icon">🧠</span>' +
                   '<strong>KC ENGINE</strong>' +
@@ -1413,9 +1422,27 @@
                   (kc.bookingFired ? '<span class="booking-badge">BOOKING</span>' : '') +
                   (kc.llmFallback ? '<span class="fallback-badge">LLM FALLBACK</span>' : '') +
                   (kc.gracefulAck ? '<span class="ack-badge">GRACEFUL ACK</span>' : '') +
-                  '<span class="kc-badge kc-intent-badge ' + (kc.groqIntent === 'ANSWERED' ? 'intent-answered' : 'intent-failed') + '">' + (kc.groqIntent || 'UNKNOWN') + '</span>' +
+                  (!kc.llmFallback && !kc.gracefulAck ? '<span class="kc-badge kc-intent-badge ' + (kc.groqIntent === 'ANSWERED' ? 'intent-answered' : 'intent-failed') + '">' + (kc.groqIntent || 'UNKNOWN') + '</span>' : '') +
                 '</div>' +
                 '<div class="step-content">' +
+
+                // ── NO-MATCH diagnostic block ──────────────────────────────────────
+                (_isNoMatch ? (
+                  '<div class="step-detail full-width" style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px;margin-bottom:8px;">' +
+                    '<div style="color:#dc2626;font-weight:700;margin-bottom:6px;">🚫 No KC container matched — Groq answered from its own training (not from your KC)</div>' +
+                    (kc.llmFallbackInput ? '<div style="margin-bottom:6px;"><span style="color:#6b7280;font-size:0.82em;">CALLER SAID:</span> <em style="color:#1f2937;">"' + kc.llmFallbackInput + '"</em></div>' : '') +
+                    (kc.containerCount != null ? '<div style="margin-bottom:6px;color:#6b7280;font-size:0.82em;">' +
+                      (kc.containerCount === 0
+                        ? '⚠️ <strong>No KC containers are configured</strong> for this company.'
+                        : 'Searched <strong>' + kc.containerCount + ' KC container' + (kc.containerCount === 1 ? '' : 's') + '</strong>' +
+                          (kc.containerTitles?.length ? ': ' + kc.containerTitles.map(t => '<code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">' + t + '</code>').join(', ') : '') +
+                          ' — none had keywords matching the caller\'s input.'
+                      ) +
+                    '</div>' : '') +
+                    '<div style="margin-top:6px;">' + _cidsLink + '</div>' +
+                  '</div>'
+                ) : (
+                  // ── Standard container identity ──────────────────────────────────
                   '<div class="step-detail">' +
                     '<span class="detail-label">Container:</span>' +
                     '<span class="detail-value kc-container-name"><strong>' + (kc.containerTitle || 'Unknown') + '</strong> ' + _kcEditLink + '</span>' +
@@ -1431,31 +1458,34 @@
                   '<div class="step-detail">' +
                     '<span class="detail-label">Match Score:</span>' +
                     '<span class="detail-value">' + (kc.matchScore === 'spfuq' ? '<span class=\'kc-badge spfuq-badge\'>SPFUQ continuation</span>' : (kc.matchScore != null ? kc.matchScore : 'N/A')) + '</span>' +
-                  '</div>' +
-                  '<div class="step-detail">' +
-                    '<span class="detail-label">Path:</span>' +
-                    '<span class="detail-value"><code>' + (kc.path || 'N/A') + '</code></span>' +
-                  '</div>' +
-                  (kc.containerBlockPreview ? '<div class="step-detail full-width">' +
-                    '<span class="detail-label">📄 Source Material (what Groq read):</span>' +
-                    '<pre class="code-block kc-source-block">' + kc.containerBlockPreview + '</pre>' +
-                  '</div>' : '') +
-                  (kc.groqConfidence != null ? '<div class="step-detail">' +
-                    '<span class="detail-label">Confidence:</span>' +
-                    '<span class="detail-value">' + kc.groqConfidence + '</span>' +
-                  '</div>' : '') +
-                  '<div class="step-detail">' +
-                    '<span class="detail-label">Groq Latency:</span>' +
-                    '<span class="detail-value">' + (kc.groqLatencyMs != null ? kc.groqLatencyMs + 'ms' : 'N/A') + '</span>' +
-                  '</div>' +
-                  (kc.groqResponse ? '<div class="step-detail full-width">' +
-                    '<span class="detail-label">Groq Response:</span>' +
-                    '<pre class="code-block">' + kc.groqResponse + '</pre>' +
-                  '</div>' : '') +
-                  (kc.spfuqContainer ? '<div class="step-detail">' +
-                    '<span class="detail-label">SPFUQ Anchor:</span>' +
-                    '<span class="detail-value">' + kc.spfuqContainer + '</span>' +
-                  '</div>' : '') +
+                  '</div>'
+                )) +
+
+                // ── Common fields (shown for all paths) ───────────────────────────
+                '<div class="step-detail">' +
+                  '<span class="detail-label">Path:</span>' +
+                  '<span class="detail-value"><code>' + (kc.path || (kc.llmFallback ? 'KC_LLM_FALLBACK' : kc.gracefulAck ? 'KC_GRACEFUL_ACK' : 'N/A')) + '</code></span>' +
+                '</div>' +
+                (kc.containerBlockPreview ? '<div class="step-detail full-width">' +
+                  '<span class="detail-label">📄 Source Material (what Groq read):</span>' +
+                  '<pre class="code-block kc-source-block">' + kc.containerBlockPreview + '</pre>' +
+                '</div>' : '') +
+                (kc.groqConfidence != null ? '<div class="step-detail">' +
+                  '<span class="detail-label">Confidence:</span>' +
+                  '<span class="detail-value">' + kc.groqConfidence + '</span>' +
+                '</div>' : '') +
+                (kc.groqLatencyMs != null ? '<div class="step-detail">' +
+                  '<span class="detail-label">Groq Latency:</span>' +
+                  '<span class="detail-value">' + kc.groqLatencyMs + 'ms</span>' +
+                '</div>' : '') +
+                (kc.groqResponse ? '<div class="step-detail full-width">' +
+                  '<span class="detail-label">Groq Response:</span>' +
+                  '<pre class="code-block">' + kc.groqResponse + '</pre>' +
+                '</div>' : '') +
+                (kc.spfuqContainer ? '<div class="step-detail">' +
+                  '<span class="detail-label">SPFUQ Anchor:</span>' +
+                  '<span class="detail-value">' + kc.spfuqContainer + '</span>' +
+                '</div>' : '') +
                 '</div>' +
               '</div>';
             })() : ''}
