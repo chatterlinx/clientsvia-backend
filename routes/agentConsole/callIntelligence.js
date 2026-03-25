@@ -419,6 +419,31 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       turnData.routingTier = turnTraceSummary.payload._123rp;
     }
 
+    // ── KC ENGINE — build dedicated kcEngine block when routing tier is KC ──
+    // TURN_TRACE_SUMMARY._123rp is the richest source: containerId, containerTitle,
+    // kcId, intent, latencyMs, spfuqActive are all stored there.
+    // KC_CONTAINER_MATCHED has the raw matchScore.
+    // KC_GROQ_ANSWERED duplicates intent/latency — used as fallback.
+    if (turnData.routingTier?.source === 'KC_ENGINE') {
+      const kcContainerMatched = traceByKind.get(`${turnNum}:KC_CONTAINER_MATCHED`);
+      const kcGroqAnswered = traceByKind.get(`${turnNum}:KC_GROQ_ANSWERED`);
+      const kcSpfuqLoaded = traceByKind.get(`${turnNum}:KC_SPFUQ_LOADED`);
+      const rt = turnData.routingTier;
+      turnData.kcEngine = {
+        containerId:    rt.containerId || kcSpfuqLoaded?.payload?.containerId || null,
+        containerTitle: rt.containerTitle || kcContainerMatched?.payload?.containerTitle || null,
+        kcId:           rt.kcId || null,
+        matchScore:     kcContainerMatched?.payload?.score ?? null,
+        groqIntent:     rt.intent || kcGroqAnswered?.payload?.intent || null,
+        groqLatencyMs:  rt.latencyMs || kcGroqAnswered?.payload?.latencyMs || null,
+        groqResponse:   turnData.agentResponse?.text || null,
+        path:           rt.path || null,
+        spfuqActive:    rt.spfuqActive ?? false,
+        llmFallback:    rt.path === 'KC_LLM_FALLBACK',
+        gracefulAck:    rt.path === 'KC_GRACEFUL_ACK',
+      };
+    }
+
     flowSteps.push(turnData);
   }
 
@@ -682,6 +707,94 @@ router.post('/analyze/:callSid', async (req, res) => {
 });
 
 /**
+ * Build a human-readable auto-diagnostic summary from trace data alone.
+ * Used for trace_only calls where GPT-4 analysis has not run yet.
+ * Returns { executiveSummary, topIssue, issues }.
+ */
+function buildAutoSummary(callContext) {
+  const flow    = callContext.turnByTurnFlow || [];
+  const txScript = callContext.transcript    || [];
+
+  const lines  = [];
+  const issues = [];
+
+  // ── Intake extraction ──────────────────────────────────────────────────────
+  const intakeTurn       = flow.find(t => t.intakeExtraction);
+  const firstName        = intakeTurn?.intakeExtraction?.entities?.firstName;
+  const callReason       = intakeTurn?.intakeExtraction?.callReason;
+  const urgency          = intakeTurn?.intakeExtraction?.urgency;
+  const priorVisit       = intakeTurn?.intakeExtraction?.priorVisit;
+  const sameDayRequested = intakeTurn?.intakeExtraction?.sameDayRequested;
+  const nextLane         = intakeTurn?.intakeExtraction?.nextLane;
+
+  // Caller + reason narrative
+  if (firstName || callReason) {
+    let intro = firstName ? `${firstName} called` : 'Caller';
+    if (callReason) intro += ` about: ${callReason}`;
+    if (urgency === 'high') intro += ' [HIGH URGENCY]';
+    if (priorVisit)        intro += '. Prior visit on record.';
+    if (sameDayRequested)  intro += ' Same-day service requested.';
+    lines.push(intro + '.');
+  }
+
+  // ── KC containers accessed ─────────────────────────────────────────────────
+  const kcTurns      = flow.filter(t => t.kcEngine);
+  const kcContainers = [...new Set(kcTurns.map(t => t.kcEngine.containerTitle).filter(Boolean))];
+  if (kcTurns.length > 0) {
+    lines.push(
+      `KC engine answered ${kcTurns.length} question${kcTurns.length > 1 ? 's' : ''} ` +
+      `from container: "${kcContainers.join('", "')}".`
+    );
+    // SPFUQ follow-ups
+    const spfuqCount = kcTurns.filter(t => t.kcEngine.spfuqActive).length;
+    if (spfuqCount > 0) {
+      lines.push(`${spfuqCount} follow-up question${spfuqCount > 1 ? 's' : ''} answered via SPFUQ (same KC container re-used).`);
+    }
+  }
+
+  // ── Routing distribution ───────────────────────────────────────────────────
+  const realTurns  = flow.filter(t => !t.traceOnly);
+  const t1Turns    = realTurns.filter(t => t.routingTier?.tier === 'T1' || t.routingTier?.tier === 1);
+  const t2Turns    = realTurns.filter(t => t.routingTier?.tier === 2);
+  const tierParts  = [];
+  if (t1Turns.length) tierParts.push(`${t1Turns.length} T1 (KC / trigger)`);
+  if (t2Turns.length) tierParts.push(`${t2Turns.length} T2 (LLM agent)`);
+  if (tierParts.length) lines.push(`Routing: ${tierParts.join(', ')}.`);
+
+  // ── Ghost / empty turns ────────────────────────────────────────────────────
+  const ghostCount = txScript.filter(t => t.kind === 'GHOST_TURN_SKIPPED').length;
+  if (ghostCount > 0) {
+    issues.push(`${ghostCount} empty STT turn${ghostCount > 1 ? 's' : ''} silently skipped by ghost guard`);
+  }
+
+  // ── Booking status ─────────────────────────────────────────────────────────
+  if (nextLane === 'BOOKING_HANDOFF') {
+    const bookingCompleted = flow.some(t => t.kcEngine?.bookingFired);
+    if (!bookingCompleted) {
+      issues.push('Booking handoff was expected (nextLane=BOOKING_HANDOFF) but no booking was completed — call may have ended prematurely');
+    }
+  }
+
+  // ── LLM fallbacks inside KC ────────────────────────────────────────────────
+  const llmFallbacks = kcTurns.filter(t => t.kcEngine?.llmFallback).length;
+  if (llmFallbacks > 0) {
+    issues.push(`KC fell back to LLM ${llmFallbacks} time${llmFallbacks > 1 ? 's' : ''} (Groq could not answer directly)`);
+  }
+
+  // ── Assemble ───────────────────────────────────────────────────────────────
+  let summary = lines.join(' ');
+  if (!summary) summary = 'Call completed — no intake extraction available.';
+  if (issues.length > 0) summary += ` Diagnostic flags: ${issues.join('; ')}.`;
+
+  const topIssue = issues.length > 0 ? issues[0]
+    : (nextLane === 'BOOKING_HANDOFF' ? 'Awaiting booking completion'
+    : kcContainers.length > 0        ? `KC: ${kcContainers[0]}`
+    : 'No issues detected');
+
+  return { executiveSummary: summary, topIssue, autoIssues: issues };
+}
+
+/**
  * GET /api/call-intelligence/:callSid
  * Get intelligence for a specific call
  */
@@ -803,17 +916,18 @@ router.get('/:callSid', async (req, res) => {
     // No GPT-4 analysis yet — return trace-based callContext so admin can
     // still see turn-by-turn flow + 123RP tier data without waiting for analysis.
     if (turns.length > 0 || trace.length > 0) {
+      const autoSummary = buildAutoSummary(callContext);
       return res.json({
         success: true,
         intelligence: {
           callSid,
           companyId: transcript?.companyId || summary?.companyId || null,
           status: 'trace_only',
-          executiveSummary: 'GPT-4 analysis not yet run. Turn-by-turn trace data shown below.',
-          topIssue: 'Not analyzed',
-          issueCount: 0,
+          executiveSummary: autoSummary.executiveSummary,
+          topIssue: autoSummary.topIssue,
+          issueCount: autoSummary.autoIssues.length,
           criticalIssueCount: 0,
-          issues: [],
+          issues: autoSummary.autoIssues.map(msg => ({ title: msg, severity: 'medium', category: 'auto_diagnostic' })),
           recommendations: [],
           recording,
           callMetadata: {

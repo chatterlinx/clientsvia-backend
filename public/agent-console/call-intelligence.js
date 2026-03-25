@@ -1359,19 +1359,24 @@
                   (kc.bookingFired ? '<span class="booking-badge">BOOKING</span>' : '') +
                   (kc.llmFallback ? '<span class="fallback-badge">LLM FALLBACK</span>' : '') +
                   (kc.gracefulAck ? '<span class="ack-badge">GRACEFUL ACK</span>' : '') +
+                  '<span class="kc-badge kc-intent-badge ' + (kc.groqIntent === 'ANSWERED' ? 'intent-answered' : 'intent-failed') + '">' + (kc.groqIntent || 'UNKNOWN') + '</span>' +
                 '</div>' +
                 '<div class="step-content">' +
                   '<div class="step-detail">' +
                     '<span class="detail-label">Container:</span>' +
-                    '<span class="detail-value"><strong>' + (kc.containerTitle || 'Unknown') + '</strong> ' + _kcEditLink + '</span>' +
+                    '<span class="detail-value kc-container-name"><strong>' + (kc.containerTitle || 'Unknown') + '</strong> ' + _kcEditLink + '</span>' +
+                  '</div>' +
+                  '<div class="step-detail">' +
+                    '<span class="detail-label">Container ID:</span>' +
+                    '<span class="detail-value"><code class="trigger-id-display">' + (kc.containerId || '<em style=\'color:#dc2626\'>not in trace</em>') + '</code></span>' +
                   '</div>' +
                   (kc.kcId ? '<div class="step-detail">' +
                     '<span class="detail-label">KC ID:</span>' +
-                    '<span class="detail-value"><code>' + kc.kcId + '</code></span>' +
+                    '<span class="detail-value"><code class="trigger-id-display">' + kc.kcId + '</code></span>' +
                   '</div>' : '') +
                   '<div class="step-detail">' +
                     '<span class="detail-label">Match Score:</span>' +
-                    '<span class="detail-value">' + (kc.matchScore != null ? kc.matchScore : 'N/A') + '</span>' +
+                    '<span class="detail-value">' + (kc.matchScore === 'spfuq' ? '<span class=\'kc-badge spfuq-badge\'>SPFUQ continuation</span>' : (kc.matchScore != null ? kc.matchScore : 'N/A')) + '</span>' +
                   '</div>' +
                   '<div class="step-detail">' +
                     '<span class="detail-label">Path:</span>' +
@@ -1381,10 +1386,6 @@
                     '<span class="detail-label">📄 Source Material (what Groq read):</span>' +
                     '<pre class="code-block kc-source-block">' + kc.containerBlockPreview + '</pre>' +
                   '</div>' : '') +
-                  '<div class="step-detail">' +
-                    '<span class="detail-label">Groq Intent:</span>' +
-                    '<span class="detail-value">' + (kc.groqIntent || 'N/A') + '</span>' +
-                  '</div>' +
                   (kc.groqConfidence != null ? '<div class="step-detail">' +
                     '<span class="detail-label">Confidence:</span>' +
                     '<span class="detail-value">' + kc.groqConfidence + '</span>' +
@@ -1493,17 +1494,22 @@
                     </span>
                   </div>
                   <div class="step-detail">
-                    <span class="detail-label">Classification:</span>
-                    <span class="detail-value">${turn.routingTier.tierLabel || 'Unknown'}</span>
+                    <span class="detail-label">Source:</span>
+                    <span class="detail-value">${turn.routingTier.source || turn.routingTier.tierLabel || 'Unknown'}</span>
                   </div>
                   <div class="step-detail">
-                    <span class="detail-label">Last Path:</span>
-                    <span class="detail-value"><code>${turn.routingTier.lastPath || turn.routingTier.path || 'Unknown'}</code></span>
+                    <span class="detail-label">Path:</span>
+                    <span class="detail-value"><code>${turn.routingTier.path || turn.routingTier.lastPath || 'Unknown'}</code></span>
                   </div>
-                  ${turn.routingTier.source === 'KC_ENGINE' && turn.routingTier.containerTitle ? `
+                  ${turn.routingTier.intent ? `
                   <div class="step-detail">
-                    <span class="detail-label">KC Container:</span>
-                    <span class="detail-value">${turn.routingTier.containerTitle}</span>
+                    <span class="detail-label">Intent:</span>
+                    <span class="detail-value">${turn.routingTier.intent}</span>
+                  </div>` : ''}
+                  ${turn.routingTier.latencyMs ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Latency:</span>
+                    <span class="detail-value">${turn.routingTier.latencyMs}ms</span>
                   </div>` : ''}
                 </div>
               </div>

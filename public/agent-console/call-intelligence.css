@@ -2078,6 +2078,43 @@ input:disabled + .toggle-slider {
   border-left-color: #7C3AED;
 }
 
+/* ══ KC Engine Step ════════════════════════════════════════════════════ */
+.kc-engine-step {
+  background: #F0FDF4;
+  border-left-color: #16A34A;
+}
+
+.kc-container-name {
+  font-weight: 600;
+  color: #166534;
+}
+
+.kc-response-block {
+  background: #DCFCE7;
+  border-left: 3px solid #16A34A;
+}
+
+/* KC inline badges */
+.kc-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kc-source-badge  { background: #BBF7D0; color: #14532D; }
+.spfuq-badge      { background: #E0F2FE; color: #075985; }
+.kc-llm-badge     { background: #FEF9C3; color: #713F12; }
+.kc-ack-badge     { background: #F3F4F6; color: #374151; }
+
+.kc-intent-badge.intent-answered { background: #BBF7D0; color: #14532D; }
+.kc-intent-badge.intent-failed   { background: #FECACA; color: #7F1D1D; }
+
 /* ══ Voice Delivery Audit ══════════════════════════════════════════════ */
 .voice-delivery-step {
   background: #EFF6FF;
