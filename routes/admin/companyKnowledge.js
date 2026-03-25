@@ -406,9 +406,9 @@ ${sectionBlock}`;
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   800,
+      maxTokens:   1200,
       temperature: 0.15,
-      jsonMode:    false,
+      jsonMode:    true,   // forces strict JSON output — system prompt contains "json" ✓
       system: `You are a quality auditor for a phone-call AI knowledge base. The voice agent (Groq) must answer callers ONLY from this container — no improvisation allowed. Your job is to catch mistakes that would cause the agent to fail on live calls.
 
 Evaluate across exactly 5 dimensions. Return ONLY valid JSON — no markdown, no extra text.
@@ -437,17 +437,21 @@ Return ONLY this JSON structure:
       return res.status(500).json({ success: false, error: 'Groq returned no response' });
     }
 
-    // Parse — strip any markdown fences
+    // Parse — jsonMode:true means Groq output should be clean JSON, but still be defensive
     let evaluation;
     try {
-      const raw     = result.response.trim()
-        .replace(/^```(?:json)?\s*/i, '')
+      const raw = result.response.trim()
+        .replace(/^```(?:json)?\s*/i, '')   // strip any accidental fences
         .replace(/\s*```$/, '');
       const objMatch = raw.match(/\{[\s\S]*\}/);
       evaluation = JSON.parse(objMatch ? objMatch[0] : raw);
-      if (typeof evaluation.overallScore !== 'number') throw new Error('missing overallScore');
+      if (typeof evaluation.overallScore !== 'number') throw new Error('missing overallScore field');
     } catch (parseErr) {
-      logger.warn('[companyKnowledge] evaluate: JSON parse failed', { companyId, err: parseErr.message });
+      logger.warn('[companyKnowledge] evaluate: JSON parse failed', {
+        companyId,
+        err:     parseErr.message,
+        preview: result.response?.slice(0, 300),   // log first 300 chars for debugging
+      });
       return res.status(500).json({ success: false, error: 'Could not parse AI evaluation response' });
     }
 
