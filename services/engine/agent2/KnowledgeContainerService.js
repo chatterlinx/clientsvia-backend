@@ -233,8 +233,13 @@ function _buildSystemPrompt({
 }) {
   // Booking instruction block
   let bookingInstruction = '';
-  if (bookingOfferMode === 'none') {
-    // Caller is mid-booking — suppress all booking offers so KC doesn't re-invite booking
+  if (bookingOfferMode === 'return_to_booking') {
+    // BPFUQ context — caller is mid-booking. Answer the question, then naturally
+    // invite them to return to the appointment booking already in progress.
+    // Do NOT start a new booking — just offer to resume the one underway.
+    bookingInstruction = '5. After answering, briefly and naturally invite the caller to return to completing their appointment — for example: "Does that help? Shall we get back to your booking?" Keep it short and warm. Do NOT pitch a new booking — just offer to resume the one already in progress.';
+  } else if (bookingOfferMode === 'none') {
+    // Suppress all booking offers (used when a simple answer-only response is needed)
     bookingInstruction = '5. Do NOT add any booking invitation — answer only.';
   } else if (bookingAction === 'none') {
     bookingInstruction = '5. Do NOT add any booking invitation — answer only.';

@@ -33,6 +33,7 @@ const BookingLLMInterceptService     = require('./BookingLLMInterceptService');
 const GroqFieldExtractorService      = require('./GroqFieldExtractorService');
 const GlobalHubService     = require('../../GlobalHubService');
 const KCS                  = require('../agent2/KnowledgeContainerService');
+const BPFUQService         = require('../kc/BPFUQService');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -386,6 +387,48 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     STEPS.COLLECT_PREFERRED_TIME,
   ]);
 
+  // ── Gate 0: BPFUQ — Booking Pending Follow-Up Question ───────────────────
+  // Fires BEFORE the step handler. Last turn answered a mid-booking KC
+  // question (Tier 1.5). Groq closed with "Shall we get back to your booking?"
+  // Now we detect whether the caller is ready to resume or has more questions.
+  //
+  //   YES      → clear BPFUQ, return step re-anchor (e.g. "What is the address?")
+  //   NO       → clear BPFUQ, fall through — let 123RP handle the new question
+  //              (Tier 1.5 will re-fire if it's another KC question → chains naturally)
+  //   AMBIGUOUS → keep BPFUQ alive, re-ask "Shall we get back to completing your booking?"
+  // ─────────────────────────────────────────────────────────────────────────
+  const bpfuq = BPFUQService.load(ctx);
+  if (bpfuq) {
+    const consent = BPFUQService.detectConsent(userInput);
+    events.push({ type: 'BK_BPFUQ_GATE', step: bpfuq.step, consent, timestamp: Date.now() });
+
+    if (consent === 'YES') {
+      BPFUQService.clear(ctx);
+      const reAnchor = _getStepReAnchor(bpfuq.step, config);
+      return {
+        nextPrompt: reAnchor,
+        bookingCtx: ctx,
+        completed:  false,
+        _123rp:     { tier: 0, path: 'BK_BPFUQ_RESUME' }
+      };
+    }
+
+    if (consent === 'NO') {
+      // Caller has more questions — clear BPFUQ and fall through to normal
+      // 123RP cascade. Tier 1.5 will re-set BPFUQ if they ask another KC question.
+      BPFUQService.clear(ctx);
+      // ↓ fall through
+    } else {
+      // AMBIGUOUS (short/unclear) — gently re-ask
+      return {
+        nextPrompt: RETURN_TO_BOOKING_Q,
+        bookingCtx: ctx,
+        completed:  false,
+        _123rp:     { tier: 0, path: 'BK_BPFUQ_REASK' }
+      };
+    }
+  }
+
   // ── STEP 1: Run the normal step handler ───────────────────────────────────
   const prevSnap   = _snapshotCtx(ctx);
   const stepResult = await _runStepHandler(ctx, userInput, config, companyId, isTest, events);
@@ -493,11 +536,14 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
   }
 
-  // ── Tier 1.5: KC knowledge digression ────────────────────────────────────
-  // Caller asked a knowledge/pricing question mid-booking (e.g. "how much is the maintenance?").
-  // Answer via KC engine with booking offer suppressed, then re-anchor to current step so
-  // booking resumes next turn. Runs AFTER Tier 1 (triggers) so triggers still take priority.
-  // Calls KCS.answer() directly — NOT KCDiscoveryRunner — to stay inside booking context.
+  // ── Tier 1.5: KC knowledge digression (BPFUQ) ────────────────────────────
+  // Caller asked a knowledge/pricing question mid-booking.
+  // KCS answers with bookingOfferMode:'return_to_booking' so Groq naturally
+  // closes: "Does that help? Shall we get back to your booking?"
+  // BPFUQService records which step was interrupted — Gate 0 (top of
+  // processCurrentStep) intercepts next turn to detect consent and either
+  // re-anchor or fall through for another KC question.
+  // Calls KCS.answer() directly — NOT KCDiscoveryRunner — to stay in booking lane.
   try {
     if (KCS.detect(userInput)) {
       const containers = await KCS.getActiveForCompany(companyId);
@@ -507,15 +553,16 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           const kcResult = await KCS.answer({
             container:  match.container,
             question:   userInput,
-            kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
+            kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'return_to_booking' },
             company:    { _id: companyId, companyName: config.companyName },
           });
           if (kcResult?.response) {
-            const reAnchor = _getStepReAnchor(prevSnap.step, config);
+            // Store BPFUQ — Gate 0 will handle the return-to-booking consent next turn
+            BPFUQService.set(ctx, { step: prevSnap.step });
             events.push({ type: 'BK_123RP_TIER1_5_KC', step: prevSnap.step, containerTitle: match.container.title, timestamp: Date.now() });
             ctx.lastPath = 'BK_KC_DIGRESSION';
             return {
-              nextPrompt: `${kcResult.response} ${reAnchor}`,
+              nextPrompt: kcResult.response,   // Groq already closed with return-to-booking invite
               bookingCtx: ctx,
               completed:  false,
               _123rp:     { tier: 1.5, path: 'BK_KC_DIGRESSION', containerTitle: match.container.title }
