@@ -181,6 +181,24 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
     },
 
     // ─────────────────────────────────────────────────────────────────────────
+    // SEMANTIC EMBEDDING — for keyword health / conflict detection
+    // Generated automatically on save via KCKeywordHealthService.
+    // select: false keeps the large float array out of regular queries.
+    // ─────────────────────────────────────────────────────────────────────────
+    embeddingVector: {
+      type:    [Number],
+      default: undefined,
+      select:  false,
+      comment: 'text-embedding-3-small 512-dim vector of title+sections. Used for semantic conflict detection.'
+    },
+
+    embeddingUpdatedAt: {
+      type:    Date,
+      default: undefined,
+      comment: 'Timestamp of last embedding generation. Stale if older than updatedAt.'
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // STATE & ORDERING
     // ─────────────────────────────────────────────────────────────────────────
     isActive: {

@@ -45,6 +45,7 @@ const KnowledgeContainerService    = require('../../services/engine/agent2/Knowl
 const CompanyTriggerSettings       = require('../../models/CompanyTriggerSettings');
 const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
+const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthService');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -257,6 +258,11 @@ router.post('/:companyId/knowledge', async (req, res) => {
       logger.warn('[companyKnowledge] cache invalidation failed on POST', { companyId, e: e.message })
     );
 
+    // Generate semantic embedding fire-and-forget — failure never blocks the response
+    setImmediate(() =>
+      KCKeywordHealthService.generateAndStoreEmbedding(container._id).catch(() => {})
+    );
+
     logger.info('[companyKnowledge] Created container', { companyId, id: container._id, kcId, title: container.title });
     return res.status(201).json({ success: true, container });
   } catch (err) {
@@ -406,6 +412,36 @@ router.post('/:companyId/knowledge/reorder', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/keyword-health
+// Runs the full semantic + keyword conflict analysis.
+// If containers are missing embeddings, backfills them first (synchronous so
+// the first call always returns a complete report).
+// Returns: full conflict report with severity levels, shared keywords,
+//          semantic similarity scores, Groq conflict type classifications,
+//          conflictMap (for edit-page chip indicators), and per-container counts.
+// ⚠️ MUST be before GET /:id — Express will match 'keyword-health' as id otherwise
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    // Backfill any containers missing embeddings before analysing
+    const { processed, failed } = await KCKeywordHealthService.batchGenerateEmbeddings(companyId);
+    if (processed > 0) {
+      logger.info('[companyKnowledge] keyword-health: backfilled embeddings', { companyId, processed, failed });
+    }
+
+    const report = await KCKeywordHealthService.analyzeConflicts(companyId);
+
+    return res.json({ success: true, ...report });
+  } catch (err) {
+    logger.error('[companyKnowledge] keyword-health error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Keyword health analysis failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge/:id — Get single container
 // ⚠️ Must be AFTER all literal-segment routes above
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,6 +483,13 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
     KnowledgeContainerService.invalidateCache(companyId).catch(e =>
       logger.warn('[companyKnowledge] cache invalidation failed on PATCH', { companyId, e: e.message })
     );
+
+    // Re-embed if title or sections changed (the fields that affect semantic meaning)
+    if (updates.title !== undefined || updates.sections !== undefined) {
+      setImmediate(() =>
+        KCKeywordHealthService.generateAndStoreEmbedding(id).catch(() => {})
+      );
+    }
 
     logger.info('[companyKnowledge] Updated container', { companyId, id, fields: Object.keys(updates) });
     return res.json({ success: true, container });
@@ -669,6 +712,25 @@ Return ONLY the label text. No quotes. No extra text.`,
   } catch (err) {
     logger.error('[companyKnowledge] suggest-label error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Failed to generate label suggestion' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/generate-embeddings
+// Backfills embeddings for all containers missing them.
+// Returns: { processed: N, failed: N }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/generate-embeddings', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const result = await KCKeywordHealthService.batchGenerateEmbeddings(companyId);
+    logger.info('[companyKnowledge] generate-embeddings complete', { companyId, ...result });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    logger.error('[companyKnowledge] generate-embeddings error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Embedding generation failed' });
   }
 });
 

@@ -172,6 +172,9 @@
       padding: 0; font-size: 14px; line-height: 1; display: flex;
     }
     .kw-tag button:hover { color: #dc2626; }
+    .kw-tag.conflict { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+    .kw-tag.conflict button { color: #dc2626; }
+    .kw-conflict-tip { font-size: 11px; cursor: help; line-height: 1; }
     .kw-input-inner {
       border: none; outline: none; font-size: 13px; min-width: 120px;
       flex: 1; padding: 2px 4px; font-family: inherit; background: transparent;
@@ -579,6 +582,7 @@ const S = {
   isEdit:      false,
   keywords:    [],         // current keyword list
   sectionSeq:  0,          // monotonic ID for section DOM nodes
+  conflictMap: {},         // { keyword: [{id, title}] } — from keyword-health endpoint
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -617,6 +621,8 @@ const LABEL_SUGGESTIONS = [
     document.getElementById('btnDeleteHeader').style.display = '';
     document.getElementById('hardDeleteSection').style.display = '';
     await loadContainer();
+    // Load keyword health conflict map in background — chips update when ready
+    _loadConflictMap();
   } else {
     document.getElementById('pageTitle').textContent = 'Add Knowledge Container';
     _showForm();
@@ -636,6 +642,21 @@ async function _loadCategoryOptions() {
     const dl = document.getElementById('catDatalist');
     dl.innerHTML = cats.map(c => `<option value="${_esc(c)}">`).join('');
   } catch (_e) {}
+}
+
+// Load conflictMap from keyword-health — fire-and-forget, silently ignored if unavailable
+async function _loadConflictMap() {
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/keyword-health`
+    );
+    if (data?.success && data.conflictMap) {
+      S.conflictMap = data.conflictMap;
+      _renderKeywords();  // Re-render chips with conflict indicators
+    }
+  } catch (_e) {
+    // Graceful degrade — conflict indicators are purely informational
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -812,15 +833,22 @@ function _getSections() {
 // KEYWORDS
 // ─────────────────────────────────────────────────────────────────────────────
 function _renderKeywords() {
-  const wrap = document.getElementById('kwWrap');
+  const wrap  = document.getElementById('kwWrap');
   const input = document.getElementById('kwInner');
   // Remove existing tags (keep the input)
   wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
   // Insert tags before the input
   S.keywords.forEach(kw => {
-    const tag = document.createElement('span');
-    tag.className = 'kw-tag';
-    tag.innerHTML = `${_esc(kw)} <button type="button" onclick="removeKeyword('${_esc(kw).replace(/'/g, "\\'")}')">×</button>`;
+    const tag        = document.createElement('span');
+    const conflicts  = S.conflictMap[kw.toLowerCase().trim()] || [];
+    // Exclude self from conflict list
+    const others     = conflicts.filter(c => c.id !== S.itemId);
+    const hasConflict = others.length > 0;
+    tag.className    = 'kw-tag' + (hasConflict ? ' conflict' : '');
+    const conflictTip = hasConflict
+      ? `<span class="kw-conflict-tip" title="Also used by: ${others.map(c => c.title).join(', ')}">⚠️</span>`
+      : '';
+    tag.innerHTML = `${_esc(kw)} ${conflictTip}<button type="button" onclick="removeKeyword('${_esc(kw).replace(/'/g, "\\'")}')">×</button>`;
     wrap.insertBefore(tag, input);
   });
 }

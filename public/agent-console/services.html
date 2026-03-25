@@ -409,6 +409,110 @@
     .popt-new.changed { color: #0284c7; }
     .popt-new.same    { color: var(--text-muted); font-weight: 400; }
     .popt-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    /* ── Keyword health button ───────────────────────────────────────────── */
+    .btn-kw-health {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      background: #fefce8; border: 1px solid #fde68a; color: #92400e;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    .btn-kw-health:hover    { background: #fef3c7; border-color: #fcd34d; }
+    .btn-kw-health.has-high { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    .btn-kw-health.has-high:hover { background: #fecaca; }
+    .btn-kw-health:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Conflict badge on cards ─────────────────────────────────────────── */
+    .badge-conflict      { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .badge-conflict.high { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+    /* ── Keyword health modal ────────────────────────────────────────────── */
+    .health-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5); z-index: 1000;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .health-overlay.open { display: flex; }
+    .health-box {
+      background: white; border-radius: 16px; padding: 28px;
+      width: 100%; max-width: 720px; max-height: 85vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.22);
+    }
+    .health-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .health-title  { font-size: 17px; font-weight: 700; color: var(--text-primary); flex: 1; }
+    .health-summary-chips { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .health-chip {
+      font-size: 12px; font-weight: 700; padding: 4px 12px;
+      border-radius: 20px; border: 1px solid;
+    }
+    .health-chip-high  { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    .health-chip-warn  { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .health-chip-info  { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .health-chip-clean { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+    .health-list { flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .health-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 40px; gap: 10px;
+      font-size: 14px; color: var(--text-muted);
+    }
+    .health-empty span:first-child { font-size: 32px; }
+    .health-conflict-row {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .health-conflict-row:last-child { border-bottom: none; }
+    .health-conflict-top {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .health-sev-badge {
+      font-size: 10px; font-weight: 800; padding: 2px 8px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: .5px;
+      border: 1px solid;
+    }
+    .health-sev-high { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    .health-sev-warn { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .health-sev-info { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .health-cards-row {
+      display: flex; align-items: center; gap: 6px; font-weight: 600; flex-wrap: wrap;
+    }
+    .health-card-name { color: var(--text-primary); }
+    .health-vs { color: var(--text-muted); font-weight: 400; font-size: 11px; }
+    .health-priority-pill {
+      font-size: 10px; background: #f1f5f9; border: 1px solid #e2e8f0;
+      color: #64748b; border-radius: 10px; padding: 1px 6px;
+    }
+    .health-priority-tie {
+      font-size: 10px; background: #fee2e2; border: 1px solid #fca5a5;
+      color: #dc2626; border-radius: 10px; padding: 1px 6px; font-weight: 700;
+    }
+    .health-details { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-muted); }
+    .health-sim { color: #0ea5e9; font-weight: 600; }
+    .health-kws { display: flex; gap: 4px; flex-wrap: wrap; }
+    .health-kw-chip {
+      background: #fef3c7; border: 1px solid #fde68a;
+      color: #92400e; border-radius: 4px; padding: 1px 6px;
+      font-size: 11px; font-weight: 500;
+    }
+    .health-type-badge {
+      font-size: 11px; font-weight: 700; padding: 2px 8px;
+      border-radius: 4px; background: #f1f5f9; color: #475569;
+      border: 1px solid #e2e8f0; white-space: nowrap;
+    }
+    .health-rec {
+      margin-top: 6px; font-size: 12px; color: #059669;
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 6px; padding: 6px 10px; line-height: 1.5;
+    }
+    .health-explain {
+      margin-top: 4px; font-size: 12px; color: #6b7280;
+      font-style: italic; line-height: 1.5;
+    }
+    .health-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    .health-loading { display: flex; align-items: center; gap: 10px; padding: 30px; justify-content: center; font-size: 14px; color: var(--text-muted); }
+
     .btn-optimize {
       display: flex; align-items: center; gap: 6px;
       padding: 8px 14px; border-radius: 8px;
@@ -686,6 +790,9 @@
     <input type="text" class="search-input" id="searchInput" placeholder="Search containers…" oninput="applySearch(this.value)">
   </div>
   <div class="toolbar-spacer"></div>
+  <button class="btn-kw-health" id="btnKwHealth" onclick="showKeywordHealth()" title="Detect competing keywords and semantic conflicts between KC cards">
+    ⚠️ Keyword Health
+  </button>
   <button class="btn-optimize" id="btnOptimize" onclick="optimizePriorities()" title="AI analyzes all cards and suggests optimal priority numbers">
     🎯 Optimize Priorities
   </button>
@@ -731,6 +838,25 @@
   </div>
 </div>
 
+<!-- ── Keyword Health modal ──────────────────────────────────────────────── -->
+<div class="health-overlay" id="healthOverlay">
+  <div class="health-box">
+    <div class="health-header">
+      <span style="font-size:22px;">🧠</span>
+      <div class="health-title">Keyword Health Report</div>
+      <button class="btn-secondary" style="padding:6px 14px;font-size:12px;" onclick="closeHealthModal()">✕ Close</button>
+    </div>
+    <div class="health-summary-chips" id="healthSummaryChips"></div>
+    <div class="health-list" id="healthList">
+      <div class="health-loading">Scanning for conflicts…</div>
+    </div>
+    <div class="health-footer">
+      <button class="btn-secondary" onclick="closeHealthModal()">Close</button>
+      <button class="btn-optimize" id="btnRescan" onclick="showKeywordHealth(true)">🔄 Re-scan</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Toast container ────────────────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -755,6 +881,8 @@ const S = {
   deleteTarget:     null,
   companyVariables: new Map(),  // {varName → value} — same store as trigger card variables
   detectedVars:     new Set(),  // variable names found in KC section content
+  healthData:       null,       // cached conflict report from last health check
+  healthLoading:    false,
 };
 
 // Category dot colour palette — cycles through for variety
@@ -1178,6 +1306,25 @@ function _cardHTML(c) {
     ? `<span class="badge badge-limit">${c.wordLimit}w limit</span>`
     : '';
 
+  // Conflict badge — populated from S.healthData if available
+  const conflictCount = S.healthData?.containerConflictCounts?.[String(c._id)] || 0;
+  const conflictHighest = (() => {
+    if (!S.healthData || !conflictCount) return null;
+    const pairs = (S.healthData.conflicts || []).filter(x =>
+      x.containerA._id === String(c._id) || x.containerB._id === String(c._id)
+    );
+    if (pairs.some(p => p.severity === 'HIGH')) return 'HIGH';
+    if (pairs.some(p => p.severity === 'WARN')) return 'WARN';
+    return 'INFO';
+  })();
+  const conflictBadge = conflictCount
+    ? `<span class="badge badge-conflict${conflictHighest === 'HIGH' ? ' high' : ''}"
+         title="Click Keyword Health for details"
+         style="cursor:pointer" onclick="showKeywordHealth()">
+         ⚠️ ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}
+       </span>`
+    : '';
+
   // Keyword chips
   const kwHtml = kws.length
     ? shown.map(k => `<span class="kw-chip">${_esc(k)}</span>`).join('') +
@@ -1200,7 +1347,7 @@ function _cardHTML(c) {
         <div class="kc-title">${_esc(c.title)}</div>
         ${c.kcId ? `<div class="kc-id" title="Knowledge Container ID — immutable, never reused">🏷 ${_esc(c.kcId)}</div>` : ''}
         <div class="kc-badges">
-          ${catBadge}${offBadge}${actionBadge}${limitBadge}
+          ${catBadge}${offBadge}${actionBadge}${limitBadge}${conflictBadge}
           <span class="badge" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b;">${sCount} section${sCount !== 1 ? 's' : ''}</span>
         </div>
       </div>
@@ -1433,6 +1580,154 @@ function _esc(str) {
 document.getElementById('deleteDialog').addEventListener('click', function(e) {
   if (e.target === this) closeDeleteDialog();
 });
+
+// Close health modal on overlay click
+document.getElementById('healthOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeHealthModal();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYWORD HEALTH DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+function closeHealthModal() {
+  document.getElementById('healthOverlay').classList.remove('open');
+}
+
+async function showKeywordHealth(forceRescan = false) {
+  if (S.healthLoading) return;
+
+  const overlay  = document.getElementById('healthOverlay');
+  const listEl   = document.getElementById('healthList');
+  const chipsEl  = document.getElementById('healthSummaryChips');
+  const btn      = document.getElementById('btnKwHealth');
+  const rescanBtn = document.getElementById('btnRescan');
+
+  overlay.classList.add('open');
+
+  // Use cached data unless forced rescan
+  if (S.healthData && !forceRescan) {
+    _renderHealthModal(S.healthData);
+    return;
+  }
+
+  // Show loading state
+  S.healthLoading = true;
+  btn.disabled = true;
+  rescanBtn.disabled = true;
+  listEl.innerHTML  = '<div class="health-loading">🔍 Scanning containers for conflicts…</div>';
+  chipsEl.innerHTML = '';
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/keyword-health`
+    );
+    if (!data.success) throw new Error(data.error || 'Health check failed');
+
+    S.healthData = data;
+    _renderHealthModal(data);
+
+    // Update button state
+    if (data.highCount > 0) {
+      btn.classList.add('has-high');
+      btn.title = `${data.highCount} HIGH severity conflict${data.highCount > 1 ? 's' : ''} detected`;
+    } else {
+      btn.classList.remove('has-high');
+    }
+
+    // Re-render cards to show/update conflict badges
+    _renderCards();
+
+  } catch (err) {
+    listEl.innerHTML = `<div class="health-empty"><span>❌</span><span>Failed to load health report: ${_esc(err.message)}</span></div>`;
+    _toast('Keyword health check failed', 'error');
+  } finally {
+    S.healthLoading = false;
+    btn.disabled    = false;
+    rescanBtn.disabled = false;
+  }
+}
+
+function _renderHealthModal(data) {
+  const chipsEl = document.getElementById('healthSummaryChips');
+  const listEl  = document.getElementById('healthList');
+
+  // Summary chips
+  if (data.totalConflicts === 0) {
+    chipsEl.innerHTML = `
+      <span class="health-chip health-chip-clean">✅ No conflicts — ${data.totalContainers} containers clean</span>
+      ${data.missingEmbeddings ? `<span class="health-chip" style="background:#fef9c3;border-color:#fde68a;color:#713f12;">⚡ ${data.missingEmbeddings} containers missing embeddings</span>` : ''}
+    `;
+    listEl.innerHTML = `
+      <div class="health-empty">
+        <span>✅</span>
+        <span>All ${data.totalContainers} containers are clean — no conflicts detected.</span>
+      </div>`;
+    return;
+  }
+
+  chipsEl.innerHTML = [
+    data.highCount ? `<span class="health-chip health-chip-high">🔴 ${data.highCount} HIGH</span>` : '',
+    data.warnCount ? `<span class="health-chip health-chip-warn">🟡 ${data.warnCount} WARN</span>` : '',
+    data.infoCount ? `<span class="health-chip health-chip-info">🔵 ${data.infoCount} INFO</span>` : '',
+    `<span class="health-chip" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b;">${data.totalContainers} containers scanned</span>`,
+    data.missingEmbeddings ? `<span class="health-chip" style="background:#fef9c3;border-color:#fde68a;color:#713f12;">⚡ ${data.missingEmbeddings} missing embeddings</span>` : '',
+  ].filter(Boolean).join('');
+
+  // Conflict rows
+  const rows = (data.conflicts || []).map(c => {
+    const sevClass = { HIGH: 'health-sev-high', WARN: 'health-sev-warn', INFO: 'health-sev-info' }[c.severity] || 'health-sev-info';
+    const prioA = c.containerA.priority ?? 100;
+    const prioB = c.containerB.priority ?? 100;
+    const prioBadgeA = `<span class="${c.samePriority ? 'health-priority-tie' : 'health-priority-pill'}">pri:${prioA}</span>`;
+    const prioBadgeB = `<span class="${c.samePriority ? 'health-priority-tie' : 'health-priority-pill'}">pri:${prioB}</span>`;
+
+    const simBadge = c.isSemanticConflict
+      ? `<span class="health-sim">~${Math.round(c.semanticSimilarity * 100)}% similar</span>`
+      : '';
+
+    const kwChips = c.sharedKeywords.length
+      ? `<span style="color:var(--text-muted);">Shared keywords:</span>
+         <div class="health-kws">${c.sharedKeywords.slice(0, 8).map(k =>
+           `<span class="health-kw-chip">${_esc(k)}</span>`).join('')}${c.sharedKeywords.length > 8 ? `<span class="kw-more">+${c.sharedKeywords.length - 8}</span>` : ''}</div>`
+      : '';
+
+    const typeBadge = c.conflictType
+      ? `<span class="health-type-badge">${_esc(c.conflictType)}</span>`
+      : '';
+
+    const editA = S.companyId
+      ? `<a href="/agent-console/services-item.html?companyId=${S.companyId}&itemId=${c.containerA._id}" target="_blank" style="font-size:11px;color:var(--color-primary);text-decoration:none;">Edit ↗</a>`
+      : '';
+    const editB = S.companyId
+      ? `<a href="/agent-console/services-item.html?companyId=${S.companyId}&itemId=${c.containerB._id}" target="_blank" style="font-size:11px;color:var(--color-primary);text-decoration:none;">Edit ↗</a>`
+      : '';
+
+    return `
+      <div class="health-conflict-row">
+        <div class="health-conflict-top">
+          <span class="health-sev-badge ${sevClass}">${c.severity}</span>
+          ${typeBadge}
+          ${c.samePriority ? '<span class="health-priority-tie">⚠️ SAME PRIORITY — random winner</span>' : ''}
+        </div>
+        <div class="health-cards-row">
+          <span class="health-card-name">${_esc(c.containerA.title)}</span>
+          ${prioBadgeA} ${editA}
+          <span class="health-vs">↔</span>
+          <span class="health-card-name">${_esc(c.containerB.title)}</span>
+          ${prioBadgeB} ${editB}
+        </div>
+        <div class="health-details">
+          ${simBadge}
+          ${kwChips}
+        </div>
+        ${c.conflictExplanation ? `<div class="health-explain">"${_esc(c.conflictExplanation)}"</div>` : ''}
+        ${c.recommendation ? `<div class="health-rec">💡 ${_esc(c.recommendation)}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  listEl.innerHTML = rows;
+}
 </script>
 </body>
 </html>
