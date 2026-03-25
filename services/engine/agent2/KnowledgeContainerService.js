@@ -216,6 +216,8 @@ function _buildContainerBlock(container) {
  * @param {string}  opts.bookingOfferMode  — 'groq' | 'fixed'
  * @param {string}  opts.bookingOfferPhrase — used when mode is 'fixed'
  * @param {string}  opts.bookingAction     — container-level booking action
+ * @param {string}  [opts.spfuqContext]    — active topic reminder injected when SPFUQ anchor is live.
+ *                                           Helps Groq resolve pronouns ('it', 'that') to the current topic.
  * @returns {string}
  */
 function _buildSystemPrompt({
@@ -227,6 +229,7 @@ function _buildSystemPrompt({
   bookingOfferPhrase,
   bookingAction,
   closingPrompt,
+  spfuqContext,
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -245,9 +248,15 @@ function _buildSystemPrompt({
     bookingInstruction = '5. After answering, read the caller\'s tone and engagement. If they sound interested or ready, invite them to schedule in one warm, natural sentence. If the topic was purely informational or the caller seems hesitant, offer to answer any other questions instead. Never force a booking pitch if the context doesn\'t call for it.';
   }
 
+  // ACTIVE TOPIC block — injected when SPFUQ anchor is live so Groq resolves
+  // pronouns ('it', 'that', 'they', 'those') back to the anchored container topic.
+  const activeTopicBlock = spfuqContext
+    ? `\nACTIVE TOPIC: The caller is currently discussing "${containerTitle}". Resolve pronouns ('it', 'that', 'they', 'those') as references to "${containerTitle}" unless the caller explicitly introduces a new topic.\n`
+    : '';
+
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-
+${activeTopicBlock}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
 2. Keep your response under ${wordLimit} words — this is a spoken phone answer.
@@ -439,6 +448,7 @@ async function answer(opts) {
     company     = {},
     callerName,
     callSid,
+    spfuqContext,    // optional — active topic reminder injected into system prompt for pronoun resolution
   } = opts;
 
   const startMs       = Date.now();
@@ -475,6 +485,7 @@ async function answer(opts) {
     bookingOfferPhrase: kbSettings.bookingOfferPhrase || BUILT_IN_BOOKING_OFFER,
     bookingAction:      container.bookingAction        || 'offer_to_book',
     closingPrompt:      container.closingPrompt        || '',
+    spfuqContext:       spfuqContext                   || null,
   });
 
   // User message — personalise with caller name if known

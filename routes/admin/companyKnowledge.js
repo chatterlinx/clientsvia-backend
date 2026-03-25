@@ -419,7 +419,7 @@ SCORING RUBRIC:
 
 2. LABEL_ALIGNMENT (0-100): Do the section labels accurately describe their content so Groq can locate the right information? Penalize: generic labels ("Section 1", "Notes", "Info"), labels that don't match the actual content, missing labels.
 
-3. KEYWORD_QUALITY (0-100): Are keywords phrased the way real callers speak on the phone (conversational, not database terms)? Are they specific enough to this topic that they won't accidentally trigger other cards? Are obvious caller phrases missing?
+3. KEYWORD_QUALITY (0-100): Are keywords phrased the way real callers speak on the phone (conversational, not database terms)? Are they specific enough to this topic that they won't accidentally trigger other cards? Are obvious caller phrases missing? CRITICAL FLAG: Penalize heavily (–30 points each) any keyword that is a generic pronoun, filler word, or common verb that matches almost any utterance: words like "it", "that", "this", "they", "those", "what", "how", "there", "here", "yes", "no", "okay", "tell", "know", "get", "need", "want", "help", "more", "about", "the", "a" — these would silently break topic anchoring by causing the wrong container to activate mid-conversation. Also penalize single-character keywords. Flag each dangerous keyword by name in the "finding" and list them in "fixes".
 
 4. COMPLETENESS (0-100): Given the title and topic, what sections would a world-class phone KB entry include that are currently MISSING? Consider: pricing, what's included, duration/timing, availability/scheduling, warranty/guarantees, requirements/eligibility, common caller objections, FAQs. Penalize for missing sections that callers will definitely ask about.
 

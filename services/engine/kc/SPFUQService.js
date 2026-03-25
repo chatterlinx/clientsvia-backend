@@ -34,6 +34,7 @@
  *     lastQuestion:      String,   // caller's last question in this topic
  *     lastAnswer:        String,   // Groq's last answer (clipped to 300 chars)
  *     subjectBrief:      String,   // 1-sentence running context injected into Groq
+ *     turnsRemaining:    Number,   // follow-up turns left before anchor expires; decrements each SPFUQ_CONTINUE turn
  *   }
  *
  * USAGE:
@@ -55,10 +56,11 @@ const logger                   = require('../../../utils/logger');
 // ============================================================================
 
 const CONFIG = {
-  REDIS_TTL_SECONDS: 14400,  // 4 hours — matches call session max lifetime
-  KEY_PREFIX:        'spfuq', // Redis key prefix: spfuq:{companyId}:{callSid}
-  BRIEF_MAX_CHARS:   200,     // Cap on subjectBrief injected into Groq prompt
-  ANSWER_MAX_CHARS:  300,     // Cap on lastAnswer stored in Redis
+  REDIS_TTL_SECONDS:    14400,  // 4 hours — matches call session max lifetime
+  KEY_PREFIX:           'spfuq', // Redis key prefix: spfuq:{companyId}:{callSid}
+  BRIEF_MAX_CHARS:      200,     // Cap on subjectBrief injected into Groq prompt
+  ANSWER_MAX_CHARS:     300,     // Cap on lastAnswer stored in Redis
+  DEFAULT_TURN_BUDGET:  4,       // Default follow-up turns before anchor expires (admin can override per-container)
 };
 
 // ============================================================================
@@ -131,6 +133,10 @@ async function set(companyId, callSid, spfuq) {
       lastQuestion:      spfuq.lastQuestion        || '',
       lastAnswer:        (spfuq.lastAnswer         || '').slice(0, CONFIG.ANSWER_MAX_CHARS),
       subjectBrief:      (spfuq.subjectBrief       || '').slice(0, CONFIG.BRIEF_MAX_CHARS),
+      // FIX 3: Turn budget — decrements on each SPFUQ_CONTINUE turn, resets on fresh match
+      turnsRemaining:    typeof spfuq.turnsRemaining === 'number'
+                           ? spfuq.turnsRemaining
+                           : CONFIG.DEFAULT_TURN_BUDGET,
     };
     await redis.set(_buildKey(companyId, callSid), JSON.stringify(record), { EX: CONFIG.REDIS_TTL_SECONDS });
     logger.debug('[SPFUQ] Anchor set', { companyId, callSid, containerId: record.containerId, containerTitle: record.containerTitle });
@@ -166,6 +172,28 @@ async function clear(companyId, callSid) {
 }
 
 // ============================================================================
+// TURN BUDGET — Check if the anchor has exhausted its follow-up turn allowance
+// ============================================================================
+
+/**
+ * isExpiredByTurnBudget — Returns true if the SPFUQ anchor has used all its
+ * allowed follow-up turns. Called in GATE 2 of KCDiscoveryRunner.
+ *
+ * An expired anchor is cleared and the call falls through to LLM fallback or
+ * a fresh container match. This prevents Groq from getting stuck in a stale
+ * topic for too many turns (e.g. caller moved on but pronouns keep matching).
+ *
+ * @param {Object|null} spfuq — loaded SPFUQ object (from load())
+ * @returns {boolean}
+ */
+function isExpiredByTurnBudget(spfuq) {
+  if (!spfuq) return false;
+  // turnsRemaining is undefined on old anchors created before this fix — treat as not expired
+  if (typeof spfuq.turnsRemaining !== 'number') return false;
+  return spfuq.turnsRemaining <= 0;
+}
+
+// ============================================================================
 // BUILD BRIEF — Derive a 1-sentence running context summary
 // ============================================================================
 
@@ -198,4 +226,6 @@ module.exports = {
   set,
   clear,
   buildBrief,
+  isExpiredByTurnBudget,
+  DEFAULT_TURN_BUDGET: CONFIG.DEFAULT_TURN_BUDGET,
 };

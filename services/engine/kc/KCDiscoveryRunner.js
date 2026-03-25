@@ -285,14 +285,26 @@ class KCDiscoveryRunner {
     }
 
     if (spfuq) {
-      logger.info('[KC_ENGINE] SPFUQ anchor loaded', {
-        companyId, callSid, containerId: spfuq.containerId,
-        containerTitle: spfuq.containerTitle, lastTurn: spfuq.lastTurn,
-      });
-      emit('KC_SPFUQ_LOADED', {
-        containerId: spfuq.containerId, containerTitle: spfuq.containerTitle,
-        lastTurn: spfuq.lastTurn,
-      });
+      // FIX 3: Check turn budget — if expired, clear anchor and proceed fresh
+      if (SPFUQService.isExpiredByTurnBudget(spfuq)) {
+        logger.info('[KC_ENGINE] SPFUQ anchor expired (turn budget exhausted) — clearing', {
+          companyId, callSid,
+          containerTitle: spfuq.containerTitle,
+          turnsRemaining: spfuq.turnsRemaining,
+        });
+        SPFUQService.clear(companyId, callSid).catch(() => {});
+        spfuq = null;
+      } else {
+        logger.info('[KC_ENGINE] SPFUQ anchor loaded', {
+          companyId, callSid, containerId: spfuq.containerId,
+          containerTitle: spfuq.containerTitle, lastTurn: spfuq.lastTurn,
+          turnsRemaining: spfuq.turnsRemaining,
+        });
+        emit('KC_SPFUQ_LOADED', {
+          containerId: spfuq.containerId, containerTitle: spfuq.containerTitle,
+          lastTurn: spfuq.lastTurn, turnsRemaining: spfuq.turnsRemaining,
+        });
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -308,26 +320,50 @@ class KCDiscoveryRunner {
 
     const match = KCS.findContainer(containers, userInput);
 
-    // ── SPFUQ ACTIVE + NEW CONTAINER MATCHED → TOPIC HOP ────────────────────
+    // ── SPFUQ ACTIVE + NEW CONTAINER MATCHED → TOPIC HOP (with confidence gap)
     if (spfuq && match && match.container) {
       const matchedId  = String(match.container._id || match.container.title || '');
       const anchoredId = String(spfuq.containerId || '');
 
       if (matchedId && anchoredId && matchedId !== anchoredId) {
-        // Caller moved to a different topic — clear old anchor, set new one
-        logger.info('[KC_ENGINE] Topic hop detected — clearing SPFUQ, switching container', {
-          companyId, callSid, from: spfuq.containerTitle, to: match.container.title,
-        });
-        emit('KC_CONTAINER_MATCHED', {
-          containerTitle: match.container.title,
-          containerId:    String(match.container._id || match.container.title || ''),
-          kcId:           match.container.kcId || null,
-          score:          match.score,
-          path:           PATH.KC_TOPIC_HOP,
-        });
+        // FIX 2: Confidence gap — require the new container to score ≥ 1.5× what
+        // the anchored container scores on this same input before allowing a hop.
+        // This prevents a single generic word (e.g. "price") in another container
+        // from stealing the caller away from their current topic.
+        const anchorContainer = containers.find(c =>
+          String(c._id || c.title || '') === anchoredId ||
+          (c.title && c.title === spfuq.containerTitle)
+        );
+        const anchorMatch   = anchorContainer ? KCS.findContainer([anchorContainer], userInput) : null;
+        const anchorScore   = anchorMatch?.score ?? 0;
+        const hopThreshold  = Math.max(anchorScore * 1.5, 1);  // at least 1.5× anchor, min threshold of 1
 
-        SPFUQService.clear(companyId, callSid).catch(() => {});
-        spfuq = null; // Treat as fresh match below (falls into direct-answer path)
+        if (match.score < hopThreshold) {
+          // New match not strong enough — stay in SPFUQ topic, let continue path handle it
+          logger.info('[KC_ENGINE] Topic hop blocked (confidence gap) — staying in SPFUQ topic', {
+            companyId, callSid,
+            from: spfuq.containerTitle, to: match.container.title,
+            matchScore: match.score, anchorScore, hopThreshold,
+          });
+          // Intentionally do NOT clear spfuq — fall through to SPFUQ continue check below
+        } else {
+          // Caller clearly moved to a different topic — clear old anchor, hop
+          logger.info('[KC_ENGINE] Topic hop confirmed (confidence gap cleared) — switching container', {
+            companyId, callSid,
+            from: spfuq.containerTitle, to: match.container.title,
+            matchScore: match.score, anchorScore, hopThreshold,
+          });
+          emit('KC_CONTAINER_MATCHED', {
+            containerTitle: match.container.title,
+            containerId:    String(match.container._id || match.container.title || ''),
+            kcId:           match.container.kcId || null,
+            score:          match.score,
+            path:           PATH.KC_TOPIC_HOP,
+          });
+
+          SPFUQService.clear(companyId, callSid).catch(() => {});
+          spfuq = null; // Treat as fresh match below (falls into direct-answer path)
+        }
       }
     }
 
@@ -397,10 +433,11 @@ async function _handleSPFUQContinue({
     });
   }
 
-  // Inject prior context into the question for Groq
-  const contextualQuestion = spfuq.subjectBrief
-    ? `[Earlier context: ${spfuq.subjectBrief}] Caller now asks: ${userInput}`
-    : userInput;
+  // Build spfuqContext — injected into the system prompt so Groq resolves pronouns
+  // ('it', 'that', 'they') back to the anchored container.  Previously this was
+  // prepended to the user message, which confused Groq's role boundary.
+  // Now it lives in the system prompt via KCS.answer({ spfuqContext }).
+  const spfuqContext = spfuq.subjectBrief || `Caller is asking about ${containerTitle}`;
 
   emit('KC_CONTAINER_MATCHED', {
     containerTitle: anchorMatch.title,
@@ -413,12 +450,13 @@ async function _handleSPFUQContinue({
   let kcResult;
   try {
     kcResult = await KCS.answer({
-      container:  anchorMatch,
-      question:   contextualQuestion,
+      container:    anchorMatch,
+      question:     userInput,      // clean question — context now in system prompt
       kbSettings,
       company,
       callerName,
       callSid,
+      spfuqContext,                  // ← FIX 1: active topic injected via system prompt
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Groq error on SPFUQ_CONTINUE', { companyId, callSid, err: _e.message });
@@ -433,14 +471,18 @@ async function _handleSPFUQContinue({
     });
   }
 
-  // Update SPFUQ anchor with new Q&A context
-  const updatedBrief = SPFUQService.buildBrief(spfuq, userInput, kcResult.response);
+  // Update SPFUQ anchor with new Q&A context + decrement turn budget (FIX 3)
+  const updatedBrief    = SPFUQService.buildBrief(spfuq, userInput, kcResult.response);
+  const turnsRemaining  = typeof spfuq.turnsRemaining === 'number'
+    ? Math.max(0, spfuq.turnsRemaining - 1)
+    : SPFUQService.DEFAULT_TURN_BUDGET - 1;
   SPFUQService.set(companyId, callSid, {
     ...spfuq,
-    lastTurn:     turn ?? spfuq.lastTurn,
-    lastQuestion: userInput,
-    lastAnswer:   kcResult.response,
-    subjectBrief: updatedBrief,
+    lastTurn:       turn ?? spfuq.lastTurn,
+    lastQuestion:   userInput,
+    lastAnswer:     kcResult.response,
+    subjectBrief:   updatedBrief,
+    turnsRemaining,   // decremented — next turn checks this in GATE 2
   }).catch(() => {});
 
   // ── discoveryNotes: keep callReason + Q&A log current across SPFUQ turns ─
@@ -602,6 +644,10 @@ async function _handleKCMatch({
 
   // ── ANSWERED — set/update SPFUQ anchor and return ────────────────────────
   const newBrief = SPFUQService.buildBrief(null, userInput, kcResult.response);
+  // FIX 3+4: Initialize turn budget from container.followUpDepth (admin-set) or system default
+  const initialTurns = (typeof container.followUpDepth === 'number' && container.followUpDepth >= 2)
+    ? container.followUpDepth
+    : SPFUQService.DEFAULT_TURN_BUDGET;
   SPFUQService.set(companyId, callSid, {
     containerId,
     containerTitle,
@@ -611,6 +657,7 @@ async function _handleKCMatch({
     lastQuestion:      userInput,
     lastAnswer:        kcResult.response,
     subjectBrief:      newBrief,
+    turnsRemaining:    initialTurns,    // reset budget on fresh match / topic hop
   }).catch(() => {});
 
   // ── discoveryNotes: record callReason + Q&A so BookingLogicEngine knows
