@@ -454,11 +454,13 @@
         <div class="form-group">
           <label class="form-label" for="fWordLimit">Word Limit Override</label>
           <div style="display:flex;align-items:center;gap:10px;">
-            <input type="number" id="fWordLimit" class="form-input" min="5" max="200" placeholder="(use global default)"
-              style="width:130px;">
+            <input type="number" id="fWordLimit" class="form-input" min="5" max="300" placeholder="(use global default)"
+              style="width:130px;" oninput="_updateWordLimitHint()">
             <span style="font-size:13px;color:var(--text-muted);">words</span>
           </div>
-          <div class="form-hint">Leave blank to use the global default. Set here to override for this specific topic (e.g. complex policies need more words).</div>
+          <div class="form-hint">Leave blank to use the global default. For complex topics (pricing tiers, policies, multi-step processes) set 60–120+.</div>
+          <div id="wordLimitHint" class="form-hint" style="margin-top:4px;font-style:italic;"></div>
+          <div id="complexityIndicator" style="margin-top:6px;display:none;"></div>
         </div>
       </div>
 
@@ -469,8 +471,8 @@
           <label class="booking-radio-label">
             <input type="radio" name="bookingAction" value="offer_to_book" checked>
             <div class="booking-radio-text">
-              <strong>📅 Offer to Book</strong>
-              <small>Groq offers to schedule after answering (default)</small>
+              <strong>🧠 Smart Close</strong>
+              <small>Groq reads caller intent — offers to book when ready, stays conversational when not (default)</small>
             </div>
           </label>
           <label class="booking-radio-label">
@@ -691,6 +693,7 @@ function _populateForm(c) {
   if (typeof c.wordLimit === 'number' && c.wordLimit >= 5) {
     document.getElementById('fWordLimit').value = c.wordLimit;
   }
+  _updateWordLimitHint();
 
   if (c.closingPrompt) {
     const el = document.getElementById('fClosingPrompt');
@@ -753,7 +756,7 @@ function addSection(label = '', content = '') {
       <textarea class="form-textarea tall" placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
         oninput="charCount(this, 2000, null)" maxlength="2000">${_esc(content)}</textarea>
       <div style="display:flex;justify-content:flex-end;">
-        <span class="char-count" style="font-size:11px;">${content.length} / 2000</span>
+        <span class="char-count" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} / 2000 chars</span>
       </div>
     </div>`;
   list.appendChild(row);
@@ -807,6 +810,7 @@ function deleteSection(btn) {
   }
   row.remove();
   updateSectionNumbers();
+  _updateComplexityIndicator();
 }
 
 function updateSectionNumbers() {
@@ -1023,15 +1027,53 @@ function charCount(el, max, countId) {
       counter.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
     }
   }
-  // Also update inline textarea counters
+  // Section row textareas: show word count as primary, chars as secondary
   const parent = el.closest('.section-row-body');
   if (parent) {
     const span = parent.querySelector('.char-count');
     if (span) {
-      span.textContent = `${len} / ${max}`;
+      const words = _wordCount(el.value);
+      span.textContent = `${words} word${words !== 1 ? 's' : ''} · ${len} / ${max} chars`;
       span.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
     }
+    _updateComplexityIndicator();
   }
+}
+
+function _wordCount(str) {
+  return str.trim() ? str.trim().split(/\s+/).length : 0;
+}
+
+function _updateWordLimitHint() {
+  const input = document.getElementById('fWordLimit');
+  const hint  = document.getElementById('wordLimitHint');
+  if (!hint || !input) return;
+  const val = parseInt(input.value, 10);
+  if (!isNaN(val) && val >= 5) {
+    hint.textContent = `✓ This container: ${val} words`;
+  } else {
+    hint.textContent = 'Using company default (falls back to 40 words if not set)';
+  }
+  _updateComplexityIndicator();
+}
+
+function _updateComplexityIndicator() {
+  const el = document.getElementById('complexityIndicator');
+  if (!el) return;
+  const textareas = document.querySelectorAll('#sectionsList textarea');
+  let totalWords = 0;
+  textareas.forEach(ta => { totalWords += _wordCount(ta.value); });
+  if (totalWords === 0) { el.style.display = 'none'; return; }
+  const limitInput    = document.getElementById('fWordLimit');
+  const limitVal      = parseInt(limitInput?.value, 10);
+  const effectiveLimit = (!isNaN(limitVal) && limitVal >= 5) ? limitVal : 40;
+  const ratio = totalWords / effectiveLimit;
+  let color = '#16a34a', icon = '✓', note = 'fits within limit';
+  if (ratio > 3)       { color = '#dc2626'; icon = '⚠️'; note = `${Math.round(ratio)}× limit — Groq will heavily compress`; }
+  else if (ratio > 1.5){ color = '#f59e0b'; icon = '⚡'; note = `${Math.round(ratio)}× limit — Groq will summarise`; }
+  else if (ratio > 1)  { color = '#f59e0b'; icon = '⚡'; note = 'slight compression'; }
+  el.style.display = 'block';
+  el.innerHTML = `<span style="color:${color};font-size:11px;">${icon} ${totalWords} section words · limit ${effectiveLimit} words${ratio > 1 ? ' — ' + note : ' — ' + note}</span>`;
 }
 
 function _setLoading(on) {

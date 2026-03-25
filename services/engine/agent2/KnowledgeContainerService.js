@@ -241,8 +241,8 @@ function _buildSystemPrompt({
     // Admin-authored follow-up guidance — Groq adapts it naturally, not verbatim
     bookingInstruction = `5. After answering, close with a follow-up in the spirit of this suggested phrase (adapt naturally — do not copy word for word): "${closingPrompt.trim()}"`;
   } else {
-    // Groq natural close (default)
-    bookingInstruction = '5. After answering, naturally invite the caller to schedule a visit. One warm, conversational sentence. Do not be repetitive if it doesn\'t fit the context.';
+    // Smart Close — Groq reads caller intent and adapts the close strategy
+    bookingInstruction = '5. After answering, read the caller\'s tone and engagement. If they sound interested or ready, invite them to schedule in one warm, natural sentence. If the topic was purely informational or the caller seems hesitant, offer to answer any other questions instead. Never force a booking pitch if the context doesn\'t call for it.';
   }
 
   return `You are the phone agent for ${companyName}.
@@ -462,7 +462,7 @@ async function answer(opts) {
     ? container.wordLimit
     : (typeof kbSettings.defaultWordLimit === 'number' && kbSettings.defaultWordLimit >= 5)
       ? kbSettings.defaultWordLimit
-      : 20;
+      : 40;
 
   // Build prompt components — resolve {variables} so Groq sees real values
   const containerBlock = await _resolveKCVariables(companyId, _buildContainerBlock(container));

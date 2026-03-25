@@ -157,7 +157,7 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       type:    Number,
       default: null,
       min:     5,
-      max:     200,
+      max:     300,
       comment: 'Max words Groq may use in its response. null = use company knowledgeBaseSettings.defaultWordLimit.'
     },
 
