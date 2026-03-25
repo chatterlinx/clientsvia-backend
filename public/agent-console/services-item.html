@@ -717,6 +717,8 @@ function _populateForm(c) {
   } else {
     addSection();
   }
+  // Complexity indicator needs sections in DOM — update now that they are rendered
+  _updateComplexityIndicator();
 }
 
 function _showForm() {
