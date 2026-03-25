@@ -74,6 +74,7 @@ const ALLOWED_FIELDS = [
   'sections',        // [{ label, content, order }]
   'keywords',
   'wordLimit',
+  'followUpDepth',   // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
   'bookingAction',
   'closingPrompt',
   'isActive',
