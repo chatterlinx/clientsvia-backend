@@ -233,7 +233,10 @@ function _buildSystemPrompt({
 }) {
   // Booking instruction block
   let bookingInstruction = '';
-  if (bookingAction === 'none') {
+  if (bookingOfferMode === 'none') {
+    // Caller is mid-booking — suppress all booking offers so KC doesn't re-invite booking
+    bookingInstruction = '5. Do NOT add any booking invitation — answer only.';
+  } else if (bookingAction === 'none') {
     bookingInstruction = '5. Do NOT add any booking invitation — answer only.';
   } else if (bookingAction === 'advisor_callback') {
     bookingInstruction = '5. After answering, naturally invite the caller to leave their name and number for an advisor to call them back with more details.';
