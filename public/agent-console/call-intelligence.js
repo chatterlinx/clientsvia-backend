@@ -1340,11 +1340,70 @@
               </div>
             ` : ''}
 
+            ${turn.kcEngine ? (() => {
+              const _cid = new URLSearchParams(window.location.search).get('companyId') || '';
+              const _containerId = turn.kcEngine.containerId || '';
+              const _kcEditHref = _containerId && _cid
+                ? `/agent-console/services.html?companyId=${_cid}&edit=${encodeURIComponent(_containerId)}`
+                : null;
+              const _intentOk = turn.kcEngine.groqIntent === 'ANSWERED';
+              return `
+              <div class="flow-step kc-engine-step">
+                <div class="step-label">
+                  <span class="step-icon">🧠</span>
+                  <strong>KC ENGINE</strong>
+                  ${turn.kcEngine.spfuqActive ? '<span class="kc-badge spfuq-badge">SPFUQ</span>' : ''}
+                  ${turn.kcEngine.llmFallback ? '<span class="kc-badge kc-llm-badge">LLM FALLBACK</span>' : ''}
+                  ${turn.kcEngine.gracefulAck ? '<span class="kc-badge kc-ack-badge">GRACEFUL ACK</span>' : ''}
+                  <span class="kc-badge kc-intent-badge ${_intentOk ? 'intent-answered' : 'intent-failed'}">${turn.kcEngine.groqIntent || 'UNKNOWN'}</span>
+                </div>
+                <div class="step-content">
+                  <div class="step-detail">
+                    <span class="detail-label">Container:</span>
+                    <span class="detail-value kc-container-name">${turn.kcEngine.containerTitle || '<span class="ci-unknown">UNKNOWN</span>'}</span>
+                    ${_kcEditHref ? `<a href="${_kcEditHref}" target="_blank" class="ci-card-link">Edit KC ↗</a>` : ''}
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Container ID:</span>
+                    <span class="detail-value">
+                      <code class="trigger-id-display">${_containerId || '<span class="ci-unknown">not in trace</span>'}</code>
+                    </span>
+                  </div>
+                  ${turn.kcEngine.kcId ? `
+                  <div class="step-detail">
+                    <span class="detail-label">KC ID:</span>
+                    <span class="detail-value"><code class="trigger-id-display">${turn.kcEngine.kcId}</code></span>
+                  </div>` : ''}
+                  <div class="step-detail">
+                    <span class="detail-label">Match Score:</span>
+                    <span class="detail-value">${turn.kcEngine.matchScore === 'spfuq' ? '<span class="kc-badge spfuq-badge">SPFUQ continuation</span>' : (turn.kcEngine.matchScore !== null && turn.kcEngine.matchScore !== undefined ? turn.kcEngine.matchScore : 'N/A')}</span>
+                  </div>
+                  <div class="step-detail">
+                    <span class="detail-label">Path:</span>
+                    <span class="detail-value"><code>${turn.kcEngine.path || 'N/A'}</code></span>
+                  </div>
+                  ${turn.kcEngine.groqLatencyMs ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Groq Latency:</span>
+                    <span class="detail-value">${turn.kcEngine.groqLatencyMs}ms</span>
+                  </div>` : ''}
+                  ${turn.kcEngine.groqResponse ? `
+                  <div class="step-detail full-width">
+                    <span class="detail-label">Groq Response:</span>
+                    <pre class="code-block kc-response-block">${turn.kcEngine.groqResponse}</pre>
+                  </div>` : ''}
+                </div>
+              </div>
+            `})() : ''}
+
             ${turn.agentResponse ? `
               <div class="flow-step response-step">
                 <div class="step-label">
                   <span class="step-icon">💬</span>
                   <strong>6. AGENT RESPONSE</strong>
+                  ${turn.agentResponse.source === 'KC_ENGINE' ? '<span class="kc-badge kc-source-badge">KC</span>' : ''}
+                  ${(turn.agentResponse.source || '').toLowerCase().includes('llmagent') ? '<span class="kc-badge kc-llm-badge">LLM</span>' : ''}
+                  ${(turn.agentResponse.source || '').toLowerCase().includes('fallback') ? '<span class="kc-badge kc-ack-badge">FALLBACK</span>' : ''}
                 </div>
                 <div class="step-content">
                   <div class="step-detail">
@@ -1428,13 +1487,23 @@
                     </span>
                   </div>
                   <div class="step-detail">
-                    <span class="detail-label">Classification:</span>
-                    <span class="detail-value">${turn.routingTier.tierLabel || 'Unknown'}</span>
+                    <span class="detail-label">Source:</span>
+                    <span class="detail-value">${turn.routingTier.source || turn.routingTier.tierLabel || 'Unknown'}</span>
                   </div>
                   <div class="step-detail">
-                    <span class="detail-label">Last Path:</span>
-                    <span class="detail-value"><code>${turn.routingTier.lastPath || 'Unknown'}</code></span>
+                    <span class="detail-label">Path:</span>
+                    <span class="detail-value"><code>${turn.routingTier.path || turn.routingTier.lastPath || 'Unknown'}</code></span>
                   </div>
+                  ${turn.routingTier.intent ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Intent:</span>
+                    <span class="detail-value">${turn.routingTier.intent}</span>
+                  </div>` : ''}
+                  ${turn.routingTier.latencyMs ? `
+                  <div class="step-detail">
+                    <span class="detail-label">Latency:</span>
+                    <span class="detail-value">${turn.routingTier.latencyMs}ms</span>
+                  </div>` : ''}
                 </div>
               </div>
             ` : ''}
