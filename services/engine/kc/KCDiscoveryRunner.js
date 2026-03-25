@@ -313,7 +313,7 @@ class KCDiscoveryRunner {
 
     let containers = [];
     try {
-      containers = await KCS.getActiveForCompany(companyId, redis);
+      containers = await KCS.getActiveForCompany(companyId);
     } catch (_e) {
       logger.warn('[KC_ENGINE] Failed to load containers — falling to LLM', { companyId, callSid, err: _e.message });
     }
@@ -372,7 +372,8 @@ class KCDiscoveryRunner {
       // Caller asked a follow-up, no new container matched — stay in SPFUQ topic
       return await _handleSPFUQContinue({
         spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
-        channel, nextState, emit, startMs, turn, pendingBookingQuestion,
+        channel, nextState, emit, startMs, turn,
+        bridgeToken, redis, onSentence, pendingBookingQuestion,
       });
     }
 
@@ -380,7 +381,8 @@ class KCDiscoveryRunner {
     if (match && match.container) {
       return await _handleKCMatch({
         match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
-        channel, nextState, emit, startMs, turn, onSentence, pendingBookingQuestion,
+        channel, nextState, emit, startMs, turn,
+        bridgeToken, redis, onSentence, pendingBookingQuestion,
       });
     }
 
@@ -402,6 +404,9 @@ class KCDiscoveryRunner {
 async function _handleSPFUQContinue({
   spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
   channel, nextState, emit, startMs, turn,
+  bridgeToken           = null,
+  redis                 = null,
+  onSentence            = null,
   pendingBookingQuestion = null,
 }) {
   const containerTitle = spfuq.containerTitle || 'this topic';
@@ -413,7 +418,7 @@ async function _handleSPFUQContinue({
   // We need to reload the actual container document for Groq
   let containers = [];
   try {
-    containers = await KCS.getActiveForCompany(companyId, null);
+    containers = await KCS.getActiveForCompany(companyId);
   } catch (_e) { /* graceful */ }
 
   const anchorMatch = containers.find(c =>
@@ -429,7 +434,7 @@ async function _handleSPFUQContinue({
     SPFUQService.clear(companyId, callSid).catch(() => {});
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel: 'call', nextState, emit,
-      startMs, turn, bridgeToken: null, redis: null, callerName, onSentence: null,
+      startMs, turn, bridgeToken, redis, callerName, onSentence,
     });
   }
 
@@ -467,7 +472,7 @@ async function _handleSPFUQContinue({
     // Groq couldn't answer even with context — fall to LLM
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel: 'call', nextState, emit,
-      startMs, turn, bridgeToken: null, redis: null, callerName, onSentence: null,
+      startMs, turn, bridgeToken, redis, callerName, onSentence,
     });
   }
 
@@ -560,6 +565,9 @@ async function _handleSPFUQContinue({
 async function _handleKCMatch({
   match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
   channel, nextState, emit, startMs, turn,
+  bridgeToken           = null,
+  redis                 = null,
+  onSentence            = null,
   pendingBookingQuestion = null,
 }) {
   const container      = match.container;
@@ -600,7 +608,7 @@ async function _handleKCMatch({
     });
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel: 'call', nextState, emit,
-      startMs, turn, bridgeToken: null, redis: null, callerName, onSentence: null,
+      startMs, turn, bridgeToken, redis, callerName, onSentence,
     });
   }
 
