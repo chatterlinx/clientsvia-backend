@@ -360,6 +360,109 @@ Return ONLY a valid JSON array of strings. No extra text. Example: ["how much is
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EVALUATION HELPER — AI quality audit for a knowledge container
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * _runEvaluation — Single Groq call that scores a KC container across 5
+ * dimensions and returns actionable fixes.
+ *
+ * Dimensions: CONTENT_QUALITY | LABEL_ALIGNMENT | KEYWORD_QUALITY |
+ *             COMPLETENESS | CLOSING_CONFIG
+ *
+ * @param {string} companyId
+ * @param {Object} payload   — { title, category, sections, keywords, wordLimit, bookingAction, closingPrompt }
+ * @param {Object} res       — Express response object
+ */
+async function _runEvaluation(companyId, payload, res) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
+  }
+
+  const { title = '', category = '', sections = [], keywords = [],
+          wordLimit = null, bookingAction = 'offer_to_book', closingPrompt = '' } = payload;
+
+  // Build section block for prompt
+  const sectionBlock = (sections || [])
+    .filter(s => s.label?.trim() && s.content?.trim())
+    .map(s => `${s.label.trim().toUpperCase()}: ${s.content.trim().slice(0, 600)}`)
+    .join('\n\n') || '(no sections)';
+
+  const kwList    = (keywords || []).slice(0, 20).join(', ') || '(none)';
+  const wlDisplay = wordLimit ? `${wordLimit} words` : 'not set (falls back to 40)';
+
+  const userContent = `CONTAINER:
+Title: "${title}"
+Category: "${category || 'none'}"
+Keywords: [${kwList}]
+Word Limit: ${wlDisplay} | Booking Action: ${bookingAction}
+Closing Prompt: "${closingPrompt || '(none)'}"
+
+SECTIONS:
+${sectionBlock}`;
+
+  try {
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   800,
+      temperature: 0.15,
+      jsonMode:    false,
+      system: `You are a quality auditor for a phone-call AI knowledge base. The voice agent (Groq) must answer callers ONLY from this container — no improvisation allowed. Your job is to catch mistakes that would cause the agent to fail on live calls.
+
+Evaluate across exactly 5 dimensions. Return ONLY valid JSON — no markdown, no extra text.
+
+SCORING RUBRIC:
+
+1. CONTENT_QUALITY (0-100): Is the content specific and complete enough for Groq to answer the 3 most likely caller questions about this topic? Penalize: vague or generic text, missing key facts (prices, availability, what's included, duration), content too short to be actionable, sections that just say "call us for details".
+
+2. LABEL_ALIGNMENT (0-100): Do the section labels accurately describe their content so Groq can locate the right information? Penalize: generic labels ("Section 1", "Notes", "Info"), labels that don't match the actual content, missing labels.
+
+3. KEYWORD_QUALITY (0-100): Are keywords phrased the way real callers speak on the phone (conversational, not database terms)? Are they specific enough to this topic that they won't accidentally trigger other cards? Are obvious caller phrases missing?
+
+4. COMPLETENESS (0-100): Given the title and topic, what sections would a world-class phone KB entry include that are currently MISSING? Consider: pricing, what's included, duration/timing, availability/scheduling, warranty/guarantees, requirements/eligibility, common caller objections, FAQs. Penalize for missing sections that callers will definitely ask about.
+
+5. CLOSING_CONFIG (0-100): Is the word limit appropriate for the content complexity (e.g. simple service = 30-50 words, complex multi-option service = 60-100 words)? Is the booking action sensible for this topic type? If a closing prompt is set, is it natural and caller-friendly?
+
+Status rules: score >= 75 = PASS, 50-74 = WARN, below 50 = FAIL.
+Grade: 90+ = A, 80-89 = B+, 70-79 = B, 60-69 = C+, 50-59 = C, below 50 = D or F.
+
+Return ONLY this JSON structure:
+{"overallScore":<0-100>,"grade":"<A|B+|B|C+|C|D|F>","summary":"<2 sentences: what is good and what is the biggest problem>","dimensions":[{"id":"<DIMENSION_ID>","label":"<short display label>","score":<0-100>,"status":"<PASS|WARN|FAIL>","finding":"<1 specific sentence — be concrete, mention actual content>","fixes":["<specific actionable fix>","<specific actionable fix>"]}],"suggestedKeywords":["<phrase a caller would actually say>"],"missingSections":["<section label name>"],"suggestedWordLimit":<null or recommended number>,"topFixes":["<fix 1>","<fix 2>","<fix 3>"]}`,
+      messages: [{ role: 'user', content: userContent }],
+    });
+
+    if (!result.response) {
+      return res.status(500).json({ success: false, error: 'Groq returned no response' });
+    }
+
+    // Parse — strip any markdown fences
+    let evaluation;
+    try {
+      const raw     = result.response.trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/, '');
+      const objMatch = raw.match(/\{[\s\S]*\}/);
+      evaluation = JSON.parse(objMatch ? objMatch[0] : raw);
+      if (typeof evaluation.overallScore !== 'number') throw new Error('missing overallScore');
+    } catch (parseErr) {
+      logger.warn('[companyKnowledge] evaluate: JSON parse failed', { companyId, err: parseErr.message });
+      return res.status(500).json({ success: false, error: 'Could not parse AI evaluation response' });
+    }
+
+    logger.info('[companyKnowledge] evaluate complete', {
+      companyId, title, overallScore: evaluation.overallScore, grade: evaluation.grade
+    });
+    return res.json({ success: true, evaluation });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] evaluate error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'AI evaluation failed' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/generate-keywords — Generate keywords via Groq
 // ⚠️ MUST be registered BEFORE /:id
 //
@@ -376,6 +479,25 @@ router.post('/:companyId/knowledge/generate-keywords', async (req, res) => {
   }
 
   return _runKeywordGeneration(companyId, title, sections, res);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/evaluate — AI quality audit
+// ⚠️ MUST be registered BEFORE /:id
+//
+// Accepts full container payload (works pre-save). Returns a structured
+// evaluation with 5 dimension scores, fixes, suggested keywords, and missing sections.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/evaluate', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { title = '', sections = [] } = req.body || {};
+  if (!title.trim() && !sections.length) {
+    return res.status(400).json({ success: false, error: 'title or sections are required for evaluation' });
+  }
+
+  return _runEvaluation(companyId, req.body || {}, res);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

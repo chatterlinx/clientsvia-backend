@@ -96,6 +96,49 @@
     .char-count { font-size: 11px; color: var(--text-xs); text-align: right; }
     .char-count.warn { color: #f59e0b; }
     .char-count.over { color: #ef4444; }
+
+    /* ── Evaluate button ─────────────────────────────────────────────────── */
+    .btn-evaluate { background:white; border:1.5px solid #6366f1; color:#6366f1; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .btn-evaluate:hover { background:#eef2ff; }
+    .btn-evaluate:disabled { opacity:.55; cursor:wait; }
+    .btn-evaluate.has-issues { border-color:#f59e0b; color:#b45309; background:#fffbeb; }
+    .btn-evaluate.all-pass   { border-color:#16a34a; color:#15803d; background:#f0fdf4; }
+
+    /* ── Evaluation panel ────────────────────────────────────────────────── */
+    .eval-panel { background:white; border-radius:12px; border:1.5px solid #e0e7ff; box-shadow:0 2px 16px rgba(99,102,241,.08); padding:20px; }
+    .eval-score-ring { width:62px; height:62px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:700; flex-shrink:0; border:3px solid; }
+    .eval-score-num  { font-size:20px; line-height:1; }
+    .eval-grade-label{ font-size:11px; margin-top:2px; opacity:.85; }
+    .score-a  { border-color:#16a34a; color:#16a34a; }
+    .score-b  { border-color:#2563eb; color:#2563eb; }
+    .score-c  { border-color:#f59e0b; color:#b45309; }
+    .score-df { border-color:#dc2626; color:#dc2626; }
+
+    .eval-dimension { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:7px; cursor:pointer; transition:background .1s; font-size:13px; user-select:none; }
+    .eval-dimension:hover { background:#f8faff; }
+    .eval-dim-icon  { width:20px; text-align:center; font-size:14px; flex-shrink:0; }
+    .eval-dim-label { width:145px; flex-shrink:0; font-weight:500; }
+    .eval-dim-track { flex:1; background:#e5e7eb; border-radius:4px; height:5px; }
+    .eval-dim-fill  { height:5px; border-radius:4px; transition:width .7s ease; }
+    .eval-dim-score { width:26px; text-align:right; font-size:12px; font-weight:700; }
+    .eval-dim-status{ width:38px; font-size:11px; font-weight:700; text-align:right; }
+    .eval-dim-arrow { font-size:10px; color:var(--text-muted); flex-shrink:0; }
+    .eval-status-pass{ color:#16a34a; }
+    .eval-status-warn{ color:#f59e0b; }
+    .eval-status-fail{ color:#dc2626; }
+    .eval-dim-detail { font-size:12px; color:#4b5563; margin:0 0 6px 76px; display:none; line-height:1.55; }
+    .eval-dim-detail.open { display:block; }
+    .eval-dim-fix    { padding:1px 0 1px 14px; color:#374151; position:relative; }
+    .eval-dim-fix::before { content:"→"; position:absolute; left:0; color:#6366f1; font-weight:700; }
+
+    .eval-top-fixes { background:#f8faff; border:1px solid #e0e7ff; border-radius:8px; padding:12px 14px; margin-top:14px; }
+    .eval-top-fixes-title { font-size:11px; font-weight:700; color:#374151; text-transform:uppercase; letter-spacing:.05em; margin-bottom:7px; }
+    .eval-fix-item  { font-size:13px; color:#374151; padding:2px 0 2px 16px; position:relative; }
+    .eval-fix-item::before { content:"→"; position:absolute; left:0; color:#6366f1; font-weight:700; }
+
+    .eval-apply-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+    .btn-eval-apply { font-size:12px; padding:5px 13px; border-radius:6px; border:1.5px solid #6366f1; color:#6366f1; background:white; cursor:pointer; font-weight:600; transition:background .1s; }
+    .btn-eval-apply:hover { background:#eef2ff; }
     .form-input.error, .form-textarea.error { border-color: #fca5a5; }
 
     /* ── Knowledge Sections ──────────────────────────────────────────────── */
@@ -320,6 +363,7 @@
   </div>
   <div class="header-spacer"></div>
   <div class="header-actions">
+    <button id="btnEvaluate" class="btn-evaluate" onclick="runEvaluation()" title="AI quality check — catch mistakes before they hurt live calls" style="display:none;">⚡ Evaluate</button>
     <button class="btn-secondary" id="btnCancel" onclick="goBack()">Cancel</button>
     <button id="btnDeleteHeader" class="btn-danger" style="display:none;" onclick="softDelete()">Deactivate</button>
     <button class="btn-primary" id="btnSave" onclick="saveContainer()">Save Container</button>
@@ -337,6 +381,15 @@
 
   <!-- Actual form (hidden while loading) -->
   <div id="formBody" style="display:none;flex-direction:column;gap:18px;">
+
+  <!-- ── 0. AI Evaluation Panel (hidden until triggered) ───────────────────── -->
+  <div id="evalPanel" class="eval-panel" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <strong style="font-size:14px;color:#1e1e2e;">⚡ AI Quality Evaluation</strong>
+      <button onclick="closeEvalPanel()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0 4px;" title="Close">×</button>
+    </div>
+    <div id="evalContent" style="color:var(--text-muted);font-size:13px;min-height:40px;"></div>
+  </div>
 
   <!-- ── 1. Container Identity ─────────────────────────────────────────────── -->
   <div class="form-card">
@@ -585,6 +638,8 @@ const S = {
   keywords:    [],         // current keyword list
   sectionSeq:  0,          // monotonic ID for section DOM nodes
   conflictMap: {},         // { keyword: [{id, title}] } — from keyword-health endpoint
+  evalResult:  null,       // last evaluation result from /evaluate
+  evalLoading: false,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -621,12 +676,14 @@ const LABEL_SUGGESTIONS = [
   if (S.isEdit) {
     document.getElementById('pageTitle').textContent   = 'Edit Knowledge Container';
     document.getElementById('btnDeleteHeader').style.display = '';
+    document.getElementById('btnEvaluate').style.display = '';
     document.getElementById('hardDeleteSection').style.display = '';
     await loadContainer();
     // Load keyword health conflict map in background — chips update when ready
     _loadConflictMap();
   } else {
     document.getElementById('pageTitle').textContent = 'Add Knowledge Container';
+    document.getElementById('btnEvaluate').style.display = '';
     _showForm();
     addSection(); // Start with one empty section
   }
@@ -877,6 +934,188 @@ function kwKeydown(e) {
 function removeKeyword(kw) {
   S.keywords = S.keywords.filter(k => k !== kw);
   _renderKeywords();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI QUALITY EVALUATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runEvaluation() {
+  const btn = document.getElementById('btnEvaluate');
+  btn.disabled  = true;
+  btn.className = 'btn-evaluate';
+  btn.textContent = '⏳ Evaluating…';
+
+  const panel = document.getElementById('evalPanel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('evalContent').innerHTML =
+    '<div style="padding:16px 0;color:var(--text-muted);font-size:13px;">🔍 Running AI quality check — this takes 5–10 seconds…</div>';
+
+  const title        = document.getElementById('fTitle').value?.trim() || '';
+  const category     = document.getElementById('fCategory').value?.trim() || '';
+  const sections     = _getSections();
+  const wordLimitVal = parseInt(document.getElementById('fWordLimit').value, 10);
+  const payload = {
+    title,
+    category,
+    sections,
+    keywords:      S.keywords,
+    wordLimit:     (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    bookingAction: document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    closingPrompt: (document.getElementById('fClosingPrompt')?.value || '').trim(),
+  };
+
+  try {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/evaluate`, {
+      method: 'POST',
+      body:   JSON.stringify(payload),
+    });
+    if (!data.success) throw new Error(data.error || 'Evaluation failed');
+    S.evalResult = data.evaluation;
+    _renderEvalPanel(data.evaluation);
+    const score = data.evaluation.overallScore || 0;
+    btn.className   = score >= 75 ? 'btn-evaluate all-pass' : 'btn-evaluate has-issues';
+    btn.textContent = score >= 75 ? `⚡ ${score}/100 ✓` : `⚡ ${score}/100 ⚠`;
+  } catch (err) {
+    document.getElementById('evalContent').innerHTML =
+      `<div style="color:#dc2626;font-size:13px;">❌ ${_esc(err.message)}</div>`;
+    btn.className   = 'btn-evaluate';
+    btn.textContent = '⚡ Evaluate';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function closeEvalPanel() {
+  document.getElementById('evalPanel').style.display = 'none';
+}
+
+function _renderEvalPanel(ev) {
+  const DIM_META = {
+    CONTENT_QUALITY: { icon: '📝', label: 'Content Quality' },
+    LABEL_ALIGNMENT: { icon: '🏷', label: 'Label Alignment' },
+    KEYWORD_QUALITY: { icon: '🔑', label: 'Keywords' },
+    COMPLETENESS:    { icon: '📋', label: 'Completeness' },
+    CLOSING_CONFIG:  { icon: '⚙️', label: 'Closing Config' },
+  };
+
+  function scoreClass(grade) {
+    if (!grade) return 'score-b';
+    const g = grade[0].toUpperCase();
+    if (g === 'A') return 'score-a';
+    if (g === 'B') return 'score-b';
+    if (g === 'C') return 'score-c';
+    return 'score-df';
+  }
+
+  function barColor(status) {
+    if (status === 'PASS') return '#16a34a';
+    if (status === 'FAIL') return '#dc2626';
+    return '#f59e0b';
+  }
+
+  function statusClass(status) {
+    if (status === 'PASS') return 'eval-status-pass';
+    if (status === 'FAIL') return 'eval-status-fail';
+    return 'eval-status-warn';
+  }
+
+  // Score ring
+  const ringHtml = `
+    <div class="eval-score-ring ${scoreClass(ev.grade)}">
+      <span class="eval-score-num">${ev.overallScore ?? '?'}</span>
+      <span class="eval-grade-label">${ev.grade || '?'}</span>
+    </div>`;
+
+  // Summary
+  const summaryHtml = `
+    <div style="flex:1;">
+      <div style="font-size:15px;font-weight:700;color:#1e1e2e;margin-bottom:4px;">Score: ${ev.overallScore}/100 &mdash; Grade ${ev.grade}</div>
+      <div style="font-size:13px;color:#4b5563;line-height:1.55;">${_esc(ev.summary || '')}</div>
+    </div>`;
+
+  // Dimensions
+  const dimsHtml = (ev.dimensions || []).map((d, i) => {
+    const meta   = DIM_META[d.id] || { icon: '•', label: d.id };
+    const fixes  = (d.fixes || []).map(f => `<div class="eval-dim-fix">${_esc(f)}</div>`).join('');
+    const detail = `<div class="eval-dim-detail" id="evdim_${i}">
+      <div style="margin-bottom:4px;">${_esc(d.finding || '')}</div>
+      ${fixes}
+    </div>`;
+    return `
+      <div class="eval-dimension" onclick="toggleEvalDim('evdim_${i}', this)">
+        <span class="eval-dim-icon">${meta.icon}</span>
+        <span class="eval-dim-label">${meta.label}</span>
+        <div class="eval-dim-track"><div class="eval-dim-fill" style="width:${d.score}%;background:${barColor(d.status)};"></div></div>
+        <span class="eval-dim-score" style="color:${barColor(d.status)};">${d.score}</span>
+        <span class="eval-dim-status ${statusClass(d.status)}">${d.status === 'PASS' ? '✓' : d.status === 'FAIL' ? '✗' : '!'}</span>
+        <span class="eval-dim-arrow">▸</span>
+      </div>
+      ${detail}`;
+  }).join('');
+
+  // Top fixes
+  const topFixes = (ev.topFixes || []).map(f =>
+    `<div class="eval-fix-item">${_esc(f)}</div>`
+  ).join('');
+  const topFixesHtml = topFixes
+    ? `<div class="eval-top-fixes"><div class="eval-top-fixes-title">🎯 Top Fixes</div>${topFixes}</div>`
+    : '';
+
+  // Apply buttons
+  const applyParts = [];
+  if ((ev.suggestedKeywords || []).length) {
+    applyParts.push(`<button class="btn-eval-apply" onclick="_applyEvalKeywords(${JSON.stringify(ev.suggestedKeywords || [])})">+ Add ${ev.suggestedKeywords.length} suggested keyword${ev.suggestedKeywords.length !== 1 ? 's' : ''}</button>`);
+  }
+  if ((ev.missingSections || []).length) {
+    applyParts.push(`<button class="btn-eval-apply" onclick="_applyMissingSections(${JSON.stringify(ev.missingSections || [])})">+ Add ${ev.missingSections.length} missing section${ev.missingSections.length !== 1 ? 's' : ''}</button>`);
+  }
+  if (ev.suggestedWordLimit) {
+    applyParts.push(`<button class="btn-eval-apply" onclick="_applyWordLimit(${ev.suggestedWordLimit})">Apply word limit: ${ev.suggestedWordLimit} words</button>`);
+  }
+  const applyHtml = applyParts.length
+    ? `<div class="eval-apply-row">${applyParts.join('')}</div>`
+    : '';
+
+  document.getElementById('evalContent').innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;">
+      ${ringHtml}${summaryHtml}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      ${dimsHtml}
+    </div>
+    ${topFixesHtml}
+    ${applyHtml}`;
+}
+
+function toggleEvalDim(id, row) {
+  const detail = document.getElementById(id);
+  if (!detail) return;
+  const open = detail.classList.toggle('open');
+  const arrow = row.querySelector('.eval-dim-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+}
+
+function _applyEvalKeywords(keywords) {
+  let added = 0;
+  (keywords || []).forEach(kw => {
+    if (!S.keywords.includes(kw)) { S.keywords.push(kw); added++; }
+  });
+  _renderKeywords();
+  _toast(`Added ${added} keyword${added !== 1 ? 's' : ''}`, 'success');
+}
+
+function _applyMissingSections(sections) {
+  (sections || []).forEach(name => addSection(name, ''));
+  _toast(`Added ${sections.length} section${sections.length !== 1 ? 's' : ''} — fill in the content`, 'success');
+  document.getElementById('sectionsList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _applyWordLimit(n) {
+  document.getElementById('fWordLimit').value = n;
+  _updateWordLimitHint();
+  _toast(`Word limit set to ${n} words`, 'success');
 }
 
 async function generateKeywords() {
