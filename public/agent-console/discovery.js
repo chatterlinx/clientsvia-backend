@@ -213,7 +213,7 @@
         { key: 'speechTimeout',       label: '⚡ Speech Timeout (END-OF-SPEECH WAIT)', unit: 's',   note: '⚠️ DOMINANT LATENCY FACTOR. Time Twilio waits after caller stops talking before firing transcript. Default: 1.5s. Lowering to 1.0s saves 500ms on every single turn. Schema range: 1s–10s minimum. Too low risks cutting mid-sentence pauses.' },
         { key: 'initialTimeout',      label: 'Initial Timeout',       unit: 's',   note: 'How long Twilio waits for the caller to START speaking before giving up. Default: 7s. Unrelated to response latency.' },
         { key: 'bargeIn',             label: 'Barge-in',              unit: 'bool',note: 'Allow caller to interrupt agent mid-response. When false, caller must wait for all agent audio to finish — adds full response duration to wait time.' },
-        { key: 'enhancedRecognition', label: 'Enhanced Recognition',  unit: 'bool',note: 'Higher-accuracy Deepgram model (recommended). Minor latency cost (~20ms), significant accuracy improvement.' },
+        { key: 'enhancedRecognition', label: 'Enhanced Recognition',  unit: 'bool',note: 'Twilio\'s enhanced speech model (Google under the hood — NOT Deepgram). Adds ~100ms latency per turn. Deepgram is a separate low-confidence FALLBACK (fires post-hoc on ~10% of calls). Test with enhanced OFF — if transcripts stay clean, save 100ms.' },
         { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony via Deepgram; default = general purpose. phone_call recommended for all live calls.' },
       ],
 
@@ -785,13 +785,13 @@
                 : 'Caller must wait for all agent audio to finish before speaking. Adds full response playback duration to perceived wait.',
             },
             {
-              label:  'Enhanced STT',
+              label:  'Enhanced STT (Twilio model)',
               value:  sd.enhancedRecognition !== false ? 'ON' : 'OFF',
-              ms:     sd.enhancedRecognition !== false ? 20 : 0,
-              impact: 'low',
+              ms:     sd.enhancedRecognition !== false ? 100 : 0,
+              impact: sd.enhancedRecognition !== false ? 'medium' : 'none',
               note:   sd.enhancedRecognition !== false
-                ? 'Higher-accuracy Deepgram model active (~20ms latency cost, significant accuracy gain on accents and noise).'
-                : 'Standard accuracy mode. Faster but less accurate.',
+                ? 'Twilio\'s enhanced Google model active (~100ms latency cost per turn). NOT Deepgram — Deepgram is a separate post-hoc fallback. Test with OFF — if transcripts stay clean, save 100ms.'
+                : 'Standard Twilio model. Faster (~100ms saved). Monitor transcript quality on technical terms (model names, HVAC parts etc).',
             },
             {
               label:  'Speech Model',
