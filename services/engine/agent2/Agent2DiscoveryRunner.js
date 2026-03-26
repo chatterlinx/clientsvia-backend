@@ -426,6 +426,71 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       return null;
     }
 
+    // ── Stage 11: Question Detector — KC direct fast-path (TIER 1) ───────────
+    // Two-tier signal detection fires BEFORE T1.5 to route high-confidence
+    // questions straight to KC, preventing them from being lost in the T1.5
+    // trigger-knowledge lane which is not designed for knowledge-container Q&A.
+    //
+    // TIER 1 (high-confidence multi-word): "how much does", "do you accept",
+    //   "what's included", "diagnostic fee" → go DIRECTLY to KC, skip T1.5.
+    //   Rationale: these are definitively informational questions. KC containers
+    //   hold the right answers. T1.5 (trigger fast lane) won't have them.
+    //
+    // TIER 2 (ambiguous single-word): "schedule", "credit", "warranty"
+    //   → fall through to T1.5 → Pricing → existing KC intercept below.
+    //
+    // Graceful degrade: any error falls through — call never breaks.
+    // ─────────────────────────────────────────────────────────────────────────
+    if (!sttEmpty && input?.trim()) {
+      const _s11 = KnowledgeContainerService.detectTier(input);
+
+      if (_s11.tier === 1) {
+        emit('A2_STAGE11_DETECT', { tier: 1, matched: _s11.matched, callSid, turn });
+        const _kbCfg11 = company?.knowledgeBaseSettings || {};
+        if (_kbCfg11.enabled !== false && process.env.GROQ_API_KEY) {
+          try {
+            const _kcItems11 = await KnowledgeContainerService.getActiveForCompany(String(company._id));
+            if (_kcItems11.length) {
+              const _kcMatch11 = KnowledgeContainerService.findContainer(_kcItems11, input);
+              if (_kcMatch11) {
+                const _kcResult11 = await KnowledgeContainerService.answer({
+                  container:  _kcMatch11.container,
+                  question:   input,
+                  kbSettings: _kbCfg11,
+                  company,
+                  callerName,
+                  callSid,
+                });
+                if (_kcResult11.intent !== KnowledgeContainerService.INTENT.ERROR && _kcResult11.response) {
+                  emit('A2_STAGE11_KC_HIT', {
+                    tier:           1,
+                    matched:        _s11.matched,
+                    containerTitle: _kcResult11.containerTitle,
+                    intent:         _kcResult11.intent,
+                    latencyMs:      _kcResult11.latencyMs,
+                    callSid,
+                    turn,
+                  });
+                  return {
+                    response:            _kcResult11.response,
+                    tokensUsed:          { input: 0, output: 0 },
+                    latencyMs:           _kcResult11.latencyMs,
+                    wasPartial:          false,
+                    _knowledgeContainer: true,
+                    _stage11:            true,
+                  };
+                }
+              }
+            }
+          } catch (_s11Err) {
+            logger.warn('[LLM_AGENT] Stage 11 KC fast-path error — falling through', { callSid, err: _s11Err?.message });
+          }
+        }
+        // TIER 1 detected but KC missed (no containers or no match) — fall through to T1.5
+      }
+      // TIER 2 or no signal — fall through to T1.5 → Pricing → KC intercept below
+    }
+
     // ── T1.5: Groq fast lane — factual Q&A from trigger knowledge ────────────
     // Fires BEFORE the maxTurns gate: even a caller who exhausted Claude's turn
     // budget can still get a factual answer (pricing, area, promos, coupons).

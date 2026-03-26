@@ -110,6 +110,77 @@ const KNOWLEDGE_SIGNALS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STAGE 11 — TWO-TIER SIGNAL TABLE
+// Splits KNOWLEDGE_SIGNALS into two confidence tiers:
+//   TIER 1: Multi-word phrases — unambiguously informational questions.
+//           Safe to gate KC BEFORE T1.5/Pricing. Zero booking-intent overlap.
+//   TIER 2: Ambiguous single words — also present in booking/scheduling
+//           utterances. Fall through to normal T1.5 → Pricing → KC path.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** TIER 1 — High-confidence multi-word question phrases (Stage 11 direct-KC gate) */
+const TIER1_SIGNALS = [
+  // Cost / price — explicit question phrases
+  'how much does', 'how much is', 'how much for', 'how much will',
+  'how much do you', 'how much would',
+  'what does it cost', 'what will it cost', 'what does that cost',
+  'what is the cost', 'what is the fee', 'what is the price',
+  'whats the fee', 'whats the cost', 'whats the price',
+  'what are your rates', 'what are the rates', 'what are your prices',
+  'what is the charge', 'what do you charge', 'how much do you charge',
+  // Service inclusions
+  'what does it include', 'what is included', 'what comes with',
+  'whats included', "what's included",
+  'what does the service include', 'what is covered', 'whats covered',
+  // Specific service fees (always informational)
+  'diagnostic fee', 'service call fee', 'service fee', 'visit fee',
+  'trip charge', 'callout fee',
+  'emergency fee', 'after hours fee', 'weekend rate',
+  'installation cost', 'replacement cost',
+  // Maintenance / plans
+  'maintenance plan', 'annual plan', 'tune up cost', 'tune-up cost',
+  // Credit / waiver
+  'diagnostic credit', 'service call credit',
+  'go towards', 'applied to the', 'waive the fee',
+  // Warranty — question form
+  'what is the warranty', 'how long is the warranty',
+  'what does the warranty', 'is there a warranty', 'do you offer a warranty',
+  // Payment / financing
+  'do you accept', 'do you take credit', 'do you take debit',
+  'do you finance', 'do you offer financing',
+  'payment options', 'financing options', 'payment plan', 'monthly payments',
+  // Specials / promotions
+  'any specials', 'any deals', 'any discounts', 'any promotions', 'any coupons',
+  'do you have any specials', 'do you have any deals',
+  'do you have any discounts', 'running any specials', 'current specials',
+  // Policy / terms
+  'what is your policy', 'what are your terms',
+  'do you have a contract', 'is there a contract',
+  // Availability / timing
+  'how soon can you', 'when can you come', 'how long does it take',
+  'how long will it take', 'when do you open', 'what are your hours',
+  'are you open on', 'do you service', 'do you work on',
+  // General info questions
+  'tell me about', 'can you tell me', 'can you explain',
+  'what do you do', 'what do you offer', 'what services do you',
+  'do you offer', 'do you provide',
+  'is there a', 'are there any', 'do you have a',
+  'what is a', 'what is an', 'what are the',
+];
+
+/** TIER 2 — Ambiguous single-word signals (overlap with booking intent — fall through to normal path) */
+const TIER2_SIGNALS = [
+  'cost', 'price', 'pricing', 'rate', 'rates', 'fee', 'fees', 'charge',
+  'credit', 'credited', 'include', 'includes', 'included',
+  'special', 'specials', 'deal', 'deals', 'promo', 'promotion', 'promotions',
+  'discount', 'discounts', 'offer', 'offers', 'coupon', 'sale',
+  'warranty', 'guarantee', 'guaranteed', 'covered', 'coverage',
+  'policy', 'policies', 'terms', 'contract', 'agreement',
+  'schedule', 'available', 'availability',
+  'install', 'maintenance', 'explain', 'describe',
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // REDIS CACHE
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -336,6 +407,44 @@ function detect(input) {
     if (signal.includes(' ')) return norm.includes(signal);
     return norm.split(/\s+/).includes(signal);
   });
+}
+
+/**
+ * detectTier — Two-tier confidence scoring for question detection (Stage 11).
+ *
+ * TIER 1: High-confidence multi-word phrases — safe to route directly to KC
+ *   BEFORE T1.5/Pricing. These phrases are unambiguously informational.
+ *   Examples: "how much does", "do you accept credit cards", "what's included".
+ *   Agent2DiscoveryRunner uses TIER 1 to skip T1.5 and go straight to KC.
+ *
+ * TIER 2: Ambiguous single-word signals — also appear in booking utterances.
+ *   Falls through to the normal T1.5 → Pricing → KC path.
+ *   Example: "schedule" could be booking ("can you schedule me?") or
+ *   info ("what's your schedule?").
+ *
+ * @param  {string} input — Raw caller utterance
+ * @returns {{ tier: 0|1|2, matched: string|null }}
+ */
+function detectTier(input) {
+  if (!input || typeof input !== 'string') return { tier: 0, matched: null };
+  const norm = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
+
+  // TIER 1 — multi-word, high confidence (check first, longest-match wins)
+  for (const signal of TIER1_SIGNALS) {
+    if (norm.includes(signal)) return { tier: 1, matched: signal };
+  }
+
+  // TIER 2 — single-word ambiguous (word-boundary check prevents partial hits)
+  const words = new Set(norm.split(/\s+/));
+  for (const signal of TIER2_SIGNALS) {
+    if (signal.includes(' ')) {
+      if (norm.includes(signal)) return { tier: 2, matched: signal };
+    } else if (words.has(signal)) {
+      return { tier: 2, matched: signal };
+    }
+  }
+
+  return { tier: 0, matched: null };
 }
 
 /**
@@ -631,7 +740,10 @@ async function answer(opts) {
 module.exports = {
   INTENT,
   KNOWLEDGE_SIGNALS,
+  TIER1_SIGNALS,
+  TIER2_SIGNALS,
   detect,
+  detectTier,
   getActiveForCompany,
   invalidateCache,
   invalidateKCVariablesCache,

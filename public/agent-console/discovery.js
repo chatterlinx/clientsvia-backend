@@ -442,30 +442,32 @@
       order:    11,
       icon:     '❓',
       name:     'Question Detector',
-      subtitle: 'Scans utterance for KC signals BEFORE booking intent fires — prevents questions being silently ignored',
-      status:   'not_built',
+      subtitle: 'Two-tier signal scan — TIER 1 high-confidence questions bypass T1.5 and go straight to KC',
+      status:   'wired',
       group:    'Turn 2+ — KC Engine',
 
-      why: 'Callers do not follow a script. They say "my AC is broken — do you accept credit cards?" in a single utterance. Without this gate, the booking intent fires first and wins — the credit card question is completely ignored. The caller gets "Can I get someone to schedule that?" when they wanted an answer. This detector runs a fast KnowledgeContainerService signal scan on every utterance BEFORE the booking intent check. If a KC signal is found, route to KC Answer first, then append the booking CTA.',
+      why: 'Callers do not follow a script. They say "my AC is broken — do you accept credit cards?" in a single utterance. Without this gate, T1.5 (trigger fast lane) handles it, but T1.5 is not designed for knowledge-container Q&A — it would miss or produce a generic answer. The two-tier system separates definite questions (TIER 1: multi-word phrases like "how much does", "do you accept", "diagnostic fee") from ambiguous signals (TIER 2: single words like "schedule", "credit"). TIER 1 routes DIRECTLY to KC, skipping T1.5 and Pricing entirely. TIER 2 falls through to the normal T1.5 → Pricing → KC path where they are still caught.',
 
-      engine:   null,
-      provider: 'NOT BUILT',
+      engine:   'KnowledgeContainerService.detectTier()',
+      provider: 'Synchronous (no AI) — two-tier phrase matching, <1ms',
       model:    null,
-      fires:    'Every turn, before Booking Intent Gate. Needs to fire on Turn 1 too.',
-      writesTo: null,
-      wiredIn:  [],
-      configIn:  null,
-      configUrl: null,
+      fires:    'Turn 2+ (no-match path), inside callLLMAgentForNoMatch, BEFORE T1.5 Groq fast lane',
+      writesTo: 'Early return with KC answer on TIER 1 hit. Emits A2_STAGE11_DETECT + A2_STAGE11_KC_HIT.',
+      wiredIn:  [
+        'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForNoMatch, before T1.5',
+        'services/engine/agent2/KnowledgeContainerService.js — detectTier(), TIER1_SIGNALS, TIER2_SIGNALS',
+      ],
+      configIn:  'Knowledge Containers — Knowledge Base tab',
+      configUrl: 'agent2.html',
 
       extracts: [],
 
       gaps: [
-        'NOT BUILT: Confirmed with real call — Caller said "Do you accept credit cards?" on Turn 1. Agent responded "Can I get someone to look into that for you?" — completely wrong answer, question ignored.',
-        'Fix: Run KnowledgeContainerService.findMatches(cleanedTranscript) before booking intent check. If matches.length > 0, route YES to kc_answer.',
-        'Impact: HIGH — every caller who asks a factual question (pricing, warranty, inclusions) on any turn gets the wrong routing if the utterance also contains a problem statement.',
+        'Stage 11 only fires on the no-match path (Turn 2+). If a trigger card matches on Turn 1 and the caller also asked a question, KC still does not run for that turn.',
+        'Next step: Wire a lightweight TIER 1 check in the main pipeline before ScrabEngine for full Turn 1 coverage.',
       ],
 
-      routing: { yes: 'kc_answer', no: 'booking_intent' },
+      routing: { 'tier1 + KC hit': 'KC Answer (direct, skips T1.5)', 'tier1 miss / tier2 / no signal': 'T1.5 → Pricing → KC → Claude' },
     },
 
     // ── [7] Booking Intent Gate ──────────────────────────────────────────
@@ -1572,23 +1574,42 @@
         }
         turnResult.stages.push(entityStage);
 
-        // [2] Question Detector
-        const kcSignals = ['how much', 'do you accept', 'what is', 'do you offer', 'how long',
-                           'what does', 'credit card', 'warranty', 'guarantee', 'price',
-                           'cost', 'charge', 'fee', 'special', 'discount', 'include'];
-        const hasQuestion = kcSignals.some(sig => input.includes(sig));
+        // [2] Question Detector — two-tier (wired as Stage 11)
+        const _t1Sigs = [
+          'how much does', 'how much is', 'how much for', 'how much will', 'how much do you',
+          'what does it cost', 'what will it cost', 'what is the cost', 'what is the fee',
+          'what is the price', 'what are your rates', 'what are your prices', 'what do you charge',
+          'what does it include', 'what is included', "what's included", 'whats included', 'what comes with',
+          'what is covered', 'diagnostic fee', 'service call fee', 'service fee', 'trip charge',
+          'emergency fee', 'after hours fee', 'maintenance plan', 'annual plan',
+          'diagnostic credit', 'service call credit', 'do you accept', 'do you take credit',
+          'do you finance', 'do you offer financing', 'payment options', 'financing options',
+          'payment plan', 'any specials', 'any deals', 'any discounts', 'do you have any specials',
+          'running any specials', 'is there a warranty', 'what is the warranty', 'how long is the warranty',
+          'how soon can you', 'when can you come', 'how long does it take', 'what are your hours',
+          'tell me about', 'can you tell me', 'can you explain', 'do you offer', 'do you provide',
+          'is there a', 'are there any', 'do you have a',
+        ];
+        const _t2Sigs = ['cost', 'price', 'fee', 'rates', 'warranty', 'schedule',
+                         'available', 'credit', 'discount', 'special', 'guarantee', 'covered'];
+
+        const _t1Match = _t1Sigs.find(sig => input.includes(sig));
+        const _t2Match = !_t1Match && _t2Sigs.some(sig => input.split(/\s+/).includes(sig));
+        const _t2Matched = _t2Match ? _t2Sigs.filter(sig => input.split(/\s+/).includes(sig)) : [];
+
         const questionStage = {
           stageId: 'question_detector',
           icon: '❓', name: 'Question Detector',
-          status: hasQuestion ? 'gap' : 'skipped',
+          status: (_t1Match || _t2Match) ? 'fired' : 'skipped',
           details: [],
         };
-        if (hasQuestion) {
-          const matched = kcSignals.filter(sig => input.includes(sig));
-          questionStage.details.push(`⚠️ NOT BUILT — KC signal(s) detected: "${matched.join('", "')}" but not routed to KC Answer`);
-          turnResult.score.fail.push(`Question not answered: "${matched.join(', ')}" detected but Question Detector not built`);
+        if (_t1Match) {
+          questionStage.details.push(`✅ TIER 1 detected: "${_t1Match}" — routed directly to KC (skipped T1.5 + Pricing)`);
+          turnResult.score.pass.push(`TIER 1 question detected: "${_t1Match}" — KC fast-path`);
+        } else if (_t2Match) {
+          questionStage.details.push(`ℹ️ TIER 2 signal(s): "${_t2Matched.join('", "')}" — falls through to T1.5 → Pricing → KC`);
         } else {
-          questionStage.details.push('No KC signals detected in this utterance');
+          questionStage.details.push('No question signals — normal booking/no-match path');
         }
         turnResult.stages.push(questionStage);
 
