@@ -60,26 +60,142 @@
   const PIPELINE_STAGES = [
 
     // ════════════════════════════════════════════════════════════════════════
-    // GROUP A — CALL RECEIPT
+    // GROUP A — CALL ENTRY
     // ════════════════════════════════════════════════════════════════════════
 
-    // ── [1] STT / Twilio Gather ──────────────────────────────────────────
+    // ── [1] Twilio — Inbound Call ────────────────────────────────────────
+    {
+      id:       'twilio_inbound',
+      order:    1,
+      icon:     '📞',
+      name:     'Twilio — Inbound Call',
+      subtitle: 'PSTN call arrives at Twilio — CallSid, From, To captured — webhook fires to v2twilio.js',
+      status:   'wired',
+      group:    'Call Entry',
+
+      why: 'Every call starts here. Twilio receives the PSTN call and fires an HTTP POST to the platform\'s webhook endpoint (/v2-agent). The CallSid, caller\'s number (From), and destination number (To) are all captured here and flow as context through every downstream stage. This is the network entry point — nothing runs before this.',
+
+      engine:   'Twilio PSTN → webhook POST',
+      provider: 'Twilio',
+      model:    null,
+      fires:    'Every inbound call.',
+      writesTo: 'req.body.CallSid, req.body.From, req.body.To → all downstream stages',
+      wiredIn:  ['routes/v2twilio.js — /v2-agent (inbound webhook handler)'],
+      configIn:  'Twilio Console — webhook URL',
+      configUrl: null,
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { always: 'config_gate' },
+    },
+
+    // ── [2] Configuration Gate — Account Gatekeeper ─────────────────────
+    {
+      id:       'config_gate',
+      order:    2,
+      icon:     '🔑',
+      name:     'Configuration Gate — Account Gatekeeper',
+      subtitle: 'Blocks calls if account is closed or suspended — no audio, no AI costs, call ends immediately',
+      status:   'wired',
+      group:    'Call Entry',
+
+      why: 'Before playing any audio or running any AI, the platform confirms the company account is active and has a valid Agent 2.0 configuration. If the account is closed, suspended, or missing config, the call is rejected here — zero ElevenLabs cost, zero Groq cost, zero Twilio TTS charge. This is the financial and operational safety gate that prevents runaway charges on inactive or misconfigured accounts.',
+
+      engine:   'Company config load — account status check',
+      provider: 'MongoDB (no AI)',
+      model:    null,
+      fires:    'Every inbound call, before any audio plays.',
+      writesTo: 'agent2Config → loaded into memory for all downstream stages',
+      wiredIn:  ['routes/v2twilio.js — company config load + active status check'],
+      configIn:  'Account Status — Admin Panel',
+      configUrl: null,
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { yes: 'spam_filter', no: 'REJECT — call ends, no audio' },
+    },
+
+    // ── [3] Spam / Caller ID Filter ──────────────────────────────────────
+    {
+      id:       'spam_filter',
+      order:    3,
+      icon:     '🚫',
+      name:     'Spam / Caller ID Filter',
+      subtitle: 'Blocked number list checked before greeting plays — per-company, per-tenant',
+      status:   'wired',
+      group:    'Call Entry',
+
+      why: 'Known spam callers, robocallers, and manually blocked numbers are checked before any greeting plays. If the caller\'s phone number matches the block list, the call is silently rejected. This prevents AI costs on unwanted calls and protects against toll fraud. The block list is per-company — each tenant manages their own blocked numbers independently without affecting other tenants.',
+
+      engine:   'Blocked number lookup',
+      provider: 'MongoDB (no AI)',
+      model:    null,
+      fires:    'Every inbound call that passes the Config Gate.',
+      writesTo: null,
+      wiredIn:  ['routes/v2twilio.js — blocked caller ID check'],
+      configIn:  'Blocked Numbers — Agent 2.0 Settings',
+      configUrl: 'agent2.html',
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { yes: 'greeting', no: 'BLOCK — call rejected' },
+    },
+
+    // ── [4] Greeting — Opening Message ──────────────────────────────────
+    {
+      id:       'greeting',
+      order:    4,
+      icon:     '👋',
+      name:     'Greeting — Opening Message',
+      subtitle: 'Pre-cached greeting MP3 plays instantly via InstantAudioService — no TTS round-trip',
+      status:   'wired',
+      group:    'Call Entry',
+
+      why: 'The greeting is the caller\'s first impression. It plays as a pre-cached MP3 built by InstantAudioService at config-save time — near-instant playback, no ElevenLabs round-trip on first audio. After the greeting plays, Twilio opens the first <Gather> to capture the caller\'s response. The greeting text, voice, and style are fully configured in Agent 2.0 Settings and apply per-company.',
+
+      engine:   'InstantAudioService — pre-cached MP3 → Twilio <Play>',
+      provider: 'ElevenLabs (pre-generated at config save time, not at call time)',
+      model:    'Configured per company (voiceSettings)',
+      fires:    'Once per call, immediately after spam filter passes.',
+      writesTo: 'Twilio <Play> → caller hears greeting → <Gather> opens for Turn 1',
+      wiredIn:  ['routes/v2twilio.js — /v2-agent greeting handler', 'services/instantAudio/InstantAudioService.js'],
+      configIn:  'Greeting — Agent 2.0 Settings',
+      configUrl: 'agent2.html',
+
+      configFields: [
+        { key: 'greetingText', label: 'Greeting Text', unit: 'string', note: 'What the agent says when a call connects. Pre-cached as MP3 at save time — change it and save to regenerate.' },
+      ],
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { always: 'stt_gather' },
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // GROUP B — CALL RECEIPT (STT + TRANSCRIPT)
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── [5] STT — Deepgram via Twilio Gather ─────────────────────────────
     {
       id:       'stt_gather',
-      order:    1,
+      order:    5,
       icon:     '🎙️',
-      name:     'STT / Twilio Gather',
-      subtitle: 'Twilio captures caller speech — config controls sensitivity, timeout, and barge-in',
+      name:     'STT — Deepgram via Twilio Gather',
+      subtitle: 'Twilio <Gather> captures speech → Deepgram transcribes → transcript flows to ScrabEngine',
       status:   'wired',
       group:    'Call Receipt',
 
-      why: 'This is the entry point for every caller turn. Twilio fires a <Gather> verb with speech recognition settings. The quality of the transcript depends entirely on these settings — wrong timeout = agent cuts off callers; barge-in off = caller has to wait for agent to finish before speaking. Every downstream stage depends on clean STT input.',
+      why: 'After each agent response, Twilio opens a <Gather> with Deepgram speech recognition. The quality of the transcript depends entirely on these settings — wrong timeout = agent cuts off callers mid-sentence; barge-in off = caller must wait for agent audio to finish before speaking. Deepgram\'s phone_call model is optimized for telephony and outperforms generic STT on speaker accents and noise. Every downstream stage depends on clean STT input.',
 
-      engine:   'Twilio <Gather verb> with speech recognition',
-      provider: 'Twilio (Google Speech-to-Text under the hood)',
-      model:    'Configurable via speechModel setting',
-      fires:    'Every turn — opening gather after greeting, every gather after agent response.',
-      writesTo: 'req.body.SpeechResult → downstream stages',
+      engine:   'Twilio <Gather> with Deepgram speech recognition',
+      provider: 'Deepgram (via Twilio speech recognition integration)',
+      model:    'Configurable via speechModel setting (phone_call recommended)',
+      fires:    'Every turn — after greeting, after every agent response.',
+      writesTo: 'req.body.SpeechResult → ScrabEngine → downstream stages',
       wiredIn:  ['routes/v2twilio.js — /v2-agent (greeting gather)', 'routes/v2twilio.js — /v2-agent-sentence-continue (post-response gather)'],
       configIn:  'Speech Detection — Agent 2.0 Settings',
       configUrl: 'agent2.html',
@@ -91,7 +207,7 @@
         { key: 'initialTimeout',      label: 'Initial Timeout',       unit: 's',   note: 'How long agent waits for caller to start speaking' },
         { key: 'bargeIn',             label: 'Barge-in',              unit: 'bool',note: 'Allow caller to interrupt agent mid-response' },
         { key: 'enhancedRecognition', label: 'Enhanced Recognition',  unit: 'bool',note: 'Higher-accuracy STT model (recommended for phone calls)' },
-        { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony; default = general purpose' },
+        { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony via Deepgram; default = general purpose' },
       ],
 
       gaps: [],
@@ -99,10 +215,10 @@
       routing: { always: 'scrabengine' },
     },
 
-    // ── [2] ScrabEngine — Transcript Cleaning ────────────────────────────
+    // ── [6] ScrabEngine — Transcript Cleaning ────────────────────────────
     {
       id:       'scrabengine',
-      order:    2,
+      order:    6,
       icon:     '🔍',
       name:     'ScrabEngine — Transcript Cleaning',
       subtitle: 'Removes filler words, expands vocabulary, applies synonyms before LLM sees the text',
@@ -127,13 +243,13 @@
     },
 
     // ════════════════════════════════════════════════════════════════════════
-    // GROUP B — TURN 1: LLM INTAKE
+    // GROUP C — TURN 1: LLM INTAKE
     // ════════════════════════════════════════════════════════════════════════
 
     // ── [3] LLM Intake (Turn 1) ──────────────────────────────────────────
     {
       id:       'llm_intake',
-      order:    3,
+      order:    7,
       icon:     '🧠',
       name:     'LLM Intake — Entity Extraction',
       subtitle: 'Groq extracts who is calling and why — builds discoveryNotes profile for all downstream stages',
@@ -173,7 +289,7 @@
     // ── [4] Greeting Protocol (Groq Protocol) ───────────────────────────
     {
       id:       'greeting_protocol',
-      order:    4,
+      order:    8,
       icon:     '👋',
       name:     'Greeting Protocol — Groq Response Rules',
       subtitle: 'Groq protocol: mirror greeting → greet caller by name → acknowledge problem → offer solution',
@@ -205,7 +321,7 @@
     // ── [5] First-Sentence Fast Path ─────────────────────────────────────
     {
       id:       'first_sentence_streaming',
-      order:    5,
+      order:    9,
       icon:     '⚡',
       name:     'First-Sentence Fast Path',
       subtitle: 'First sentence streams to ElevenLabs immediately — caller hears audio in ~400ms, no bridge',
@@ -238,13 +354,13 @@
     },
 
     // ════════════════════════════════════════════════════════════════════════
-    // GROUP C — TURN 2+: KC ENGINE
+    // GROUP D — TURN 2+: KC ENGINE
     // ════════════════════════════════════════════════════════════════════════
 
     // ── [6] Question Detector ────────────────────────────────────────────
     {
       id:       'question_detector',
-      order:    6,
+      order:    10,
       icon:     '❓',
       name:     'Question Detector',
       subtitle: 'Scans utterance for KC signals BEFORE booking intent fires — prevents questions being silently ignored',
@@ -276,7 +392,7 @@
     // ── [7] Booking Intent Gate ──────────────────────────────────────────
     {
       id:       'booking_intent',
-      order:    7,
+      order:    11,
       icon:     '🔒',
       name:     'Booking Intent Gate',
       subtitle: 'Pure booking signals skip straight to handoff — no KC or LLM needed',
@@ -306,7 +422,7 @@
     // ── [8] KC Answer ────────────────────────────────────────────────────
     {
       id:       'kc_answer',
-      order:    8,
+      order:    12,
       icon:     '📦',
       name:     'KC Answer — Knowledge Containers',
       subtitle: 'Groq answers from admin-authored facts only — no hallucination, bounded to your content',
@@ -333,7 +449,7 @@
     // ── [9] Groq Response Formatter ──────────────────────────────────────
     {
       id:       'groq_formatter',
-      order:    9,
+      order:    13,
       icon:     '🤖',
       name:     'Groq Response Formatter',
       subtitle: 'Applies Groq Protocol to KC answers: name + acknowledgement + answer + CTA',
@@ -365,7 +481,7 @@
     // ── [10] LLM Fallback ────────────────────────────────────────────────
     {
       id:       'llm_fallback',
-      order:    10,
+      order:    14,
       icon:     '🔮',
       name:     'LLM Fallback — Claude',
       subtitle: 'Claude handles complex questions KC containers could not match',
@@ -392,7 +508,7 @@
     // ── [11] Graceful ACK ────────────────────────────────────────────────
     {
       id:       'graceful_ack',
-      order:    11,
+      order:    15,
       icon:     '🆗',
       name:     'Graceful ACK',
       subtitle: 'Final safety net — canned acknowledgement when all AI paths are unavailable',
@@ -417,13 +533,13 @@
     },
 
     // ════════════════════════════════════════════════════════════════════════
-    // GROUP D — RESPONSE DELIVERY
+    // GROUP E — RESPONSE DELIVERY
     // ════════════════════════════════════════════════════════════════════════
 
     // ── [12] Bridge / Post-Gather Config ────────────────────────────────
     {
       id:       'bridge_config',
-      order:    12,
+      order:    16,
       icon:     '🌉',
       name:     'Bridge — Post-Gather Delay',
       subtitle: 'postGatherDelayMs controls silence window before next <Gather> fires — critical for response completion',
