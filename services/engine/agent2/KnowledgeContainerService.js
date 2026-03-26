@@ -230,6 +230,7 @@ function _buildSystemPrompt({
   bookingAction,
   closingPrompt,
   spfuqContext,
+  discoveryContext,
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -262,9 +263,16 @@ function _buildSystemPrompt({
     ? `\nACTIVE TOPIC: The caller is currently discussing "${containerTitle}". Resolve pronouns ('it', 'that', 'they', 'those') as references to "${containerTitle}" unless the caller explicitly introduces a new topic.\n`
     : '';
 
+  // CALL CONTEXT block — injected when discoveryNotes provide call-level context
+  // (callReason, caller name, urgency) so Groq connects its answer to the
+  // caller's specific situation. Additive — does not replace ACTIVE TOPIC.
+  const callContextBlock = discoveryContext
+    ? `\nCALL CONTEXT: ${discoveryContext}\nUse this context to connect your answer to what the caller is specifically calling about.\n`
+    : '';
+
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-${activeTopicBlock}
+${activeTopicBlock}${callContextBlock}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
 2. Keep your response under ${wordLimit} words — this is a spoken phone answer.
@@ -393,9 +401,11 @@ async function invalidateCache(companyId) {
  *
  * @param {Array}  containers — Active CompanyKnowledgeContainer documents
  * @param {string} input      — Raw caller utterance
- * @returns {{ container: Object, score: number } | null}
+ * @param {Object} [context]  — Optional call context from discoveryNotes
+ * @param {string} [context.callReason] — e.g. "annual maintenance" from Turn 1
+ * @returns {{ container: Object, score: number, contextAssisted?: boolean } | null}
  */
-function findContainer(containers, input) {
+function findContainer(containers, input, context = null) {
   if (!containers?.length || !input) return null;
 
   const norm = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
@@ -446,6 +456,54 @@ function findContainer(containers, input) {
     }
   }
 
+  // ── CONTEXT FALLBACK: if no direct match and callReason available, retry
+  // with callReason words prepended to input. The word-overlap fallback in
+  // the scoring algorithm naturally picks up shared content words
+  // (e.g. "maintenance" from callReason matches "maintenance plan" keyword).
+  //
+  // Only fires when raw input had zero hits — never overrides a direct match.
+  // contextAssisted flag distinguishes this in trace events.
+  if (!bestMatch && context?.callReason) {
+    const augmented = `${context.callReason} ${input}`;
+    const augNorm   = augmented.toLowerCase().replace(/[^a-z\s]/g, ' ');
+
+    for (const container of containers) {
+      const keywords = container.keywords || [];
+      if (!keywords.length) continue;
+
+      for (const kw of keywords) {
+        const kwNorm = kw.toLowerCase().trim();
+        if (!kwNorm) continue;
+
+        let matched = false;
+        let score   = 0;
+
+        if (kwNorm.includes(' ')) {
+          if (augNorm.includes(kwNorm)) {
+            matched = true;
+            score   = kwNorm.length * 2;
+          } else {
+            const inputWords   = new Set(augNorm.split(/\s+/));
+            const contentWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
+            const hits         = contentWords.filter(w => inputWords.has(w));
+            if (hits.length >= 1) {
+              matched = true;
+              score   = hits.reduce((s, w) => s + w.length, 0);
+            }
+          }
+        } else {
+          matched = augNorm.split(/\s+/).includes(kwNorm);
+          score   = matched ? kwNorm.length : 0;
+        }
+
+        if (matched && score > bestScore) {
+          bestScore = score;
+          bestMatch = { container, score, contextAssisted: true };
+        }
+      }
+    }
+  }
+
   return bestMatch;
 }
 
@@ -471,7 +529,8 @@ async function answer(opts) {
     company     = {},
     callerName,
     callSid,
-    spfuqContext,    // optional — active topic reminder injected into system prompt for pronoun resolution
+    spfuqContext,       // optional — active topic reminder injected into system prompt for pronoun resolution
+    discoveryContext,   // optional — call-level context from discoveryNotes (callReason, entities)
   } = opts;
 
   const startMs       = Date.now();
@@ -509,6 +568,7 @@ async function answer(opts) {
     bookingAction:      container.bookingAction        || 'offer_to_book',
     closingPrompt:      container.closingPrompt        || '',
     spfuqContext:       spfuqContext                   || null,
+    discoveryContext:   discoveryContext                || null,
   });
 
   // User message — personalise with caller name if known

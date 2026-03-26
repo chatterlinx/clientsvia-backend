@@ -156,6 +156,20 @@ async function _writeDiscoveryNotes(companyId, callSid, patch) {
   }
 }
 
+/**
+ * _buildDiscoveryContext — Derive a compact call-context string from
+ * discoveryNotes for injection into the Groq system prompt (~20-40 tokens).
+ * Returns null if notes are empty or have no useful context.
+ */
+function _buildDiscoveryContext(notes) {
+  if (!notes) return null;
+  const parts = [];
+  if (notes.callReason) parts.push(`Caller is calling about "${notes.callReason}"`);
+  if (notes.entities?.firstName) parts.push(`Caller's name is ${notes.entities.firstName}`);
+  if (notes.urgency && notes.urgency !== 'normal') parts.push(`Urgency: ${notes.urgency}`);
+  return parts.length ? parts.join('. ') + '.' : null;
+}
+
 // ============================================================================
 // MAIN ORCHESTRATOR
 // ============================================================================
@@ -274,14 +288,26 @@ class KCDiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // GATE 2 — LOAD SPFUQ ANCHOR  (~1ms, Redis)
+    // GATE 2 — LOAD SPFUQ ANCHOR + DISCOVERY NOTES  (parallel, ~1ms each)
     // ══════════════════════════════════════════════════════════════════════════
 
     let spfuq = null;
+    let notes = null;
     try {
-      spfuq = await SPFUQService.load(companyId, callSid);
+      [spfuq, notes] = await Promise.all([
+        SPFUQService.load(companyId, callSid).catch(() => null),
+        DiscoveryNotesService.load(companyId, callSid).catch(() => null),
+      ]);
     } catch (_e) {
-      // Redis timeout — continue without anchor
+      // Redis timeout — continue without anchor or notes
+    }
+
+    if (notes) {
+      emit('KC_DISCOVERY_NOTES_LOADED', {
+        callReason:  notes.callReason || null,
+        objective:   notes.objective || null,
+        entityCount: Object.values(notes.entities || {}).filter(Boolean).length,
+      });
     }
 
     if (spfuq) {
@@ -318,7 +344,17 @@ class KCDiscoveryRunner {
       logger.warn('[KC_ENGINE] Failed to load containers — falling to LLM', { companyId, callSid, err: _e.message });
     }
 
-    const match = KCS.findContainer(containers, userInput);
+    const discoveryContext = _buildDiscoveryContext(notes);
+    const match = KCS.findContainer(containers, userInput, notes ? { callReason: notes.callReason } : null);
+
+    if (match?.contextAssisted) {
+      emit('KC_CONTEXT_MATCH', {
+        containerTitle: match.container.title,
+        containerId:    String(match.container._id || match.container.title || ''),
+        score:          match.score,
+        callReason:     notes?.callReason || null,
+      });
+    }
 
     // ── SPFUQ ACTIVE + NEW CONTAINER MATCHED → TOPIC HOP (with confidence gap)
     if (spfuq && match && match.container) {
@@ -374,6 +410,7 @@ class KCDiscoveryRunner {
         spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
         channel, nextState, emit, startMs, turn,
         bridgeToken, redis, onSentence, pendingBookingQuestion,
+        discoveryContext,
       });
     }
 
@@ -383,6 +420,7 @@ class KCDiscoveryRunner {
         match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
         channel, nextState, emit, startMs, turn,
         bridgeToken, redis, onSentence, pendingBookingQuestion,
+        discoveryContext,
       });
     }
 
@@ -394,6 +432,7 @@ class KCDiscoveryRunner {
       userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
       bridgeToken, redis, callerName, onSentence,
       containers,   // passed so fallback event records what was searched
+      notes,        // discoveryNotes for building Claude callContext
     });
   }
 }
@@ -409,6 +448,7 @@ async function _handleSPFUQContinue({
   redis                 = null,
   onSentence            = null,
   pendingBookingQuestion = null,
+  discoveryContext       = null,
 }) {
   const containerTitle = spfuq.containerTitle || 'this topic';
 
@@ -463,6 +503,7 @@ async function _handleSPFUQContinue({
       callerName,
       callSid,
       spfuqContext,                  // ← FIX 1: active topic injected via system prompt
+      discoveryContext,              // call-level context from discoveryNotes
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Groq error on SPFUQ_CONTINUE', { companyId, callSid, err: _e.message });
@@ -570,6 +611,7 @@ async function _handleKCMatch({
   redis                 = null,
   onSentence            = null,
   pendingBookingQuestion = null,
+  discoveryContext       = null,
 }) {
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
@@ -596,6 +638,7 @@ async function _handleKCMatch({
       company,
       callerName,
       callSid,
+      discoveryContext,              // call-level context from discoveryNotes
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Groq error on direct answer', { companyId, callSid, containerId, err: _e.message });
@@ -740,6 +783,7 @@ async function _handleLLMFallback({
   userInput, companyId, callSid, company, channel, nextState, emit,
   startMs, turn, bridgeToken, redis, callerName, onSentence,
   containers = [],
+  notes      = null,
 }) {
   logger.info('[KC_ENGINE] No KC match — firing LLM fallback (Claude COMPLEX)', {
     companyId, callSid, turn, inputPreview: _clip(userInput, 40),
@@ -754,7 +798,15 @@ async function _handleLLMFallback({
     inputPreview:    _clip(userInput, 100),
     containerCount:  containers.length,
     containerTitles: containers.map(c => c.title).slice(0, 8),
+    callReason:      notes?.callReason || null,
   });
+
+  // Build callContext from discoveryNotes so Claude has call-level awareness
+  const callContext = notes ? {
+    caller: notes.entities?.firstName ? { firstName: notes.entities.firstName, speakable: true } : null,
+    issue:  notes.callReason ? { summary: notes.callReason } : null,
+    urgency: notes.urgency === 'high' ? { level: 'high', reason: notes.callReason } : null,
+  } : null;
 
   let llmResult = null;
   try {
@@ -772,6 +824,7 @@ async function _handleLLMFallback({
       redis,
       callerName,
       onSentence,
+      callContext,                     // discoveryNotes context for Claude
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] LLM fallback threw — routing to graceful ACK', {
