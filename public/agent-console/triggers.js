@@ -272,8 +272,6 @@
         showToast,
         apiFetch
       });
-    } else {
-      console.warn('[BucketManager] Not available — bucket UI disabled');
     }
     loadTriggers();
   }
@@ -416,98 +414,43 @@
     const btnFixUnpublished = document.getElementById('btn-fix-unpublished');
     if (btnFixUnpublished) {
       btnFixUnpublished.addEventListener('click', async () => {
-        console.log('');
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #3b82f6; font-weight: bold');
-        console.log('%c🚀 AUTO-PUBLISH TRIGGERS - CHECKPOINT LOG', 'color: #3b82f6; font-weight: bold; font-size: 14px');
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #3b82f6; font-weight: bold');
-        console.log('');
-        
-        console.log('%c✓ [CHECKPOINT 1/6] Button clicked', 'color: #10b981; font-weight: bold');
-        console.log('  Timestamp:', new Date().toISOString());
-        console.log('  Company ID:', state.companyId);
-        
         if (!confirm('This will set state="published" for all local triggers with state=null. Continue?')) {
-          console.log('%c❌ Operation cancelled by user', 'color: #94a3b8');
           return;
         }
-        
+
         const btn = btnFixUnpublished;
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        
+
         try {
-          // CHECKPOINT 2
-          console.log('%c✓ [CHECKPOINT 2/6] User confirmed action', 'color: #10b981; font-weight: bold');
-          console.log('  API Base:', CONFIG.API_BASE_COMPANY);
-          console.log('  Full URL:', `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`);
-          
           btn.innerHTML = '📡 Calling API...';
-          
-          // CHECKPOINT 3
-          console.log('%c🌐 [CHECKPOINT 3/6] Sending POST request...', 'color: #3b82f6; font-weight: bold');
-          const startTime = performance.now();
-          
+
           const res = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`, {
             method: 'POST'
           });
-          
-          const apiDuration = Math.round(performance.now() - startTime);
-          
-          // CHECKPOINT 4
-          console.log('%c✓ [CHECKPOINT 4/6] API Response received', 'color: #10b981; font-weight: bold');
-          console.log('  Duration:', apiDuration + 'ms');
-          console.log('  Success:', res.success);
-          console.log('  Published Count:', res.publishedCount);
-          console.log('  Full Response:', res);
-          
+
           if (res.success) {
             btn.innerHTML = `✓ ${res.publishedCount} published`;
             showToast('success', 'Published', `${res.publishedCount} trigger(s) published`);
-            
-            // CHECKPOINT 5
+
             btn.innerHTML = '🔄 Refreshing cache...';
-            console.log('%c🔄 [CHECKPOINT 5/6] Refreshing runtime cache...', 'color: #f59e0b; font-weight: bold');
-            
             try {
-              const cacheStart = performance.now();
-              const cacheRes = await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/refresh`, { method: 'POST' });
-              const cacheDuration = Math.round(performance.now() - cacheStart);
-              console.log('  ✓ Cache refreshed (' + cacheDuration + 'ms)');
-              console.log('  Response:', cacheRes);
+              await apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/triggers/refresh`, { method: 'POST' });
             } catch (cacheErr) {
-              console.warn('%c⚠️  Cache refresh failed (non-critical)', 'color: #f59e0b');
-              console.warn('  Error:', cacheErr.message);
+              // non-critical
             }
-            
-            // CHECKPOINT 6
+
             btn.innerHTML = '📥 Reloading data...';
-            console.log('%c📥 [CHECKPOINT 6/6] Reloading trigger list from server...', 'color: #8b5cf6; font-weight: bold');
-            
-            const reloadStart = performance.now();
             await loadTriggers();
-            const reloadDuration = Math.round(performance.now() - reloadStart);
-            
-            console.log('  ✓ Data reloaded (' + reloadDuration + 'ms)');
-            console.log('');
-            console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #10b981; font-weight: bold');
-            console.log('%c🎉 SUCCESS! Auto-Publish Complete', 'color: #10b981; font-weight: bold; font-size: 14px');
-            console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #10b981; font-weight: bold');
-            console.log('  Total Duration:', Math.round(performance.now() - startTime) + 'ms');
-            console.log('  Triggers Published:', res.publishedCount);
-            console.log('  Status: All triggers now visible to agent runtime ✅');
-            console.log('');
-            
+
             btn.innerHTML = '✅ Complete!';
-            showToast('success', 'Complete', 'All done! Check console for details.');
-            
+            showToast('success', 'Complete', 'Triggers published and cache refreshed.');
+
             setTimeout(() => {
               btn.innerHTML = originalText;
               btn.disabled = false;
             }, 3000);
           } else {
-            console.error('%c❌ API Error', 'color: #ef4444; font-weight: bold');
-            console.error('  Error:', res.error);
-            console.error('  Full Response:', res);
             showToast('error', 'Failed', res.error || 'API returned error');
             btn.innerHTML = '❌ Failed';
             setTimeout(() => {
@@ -516,22 +459,8 @@
             }, 3000);
           }
         } catch (err) {
-          console.log('');
-          console.error('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ef4444; font-weight: bold');
-          console.error('%c💥 CRITICAL ERROR - Auto-Publish Failed', 'color: #ef4444; font-weight: bold; font-size: 14px');
-          console.error('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ef4444; font-weight: bold');
-          console.error('');
-          console.error('Error Type:', err.constructor.name);
-          console.error('Error Message:', err.message);
-          console.error('');
-          console.error('Full Error Object:', err);
-          console.error('Stack Trace:', err.stack);
-          console.error('');
-          console.error('Attempted URL:', `${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers/fix-unpublished`);
-          console.error('');
-          
-          showToast('error', 'Error', `Failed: ${err.message || 'Check console for details'}`);
-          btn.innerHTML = '❌ Error - Check Console';
+          showToast('error', 'Error', `Failed: ${err.message}`);
+          btn.innerHTML = '❌ Error';
           setTimeout(() => {
             btn.innerHTML = originalText;
             btn.disabled = false;
@@ -927,10 +856,6 @@
       // Load agent2 config for Follow-up Consent Cards
       try {
         const configData = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`);
-        console.log('[Consent Cards] CONFIG_LOAD — raw response keys:', Object.keys(configData || {}));
-        console.log('[Consent Cards] CONFIG_LOAD — has agent2:', !!configData?.agent2);
-        console.log('[Consent Cards] CONFIG_LOAD — has discovery:', !!configData?.agent2?.discovery);
-        console.log('[Consent Cards] CONFIG_LOAD — has followUpConsent:', !!configData?.agent2?.discovery?.followUpConsent);
 
         if (configData?.agent2) {
           state.config = configData.agent2;
@@ -945,14 +870,11 @@
             if (typeof savedGpt.includeFollowup === 'boolean') state.gptSettings.includeFollowup = savedGpt.includeFollowup;
           }
         } else {
-          console.warn('[Consent Cards] CONFIG_LOAD — No agent2 object in response, consent cards will be empty');
         }
       } catch (cfgErr) {
-        console.warn('[Triggers] Failed to load agent2 config for consent cards:', cfgErr.message);
       }
       
     } catch (error) {
-      console.error('[Triggers] Failed to load:', error);
       showToast('error', 'Load Failed', 'Could not load trigger data.');
     }
   }
@@ -987,7 +909,6 @@
         emptyPoolBanner.style.display = 'none';
       }
     } catch (error) {
-      console.warn('[TriggerHealth] Health check failed:', error);
       // Hide banners if health check fails
       unpublishedBanner.style.display = 'none';
       emptyPoolBanner.style.display = 'none';
@@ -999,7 +920,6 @@
   // Shows warnings when trigger system has issues or is in legacy mode
   // ═══════════════════════════════════════════════════════════════════════════
   function renderHealthBanner() {
-    // Legacy mode removed - new platform only shows critical configuration errors
     const existingBanner = document.getElementById('trigger-health-banner');
     if (existingBanner) existingBanner.remove();
     
@@ -1034,7 +954,6 @@
     }
   }
   
-  // Legacy mode removed - new platform has no legacy options
 
   function renderGroupSelector() {
     DOM.groupSelector.innerHTML = '<option value="">— No group selected —</option>';
@@ -1098,7 +1017,6 @@
       DOM.statDisabled.textContent = state.stats.totalDisabledCount || 0;
     }
     
-    console.log('[Triggers] Stats updated:', state.stats);
   }
 
   function updateBuckets(buckets, cacheInfo) {
@@ -1444,7 +1362,6 @@
     if (e.target.classList.contains('variable-input')) {
       const varName = e.target.dataset.variable;
       const value = e.target.value.trim();
-      console.log('[Variables] Change event:', varName, '=', value);
       saveVariable(varName, value);
     }
   }
@@ -1453,19 +1370,16 @@
     if (e.target.classList.contains('variable-input')) {
       const varName = e.target.dataset.variable;
       const value = e.target.value.trim();
-      console.log('[Variables] Blur event:', varName, '=', value);
       saveVariable(varName, value);
     }
   }
   
   async function saveVariable(varName, value) {
-    console.log('[Variables] Saving:', varName, '=', value);
     
     try {
       state.companyVariables.set(varName, value);
       
       const varsToSave = Object.fromEntries(state.companyVariables);
-      console.log('[Variables] Sending to API:', varsToSave);
       
       const result = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/variables`, {
         method: 'PUT',
@@ -1474,7 +1388,6 @@
         }
       });
       
-      console.log('[Variables] Save result:', result);
       
       renderVariables();
       
@@ -1490,7 +1403,6 @@
       }
       
     } catch (error) {
-      console.error('[Variables] Save failed:', error);
       showToast('error', 'Save Failed', 'Could not save variable.');
     }
   }
@@ -1731,7 +1643,6 @@
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Failed to change group:', error);
       showToast('error', 'Failed', 'Could not change trigger group.');
       DOM.groupSelector.value = state.activeGroupId || '';
     }
@@ -1788,7 +1699,6 @@
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Failed to create group:', error);
       showToast('error', 'Failed', error.message || 'Could not create group.');
     }
   }
@@ -2061,7 +1971,6 @@
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Save failed:', error);
       showToast('error', 'Save Failed', error.message || 'Could not save trigger.');
     }
   }
@@ -2243,7 +2152,6 @@
       }
       
     } catch (error) {
-      console.error('[Triggers] Action failed:', error);
       showToast('error', 'Failed', error.message || 'Action could not be completed.');
     }
   }
@@ -2259,7 +2167,6 @@
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Enable/disable toggle failed:', error);
       showToast('error', 'Failed', 'Could not change trigger status.');
       await loadTriggers();
       throw error;
@@ -2282,7 +2189,6 @@
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Enable toggle failed:', error);
       showToast('error', 'Failed', 'Could not change trigger status.');
       await loadTriggers();
       throw error;
@@ -2306,7 +2212,6 @@
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Scope toggle failed:', error);
       showToast('error', 'Failed', 'Could not change trigger scope.');
       await loadTriggers();
       throw error;
@@ -2370,7 +2275,6 @@
       showToast('success', 'Audio Generated', 'Audio created with your ElevenLabs voice');
       
     } catch (error) {
-      console.error('[Audio] Generation failed:', error);
       
       if (btn) {
         btn.textContent = originalText;
@@ -2410,7 +2314,6 @@
     const userInput = prompt(confirmMsg);
     
     if (userInput !== 'CLEAR') {
-      console.log('[Triggers] Clear audio cancelled');
       return;
     }
     
@@ -2430,7 +2333,6 @@
       showToast('success', 'Audio Cleared', `${response.cleared} audio files marked for regeneration`);
       
     } catch (err) {
-      console.error('[Triggers] Clear audio failed:', err);
       alert('Failed to clear audio: ' + err.message);
     } finally {
       const btn = DOM.btnClearAllAudio;
@@ -2658,7 +2560,6 @@
       });
       showToast('success', 'Settings Saved', 'GPT prefill settings saved to company config.');
     } catch (err) {
-      console.warn('[GPT Settings] Failed to persist settings:', err.message);
       showToast('warning', 'Settings Saved Locally', 'Settings applied but could not save to server.');
     }
   }
@@ -2729,7 +2630,6 @@
       showToast('success', 'Prefill Complete', 'Review and edit the generated content as needed.');
       
     } catch (error) {
-      console.error('[Triggers] GPT prefill failed:', error);
       showToast('error', 'Prefill Failed', error.message || 'Could not generate content.');
       
       if (btn) {
@@ -2803,11 +2703,9 @@
         }
         if (DOM.duplicateWarning) DOM.duplicateWarning.style.display = 'flex';
         showToast('warning', 'Issues Found', `${summary} detected.`);
-        console.warn('[Triggers] Health issues:', issues);
       }
       
     } catch (error) {
-      console.error('[Triggers] Health check failed:', error);
       showToast('error', 'Check Failed', 'Could not check for duplicates.');
     }
   }
@@ -2842,22 +2740,15 @@
 
   async function loadNameGreeting() {
     try {
-      console.log('[NameGreeting] LOAD — fetching settings...');
       const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`);
-      console.log('[NameGreeting] LOAD — API response:', data);
       const s = data.settings || {};
-      console.log('[NameGreeting] LOAD — extracted settings:', s);
-      console.log('[NameGreeting] LOAD — alwaysGreet value:', s.alwaysGreet, 'type:', typeof s.alwaysGreet);
       
       if (DOM.nameGreetingAlways) {
         DOM.nameGreetingAlways.checked = s.alwaysGreet === true;
-        console.log('[NameGreeting] LOAD — set checkbox to:', DOM.nameGreetingAlways.checked);
       } else {
-        console.error('[NameGreeting] LOAD — DOM.nameGreetingAlways is null!');
       }
       if (DOM.nameGreetingText) DOM.nameGreetingText.value = s.greetingLine || '';
     } catch (err) {
-      console.warn('[NameGreeting] Failed to load, using defaults:', err.message);
     }
   }
 
@@ -2874,21 +2765,16 @@
           || 'Hello {name}, thank you for calling.'
       };
 
-      console.log('[NameGreeting] SAVE — checkbox element:', DOM.nameGreetingAlways);
-      console.log('[NameGreeting] SAVE — checkbox checked:', DOM.nameGreetingAlways?.checked);
-      console.log('[NameGreeting] SAVE — settings being sent:', settings);
 
       const response = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/name-greeting`, {
         method: 'PUT',
         body: { settings }
       });
 
-      console.log('[NameGreeting] SAVE — API response:', response);
 
       showToast('success', 'Name Greeting Saved', settings.alwaysGreet ? 'Always greet (with or without name)' : 'Greet only when name captured');
       closeNameGreetingModal();
     } catch (err) {
-      console.error('[NameGreeting] Save failed:', err);
       showToast('error', 'Save Failed', err.message || 'Could not save greeting');
     } finally {
       btn.textContent = originalText;
@@ -2928,7 +2814,6 @@
       if (DOM.patienceMaxCheckins) DOM.patienceMaxCheckins.value = s.maxCheckins || 2;
       if (DOM.patienceFinalResponse) DOM.patienceFinalResponse.value = s.finalResponse || '';
     } catch (err) {
-      console.warn('[Patience] Failed to load settings, using defaults:', err.message);
     }
   }
 
@@ -2964,7 +2849,6 @@
       showToast('success', 'Patience Settings Saved', `${phrases.length} trigger phrases, ${settings.timeoutSeconds}s timeout`);
       closePatienceModal();
     } catch (err) {
-      console.error('[Patience] Save failed:', err);
       showToast('error', 'Save Failed', err.message || 'Could not save patience settings');
     } finally {
       btn.textContent = originalText;
@@ -3440,7 +3324,6 @@
 
   function loadFollowUpConsent(config) {
     const fuc = config?.discovery?.followUpConsent || {};
-    console.log('[Consent Cards] LOAD — raw followUpConsent from config:', JSON.stringify(fuc, null, 2));
     const missingActionEl = document.getElementById('fuc-missing-response-action');
     if (missingActionEl) missingActionEl.value = fuc.missingResponseAction || 'REASK_FOLLOWUP';
     for (const bucket of FUC_BUCKETS) {
@@ -3450,14 +3333,11 @@
       const phrasesToRender = (data.phrases?.length > 0)
         ? data.phrases
         : (DEFAULT_FUC_CLIENT[bucket]?.phrases || []);
-      console.log(`[Consent Cards] LOAD.${bucket} — phrases: ${phrasesToRender.length} (${data.phrases?.length > 0 ? 'from DB' : 'starter template'}), response: "${data.response || ''}", direction: "${data.direction || ''}"`);
       renderFucPhrases(bucket, phrasesToRender);
       const respEl = document.getElementById(`fuc-${bucket}-response`);
       if (respEl) respEl.value = data.response || '';
-      else console.warn(`[Consent Cards] LOAD — fuc-${bucket}-response element NOT found`);
       const dirEl = document.getElementById(`fuc-${bucket}-direction`);
       if (dirEl) dirEl.value = data.direction || '';
-      else console.log(`[Consent Cards] LOAD — fuc-${bucket}-direction element not found (may be expected)`);
       const modeEl = document.getElementById(`fuc-${bucket}-booking-mode`);
       if (modeEl) modeEl.value = data.bookingMode || '';
     }
@@ -3466,7 +3346,6 @@
       ? fuc.yes.questionSignals
       : DEFAULT_FUC_CLIENT.yes.questionSignals;
     renderFucSignals(signalsToRender);
-    console.log('[Consent Cards] LOAD — complete');
   }
 
   function renderFucPhrases(bucket, phrases) {
@@ -3494,11 +3373,9 @@
   function getFucPhrases(bucket) {
     const container = document.getElementById(`fuc-${bucket}-phrases`);
     if (!container) {
-      console.warn(`[Consent Cards] getFucPhrases — container fuc-${bucket}-phrases NOT found`);
       return [];
     }
     const tags = container.querySelectorAll('.phrase-tag');
-    console.log(`[Consent Cards] getFucPhrases(${bucket}) — found ${tags.length} phrase-tag elements`);
     return Array.from(tags).map(tag => {
       const clone = tag.cloneNode(true);
       const btn = clone.querySelector('button');
@@ -3591,22 +3468,17 @@
   };
 
   const btnSaveFuc = document.getElementById('btn-save-followup-consent');
-  console.log('[Consent Cards] INIT — btn-save-followup-consent found:', !!btnSaveFuc);
 
   if (btnSaveFuc) {
     btnSaveFuc.addEventListener('click', async () => {
-      console.log('[Consent Cards] ── SAVE CLICKED ──');
-      console.log('[Consent Cards] CP1 — companyId:', state.companyId);
 
       if (!state.companyId) {
-        console.error('[Consent Cards] CP1-FAIL — No companyId in state, aborting save');
         showToast('error', 'Save Failed', 'No company ID available');
         return;
       }
 
       try {
         const followUpConsent = collectFollowUpConsent();
-        console.log('[Consent Cards] CP2 — collectFollowUpConsent() result:', JSON.stringify(followUpConsent, null, 2));
 
         const requiredBuckets = ['yes', 'no', 'reprompt', 'hesitant'];
         const missingResponses = requiredBuckets.filter(bucket => {
@@ -3620,42 +3492,31 @@
 
         for (const bucket of FUC_BUCKETS) {
           const data = followUpConsent[bucket] || {};
-          console.log(`[Consent Cards] CP2.${bucket} — phrases: [${(data.phrases || []).join(', ')}] | response: "${data.response || ''}" | direction: "${data.direction || ''}"`);
         }
 
         const saveUrl = `${CONFIG.API_BASE_AGENT2}/${state.companyId}/agent2/config`;
         const payload = { discovery: { followUpConsent } };
-        console.log('[Consent Cards] CP3 — API URL:', saveUrl);
-        console.log('[Consent Cards] CP3 — method: PATCH');
-        console.log('[Consent Cards] CP3 — payload:', JSON.stringify(payload, null, 2));
 
         const resp = await AgentConsoleAuth.apiFetch(saveUrl, {
           method: 'PATCH',
           body: payload
         });
 
-        console.log('[Consent Cards] CP4 — Raw API response:', JSON.stringify(resp, null, 2));
 
         if (resp.success) {
-          console.log('[Consent Cards] CP5 — SUCCESS — updating local state');
           if (!state.config) state.config = {};
           if (!state.config.discovery) state.config.discovery = {};
           state.config.discovery.followUpConsent = followUpConsent;
           showToast('success', 'Saved', 'Follow-up consent cards saved.');
           state.isDirty = false;
         } else {
-          console.error('[Consent Cards] CP5-FAIL — Server returned success:false', resp);
           showToast('error', 'Save Failed', resp.message || resp.error || 'Server returned failure');
         }
       } catch (err) {
-        console.error('[Consent Cards] CP-ERROR — Exception during save:', err);
-        console.error('[Consent Cards] CP-ERROR — err.message:', err.message);
-        console.error('[Consent Cards] CP-ERROR — err.data:', err.data);
         showToast('error', 'Save Failed', err.message);
       }
     });
   } else {
-    console.error('[Consent Cards] INIT-FAIL — btn-save-followup-consent NOT found in DOM');
   }
 
   /* --------------------------------------------------------------------------
@@ -3744,11 +3605,9 @@
         // Extract the ruleId - need to find the trigger to get its ruleId
         const trigger = state.triggers.find(t => t.triggerId === triggerId);
         if (!trigger || !trigger.ruleId) {
-          console.warn('[Bulk Delete] Could not find ruleId for triggerId:', triggerId);
           continue;
         }
         const url = `${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${encodeURIComponent(trigger.ruleId)}`;
-        console.log('[Bulk Delete] Deleting local trigger:', trigger.ruleId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
@@ -3759,11 +3618,9 @@
         const trigger = state.triggers.find(t => t.triggerId === triggerId);
         const groupId = trigger?.originGroupId || trigger?.groupId;
         if (!trigger || !trigger.ruleId || !groupId) {
-          console.warn('[Bulk Delete] Could not find ruleId/originGroupId for global triggerId:', triggerId, 'trigger:', trigger);
           continue;
         }
         const url = `${CONFIG.API_BASE_GLOBAL}/trigger-groups/${encodeURIComponent(groupId)}/triggers/${encodeURIComponent(trigger.ruleId)}`;
-        console.log('[Bulk Delete] Deleting global trigger:', trigger.ruleId, 'from group:', groupId, 'URL:', url);
         await AgentConsoleAuth.apiFetch(url, { method: 'DELETE' });
         deleted++;
       }
@@ -3777,7 +3634,6 @@
       await loadTriggers();
       
     } catch (err) {
-      console.error('[Triggers] Bulk delete failed:', err);
       showToast('error', 'Delete Failed', err.message);
     }
   }

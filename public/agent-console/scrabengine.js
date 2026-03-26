@@ -301,8 +301,7 @@
       loadCompanyName();
       log('CHECKPOINT 8: init() COMPLETE — all wiring done');
     } catch (err) {
-      console.error('[ScrabEngine] FATAL: Initialization error:', err);
-      console.error('[ScrabEngine] Stack:', err.stack);
+      alert('ScrabEngine init failed: ' + err.message);
     }
   }
 
@@ -389,8 +388,6 @@
   function safeListen(el, event, handler) {
     if (el) {
       el.addEventListener(event, handler);
-    } else {
-      console.warn('[ScrabEngine] safeListen SKIPPED: element is null for event', event);
     }
   }
 
@@ -436,7 +433,6 @@
         log('Configuration loaded');
       }
     } catch (err) {
-      console.error('[ScrabEngine] Failed to load config:', err);
       render();
     }
   }
@@ -459,7 +455,6 @@
         DOM.btnSaveAll.disabled = false;
       }, 2000);
     } catch (err) {
-      console.error('[ScrabEngine] Save failed:', err);
       alert('Failed to save configuration: ' + err.message);
       DOM.btnSaveAll.textContent = 'Save All Changes';
       DOM.btnSaveAll.disabled = false;
@@ -739,20 +734,14 @@
   function openModal(type, editIdx) {
     log(`MODAL OPEN: type="${type}", editIdx=${editIdx}`);
     const modal = getModal(type);
-    if (!modal) {
-      console.error(`[ScrabEngine] MODAL OPEN FAILED: getModal("${type}") returned null. DOM key: "${MODAL_REGISTRY[type]?.key}", DOM value:`, DOM[MODAL_REGISTRY[type]?.key]);
-      return;
-    }
+    if (!modal) return;
 
     state.editingType = type;
     state.editingIndex = typeof editIdx === 'number' ? editIdx : -1;
 
     const isEdit = state.editingIndex >= 0;
     const fields = MODAL_FIELDS[type];
-    if (!fields) {
-      console.error(`[ScrabEngine] MODAL OPEN FAILED: No MODAL_FIELDS for type "${type}"`);
-      return;
-    }
+    if (!fields) return;
 
     if (isEdit) {
       const saveConfig = MODAL_SAVE_CONFIG[type];
@@ -844,7 +833,7 @@
   function saveModalItem(type) {
     log(`SAVE MODAL: type="${type}"`);
     const saveConf = MODAL_SAVE_CONFIG[type];
-    if (!saveConf) { console.error(`[ScrabEngine] SAVE FAILED: No MODAL_SAVE_CONFIG for "${type}"`); return; }
+    if (!saveConf) return;
 
     const fieldValues = readModalFields(type);
     const error = saveConf.validate(fieldValues);
@@ -886,7 +875,6 @@
       );
       displayTestResults(result);
     } catch (err) {
-      console.error('[ScrabEngine] Test failed:', err);
       alert('Test failed: ' + err.message);
     } finally {
       DOM.btnRunTest.disabled = false;

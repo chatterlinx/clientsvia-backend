@@ -36,37 +36,26 @@ const state = {
 // ════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[LLMAgent] ✅ DOMContentLoaded fired');
-
   const urlParams = new URLSearchParams(window.location.search);
   state.companyId = urlParams.get('companyId');
-  console.log('[LLMAgent] companyId:', state.companyId);
 
   if (!state.companyId) {
     showToast('error', 'Missing companyId parameter');
-    console.error('[LLMAgent] ❌ No companyId — aborting init');
     return;
   }
 
   try {
-    console.log('[LLMAgent] Setting up tabs...');
     setupConfigTabs();
     setupFilterChips();
     setupBrFilterChips();
     setupChannelTabs();
-    console.log('[LLMAgent] Setting up event listeners...');
     setupEventListeners();
-    console.log('[LLMAgent] ✅ Event listeners wired');
-    console.log('[LLMAgent] Loading settings...');
     await loadSettings();
-    console.log('[LLMAgent] ✅ Settings loaded, config:', state.config ? 'EXISTS' : 'NULL');
 
     // Auto-sync triggers as knowledge cards after settings load
-    console.log('[LLMAgent] Starting trigger auto-sync...');
     await autoSyncTriggers();
-    console.log('[LLMAgent] ✅ Init complete');
   } catch (error) {
-    console.error('[LLMAgent] ❌ Init failed:', error);
+    showToast('error', `Initialisation failed: ${error.message}`);
   }
 });
 
@@ -88,7 +77,6 @@ async function loadSettings() {
     renderAll();
     hideLoadingState();
   } catch (error) {
-    console.error('[LLMAgent] Load error:', error);
     showToast('error', `Failed to load settings: ${error.message}`);
     hideLoadingState();
   }
@@ -192,7 +180,6 @@ async function saveSettings() {
     showToast('success', 'Settings saved successfully');
     hideLoadingState();
   } catch (error) {
-    console.error('[LLMAgent] Save error:', error);
     showToast('error', `Failed to save: ${error.message}`);
     hideLoadingState();
   }
@@ -265,17 +252,14 @@ async function autoSyncTriggers() {
 
     // If anything changed, save and re-render
     if (added > 0 || updated > 0 || removed > 0) {
-      console.log(`[LLMAgent] Trigger sync: +${added} added, ~${updated} updated, -${removed} removed`);
       markDirty();
       renderKnowledgeCards();
       renderPromptPreview();
       // Auto-save the synced triggers
       await saveSettings();
-    } else {
-      console.log('[LLMAgent] Trigger sync: already up to date');
     }
   } catch (error) {
-    console.warn('[LLMAgent] Trigger auto-sync failed (non-critical):', error.message);
+    // Non-critical — page works fine without trigger sync
     // Non-critical — page works fine without trigger sync
   }
 }
@@ -1177,23 +1161,17 @@ function setupEventListeners() {
 
   // ── Knowledge card buttons ──
   const addCardBtn = document.getElementById('btn-add-card');
-  console.log('[LLMAgent] btn-add-card element:', addCardBtn ? 'FOUND' : 'NOT FOUND');
   if (addCardBtn) {
-    addCardBtn.addEventListener('click', () => {
-      console.log('[LLMAgent] 🔘 btn-add-card CLICKED');
-      openAddCardModal();
-    });
+    addCardBtn.addEventListener('click', () => openAddCardModal());
   }
 
   // Event delegation for ALL dynamically-rendered card buttons
   const cardsList = document.getElementById('cards-list');
-  console.log('[LLMAgent] cards-list element:', cardsList ? 'FOUND' : 'NOT FOUND');
   if (cardsList) {
     cardsList.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      console.log('[LLMAgent] 🔘 cards-list delegation:', action, btn.dataset.cardId || '');
       if (action === 'add-card') openAddCardModal();
       if (action === 'edit-card') editCard(btn.dataset.cardId);
       if (action === 'delete-card') deleteCard(btn.dataset.cardId);
@@ -1201,7 +1179,6 @@ function setupEventListeners() {
     cardsList.addEventListener('change', (e) => {
       const el = e.target.closest('[data-action="toggle-card"]');
       if (!el) return;
-      console.log('[LLMAgent] 🔘 toggle card:', el.dataset.cardId, el.checked);
       toggleCard(el.dataset.cardId, el.checked);
     });
   }
@@ -1338,7 +1315,6 @@ function addCustomRule() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function openAddCardModal() {
-  console.log('[LLMAgent] 📦 openAddCardModal() called');
   state.editingCardId = null;
   state.modalCardType = null;
   state.scrapedContent = null;

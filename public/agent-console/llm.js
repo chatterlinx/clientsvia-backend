@@ -62,14 +62,13 @@ async function loadSettings() {
       state.companyName = truthData?.companyProfile?.businessName ||
                           truthData?.companyProfile?.companyName || '';
     } catch (err) {
-      console.warn('[LLM] Truth fetch failed:', err.message);
+      // non-critical — company name is cosmetic only
     }
 
     renderAllSections();
     updatePreview();
     hideLoadingState();
   } catch (error) {
-    console.error('[LLM] Load error:', error);
     showToast('error', `Failed to load settings: ${error.message}`);
     hideLoadingState();
   }
@@ -97,7 +96,6 @@ async function saveSettings() {
 
     showToast('success', 'Settings saved successfully');
   } catch (error) {
-    console.error('[LLM Settings] Save error:', error);
     showToast('error', `Failed to save: ${error.message}`);
   }
 }

@@ -232,7 +232,6 @@ async function loadConfig() {
     updateFlowVisualizer();
 
   } catch (err) {
-    console.error('[BookingConfig] Load failed:', err);
     showToast('error', 'Load failed', err.message || 'Network error');
     // Initialize empty so the page is usable
     bookingConfig = {};
@@ -1310,7 +1309,6 @@ async function saveAll() {
     isDirty = false;
     setTimeout(() => showSaveStatus('', ''), 3000);
   } catch (err) {
-    console.error('[BookingConfig] Save failed:', err);
     showSaveStatus('error', 'Error');
     showToast('error', 'Save failed', err.message || 'Please try again.');
   } finally {

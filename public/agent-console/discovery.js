@@ -1007,7 +1007,7 @@
 
       updateLiveIndicator();
     } catch (err) {
-      console.warn('[Discovery] Auto-refresh failed:', err);
+      // silent — auto-refresh failure is non-blocking
     }
   }
 
@@ -1794,7 +1794,6 @@
       renderNotesModal(schema, data.discoveryNotes?.gaps || []);
 
     } catch (err) {
-      console.error('[Discovery] API overlay failed:', err);
       // Pipeline already visible from Phase 1 — show a soft inline warning only
       const warn = document.createElement('div');
       warn.className = 'dp-gap-item';

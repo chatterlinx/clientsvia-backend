@@ -1,8 +1,6 @@
 (function() {
   'use strict';
 
-  console.log('[FlowBuilder] Loading...');
-
   const state = {
     companyId: null,
     steps: [],
@@ -43,7 +41,6 @@
   }
 
   function init() {
-    console.log('[FlowBuilder] Initializing...');
     initDOM();
 
     const params = new URLSearchParams(window.location.search);
@@ -114,7 +111,6 @@
         state.steps = getDefaultSteps();
       }
     } catch (err) {
-      console.error('[FlowBuilder] Load error:', err);
       state.steps = getDefaultSteps();
     }
   }
@@ -126,7 +122,6 @@
       state.unsavedChanges = false;
       showToast('success', 'Saved!', 'Flow sequence saved to browser storage');
     } catch (err) {
-      console.error('[FlowBuilder] Save error:', err);
       showToast('error', 'Save Failed', err.message);
     }
   }
@@ -683,8 +678,6 @@
   }
 
   function showToast(type, title, message) {
-    console.log(`[FlowBuilder] ${type.toUpperCase()}: ${title} - ${message}`);
-    // TODO: Add visual toast notifications
     alert(`${title}\n\n${message}`);
   }
 
