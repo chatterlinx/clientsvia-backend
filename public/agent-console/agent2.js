@@ -2124,6 +2124,19 @@
   }
 
   /* --------------------------------------------------------------------------
+     GLOBAL EXPORTS — expose keywords modal functions to inline onclick handlers
+     (functions are defined inside the IIFE so must be pinned to window)
+     -------------------------------------------------------------------------- */
+  window.openKeywordsModal  = openKeywordsModal;
+  window.closeKeywordsModal = closeKeywordsModal;
+  window.kwParseBulk        = kwParseBulk;
+  window.kwSetFilter        = kwSetFilter;
+  window.kwUpdateBoost      = kwUpdateBoost;
+  window.kwToggleEnabled    = kwToggleEnabled;
+  window.kwDeleteRow        = kwDeleteRow;
+  window.kwSave             = kwSave;
+
+  /* --------------------------------------------------------------------------
      BOOTSTRAP
      -------------------------------------------------------------------------- */
   if (document.readyState === 'loading') {
