@@ -337,23 +337,24 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
 
       // ── Parse BK_* step events to determine routing tier ────────────
-      const bpfuqGate   = steps.find(s => s.type === 'BK_BPFUQ_GATE');
-      const tier1Step   = steps.find(s => s.type === 'BK_123RP_TIER1');
-      const tier1_5Step = steps.find(s => s.type === 'BK_123RP_TIER1_5_KC');
-      const tier2Step   = steps.find(s => s.type === 'BK_123RP_TIER2');
-      const tier3Step   = steps.find(s => s.type === 'BK_123RP_TIER3');
+      // 123RP (Tier 1 triggers / Tier 2 LLM / Tier 3 fallback) removed.
+      // Booking digressions now use BPFUQ exclusively (KC → services.html).
+      const bpfuqGate    = steps.find(s => s.type === 'BK_BPFUQ_GATE');
+      const bpfuqKcStep  = steps.find(s => s.type === 'BK_BPFUQ_KC_ANSWERED');
+      const bpfuqNoMatch = steps.find(s => s.type === 'BK_BPFUQ_KC_NO_MATCH');
+      // Legacy event names kept for backward compat with old call data
+      const legacyTier1_5 = steps.find(s => s.type === 'BK_123RP_TIER1_5_KC');
 
-      // Highest tier wins (T2 > T1.5 > T1 > T3 > BPFUQ > normal)
+      const kcDigressionStep = bpfuqKcStep || legacyTier1_5;
+
       let routingPath = 'BK_STEP_NORMAL';
       let routingTierNum = 0;
       if (bpfuqGate) {
         const c = bpfuqGate.consent;
         routingPath = c === 'YES' ? 'BK_BPFUQ_RESUME' : c === 'AMBIGUOUS' ? 'BK_BPFUQ_REASK' : 'BK_STEP_NORMAL';
       }
-      if (tier3Step)   { routingPath = 'BK_CANNED_FALLBACK'; routingTierNum = 3; }
-      if (tier1Step)   { routingPath = 'BK_TRIGGER_MATCH';   routingTierNum = 1; }
-      if (tier1_5Step) { routingPath = 'BK_KC_DIGRESSION';   routingTierNum = 1.5; }
-      if (tier2Step)   { routingPath = 'BK_LLM_INTERCEPT';   routingTierNum = 2; }
+      if (bpfuqNoMatch)      { routingPath = 'BK_BPFUQ_NO_MATCH'; routingTierNum = 1.5; }
+      if (kcDigressionStep)  { routingPath = 'BK_KC_DIGRESSION';   routingTierNum = 1.5; }
 
       turnData.routingTier = {
         tier:   routingTierNum,
@@ -361,13 +362,13 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         source: 'BOOKING_ENGINE',
       };
 
-      // ── KC digression (Tier 1.5) — container + KC ID ────────────────
-      if (tier1_5Step) {
+      // ── KC digression (BPFUQ) — container + KC ID ───────────────────
+      if (kcDigressionStep) {
         turnData.kcEngine = {
-          containerTitle: tier1_5Step.containerTitle || null,
-          containerId:    tier1_5Step.containerId    || null,
-          kcId:           tier1_5Step.kcId           || null,
-          matchScore:     null,    // keyword match in booking path — no numeric score
+          containerTitle: kcDigressionStep.containerTitle || null,
+          containerId:    kcDigressionStep.containerId    || null,
+          kcId:           kcDigressionStep.kcId           || null,
+          matchScore:     null,
           groqIntent:     'ANSWERED',
           groqLatencyMs:  null,
           groqResponse:   (bsp.nextPromptPreview || '').substring(0, 500) || null,
@@ -634,12 +635,12 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       if (turnData.ghostTurnInfo?.type === 'STT_EMPTY')  return 'STT_EMPTY';
 
       // ── BOOKING ENGINE lane outcomes (most specific — checked first) ──
+      // Digressions use BPFUQ (KC only) — no trigger or LLM paths.
       if (turnData.bookingStep) {
         if (turnData.bookingStep.isComplete)               return 'BOOKING_COMPLETE';
         const rp = turnData.routingTier?.path;
         if (rp === 'BK_KC_DIGRESSION')                    return 'BOOKING_KC_DIGRESSION';
-        if (rp === 'BK_TRIGGER_MATCH')                    return 'BOOKING_TRIGGER';
-        if (rp === 'BK_LLM_INTERCEPT')                    return 'BOOKING_LLM';
+        if (rp === 'BK_BPFUQ_NO_MATCH')                   return 'BPFUQ_NO_MATCH';
         if (rp === 'BK_BPFUQ_RESUME')                     return 'BPFUQ_RESUME';
         if (rp === 'BK_BPFUQ_REASK')                      return 'BPFUQ_REASK';
         return 'BOOKING_STEP';

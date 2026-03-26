@@ -402,49 +402,8 @@ async function runBookingLogicLane({
         });
     }
 
-    // ── GROQ T2 DIGRESSION HANDLER ────────────────────────────────────────
-    // When BookingLogicEngine signals t2Digression (caller asked a question
-    // mid-booking with no matching trigger), ask Groq to answer it in one
-    // sentence, then append the re-anchor phrase so the caller knows we still
-    // need their info.  Falls back to the canned nextPrompt on any error.
-    // ─────────────────────────────────────────────────────────────────────
-    if (bookingResult.t2Digression && !isComplete) {
-        const groqKey = process.env.GROQ_API_KEY;
-        if (groqKey && userInput?.trim()) {
-            try {
-                const { streamFull } = require('../../services/streaming/adapters/GroqStreamAdapter');
-                const reAnchor = bookingResult.reAnchorPhrase ||
-                                 bookingResult.pendingField?.reAnchorPhrase ||
-                                 'Can we continue with your booking?';
-
-                const groqResult = await streamFull({
-                    apiKey:      groqKey,
-                    model:       'llama-3.3-70b-versatile',
-                    maxTokens:   60,
-                    temperature: 0.3,
-                    system:      'You are a warm, helpful booking assistant. The caller asked a question mid-booking. Answer it in exactly one brief, helpful sentence. Do NOT ask for any information. Do NOT repeat the question. No filler openers.',
-                    messages:    [{ role: 'user', content: userInput }],
-                    callSid,
-                    turn
-                });
-
-                if (groqResult.response && !groqResult.failureReason) {
-                    bookingResult.nextPrompt = `${groqResult.response.trim()} ${reAnchor}`;
-                    bufferEvent('BOOKING_T2_GROQ_ANSWERED', {
-                        latencyMs:   groqResult.latencyMs,
-                        reAnchor,
-                        preview:     groqResult.response.substring(0, 80)
-                    });
-                }
-            } catch (groqErr) {
-                logger.warn('[BOOKING_LANE] Groq T2 digression failed — using canned response', {
-                    callSid, error: groqErr.message
-                });
-                bufferEvent('BOOKING_T2_GROQ_FAILED', { error: groqErr.message });
-            }
-        }
-    }
-    // ── END GROQ T2 ───────────────────────────────────────────────────────
+    // BPFUQ: digression questions during booking are handled exclusively by KC
+    // inside BookingLogicEngine. No Groq T2 LLM override needed here.
 
     // ── BOOKING COMPLETION WIRING ─────────────────────────────────────────
     // Fire-and-forget: persist BookingRequest, send SMS, notify admin.

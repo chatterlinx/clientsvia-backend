@@ -358,24 +358,24 @@ function initializeContext(payload, config) {
 
 async function processCurrentStep(ctx, userInput, config, companyId, isTest, events) {
 
-  // ── 123RP: STEP-FIRST ARCHITECTURE ───────────────────────────────────────
+  // ── BPFUQ: STEP-FIRST ARCHITECTURE ──────────────────────────────────────
   //
   // 1. Try to process as expected step input (step handler runs first).
-  // 2. If step did NOT advance AND input looks off-topic → 123RP cascade:
-  //      Tier 1: BookingTriggerMatcher (fast, deterministic)
-  //      Tier 2: BookingLLMInterceptService (single-turn LLM answer)
-  //      Tier 3: DigressionAck + current step re-anchor (safe fallback)
+  // 2. If step did NOT advance AND input looks off-topic → BPFUQ:
+  //      Go to KC (services.html containers) — the ONLY digression handler.
+  //      KC answers → BPFUQ records paused step → Gate 0 resumes next turn.
+  //      No KC match → graceful re-anchor to current booking step.
+  //      No triggers. No LLM fallback.
   // 3. Otherwise: return step result as-is.
   //
-  // DATA-ENTRY STEPS (phone, address, preferred day/time) never trigger 123RP —
-  // callers there are providing raw data, not expressing intent. Keyword matching
-  // against phone digits or city names produces dangerous false-positives.
+  // DATA-ENTRY STEPS (phone, address, preferred day/time) never trigger BPFUQ —
+  // callers there are providing raw data, not expressing intent.
   //
-  // Why step-first instead of trigger-first?
-  //   "John Smith"   at COLLECT_NAME → step handler extracts name → no 123RP needed.
-  //   "Today at 10"  at OFFER_TIMES  → step handler matches slot  → no 123RP needed.
-  //   "What if I change the battery?" at COLLECT_NAME → step fails → 123RP fires.
-  //   "What do you charge?"           at COLLECT_NAME → step fails → trigger matches → Tier 1.
+  // Why step-first?
+  //   "John Smith"   at COLLECT_NAME → step handler extracts name → no BPFUQ needed.
+  //   "Today at 10"  at OFFER_TIMES  → step handler matches slot  → no BPFUQ needed.
+  //   "What if I change the battery?" at COLLECT_NAME → step fails → BPFUQ fires.
+  //   "What do you charge?"           at COLLECT_NAME → step fails → KC answers it.
   // ─────────────────────────────────────────────────────────────────────────
 
   const DATA_ENTRY_STEPS = new Set([
@@ -393,8 +393,8 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // Now we detect whether the caller is ready to resume or has more questions.
   //
   //   YES      → clear BPFUQ, return step re-anchor (e.g. "What is the address?")
-  //   NO       → clear BPFUQ, fall through — let 123RP handle the new question
-  //              (Tier 1.5 will re-fire if it's another KC question → chains naturally)
+  //   NO       → clear BPFUQ, fall through — BPFUQ will re-fire if another KC question
+  //              (chains naturally: KC answers → BPFUQ set → Gate 0 next turn)
   //   AMBIGUOUS → keep BPFUQ alive, re-ask "Shall we get back to completing your booking?"
   // ─────────────────────────────────────────────────────────────────────────
   const bpfuq = BPFUQService.load(ctx);
@@ -458,11 +458,8 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // ── OFFER_TIMES scheduling bypass ────────────────────────────────────────
   // When the caller is choosing from presented time slots, short inputs or
   // inputs containing scheduling terms ("day", "time", "now", "when", etc.)
-  // are scheduling clarifications — NOT off-topic intent.  Running them through
-  // BookingTriggerMatcher causes dangerous keyword collisions observed in real
-  // calls:  "now" → emergency redirect,  "time" → service-duration trigger,
-  // "what" → bot-detection trigger.  Reset to day collection so the booking
-  // can retry with a fresh availability fetch, avoiding all false-positives.
+  // are scheduling clarifications — NOT off-topic intent. Reset to day
+  // collection so the booking can retry with a fresh availability fetch.
   if (prevSnap.step === STEPS.OFFER_TIMES) {
     const lc              = (userInput || '').toLowerCase().trim();
     const wordCount       = lc.split(/\s+/).length;
@@ -483,133 +480,76 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     }
   }
 
-  // ── STEP 2: Off-topic detected — run 123RP cascade ────────────────────────
+  // ── STEP 2: Off-topic question — BPFUQ ──────────────────────────────────
+  // All caller questions mid-booking route exclusively through KC (services.html).
+  // No triggers. No LLM fallback.
+  //
+  // KC answers → BPFUQ records the paused booking step → Gate 0 (top of this
+  // function) resumes booking next turn once the caller confirms they're done.
+  //
+  // No KC container match → clean re-anchor to current step question.
+  // The agent always knows exactly where booking was paused and returns there.
+  // ─────────────────────────────────────────────────────────────────────────
   events.push({
-    type:      'BK_123RP_START',
+    type:      'BK_BPFUQ_START',
     step:      prevSnap.step,
     input:     userInput.substring(0, 100),
     timestamp: Date.now()
   });
 
-  // ── Tier 1: Booking triggers ──────────────────────────────────────────────
   try {
-    const triggerResult = await BookingTriggerMatcher.match(userInput, companyId, prevSnap.step);
-
-    if (triggerResult.matched) {
-      const card            = triggerResult.card;
-      const triggerResponse = await buildTriggerResponse(card);
-
-      events.push({
-        type:      'BK_123RP_TIER1',
-        ruleId:    card.ruleId,
-        behavior:  triggerResult.behavior,
-        timestamp: Date.now()
-      });
-
-      // INFO / BLOCK — answer + return-to-booking prompt, hold current step
-      if (triggerResult.behavior === 'INFO' || triggerResult.behavior === 'BLOCK') {
-        // Use trigger's own followUpQuestion if configured; otherwise use standard return prompt
-        const followUp  = card.followUp?.question?.trim() || RETURN_TO_BOOKING_Q;
-        const fullText  = `${triggerResponse} ${followUp}`;
-
-        ctx.lastTriggerRuleId   = card.ruleId;
-        ctx.lastTriggerBehavior = triggerResult.behavior;
-        ctx.lastPath            = 'BK_TRIGGER_123RP';
-        if (triggerResult.behavior === 'BLOCK') ctx.blocked = true;
-
-        return {
-          nextPrompt: fullText,
-          bookingCtx: ctx,
-          completed:  false,
-          _triggerHit: { ruleId: card.ruleId, behavior: triggerResult.behavior },
-          _123rp:      { tier: 1, path: 'BK_TRIGGER_INFO' }
-        };
-      }
-
-      // REDIRECT — delegate to full handler (which now has required-field guard)
-      return handleBookingTriggerHit({ ctx, config, companyId, isTest, events, triggerResult, triggerResponse, userInput });
-    }
-  } catch (triggerErr) {
-    logger.warn(`[${ENGINE_ID}] 123RP Tier 1 trigger error — continuing to Tier 2`, {
-      companyId, step: prevSnap.step, error: triggerErr.message
-    });
-    events.push({ type: 'BL2_TRIGGER_ERROR', error: triggerErr.message, timestamp: Date.now() });
-  }
-
-  // ── Tier 1.5: KC knowledge digression (BPFUQ) ────────────────────────────
-  // Caller asked a knowledge/pricing question mid-booking.
-  // KCS answers with bookingOfferMode:'return_to_booking' so Groq naturally
-  // closes: "Does that help? Shall we get back to your booking?"
-  // BPFUQService records which step was interrupted — Gate 0 (top of
-  // processCurrentStep) intercepts next turn to detect consent and either
-  // re-anchor or fall through for another KC question.
-  // Calls KCS.answer() directly — NOT KCDiscoveryRunner — to stay in booking lane.
-  try {
-    if (KCS.detect(userInput)) {
-      const containers = await KCS.getActiveForCompany(companyId);
-      if (containers.length) {
-        const match = KCS.findContainer(containers, userInput);
-        if (match) {
-          const kcResult = await KCS.answer({
-            container:  match.container,
-            question:   userInput,
-            kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'return_to_booking' },
-            company:    { _id: companyId, companyName: config.companyName },
+    const containers = await KCS.getActiveForCompany(companyId);
+    if (containers.length) {
+      const match = KCS.findContainer(containers, userInput);
+      if (match) {
+        const kcResult = await KCS.answer({
+          container:  match.container,
+          question:   userInput,
+          kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'return_to_booking' },
+          company:    { _id: companyId, companyName: config.companyName },
+        });
+        if (kcResult?.response) {
+          // BPFUQ: record which booking step was paused.
+          // Gate 0 will intercept next turn to resume or chain another KC question.
+          BPFUQService.set(ctx, { step: prevSnap.step });
+          events.push({
+            type:           'BK_BPFUQ_KC_ANSWERED',
+            step:           prevSnap.step,
+            containerTitle: match.container.title,
+            containerId:    String(match.container._id),
+            kcId:           match.container.kcId || null,
+            timestamp:      Date.now()
           });
-          if (kcResult?.response) {
-            // Store BPFUQ — Gate 0 will handle the return-to-booking consent next turn
-            BPFUQService.set(ctx, { step: prevSnap.step });
-            events.push({ type: 'BK_123RP_TIER1_5_KC', step: prevSnap.step, containerTitle: match.container.title, containerId: String(match.container._id), kcId: match.container.kcId || null, timestamp: Date.now() });
-            ctx.lastPath = 'BK_KC_DIGRESSION';
-            return {
-              nextPrompt: kcResult.response,   // Groq already closed with return-to-booking invite
-              bookingCtx: ctx,
-              completed:  false,
-              _123rp:     { tier: 1.5, path: 'BK_KC_DIGRESSION', containerTitle: match.container.title }
-            };
-          }
+          ctx.lastPath = 'BK_KC_DIGRESSION';
+          return {
+            nextPrompt: kcResult.response,
+            bookingCtx: ctx,
+            completed:  false,
+            _123rp:     { tier: 1.5, path: 'BK_KC_DIGRESSION', containerTitle: match.container.title }
+          };
         }
       }
     }
   } catch (kcErr) {
-    logger.warn(`[${ENGINE_ID}] 123RP Tier 1.5 KC digression error — continuing to Tier 2`, {
+    logger.warn(`[${ENGINE_ID}] BPFUQ KC lookup failed`, {
       companyId, step: prevSnap.step, error: kcErr.message
     });
-    events.push({ type: 'BL2_KC_DIGRESSION_ERROR', error: kcErr.message, timestamp: Date.now() });
+    events.push({ type: 'BK_BPFUQ_KC_ERROR', error: kcErr.message, timestamp: Date.now() });
   }
 
-  // ── Tier 2: LLM intercept ─────────────────────────────────────────────────
-  const llmAnswer = await BookingLLMInterceptService.answer({
-    question:  userInput,
-    companyId,
-    ctx,
-    config
+  // No KC container matched — re-anchor cleanly to the current booking step.
+  events.push({
+    type:      'BK_BPFUQ_KC_NO_MATCH',
+    step:      prevSnap.step,
+    input:     userInput.substring(0, 60),
+    timestamp: Date.now()
   });
-
-  if (llmAnswer) {
-    events.push({ type: 'BK_123RP_TIER2', step: prevSnap.step, timestamp: Date.now() });
-    ctx.lastPath = 'BK_LLM_INTERCEPT';
-    return {
-      nextPrompt: `${llmAnswer} ${RETURN_TO_BOOKING_Q}`,
-      bookingCtx: ctx,
-      completed:  false,
-      _123rp:     { tier: 2, path: 'BK_LLM_INTERCEPT' }
-    };
-  }
-
-  // ── Tier 3: Fallback ──────────────────────────────────────────────────────
-  // LLM failed or timed out — acknowledge and re-anchor to current step.
-  events.push({ type: 'BK_123RP_TIER3', step: prevSnap.step, timestamp: Date.now() });
-  ctx.lastPath = 'BK_FALLBACK';
-
-  const reAnchor  = _getStepReAnchor(prevSnap.step, config);
-  const ackPhrase = config.t2DigressionAck || "Absolutely — let me make sure we get that handled.";
-
+  ctx.lastPath = 'BK_BPFUQ_NO_MATCH';
   return {
-    nextPrompt: `${ackPhrase} ${reAnchor}`,
+    nextPrompt: _getStepReAnchor(prevSnap.step, config),
     bookingCtx: ctx,
     completed:  false,
-    _123rp:     { tier: 3, path: 'BK_FALLBACK' }
+    _123rp:     { tier: 1.5, path: 'BK_BPFUQ_NO_MATCH' }
   };
 }
 

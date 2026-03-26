@@ -697,9 +697,8 @@
           const counts = intel.callContext?.turnOutcomeCounts;
           if (!counts || Object.keys(counts).length === 0) return '';
           const ORDER = ['KC_ANSWERED','KC_LLM_FALLBACK','TRIGGER_ANSWERED','LLM_ANSWERED',
-                         'INTAKE','BOOKING_STEP','BOOKING_KC_DIGRESSION','BOOKING_TRIGGER',
-                         'BOOKING_LLM','BOOKING_COMPLETE','BOOKING_HANDOFF',
-                         'BPFUQ_RESUME','BPFUQ_REASK',
+                         'INTAKE','BOOKING_STEP','BOOKING_KC_DIGRESSION','BOOKING_COMPLETE','BOOKING_HANDOFF',
+                         'BPFUQ_RESUME','BPFUQ_REASK','BPFUQ_NO_MATCH',
                          'GRACEFUL_ACK','GHOST_SKIPPED','STT_EMPTY','TRACE_ONLY','UNKNOWN'];
           const chips = ORDER
             .filter(k => counts[k])
@@ -2500,10 +2499,9 @@
       'BOOKING_STEP':          { label: 'BK STEP',       cls: 'outcome-booking'   },
       'BOOKING_COMPLETE':      { label: 'BK DONE ✓',     cls: 'outcome-bk-done'   },
       'BOOKING_KC_DIGRESSION': { label: 'BK KC',         cls: 'outcome-kc'        },
-      'BOOKING_TRIGGER':       { label: 'BK T1',         cls: 'outcome-trigger'   },
-      'BOOKING_LLM':           { label: 'BK T2',         cls: 'outcome-llm'       },
       'BPFUQ_RESUME':          { label: 'BPFUQ ↩',       cls: 'outcome-booking'   },
       'BPFUQ_REASK':           { label: 'BPFUQ ?',       cls: 'outcome-ghost'     },
+      'BPFUQ_NO_MATCH':        { label: 'BK NO KC',      cls: 'outcome-kc-llm'    },
       'LLM_ANSWERED':          { label: 'LLM',           cls: 'outcome-llm'       },
       'TRIGGER_ANSWERED':      { label: 'TRIGGER',       cls: 'outcome-trigger'   },
       'GHOST_SKIPPED':         { label: 'GHOST',         cls: 'outcome-ghost'     },
