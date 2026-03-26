@@ -217,6 +217,26 @@
         { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony via Deepgram; default = general purpose. phone_call recommended for all live calls.' },
       ],
 
+      // ── Twilio <Gather> wire map — every attribute sent at call time ────
+      // source: 'wired' = per-company, UI-configurable
+      //         'stt_builder' = computed by STTHintsBuilder from company keywords
+      //         'runtime' = computed per-request (URL, companyId etc)
+      //         'hardcoded' = fixed in v2twilio.js, never changes
+      gatherParams: [
+        { param: 'speechTimeout',               source: 'wired',       liveKey: 'speechTimeout',       unit: 's',    note: '⚡ END-OF-SPEECH SILENCE WAIT — dominant latency factor. Counts silence after caller stops talking. Nothing starts until this fires.' },
+        { param: 'timeout (initial)',            source: 'wired',       liveKey: 'initialTimeout',       unit: 's',    note: 'Max wait for caller to BEGIN speaking. No latency impact once caller starts.' },
+        { param: 'bargeIn',                      source: 'wired',       liveKey: 'bargeIn',              unit: 'bool', note: 'Caller can interrupt agent mid-response. OFF = caller must wait for full audio playback before speaking.' },
+        { param: 'speechModel',                  source: 'wired',       liveKey: 'speechModel',          unit: 'enum', note: 'STT provider & model. nova-2-phonecall / auto = Deepgram. phone_call / default = Google.' },
+        { param: 'enhanced',                     source: 'wired',       liveKey: 'enhancedRecognition',  unit: 'bool', note: 'Twilio Google enhanced model (~100ms cost). Auto-disabled when Deepgram (nova-2-phonecall/auto) is active — the two providers conflict.' },
+        { param: 'hints',                        source: 'stt_builder', liveKey: 'keywords',             unit: 'str',  note: 'STT vocabulary hints sent to Twilio. Built by STTHintsBuilder from company keywords. Deepgram: "phrase:boost" weighted format. Google: flat CSV.' },
+        { param: 'action',                       source: 'runtime',     value: '/api/twilio/v2-agent-respond/:companyId', note: 'Webhook URL Twilio POSTs the transcript to. Computed per request.' },
+        { param: 'partialResultCallback',        source: 'runtime',     value: '/api/twilio/v2-agent-partial/:companyId', note: 'URL for partial (streaming) transcript tokens — powers real-time partial display in Call Review.' },
+        { param: 'input',                        source: 'hardcoded',   value: 'speech',    note: 'Always speech for voice calls.' },
+        { param: 'method',                       source: 'hardcoded',   value: 'POST',      note: '' },
+        { param: 'partialResultCallbackMethod',  source: 'hardcoded',   value: 'POST',      note: '' },
+        { param: 'actionOnEmptyResult',          source: 'hardcoded',   value: 'true',      note: 'CRITICAL — fires webhook even if no speech detected. Without this, silence = no POST = Twilio hangs the call.' },
+      ],
+
       gaps: [
         '⚡ MS-CRITICAL — speechTimeout 1.5s adds 1,500ms to EVERY turn. This single number dominates all other pipeline latency combined. Evaluate lowering to 1.0s for 500ms improvement per turn.',
         'barge-in is off by default — caller cannot interrupt agent audio. When response is long (3+ sentences), caller waits the full playback duration before speaking. Consider enabling barge-in for Turn 2+ conversational turns.',
@@ -755,6 +775,34 @@
 
       if (!apiData) return enriched;
 
+      // STT Gather: populate gatherParams live values from speechDetection config
+      if (stage.id === 'stt_gather') {
+        const sd = apiData.pipeline?.speechDetection;
+        if (sd && enriched.gatherParams?.length) {
+          enriched.gatherParams = enriched.gatherParams.map(gp => {
+            if (gp.source !== 'wired' && gp.source !== 'stt_builder') return gp;
+            const updated = { ...gp };
+            if (gp.liveKey === 'keywords') {
+              // hints: show keyword count + format
+              const kws = (sd.keywords || []).filter(k => k.enabled !== false);
+              const model = sd.speechModel || 'phone_call';
+              const isDeepgram = (model === 'nova-2-phonecall' || model === 'auto');
+              updated.liveValue = kws.length > 0
+                ? `${kws.length} keyword${kws.length !== 1 ? 's' : ''} (${isDeepgram ? 'phrase:boost' : 'flat CSV'})`
+                : 'none — using trade/service fallback';
+            } else if (gp.liveKey === 'enhancedRecognition') {
+              const model = sd.speechModel || 'phone_call';
+              const isDeepgram = (model === 'nova-2-phonecall' || model === 'auto');
+              const raw = sd.enhancedRecognition !== false;
+              updated.liveValue = isDeepgram ? 'false (auto-disabled — Deepgram active)' : String(raw);
+            } else if (gp.liveKey !== undefined && sd[gp.liveKey] !== undefined) {
+              updated.liveValue = String(sd[gp.liveKey]);
+            }
+            return updated;
+          });
+        }
+      }
+
       // End-of-Speech Detection: populate live values from speechDetection config
       if (stage.id === 'stt_eosdetection') {
         const sd = apiData.pipeline?.speechDetection;
@@ -1195,6 +1243,38 @@
          </div>`
       : '';
 
+    // ── Gather parameters map ──────────────────────────────────────────
+    // Shows every attribute sent to Twilio <Gather>, colour-coded by source.
+    const gatherParamsHtml = stage.gatherParams?.length
+      ? (() => {
+          const sourceLabel = { wired: '✅ WIRED', stt_builder: '✅ WIRED', runtime: '🔧 RUNTIME', hardcoded: '— FIXED' };
+          const sourceCls   = { wired: 'gp-wired', stt_builder: 'gp-builder', runtime: 'gp-runtime', hardcoded: 'gp-fixed' };
+          const rows = stage.gatherParams.map(gp => {
+            const display = gp.liveValue !== undefined
+              ? `<span class="gp-live-value">${esc(gp.liveValue)}</span>`
+              : gp.value !== undefined
+                ? `<span class="gp-static-value">${esc(gp.value)}</span>`
+                : `<span class="gp-no-value">—</span>`;
+            const badge = `<span class="gp-source-badge ${sourceCls[gp.source] || ''}">${sourceLabel[gp.source] || gp.source}</span>`;
+            const note = gp.note ? `<span class="gp-note">${esc(gp.note)}</span>` : '';
+            return `<tr class="gp-row gp-row-${gp.source}">
+              <td class="gp-param"><code>${esc(gp.param)}</code></td>
+              <td class="gp-val">${display}</td>
+              <td class="gp-badge-cell">${badge}</td>
+              <td class="gp-note-cell">${note}</td>
+            </tr>`;
+          }).join('');
+          return `<div class="dp-section">
+            <div class="dp-section-label">🔌 Twilio &lt;Gather&gt; — All Parameters</div>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 10px 0;">Every attribute sent to Twilio at call time. <strong>WIRED</strong> = per-company, UI-configurable. <strong>RUNTIME</strong> = computed per request. <strong>FIXED</strong> = hardcoded in v2twilio.js.</p>
+            <table class="gp-table">
+              <thead><tr><th>Parameter</th><th>Current Value</th><th>Source</th><th>Notes</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+        })()
+      : '';
+
     // ── Config fields table ────────────────────────────────────────────
     const configFieldsHtml = stage.configFields?.length
       ? `<div class="dp-section">
@@ -1299,6 +1379,7 @@
           ` : ''}
 
           ${liveValuesHtml}
+          ${gatherParamsHtml}
           ${extractsHtml}
           ${gapsHtml}
           ${metaHtml}
