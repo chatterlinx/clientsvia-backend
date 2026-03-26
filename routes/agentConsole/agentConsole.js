@@ -1565,6 +1565,15 @@ router.patch(
               companyId,
               updatedKeys: Object.keys(value)
             });
+          } else if (key === 'speechDetection' && value && typeof value === 'object') {
+            // Deep-merge speechDetection — preserve keywords when saving timing settings and vice versa.
+            // If wholesale replaced, a keywords-only PATCH would wipe speechTimeout/bargeIn etc.
+            const existing = company.aiAgentSettings.agent2.speechDetection || {};
+            company.aiAgentSettings.agent2.speechDetection = { ...existing, ...value };
+            logger.info(`[${MODULE_ID}] speechDetection deep-merge applied`, {
+              companyId,
+              updatedKeys: Object.keys(value)
+            });
           } else {
             company.aiAgentSettings.agent2[key] = value;
           }

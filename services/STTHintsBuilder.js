@@ -24,48 +24,79 @@ class STTHintsBuilder {
      */
     static async buildHints(templateId, company = null) {
         try {
-            // Check cache first
-            const cacheKey = templateId?.toString() || 'default';
+            // Cache key is per-company when a company is provided — prevents cross-tenant hits.
+            const cacheKey = company?._id
+                ? `${company._id.toString()}:${templateId?.toString() || 'notemplate'}`
+                : (templateId?.toString() || 'default');
             const cached = hintsCache.get(cacheKey);
-            
+
             if (cached && Date.now() - cached.loadedAt < CACHE_TTL) {
                 return cached.hints;
             }
-            
+
+            // Detect STT provider from company speechDetection setting.
+            // Deepgram (nova-2-phonecall / auto): weighted "phrase:boost" format supported.
+            // Google (phone_call / default): flat CSV only — weights discarded.
+            const speechModel = company?.aiAgentSettings?.agent2?.speechDetection?.speechModel || 'phone_call';
+            const isDeepgram = (speechModel === 'nova-2-phonecall' || speechModel === 'auto');
+
             // Try to load from STT Profile
-            let hints = [];
-            
-            if (templateId) {
+            let hints = []; // flat phrases (unweighted portion)
+            let weightedHints = []; // { phrase, boost } — only used for Deepgram format
+
+            // ── Priority 1: Company-managed keywords in agent2 speechDetection ──────────
+            const companyKeywords = company?.aiAgentSettings?.agent2?.speechDetection?.keywords;
+            if (companyKeywords && companyKeywords.length > 0) {
+                const enabled = companyKeywords
+                    .filter(k => k.enabled !== false)
+                    .sort((a, b) => (b.boost || 3) - (a.boost || 3));
+
+                if (isDeepgram) {
+                    weightedHints = enabled.map(k => ({ phrase: k.phrase, boost: k.boost || 3 }));
+                } else {
+                    hints = enabled.map(k => k.phrase);
+                }
+
+                logger.debug('[STT HINTS] Using company keywords', {
+                    companyId: company._id,
+                    count: enabled.length,
+                    provider: speechModel
+                });
+
+            // ── Priority 2: STT Profile template keywords (legacy path) ─────────────────
+            } else if (templateId) {
                 const STTProfile = require('../models/STTProfile');
-                const profile = await STTProfile.findOne({ 
-                    templateId, 
-                    isActive: true 
+                const profile = await STTProfile.findOne({
+                    templateId,
+                    isActive: true
                 }).lean();
-                
+
                 if (profile && profile.provider?.useHints !== false) {
-                    // Get boosted keywords sorted by weight
                     const keywords = (profile.vocabulary?.boostedKeywords || [])
                         .filter(k => k.enabled)
-                        .sort((a, b) => (b.boostWeight || 5) - (a.boostWeight || 5))
-                        .map(k => k.phrase);
-                    
-                    hints = keywords;
-                    
+                        .sort((a, b) => (b.boostWeight || 5) - (a.boostWeight || 5));
+
+                    if (isDeepgram) {
+                        weightedHints = keywords.map(k => ({ phrase: k.phrase, boost: k.boostWeight || 5 }));
+                    } else {
+                        hints = keywords.map(k => k.phrase);
+                    }
+
                     logger.debug('[STT HINTS] Loaded from profile', {
                         templateId,
-                        keywordCount: hints.length
+                        keywordCount: hints.length || weightedHints.length
                     });
                 }
             }
-            
-            // Fallback: Build from company trade/services if no profile
-            if (hints.length === 0 && company) {
+
+            // ── Priority 3: Trade + service types fallback (no custom keywords, no profile) ─
+            if (hints.length === 0 && weightedHints.length === 0 && company) {
                 const tradeHints = company.trade ? [company.trade.toLowerCase()] : [];
                 const serviceHints = (company.aiAgentSettings?.serviceTypes || [])
                     .map(s => s.toLowerCase())
                     .filter(Boolean)
                     .slice(0, 10);
-                    
+
                 hints = [...tradeHints, ...serviceHints];
             }
             
@@ -126,18 +157,40 @@ class STTHintsBuilder {
                 'repair', 'maintenance', 'tune up', 'fix', 'broken', 'not working'
             ];
             
-            // Merge and deduplicate (include address hints + common names for booking flow)
+            // Merge and deduplicate the unweighted pool (defaults + address + names)
             // V87: commonNames added to prevent "Dustin" → "question" mishearing
-            const allHints = [...new Set([...hints, ...defaultHints, ...addressHints, ...commonNames])];
-            
-            // Build string with Twilio limit (1000 chars)
+            const flatHints = [...new Set([...hints, ...defaultHints, ...addressHints, ...commonNames])];
+
+            // Build hints string with 1,000-char Twilio budget.
+            // Deepgram: weighted keywords first ("phrase:boost"), then flat phrases.
+            // Google: flat CSV only.
             let hintsString = '';
-            for (const hint of allHints) {
-                const next = hintsString ? hintsString + ', ' + hint : hint;
-                if (next.length > 1000) break;
-                hintsString = next;
+
+            if (isDeepgram && weightedHints.length > 0) {
+                // Emit "phrase:boost" for custom keywords
+                for (const { phrase, boost } of weightedHints) {
+                    const token = `${phrase}:${boost}`;
+                    const next = hintsString ? hintsString + ', ' + token : token;
+                    if (next.length > 1000) break;
+                    hintsString = next;
+                }
+                // Fill remaining budget with flat hints (names, defaults, etc.)
+                const weightedPhrases = new Set(weightedHints.map(w => w.phrase.toLowerCase()));
+                for (const hint of flatHints) {
+                    if (weightedPhrases.has(hint.toLowerCase())) continue; // already included
+                    const next = hintsString ? hintsString + ', ' + hint : hint;
+                    if (next.length > 1000) break;
+                    hintsString = next;
+                }
+            } else {
+                // Google / legacy: flat CSV
+                for (const hint of flatHints) {
+                    const next = hintsString ? hintsString + ', ' + hint : hint;
+                    if (next.length > 1000) break;
+                    hintsString = next;
+                }
             }
-            
+
             // Cache the result
             hintsCache.set(cacheKey, {
                 hints: hintsString,

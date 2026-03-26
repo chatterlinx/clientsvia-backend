@@ -2021,15 +2021,16 @@ router.post('/voice', async (req, res) => {
       
       // 🐰 RABBIT HOLE CHECKPOINT #1: WHERE WILL GATHER SEND USER INPUT?
       const actionUrl = `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`;
-      // Build business-relevant hints from company trade/services
-      const tradeHints = company.trade ? [company.trade.toLowerCase()] : [];
-      const serviceHints = (company.aiAgentSettings?.serviceTypes || [])
-        .map(s => s.name?.toLowerCase())
-        .filter(Boolean)
-        .slice(0, 10); // Limit to 10 most important
-      const defaultHints = ['appointment', 'schedule', 'emergency', 'question', 'help'];
-      const hints = [...new Set([...tradeHints, ...serviceHints, ...defaultHints])].join(', ');
-      
+      // Build STT hints via STTHintsBuilder — reads per-company keywords from MongoDB,
+      // emits Deepgram "phrase:boost" format for nova-2-phonecall/auto, flat CSV for Google.
+      const hints = await STTHintsBuilder.buildHints(null, company);
+
+      // enhanced=true enables Twilio's Google-backed premium STT model.
+      // It must be false when using Deepgram (nova-2-phonecall / auto) — the two conflict.
+      const activeSpeechModel = speechDetection.speechModel ?? 'phone_call';
+      const isDeepgramProvider = (activeSpeechModel === 'nova-2-phonecall' || activeSpeechModel === 'auto');
+      const enhancedEnabled = isDeepgramProvider ? false : (speechDetection.enhancedRecognition ?? true);
+
       const gatherConfig = {
         input: 'speech',
         action: actionUrl,
@@ -2038,8 +2039,8 @@ router.post('/voice', async (req, res) => {
         bargeIn: speechDetection.bargeIn ?? false,
         timeout: speechDetection.initialTimeout ?? 7,
         speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
-        enhanced: speechDetection.enhancedRecognition ?? true,
-        speechModel: speechDetection.speechModel ?? 'phone_call',
+        enhanced: enhancedEnabled,
+        speechModel: activeSpeechModel,
         hints: hints,
         partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`,
         partialResultCallbackMethod: 'POST'

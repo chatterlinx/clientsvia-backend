@@ -794,12 +794,27 @@
                 : 'Standard Twilio model. Faster (~100ms saved). Monitor transcript quality on technical terms (model names, HVAC parts etc).',
             },
             {
-              label:  'Speech Model',
+              label:  'Speech Model / STT Provider',
               value:  sd.speechModel || 'phone_call',
               ms:     0,
               impact: 'none',
-              note:   'phone_call = optimized for PSTN telephony. Best choice for all live calls.',
+              note:   (sd.speechModel === 'nova-2-phonecall' || sd.speechModel === 'auto')
+                ? `Deepgram provider active — weighted hint format (phrase:boost) in use. Enhanced STT auto-disabled. Consider adding keywords in agent2.html → Manage Keywords.`
+                : 'Google STT provider. phone_call is optimized for PSTN. Switch to "auto" to enable Deepgram with automatic failover.',
             },
+            (() => {
+              const kws = (sd.keywords || []).filter(k => k.enabled !== false);
+              const isDeepgram = (sd.speechModel === 'nova-2-phonecall' || sd.speechModel === 'auto');
+              return {
+                label:  'STT Keywords',
+                value:  kws.length > 0 ? `${kws.length} active` : 'none',
+                ms:     0,
+                impact: kws.length > 0 ? 'low' : 'medium',
+                note:   kws.length === 0
+                  ? 'No custom keywords — generic hints only (trade name + service types). Add keywords in agent2.html → Manage Keywords to improve brand/symptom recognition.'
+                  : `${kws.length} custom keyword${kws.length !== 1 ? 's' : ''} sent as STT hints. Format: ${isDeepgram ? 'Deepgram weighted (phrase:boost)' : 'Google flat CSV'}.`,
+              };
+            })(),
           ];
           enriched.dynamicBadge = `⏳ ${sd.speechTimeout ?? 1.5}s → ${stMs.toLocaleString()}ms`;
           // Surface a gap if speechTimeout is above optimal

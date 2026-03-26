@@ -3940,7 +3940,17 @@ const companySchema = new mongoose.Schema({
                 initialTimeout:      { type: Number, min: 3,   max: 15,  default: 7   },
                 bargeIn:             { type: Boolean,                     default: false },
                 enhancedRecognition: { type: Boolean,                     default: true  },
-                speechModel:         { type: String, enum: ['default', 'numbers_and_commands', 'phone_call'], default: 'phone_call' }
+                speechModel:         { type: String, enum: ['default', 'numbers_and_commands', 'phone_call', 'auto', 'nova-2-phonecall', 'googlev2_telephony'], default: 'phone_call' },
+                // AC2: Per-company voice keywords — sent as Twilio STT hints at call time.
+                // Deepgram (nova-2-phonecall / auto): emitted as "phrase:boost" weighted format.
+                // Google (phone_call / default): emitted as flat CSV (Twilio ignores weights).
+                // Managed via agent2.html → "🎙️ Manage Voice Keywords" modal.
+                keywords: [{
+                    phrase:   { type: String, required: true },
+                    boost:    { type: Number, default: 3, min: 1, max: 10 },
+                    category: { type: String, enum: ['brand', 'symptom', 'technical', 'booking', 'custom'], default: 'custom' },
+                    enabled:  { type: Boolean, default: true }
+                }]
             },
             // V129: Real bridge (latency filler) settings
             // Two-phase TwiML: play a short bridge line, then Redirect to continue.

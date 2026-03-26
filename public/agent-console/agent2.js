@@ -61,6 +61,10 @@
   /* --------------------------------------------------------------------------
      STATE
      -------------------------------------------------------------------------- */
+  // ─── Voice Keywords modal working state ────────────────────────────────────
+  let kwState = [];       // working copy of keywords array while modal is open
+  let kwFilter = 'all';   // active category tab filter
+
   const state = {
     companyId: null,
     companyName: null,
@@ -550,6 +554,7 @@
     if (DOM.inputSpeechBargeIn) DOM.inputSpeechBargeIn.checked = speechDet.bargeIn === true;
     if (DOM.inputSpeechEnhanced) DOM.inputSpeechEnhanced.checked = speechDet.enhancedRecognition !== false;
     if (DOM.inputSpeechModel) DOM.inputSpeechModel.value = speechDet.speechModel || 'phone_call';
+    kwUpdateCountBadge(speechDet.keywords || []);
     updateSpeechImpactPreview();
 
     // Consent phrases
@@ -1907,6 +1912,215 @@
       btn.disabled = false;
       btn.textContent = 'Refresh';
     }
+  }
+
+  /* --------------------------------------------------------------------------
+     VOICE KEYWORDS MODAL
+     Manages per-company STT hint keywords. Deepgram: phrase:boost format.
+     Google: flat CSV. Deep-merge PATCH keeps timing settings safe.
+     -------------------------------------------------------------------------- */
+
+  /** Open the keywords modal — copies saved keywords into working state */
+  function openKeywordsModal() {
+    const saved = state.config?.speechDetection?.keywords || [];
+    kwState = saved.map(k => ({ ...k })); // shallow clone each item
+    kwFilter = 'all';
+    kwRenderTable();
+    kwUpdatePreview();
+    kwSetFilterActive('all');
+    document.getElementById('modal-voice-keywords').classList.add('active');
+  }
+
+  /** Close the keywords modal — discard working state */
+  function closeKeywordsModal() {
+    document.getElementById('modal-voice-keywords').classList.remove('active');
+    kwState = [];
+  }
+
+  /** Parse bulk textarea input, add new keywords to working state */
+  function kwParseBulk() {
+    const raw = document.getElementById('kw-bulk-input')?.value || '';
+    const category = document.getElementById('kw-bulk-category')?.value || 'custom';
+    const boost = parseInt(document.getElementById('kw-bulk-boost')?.value, 10) || 3;
+
+    const phrases = raw.split(',').map(p => p.trim()).filter(Boolean);
+    const existing = new Set(kwState.map(k => k.phrase.toLowerCase()));
+    let added = 0;
+
+    for (const phrase of phrases) {
+      if (!phrase || existing.has(phrase.toLowerCase())) continue;
+      kwState.push({ phrase, boost, category, enabled: true });
+      existing.add(phrase.toLowerCase());
+      added++;
+    }
+
+    if (document.getElementById('kw-bulk-input')) document.getElementById('kw-bulk-input').value = '';
+    kwRenderTable();
+    kwUpdatePreview();
+    if (added > 0) showToast('success', 'Keywords Added', `${added} keyword${added !== 1 ? 's' : ''} added.`);
+    else showToast('info', 'No New Keywords', 'All phrases already exist or input was empty.');
+  }
+
+  /** Set active category tab filter and re-render table */
+  function kwSetFilter(filter, btnEl) {
+    kwFilter = filter;
+    kwSetFilterActive(filter);
+    kwRenderTable();
+  }
+
+  function kwSetFilterActive(filter) {
+    document.querySelectorAll('.kw-tab-btn').forEach(btn => {
+      const isActive = btn.dataset.filter === filter;
+      btn.style.background = isActive ? 'var(--primary, #4f46e5)' : 'transparent';
+      btn.style.color = isActive ? '#fff' : 'var(--text-secondary)';
+      btn.style.borderColor = isActive ? 'var(--primary, #4f46e5)' : 'var(--border-color, #e5e7eb)';
+    });
+  }
+
+  /** Render keywords table body, applying current filter */
+  function kwRenderTable() {
+    const tbody = document.getElementById('kw-table-body');
+    if (!tbody) return;
+
+    const filtered = kwState
+      .map((kw, idx) => ({ ...kw, _idx: idx }))
+      .filter(kw => kwFilter === 'all' || kw.category === kwFilter);
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr id="kw-empty-row"><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-style:italic;">${kwState.length === 0 ? 'No keywords yet — use Bulk Import above to add your first batch.' : `No keywords in category "<strong>${kwFilter}</strong>".`}</td></tr>`;
+      return;
+    }
+
+    const categoryColors = { brand: '#7c3aed', symptom: '#dc2626', technical: '#2563eb', booking: '#059669', custom: '#6b7280' };
+    tbody.innerHTML = filtered.map(kw => {
+      const color = categoryColors[kw.category] || '#6b7280';
+      return `<tr style="border-bottom: 1px solid var(--border-color, #e5e7eb);">
+        <td style="padding: 8px 12px; font-size: 0.83rem;">${escapeHtml(kw.phrase)}</td>
+        <td style="padding: 8px 12px;">
+          <span style="font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: ${color}22; color: ${color};">${kw.category}</span>
+        </td>
+        <td style="padding: 8px 12px; text-align: center;">
+          <input type="number" min="1" max="10" value="${kw.boost || 3}"
+            onchange="kwUpdateBoost(${kw._idx}, this.value)"
+            style="width: 52px; text-align: center; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 4px;">
+        </td>
+        <td style="padding: 8px 12px; text-align: center;">
+          <input type="checkbox" ${kw.enabled !== false ? 'checked' : ''} onchange="kwToggleEnabled(${kw._idx}, this.checked)">
+        </td>
+        <td style="padding: 8px 12px; text-align: center;">
+          <button type="button" onclick="kwDeleteRow(${kw._idx})" style="background:transparent;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;line-height:1;">×</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  /** Update boost value for a keyword at index */
+  function kwUpdateBoost(idx, val) {
+    if (kwState[idx]) {
+      kwState[idx].boost = Math.max(1, Math.min(10, parseInt(val, 10) || 3));
+      kwUpdatePreview();
+    }
+  }
+
+  /** Toggle enabled state for a keyword */
+  function kwToggleEnabled(idx, checked) {
+    if (kwState[idx]) {
+      kwState[idx].enabled = checked;
+      kwUpdatePreview();
+    }
+  }
+
+  /** Delete a keyword by index */
+  function kwDeleteRow(idx) {
+    kwState.splice(idx, 1);
+    kwRenderTable();
+    kwUpdatePreview();
+  }
+
+  /** Compute client-side hints preview string (mirrors STTHintsBuilder logic) */
+  function kwUpdatePreview() {
+    const totalCount = kwState.length;
+    const enabledKws = kwState.filter(k => k.enabled !== false).sort((a, b) => (b.boost || 3) - (a.boost || 3));
+
+    // Detect provider
+    const speechModel = DOM.inputSpeechModel?.value || state.config?.speechDetection?.speechModel || 'phone_call';
+    const isDeepgram = (speechModel === 'nova-2-phonecall' || speechModel === 'auto');
+
+    // Build preview string (custom keywords only — defaults/names handled server-side)
+    let preview = '';
+    if (isDeepgram) {
+      for (const kw of enabledKws) {
+        const token = `${kw.phrase}:${kw.boost || 3}`;
+        const next = preview ? preview + ', ' + token : token;
+        if (next.length > 800) { preview = next.substring(0, 797) + '...'; break; } // leave budget for defaults
+        preview = next;
+      }
+    } else {
+      for (const kw of enabledKws) {
+        const next = preview ? preview + ', ' + kw.phrase : kw.phrase;
+        if (next.length > 800) { preview = next.substring(0, 797) + '...'; break; }
+        preview = next;
+      }
+    }
+    if (preview) preview += ', … (+ defaults & names)';
+
+    // Update UI
+    const pct = Math.min(100, Math.round((preview.length / 1000) * 100));
+    if (document.getElementById('kw-modal-count')) document.getElementById('kw-modal-count').textContent = totalCount;
+    if (document.getElementById('kw-budget-pct')) document.getElementById('kw-budget-pct').textContent = pct;
+    if (document.getElementById('kw-provider-note')) {
+      document.getElementById('kw-provider-note').textContent = isDeepgram
+        ? `${speechModel} (Deepgram — weighted phrase:boost)`
+        : `${speechModel} (Google — flat CSV, weights ignored)`;
+    }
+    if (document.getElementById('kw-hints-preview')) {
+      document.getElementById('kw-hints-preview').textContent = preview || '(no custom keywords — defaults only)';
+    }
+  }
+
+  /** Update the count badge in the Speech Detection card */
+  function kwUpdateCountBadge(keywords) {
+    const badge = document.getElementById('kw-count-badge');
+    if (!badge) return;
+    const enabled = (keywords || []).filter(k => k.enabled !== false).length;
+    if (enabled > 0) {
+      badge.textContent = `${enabled} keyword${enabled !== 1 ? 's' : ''}`;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  /** Save keywords — PATCH only the keywords array (deep-merge preserves timing settings) */
+  async function kwSave() {
+    const btn = document.getElementById('btn-save-keywords');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    try {
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`, {
+        method: 'PATCH',
+        body: { speechDetection: { keywords: kwState } }
+      });
+
+      // Update local state
+      if (!state.config.speechDetection) state.config.speechDetection = {};
+      state.config.speechDetection.keywords = kwState.map(k => ({ ...k }));
+      kwUpdateCountBadge(state.config.speechDetection.keywords);
+
+      closeKeywordsModal();
+      showToast('success', 'Saved', `${kwState.length} keyword${kwState.length !== 1 ? 's' : ''} saved successfully.`);
+
+    } catch (err) {
+      console.error('[Agent2] Keywords save failed:', err);
+      showToast('error', 'Save Failed', 'Could not save keywords.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Keywords'; }
+    }
+  }
+
+  /** Simple HTML escape helper */
+  function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   /* --------------------------------------------------------------------------
