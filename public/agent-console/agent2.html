@@ -439,24 +439,24 @@
                 <p class="form-hint">Off = agent must finish speaking before caller can respond. Recommended: <strong>off</strong>.</p>
               </div>
               <div class="form-group mb-0">
-                <label class="form-label">Enhanced Recognition</label>
+                <label class="form-label">Enhanced Recognition <span style="font-size:0.7rem;font-weight:400;color:var(--text-muted)">(Google only)</span></label>
                 <label style="display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
                   <input type="checkbox" id="input-speech-enhanced">
-                  <span>Use Twilio enhanced STT</span>
+                  <span>Use Google enhanced tier</span>
                 </label>
-                <p class="form-hint">Higher accuracy but adds ~100ms. Recommended: <strong>on</strong> for conversational calls.</p>
+                <p class="form-hint"><strong>Google STT only</strong> — activates Google's premium model tier inside Twilio. Adds ~100ms per turn. Has no effect when provider is Deepgram (<code>auto</code> / <code>nova-2-phonecall</code>) — automatically disabled.</p>
               </div>
               <div class="form-group mb-0">
                 <label class="form-label">Speech Model / STT Provider</label>
                 <select class="form-input" id="input-speech-model" style="margin-top: 6px;">
                   <option value="phone_call">phone_call — Google (current default)</option>
-                  <option value="auto">auto — Twilio picks best, Deepgram failover (recommended)</option>
-                  <option value="nova-2-phonecall">nova-2-phonecall — Deepgram Nova-2 (best accuracy)</option>
+                  <option value="auto">auto — Deepgram Nova-2, Google failover (recommended)</option>
+                  <option value="nova-2-phonecall">nova-2-phonecall — Deepgram Nova-2 only</option>
                   <option value="googlev2_telephony">googlev2_telephony — Google Telephony v2</option>
                   <option value="default">default</option>
                   <option value="numbers_and_commands">numbers_and_commands</option>
                 </select>
-                <p class="form-hint">Deepgram (<code>auto</code> / <code>nova-2-phonecall</code>) supports weighted keyword hints and has lower word error rates. Enhanced STT auto-disables when Deepgram is active.</p>
+                <p class="form-hint"><strong>Switch provider here.</strong> <code>auto</code> = Deepgram Nova-2 as primary, Google as failover (best option). <code>nova-2-phonecall</code> = Deepgram only. Deepgram has lower word error rates and supports weighted keyword hints — Google Enhanced checkbox auto-disables when active.</p>
               </div>
             </div>
 
