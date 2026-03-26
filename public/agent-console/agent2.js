@@ -555,6 +555,7 @@
     if (DOM.inputSpeechEnhanced) DOM.inputSpeechEnhanced.checked = speechDet.enhancedRecognition !== false;
     if (DOM.inputSpeechModel) DOM.inputSpeechModel.value = speechDet.speechModel || 'phone_call';
     kwUpdateCountBadge(speechDet.keywords || []);
+    updateEnhancedStateForProvider(); // dim checkbox if Deepgram is active
     updateSpeechImpactPreview();
 
     // Consent phrases
@@ -688,9 +689,40 @@
     DOM.speechImpactTip.textContent = tip;
   }
 
+  /**
+   * When Speech Model switches to Deepgram (auto / nova-2-phonecall),
+   * visually disable the Enhanced Recognition checkbox — it has no effect
+   * and is auto-forced to false at runtime. Makes it clear to the user.
+   */
+  function updateEnhancedStateForProvider() {
+    const model = DOM.inputSpeechModel?.value || 'phone_call';
+    const isDeepgram = (model === 'nova-2-phonecall' || model === 'auto');
+    const enhancedCheckbox = DOM.inputSpeechEnhanced;
+    const enhancedLabel = enhancedCheckbox?.closest('.form-group');
+
+    if (!enhancedCheckbox) return;
+
+    if (isDeepgram) {
+      enhancedCheckbox.disabled = true;
+      if (enhancedLabel) {
+        enhancedLabel.style.opacity = '0.45';
+        enhancedLabel.title = 'Auto-disabled — has no effect when Deepgram (auto / nova-2-phonecall) is active';
+      }
+    } else {
+      enhancedCheckbox.disabled = false;
+      if (enhancedLabel) {
+        enhancedLabel.style.opacity = '';
+        enhancedLabel.title = '';
+      }
+    }
+  }
+
   function initSpeechDetectionListeners() {
     if (DOM.inputSpeechTimeout) {
       DOM.inputSpeechTimeout.addEventListener('input', updateSpeechImpactPreview);
+    }
+    if (DOM.inputSpeechModel) {
+      DOM.inputSpeechModel.addEventListener('change', updateEnhancedStateForProvider);
     }
   }
 
