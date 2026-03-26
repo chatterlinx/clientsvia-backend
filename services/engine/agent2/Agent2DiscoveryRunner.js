@@ -104,7 +104,8 @@ const PricingConversationService  = require('./PricingConversationService');   /
 const KnowledgeContainerService   = require('./KnowledgeContainerService');    // 🧠 Unified knowledge Q&A — fires first in all intercept paths
 const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
-const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt } = require('../../../config/llmAgentDefaults');
+const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt, composeIntakeExtractionPrompt, composeIntakeResponsePrompt } = require('../../../config/llmAgentDefaults');
+const GroqStreamAdapter = require('../../streaming/adapters/GroqStreamAdapter');
 const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
 const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
@@ -908,6 +909,79 @@ function extractYamlLike(rawResponse) {
 // The caller (run()) is responsible for writing state to match ScrabEngine format.
 // ────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SPLIT-CALL HELPER: Phase 1 — Entity Extraction (Groq 8b, ~30ms)
+// Called only when intakeConfig.splitCalls.enabled = true.
+// Returns extraction object on success, or safe empty object on any failure.
+// All errors are non-fatal — caller always continues to Phase 2.
+// ─────────────────────────────────────────────────────────────────────────────
+async function _extractIntakeEntities({ input, llmConfig, intakeConfig, apiKey, callSid, turn, emit }) {
+  const FUNC_TAG = '[LLM_INTAKE_EXTRACT]';
+  const extractionModel = intakeConfig.splitCalls?.extractionModel || 'llama-3.1-8b-instant';
+  const EMPTY = { extraction: {}, confidence: {}, nextLane: 'DISCOVERY_CONTINUE', doNotReask: [], latencyMs: 0 };
+
+  try {
+    const systemPrompt = composeIntakeExtractionPrompt(llmConfig, intakeConfig, 'call');
+    const t0 = Date.now();
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       extractionModel,
+      maxTokens:   350,         // extraction JSON needs ~200-300 tokens
+      temperature: 0.1,         // very low — deterministic extraction
+      system:      systemPrompt,
+      messages:    [{ role: 'user', content: input }],
+      callSid,
+      turn,
+      jsonMode:    true,
+    });
+
+    const latencyMs = Date.now() - t0;
+
+    if (!result?.response) {
+      logger.warn(`${FUNC_TAG} No response from extraction model`, { callSid, turn, latencyMs });
+      return { ...EMPTY, latencyMs };
+    }
+
+    // Parse JSON — try clean parse, then strip code fences
+    let parsed = null;
+    try {
+      parsed = JSON.parse(result.response);
+    } catch (_) {
+      const cleaned = result.response
+        .replace(/^```(?:json)?\s*/m, '')
+        .replace(/\s*```\s*$/m, '')
+        .trim();
+      try { parsed = JSON.parse(cleaned); } catch (_inner) { /* fall through */ }
+    }
+
+    if (!parsed?.extraction) {
+      logger.warn(`${FUNC_TAG} JSON parse failed on extraction — using empty`, { responsePreview: clip(result.response, 120), callSid, turn });
+      return { ...EMPTY, latencyMs };
+    }
+
+    const entitiesFound = Object.keys(parsed.extraction).filter(k => parsed.extraction[k] != null).length;
+    emit('A2_LLM_INTAKE_EXTRACT_DONE', {
+      model:          extractionModel,
+      latencyMs,
+      entitiesFound,
+      nextLane:       parsed.nextLane || 'DISCOVERY_CONTINUE',
+    });
+    logger.info(`${FUNC_TAG} ✅ Extraction complete`, { latencyMs, entitiesFound, nextLane: parsed.nextLane, callSid });
+
+    return {
+      extraction: parsed.extraction || {},
+      confidence: parsed.confidence || {},
+      nextLane:   parsed.nextLane   || 'DISCOVERY_CONTINUE',
+      doNotReask: Array.isArray(parsed.doNotReask) ? parsed.doNotReask : [],
+      latencyMs,
+    };
+  } catch (err) {
+    logger.warn(`${FUNC_TAG} Extraction call failed — returning empty (non-fatal)`, { error: err.message, callSid, turn });
+    return EMPTY;
+  }
+}
+
 async function callLLMAgentForIntake({ company, input, channel, turn, emit, callSid, bridgeToken, redis, onSentence = null }) {
   const FUNC_TAG = '[LLM_INTAKE]';
 
@@ -1006,6 +1080,112 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
       inputPreview: clip(input, 80),
       turn,
     });
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SPLIT-CALL PATH: two sequential Groq calls when splitCalls.enabled=true
+    //
+    // Phase 1 (Groq 8b, ~30ms, blocking):  JSON entity extraction only
+    // Phase 2 (Groq 70b, streaming):        Plain-text response with entities known
+    //
+    // Benefit: 70b generates natural speech unconstrained by JSON structure.
+    //          onSentence fires on the FIRST plain-text token — no JSON prefix.
+    //          First Sentence → ElevenLabs path is ~30ms faster.
+    // ════════════════════════════════════════════════════════════════════════
+    if (intakeConfig.splitCalls?.enabled && groqKey) {
+      const responseModel = intakeConfig.splitCalls?.responseModel || 'llama-3.3-70b-versatile';
+
+      // ── Phase 1: Entity extraction (~30ms, blocks) ────────────────────────
+      const entityResult = await _extractIntakeEntities({
+        input, llmConfig, intakeConfig,
+        apiKey:   groqKey,
+        callSid,  turn,   emit,
+      });
+
+      // ── Early discoveryNotes write (fire-and-forget) ──────────────────────
+      // Turn 2 has entities even if Phase 2 is slow or partial
+      const companyId = company?._id?.toString() || company?.companyId || '';
+      if (companyId && callSid) {
+        DiscoveryNotesService.update(companyId, callSid, entityResult.extraction).catch(() => {});
+      }
+
+      // ── Phase 2: Response generation (streaming — onSentence → ElevenLabs) ─
+      const responseSystemPrompt = composeIntakeResponsePrompt(
+        llmConfig, entityResult.extraction, intakeConfig, channel || 'call'
+      );
+
+      emit('A2_LLM_INTAKE_RESPONSE_CALL', {
+        model:    responseModel,
+        provider: 'groq',
+        entitiesFromPhase1: Object.keys(entityResult.extraction).filter(k => entityResult.extraction[k] != null).length,
+        nextLane: entityResult.nextLane,
+        turn,
+      });
+
+      const responseResult = await streamWithSentences({
+        apiKey:        groqKey,
+        provider:      'groq',
+        model:         responseModel,
+        maxTokens:     intakeConfig.model?.maxTokens || 300,
+        temperature:   0.6,          // natural conversational tone
+        system:        responseSystemPrompt,
+        messages:      [{ role: 'user', content: input }],
+        callSid,
+        turn,
+        token:         bridgeToken,
+        redis,
+        emit,
+        onSentence,               // ⚡ CRITICAL: fires first sentence → ElevenLabs TTS
+        skipResultKey: false,     // plain text — writes directly to bridge result key
+        jsonMode:      false,     // plain text, no JSON constraints
+      });
+
+      if (!responseResult?.response) {
+        // Phase 2 failed — fall through to single-call path below
+        logger.warn(`${FUNC_TAG} Split-call Phase 2 returned no response — falling through to single-call path`, { callSid, turn });
+        emit('A2_LLM_INTAKE_SPLIT_PHASE2_FAILED', { callSid, turn });
+        // intentional fall-through: do NOT return here
+      } else {
+        // ── Build result in the same shape as the single-call path ────────
+        const VALID_LANES = ['BOOKING_HANDOFF', 'DISCOVERY_CONTINUE', 'TRANSFER', 'UNKNOWN'];
+        const nextLane = VALID_LANES.includes(entityResult.nextLane) ? entityResult.nextLane : 'DISCOVERY_CONTINUE';
+
+        const splitParsed = {
+          responseText:    responseResult.response,
+          extraction:      entityResult.extraction,
+          confidence:      entityResult.confidence,
+          nextLane,
+          doNotReask:      entityResult.doNotReask,
+          askedConsent:    false,   // TODO: can detect from responseText if needed
+          consentQuestion: null,
+        };
+
+        const totalLatency = (entityResult.latencyMs || 0) + (responseResult.latencyMs || 0);
+
+        emit('A2_LLM_AGENT_RESPONSE', {
+          mode:              'TIER_2_INTAKE_SPLIT',
+          latencyMs:         totalLatency,
+          latencyExtractMs:  entityResult.latencyMs,
+          latencyResponseMs: responseResult.latencyMs,
+          model:             `${intakeConfig.splitCalls?.extractionModel || '8b'} + ${responseModel}`,
+          responsePreview:   clip(splitParsed.responseText, 120),
+          wasPartial:        responseResult.wasPartial,
+          nextLane,
+          entitiesExtracted: Object.keys(splitParsed.extraction).filter(k => splitParsed.extraction[k] != null).length,
+          doNotReaskCount:   splitParsed.doNotReask.length,
+        });
+
+        return {
+          ...splitParsed,
+          tokensUsed: responseResult.tokensUsed || { input: 0, output: 0 },
+          latencyMs:  totalLatency,
+          wasPartial: responseResult.wasPartial,
+        };
+      }
+    }
+    // ════════════════════════════════════════════════════════════════════════
+    // SINGLE-CALL PATH (legacy): one streaming call returns JSON + responseText
+    // Active when splitCalls.enabled=false OR groqKey unavailable OR Phase 2 failed
+    // ════════════════════════════════════════════════════════════════════════
 
     // ── Sentence-streaming — first sentence fires TTS immediately ───────────
     // skipResultKey=true: intake returns structured JSON/YAML — never write raw

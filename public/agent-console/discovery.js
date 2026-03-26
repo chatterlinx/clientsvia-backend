@@ -186,7 +186,7 @@
       order:    5,
       icon:     '🎙️',
       name:     'STT — Deepgram via Twilio Gather',
-      subtitle: 'Twilio <Gather> captures speech → Deepgram transcribes → transcript flows to ScrabEngine',
+      subtitle: 'Twilio <Gather> captures speech → Deepgram transcribes → raw transcript flows to Turn 1 entity extraction',
       status:   'wired',
       group:    'Call Receipt',
 
@@ -196,7 +196,7 @@
       provider: 'Deepgram (via Twilio speech recognition integration)',
       model:    'Configurable via speechModel setting (phone_call recommended)',
       fires:    'Every turn — after greeting, after every agent response.',
-      writesTo: 'req.body.SpeechResult → ScrabEngine → downstream stages',
+      writesTo: 'req.body.SpeechResult → Turn 1 entity extraction (Stage 7) → downstream stages',
       wiredIn:  ['routes/v2twilio.js — /v2-agent (greeting gather)', 'routes/v2twilio.js — /v2-agent-sentence-continue (post-response gather)'],
       configIn:  'Speech Detection — Agent 2.0 Settings',
       configUrl: 'agent2.html',
@@ -250,26 +250,30 @@
     // GROUP C — TURN 1: LLM INTAKE
     // ════════════════════════════════════════════════════════════════════════
 
-    // ── [3] LLM Intake (Turn 1) ──────────────────────────────────────────
+    // ── [7] Turn 1 — Entity Extraction (Groq 8b) ─────────────────────────
     {
       id:       'llm_intake',
       order:    7,
-      icon:     '🧠',
-      name:     'LLM Intake — Entity Extraction',
-      subtitle: 'Groq extracts who is calling and why — builds discoveryNotes profile for all downstream stages',
-      status:   'partial',
+      icon:     '🔬',
+      name:     'Turn 1 — Entity Extraction',
+      subtitle: 'llama-3.1-8b-instant extracts caller entities as JSON in ~30ms: name, call reason, urgency, prior visit',
+      status:   'wired',
       group:    'Turn 1 — LLM Intake',
 
-      why: 'This is the brain of Turn 1. Groq (llama-3.1-70b-versatile) reads the caller\'s first utterance and extracts structured data: name, call reason, urgency, prior visit, same-day request, caller type. This profile is written to discoveryNotes (Redis, TTL=4h) and injected into every subsequent LLM prompt — it is why the agent remembers context across turns and does not ask the same question twice.',
+      why: 'Split-Call Phase 1. The 8b model is given a single task: extract structured data from the caller\'s first utterance. It returns pure JSON — no response text. By separating extraction from response generation, each model does exactly what it\'s optimised for. The 8b model is ~10× faster than 70b for this structured task (~30ms), and JSON mode is reliable at this model size. Extracted entities flow directly into Phase 2\'s system prompt so the 70b model can greet the caller by name and acknowledge their specific problem.',
 
-      engine:   'HybridReceptionistLLM — LLM_INTAKE_TURN_1',
+      engine:   'Agent2DiscoveryRunner — _extractIntakeEntities() → callLLMAgentForIntake() Split Phase 1',
       provider: 'Groq',
-      model:    'llama-3.1-70b-versatile',
-      fires:    'Turn 1 only. KC engine updates callReason + objective on subsequent turns.',
-      writesTo: 'discoveryNotes (Redis: discovery-notes:{companyId}:{callSid}, TTL=4h) → MongoDB Customer.discoveryNotes[] at call end',
-      wiredIn:  ['services/HybridReceptionistLLM.js — _buildIntakePrompt()', 'services/discoveryNotes/DiscoveryNotesService.js'],
-      configIn:  null,
-      configUrl: null,
+      model:    'llama-3.1-8b-instant',
+      fires:    'Turn 1 only. Blocking (~30ms). Runs BEFORE response generation. Falls through to single-call path on error.',
+      writesTo: 'entityResult → injected into Phase 2 system prompt + early discoveryNotes.update() fire-and-forget',
+      wiredIn:  [
+        'services/engine/agent2/Agent2DiscoveryRunner.js — _extractIntakeEntities()',
+        'config/llmAgentDefaults.js — composeIntakeExtractionPrompt()',
+        'services/streaming/adapters/GroqStreamAdapter.js — streamFull()',
+      ],
+      configIn:  'LLM Agent Settings — Intake > Split Calls',
+      configUrl: 'llmagent.html',
 
       extracts: [
         { field: 'entities.firstName',  label: 'First Name',        status: 'active'  },
@@ -279,68 +283,74 @@
         { field: 'priorVisit',          label: 'Prior Visit Flag',  status: 'active'  },
         { field: 'sameDayRequested',    label: 'Same-Day Request',  status: 'active'  },
         { field: 'callerType',          label: 'Caller Type',       status: 'active'  },
-        { field: 'employeeMentioned',   label: 'Employee Mentioned',status: 'gap'     },
+        { field: 'employeeMentioned',   label: 'Employee Mentioned',status: 'active'  },
       ],
 
       gaps: [
-        'employeeMentioned: Caller says "Hi John" (greeting an employee by name) — field stays null. Agent cannot acknowledge prior employee relationships. Fix: add employeeMentioned extraction to the intake prompt schema.',
-        'No Turn 1 booking gate: If caller\'s first utterance is a pure booking signal ("just schedule me"), intake engine runs anyway — wasted Groq call. Fix: check for booking intent before running intake.',
+        'No Turn 1 booking gate: If caller\'s first utterance is a pure booking signal ("just schedule me"), intake still runs — wasted 30ms extraction call. Future: add booking intent check before running intake.',
       ],
 
-      routing: { always: 'greeting_protocol' },
+      routing: { always: 'response_gen' },
     },
 
-    // ── [4] Greeting Protocol (Groq Protocol) ───────────────────────────
+    // ── [8] Turn 1 — Response Generation (Groq 70b, streaming) ──────────
     {
-      id:       'greeting_protocol',
+      id:       'response_gen',
       order:    8,
-      icon:     '👋',
-      name:     'Greeting Protocol — Groq Response Rules',
-      subtitle: 'Groq protocol: mirror greeting → greet caller by name → acknowledge problem → offer solution',
-      status:   'partial',
+      icon:     '💬',
+      name:     'Turn 1 — Response Generation',
+      subtitle: 'llama-3.3-70b-versatile generates warm spoken response with entities already known — streams plain text',
+      status:   'wired',
       group:    'Turn 1 — LLM Intake',
 
-      why: 'A technically correct answer delivered coldly feels wrong on a phone call. The Groq Protocol is a set of system prompt rules that structure every Turn 1 response: Rule 1 = mirror the caller\'s greeting (if they say "Good morning", say it back); Rule 2 = greet caller by name if extracted; Rule 8 = always acknowledge the problem before offering a solution; Rule 14/V96j = offer a solution, not just a claim ("We can check availability right now" not "We handle that"). This is what makes the agent feel like a real person.',
+      why: 'Split-Call Phase 2. The 70b model receives the extracted entities from Phase 1 in its system prompt — it already knows the caller\'s name, call reason, urgency, and prior visit. This lets it generate a natural, highly contextualised response without any JSON constraints. Crucially, it streams plain text instead of JSON, so the first sentence fires onSentence immediately from the first token — there is no {"responseText": "..."} JSON prefix overhead. The 3-step protocol (greet by name → acknowledge problem → offer forward move) produces responses that callers perceive as coming from a real person.',
 
-      engine:   'HybridReceptionistLLM system prompt rules',
-      provider: 'Groq (same call as LLM Intake — no extra round-trip)',
-      model:    'llama-3.1-70b-versatile',
-      fires:    'Turn 1 response generation. Same Groq call as entity extraction.',
-      writesTo: 'agent response text → first-sentence streaming path',
-      wiredIn:  ['services/HybridReceptionistLLM.js — Rule 1 (mirror greeting), Rule 2 (name), Rule 8 (ack), Rule 14/V96j (solution CTA)'],
-      configIn:  null,
-      configUrl: null,
+      engine:   'Agent2DiscoveryRunner — callLLMAgentForIntake() Split Phase 2 → streamWithSentences()',
+      provider: 'Groq',
+      model:    'llama-3.3-70b-versatile',
+      fires:    'Turn 1. Starts streaming ~30ms after Phase 1 completes. onSentence fires on first token boundary.',
+      writesTo: 'responseResult.response → Redis bridge result key (plain text, no JSON parse needed)',
+      wiredIn:  [
+        'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForIntake() split block',
+        'config/llmAgentDefaults.js — composeIntakeResponsePrompt()',
+        'services/streaming/SentenceStreamingService.js — streamWithSentences()',
+      ],
+      configIn:  'LLM Agent Settings — Intake > Split Calls',
+      configUrl: 'llmagent.html',
 
       extracts: [],
 
       gaps: [
-        'employeeMentioned not applied: If caller says "Hi John" and John is an employee, agent cannot say "I see you have worked with John before" — employeeMentioned is null.',
-        'Not UI-configurable: The greeting/ack/CTA protocol is hardcoded in system prompt rules. Admins cannot adjust the format, tone, or CTA wording without a code change.',
-        'KC path missing: The Groq Protocol rules only apply to HybridReceptionistLLM (Turn 1). If a returning customer asks a question on Turn 2+ via KC engine, their prior visit is not acknowledged.',
+        'KC path missing: Response protocol (greet by name, acknowledge, CTA) only applies on Turn 1. KC responses on Turn 2+ do not carry forward priorVisit acknowledgement.',
+        'consentQuestion detection: askedConsent is hardcoded false in split path — not yet detected from plain-text response. Low priority.',
       ],
 
-      routing: { always: 'first_sentence_streaming' },
+      routing: { always: 'first_sentence_tts' },
     },
 
-    // ── [5] First-Sentence Fast Path ─────────────────────────────────────
+    // ── [9] First Sentence → ElevenLabs TTS ── ⚡ MS-CRITICAL PATH ────────
     {
-      id:       'first_sentence_streaming',
+      id:       'first_sentence_tts',
       order:    9,
       icon:     '⚡',
-      name:     'First-Sentence Fast Path',
-      subtitle: 'First sentence streams to ElevenLabs immediately — caller hears audio in ~400ms, no bridge',
+      name:     'First Sentence → ElevenLabs TTS',
+      subtitle: '⚡ MS-CRITICAL: First sentence boundary in Groq stream → ElevenLabs synthesis → caller hears audio in ~400ms',
       status:   'wired',
       group:    'Turn 1 — LLM Intake',
 
-      why: 'The single most impactful performance optimization in the platform. Instead of waiting for the full LLM response before sending anything to TTS, the runtime detects the first sentence boundary (period/comma/question mark) as Groq streams tokens, immediately sends that sentence to ElevenLabs, and plays it via <Play>. The caller hears audio in ~400ms. The remaining sentences continue in /v2-agent-sentence-continue. Without this, TTFB would be 1-2 seconds — the caller thinks the line is dead.',
+      why: 'This is the single most important latency gate in the entire platform. As the Groq 70b model streams tokens, SentenceStreamingService detects the first sentence boundary (period/exclamation/question mark). The instant that boundary is found, onSentence(sentence, 0) fires — the sentence is immediately sent to ElevenLabs for TTS synthesis, written to disk as an MP3, and its URL is resolved in the bridge race. The caller hears audio within ~400ms of their last word. Without this path, the system would wait for the FULL LLM response before any TTS could start — TTFB would be 1.5–2 seconds and callers would think the line went dead. Every regression here directly adds to caller-perceived dead air. NEVER remove or slow this path.',
 
-      engine:   'v2twilio.js — first-sentence streaming to ElevenLabs',
+      engine:   'SentenceStreamingService.streamWithSentences() → onSentence(sentence, 0) callback → ElevenLabs synthesizeSpeech()',
       provider: 'ElevenLabs (TTS)',
-      model:    'Configured per company (voiceSettings)',
-      fires:    'Every LLM/Groq response turn. Applies to Turn 1 (HybridReceptionist) and KC/LLM fallback responses.',
-      writesTo: 'MP3 stream → Twilio <Play> → caller hears audio',
-      wiredIn:  ['routes/v2twilio.js — first-sentence detection + ElevenLabs stream', 'routes/v2twilio.js — /v2-agent-sentence-continue (remainder of response)'],
-      configIn:  'Voice Settings (agent2.html)',
+      model:    'Configured per company (voiceSettings.voiceId)',
+      fires:    'On the first sentence boundary detected in EVERY Groq streaming response — Turn 1 and Turn 2+.',
+      writesTo: 'MP3 file → disk (public/audio/sentences/) → Redis URL → Twilio <Play> → caller hears audio',
+      wiredIn:  [
+        'services/streaming/SentenceStreamingService.js — SentenceSplitter + onSentence callback',
+        'routes/v2twilio.js — onSentence handler → ElevenLabs synthesizeSpeech() → firstSentenceAudioPromise.resolve()',
+        'routes/v2twilio.js — /v2-agent-sentence-continue (remainder of response)',
+      ],
+      configIn:  'Voice Settings',
       configUrl: 'agent2.html',
 
       configFields: [
@@ -348,11 +358,13 @@
         { key: 'stability',         label: 'Stability',           unit: '0-1',    note: 'Lower = more expressive, higher = more consistent' },
         { key: 'similarityBoost',   label: 'Similarity Boost',    unit: '0-1',    note: 'How closely to match the original voice' },
         { key: 'styleExaggeration', label: 'Style Exaggeration',  unit: '0-1',    note: 'Amplifies speaking style' },
-        { key: 'streamingLatency',  label: 'Streaming Latency',   unit: 'enum',   note: '0=lowest latency, 4=highest quality' },
+        { key: 'streamingLatency',  label: 'Streaming Latency',   unit: 'enum',   note: '0=lowest latency, 4=highest quality — keep at 0 or 1 for phone calls' },
       ],
 
       extracts: [],
-      gaps:     [],
+      gaps: [
+        '⚠️ REGRESSION RISK: Any change to SentenceStreamingService, the onSentence callback, or ElevenLabs synthesis path directly impacts caller-perceived latency. Always measure TTFA (time to first audio) after changes.',
+      ],
 
       routing: { always: 'question_detector' },
     },

@@ -141,6 +141,17 @@ const DEFAULT_INTAKE_SETTINGS = {
     phoneThreshold: 0.80,
     addressThreshold: 0.60,
     reasonThreshold: 0.50
+  },
+
+  // ── Split-Call Architecture ────────────────────────────────────────────────
+  // When enabled: Call 1 (8b, ~30ms) extracts entities as JSON,
+  // Call 2 (70b, streaming) generates the plain-text response with entities known.
+  // Benefit: 70b speaks naturally without JSON constraints; onSentence fires
+  // on the first plain-text token — no {"responseText": "..."} prefix overhead.
+  splitCalls: {
+    enabled:         true,                       // DEFAULT ON — Groq two-call path for all companies
+    extractionModel: 'llama-3.1-8b-instant',     // hardcoded: always right for structured JSON extraction
+    responseModel:   'llama-3.3-70b-versatile',  // configurable per company if needed
   }
 };
 
@@ -600,6 +611,213 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
   return parts.join('\n');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SPLIT-CALL PROMPT A: Entity Extraction Only
+// Purpose-built for llama-3.1-8b-instant — extraction-only, no responseText.
+// Smaller prompt = faster tokens = lower latency on the blocking call.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * composeIntakeExtractionPrompt — Extraction-only system prompt for Split-Call Phase 1.
+ * No responseText, no response rules, no 3-step protocol.
+ * Designed for llama-3.1-8b-instant: focused JSON extraction task only.
+ *
+ * @param {Object} settings       — Merged LLM agent settings
+ * @param {Object} intakeSettings — Merged intake settings
+ * @param {string} channel        — 'call' | 'sms' | 'webchat'
+ * @returns {string}
+ */
+function composeIntakeExtractionPrompt(settings, intakeSettings, channel = 'call') {
+  const parts = [];
+  const extract = intakeSettings.extract || {};
+
+  parts.push(
+    'You are an ENTITY EXTRACTOR for a service business call center.',
+    'A caller just left their first message. Extract structured data from it.',
+    'You do NOT generate a response. You ONLY extract and classify.',
+    ''
+  );
+
+  parts.push(
+    '=== EXTRACTION RULES ===',
+    'Extract the following fields. Set each to null if not mentioned by the caller:'
+  );
+  if (extract.firstName !== false)         parts.push('- firstName: caller\'s first name if stated ("this is John", "it\'s Sarah")');
+  if (extract.lastName !== false)          parts.push('- lastName: caller\'s last name if stated');
+  if (extract.phone !== false)             parts.push('- phone: a callback number if provided');
+  if (extract.email !== false)             parts.push('- email: an email address if provided');
+  if (extract.address !== false)           parts.push('- address: a service address or location if mentioned');
+  if (extract.callReason !== false)        parts.push('- callReason: WHY they are calling in 2-8 words (e.g. "AC not cooling", "water heater leaking")');
+  if (extract.employeeMentioned !== false) parts.push('- employeeMentioned: name of any employee, tech, or staff member the caller mentioned');
+  if (extract.priorVisit !== false)        parts.push('- priorVisit: true if they mention a previous visit, false if first time, null if unclear');
+  if (extract.urgency !== false)           parts.push('- urgency: "emergency" = life/safety/flooding/fire; "high" = same-day/urgent language; "normal" = everything else');
+  if (extract.sameDayRequested !== false)  parts.push('- sameDayRequested: true only if caller explicitly asks for today/ASAP/same-day');
+  parts.push('- callerType: CUSTOMER (default) | VENDOR_SALES (selling to business) | DELIVERY (driver/courier) | WRONG_NUMBER');
+  parts.push('  Default to CUSTOMER unless it is completely unambiguous otherwise.');
+  parts.push(
+    '',
+    'Confidence scores (0.0-1.0) — only for fields you extracted:',
+    '  1.0 = explicitly stated | 0.7-0.9 = strongly implied | below 0.5 = leave null',
+    '=== END EXTRACTION RULES ==='
+  );
+
+  parts.push(
+    '',
+    '=== NEXT LANE ===',
+    'Recommend what should happen next:',
+    '- BOOKING_HANDOFF: caller wants to schedule AND you have reason + name or phone',
+    '- DISCOVERY_CONTINUE: need more info or intent is unclear',
+    '- TRANSFER: caller asked for a specific person, or emergency needing human',
+    '- UNKNOWN: cannot determine intent',
+    '=== END NEXT LANE ==='
+  );
+
+  parts.push(
+    '',
+    '=== DO NOT RE-ASK ===',
+    'List fieldNames the caller already provided so the next turn never asks again.',
+    '=== END DO NOT RE-ASK ==='
+  );
+
+  parts.push(
+    '',
+    '=== OUTPUT FORMAT ===',
+    'Respond with ONLY a raw JSON object. No code fences. Start with { end with }.',
+    '{',
+    '  "extraction": {',
+    '    "firstName": "string|null",',
+    '    "lastName": "string|null",',
+    '    "phone": "string|null",',
+    '    "email": "string|null",',
+    '    "address": "string|null",',
+    '    "callReason": "string|null",',
+    '    "employeeMentioned": "string|null",',
+    '    "priorVisit": "boolean|null",',
+    '    "urgency": "\\"normal\\"|\\"high\\"|\\"emergency\\"",',
+    '    "sameDayRequested": "boolean|null",',
+    '    "callerType": "\\"CUSTOMER\\"|\\"VENDOR_SALES\\"|\\"DELIVERY\\"|\\"WRONG_NUMBER\\""',
+    '  },',
+    '  "confidence": { "firstName": 0.95, "callReason": 0.9 },',
+    '  "nextLane": "\\"BOOKING_HANDOFF\\"|\\"DISCOVERY_CONTINUE\\"|\\"TRANSFER\\"|\\"UNKNOWN\\"",',
+    '  "doNotReask": ["array of fieldNames caller already provided"]',
+    '}',
+    '=== END OUTPUT FORMAT ==='
+  );
+
+  return parts.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPLIT-CALL PROMPT B: Response Generation Only
+// Purpose-built for llama-3.3-70b-versatile — plain text response with
+// extracted entities already injected as context. No JSON output.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * composeIntakeResponsePrompt — Response-only system prompt for Split-Call Phase 2.
+ * Receives extracted entities from Phase 1 as injected context.
+ * Plain text output only — no JSON schema, no extraction rules.
+ * Designed for llama-3.3-70b-versatile streaming.
+ *
+ * @param {Object} settings       — Merged LLM agent settings
+ * @param {Object} entities       — Extracted entities from Phase 1 { firstName, callReason, urgency, ... }
+ * @param {Object} intakeSettings — Merged intake settings
+ * @param {string} channel        — 'call' | 'sms' | 'webchat'
+ * @returns {string}
+ */
+function composeIntakeResponsePrompt(settings, entities = {}, intakeSettings, channel = 'call') {
+  const parts = [];
+
+  // 1. Role
+  parts.push('You are a warm, professional receptionist answering an inbound service call.');
+  if (settings.persona?.name) {
+    parts.push(`Your name is ${settings.persona.name}.`);
+  }
+
+  // 2. Tone
+  const toneDesc = TONE_DESCRIPTIONS[settings.persona?.tone] || TONE_DESCRIPTIONS['friendly-professional'];
+  parts.push(`Tone: ${toneDesc}`);
+
+  // 3. Channel
+  const channelInstr = CHANNEL_INSTRUCTIONS[channel] || CHANNEL_INSTRUCTIONS.call;
+  parts.push(channelInstr);
+
+  // 4. What we already know about this caller (injected from Phase 1)
+  const known = [];
+  if (entities.firstName)        known.push(`Caller's name: ${entities.firstName}`);
+  if (entities.callReason)       known.push(`Call reason: ${entities.callReason}`);
+  if (entities.urgency && entities.urgency !== 'normal') known.push(`Urgency: ${entities.urgency}`);
+  if (entities.sameDayRequested) known.push('Caller requested same-day service');
+  if (entities.priorVisit)       known.push('Caller has had a prior visit');
+  if (entities.employeeMentioned) known.push(`Caller mentioned employee/tech: ${entities.employeeMentioned}`);
+
+  if (known.length > 0) {
+    parts.push(
+      '',
+      '=== WHAT YOU ALREADY KNOW (use this context in your response) ===',
+      ...known,
+      '=== END KNOWN CONTEXT ==='
+    );
+  }
+
+  // 5. 3-step response protocol (same rules as full prompt, minus extraction)
+  const maxSentences = intakeSettings.response?.maxSentences || 3;
+  parts.push(
+    '',
+    `=== YOUR RESPONSE — 3-STEP PROTOCOL (${maxSentences} sentences MAX) ===`,
+    '',
+    'STEP 1 — GREETING BY NAME (if name is known):',
+    '  Use their name immediately: "Hi Mark!" or "Hey Mark!"',
+    '  If no name was given, jump straight to Step 2.',
+    '  IMPORTANT: A greeting ("thanks for calling") has ALREADY been played. Do NOT repeat it.',
+    '',
+    'STEP 2 — ACKNOWLEDGE THE PROBLEM:',
+    '  Mirror back what they said empathetically.',
+    '  If an employee/tech was mentioned, USE their name: "I see Tony was out there recently."',
+    '  NEVER re-ask for info already given (name, call reason, etc.)',
+    '',
+    'STEP 3 — FORWARD MOVE (end with ONE yes/no question):',
+    '  Offer to dispatch a technician or take the next step.',
+    '  Example: "Would you like me to get someone scheduled to come out?"',
+    '  Keep it warm and natural. One sentence. No pressure.',
+    '  NEVER say "let me look that up" or "let me pull up your information".',
+    '=== END PROTOCOL ==='
+  );
+
+  // 6. Hard limits
+  parts.push(
+    '',
+    'NEVER: Ask more than one question | Mention pricing | Make promises about timing | Re-ask given info.'
+  );
+
+  // 7. Guardrails from settings
+  const guardrails = settings.guardrails || {};
+  const rules = [];
+  if (guardrails.noPiiCollection) rules.push('NEVER ask for personal identifying information.');
+  if (guardrails.noScheduling)    rules.push('NEVER schedule or book appointments in your response.');
+  if (guardrails.noPricing)       rules.push('NEVER quote prices or fees.');
+  if (guardrails.noMedicalAdvice) rules.push('NEVER provide medical advice.');
+  if (guardrails.noLegalAdvice)   rules.push('NEVER provide legal advice.');
+  if (guardrails.customRules?.length > 0) {
+    for (const cr of guardrails.customRules) {
+      if (cr.rule?.trim()) rules.push(cr.rule.trim());
+    }
+  }
+  if (rules.length > 0) {
+    parts.push('\nGUARDRAILS:');
+    rules.forEach((r, i) => parts.push(`${i + 1}. ${r}`));
+  }
+
+  // 8. Output: plain text only
+  parts.push(
+    '',
+    'OUTPUT: Respond with plain spoken text only. No JSON. No lists. No markdown.',
+    'Your response IS what the caller will hear. Make it sound natural and human.'
+  );
+
+  return parts.join('\n');
+}
+
 module.exports = {
   DEFAULT_LLM_AGENT_SETTINGS,
   DEFAULT_INTAKE_SETTINGS,
@@ -611,5 +829,7 @@ module.exports = {
   AVAILABLE_PROVIDERS,
   AVAILABLE_MODELS,
   composeSystemPrompt,
-  composeIntakeSystemPrompt
+  composeIntakeSystemPrompt,
+  composeIntakeExtractionPrompt,
+  composeIntakeResponsePrompt
 };
