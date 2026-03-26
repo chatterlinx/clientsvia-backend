@@ -48,6 +48,7 @@
      STATUS VALUES:
        'wired'     — fully implemented and running on live calls
        'partial'   — implemented but has known gaps / missing fields
+       'bypassed'  — code exists but intentionally skipped at runtime (superseded by LLM)
        'not_built' — architecture defined, code not written yet
        'planned'   — on roadmap, not yet designed
 
@@ -212,32 +213,35 @@
 
       gaps: [],
 
-      routing: { always: 'scrabengine' },
+      routing: { always: 'llm_intake', note: 'ScrabEngine (6) is bypassed — STT routes direct to LLM' },
     },
 
-    // ── [6] ScrabEngine — Transcript Cleaning ────────────────────────────
+    // ── [6] ScrabEngine — Transcript Cleaning (BYPASSED) ─────────────────
     {
       id:       'scrabengine',
       order:    6,
-      icon:     '🔍',
+      icon:     '⏭️',
       name:     'ScrabEngine — Transcript Cleaning',
-      subtitle: 'Removes filler words, expands vocabulary, applies synonyms before LLM sees the text',
-      status:   'wired',
+      subtitle: 'Bypassed — Groq handles filler removal and vocabulary expansion natively as part of LLM processing',
+      status:   'bypassed',
       group:    'Call Receipt',
 
-      why: 'Raw STT is noisy. Callers say "um", "uh", "like", "you know" — these dilute the signal and confuse keyword matching. ScrabEngine strips fillers, then expands vocabulary tokens ("AC" → "air conditioner") and applies synonym maps. The cleaned text gives the LLM and KC engine a much higher-quality signal to work with. Without this, KC matching degrades significantly.',
+      why: 'ScrabEngine was originally built to strip filler words ("um", "uh", "like"), expand vocabulary tokens ("AC" → "air conditioner"), and apply synonym maps before the LLM saw the transcript. This preprocessing improved KC keyword matching. However, Groq handles all of this natively — it ignores filler words and understands vocabulary variants without any preprocessing. The synchronous string-pass step adds latency with no meaningful improvement over what Groq does out-of-the-box, so it is skipped at runtime. Code is preserved in case re-evaluation is needed.',
 
       engine:   'ScrabEngineService V125',
       provider: 'Synchronous (no AI) — pure string processing',
       model:    null,
-      fires:    'Every turn, applied to SpeechResult before routing to LLM_INTAKE or KC engine.',
-      writesTo: 'cleanedTranscript — read by all downstream stages',
-      wiredIn:  ['services/scrabEngine/ScrabEngineService.js', 'routes/v2twilio.js — preprocessing step'],
+      fires:    '⚠️ NOT CALLED — STT routes directly to LLM_INTAKE, bypassing this stage.',
+      writesTo: 'n/a — bypassed, no cleanedTranscript produced',
+      wiredIn:  ['services/scrabEngine/ScrabEngineService.js'],
       configIn:  'ScrabEngine',
       configUrl: 'scrabengine.html',
 
       extracts: [],
-      gaps:     [],
+      gaps: [
+        'Evaluate whether ScrabEngine KC synonym maps still provide value that Groq misses. If synonym matching improves KC container scoring beyond what Groq intent-parsing does natively, a selective re-wire may be worthwhile.',
+        'Consider removing ScrabEngineService.js and scrabengine.html if the bypass is confirmed permanent — see Dead Code Cleanup plan.',
+      ],
 
       routing: { always: 'llm_intake' },
     },
@@ -671,6 +675,7 @@
     const map = {
       wired:     '✅ Wired',
       partial:   '⚠️ Partial',
+      bypassed:  '⏭️ Bypassed',
       not_built: '❌ Not Built',
       planned:   '🔵 Planned',
     };
