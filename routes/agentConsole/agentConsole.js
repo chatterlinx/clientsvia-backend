@@ -2639,4 +2639,114 @@ router.get('/:companyId/calls/export',
   }
 );
 
+/**
+ * POST /:companyId/agent2/suggest-keywords
+ *
+ * AI-powered STT keyword suggestions.
+ * Reads company trade / name / serviceTypes from MongoDB, accepts optional
+ * brand list + context from the user, calls Claude Haiku and returns a
+ * structured keyword array for the agent console to preview before saving.
+ * Keywords are NOT saved here — the frontend merges them into the working
+ * kwState and the user saves via the normal kwSave() → PATCH flow.
+ */
+router.post(
+  '/:companyId/agent2/suggest-keywords',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { brands = '', context = '' } = req.body;
+
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured on this server.' });
+      }
+
+      const company = await v2Company.findById(companyId)
+        .select('companyName trade aiAgentSettings')
+        .lean();
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const companyName  = company.companyName || '';
+      const trade        = company.trade || '';
+      const serviceTypes = (company.aiAgentSettings?.serviceTypes || []).join(', ');
+      const existingPhrases = (company.aiAgentSettings?.agent2?.speechDetection?.keywords || [])
+        .filter(k => k.enabled !== false)
+        .map(k => k.phrase)
+        .join(', ');
+
+      const prompt = `You are configuring a voice AI receptionist for a business. Generate STT (speech-to-text) hint keywords for Twilio speech recognition to improve accuracy on phone calls.
+
+Business profile:
+- Company name: ${companyName || '(not set)'}
+- Trade / industry: ${trade || '(not set)'}
+- Service types: ${serviceTypes || '(not set)'}
+- Equipment / brands to recognise: ${brands || '(not provided — infer common brands for this trade)'}
+- Additional context: ${context || '(none)'}
+${existingPhrases ? `- Already configured (skip exact duplicates): ${existingPhrases}` : ''}
+
+Instructions:
+1. Return ONLY a valid JSON array — no markdown, no code fences, no explanation.
+2. Each element: { "phrase": "...", "boost": N, "category": "..." }
+3. category must be exactly one of: brand | symptom | technical | booking | custom
+4. boost is 1–10: brand names 7–8, symptoms/complaints 6–7, technical terms 5–6, booking/scheduling 4, other 3
+5. Include: equipment brand names, model/series names, common caller complaints, technical service terms, call-reason phrases
+6. Exclude generic words already in Twilio defaults: appointment, schedule, repair, service, maintenance, help, emergency, problem, issue
+7. Maximum 40 keywords. Prioritise words Twilio is likely to mishear without hints (proper nouns, industry jargon).
+8. Phrases can be 1–3 words.
+
+JSON array only:`;
+
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey });
+
+      const message = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const rawText = (message.content?.[0]?.text || '').trim();
+
+      // Parse and sanitise — never trust raw LLM output
+      let suggestions;
+      try {
+        // Strip accidental markdown fences if model added them despite instructions
+        const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        suggestions = JSON.parse(cleaned);
+        if (!Array.isArray(suggestions)) throw new Error('Response is not a JSON array');
+
+        const validCategories = new Set(['brand', 'symptom', 'technical', 'booking', 'custom']);
+        suggestions = suggestions
+          .filter(s => s && typeof s.phrase === 'string' && s.phrase.trim())
+          .map(s => ({
+            phrase:   s.phrase.trim().toLowerCase(),
+            boost:    Math.min(10, Math.max(1, parseInt(s.boost, 10) || 3)),
+            category: validCategories.has(s.category) ? s.category : 'custom',
+            enabled:  true
+          }))
+          .slice(0, 40);
+      } catch (parseErr) {
+        logger.warn(`[${MODULE_ID}] suggest-keywords JSON parse failed`, {
+          companyId,
+          error: parseErr.message,
+          rawText: rawText.substring(0, 300)
+        });
+        return res.status(500).json({
+          error: 'AI returned unparseable JSON — try again',
+          raw: rawText.substring(0, 300)
+        });
+      }
+
+      logger.info(`[${MODULE_ID}] suggest-keywords success`, { companyId, count: suggestions.length });
+      res.json({ success: true, suggestions });
+
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] suggest-keywords error: ${error.message}`, { companyId });
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 module.exports = router;

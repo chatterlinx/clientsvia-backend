@@ -2156,6 +2156,84 @@
   }
 
   /* --------------------------------------------------------------------------
+     AI KEYWORD SUGGESTIONS
+     Calls POST /agent2/suggest-keywords → Claude Haiku generates brand names,
+     symptoms, and technical terms based on company trade + services.
+     Results are merged into kwState for review — nothing is saved until
+     the user explicitly clicks "Save Keywords".
+     -------------------------------------------------------------------------- */
+
+  async function kwEnhanceWithAI() {
+    const brandsEl  = document.getElementById('kw-ai-brands');
+    const contextEl = document.getElementById('kw-ai-context');
+    const btn       = document.getElementById('btn-kw-ai-enhance');
+    const statusEl  = document.getElementById('kw-ai-status');
+
+    const brands  = brandsEl?.value?.trim()  || '';
+    const context = contextEl?.value?.trim() || '';
+
+    // Loading state
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Thinking…'; }
+    if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+
+    try {
+      const res = await AgentConsoleAuth.apiFetch(
+        `${CONFIG.API_BASE}/${state.companyId}/agent2/suggest-keywords`,
+        { method: 'POST', body: { brands, context } }
+      );
+
+      const suggestions = res.suggestions || [];
+
+      if (suggestions.length === 0) {
+        if (statusEl) {
+          statusEl.textContent = 'No suggestions returned — try adding equipment brand names above.';
+          statusEl.style.color = 'var(--warning, #f59e0b)';
+          statusEl.style.display = '';
+        }
+        return;
+      }
+
+      // Merge into working state — skip exact duplicates (case-insensitive)
+      const existing = new Set(kwState.map(k => k.phrase.toLowerCase()));
+      let added = 0;
+      for (const s of suggestions) {
+        if (!existing.has(s.phrase.toLowerCase())) {
+          kwState.push(s);
+          existing.add(s.phrase.toLowerCase());
+          added++;
+        }
+      }
+
+      kwFilter = 'all';
+      kwSetFilterActive('all');
+      kwRenderTable();
+      kwUpdatePreview();
+
+      if (statusEl) {
+        statusEl.textContent = added > 0
+          ? `✅ ${added} keyword${added !== 1 ? 's' : ''} added — review the table and click Save when ready.`
+          : '✅ All suggestions already exist in your list.';
+        statusEl.style.color = 'var(--success, #10b981)';
+        statusEl.style.display = '';
+      }
+
+      if (added > 0) {
+        showToast('success', 'AI Suggestions Ready', `${added} keyword${added !== 1 ? 's' : ''} added for review — save when you're happy.`);
+      }
+
+    } catch (err) {
+      console.error('[Agent2] kwEnhanceWithAI failed:', err);
+      if (statusEl) {
+        statusEl.textContent = `❌ ${err.message || 'Request failed — check connection and try again.'}`;
+        statusEl.style.color = 'var(--error, #ef4444)';
+        statusEl.style.display = '';
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '✨ Suggest with AI'; }
+    }
+  }
+
+  /* --------------------------------------------------------------------------
      GLOBAL EXPORTS — expose keywords modal functions to inline onclick handlers
      (functions are defined inside the IIFE so must be pinned to window)
      -------------------------------------------------------------------------- */
@@ -2167,6 +2245,7 @@
   window.kwToggleEnabled    = kwToggleEnabled;
   window.kwDeleteRow        = kwDeleteRow;
   window.kwSave             = kwSave;
+  window.kwEnhanceWithAI    = kwEnhanceWithAI;
 
   /* --------------------------------------------------------------------------
      BOOTSTRAP

@@ -898,6 +898,26 @@
           <span>Provider: <strong id="kw-provider-note">phone_call (flat CSV)</strong></span>
         </div>
 
+        <!-- ✨ AI Keyword Suggestions -->
+        <div id="kw-ai-panel" style="margin-bottom: 20px; padding: 14px 16px; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border: 1px solid #c4b5fd; border-radius: 10px;">
+          <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6d28d9; margin: 0 0 10px 0;">✨ AI Keyword Suggestions</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: flex-end;">
+            <div class="form-group mb-0">
+              <label class="form-label" style="font-size: 0.75rem;">Equipment Brands <span style="color: var(--text-muted); font-weight: 400;">(optional — Claude infers if blank)</span></label>
+              <input type="text" class="form-input" id="kw-ai-brands" placeholder="Lennox, Carrier, Trane, Rheem..." style="font-size: 0.82rem;">
+            </div>
+            <div class="form-group mb-0">
+              <label class="form-label" style="font-size: 0.75rem;">Additional Context <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+              <input type="text" class="form-input" id="kw-ai-context" placeholder="e.g. residential only, older homes..." style="font-size: 0.82rem;">
+            </div>
+            <div style="padding-top: 22px;">
+              <button type="button" class="btn btn-primary" id="btn-kw-ai-enhance" onclick="kwEnhanceWithAI()" style="white-space: nowrap; font-size: 0.82rem; background: #7c3aed; border-color: #7c3aed;">✨ Suggest with AI</button>
+            </div>
+          </div>
+          <p id="kw-ai-status" style="font-size: 0.8rem; margin: 8px 0 0 0; display: none;"></p>
+          <p class="form-hint" style="margin-top: 6px; color: #7c3aed; opacity: 0.8;">Claude reads your trade &amp; services and generates branded + symptom keywords — added to table for review, not saved until you click Save.</p>
+        </div>
+
         <!-- Bulk Import -->
         <div style="margin-bottom: 20px;">
           <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0 0 8px 0;">Bulk Import</p>
