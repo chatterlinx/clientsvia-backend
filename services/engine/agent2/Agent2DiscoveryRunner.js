@@ -82,10 +82,6 @@ const { TriggerBucketClassifier }  = require('./TriggerBucketClassifier');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { computeComplexityScore } = require('./Agent2LLMFallbackService');
 const { generateLLMTriggerResponse } = require('./Agent2LLMTriggerService');
-// Agent2SpeechPreprocessor was removed: ScrabEngine (V125) fully replaces it.
-// The preprocessor ran duplicate filler/greeting stripping that ScrabEngine already handles,
-// creating hidden double-processing. Nuked to eliminate the hidden nightmare.
-
 // ════════════════════════════════════════════════════════════════════════════
 // 🔍 SCRABENGINE - Enterprise Text Processing Pipeline
 // ════════════════════════════════════════════════════════════════════════════

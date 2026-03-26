@@ -3937,11 +3937,7 @@ const companySchema = new mongoose.Schema({
                 // V131: Post-gather delay — bridge fires this many ms after gather completes
                 // unless compute already resolved. UI-configurable. Replaces old race threshold.
                 postGatherDelayMs: { type: Number, default: 200 },
-                // LEGACY: old threshold (kept for backward compat, postGatherDelayMs takes priority)
-                thresholdMs: { type: Number, default: 1100 },
-                // LEGACY: old hard cap (kept for backward compat, no longer drives decisions)
-                hardCapMs: { type: Number, default: 6000 },
-                // Absolute ceiling: emergency-only safety stop (was 25s, now 15s)
+                // Absolute ceiling: emergency-only safety stop (heartbeat decides, this is the hard stop)
                 maxCeilingMs: { type: Number, default: 15000 },
                 // Heartbeat silence threshold: stream dead if no heartbeat for this long
                 heartbeatSilenceMs: { type: Number, default: 5000 },
@@ -4275,20 +4271,6 @@ const companySchema = new mongoose.Schema({
                         uiBuild: { type: String, default: null },
                         lastModified: { type: Date, default: Date.now }
                     }
-                },
-                
-                // ═══════════════════════════════════════════════════════════
-                // V4: SPEECH PREPROCESSING - Clean input BEFORE matching
-                // ═══════════════════════════════════════════════════════════
-                // ⚠️ DEPRECATED: Use scrabEngine instead (above)
-                // Kept for backward compatibility only
-                // ═══════════════════════════════════════════════════════════
-                preprocessing: {
-                    enabled: { type: Boolean, default: false },  // Disabled by default
-                    ignorePhrases: { type: [String], default: [] },
-                    fillerWords: { type: [String], default: [] },
-                    canonicalRewrites: { type: mongoose.Schema.Types.Mixed, default: [] },
-                    stripPatterns: { type: [String], default: [] }
                 },
                 
                 // ═══════════════════════════════════════════════════════════

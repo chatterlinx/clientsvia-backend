@@ -48,20 +48,20 @@ function defaultAgent2Config() {
     // Global negative keywords that block ALL trigger cards (V4)
     // Intentionally empty by default to avoid accidental suppression.
     globalNegativeKeywords: [],
-    // V129: Real bridge (latency filler)
-    // Two-phase TwiML: if processing exceeds thresholdMs, return a short bridge line
-    // and Redirect to a continuation endpoint that serves the real answer.
+    // V129+V132: Bridge (latency filler)
+    // Two-phase TwiML: if processing exceeds postGatherDelayMs, play bridge hold
+    // phrase and Redirect to continuation endpoint that serves the real answer.
     bridge: {
       enabled: false,
-      thresholdMs: 1100,
-      hardCapMs: 6000,
+      postGatherDelayMs: 500,
+      maxCeilingMs: 15000,
       maxBridgesPerCall: 2,
       maxRedirectAttempts: 2,
       lines: [
-        'Ok — one moment.',
-        'Got it — give me just a second.',
-        "One sec — I’m pulling that up now.",
-        'Alright — hang with me for a moment.'
+        'Ok - one moment.',
+        'Got it - give me just a second.',
+        "One sec - I'm pulling that up now.",
+        'Alright - hang with me for a moment.'
       ]
     },
     discovery: {
@@ -699,11 +699,11 @@ function mergeAgent2Config(saved) {
       .filter(Boolean)
       .slice(0, 12);
   }
-  if (typeof merged.bridge.thresholdMs !== 'number' || !Number.isFinite(merged.bridge.thresholdMs) || merged.bridge.thresholdMs < 0) {
-    merged.bridge.thresholdMs = defaults.bridge.thresholdMs;
+  if (typeof merged.bridge.postGatherDelayMs !== 'number' || !Number.isFinite(merged.bridge.postGatherDelayMs) || merged.bridge.postGatherDelayMs < 0) {
+    merged.bridge.postGatherDelayMs = defaults.bridge.postGatherDelayMs;
   }
-  if (typeof merged.bridge.hardCapMs !== 'number' || !Number.isFinite(merged.bridge.hardCapMs) || merged.bridge.hardCapMs < merged.bridge.thresholdMs) {
-    merged.bridge.hardCapMs = Math.max(defaults.bridge.hardCapMs, merged.bridge.thresholdMs);
+  if (typeof merged.bridge.maxCeilingMs !== 'number' || !Number.isFinite(merged.bridge.maxCeilingMs) || merged.bridge.maxCeilingMs < merged.bridge.postGatherDelayMs) {
+    merged.bridge.maxCeilingMs = Math.max(defaults.bridge.maxCeilingMs, merged.bridge.postGatherDelayMs);
   }
   if (typeof merged.bridge.maxBridgesPerCall !== 'number' || !Number.isFinite(merged.bridge.maxBridgesPerCall) || merged.bridge.maxBridgesPerCall < 0) {
     merged.bridge.maxBridgesPerCall = defaults.bridge.maxBridgesPerCall;

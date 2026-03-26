@@ -29,7 +29,7 @@
       speechModel:          'phone_call'
     },
     bridge: {
-      thresholdMs:          500,
+      postGatherDelayMs:    500,
       heartbeatSilenceMs:   5000,
       maxCeilingMs:         15000
     }
@@ -532,7 +532,7 @@
     // Bridge (Latency Filler)
     const bridge = config.bridge || {};
     if (DOM.inputBridgeEnabled) DOM.inputBridgeEnabled.checked = bridge.enabled === true;
-    if (DOM.inputBridgeThreshold) DOM.inputBridgeThreshold.value = bridge.thresholdMs || 500;
+    if (DOM.inputBridgeThreshold) DOM.inputBridgeThreshold.value = bridge.postGatherDelayMs || bridge.thresholdMs || 500;
     if (DOM.inputBridgeHeartbeatSilence) DOM.inputBridgeHeartbeatSilence.value = bridge.heartbeatSilenceMs || 5000;
     if (DOM.inputBridgeHardcap) DOM.inputBridgeHardcap.value = bridge.maxCeilingMs || 15000;
     if (DOM.inputBridgeLines) DOM.inputBridgeLines.value = (bridge.lines || []).join('\n');
@@ -703,7 +703,7 @@
 
   function resetBridgeToDefaults() {
     const d = OPTIMAL_DEFAULTS.bridge;
-    if (DOM.inputBridgeThreshold)         DOM.inputBridgeThreshold.value         = d.thresholdMs;
+    if (DOM.inputBridgeThreshold)         DOM.inputBridgeThreshold.value         = d.postGatherDelayMs;
     if (DOM.inputBridgeHeartbeatSilence)  DOM.inputBridgeHeartbeatSilence.value  = d.heartbeatSilenceMs;
     if (DOM.inputBridgeHardcap)           DOM.inputBridgeHardcap.value           = d.maxCeilingMs;
     state.isDirty = true;
@@ -743,7 +743,7 @@
       },
       bridge: {
         enabled: DOM.inputBridgeEnabled?.checked || false,
-        thresholdMs: parseInt(DOM.inputBridgeThreshold?.value, 10) || 500,
+        postGatherDelayMs: parseInt(DOM.inputBridgeThreshold?.value, 10) || 500,
         heartbeatSilenceMs: parseInt(DOM.inputBridgeHeartbeatSilence?.value, 10) || 5000,
         maxCeilingMs: parseInt(DOM.inputBridgeHardcap?.value, 10) || 15000,
         lines: (DOM.inputBridgeLines?.value || '').split('\n').map(l => l.trim()).filter(Boolean),

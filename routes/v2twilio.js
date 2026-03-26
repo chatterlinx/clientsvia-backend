@@ -3018,7 +3018,7 @@ router.post('/handle-speech', async (req, res) => {
         }
         
         // Ask caller to repeat
-      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
+      const speechDetection = company.aiAgentSettings?.agent2?.speechDetection || company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -3129,7 +3129,7 @@ router.post('/handle-speech', async (req, res) => {
         const clarification = clarificationResponses[Math.floor(Math.random() * clarificationResponses.length)];
         
         // Use configurable speech detection settings (fallback to defaults if not set)
-        const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
+        const speechDetection = company.aiAgentSettings?.agent2?.speechDetection || company.aiAgentSettings?.voiceSettings?.speechDetection || {};
         const gather = twiml.gather({
           input: 'speech',
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -3157,7 +3157,7 @@ router.post('/handle-speech', async (req, res) => {
       logger.info(`[Q&A RESPONSE] [OK] Using Q&A response (no repetition detected)`);
       
       // Use configurable speech detection settings (fallback to defaults if not set)
-      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
+      const speechDetection = company.aiAgentSettings?.agent2?.speechDetection || company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -3271,7 +3271,7 @@ router.post('/handle-speech', async (req, res) => {
     }
 
     // Generate TTS and respond immediately - using configurable speech detection settings
-    const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
+    const speechDetection = company.aiAgentSettings?.agent2?.speechDetection || company.aiAgentSettings?.voiceSettings?.speechDetection || {};
     const gather = twiml.gather({
       input: 'speech',
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -3548,7 +3548,6 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     const company = await Company.findById(companyID).lean();
 
     const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
-    const hardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
 
     // V-FIX: Hoist voice settings so all bridge paths can attempt ElevenLabs
     const hostHeader = req.get('host');
@@ -3835,7 +3834,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     //   C. T2 death detection → heartbeat silence threshold, NOT raw elapsed time
     //
     // WHAT WAS KILLED:
-    //   - hardCapMs as a decision-maker (legacy, kept in schema for compat only)
+    //   - hardCapMs as a decision-maker (removed from schema V132)
     //   - maxRedirectAttempts as a cap (was cutting live responses)
     //   - Twilio <Say> for hold lines (now uses BridgeAudioService cached audio)
     //   - Attempt-1 silent pause (bridgeQuietWindowMs) — was always 1s due to Twilio floor
@@ -3991,7 +3990,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     //   4. heartbeat alive           → KEEP WAITING (T2 is working)
     //   5. no heartbeat data yet     → keep waiting if within quiet window
     //
-    // NOTE: hardCapMs and maxRedirectAttempts are INTENTIONALLY not used here.
+    // NOTE: maxRedirectAttempts is INTENTIONALLY not used here.
     // They were the old "dumb timer" that cut live responses. Heartbeat decides.
     // ─────────────────────────────────────────────────────────────────────────
     const ceilingHit = typeof elapsedMs === 'number' && elapsedMs >= maxCeilingMs;
@@ -5148,8 +5147,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const turn1WelcomeDelayMs = Number.isFinite(turn1WelcomeCfg.thresholdMs) ? turn1WelcomeCfg.thresholdMs : 0;
     const bridgePostGatherDelayMs = isTurn1Welcome ? turn1WelcomeDelayMs
       : (Number.isFinite(bridgeCfg.postGatherDelayMs) ? bridgeCfg.postGatherDelayMs
-        : (Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 200));
-    const bridgeHardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
+        : (Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 200));  // thresholdMs fallback for pre-V131 data
+    const bridgeMaxCeilingMs = Number.isFinite(bridgeCfg.maxCeilingMs) ? bridgeCfg.maxCeilingMs : 15000;
 
     // V131: Only suppress bridge during active transfers (legitimate).
     // Pending yes/no and PFUQ guards REMOVED — these are internal state concepts
@@ -6966,8 +6965,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         turn: turnNumber,
         data: {
           elapsedMs,
-          thresholdMs: bridgePostGatherDelayMs,
-          hardCapMs: bridgeHardCapMs,
+          postGatherDelayMs: bridgePostGatherDelayMs,
+          maxCeilingMs: bridgeMaxCeilingMs,
           bridgeTurn: turnNumber,
           lineIdx: idx,
           linePreview: bridgeLine.substring(0, 80),
@@ -6997,8 +6996,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           isBridge: true,
           bridge: {
             elapsedMs,
-            thresholdMs: bridgePostGatherDelayMs,
-            hardCapMs: bridgeHardCapMs
+            postGatherDelayMs: bridgePostGatherDelayMs,
+            maxCeilingMs: bridgeMaxCeilingMs
           }
         }
       };
@@ -7040,8 +7039,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                     },
                     latency: {
                       bridgeElapsedMs: elapsedMs,
-                      thresholdMs: bridgePostGatherDelayMs,
-                      hardCapMs: bridgeHardCapMs
+                      postGatherDelayMs: bridgePostGatherDelayMs,
+                      maxCeilingMs: bridgeMaxCeilingMs
                     }
                   }
                 }
@@ -7116,7 +7115,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       bridgeMeta: {
         token: token.slice(0, 8),
         elapsedMs,
-        thresholdMs: bridgePostGatherDelayMs,
+        postGatherDelayMs: bridgePostGatherDelayMs,
         outputMode: bridgeOutputMode,
         audioUrl: bridgeAudioUrl || null
       }
