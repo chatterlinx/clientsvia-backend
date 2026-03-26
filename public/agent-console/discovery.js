@@ -58,58 +58,205 @@
      ========================================================================= */
 
   const PIPELINE_STAGES = [
-    // ── [1] Entity Extractor ─────────────────────────────────────────────
+
+    // ════════════════════════════════════════════════════════════════════════
+    // GROUP A — CALL RECEIPT
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── [1] STT / Twilio Gather ──────────────────────────────────────────
     {
-      id:       'entity_extractor',
+      id:       'stt_gather',
       order:    1,
+      icon:     '🎙️',
+      name:     'STT / Twilio Gather',
+      subtitle: 'Twilio captures caller speech — config controls sensitivity, timeout, and barge-in',
+      status:   'wired',
+      group:    'Call Receipt',
+
+      why: 'This is the entry point for every caller turn. Twilio fires a <Gather> verb with speech recognition settings. The quality of the transcript depends entirely on these settings — wrong timeout = agent cuts off callers; barge-in off = caller has to wait for agent to finish before speaking. Every downstream stage depends on clean STT input.',
+
+      engine:   'Twilio <Gather verb> with speech recognition',
+      provider: 'Twilio (Google Speech-to-Text under the hood)',
+      model:    'Configurable via speechModel setting',
+      fires:    'Every turn — opening gather after greeting, every gather after agent response.',
+      writesTo: 'req.body.SpeechResult → downstream stages',
+      wiredIn:  ['routes/v2twilio.js — /v2-agent (greeting gather)', 'routes/v2twilio.js — /v2-agent-sentence-continue (post-response gather)'],
+      configIn:  'Speech Detection — Agent 2.0 Settings',
+      configUrl: 'agent2.html',
+
+      extracts: [],
+
+      configFields: [
+        { key: 'speechTimeout',       label: 'Speech Timeout',        unit: 's',   note: 'How long agent waits after caller stops speaking before processing' },
+        { key: 'initialTimeout',      label: 'Initial Timeout',       unit: 's',   note: 'How long agent waits for caller to start speaking' },
+        { key: 'bargeIn',             label: 'Barge-in',              unit: 'bool',note: 'Allow caller to interrupt agent mid-response' },
+        { key: 'enhancedRecognition', label: 'Enhanced Recognition',  unit: 'bool',note: 'Higher-accuracy STT model (recommended for phone calls)' },
+        { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony; default = general purpose' },
+      ],
+
+      gaps: [],
+
+      routing: { always: 'scrabengine' },
+    },
+
+    // ── [2] ScrabEngine — Transcript Cleaning ────────────────────────────
+    {
+      id:       'scrabengine',
+      order:    2,
+      icon:     '🔍',
+      name:     'ScrabEngine — Transcript Cleaning',
+      subtitle: 'Removes filler words, expands vocabulary, applies synonyms before LLM sees the text',
+      status:   'wired',
+      group:    'Call Receipt',
+
+      why: 'Raw STT is noisy. Callers say "um", "uh", "like", "you know" — these dilute the signal and confuse keyword matching. ScrabEngine strips fillers, then expands vocabulary tokens ("AC" → "air conditioner") and applies synonym maps. The cleaned text gives the LLM and KC engine a much higher-quality signal to work with. Without this, KC matching degrades significantly.',
+
+      engine:   'ScrabEngineService V125',
+      provider: 'Synchronous (no AI) — pure string processing',
+      model:    null,
+      fires:    'Every turn, applied to SpeechResult before routing to LLM_INTAKE or KC engine.',
+      writesTo: 'cleanedTranscript — read by all downstream stages',
+      wiredIn:  ['services/scrabEngine/ScrabEngineService.js', 'routes/v2twilio.js — preprocessing step'],
+      configIn:  'ScrabEngine',
+      configUrl: 'scrabengine.html',
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { always: 'llm_intake' },
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // GROUP B — TURN 1: LLM INTAKE
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── [3] LLM Intake (Turn 1) ──────────────────────────────────────────
+    {
+      id:       'llm_intake',
+      order:    3,
       icon:     '🧠',
-      name:     'Entity Extractor',
-      subtitle: 'Fires on Turn 1 — extracts who the caller is and why they called',
+      name:     'LLM Intake — Entity Extraction',
+      subtitle: 'Groq extracts who is calling and why — builds discoveryNotes profile for all downstream stages',
       status:   'partial',
+      group:    'Turn 1 — LLM Intake',
 
-      why: 'Before the agent can respond intelligently, it needs to know who is calling and what they want. This stage builds the caller profile that every subsequent stage reads from. Without it, the agent treats every turn as if it knows nothing — leading to repeated questions and wrong responses.',
+      why: 'This is the brain of Turn 1. Groq (llama-3.1-70b-versatile) reads the caller\'s first utterance and extracts structured data: name, call reason, urgency, prior visit, same-day request, caller type. This profile is written to discoveryNotes (Redis, TTL=4h) and injected into every subsequent LLM prompt — it is why the agent remembers context across turns and does not ask the same question twice.',
 
-      engine:   'LLM_INTAKE_TURN_1',
+      engine:   'HybridReceptionistLLM — LLM_INTAKE_TURN_1',
       provider: 'Groq',
       model:    'llama-3.1-70b-versatile',
-      fires:    'Turn 1 (primary extraction). Also updates on KC matches (callReason + objective).',
-      writesTo: 'discoveryNotes (Redis key: discovery-notes:{companyId}:{callSid}, TTL=4h)',
-      wiredIn:  ['services/HybridReceptionistLLM.js', 'services/discoveryNotes/DiscoveryNotesService.js'],
+      fires:    'Turn 1 only. KC engine updates callReason + objective on subsequent turns.',
+      writesTo: 'discoveryNotes (Redis: discovery-notes:{companyId}:{callSid}, TTL=4h) → MongoDB Customer.discoveryNotes[] at call end',
+      wiredIn:  ['services/HybridReceptionistLLM.js — _buildIntakePrompt()', 'services/discoveryNotes/DiscoveryNotesService.js'],
       configIn:  null,
       configUrl: null,
 
       extracts: [
-        { field: 'entities.firstName',  label: 'First Name',         status: 'active'  },
-        { field: 'callReason',          label: 'Call Reason',         status: 'active'  },
-        { field: 'urgency',             label: 'Urgency',             status: 'active'  },
-        { field: 'priorVisit',          label: 'Prior Visit Flag',    status: 'active'  },
-        { field: 'sameDayRequested',    label: 'Same Day Request',    status: 'active'  },
-        { field: 'callerType',          label: 'Caller Type',         status: 'active'  },
-        { field: 'employeeMentioned',   label: 'Employee Mentioned',  status: 'gap'     },
+        { field: 'entities.firstName',  label: 'First Name',        status: 'active'  },
+        { field: 'entities.lastName',   label: 'Last Name',         status: 'partial' },
+        { field: 'callReason',          label: 'Call Reason',       status: 'active'  },
+        { field: 'urgency',             label: 'Urgency',           status: 'active'  },
+        { field: 'priorVisit',          label: 'Prior Visit Flag',  status: 'active'  },
+        { field: 'sameDayRequested',    label: 'Same-Day Request',  status: 'active'  },
+        { field: 'callerType',          label: 'Caller Type',       status: 'active'  },
+        { field: 'employeeMentioned',   label: 'Employee Mentioned',status: 'gap'     },
       ],
 
       gaps: [
-        'employeeMentioned: Caller says "Hi John" (greeting an employee by name) but the field is always null. The agent cannot acknowledge prior employee relationships — a missed trust-building opportunity for returning customers.',
+        'employeeMentioned: Caller says "Hi John" (greeting an employee by name) — field stays null. Agent cannot acknowledge prior employee relationships. Fix: add employeeMentioned extraction to the intake prompt schema.',
+        'No Turn 1 booking gate: If caller\'s first utterance is a pure booking signal ("just schedule me"), intake engine runs anyway — wasted Groq call. Fix: check for booking intent before running intake.',
       ],
+
+      routing: { always: 'greeting_protocol' },
+    },
+
+    // ── [4] Greeting Protocol (Groq Protocol) ───────────────────────────
+    {
+      id:       'greeting_protocol',
+      order:    4,
+      icon:     '👋',
+      name:     'Greeting Protocol — Groq Response Rules',
+      subtitle: 'Groq protocol: mirror greeting → greet caller by name → acknowledge problem → offer solution',
+      status:   'partial',
+      group:    'Turn 1 — LLM Intake',
+
+      why: 'A technically correct answer delivered coldly feels wrong on a phone call. The Groq Protocol is a set of system prompt rules that structure every Turn 1 response: Rule 1 = mirror the caller\'s greeting (if they say "Good morning", say it back); Rule 2 = greet caller by name if extracted; Rule 8 = always acknowledge the problem before offering a solution; Rule 14/V96j = offer a solution, not just a claim ("We can check availability right now" not "We handle that"). This is what makes the agent feel like a real person.',
+
+      engine:   'HybridReceptionistLLM system prompt rules',
+      provider: 'Groq (same call as LLM Intake — no extra round-trip)',
+      model:    'llama-3.1-70b-versatile',
+      fires:    'Turn 1 response generation. Same Groq call as entity extraction.',
+      writesTo: 'agent response text → first-sentence streaming path',
+      wiredIn:  ['services/HybridReceptionistLLM.js — Rule 1 (mirror greeting), Rule 2 (name), Rule 8 (ack), Rule 14/V96j (solution CTA)'],
+      configIn:  null,
+      configUrl: null,
+
+      extracts: [],
+
+      gaps: [
+        'employeeMentioned not applied: If caller says "Hi John" and John is an employee, agent cannot say "I see you have worked with John before" — employeeMentioned is null.',
+        'Not UI-configurable: The greeting/ack/CTA protocol is hardcoded in system prompt rules. Admins cannot adjust the format, tone, or CTA wording without a code change.',
+        'KC path missing: The Groq Protocol rules only apply to HybridReceptionistLLM (Turn 1). If a returning customer asks a question on Turn 2+ via KC engine, their prior visit is not acknowledged.',
+      ],
+
+      routing: { always: 'first_sentence_streaming' },
+    },
+
+    // ── [5] First-Sentence Fast Path ─────────────────────────────────────
+    {
+      id:       'first_sentence_streaming',
+      order:    5,
+      icon:     '⚡',
+      name:     'First-Sentence Fast Path',
+      subtitle: 'First sentence streams to ElevenLabs immediately — caller hears audio in ~400ms, no bridge',
+      status:   'wired',
+      group:    'Turn 1 — LLM Intake',
+
+      why: 'The single most impactful performance optimization in the platform. Instead of waiting for the full LLM response before sending anything to TTS, the runtime detects the first sentence boundary (period/comma/question mark) as Groq streams tokens, immediately sends that sentence to ElevenLabs, and plays it via <Play>. The caller hears audio in ~400ms. The remaining sentences continue in /v2-agent-sentence-continue. Without this, TTFB would be 1-2 seconds — the caller thinks the line is dead.',
+
+      engine:   'v2twilio.js — first-sentence streaming to ElevenLabs',
+      provider: 'ElevenLabs (TTS)',
+      model:    'Configured per company (voiceSettings)',
+      fires:    'Every LLM/Groq response turn. Applies to Turn 1 (HybridReceptionist) and KC/LLM fallback responses.',
+      writesTo: 'MP3 stream → Twilio <Play> → caller hears audio',
+      wiredIn:  ['routes/v2twilio.js — first-sentence detection + ElevenLabs stream', 'routes/v2twilio.js — /v2-agent-sentence-continue (remainder of response)'],
+      configIn:  'Voice Settings (agent2.html)',
+      configUrl: 'agent2.html',
+
+      configFields: [
+        { key: 'voiceId',           label: 'Voice ID',            unit: 'string', note: 'ElevenLabs voice to use for this company' },
+        { key: 'stability',         label: 'Stability',           unit: '0-1',    note: 'Lower = more expressive, higher = more consistent' },
+        { key: 'similarityBoost',   label: 'Similarity Boost',    unit: '0-1',    note: 'How closely to match the original voice' },
+        { key: 'styleExaggeration', label: 'Style Exaggeration',  unit: '0-1',    note: 'Amplifies speaking style' },
+        { key: 'streamingLatency',  label: 'Streaming Latency',   unit: 'enum',   note: '0=lowest latency, 4=highest quality' },
+      ],
+
+      extracts: [],
+      gaps:     [],
 
       routing: { always: 'question_detector' },
     },
 
-    // ── [2] Question Detector ────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════════════════
+    // GROUP C — TURN 2+: KC ENGINE
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── [6] Question Detector ────────────────────────────────────────────
     {
       id:       'question_detector',
-      order:    2,
+      order:    6,
       icon:     '❓',
       name:     'Question Detector',
-      subtitle: 'Detects if caller asked an answerable question — routes to KC before booking',
+      subtitle: 'Scans utterance for KC signals BEFORE booking intent fires — prevents questions being silently ignored',
       status:   'not_built',
+      group:    'Turn 2+ — KC Engine',
 
-      why: 'Callers do not follow a linear script. They often give a booking signal AND ask a question in the same utterance ("my AC is broken — do you accept credit cards?"). Without this detector, the booking intent wins and the question is silently ignored. The caller gets a booking CTA when they wanted an answer first. This stage fixes that by scanning for KC signals BEFORE the booking intent gate fires.',
+      why: 'Callers do not follow a script. They say "my AC is broken — do you accept credit cards?" in a single utterance. Without this gate, the booking intent fires first and wins — the credit card question is completely ignored. The caller gets "Can I get someone to schedule that?" when they wanted an answer. This detector runs a fast KnowledgeContainerService signal scan on every utterance BEFORE the booking intent check. If a KC signal is found, route to KC Answer first, then append the booking CTA.',
 
       engine:   null,
-      provider: null,
+      provider: 'NOT BUILT',
       model:    null,
-      fires:    'Every turn, before Booking Intent Gate.',
+      fires:    'Every turn, before Booking Intent Gate. Needs to fire on Turn 1 too.',
       writesTo: null,
       wiredIn:  [],
       configIn:  null,
@@ -118,86 +265,88 @@
       extracts: [],
 
       gaps: [
-        'NOT BUILT: Turn 1 questions embedded in intake utterances are completely ignored. Example from real call: Caller said "Do you accept credit cards?" — agent responded "Can I get someone to look into that for you?" — completely wrong.',
-        'Fix needed: Run KNOWLEDGE_SIGNALS scan (from KnowledgeContainerService) on every utterance before the booking intent check. If a KC signal is found, route to KC Answer first, then append booking CTA.',
-        'Impact: HIGH — every caller who asks a question on Turn 1 gets the wrong response.',
+        'NOT BUILT: Confirmed with real call — Caller said "Do you accept credit cards?" on Turn 1. Agent responded "Can I get someone to look into that for you?" — completely wrong answer, question ignored.',
+        'Fix: Run KnowledgeContainerService.findMatches(cleanedTranscript) before booking intent check. If matches.length > 0, route YES to kc_answer.',
+        'Impact: HIGH — every caller who asks a factual question (pricing, warranty, inclusions) on any turn gets the wrong routing if the utterance also contains a problem statement.',
       ],
 
       routing: { yes: 'kc_answer', no: 'booking_intent' },
     },
 
-    // ── [3] Booking Intent Gate ──────────────────────────────────────────
+    // ── [7] Booking Intent Gate ──────────────────────────────────────────
     {
       id:       'booking_intent',
-      order:    3,
+      order:    7,
       icon:     '🔒',
       name:     'Booking Intent Gate',
-      subtitle: 'Detects pure booking signals — routes straight to booking handoff',
+      subtitle: 'Pure booking signals skip straight to handoff — no KC or LLM needed',
       status:   'partial',
+      group:    'Turn 2+ — KC Engine',
 
-      why: 'When a caller says "yes, let\'s do it" or "I want to schedule" without any question, there is no reason to run KC or LLM — just hand them off to booking immediately. This gate prevents unnecessary Groq calls on clear booking turns. Currently wired on Turn 2+ only (KC engine). NOT wired on Turn 1.',
+      why: 'When a caller says "yes schedule me" or "let\'s book it" with no question, running KC or LLM is wasteful. This gate detects pure booking intent and routes immediately to BookingLogicEngine. Saves ~300ms and avoids a Groq call. Currently only wired on Turn 2+ (KC engine path). If a caller\'s very first utterance is a booking signal, the intake engine still runs unnecessarily.',
 
       engine:   'KCBookingIntentDetector',
-      provider: 'Synchronous (no AI)',
+      provider: 'Synchronous (no AI) — phrase matching',
       model:    null,
-      fires:    'Turn 2+ (KC engine path). NOT active on Turn 1 intake.',
-      writesTo: 'discoveryNotes (objective: BOOKING), state.lane = BOOKING',
+      fires:    'Turn 2+ (KC engine path). NOT active on Turn 1.',
+      writesTo: 'discoveryNotes.objective = BOOKING, state.lane = BOOKING',
       wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — Gate 1', 'services/engine/kc/KCBookingIntentDetector.js'],
-      configIn:  'Consent phrases (agent2.html)',
+      configIn:  'Consent & Escalation Phrases — Agent 2.0 Settings',
       configUrl: 'agent2.html',
 
       extracts: [],
 
       gaps: [
-        'NOT wired on Turn 1: If a caller\'s first utterance is a pure booking signal ("just schedule me"), the intake engine runs anyway. Should detect booking intent on Turn 1 and skip straight to handoff.',
+        'NOT wired on Turn 1: First-utterance booking signals ("I just want to book") still run the full LLM_INTAKE path. Should short-circuit to booking handoff immediately.',
       ],
 
-      routing: { yes: 'BOOKING HANDOFF (BookingLogicEngine)', no: 'kc_answer' },
+      routing: { yes: 'BOOKING HANDOFF → BookingLogicEngine', no: 'kc_answer' },
     },
 
-    // ── [4] KC Answer ────────────────────────────────────────────────────
+    // ── [8] KC Answer ────────────────────────────────────────────────────
     {
       id:       'kc_answer',
-      order:    4,
+      order:    8,
       icon:     '📦',
-      name:     'KC Answer (Knowledge Containers)',
-      subtitle: 'Matches caller question to a knowledge container — Groq answers from admin-authored facts',
-      status:   'wired',  // enriched dynamically based on container count
+      name:     'KC Answer — Knowledge Containers',
+      subtitle: 'Groq answers from admin-authored facts only — no hallucination, bounded to your content',
+      status:   'wired',
+      group:    'Turn 2+ — KC Engine',
 
-      why: 'When a caller asks "how much is a service call?" or "do you offer maintenance plans?", the answer should come from the company\'s own admin-authored content — not from the LLM\'s general knowledge (which could be wrong). This stage matches the caller\'s words to the right container, then Groq answers from that container only. No hallucination. Bounded to facts.',
+      why: 'When a caller asks "how much is a service call?" the answer must come from company-authored content, not LLM general knowledge. This stage scores every knowledge container against the utterance, picks the best match, passes its content to Groq, and gets a natural spoken answer bounded entirely to that container. Zero hallucination. Groq also handles multi-turn: if the same container matches again (SPFUQ), it continues that topic. If a new container matches, it topic-hops.',
 
       engine:   'KnowledgeContainerService + KCDiscoveryRunner',
       provider: 'Groq',
       model:    'llama-3.3-70b-versatile',
-      fires:    'Turn 2+ when a KC signal is detected. Turn 1 only once Question Detector is built.',
-      writesTo: 'discoveryNotes (callReason updated to container title, qaLog entry added), SPFUQ anchor (Redis)',
+      fires:    'Turn 2+ when a KC signal is detected (or Turn 1 once Question Detector is built).',
+      writesTo: 'discoveryNotes.callReason (updated to container title), discoveryNotes.qaLog (new entry), SPFUQ anchor (Redis)',
       wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — Gates 3-4', 'services/engine/agent2/KnowledgeContainerService.js'],
-      configIn:  'Knowledge Containers (services.html)',
+      configIn:  'Knowledge Containers',
       configUrl: 'services.html',
 
       extracts: [],
-
-      gaps: [],  // enriched dynamically — shows warning if 0 containers configured
+      gaps:     [],  // enriched dynamically — shows warning if 0 containers configured
 
       routing: { yes: 'groq_formatter', no: 'llm_fallback' },
     },
 
-    // ── [5] Groq Response Formatter ──────────────────────────────────────
+    // ── [9] Groq Response Formatter ──────────────────────────────────────
     {
       id:       'groq_formatter',
-      order:    5,
+      order:    9,
       icon:     '🤖',
       name:     'Groq Response Formatter',
-      subtitle: 'Structures the final response: name greeting + problem ack + answer + CTA',
+      subtitle: 'Applies Groq Protocol to KC answers: name + acknowledgement + answer + CTA',
       status:   'partial',
+      group:    'Turn 2+ — KC Engine',
 
-      why: 'A technically correct answer delivered robotically feels wrong on a phone call. This formatter wraps whatever KC answered with a consistent protocol: greet by name if known, acknowledge what the caller mentioned (problem, prior visit, employee), deliver the answer, then close with a natural CTA. It is what makes the agent sound like a person.',
+      why: 'A correct KC answer delivered without warmth sounds like a robot reading a FAQ. The formatter wraps KC output with the same Groq Protocol used on Turn 1: greet by name if known, acknowledge prior visit or employee relationship, deliver the answer, close with a natural CTA. This is the layer that makes KC answers sound like they come from a real agent, not a database lookup.',
 
-      engine:   'KnowledgeContainerService._buildSystemPrompt() + HybridReceptionistLLM system prompt',
-      provider: 'Groq (instruction layer, not a separate LLM call)',
+      engine:   'KnowledgeContainerService._buildSystemPrompt()',
+      provider: 'Groq (same call as KC matching — no extra round-trip)',
       model:    null,
-      fires:    'Applied to every KC answer and LLM intake response.',
-      writesTo: null,
+      fires:    'Every KC Answer response. Same Groq call as container matching.',
+      writesTo: 'agent response text → first-sentence streaming path',
       wiredIn:  ['services/engine/agent2/KnowledgeContainerService.js — _buildSystemPrompt()', 'services/HybridReceptionistLLM.js — Rules 1, 2, 8, 14'],
       configIn:  null,
       configUrl: null,
@@ -205,50 +354,52 @@
       extracts: [],
 
       gaps: [
-        'employeeMentioned acknowledgement missing: Caller says "Hi John" — agent cannot say "I\'ll note you\'ve worked with John before." Field is null (see Entity Extractor gap).',
-        'priorVisit acknowledgement in KC path: HybridReceptionistLLM correctly says "I see we\'ve worked with you before" but KC engine does not — if a returning customer asks a question on Turn 2+, their prior visit is not acknowledged.',
-        'Not UI-configurable: The greeting/ack/CTA protocol is hardcoded in system prompts. No admin can adjust the format without a code change.',
+        'priorVisit not acknowledged on KC path: HybridReceptionistLLM correctly says "I see we\'ve worked with you before" on Turn 1, but KC engine does not carry this forward on Turn 2+.',
+        'employeeMentioned not applied: Cannot reference prior employee relationship in KC responses — field is null.',
+        'Not UI-configurable: Greeting/ack/CTA protocol hardcoded in system prompts. Admins cannot adjust tone or format without a code change.',
       ],
 
-      routing: { always: 'response_delivered' },
+      routing: { always: 'first_sentence_streaming' },
     },
 
-    // ── [6] LLM Fallback ─────────────────────────────────────────────────
+    // ── [10] LLM Fallback ────────────────────────────────────────────────
     {
       id:       'llm_fallback',
-      order:    6,
+      order:    10,
       icon:     '🔮',
-      name:     'LLM Fallback',
-      subtitle: 'Claude handles complex questions KC could not answer',
+      name:     'LLM Fallback — Claude',
+      subtitle: 'Claude handles complex questions KC containers could not match',
       status:   'wired',
+      group:    'Turn 2+ — KC Engine',
 
-      why: 'No matter how good the KC containers are, some questions will not match any container. Rather than returning a canned "I don\'t know", this stage calls Claude (bucket=COMPLEX) with the full discoveryNotes context. Claude can reason across multiple topics and handle edge cases. It is the safety net that keeps the agent from being silent.',
+      why: 'No KC container library covers every possible caller question. When KC returns NO_DATA, rather than saying "I don\'t know", this stage calls Claude with the full discoveryNotes context (callReason, urgency, entities, qaLog, objective). Claude can reason across topics, handle ambiguity, and give intelligent answers even for edge cases. The discoveryNotes context prevents Claude from asking questions the caller already answered.',
 
-      engine:   'callLLMAgentForFollowUp (Agent2DiscoveryRunner)',
+      engine:   'callLLMAgentForFollowUp — Agent2DiscoveryRunner',
       provider: 'Claude (Anthropic)',
-      model:    'Reads from company LLM config',
+      model:    'Reads from company LLM config (llm.html)',
       fires:    'When KC Answer returns NO_DATA or ERROR.',
       writesTo: null,
       wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback()', 'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForFollowUp()'],
-      configIn:  null,
-      configUrl: null,
+      configIn:  'LLM Settings',
+      configUrl: 'llm.html',
 
       extracts: [],
       gaps:     [],
 
-      routing: { yes: 'response_delivered', no: 'graceful_ack' },
+      routing: { yes: 'first_sentence_streaming', no: 'graceful_ack' },
     },
 
-    // ── [7] Graceful ACK ─────────────────────────────────────────────────
+    // ── [11] Graceful ACK ────────────────────────────────────────────────
     {
       id:       'graceful_ack',
-      order:    7,
+      order:    11,
       icon:     '🆗',
       name:     'Graceful ACK',
-      subtitle: 'Last resort — canned acknowledgement when all AI paths are unavailable',
+      subtitle: 'Final safety net — canned acknowledgement when all AI paths are unavailable',
       status:   'wired',
+      group:    'Turn 2+ — KC Engine',
 
-      why: 'If both KC and Claude are unavailable (network timeout, API key missing, etc.), the caller should not hear silence or an error. This stage returns a pre-written acknowledgement that buys time for a follow-up. It is the final safety net.',
+      why: 'If both KC and Claude fail (network timeout, API outage, rate limit), the caller must not hear silence or an error message. This stage returns a pre-written acknowledgement that acknowledges the problem and buys time. It is the floor that prevents total failure from being caller-visible.',
 
       engine:   'Static response (no AI)',
       provider: null,
@@ -256,13 +407,50 @@
       fires:    'Only when KC Answer + LLM Fallback both fail.',
       writesTo: null,
       wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback() graceful path'],
-      configIn:  'Fallback Response (services.html knowledge settings)',
+      configIn:  'Fallback Response — Knowledge settings',
       configUrl: 'services.html',
 
       extracts: [],
       gaps:     [],
 
-      routing: { always: 'response_delivered' },
+      routing: { always: 'bridge_config' },
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // GROUP D — RESPONSE DELIVERY
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── [12] Bridge / Post-Gather Config ────────────────────────────────
+    {
+      id:       'bridge_config',
+      order:    12,
+      icon:     '🌉',
+      name:     'Bridge — Post-Gather Delay',
+      subtitle: 'postGatherDelayMs controls silence window before next <Gather> fires — critical for response completion',
+      status:   'wired',
+      group:    'Response Delivery',
+
+      why: 'After the agent\'s audio finishes playing, there is a silence window before Twilio opens the next <Gather>. Too short = Twilio cuts off the last word. Too long = caller hears dead air and hangs up. postGatherDelayMs controls this window. The first-sentence fast path means the bridge is mostly bypassed on Turn 1 — but it still controls the gather timing on every follow-up turn. maxCeilingMs is the hard ceiling: if the total response exceeds it, the gather fires anyway.',
+
+      engine:   'Twilio <Play> + <Pause> + <Gather>',
+      provider: 'Twilio (no AI)',
+      model:    null,
+      fires:    'After every agent response completes playing.',
+      writesTo: null,
+      wiredIn:  ['routes/v2twilio.js — bridge construction', 'routes/v2twilio.js — /v2-agent-sentence-continue'],
+      configIn:  'Bridge Settings — Agent 2.0 Settings',
+      configUrl: 'agent2.html',
+
+      configFields: [
+        { key: 'postGatherDelayMs', label: 'Post-Gather Delay', unit: 'ms',   note: 'Silence window after audio ends before next gather fires. Default: 500ms' },
+        { key: 'maxCeilingMs',      label: 'Max Ceiling',       unit: 'ms',   note: 'Hard cap on total response window. Default: 15000ms' },
+        { key: 'bridgeEnabled',     label: 'Bridge Enabled',    unit: 'bool', note: 'Master switch. Disabled = immediate gather (fastest, may cut responses)' },
+      ],
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { always: 'stt_gather (next turn)' },
     },
   ];
 
@@ -383,13 +571,23 @@
 
       if (!apiData) return enriched;
 
+      // STT Gather: overlay live speechDetection config
+      if (stage.id === 'stt_gather') {
+        const sd = apiData.pipeline?.speechDetection;
+        if (sd) {
+          enriched.dynamicBadge = `timeout:${sd.speechTimeout}s  initial:${sd.initialTimeout}s  model:${sd.speechModel}`;
+        } else {
+          enriched.gaps.push('speechDetection config not found — using Twilio defaults. Configure in Agent 2.0 → Speech Detection.');
+        }
+      }
+
       // KC Answer: warn if no containers configured
       if (stage.id === 'kc_answer') {
         const count = apiData.pipeline?.kcContainerCount ?? 0;
         if (count === 0) {
           enriched.status = 'partial';
           enriched.gaps.push(
-            `No Knowledge Containers configured. KC Answer cannot match any question — every caller question falls to LLM Fallback. Add containers in Services to enable KC answers.`
+            'No Knowledge Containers configured. KC Answer stage cannot match any question — every caller falls to LLM Fallback. Add containers in Services to activate this stage.'
           );
         } else {
           enriched.dynamicBadge = `${count} container${count !== 1 ? 's' : ''} active`;
@@ -401,7 +599,21 @@
         const count = apiData.pipeline?.consentPhrasesCount ?? 0;
         enriched.dynamicBadge = count > 0 ? `${count} consent phrases` : null;
         if (count === 0) {
-          enriched.gaps.push('No consent phrases configured — booking intent detection may be unreliable.');
+          enriched.gaps.push('No consent phrases configured — booking intent detection may be unreliable. Add phrases in Agent 2.0 Settings.');
+        }
+      }
+
+      // Bridge: overlay live postGatherDelayMs and maxCeilingMs
+      if (stage.id === 'bridge_config') {
+        const p = apiData.pipeline;
+        if (p) {
+          const delay   = p.postGatherDelayMs ?? '?';
+          const ceiling = p.maxCeilingMs ?? '?';
+          const enabled = p.bridgeEnabled !== false;
+          enriched.dynamicBadge = `delay:${delay}ms  ceil:${ceiling}ms  ${enabled ? 'enabled' : '⚠️ disabled'}`;
+          if (!enabled) {
+            enriched.gaps.push('Bridge is disabled — immediate gather fires after every response. Callers may be cut off on long responses.');
+          }
         }
       }
 
@@ -516,11 +728,34 @@
          </div>`
       : '';
 
-    // ── Config link ────────────────────────────────────────────────────
-    const configLinkHtml = stage.configUrl
+    // ── Config fields table ────────────────────────────────────────────
+    const configFieldsHtml = stage.configFields?.length
       ? `<div class="dp-section">
-           <a class="dp-config-link" href="${esc(stage.configUrl)}?companyId=${esc(state.companyId)}">
-             ⚙️ Configure in ${esc(stage.configIn || stage.configUrl)}
+           <div class="dp-section-label">Config Settings</div>
+           <table class="dp-config-table">
+             <thead>
+               <tr><th>Setting</th><th>Key</th><th>Unit</th><th>Note</th></tr>
+             </thead>
+             <tbody>
+               ${stage.configFields.map(cf => `
+                 <tr>
+                   <td><strong>${esc(cf.label)}</strong></td>
+                   <td><code>${esc(cf.key)}</code></td>
+                   <td>${esc(cf.unit)}</td>
+                   <td>${esc(cf.note)}</td>
+                 </tr>
+               `).join('')}
+             </tbody>
+           </table>
+         </div>`
+      : '';
+
+    // ── Wire from here button ──────────────────────────────────────────
+    const configLinkHtml = stage.configUrl
+      ? `<div class="dp-section dp-wire-section">
+           <a class="dp-wire-btn" href="/agent-console/${esc(stage.configUrl)}?companyId=${esc(state.companyId)}">
+             ⚙️ Wire from here — ${esc(stage.configIn || stage.configUrl)}
+             <span class="dp-wire-arrow">→</span>
            </a>
          </div>`
       : '';
@@ -614,11 +849,21 @@
     `;
   }
 
-  /** Render the full pipeline (all cards + connectors). */
+  /** Render the full pipeline (all cards + connectors + group headers). */
   function renderPipeline(stages) {
     let html = '';
+    let lastGroup = null;
 
     stages.forEach((stage, idx) => {
+      // ── Group header when group changes ─────────────────────────────
+      if (stage.group && stage.group !== lastGroup) {
+        if (lastGroup !== null) {
+          html += '<div class="dp-group-gap"></div>';
+        }
+        html += `<div class="dp-group-header">${esc(stage.group)}</div>`;
+        lastGroup = stage.group;
+      }
+
       html += renderPipelineCard(stage);
 
       if (idx < stages.length - 1) {
@@ -922,32 +1167,45 @@
   /* =========================================================================
      MODULE: LOAD + RENDER
      ─────────────────────────────────────────────────────────────────────────
-     Main data flow:
-       1. API.getPipelineStatus() → raw data
-       2. enrichStages(data)      → PIPELINE_STAGES + dynamic info
-       3. renderPipeline()        → cards in DOM
-       4. renderStatsBar()        → pill counts
-       5. renderNotesPanel()      → sidebar discoveryNotes
-       6. renderNotesModal()      → modal (populated but not shown yet)
+     TWO-PHASE RENDER — same principle as the first-sentence fast path:
+
+     PHASE 1 — instant (~0ms):
+       Render full pipeline from static PIPELINE_STAGES data immediately.
+       No API call needed. User sees the complete pipeline on first paint.
+       Stats bar shows static wired/partial/not_built counts.
+       discoveryNotes panel renders from static schema.
+
+     PHASE 2 — after API (~200-400ms):
+       Overlay dynamic per-company data:
+         • KC container count (warns if 0)
+         • Trigger count
+         • Speech detection live config values
+         • discoveryNotes field statuses from MongoDB
+       Re-renders only what changed.
      ========================================================================= */
 
   async function loadAndRender() {
+    // ── PHASE 1: instant static render ────────────────────────────────────
+    state.stages = PIPELINE_STAGES.slice();
+    renderStatsBar(state.stages, null);
+    renderPipeline(state.stages);
+    renderNotesPanel(DISCOVERY_NOTES_SCHEMA);
+
+    // ── PHASE 2: overlay dynamic API data ─────────────────────────────────
     try {
       const data = await API.getPipelineStatus(state.companyId);
       state.pipelineData = data;
 
-      // Update header
+      // Update header with real company name
       state.companyName = data.companyName || state.companyId;
       DOM.headerCompanyName.textContent = state.companyName;
 
-      // Merge static stage definitions with dynamic API data
+      // Re-render with enriched stage data (KC count gaps, bridge config, etc.)
       state.stages = enrichStages(data);
-
-      // Render everything
       renderStatsBar(state.stages, data);
       renderPipeline(state.stages);
 
-      // Merge schema with API gap data
+      // Merge schema with live API gap data
       const apiFields = data.discoveryNotes?.fields || [];
       const schema = DISCOVERY_NOTES_SCHEMA.map(field => {
         const apiField = apiFields.find(f => f.key === field.key);
@@ -957,14 +1215,13 @@
       renderNotesModal(schema, data.discoveryNotes?.gaps || []);
 
     } catch (err) {
-      console.error('[Discovery] Load failed:', err);
-      DOM.pipelineContainer.innerHTML = `
-        <div class="dp-gap-item">
-          <span class="dp-gap-icon">⚠️</span>
-          <span>Failed to load pipeline status. Check that you are logged in and the companyId is valid.</span>
-        </div>
-      `;
-      DOM.statsBar.innerHTML = '';
+      console.error('[Discovery] API overlay failed:', err);
+      // Pipeline already visible from Phase 1 — show a soft inline warning only
+      const warn = document.createElement('div');
+      warn.className = 'dp-gap-item';
+      warn.style.margin = '0 0 12px 0';
+      warn.innerHTML = '<span class="dp-gap-icon">⚠️</span><span>Live config unavailable — showing static definitions. Check login or companyId.</span>';
+      DOM.statsBar.insertAdjacentElement('afterend', warn);
     }
   }
 
