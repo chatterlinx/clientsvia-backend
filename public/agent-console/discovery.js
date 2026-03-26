@@ -186,11 +186,17 @@
       order:    5,
       icon:     '🎙️',
       name:     'STT — Deepgram via Twilio Gather',
-      subtitle: 'Twilio <Gather> captures speech → Deepgram transcribes → raw transcript flows to Turn 1 entity extraction',
+      subtitle: 'speechTimeout (default 1.5s) is the #1 latency driver — dominates every other stage combined. Twilio waits this long after caller stops talking before anything starts.',
       status:   'wired',
       group:    'Call Receipt',
 
-      why: 'After each agent response, Twilio opens a <Gather> with Deepgram speech recognition. The quality of the transcript depends entirely on these settings — wrong timeout = agent cuts off callers mid-sentence; barge-in off = caller must wait for agent audio to finish before speaking. Deepgram\'s phone_call model is optimized for telephony and outperforms generic STT on speaker accents and noise. Every downstream stage depends on clean STT input.',
+      why: 'After each agent response, Twilio opens a <Gather> with Deepgram speech recognition. ' +
+           'CRITICAL LATENCY FACT: speechTimeout = 1.5s (default) is the DOMINANT contributor to caller-perceived delay. ' +
+           'The full path after the caller stops talking: 1,500ms silence wait → webhook fires → 30ms extraction → 150ms Groq TTFT → 150ms ElevenLabs → caller hears audio. ' +
+           'That 1,500ms is 4× bigger than all AI processing combined. Lowering it to 1.0s saves 500ms instantly — no code changes needed, just a slider. ' +
+           'The trade-off: too low (< 0.8s) cuts off callers who pause mid-sentence ("My AC is… broken"). ' +
+           'Additional settings that affect latency: barge-in off = caller must wait for all agent audio to finish before speaking (adds full response duration to perceived wait). ' +
+           'Deepgram phone_call model is optimized for PSTN telephony and outperforms generic STT on accents and background noise.',
 
       engine:   'Twilio <Gather> with Deepgram speech recognition',
       provider: 'Deepgram (via Twilio speech recognition integration)',
@@ -204,22 +210,59 @@
       extracts: [],
 
       configFields: [
-        { key: 'speechTimeout',       label: 'Speech Timeout',        unit: 's',   note: 'How long agent waits after caller stops speaking before processing' },
-        { key: 'initialTimeout',      label: 'Initial Timeout',       unit: 's',   note: 'How long agent waits for caller to start speaking' },
-        { key: 'bargeIn',             label: 'Barge-in',              unit: 'bool',note: 'Allow caller to interrupt agent mid-response' },
-        { key: 'enhancedRecognition', label: 'Enhanced Recognition',  unit: 'bool',note: 'Higher-accuracy STT model (recommended for phone calls)' },
-        { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony via Deepgram; default = general purpose' },
+        { key: 'speechTimeout',       label: '⚡ Speech Timeout (END-OF-SPEECH WAIT)', unit: 's',   note: '⚠️ DOMINANT LATENCY FACTOR. Time Twilio waits after caller stops talking before firing transcript. Default: 1.5s. Lowering to 1.0s saves 500ms on every single turn. Schema range: 1s–10s minimum. Too low risks cutting mid-sentence pauses.' },
+        { key: 'initialTimeout',      label: 'Initial Timeout',       unit: 's',   note: 'How long Twilio waits for the caller to START speaking before giving up. Default: 7s. Unrelated to response latency.' },
+        { key: 'bargeIn',             label: 'Barge-in',              unit: 'bool',note: 'Allow caller to interrupt agent mid-response. When false, caller must wait for all agent audio to finish — adds full response duration to wait time.' },
+        { key: 'enhancedRecognition', label: 'Enhanced Recognition',  unit: 'bool',note: 'Higher-accuracy Deepgram model (recommended). Minor latency cost (~20ms), significant accuracy improvement.' },
+        { key: 'speechModel',         label: 'Speech Model',          unit: 'enum',note: 'phone_call = best for telephony via Deepgram; default = general purpose. phone_call recommended for all live calls.' },
       ],
 
-      gaps: [],
+      gaps: [
+        '⚡ MS-CRITICAL — speechTimeout 1.5s adds 1,500ms to EVERY turn. This single number dominates all other pipeline latency combined. Evaluate lowering to 1.0s for 500ms improvement per turn.',
+        'barge-in is off by default — caller cannot interrupt agent audio. When response is long (3+ sentences), caller waits the full playback duration before speaking. Consider enabling barge-in for Turn 2+ conversational turns.',
+        'No per-turn dynamic timeout: pending follow-up questions extend to 2s automatically, but there is no mechanism to shorten timeout for simple yes/no follow-ups where 0.8s would be safe.',
+      ],
 
       routing: { always: 'llm_intake', note: 'ScrabEngine (6) is bypassed — STT routes direct to LLM' },
     },
 
-    // ── [6] ScrabEngine — Transcript Cleaning (BYPASSED) ─────────────────
+    // ── [6] End-of-Speech Detection ──────────────────────────────────────
+    {
+      id:       'stt_eosdetection',
+      order:    6,
+      icon:     '⏳',
+      name:     'End-of-Speech Detection',
+      subtitle: '⚡ DOMINANT LATENCY DRIVER — Twilio waits speechTimeout seconds of silence after caller stops talking. Nothing runs until this countdown completes.',
+      status:   'wired',
+      group:    'Call Receipt',
+
+      why: 'This is the single highest-impact latency lever in the pipeline. After the caller stops talking, Twilio counts silence. Only after speechTimeout seconds of unbroken silence does it fire the webhook — and only then does STT, entity extraction, Groq, and ElevenLabs start. ' +
+           'At the default 1.5s, this adds 1,500ms to EVERY turn. That is 4× larger than all AI processing combined. ' +
+           'Lowering speechTimeout to 1.0s is a zero-code, zero-risk 500ms improvement per turn — just a slider. ' +
+           'The floor is 1.0s (schema minimum). Below that, callers who pause mid-sentence ("My AC is… not working") get cut off. ' +
+           'barge-in OFF compounds this: caller must also wait for all agent audio to finish before the gather even opens — adding the full response playback duration on top.',
+
+      engine:   'Twilio <Gather> — built-in VAD (Voice Activity Detection)',
+      provider: 'Twilio (no AI — pure silence measurement)',
+      model:    null,
+      fires:    'Every turn. Countdown starts the instant caller stops speaking.',
+      writesTo: null,
+      wiredIn:  ['routes/v2twilio.js — Gather construction (speechTimeout attribute)', 'models/v2Company.js — agent2.speechDetection schema'],
+      configIn:  'Speech Detection — Agent 2.0 Settings',
+      configUrl: 'agent2.html',
+
+      liveValues: [],   // ← populated dynamically by enrichStages() from API data
+
+      extracts: [],
+      gaps:     [],
+
+      routing: { always: 'llm_intake', note: 'Countdown ends → Twilio POSTs transcript to server → agent processing begins' },
+    },
+
+    // ── [7] ScrabEngine — Transcript Cleaning (BYPASSED) ─────────────────
     {
       id:       'scrabengine',
-      order:    6,
+      order:    7,
       icon:     '⏭️',
       name:     'ScrabEngine — Transcript Cleaning',
       subtitle: 'Bypassed — Groq handles filler removal and vocabulary expansion natively as part of LLM processing',
@@ -253,7 +296,7 @@
     // ── [7] Turn 1 — Entity Extraction (Groq 8b) ─────────────────────────
     {
       id:       'llm_intake',
-      order:    7,
+      order:    8,
       icon:     '🔬',
       name:     'Turn 1 — Entity Extraction',
       subtitle: 'llama-3.1-8b-instant extracts caller entities as JSON in ~30ms: name, call reason, urgency, prior visit',
@@ -296,7 +339,7 @@
     // ── [8] Turn 1 — Response Generation (Groq 70b, streaming) ──────────
     {
       id:       'response_gen',
-      order:    8,
+      order:    9,
       icon:     '💬',
       name:     'Turn 1 — Response Generation',
       subtitle: 'llama-3.3-70b-versatile generates warm spoken response with entities already known — streams plain text',
@@ -331,7 +374,7 @@
     // ── [9] First Sentence → ElevenLabs TTS ── ⚡ MS-CRITICAL PATH ────────
     {
       id:       'first_sentence_tts',
-      order:    9,
+      order:    10,
       icon:     '⚡',
       name:     'First Sentence → ElevenLabs TTS',
       subtitle: '⚡ MS-CRITICAL: First sentence boundary in Groq stream → ElevenLabs synthesis → caller hears audio in ~400ms',
@@ -376,7 +419,7 @@
     // ── [6] Question Detector ────────────────────────────────────────────
     {
       id:       'question_detector',
-      order:    10,
+      order:    11,
       icon:     '❓',
       name:     'Question Detector',
       subtitle: 'Scans utterance for KC signals BEFORE booking intent fires — prevents questions being silently ignored',
@@ -408,7 +451,7 @@
     // ── [7] Booking Intent Gate ──────────────────────────────────────────
     {
       id:       'booking_intent',
-      order:    11,
+      order:    12,
       icon:     '🔒',
       name:     'Booking Intent Gate',
       subtitle: 'Pure booking signals skip straight to handoff — no KC or LLM needed',
@@ -438,7 +481,7 @@
     // ── [8] KC Answer ────────────────────────────────────────────────────
     {
       id:       'kc_answer',
-      order:    12,
+      order:    13,
       icon:     '📦',
       name:     'KC Answer — Knowledge Containers',
       subtitle: 'Groq answers from admin-authored facts only — no hallucination, bounded to your content',
@@ -465,7 +508,7 @@
     // ── [9] Groq Response Formatter ──────────────────────────────────────
     {
       id:       'groq_formatter',
-      order:    13,
+      order:    14,
       icon:     '🤖',
       name:     'Groq Response Formatter',
       subtitle: 'Applies Groq Protocol to KC answers: name + acknowledgement + answer + CTA',
@@ -497,7 +540,7 @@
     // ── [10] LLM Fallback ────────────────────────────────────────────────
     {
       id:       'llm_fallback',
-      order:    14,
+      order:    15,
       icon:     '🔮',
       name:     'LLM Fallback — Claude',
       subtitle: 'Claude handles complex questions KC containers could not match',
@@ -524,7 +567,7 @@
     // ── [11] Graceful ACK ────────────────────────────────────────────────
     {
       id:       'graceful_ack',
-      order:    15,
+      order:    16,
       icon:     '🆗',
       name:     'Graceful ACK',
       subtitle: 'Final safety net — canned acknowledgement when all AI paths are unavailable',
@@ -555,7 +598,7 @@
     // ── [12] Bridge / Post-Gather Config ────────────────────────────────
     {
       id:       'bridge_config',
-      order:    16,
+      order:    17,
       icon:     '🌉',
       name:     'Bridge — Post-Gather Delay',
       subtitle: 'postGatherDelayMs controls silence window before next <Gather> fires — critical for response completion',
@@ -712,13 +755,62 @@
 
       if (!apiData) return enriched;
 
-      // STT Gather: overlay live speechDetection config
-      if (stage.id === 'stt_gather') {
+      // End-of-Speech Detection: populate live values from speechDetection config
+      if (stage.id === 'stt_eosdetection') {
         const sd = apiData.pipeline?.speechDetection;
         if (sd) {
-          enriched.dynamicBadge = `timeout:${sd.speechTimeout}s  initial:${sd.initialTimeout}s  model:${sd.speechModel}`;
+          const stMs = Math.round((sd.speechTimeout ?? 1.5) * 1000);
+          enriched.liveValues = [
+            {
+              label:  '⚡ End-of-Speech Silence Wait',
+              value:  `${sd.speechTimeout ?? 1.5}s`,
+              ms:     stMs,
+              impact: 'high',
+              note:   `${stMs.toLocaleString()}ms of silence after caller stops talking before ANYTHING starts. Dominant latency factor — 4× larger than all AI processing combined.`,
+            },
+            {
+              label:  'Initial Wait (caller start)',
+              value:  `${sd.initialTimeout ?? 7}s`,
+              ms:     0,
+              impact: 'none',
+              note:   'How long Twilio waits for caller to begin speaking. Does not affect response speed.',
+            },
+            {
+              label:  'Barge-in',
+              value:  sd.bargeIn ? 'ON' : 'OFF',
+              ms:     sd.bargeIn ? 0 : -1,
+              impact: sd.bargeIn ? 'none' : 'medium',
+              note:   sd.bargeIn
+                ? 'Caller can interrupt agent mid-response — fastest interaction model.'
+                : 'Caller must wait for all agent audio to finish before speaking. Adds full response playback duration to perceived wait.',
+            },
+            {
+              label:  'Enhanced STT',
+              value:  sd.enhancedRecognition !== false ? 'ON' : 'OFF',
+              ms:     sd.enhancedRecognition !== false ? 20 : 0,
+              impact: 'low',
+              note:   sd.enhancedRecognition !== false
+                ? 'Higher-accuracy Deepgram model active (~20ms latency cost, significant accuracy gain on accents and noise).'
+                : 'Standard accuracy mode. Faster but less accurate.',
+            },
+            {
+              label:  'Speech Model',
+              value:  sd.speechModel || 'phone_call',
+              ms:     0,
+              impact: 'none',
+              note:   'phone_call = optimized for PSTN telephony. Best choice for all live calls.',
+            },
+          ];
+          enriched.dynamicBadge = `⏳ ${sd.speechTimeout ?? 1.5}s → ${stMs.toLocaleString()}ms`;
+          // Surface a gap if speechTimeout is above optimal
+          if ((sd.speechTimeout ?? 1.5) > 1.0) {
+            const saving = Math.round(((sd.speechTimeout ?? 1.5) - 1.0) * 1000);
+            enriched.gaps.push(
+              `speechTimeout is ${sd.speechTimeout ?? 1.5}s (${stMs}ms). Lowering to 1.0s saves ${saving}ms per turn — zero code change, just adjust the slider in Agent 2.0 → Speech Detection.`
+            );
+          }
         } else {
-          enriched.gaps.push('speechDetection config not found — using Twilio defaults. Configure in Agent 2.0 → Speech Detection.');
+          enriched.gaps.push('speechDetection config not found — using Twilio defaults (1.5s). Configure in Agent 2.0 → Speech Detection.');
         }
       }
 
@@ -1110,6 +1202,31 @@
          </div>`
       : '';
 
+    // ── Live values (dynamic — populated from API per company) ─────────
+    const liveTotal = (stage.liveValues || []).reduce((sum, lv) => sum + (lv.ms > 0 ? lv.ms : 0), 0);
+    const liveValuesHtml = stage.liveValues?.length
+      ? `<div class="dp-section">
+           <div class="dp-section-label">⚡ Live Configuration — current values for this company</div>
+           <div class="dp-lv-grid">
+             ${stage.liveValues.map(lv => `
+               <div class="dp-lv-row dp-lv-impact-${esc(lv.impact)}">
+                 <div class="dp-lv-label">${esc(lv.label)}</div>
+                 <div class="dp-lv-value">${esc(lv.value)}</div>
+                 <div class="dp-lv-ms">${lv.ms > 0 ? `~${lv.ms.toLocaleString()}ms` : lv.ms === -1 ? 'varies' : '—'}</div>
+                 <div class="dp-lv-badge">${lv.impact !== 'none' ? lv.impact.toUpperCase() : ''}</div>
+                 <div class="dp-lv-note-text">${esc(lv.note)}</div>
+               </div>
+             `).join('')}
+           </div>
+           ${liveTotal > 0 ? `
+             <div class="dp-lv-total">
+               ⏱ Estimated latency contribution from this stage:
+               <strong>~${liveTotal.toLocaleString()}ms</strong>
+             </div>
+           ` : ''}
+         </div>`
+      : '';
+
     // ── Wire from here button ──────────────────────────────────────────
     const configLinkHtml = stage.configUrl
       ? `<div class="dp-section dp-wire-section">
@@ -1166,10 +1283,12 @@
             </div>
           ` : ''}
 
+          ${liveValuesHtml}
           ${extractsHtml}
           ${gapsHtml}
           ${metaHtml}
           ${filesHtml}
+          ${configFieldsHtml}
           ${configLinkHtml}
           ${routingHtml}
 
