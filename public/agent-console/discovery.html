@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discovery Pipeline — Agent Console</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Shared agent-console styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+
+  <style>
+    /* ====================================================================
+       DISCOVERY PIPELINE — Scoped Styles
+       All classes prefixed with dp- to avoid collision with styles.css
+       ==================================================================== */
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .dp-layout {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      .dp-layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Stats bar ──────────────────────────────────────────────────── */
+    .dp-stats-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .dp-stat-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1.5px solid transparent;
+    }
+    .dp-stat-pill.wired    { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+    .dp-stat-pill.partial  { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+    .dp-stat-pill.not-built{ background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+    .dp-stat-pill.info     { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .dp-stat-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .dp-stat-pill.wired .dp-stat-dot    { background: #16a34a; }
+    .dp-stat-pill.partial .dp-stat-dot  { background: #d97706; }
+    .dp-stat-pill.not-built .dp-stat-dot{ background: #dc2626; }
+    .dp-stat-pill.info .dp-stat-dot     { background: #2563eb; }
+
+    /* ── Pipeline container ─────────────────────────────────────────── */
+    #dp-pipeline-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* ── Pipeline card ──────────────────────────────────────────────── */
+    .dp-card {
+      position: relative;
+      background: #fff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .dp-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+    .dp-card.status-wired     { border-left: 4px solid #22c55e; }
+    .dp-card.status-partial   { border-left: 4px solid #f59e0b; }
+    .dp-card.status-not-built { border-left: 4px solid #ef4444; }
+    .dp-card.status-planned   { border-left: 4px solid #6366f1; }
+
+    /* ── Card header ────────────────────────────────────────────────── */
+    .dp-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dp-card-header:hover { background: #f9fafb; }
+    .dp-card-order {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #f3f4f6;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #374151;
+      flex-shrink: 0;
+    }
+    .dp-card-icon { font-size: 20px; flex-shrink: 0; }
+    .dp-card-title-group { flex: 1; min-width: 0; }
+    .dp-card-name {
+      font-size: 15px; font-weight: 600; color: #111827;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dp-card-subtitle {
+      font-size: 12px; color: #6b7280; margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dp-card-right {
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+
+    /* ── Status badge ───────────────────────────────────────────────── */
+    .dp-status-badge {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+      padding: 3px 9px; border-radius: 999px;
+      text-transform: uppercase;
+    }
+    .dp-status-badge.wired     { background: #dcfce7; color: #15803d; }
+    .dp-status-badge.partial   { background: #fef9c3; color: #854d0e; }
+    .dp-status-badge.not-built { background: #fee2e2; color: #991b1b; }
+    .dp-status-badge.planned   { background: #e0e7ff; color: #3730a3; }
+
+    .dp-expand-btn {
+      background: none; border: none; cursor: pointer;
+      color: #9ca3af; font-size: 16px; padding: 2px 4px;
+      transition: color 0.15s;
+    }
+    .dp-expand-btn:hover { color: #374151; }
+
+    /* ── Card body (expandable) ─────────────────────────────────────── */
+    .dp-card-body {
+      display: none;
+      padding: 0 20px 20px 20px;
+      border-top: 1px solid #f3f4f6;
+    }
+    .dp-card-body.open { display: block; }
+
+    /* ── Card body sections ─────────────────────────────────────────── */
+    .dp-section { margin-top: 16px; }
+    .dp-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #9ca3af; margin-bottom: 8px;
+    }
+
+    .dp-why-box {
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: 12px 14px;
+      font-size: 13px; color: #374151; line-height: 1.6;
+    }
+
+    .dp-meta-grid {
+      display: grid; grid-template-columns: 120px 1fr;
+      gap: 6px 12px; font-size: 13px;
+    }
+    .dp-meta-key   { color: #9ca3af; font-weight: 500; }
+    .dp-meta-value { color: #111827; font-family: 'SF Mono', monospace; font-size: 12px; }
+
+    /* ── Field tags ─────────────────────────────────────────────────── */
+    .dp-field-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dp-field-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 500; padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .dp-field-tag.active   { background: #dcfce7; color: #166534; }
+    .dp-field-tag.partial  { background: #fef9c3; color: #713f12; }
+    .dp-field-tag.gap      { background: #fee2e2; color: #991b1b; }
+    .dp-field-tag.booking  { background: #eff6ff; color: #1e40af; }
+
+    /* ── Gap warnings ───────────────────────────────────────────────── */
+    .dp-gap-list { display: flex; flex-direction: column; gap: 6px; }
+    .dp-gap-item {
+      display: flex; gap: 8px; align-items: flex-start;
+      background: #fff7ed; border: 1px solid #fed7aa;
+      border-radius: 8px; padding: 10px 12px;
+      font-size: 12px; color: #9a3412; line-height: 1.5;
+    }
+    .dp-gap-icon { flex-shrink: 0; font-size: 14px; }
+
+    /* ── Routing indicator ──────────────────────────────────────────── */
+    .dp-routing {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 4px;
+    }
+    .dp-route-tag {
+      font-size: 11px; font-weight: 600; padding: 3px 10px;
+      border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .dp-route-tag.always   { background: #e0f2fe; color: #0369a1; }
+    .dp-route-tag.yes      { background: #dcfce7; color: #15803d; }
+    .dp-route-tag.no       { background: #f3f4f6; color: #374151; }
+    .dp-route-tag.fallback { background: #fef3c7; color: #92400e; }
+
+    /* ── Config link ────────────────────────────────────────────────── */
+    .dp-config-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600; color: #2563eb;
+      text-decoration: none; padding: 6px 12px;
+      background: #eff6ff; border-radius: 6px; margin-top: 4px;
+      transition: background 0.15s;
+    }
+    .dp-config-link:hover { background: #dbeafe; }
+
+    /* ── Connector between cards ────────────────────────────────────── */
+    .dp-connector {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 4px 0; position: relative;
+    }
+    .dp-connector-line {
+      width: 2px; height: 20px; background: #d1d5db;
+    }
+    .dp-connector-label {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #9ca3af; padding: 2px 8px;
+      background: #f9fafb; border: 1px solid #e5e7eb;
+      border-radius: 999px;
+    }
+
+    /* ── Branch connector ───────────────────────────────────────────── */
+    .dp-branch {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 8px 0;
+      margin-left: 60px;
+    }
+    .dp-branch-arm {
+      display: flex; flex-direction: column; align-items: center;
+      font-size: 10px; font-weight: 700; color: #6b7280;
+      gap: 4px;
+    }
+    .dp-branch-arm .dp-branch-label {
+      padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700;
+    }
+    .dp-branch-arm.yes .dp-branch-label { background: #dcfce7; color: #15803d; }
+    .dp-branch-arm.no  .dp-branch-label { background: #f3f4f6; color: #374151; }
+    .dp-branch-arm .dp-branch-line {
+      width: 2px; height: 16px; background: #d1d5db;
+    }
+    .dp-branch-arm .dp-branch-target {
+      font-size: 11px; font-weight: 600; color: #374151;
+      padding: 3px 10px; background: #f3f4f6; border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* ── Side panel ─────────────────────────────────────────────────── */
+    .dp-side-panel {
+      display: flex; flex-direction: column; gap: 20px;
+      position: sticky; top: 24px;
+    }
+
+    /* ── Panel card ─────────────────────────────────────────────────── */
+    .dp-panel-card {
+      background: #fff; border: 1.5px solid #e5e7eb;
+      border-radius: 12px; overflow: hidden;
+    }
+    .dp-panel-header {
+      padding: 14px 16px; border-bottom: 1px solid #f3f4f6;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .dp-panel-title {
+      font-size: 13px; font-weight: 700; color: #111827;
+    }
+    .dp-panel-body { padding: 16px; }
+
+    /* ── discoveryNotes field table ─────────────────────────────────── */
+    .dp-notes-field {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 4px 12px; padding: 7px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 12px;
+      align-items: start;
+    }
+    .dp-notes-field:last-child { border-bottom: none; }
+    .dp-notes-field-key {
+      font-family: 'SF Mono', monospace; color: #374151; font-size: 11px;
+    }
+    .dp-notes-field-source {
+      grid-column: 1; color: #9ca3af; font-size: 11px;
+    }
+    .dp-notes-field-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 999px; white-space: nowrap; align-self: center;
+    }
+    .dp-notes-field-badge.active  { background: #dcfce7; color: #15803d; }
+    .dp-notes-field-badge.partial { background: #fef9c3; color: #854d0e; }
+    .dp-notes-field-badge.gap     { background: #fee2e2; color: #991b1b; }
+    .dp-notes-field-badge.booking { background: #eff6ff; color: #1e40af; }
+
+    /* ── Call Trace Analyzer ────────────────────────────────────────── */
+    .dp-trace-textarea {
+      width: 100%; min-height: 100px;
+      font-family: 'SF Mono', monospace; font-size: 11px;
+      border: 1.5px solid #e5e7eb; border-radius: 8px;
+      padding: 10px 12px; resize: vertical; color: #374151;
+      box-sizing: border-box;
+    }
+    .dp-trace-textarea:focus {
+      outline: none; border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .dp-btn-analyze {
+      margin-top: 8px; width: 100%;
+      background: #6366f1; color: #fff;
+      border: none; border-radius: 8px;
+      padding: 10px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .dp-btn-analyze:hover { background: #4f46e5; }
+
+    /* ── Trace output ───────────────────────────────────────────────── */
+    .dp-trace-turn {
+      border: 1.5px solid #e5e7eb; border-radius: 10px;
+      overflow: hidden; margin-top: 12px;
+    }
+    .dp-trace-turn-header {
+      background: #f8fafc; padding: 10px 14px;
+      font-size: 12px; font-weight: 700; color: #374151;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dp-trace-turn-body { padding: 12px 14px; }
+    .dp-trace-stage {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 6px 0; border-bottom: 1px solid #f3f4f6;
+      font-size: 12px;
+    }
+    .dp-trace-stage:last-child { border-bottom: none; }
+    .dp-trace-stage-icon { flex-shrink: 0; font-size: 14px; }
+    .dp-trace-stage-name { font-weight: 600; color: #111827; }
+    .dp-trace-stage-detail { color: #6b7280; font-size: 11px; margin-top: 2px; }
+    .dp-trace-stage-status {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 10px; font-weight: 700; padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .dp-trace-stage-status.fired   { background: #dcfce7; color: #15803d; }
+    .dp-trace-stage-status.skipped { background: #f3f4f6; color: #6b7280; }
+    .dp-trace-stage-status.missed  { background: #fee2e2; color: #991b1b; }
+    .dp-trace-stage-status.gap     { background: #fef9c3; color: #854d0e; }
+
+    .dp-trace-response {
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 8px; padding: 10px 12px;
+      font-size: 12px; color: #166534; line-height: 1.6;
+      margin-top: 10px;
+    }
+    .dp-trace-score {
+      margin-top: 10px; padding: 10px 12px;
+      background: #f8fafc; border-radius: 8px;
+    }
+    .dp-trace-score-title {
+      font-size: 11px; font-weight: 700; color: #374151; margin-bottom: 6px;
+    }
+    .dp-trace-score-item {
+      font-size: 11px; color: #374151; padding: 2px 0;
+    }
+    .dp-trace-score-item.pass { color: #15803d; }
+    .dp-trace-score-item.fail { color: #991b1b; }
+
+    /* ── Empty state ────────────────────────────────────────────────── */
+    .dp-empty {
+      text-align: center; padding: 40px 20px;
+      color: #9ca3af; font-size: 13px;
+    }
+    .dp-empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+    /* ── Skeleton loader ────────────────────────────────────────────── */
+    .dp-skeleton {
+      background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+      background-size: 200% 100%;
+      animation: dp-shimmer 1.5s infinite;
+      border-radius: 8px; height: 80px;
+    }
+    @keyframes dp-shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Utility ────────────────────────────────────────────────────── */
+    .dp-link-btn {
+      background: none; border: none; cursor: pointer;
+      color: #6366f1; font-size: 12px; font-weight: 600;
+      padding: 0; text-decoration: underline;
+    }
+    .dp-monospace { font-family: 'SF Mono', monospace; font-size: 11px; }
+    .dp-code-pill {
+      display: inline-block; background: #f3f4f6;
+      border: 1px solid #e5e7eb; border-radius: 4px;
+      padding: 1px 6px; font-family: 'SF Mono', monospace;
+      font-size: 11px; color: #374151;
+    }
+    .dp-badge-count {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 20px; border-radius: 10px;
+      background: #6366f1; color: #fff;
+      font-size: 11px; font-weight: 700; padding: 0 6px;
+    }
+    .dp-mt-4  { margin-top: 4px; }
+    .dp-mt-8  { margin-top: 8px; }
+    .dp-mt-12 { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ================================================================
+         HEADER — STICKY TOP BAR (matches agent2.html pattern)
+         ================================================================ -->
+    <header class="header">
+      <div class="header-left">
+        <a href="/agent-console/agent2.html?companyId=__COMPANY_ID__" class="header-back" id="header-back-link" title="Back to Agent 2.0">
+          <span>←</span>
+        </a>
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="32" height="32" rx="8" fill="#6366f1"/>
+              <path d="M8 16L14 22L24 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="logo-text">ClientVia</span>
+        </div>
+        <span class="header-divider">|</span>
+        <span class="header-page-title">Discovery Pipeline</span>
+      </div>
+      <div class="header-center">
+        <span class="header-company-name" id="header-company-name">Loading…</span>
+        <span class="header-company-id" id="header-company-id"></span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary btn-sm" id="btn-refresh" title="Refresh pipeline status">
+          ↺ Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN CONTENT
+         ================================================================ -->
+    <main class="main-content single-column-layout-full">
+
+      <!-- Page title + subtitle -->
+      <div class="page-header" style="margin-bottom: 20px;">
+        <div>
+          <h1 class="page-title">Turn Processing Pipeline</h1>
+          <p class="page-subtitle">
+            Every caller utterance runs through this pipeline in order.
+            This page shows what is wired, what has gaps, and what is not yet built —
+            so you never need to read code to understand what the agent does.
+          </p>
+        </div>
+      </div>
+
+      <!-- ── Stats bar ──────────────────────────────────────────────── -->
+      <div class="dp-stats-bar" id="dp-stats-bar">
+        <!-- Rendered by JS -->
+        <div class="dp-skeleton" style="width:120px; height:32px; border-radius:999px;"></div>
+        <div class="dp-skeleton" style="width:120px; height:32px; border-radius:999px;"></div>
+        <div class="dp-skeleton" style="width:120px; height:32px; border-radius:999px;"></div>
+        <div class="dp-skeleton" style="width:180px; height:32px; border-radius:999px;"></div>
+        <div class="dp-skeleton" style="width:160px; height:32px; border-radius:999px;"></div>
+      </div>
+
+      <!-- ── Two-column layout ─────────────────────────────────────── -->
+      <div class="dp-layout">
+
+        <!-- ── LEFT: Pipeline flow ─────────────────────────────────── -->
+        <div>
+          <div id="dp-pipeline-container">
+            <!-- Skeleton while loading -->
+            <div class="dp-skeleton" style="height:72px; border-radius:12px;"></div>
+            <div class="dp-connector" style="padding:8px 0;"><div class="dp-connector-line"></div></div>
+            <div class="dp-skeleton" style="height:72px; border-radius:12px;"></div>
+            <div class="dp-connector" style="padding:8px 0;"><div class="dp-connector-line"></div></div>
+            <div class="dp-skeleton" style="height:72px; border-radius:12px;"></div>
+          </div>
+        </div>
+
+        <!-- ── RIGHT: Side panel ──────────────────────────────────── -->
+        <div class="dp-side-panel">
+
+          <!-- discoveryNotes monitor -->
+          <div class="dp-panel-card" id="dp-notes-panel">
+            <div class="dp-panel-header">
+              <span class="dp-panel-title">🧠 discoveryNotes Schema</span>
+              <button class="dp-link-btn" id="btn-notes-detail">Full detail →</button>
+            </div>
+            <div class="dp-panel-body" id="dp-notes-fields">
+              <!-- Rendered by JS -->
+              <div class="dp-skeleton" style="height:200px;"></div>
+            </div>
+          </div>
+
+          <!-- Call Trace Analyzer -->
+          <div class="dp-panel-card">
+            <div class="dp-panel-header">
+              <span class="dp-panel-title">🔬 Call Trace Analyzer</span>
+            </div>
+            <div class="dp-panel-body">
+              <p style="font-size:12px; color:#6b7280; margin:0 0 10px 0; line-height:1.5;">
+                Paste a call intelligence JSON to see exactly how that call
+                mapped to the pipeline — which stages fired, which were skipped,
+                and what gaps were hit.
+              </p>
+              <textarea
+                class="dp-trace-textarea"
+                id="dp-trace-input"
+                placeholder='Paste call intelligence JSON here…&#10;&#10;Example: the output from "Download Call Intelligence" in the Call Review Console.'
+              ></textarea>
+              <button class="dp-btn-analyze" id="dp-btn-analyze">
+                Analyze Call
+              </button>
+              <div id="dp-trace-output"></div>
+            </div>
+          </div>
+
+        </div><!-- /side panel -->
+      </div><!-- /layout -->
+
+    </main><!-- /main -->
+  </div><!-- /app-container -->
+
+  <!-- ================================================================
+       MODAL — discoveryNotes Full Detail
+       ================================================================ -->
+  <div id="modal-discovery-notes" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="modal-notes-title">
+    <div class="modal-container" style="max-width:680px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-notes-title">🧠 discoveryNotes — Full Schema & Status</h2>
+        <button class="modal-close" id="btn-notes-modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Redis / MongoDB path info -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:20px; font-size:12px; color:#374151; line-height:1.8;">
+          <strong>Redis key:</strong> <span class="dp-monospace">discovery-notes:{companyId}:{callSid}</span> · TTL=4h<br>
+          <strong>MongoDB:</strong> <span class="dp-monospace">Customer.discoveryNotes[]</span> · fire-and-forget mid-call, full $push at call end<br>
+          <strong>Wire point (read):</strong> HybridReceptionistLLM.js · KCDiscoveryRunner.js (Gate 2)
+        </div>
+
+        <!-- How it works -->
+        <div style="font-size:13px; color:#374151; line-height:1.7; margin-bottom:20px;">
+          <strong>How it works:</strong> On Turn 1, the LLM intake extracts entities from the caller's first utterance
+          and writes them to Redis. Every subsequent turn reads this live state before Groq is called,
+          so the agent never re-asks what it already knows and can answer in context
+          (e.g. "Caller is calling about annual maintenance — Caller's name is Mark").
+        </div>
+
+        <!-- Fields table -->
+        <div id="modal-notes-fields-table">
+          <!-- Rendered by JS -->
+        </div>
+
+        <!-- Gaps section -->
+        <div style="margin-top:20px;" id="modal-notes-gaps">
+          <!-- Rendered by JS -->
+        </div>
+
+      </div><!-- /modal-body -->
+    </div><!-- /modal-container -->
+  </div><!-- /modal -->
+
+  <!-- ================================================================
+       SCRIPTS
+       ================================================================ -->
+  <script src="/agent-console/shared/agentConsoleAuth.js"></script>
+  <script src="/agent-console/discovery.js"></script>
+</body>
+</html>

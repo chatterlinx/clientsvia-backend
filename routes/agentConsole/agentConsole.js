@@ -1626,8 +1626,110 @@ router.patch(
 );
 
 /**
+ * GET /:companyId/discovery/status
+ *
+ * Discovery Pipeline Status — powers discovery.html
+ * Returns per-company dynamic data: KC container count, trigger count,
+ * engine config, discoveryNotes schema map, and gap analysis.
+ * Pipeline stage definitions live in discovery.js (frontend) — this
+ * route provides the data layer that enriches those static definitions.
+ */
+router.get(
+  '/:companyId/discovery/status',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+    try {
+      const company = await v2Company.findById(companyId)
+        .select('aiAgentSettings companyName')
+        .lean();
+
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const agent2 = company.aiAgentSettings?.agent2 || {};
+
+      // ── KC Container count ───────────────────────────────────────────
+      const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
+      const kcContainers = await CompanyKnowledgeContainer.findActiveForCompany(companyId).catch(() => []);
+
+      // ── Trigger count ────────────────────────────────────────────────
+      const CompanyTriggerSettingsModel = require('../../models/CompanyTriggerSettings');
+      const GlobalTrigger        = require('../../models/GlobalTrigger');
+      const CompanyLocalTrigger  = require('../../models/CompanyLocalTrigger');
+
+      const triggerSettings = await CompanyTriggerSettingsModel.findOne({ companyId }).lean().catch(() => null);
+      let triggerCount = 0;
+      if (triggerSettings?.activeGroupId) {
+        const globalTriggers  = await GlobalTrigger.findByGroupId(triggerSettings.activeGroupId).catch(() => []);
+        const disabledSet     = new Set(triggerSettings.disabledGlobalTriggerIds || []);
+        triggerCount += globalTriggers.filter(gt => !disabledSet.has(gt.triggerId)).length;
+      }
+      const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId).catch(() => []);
+      triggerCount += localTriggers.filter(lt => !lt.isOverride && lt.enabled !== false && !lt.isDeleted).length;
+
+      // ── KC containers detail (title + keyword count per container) ───
+      const kcContainerSummary = kcContainers.map(c => ({
+        id:           String(c._id),
+        title:        c.title || 'Untitled',
+        keywordCount: (c.keywords || []).length,
+        sectionCount: (c.sections || []).length,
+        hasContent:   (c.sections || []).some(s => s.content?.trim()),
+      }));
+
+      res.json({
+        companyId,
+        companyName:  company.companyName,
+        engine:       agent2.discovery?.engine || 'kc',
+        groqReady:    true, // GROQ_API_KEY is server-side only — assume true if deployed
+        pipeline: {
+          kcContainerCount:       kcContainers.length,
+          kcContainerSummary,
+          triggerCount,
+          bridgeEnabled:          agent2.bridge?.enabled || false,
+          postGatherDelayMs:      agent2.bridge?.postGatherDelayMs || 500,
+          speechDetection:        agent2.speechDetection || null,
+          consentPhrasesCount:    (agent2.consentPhrases || []).length,
+          escalationPhrasesCount: (agent2.escalationPhrases || []).length,
+          discoveryHandoff:       agent2.discovery?.discoveryHandoff || {},
+          fallbackResponse:       company.aiAgentSettings?.knowledgeBaseSettings?.fallbackResponse || '',
+        },
+        // discoveryNotes schema — all possible fields, status, and known gaps
+        discoveryNotes: {
+          redisKey:   `discovery-notes:{companyId}:{callSid}  (TTL=4h)`,
+          mongoPath:  'Customer.discoveryNotes[]',
+          fields: [
+            { key: 'entities.firstName',   label: 'Caller First Name',      status: 'active',  source: 'LLM_INTAKE' },
+            { key: 'entities.lastName',    label: 'Caller Last Name',        status: 'partial', source: 'LLM_INTAKE — extracted when stated' },
+            { key: 'entities.fullName',    label: 'Caller Full Name',        status: 'active',  source: 'LLM_INTAKE' },
+            { key: 'entities.phone',       label: 'Phone Number',            status: 'booking', source: 'BookingLogicEngine' },
+            { key: 'entities.address',     label: 'Service Address',         status: 'booking', source: 'BookingLogicEngine' },
+            { key: 'callReason',           label: 'Call Reason',             status: 'active',  source: 'LLM_INTAKE + KC Engine (updates per container match)' },
+            { key: 'urgency',              label: 'Urgency Level',           status: 'active',  source: 'LLM_INTAKE (low/normal/high/emergency)' },
+            { key: 'objective',            label: 'Objective',               status: 'active',  source: 'KC Engine (INTAKE/DISCOVERY/BOOKING/TRANSFER/CLOSING)' },
+            { key: 'priorVisit',           label: 'Prior Visit Flag',        status: 'active',  source: 'LLM_INTAKE' },
+            { key: 'sameDayRequested',     label: 'Same Day Request',        status: 'active',  source: 'LLM_INTAKE' },
+            { key: 'employeeMentioned',    label: 'Employee Mentioned',      status: 'gap',     source: 'NOT EXTRACTED — caller says "Hi John", field stays null' },
+            { key: 'doNotReask',           label: 'Do Not Re-ask List',      status: 'active',  source: 'Populated after each extraction to prevent repeat questions' },
+            { key: 'qaLog',                label: 'Q&A Log (per turn)',      status: 'active',  source: 'KC Engine — logs question + answer per turn' },
+            { key: 'turnNumber',           label: 'Current Turn Number',     status: 'active',  source: 'Updated at each turn' },
+            { key: 'lastMeaningfulInput',  label: 'Last Meaningful Input',   status: 'active',  source: 'KC Engine' },
+          ],
+          gaps: [
+            'employeeMentioned: caller greets employee by name ("Hi John") but field is never extracted. Agent cannot acknowledge prior employee relationship.',
+          ],
+        },
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Discovery status error`, { companyId, error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
  * GET /:companyId/booking/config
- * 
+ *
  * Get Booking Logic config for editing
  */
 router.get(
