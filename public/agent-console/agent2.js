@@ -138,7 +138,6 @@
     // Header
     headerCompanyName: document.getElementById('header-company-name'),
     headerCompanyId: document.getElementById('header-company-id'),
-    // Note: btnDownloadTruth removed - handled by shared/truthButton.js
     btnBack: document.getElementById('btn-back'),
     btnBackToProfile: document.getElementById('btn-back-to-profile'),
     btnSaveConfig: document.getElementById('btn-save-config'),
@@ -231,7 +230,6 @@
     inputAckWord: document.getElementById('input-ack-word'),
     inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
     inputRobotChallengeLine: document.getElementById('input-robot-challenge-line'),
-    // Recovery message inputs removed — moved to LLM Settings > Call Handling
     inputDiscoveryConsentQuestion: document.getElementById('input-discovery-consent-question'),
     inputFallbackNoMatchAnswer: document.getElementById('input-fallback-no-match-answer'),
     inputFallbackNoMatchWhenReasonCaptured: document.getElementById('input-fallback-no-match-when-reason-captured'),
@@ -384,7 +382,6 @@
       btnRefreshHealth.addEventListener('click', refreshHealthStatus);
     }
     
-    // Note: btnDownloadTruth event listener removed - handled by shared/truthButton.js
     DOM.btnSaveConfig.addEventListener('click', saveConfig);
     
     // Consent phrases
@@ -473,7 +470,6 @@
       renderConfig();
       
     } catch (error) {
-      console.error('[Agent2] Failed to load config:', error);
       showToast('error', 'Load Failed', 'Could not load Agent 2.0 configuration.');
       
       // Use defaults
@@ -814,7 +810,6 @@
       showToast('success', 'Saved', 'Agent 2.0 configuration updated successfully.');
       
     } catch (error) {
-      console.error('[Agent2] Save failed:', error);
       showToast('error', 'Save Failed', 'Could not save configuration.');
     }
   }
@@ -866,7 +861,6 @@
       DOM.testInput.value = '';
       
     } catch (error) {
-      console.error('[Agent2] Test turn failed:', error);
       DOM.testOutputReply.textContent = 'Error: ' + error.message;
       appendTraceLog(`[ERROR] ${error.message}`);
     } finally {
@@ -932,8 +926,6 @@
     DOM.testHandoffPayload.innerHTML = syntaxHighlight(JSON.stringify(samplePayload, null, 2));
     showToast('info', 'Sample Generated', 'Sample handoff payload created.');
   }
-
-  // Note: downloadTruthJson removed - handled by shared/truthButton.js
 
   /* --------------------------------------------------------------------------
      UTILITIES
@@ -1022,15 +1014,10 @@
    */
   async function loadGreetings() {
     try {
-      console.log('[Greetings] Loading greetings config...');
       const response = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/${state.companyId}/greetings`);
-      
-      console.log('[Greetings] API response:', response);
-      
+
       if (response.success && response.data) {
         state.greetings = response.data;
-        console.log('[Greetings] State updated:', state.greetings);
-        console.log('[Greetings] Rules loaded:', state.greetings.interceptor?.rules);
         
         // Auto-migrate if old schema detected
         await checkAndMigrateSchema();
@@ -1038,7 +1025,6 @@
         renderGreetings();
       }
     } catch (error) {
-      console.error('[Greetings] Load failed:', error);
       showToast('error', 'Load Failed', 'Could not load greetings configuration.');
     }
   }
@@ -1057,8 +1043,6 @@
     const hasOldSchema = rules.some(r => r.id && !r.ruleId);
     
     if (hasOldSchema) {
-      console.log('[Greetings] Old schema detected, auto-migrating to new schema...');
-      
       try {
         const response = await AgentConsoleAuth.apiFetch(
           `/api/admin/agent2/${state.companyId}/greetings/migrate-schema`,
@@ -1066,18 +1050,16 @@
         );
         
         if (response.success) {
-          console.log('[Greetings] Schema migrated successfully:', response.data);
           showToast('success', 'Migrated', `Greeting rules updated to new schema (${response.data.rulesMigrated} rules)`);
           
           // Reload greetings to get migrated data
           const reloadResponse = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/${state.companyId}/greetings`);
           if (reloadResponse.success && reloadResponse.data) {
             state.greetings = reloadResponse.data;
-            console.log('[Greetings] Reloaded after migration:', state.greetings);
           }
         }
       } catch (error) {
-        console.error('[Greetings] Auto-migration failed:', error);
+        // silent — migration failure is non-blocking
       }
     }
   }
@@ -1090,8 +1072,6 @@
   function renderGreetings() {
     // Call Start Greeting
     if (DOM.toggleCallStartEnabled && state.greetings.callStart) {
-      console.log('[Greetings] LOAD — callStart:', JSON.stringify(state.greetings.callStart, null, 2));
-      console.log('[Greetings] LOAD — emergencyFallback:', state.greetings.callStart.emergencyFallback || '(empty)');
       DOM.toggleCallStartEnabled.checked = state.greetings.callStart.enabled !== false;
       DOM.inputCallStartText.value = state.greetings.callStart.text || '';
       if (DOM.inputCallStartEmergencyFallback) {
@@ -1168,9 +1148,6 @@
     if (!DOM.greetingRulesList) return;
     
     const rules = state.greetings.interceptor?.rules || [];
-    
-    console.log('[Greetings] Rendering rules, count:', rules.length);
-    console.log('[Greetings] Rules data:', rules);
     
     if (rules.length === 0) {
       DOM.greetingRulesList.innerHTML = `
@@ -1267,8 +1244,6 @@
       const text = DOM.inputCallStartText.value.trim();
       const emergencyFallback = DOM.inputCallStartEmergencyFallback?.value?.trim() || '';
       
-      console.log('[Greetings] SAVE_START — enabled:', enabled, '| text:', text.substring(0, 50), '| emergencyFallback:', emergencyFallback.substring(0, 50));
-      
       const response = await AgentConsoleAuth.apiFetch(
         `/api/admin/agent2/${state.companyId}/greetings/call-start`,
         {
@@ -1276,8 +1251,6 @@
           body: { enabled, text, emergencyFallback }
         }
       );
-      
-      console.log('[Greetings] SAVE_RESPONSE — success:', response.success, '| data.emergencyFallback:', response.data?.emergencyFallback);
       
       if (response.success) {
         state.greetings.callStart = response.data;
@@ -1294,7 +1267,6 @@
         updateCallStartAudioStatus();
       }
     } catch (error) {
-      console.error('[Greetings] Save call start failed:', error);
       showToast('error', 'Save Failed', error.message || 'Could not save call start greeting.');
     }
   }
@@ -1338,9 +1310,8 @@
         showToast('success', 'Audio Generated', response.cached ? 'Using cached audio' : 'Audio created with your ElevenLabs voice');
       }
     } catch (error) {
-      console.error('[Greetings] Audio generation failed:', error);
       btn.innerHTML = originalHtml;
-      
+
       const errorMsg = error.message || 'Generation failed';
       const hint = errorMsg.includes('voice') 
         ? 'Configure your ElevenLabs voice in Company Profile first.'
@@ -1429,7 +1400,6 @@
         showToast('success', 'Saved', 'Greeting interceptor settings updated successfully.');
       }
     } catch (error) {
-      console.error('[Greetings] Save interceptor failed:', error);
       showToast('error', 'Save Failed', error.message || 'Could not save interceptor settings.');
     }
   }
@@ -1464,9 +1434,7 @@
   function handleEditRule(e) {
     const ruleId = e.currentTarget.dataset.ruleId;
     const rule = state.greetings.interceptor.rules.find(r => (r.ruleId || r.id) === ruleId);
-    
-    console.log('[Greetings] Edit rule:', { ruleId, found: !!rule, rule });
-    
+
     if (!rule) {
       showToast('error', 'Rule Not Found', 'Could not find rule to edit.');
       return;
@@ -1496,15 +1464,11 @@
    * ───────────────────────────────────────────────────────────────────────
    */
   async function saveGreetingRule() {
-    console.log('[Greetings] Save rule clicked', { currentRule: state.currentGreetingRule });
-    
     try {
       const priority = parseInt(DOM.inputRulePriority.value) || 50;
       const matchType = DOM.inputRuleMatchType.value || 'EXACT';
       const triggersText = DOM.inputRuleTriggers.value.trim();
       const response = DOM.inputRuleResponse.value.trim();
-      
-      console.log('[Greetings] Save rule data:', { priority, matchType, triggersText, response });
       
       // Validation
       if (!triggersText) {
@@ -1529,8 +1493,7 @@
       if (isEditing) {
         // Update existing rule - support both ruleId and id (legacy)
         const ruleId = state.currentGreetingRule.ruleId || state.currentGreetingRule.id;
-        console.log('[Greetings] Updating rule:', ruleId);
-        
+
         const updateResponse = await AgentConsoleAuth.apiFetch(
           `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}`,
           {
@@ -1577,7 +1540,6 @@
         }
       }
     } catch (error) {
-      console.error('[Greetings] Save rule failed:', error);
       showToast('error', 'Save Failed', error.message || 'Could not save greeting rule.');
     }
   }
@@ -1590,11 +1552,8 @@
   async function handleRuleToggle(e) {
     const ruleId = e.target.dataset.ruleId;
     const enabled = e.target.checked;
-    
-    console.log('[Greetings] Toggle rule:', { ruleId, enabled });
-    
+
     if (!ruleId || ruleId === 'undefined') {
-      console.error('[Greetings] Invalid ruleId for toggle');
       e.target.checked = !enabled;
       showToast('error', 'Invalid Rule', 'Rule ID is missing. Please reload the page.');
       return;
@@ -1618,7 +1577,6 @@
         showToast('success', enabled ? 'Enabled' : 'Disabled', 'Greeting rule updated.');
       }
     } catch (error) {
-      console.error('[Greetings] Toggle rule failed:', error);
       e.target.checked = !enabled; // Revert toggle
       showToast('error', 'Toggle Failed', error.message || 'Could not update rule.');
     }
@@ -1651,7 +1609,6 @@
         showToast('success', 'Deleted', 'Greeting rule deleted successfully.');
       }
     } catch (error) {
-      console.error('[Greetings] Delete rule failed:', error);
       showToast('error', 'Delete Failed', error.message || 'Could not delete greeting rule.');
     }
   }
@@ -1700,9 +1657,8 @@
         showToast('success', 'Audio Generated', response.cached ? 'Using cached audio' : 'Audio created with your ElevenLabs voice');
       }
     } catch (error) {
-      console.error('[Greetings] Audio generation failed:', error);
       btn.innerHTML = originalHtml;
-      
+
       const errorMsg = error.message || 'Generation failed';
       DOM.ruleAudioStatus.textContent = `❌ ${errorMsg}`;
       
@@ -1924,7 +1880,6 @@
         summaryText.innerHTML = `<span style="color: #dc2626;">${issues.join(' • ')}</span>`;
       }
     } catch (error) {
-      console.error('[Health] Failed to load:', error);
       summary.style.background = '#fef2f2';
       summary.style.borderColor = '#fecaca';
       if (summaryIcon) summaryIcon.textContent = '❌';
@@ -2143,16 +2098,10 @@
       showToast('success', 'Saved', `${kwState.length} keyword${kwState.length !== 1 ? 's' : ''} saved successfully.`);
 
     } catch (err) {
-      console.error('[Agent2] Keywords save failed:', err);
       showToast('error', 'Save Failed', 'Could not save keywords.');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Save Keywords'; }
     }
-  }
-
-  /** Simple HTML escape helper */
-  function escapeHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   /* --------------------------------------------------------------------------
@@ -2222,7 +2171,6 @@
       }
 
     } catch (err) {
-      console.error('[Agent2] kwEnhanceWithAI failed:', err);
       if (statusEl) {
         statusEl.textContent = `❌ ${err.message || 'Request failed — check connection and try again.'}`;
         statusEl.style.color = 'var(--error, #ef4444)';
