@@ -552,8 +552,39 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  // Detect whether semantic analysis is available
-  const semanticAvailable = !!process.env.OPENAI_API_KEY;
+  // ── OpenAI live connectivity check ─────────────────────────────────────────
+  // Don't just check if the key string exists — actually call the embeddings
+  // API with a minimal probe so we fail fast with a clear diagnosis rather
+  // than burning time on batch work that will silently fail anyway.
+  let semanticAvailable  = false;
+  let semanticError      = null;  // human-readable reason if unavailable
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) {
+    semanticError = 'OPENAI_API_KEY is not set in the Render environment.';
+  } else {
+    try {
+      const OpenAI  = require('openai');
+      const _oa     = new OpenAI({ apiKey: openaiKey });
+      const _probe  = await _oa.embeddings.create({
+        model:      'text-embedding-3-small',
+        input:      'health-check',
+        dimensions: 8,   // Smallest possible — just verifies auth + quota
+      });
+      if (_probe?.data?.[0]?.embedding?.length) {
+        semanticAvailable = true;
+      } else {
+        semanticError = 'OpenAI returned an unexpected response during the connectivity probe.';
+      }
+    } catch (_oaErr) {
+      // Map OpenAI error codes to actionable messages
+      if (_oaErr.status === 401)       semanticError = 'OpenAI API key is invalid or revoked. Check platform.openai.com/api-keys.';
+      else if (_oaErr.status === 429)  semanticError = 'OpenAI rate limit hit or billing quota exhausted. Check platform.openai.com/account/billing.';
+      else if (_oaErr.status === 403)  semanticError = 'OpenAI API key does not have permission to use embeddings. Verify key scope.';
+      else                             semanticError = `OpenAI connectivity failed: ${_oaErr.message}`;
+      logger.warn('[companyKnowledge] keyword-health: OpenAI probe failed', { companyId, err: _oaErr.message, status: _oaErr.status });
+    }
+  }
 
   try {
     let embeddingBackfill = { processed: 0, failed: 0 };
@@ -575,6 +606,7 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
     return res.json({
       success: true,
       semanticAvailable,
+      semanticError:     semanticError || null,
       embeddingBackfill: semanticAvailable ? embeddingBackfill : null,
       ...report,
     });
