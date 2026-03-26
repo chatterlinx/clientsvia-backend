@@ -491,6 +491,8 @@
     headerCompanyName: document.getElementById('header-company-name'),
     headerCompanyId:   document.getElementById('header-company-id'),
     btnRefresh:        document.getElementById('btn-refresh'),
+    liveBadge:         document.getElementById('dp-live-badge'),
+    liveTimestamp:     document.getElementById('dp-live-timestamp'),
     statsBar:          document.getElementById('dp-stats-bar'),
     pipelineContainer: document.getElementById('dp-pipeline-container'),
     notesFields:       document.getElementById('dp-notes-fields'),
@@ -501,6 +503,8 @@
     modalNotesGaps:    document.getElementById('modal-notes-gaps'),
     traceInput:        document.getElementById('dp-trace-input'),
     btnAnalyze:        document.getElementById('dp-btn-analyze'),
+    btnDownloadJson:   document.getElementById('dp-btn-download-json'),
+    btnDownloadPdf:    document.getElementById('dp-btn-download-pdf'),
     traceOutput:       document.getElementById('dp-trace-output'),
   };
 
@@ -509,10 +513,14 @@
      ========================================================================= */
 
   const state = {
-    companyId:    null,
-    companyName:  '',
-    pipelineData: null,   // raw API response
-    stages:       [],     // enriched PIPELINE_STAGES after API merge
+    companyId:        null,
+    companyName:      '',
+    pipelineData:     null,   // raw API response
+    stages:           [],     // enriched PIPELINE_STAGES after API merge
+    lastRefreshed:    null,   // ms timestamp of last successful Phase 2
+    autoRefreshTimer: null,   // setInterval handle
+    tickTimer:        null,   // setInterval for live badge counter
+    lastAnalysis:     null,   // last TRACE_ANALYZER result (for PDF)
   };
 
   /* =========================================================================
@@ -619,6 +627,225 @@
 
       return enriched;
     });
+  }
+
+  /* =========================================================================
+     MODULE: OPEN-CARD STATE HELPERS
+     ─────────────────────────────────────────────────────────────────────────
+     Used by auto-refresh to preserve expanded cards across re-renders.
+     ========================================================================= */
+
+  /** Return IDs of all currently-open pipeline cards. */
+  function getOpenCards() {
+    return Array.from(document.querySelectorAll('.dp-card-body.open'))
+      .map(el => el.id.replace('dp-body-', ''));
+  }
+
+  /** Re-open cards by ID after a re-render. */
+  function restoreOpenCards(openIds) {
+    openIds.forEach(id => {
+      const body = document.getElementById(`dp-body-${id}`);
+      const btn  = document.getElementById(`dp-expand-${id}`);
+      if (body) {
+        body.classList.add('open');
+        if (btn) btn.textContent = '▴';
+      }
+    });
+  }
+
+  /* =========================================================================
+     MODULE: LIVE INDICATOR
+     ========================================================================= */
+
+  /** Update the "Updated Xs ago" text in the live badge. */
+  function updateLiveIndicator() {
+    if (!DOM.liveBadge || !DOM.liveTimestamp || !state.lastRefreshed) return;
+    DOM.liveBadge.style.display = 'inline-flex';
+    const secs = Math.round((Date.now() - state.lastRefreshed) / 1000);
+    DOM.liveTimestamp.textContent = secs < 5 ? 'just now' : `${secs}s ago`;
+  }
+
+  /* =========================================================================
+     MODULE: AUTO-REFRESH (PHASE 2 ONLY)
+     ─────────────────────────────────────────────────────────────────────────
+     Fetches live API data every AUTO_REFRESH_MS ms.
+     Only re-renders pipeline if key values changed — preserves open cards.
+     ========================================================================= */
+
+  const AUTO_REFRESH_MS = 30_000;  // 30 seconds
+
+  /** Fingerprint the fields that matter for change detection. */
+  function pipelineFingerprint(data) {
+    if (!data) return null;
+    const p = data.pipeline || {};
+    return JSON.stringify({
+      kc:      p.kcContainerCount,
+      trig:    p.triggerCount,
+      delay:   p.postGatherDelayMs,
+      ceil:    p.maxCeilingMs,
+      bridge:  p.bridgeEnabled,
+      sttTo:   p.speechDetection?.speechTimeout,
+      sttInit: p.speechDetection?.initialTimeout,
+    });
+  }
+
+  async function refreshPhase2Only() {
+    if (!state.companyId) return;
+    try {
+      const data = await API.getPipelineStatus(state.companyId);
+      const changed = pipelineFingerprint(data) !== pipelineFingerprint(state.pipelineData);
+
+      state.pipelineData = data;
+      state.lastRefreshed = Date.now();
+
+      if (changed) {
+        // Preserve which cards are open
+        const openCards = getOpenCards();
+
+        state.stages = enrichStages(data);
+        renderStatsBar(state.stages, data);
+        renderPipeline(state.stages);
+        restoreOpenCards(openCards);
+
+        // Update notes panel
+        const apiFields = data.discoveryNotes?.fields || [];
+        const schema = DISCOVERY_NOTES_SCHEMA.map(field => {
+          const apiField = apiFields.find(f => f.key === field.key);
+          return apiField ? { ...field, status: apiField.status, source: apiField.source } : field;
+        });
+        renderNotesPanel(schema);
+        renderNotesModal(schema, data.discoveryNotes?.gaps || []);
+      }
+
+      updateLiveIndicator();
+    } catch (err) {
+      console.warn('[Discovery] Auto-refresh failed:', err);
+    }
+  }
+
+  /* =========================================================================
+     MODULE: DOWNLOADER
+     ─────────────────────────────────────────────────────────────────────────
+     JSON: downloads the raw pasted call intelligence JSON as a file.
+     PDF:  opens a clean print-ready window with the trace analysis output.
+     ========================================================================= */
+
+  const DOWNLOADER = {
+
+    /** Download the raw pasted JSON from the trace textarea. */
+    json() {
+      const raw = DOM.traceInput?.value?.trim();
+      if (!raw) {
+        DOWNLOADER._toast('Paste a call intelligence JSON first.');
+        return;
+      }
+      // Pretty-print if valid JSON
+      let content = raw;
+      let callSid = 'call';
+      try {
+        const parsed = JSON.parse(raw);
+        content  = JSON.stringify(parsed, null, 2);
+        callSid  = parsed.callSid || parsed.intelligence?.callSid || parsed.callContext?.callSid || 'call';
+      } catch (_e) { /* keep raw */ }
+
+      const blob = new Blob([content], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `call-intelligence-${callSid}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+
+    /** Export the trace analysis as a PDF via a clean print window. */
+    pdf() {
+      const output = DOM.traceOutput;
+      if (!output || !output.innerHTML.trim()) {
+        DOWNLOADER._toast('Run "Analyze Call" first to generate the report.');
+        return;
+      }
+
+      // Try to extract callSid for the title
+      let callSid = '';
+      try {
+        const raw = DOM.traceInput?.value?.trim();
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          callSid = parsed.callSid || parsed.intelligence?.callSid || '';
+        }
+      } catch (_e) { /* ignore */ }
+
+      const title   = `Call Trace Analysis${callSid ? ' — ' + callSid : ''}`;
+      const company = state.companyName || state.companyId || '';
+      const ts      = new Date().toLocaleString();
+
+      const printWin = window.open('', '_blank', 'width=940,height=720');
+      if (!printWin) {
+        DOWNLOADER._toast('Pop-up blocked. Allow pop-ups for this page, then try again.');
+        return;
+      }
+
+      printWin.document.write(`<!DOCTYPE html>
+<html><head>
+  <meta charset="UTF-8">
+  <title>${escRaw(title)}</title>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:28px 32px; color:#111827; font-size:13px; line-height:1.5; }
+    h1   { font-size:18px; font-weight:700; margin:0 0 4px; }
+    .meta{ font-size:11px; color:#6b7280; margin-bottom:20px; }
+    .dp-trace-turn { border:1.5px solid #e5e7eb; border-radius:8px; overflow:hidden; margin-bottom:12px; page-break-inside:avoid; }
+    .dp-trace-turn-header { background:#f8fafc; padding:9px 14px; font-size:12px; font-weight:700; color:#374151; display:flex; align-items:center; gap:8px; }
+    .dp-trace-turn-body   { padding:12px 14px; }
+    .dp-trace-stage { display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-bottom:1px solid #f3f4f6; font-size:12px; }
+    .dp-trace-stage:last-child { border-bottom:none; }
+    .dp-trace-stage-icon   { flex-shrink:0; }
+    .dp-trace-stage-name   { font-weight:600; color:#111827; }
+    .dp-trace-stage-detail { color:#6b7280; font-size:11px; margin-top:2px; }
+    .dp-trace-stage-status { margin-left:auto; flex-shrink:0; font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; }
+    .dp-trace-stage-status.fired   { background:#dcfce7; color:#15803d; }
+    .dp-trace-stage-status.skipped { background:#f3f4f6; color:#6b7280; }
+    .dp-trace-stage-status.missed  { background:#fee2e2; color:#991b1b; }
+    .dp-trace-stage-status.gap     { background:#fef9c3; color:#854d0e; }
+    .dp-trace-response { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 12px; font-size:12px; color:#166534; line-height:1.6; margin-top:10px; }
+    .dp-trace-score { margin-top:10px; padding:10px 12px; background:#f8fafc; border-radius:8px; }
+    .dp-trace-score-title { font-size:11px; font-weight:700; color:#374151; margin-bottom:6px; }
+    .dp-trace-score-item      { font-size:11px; padding:2px 0; }
+    .dp-trace-score-item.pass { color:#15803d; }
+    .dp-trace-score-item.fail { color:#991b1b; }
+    @media print { body { padding:0; } }
+  </style>
+</head><body>
+  <h1>${escRaw(title)}</h1>
+  <div class="meta">${company ? 'Company: ' + escRaw(company) + ' · ' : ''}Generated: ${escRaw(ts)}</div>
+  ${output.innerHTML}
+  <script>window.onload = function(){ window.print(); }<\/script>
+</body></html>`);
+      printWin.document.close();
+    },
+
+    /** Show a small inline toast below the download bar. */
+    _toast(msg) {
+      const bar = DOM.btnDownloadJson?.parentElement;
+      if (!bar) return;
+      let t = bar.querySelector('.dp-dl-toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.className = 'dp-dl-toast';
+        t.style.cssText = 'font-size:11px;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:6px 10px;margin-top:6px;';
+        bar.insertAdjacentElement('afterend', t);
+      }
+      t.textContent = msg;
+      t.style.display = 'block';
+      clearTimeout(t._hideTimer);
+      t._hideTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+    },
+  };
+
+  /* Helper used by DOWNLOADER — HTML-escapes without the full esc() chain */
+  function escRaw(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   /* =========================================================================
@@ -1200,6 +1427,10 @@
       state.companyName = data.companyName || state.companyId;
       DOM.headerCompanyName.textContent = state.companyName;
 
+      // Mark last refresh time + show live badge
+      state.lastRefreshed = Date.now();
+      updateLiveIndicator();
+
       // Re-render with enriched stage data (KC count gaps, bridge config, etc.)
       state.stages = enrichStages(data);
       renderStatsBar(state.stages, data);
@@ -1283,8 +1514,13 @@
       const raw = DOM.traceInput?.value?.trim();
       if (!raw) return;
       const analysis = TRACE_ANALYZER.analyze(raw);
+      state.lastAnalysis = analysis;
       TRACE_ANALYZER.render(analysis);
     });
+
+    // ── Download buttons ──────────────────────────────────────────────
+    DOM.btnDownloadJson?.addEventListener('click', () => DOWNLOADER.json());
+    DOM.btnDownloadPdf?.addEventListener('click',  () => DOWNLOADER.pdf());
 
     // ── ESC to close modals ───────────────────────────────────────────
     document.addEventListener('keydown', e => {
@@ -1295,6 +1531,12 @@
 
     // ── Load pipeline data ────────────────────────────────────────────
     loadAndRender();
+
+    // ── Auto-refresh every 30 s (Phase 2 only — preserves open cards) ─
+    state.autoRefreshTimer = setInterval(refreshPhase2Only, AUTO_REFRESH_MS);
+
+    // ── Tick the live badge ("Updated Xs ago") every 5 s ─────────────
+    state.tickTimer = setInterval(updateLiveIndicator, 5_000);
   }
 
   document.addEventListener('DOMContentLoaded', init);

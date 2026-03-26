@@ -425,6 +425,37 @@
     }
     .dp-config-table tr:last-child td { border-bottom: none; }
 
+    /* ── Download buttons ───────────────────────────────────────────── */
+    .dp-download-bar {
+      display: flex; gap: 8px; margin-top: 8px;
+    }
+    .dp-btn-download {
+      flex: 1; background: #f8fafc; color: #374151;
+      border: 1.5px solid #e5e7eb; border-radius: 8px;
+      padding: 8px 6px; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .dp-btn-download:hover { background: #f3f4f6; border-color: #d1d5db; }
+    .dp-btn-download.json-btn:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+    .dp-btn-download.pdf-btn:hover  { background: #fdf4ff; border-color: #d8b4fe; color: #7c3aed; }
+
+    /* ── Live indicator ──────────────────────────────────────────────── */
+    .dp-live-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600; color: #15803d;
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 999px; padding: 4px 10px;
+    }
+    .dp-live-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #22c55e;
+      animation: dp-pulse 2s infinite;
+    }
+    @keyframes dp-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.8); }
+    }
+
     /* ── Utility ────────────────────────────────────────────────────── */
     .dp-link-btn {
       background: none; border: none; cursor: pointer;
@@ -477,6 +508,10 @@
         <span class="header-company-id" id="header-company-id"></span>
       </div>
       <div class="header-right">
+        <span class="dp-live-badge" id="dp-live-badge" style="display:none;">
+          <span class="dp-live-dot"></span>
+          <span id="dp-live-timestamp">Live</span>
+        </span>
         <button class="btn btn-secondary btn-sm" id="btn-refresh" title="Refresh pipeline status">
           ↺ Refresh
         </button>
@@ -559,6 +594,14 @@
               <button class="dp-btn-analyze" id="dp-btn-analyze">
                 Analyze Call
               </button>
+              <div class="dp-download-bar">
+                <button class="dp-btn-download json-btn" id="dp-btn-download-json" title="Download the raw call intelligence JSON as a file">
+                  ⬇ JSON
+                </button>
+                <button class="dp-btn-download pdf-btn" id="dp-btn-download-pdf" title="Export the call trace analysis as a PDF">
+                  📄 PDF
+                </button>
+              </div>
               <div id="dp-trace-output"></div>
             </div>
           </div>
