@@ -1650,11 +1650,25 @@ function _renderHealthModal(data) {
   const chipsEl = document.getElementById('healthSummaryChips');
   const listEl  = document.getElementById('healthList');
 
+  // ── Semantic analysis availability banner ──────────────────────────────────
+  const noSemanticBanner = data.semanticAvailable === false
+    ? `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#78350f;display:flex;align-items:flex-start;gap:8px;">
+        <span style="font-size:16px;flex-shrink:0;">⚠️</span>
+        <div>
+          <strong>Semantic similarity analysis is unavailable</strong> — <code>OPENAI_API_KEY</code> is not set in your Render environment.<br>
+          <span style="color:#92400e;">Keyword overlap conflicts are still detected. To enable full semantic analysis, add <code>OPENAI_API_KEY</code> to your Render env group.</span>
+        </div>
+      </div>`
+    : (data.embeddingBackfill?.processed > 0
+        ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:#14532d;">
+            ✅ Embeddings generated for ${data.embeddingBackfill.processed} container${data.embeddingBackfill.processed > 1 ? 's' : ''} — semantic analysis now active.
+          </div>`
+        : '');
+
   // Summary chips
   if (data.totalConflicts === 0) {
-    chipsEl.innerHTML = `
+    chipsEl.innerHTML = noSemanticBanner + `
       <span class="health-chip health-chip-clean">✅ No conflicts — ${data.totalContainers} containers clean</span>
-      ${data.missingEmbeddings ? `<span class="health-chip" style="background:#fef9c3;border-color:#fde68a;color:#713f12;">⚡ ${data.missingEmbeddings} containers missing embeddings</span>` : ''}
     `;
     listEl.innerHTML = `
       <div class="health-empty">
@@ -1664,7 +1678,7 @@ function _renderHealthModal(data) {
     return;
   }
 
-  chipsEl.innerHTML = [
+  chipsEl.innerHTML = noSemanticBanner + [
     data.highCount ? `<span class="health-chip health-chip-high">🔴 ${data.highCount} HIGH</span>` : '',
     data.warnCount ? `<span class="health-chip health-chip-warn">🟡 ${data.warnCount} WARN</span>` : '',
     data.infoCount ? `<span class="health-chip health-chip-info">🔵 ${data.infoCount} INFO</span>` : '',

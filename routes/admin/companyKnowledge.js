@@ -552,16 +552,32 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
+  // Detect whether semantic analysis is available
+  const semanticAvailable = !!process.env.OPENAI_API_KEY;
+
   try {
-    // Backfill any containers missing embeddings before analysing
-    const { processed, failed } = await KCKeywordHealthService.batchGenerateEmbeddings(companyId);
-    if (processed > 0) {
-      logger.info('[companyKnowledge] keyword-health: backfilled embeddings', { companyId, processed, failed });
+    let embeddingBackfill = { processed: 0, failed: 0 };
+
+    if (semanticAvailable) {
+      // Backfill any containers missing embeddings before analysing
+      embeddingBackfill = await KCKeywordHealthService.batchGenerateEmbeddings(companyId);
+      if (embeddingBackfill.processed > 0) {
+        logger.info('[companyKnowledge] keyword-health: backfilled embeddings', {
+          companyId,
+          processed: embeddingBackfill.processed,
+          failed:    embeddingBackfill.failed,
+        });
+      }
     }
 
     const report = await KCKeywordHealthService.analyzeConflicts(companyId);
 
-    return res.json({ success: true, ...report });
+    return res.json({
+      success: true,
+      semanticAvailable,
+      embeddingBackfill: semanticAvailable ? embeddingBackfill : null,
+      ...report,
+    });
   } catch (err) {
     logger.error('[companyKnowledge] keyword-health error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Keyword health analysis failed' });
