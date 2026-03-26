@@ -3930,6 +3930,18 @@ const companySchema = new mongoose.Schema({
             // Mongoose drops the arrays on save and UI changes appear to "not persist".
             consentPhrases: [{ type: String, trim: true, lowercase: true }],
             escalationPhrases: [{ type: String, trim: true, lowercase: true }],
+            // AC1: Speech Detection — Twilio Gather configuration
+            // UI: agent2.html > "🎙️ Speech Detection" card
+            // Runtime: routes/v2twilio.js reads agent2.speechDetection first,
+            //          falls back to voiceSettings.speechDetection for legacy companies.
+            // MUST be in schema or Mongoose silently drops it on save.
+            speechDetection: {
+                speechTimeout:       { type: Number, min: 0.5, max: 10,  default: 1.5 },
+                initialTimeout:      { type: Number, min: 3,   max: 15,  default: 7   },
+                bargeIn:             { type: Boolean,                     default: false },
+                enhancedRecognition: { type: Boolean,                     default: true  },
+                speechModel:         { type: String, enum: ['default', 'numbers_and_commands', 'phone_call'], default: 'phone_call' }
+            },
             // V129: Real bridge (latency filler) settings
             // Two-phase TwiML: play a short bridge line, then Redirect to continue.
             bridge: {
