@@ -318,9 +318,11 @@ async function getEmbeddingsForCompany(companyId) {
       }
     }
 
-    // Backfill cache (non-blocking) — store as [[id, vec], ...] for Map reconstruction
+    // Backfill cache (non-blocking) — store as [[id, vec], ...] for Map reconstruction.
+    // TTL: 24h (86400s). Container embeddings are regenerated only when a container is
+    // saved — extremely stable data. 15min TTL causes unnecessary MongoDB re-reads.
     if (redis && map.size > 0) {
-      redis.setEx(key, CACHE_TTL, JSON.stringify([...map])).catch(() => {});
+      redis.setEx(key, 86400, JSON.stringify([...map])).catch(() => {});
     }
 
     return map;
@@ -465,13 +467,14 @@ function _buildSystemPrompt({
     : '';
 
   // ── RESPONSE TONE INSTRUCTION ──────────────────────────────────────────────
+  // Tone modifies the delivery; naturalness is always required for phone audio.
   const toneMap = {
-    professional: 'Use a formal, business-like tone. Be precise and authoritative.',
-    friendly:     'Be warm and approachable. Use a conversational, upbeat tone.',
-    casual:       'Keep it relaxed and easygoing. Talk like a helpful neighbor.',
-    warm:         'Be empathetic and caring. Show genuine concern for the caller.',
+    professional: 'formal and business-like — precise, authoritative, no filler',
+    friendly:     'warm and approachable — conversational, upbeat, never stiff',
+    casual:       'relaxed and easygoing — talk like a helpful neighbor',
+    warm:         'empathetic and caring — show genuine concern for the caller',
   };
-  const toneInstruction = toneMap[responseTone] || toneMap.friendly;
+  const toneDescriptor = toneMap[responseTone] || toneMap.friendly;
 
   // ── RESPONSE STYLE — adjust effective word limit ───────────────────────────
   const styleMultiplier = responseStyle === 'detailed' ? 2 : responseStyle === 'balanced' ? 1.5 : 1;
@@ -494,8 +497,8 @@ This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTA
 ${activeTopicBlock}${callContextBlock}${personalizationBlock}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
-2. Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer.
-3. ${toneInstruction}
+2. Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer, not a text message.
+3. Be natural and conversational — sound human, never robotic or scripted. Tone: ${toneDescriptor}.
 4. If the caller signals readiness to book or schedule, set intent to "BOOKING_READY".
 ${bookingInstruction}
 6. Respond ONLY with valid json — no extra text.
