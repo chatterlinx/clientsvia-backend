@@ -1874,9 +1874,6 @@ function detectTurnFlags(turn, kcCard, provenancePath) {
   if (kcCard?.bookingAction === 'offer_to_book' && !path.includes('BOOKING')) {
     flags.push({ code: 'MISSED_BOOKING_CTA', label: 'Missed Booking CTA', severity: 'warn' });
   }
-  if (turn.callerText && !turn.agentText) {
-    flags.push({ code: 'NO_RESPONSE', label: 'No Agent Response', severity: 'critical' });
-  }
   return flags;
 }
 
@@ -1936,7 +1933,8 @@ function buildHeader(callSid, companyId, summary, healthScore, hasIntelligence) 
     llmModel: summary?.llmModel || null,
     healthScore,
     hasIntelligence,
-    recordingRef: summary?.hasRecording ? summary?.recordingRef : null
+    recordingUrl: summary?.recordingUrl || null,
+    hasRecording: !!summary?.recordingUrl
   };
 }
 
@@ -2203,45 +2201,47 @@ function buildCostBreakdown(summary, convTurns) {
 }
 
 function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
-  // Filter to meaningful conversation turns only
-  const convo = rawTurns.filter(t =>
-    (t.speaker === 'caller' || t.speaker === 'agent') &&
-    t.kind !== 'diagnostics' &&
-    t.text?.trim()
-  );
-
-  // Group by turnNumber, building caller+agent pairs
-  const byTurn = new Map();
-  for (const t of convo) {
-    const n = typeof t.turnNumber === 'number' ? t.turnNumber : 0;
-    if (!byTurn.has(n)) byTurn.set(n, { caller: null, agent: null });
-    const entry = byTurn.get(n);
-    if (t.speaker === 'caller' && !entry.caller) entry.caller = t;
-    if (t.speaker === 'agent' && !entry.agent) entry.agent = t;
-  }
+  // Show ALL meaningful turns in chronological order (sorted by turnNumber then ts).
+  // We do NOT group caller+agent by turnNumber because the turn counter used for
+  // the greeting (0), caller STT (1…N), and agent booking responses may differ.
+  // Sequential display accurately reflects what was said and when.
+  const convo = rawTurns
+    .filter(t =>
+      (t.speaker === 'caller' || t.speaker === 'agent') &&
+      t.kind !== 'diagnostics' &&
+      t.text?.trim()
+    )
+    .sort((a, b) => {
+      // Primary: turnNumber ascending; secondary: ts ascending (handles same-turn ordering)
+      const na = typeof a.turnNumber === 'number' ? a.turnNumber : 9999;
+      const nb = typeof b.turnNumber === 'number' ? b.turnNumber : 9999;
+      if (na !== nb) return na - nb;
+      const ta = a.ts ? new Date(a.ts).getTime() : 0;
+      const tb = b.ts ? new Date(b.ts).getTime() : 0;
+      return ta - tb;
+    });
 
   const result = [];
-  for (const [turnNum, entry] of [...byTurn.entries()].sort((a, b) => a[0] - b[0])) {
-    const at = entry.agent;
-    const ct = entry.caller;
+  let displayIndex = 0;
 
-    // Extract trace / _123rp
-    const trace = at?.trace || {};
-    const prov = trace.provenance || {};
+  for (const t of convo) {
+    displayIndex++;
+    const trace = t.trace || {};
+    const prov  = trace.provenance || {};
     const r123rp = trace._123rp || {};
 
-    const provenanceType = prov.type || (at?.sourceKey === 'greetings' ? 'UI_OWNED' : 'UNKNOWN');
-    const provenancePath = r123rp.lastPath || r123rp.path || prov.uiPath || at?.sourceKey || null;
-    const sourceKey = at?.sourceKey || null;
+    const provType = prov.type
+      || (t.kind === 'GREETING' ? 'UI_OWNED' : null)
+      || (t.sourceKey === 'greetings' ? 'UI_OWNED' : 'UNKNOWN');
+    const provPath = r123rp.lastPath || r123rp.path || prov.uiPath || t.sourceKey || null;
+    const srcKey   = t.sourceKey || null;
 
-    // KC card lookup
+    // KC card lookup from containerId or uiAnchor
     let kcCard = null;
     const containerId = r123rp.containerId || prov.containerId;
-    if (containerId) {
-      const cid = containerId.toString();
-      if (kcMap.has(cid)) kcCard = kcMap.get(cid);
+    if (containerId && kcMap.has(containerId.toString())) {
+      kcCard = kcMap.get(containerId.toString());
     }
-    // Also try by uiAnchor
     if (!kcCard && prov.uiAnchor) {
       for (const [, kc] of kcMap) {
         if (kc.kcId === prov.uiAnchor || kc._id.toString() === prov.uiAnchor) {
@@ -2250,26 +2250,28 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       }
     }
 
-    const flags = detectTurnFlags(
-      { callerText: ct?.text, agentText: at?.text },
-      kcCard,
-      provenancePath
-    );
+    // Flags only make sense for agent turns (or call-ending caller turns with no follow-up)
+    const flags = t.speaker === 'agent'
+      ? detectTurnFlags({ callerText: null, agentText: t.text }, kcCard, provPath)
+      : [];
 
-    // Find discoveryNotes qa entry for this turn
-    const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === turnNum) || null;
+    const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === t.turnNumber) || null;
 
     result.push({
-      turnNumber: turnNum,
-      elapsed: fmtElapsed(startedAt, ct?.ts || at?.ts),
-      callerText: ct?.text?.trim() || null,
-      agentText: at?.text?.trim() || null,
-      callerTs: ct?.ts || null,
-      agentTs: at?.ts || null,
-      sourceKey,
-      provenanceType,
-      provenanceLabel: provenanceLabel(provenanceType, sourceKey),
-      provenancePath,
+      displayIndex,                      // sequential 1…N for the report
+      turnNumber: t.turnNumber,          // raw DB turn number (shown in pipeline trace)
+      speaker: t.speaker,                // 'caller' | 'agent'
+      text: t.text?.trim() || '',
+      // Legacy compat for renderTurnBlock which reads callerText/agentText:
+      callerText: t.speaker === 'caller' ? t.text?.trim() : null,
+      agentText:  t.speaker === 'agent'  ? t.text?.trim() : null,
+      elapsed: fmtElapsed(startedAt, t.ts),
+      ts: t.ts || null,
+      kind: t.kind || null,
+      sourceKey: srcKey,
+      provenanceType: provType,
+      provenanceLabel: provenanceLabel(provType, srcKey),
+      provenancePath: provPath,
       latencyMs: r123rp.latencyMs || null,
       kcCard: kcCard ? {
         _id: kcCard._id.toString(),
@@ -2279,7 +2281,7 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
         closingPrompt: kcCard.closingPrompt || null,
         category: kcCard.category || null
       } : null,
-      score: typeof r123rp.score === 'number' ? r123rp.score : null,
+      score:  typeof r123rp.score === 'number' ? r123rp.score : null,
       intent: r123rp.intent || null,
       qaEntry,
       flags

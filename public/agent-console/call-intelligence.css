@@ -819,6 +819,42 @@ button { cursor: pointer; font-family: inherit; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+/* ── Speaker chips (sequential turn view) ───────────────── */
+.spk-chip {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+}
+.spk-caller { background: #e2e8f0; color: #475569; }
+.spk-agent  { background: var(--c-info-bg); color: var(--c-info); border: 1px solid var(--c-info-border); }
+
+/* Caller turn blocks get a left accent */
+.turn-block.tb-caller { border-left: 3px solid #e2e8f0; }
+.turn-block.tb-agent  { border-left: 3px solid var(--c-info-border); }
+
+.dial-line {
+  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dial-line.dial-caller { color: var(--tx-secondary); }
+.dial-line.dial-caller span { color: var(--tx-muted); font-weight: 700; }
+.dial-line.dial-agent  { color: var(--tx-primary); }
+.dial-line.dial-agent span  { color: var(--c-info); font-weight: 700; }
+
+/* ── Recording player ────────────────────────────────────── */
+.rec-player-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; background: #f8fafc;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  margin-top: 12px;
+}
+.rec-player-wrap audio { flex: 1; height: 32px; min-width: 0; }
+.rec-skip-btn {
+  flex-shrink: 0; padding: 4px 9px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; color: var(--tx-secondary);
+  cursor: pointer; transition: background 0.15s;
+}
+.rec-skip-btn:hover { background: #e2e8f0; color: var(--tx-primary); }
+
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 900px) {
   .report-nav { display: none; }

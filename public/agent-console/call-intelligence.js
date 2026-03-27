@@ -303,7 +303,7 @@ function renderReport(r) {
   // ── Render all 8 sections ──────────────────────────────────────────────
   $('report-content').innerHTML = [
     renderSectionStory(story, hasGpt4Analysis, header.callSid),
-    renderSectionVitals(vitals),
+    renderSectionVitals(vitals, header.recordingUrl),
     renderSectionProtocol(protocolAudit),
     renderSectionTurns(turns, header.companyId),
     renderSectionKC(kcAudit, header.companyId),
@@ -365,7 +365,7 @@ function renderSectionStory(story, hasGpt4, callSid) {
 
 // ── S2: Vitals ────────────────────────────────────────────────────────────────
 
-function renderSectionVitals(vitals) {
+function renderSectionVitals(vitals, recordingUrl) {
   const items = vitals.metrics.map(m => `
     <div class="vital ${m.status}">
       <div class="vital-lbl">${esc(m.label)}</div>
@@ -373,10 +373,27 @@ function renderSectionVitals(vitals) {
       ${m.sub ? `<div class="vital-sub" title="${esc(m.sub)}">${esc(m.sub)}</div>` : ''}
     </div>`).join('');
 
+  // Inline recording player with 10-second skip buttons
+  const playerHtml = recordingUrl ? `
+    <div class="rec-player-wrap" id="rec-player-wrap">
+      <button class="rec-skip-btn" onclick="recSkip(-10)" title="Back 10 seconds">« 10s</button>
+      <audio id="rec-audio" src="${esc(recordingUrl)}" controls preload="none" style="flex:1;height:32px;min-width:0;"></audio>
+      <button class="rec-skip-btn" onclick="recSkip(10)" title="Forward 10 seconds">10s »</button>
+    </div>` : '';
+
   return sectionWrap('sec-vitals', '2', 'Call Vitals', `${vitals.metrics.length} metrics`, `
     <div class="vitals-grid">${items}</div>
+    ${playerHtml}
   `);
 }
+
+function recSkip(seconds) {
+  const audio = document.getElementById('rec-audio');
+  if (audio) {
+    audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + seconds));
+  }
+}
+window.recSkip = recSkip;
 
 // ── S3: Protocol Audit ────────────────────────────────────────────────────────
 
@@ -441,20 +458,26 @@ function renderSectionTurns(turns, companyId) {
 }
 
 function renderTurnBlock(t, companyId) {
-  const hasFlags = t.flags?.length > 0;
+  const isCaller = t.speaker === 'caller';
+  const isAgent  = t.speaker === 'agent';
+  const hasFlags  = t.flags?.length > 0;
   const hasCritical = t.flags?.some(f => f.severity === 'critical');
-  const latCls = latencyClass(t.latencyMs);
-  const latLabel = t.latencyMs ? `${t.latencyMs}ms` : '—';
+  const latCls   = isAgent ? latencyClass(t.latencyMs) : '';
+  const latLabel  = isAgent && t.latencyMs ? `${t.latencyMs}ms` : null;
 
   const flagsHtml = (t.flags || []).map(f =>
     `<span class="flag-chip ${f.severity}">${esc(f.label)}</span>`).join('');
 
-  const callerHtml = t.callerText
-    ? `<div class="dial-caller"><span>C:</span> ${esc(t.callerText.substring(0, 120))}${t.callerText.length > 120 ? '…' : ''}</div>`
-    : '';
-  const agentHtml = t.agentText
-    ? `<div class="dial-agent"><span>A:</span> ${esc(t.agentText.substring(0, 120))}${t.agentText.length > 120 ? '…' : ''}</div>`
-    : '';
+  // Collapsed summary line: speaker chip + truncated text
+  const speakerChip = isCaller
+    ? `<span class="spk-chip spk-caller">C</span>`
+    : `<span class="spk-chip spk-agent">A</span>`;
+  const textPreview = t.text?.substring(0, 110) || '';
+  const isLong = (t.text?.length || 0) > 110;
+  const speakerPrefix = isCaller ? 'C:' : 'A:';
+  const dialLine = `<div class="dial-line ${isCaller ? 'dial-caller' : 'dial-agent'}">
+    <span>${speakerPrefix}</span> ${esc(textPreview)}${isLong ? '…' : ''}
+  </div>`;
 
   const provClass = t.provenanceType || 'UNKNOWN';
   const provLabel = t.provenanceLabel || provClass;
@@ -464,29 +487,36 @@ function renderTurnBlock(t, companyId) {
   const verbatimHtml = `
     <div class="td-section">
       <div class="td-sec-title">Verbatim</div>
-      ${t.callerText ? `<div class="vb-caller"><span class="vb-label">Caller</span><span class="vb-text">${esc(t.callerText)}</span></div>` : ''}
-      ${t.agentText  ? `<div class="vb-agent mt-2"><span class="vb-label">Agent</span><span class="vb-text">${esc(t.agentText)}</span></div>` : ''}
+      <div class="${isCaller ? 'vb-caller' : 'vb-agent'}">
+        <span class="vb-label">${isCaller ? 'Caller' : 'Agent'}</span>
+        <span class="vb-text">${esc(t.text || '')}</span>
+      </div>
     </div>`;
 
-  // 2) Pipeline trace
-  const pathLabel = t.provenancePath || '—';
-  const pipeRows = `
-    <div class="pipe-row"><span class="pr-stage">Provenance type</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
-    <div class="pipe-row"><span class="pr-stage">Path / handler</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
-    ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
-    ${t.score  ? `<div class="pipe-row"><span class="pr-stage">KC match score</span><span class="pr-icon">→</span><span class="pr-detail">${t.score.toFixed(2)}</span></div>` : ''}
-    ${t.latencyMs ? `<div class="pipe-row"><span class="pr-stage">Response latency</span><span class="pr-icon">→</span><span class="pr-detail">${t.latencyMs}ms</span></div>` : ''}
-    ${t.sourceKey  ? `<div class="pipe-row"><span class="pr-stage">Source key</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.sourceKey)}</span></div>` : ''}
-  `;
-  const pipelineHtml = `
-    <div class="td-section">
-      <div class="td-sec-title">Pipeline Trace</div>
-      <div class="pipeline-rows">${pipeRows}</div>
-    </div>`;
+  // 2) Pipeline trace (agent turns only — caller turns have no pipeline)
+  let pipelineHtml = '';
+  if (isAgent) {
+    const pathLabel = t.provenancePath || '—';
+    const pipeRows = `
+      <div class="pipe-row"><span class="pr-stage">Provenance type</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
+      <div class="pipe-row"><span class="pr-stage">Path / handler</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
+      ${t.kind ? `<div class="pipe-row"><span class="pr-stage">Kind</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.kind)}</span></div>` : ''}
+      ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
+      ${t.score  ? `<div class="pipe-row"><span class="pr-stage">KC match score</span><span class="pr-icon">→</span><span class="pr-detail">${t.score.toFixed(2)}</span></div>` : ''}
+      ${t.latencyMs ? `<div class="pipe-row"><span class="pr-stage">Response latency</span><span class="pr-icon">→</span><span class="pr-detail">${t.latencyMs}ms</span></div>` : ''}
+      ${t.sourceKey  ? `<div class="pipe-row"><span class="pr-stage">Source key</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.sourceKey)}</span></div>` : ''}
+      <div class="pipe-row"><span class="pr-stage">DB turn #</span><span class="pr-icon">→</span><span class="pr-detail">${t.turnNumber ?? '—'}</span></div>
+    `;
+    pipelineHtml = `
+      <div class="td-section">
+        <div class="td-sec-title">Pipeline Trace</div>
+        <div class="pipeline-rows">${pipeRows}</div>
+      </div>`;
+  }
 
-  // 3) KC card (if matched)
+  // 3) KC card (agent turns only)
   let kcHtml = '';
-  if (t.kcCard) {
+  if (isAgent && t.kcCard) {
     const editUrl = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(t.kcCard._id)}`;
     kcHtml = `
       <div class="td-section">
@@ -507,44 +537,31 @@ function renderTurnBlock(t, companyId) {
       </div>`;
   }
 
-  // 4) Discovery delta
+  // 4) Discovery delta (caller turns — entities captured here)
   let discoveryHtml = '';
-  if (t.qaEntry || t.discoveryObjective) {
+  if (isCaller && t.qaEntry) {
     discoveryHtml = `
       <div class="td-section">
         <div class="td-sec-title">Discovery Delta</div>
         <div class="delta-rows">
-          ${t.qaEntry ? `
-            <div class="delta-row">
-              <span class="dr-key added">+ qaLog</span>
-              <span class="dr-val">${esc(t.qaEntry.question)}: "${esc(t.qaEntry.answer)}"</span>
-            </div>` : ''}
-          ${t.discoveryObjective ? `
-            <div class="delta-row">
-              <span class="dr-key added">objective</span>
-              <span class="dr-val">${esc(t.discoveryObjective)}</span>
-            </div>` : ''}
-          ${!t.qaEntry && !t.discoveryObjective ? `
-            <div class="delta-row">
-              <span class="dr-key none">—</span>
-              <span class="dr-val none">No entities updated this turn</span>
-            </div>` : ''}
+          <div class="delta-row">
+            <span class="dr-key added">+ qaLog</span>
+            <span class="dr-val">${esc(t.qaEntry.question)}: "${esc(t.qaEntry.answer)}"</span>
+          </div>
         </div>
       </div>`;
   }
 
-  // 5) Compliance verdict
+  // 5) Compliance flags
   let complianceHtml = '';
   if (t.flags?.length) {
     const verdicts = t.flags.map(f => `
       <div class="cv-block fail mt-2">
         <div class="cv-label">${esc(f.label)}</div>
         ${f.code === 'MISSED_BOOKING_CTA' && t.kcCard
-          ? `<div class="cv-gap">KC card has bookingAction=offer_to_book but no booking CTA was delivered in this response.</div>`
-          : ''}
+          ? `<div class="cv-gap">KC card has bookingAction=offer_to_book but no booking CTA was delivered.</div>` : ''}
         ${f.code === 'LLM_FALLBACK'
-          ? `<div class="cv-gap">No KC card matched. LLM generated this response — may not reflect authored policy.</div>`
-          : ''}
+          ? `<div class="cv-gap">No KC card matched. LLM generated this response — may not reflect authored policy.</div>` : ''}
       </div>`).join('');
     complianceHtml = `
       <div class="td-section">
@@ -554,16 +571,14 @@ function renderTurnBlock(t, companyId) {
   }
 
   return `
-    <div class="turn-block${hasFlags ? ' has-flags' : ''}${hasCritical ? ' has-critical' : ''}" data-turn="${t.turnNumber}">
+    <div class="turn-block${isCaller ? ' tb-caller' : ' tb-agent'}${hasFlags ? ' has-flags' : ''}${hasCritical ? ' has-critical' : ''}" data-turn="${t.turnNumber}">
       <div class="turn-summary">
-        <span class="turn-num-badge">${t.turnNumber}</span>
+        ${speakerChip}
+        <span class="turn-num-badge">${t.displayIndex ?? t.turnNumber}</span>
         <span class="turn-ts">${t.elapsed || '—'}</span>
-        <span class="latency-pill ${latCls}">${latLabel}</span>
-        <div class="turn-dialogue">
-          ${callerHtml}
-          ${agentHtml}
-        </div>
-        <span class="prov-badge ${provClass}">${esc(provLabel)}</span>
+        ${latLabel ? `<span class="latency-pill ${latCls}">${latLabel}</span>` : ''}
+        <div class="turn-dialogue">${dialLine}</div>
+        ${isAgent ? `<span class="prov-badge ${provClass}">${esc(provLabel)}</span>` : ''}
         ${hasFlags ? `<div class="turn-flags-row">${flagsHtml}</div>` : ''}
         <svg class="turn-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
