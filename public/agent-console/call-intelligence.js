@@ -138,8 +138,8 @@ async function loadDashboard() {
   try {
     // Load stats and list in parallel
     const [statsData, listData] = await Promise.all([
-      apiFetch(`/api/call-intelligence/company/${state.companyId}/summary`).catch(() => null),
-      apiFetch(`/api/call-intelligence/company/${state.companyId}/list?${params}`).catch(() => ({ calls: [], total: 0, pages: 1 }))
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/stats?timeRange=${state.filterTime}`).catch(() => null),
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/list?${params}`).catch(() => ({ items: [], total: 0, pages: 1 }))
     ]);
 
     renderStats(statsData);
@@ -159,11 +159,30 @@ function renderStats(data) {
   $('sv-good').textContent     = data.performingWell   ?? '—';
   $('sv-total').textContent    = data.total        ?? '—';
   if (data.avgCost != null) {
-    $('sv-avgcost').textContent = `$${data.avgCost.toFixed(4)}`;
+    $('sv-avgcost').textContent = `$${Number(data.avgCost).toFixed(4)}`;
   }
 }
 
-function renderCallsList({ calls = [], total = 0, pages = 1 }) {
+// Normalize API list item to flat fields the row renderer needs.
+// API wraps metadata in callMetadata + recording — flatten here.
+function normalizeListItem(c) {
+  const meta = c.callMetadata || {};
+  const rec  = c.recording   || {};
+  return {
+    callSid:         c.callSid || '',
+    startedAt:       meta.startTime   || c.startedAt  || c.analyzedAt || null,
+    phone:           meta.fromPhone   || c.phone      || '',
+    durationSeconds: meta.duration    ?? c.durationSeconds ?? null,
+    turnCount:       meta.turns       ?? c.turnCount  ?? null,
+    routingTier:     meta.routingTier || c.routingTier || null,
+    outcome:         c.outcome        || c.status     || 'unknown',
+    llmCost:         c.llmCost        ?? null,
+    hasRecording:    rec.hasRecording ?? c.hasRecording ?? false,
+    recordingUrl:    rec.url          || c.recordingUrl || null,
+  };
+}
+
+function renderCallsList({ items = [], total = 0, pages = 1 }) {
   state.totalCalls = total;
   state.totalPages = pages;
 
@@ -171,7 +190,7 @@ function renderCallsList({ calls = [], total = 0, pages = 1 }) {
 
   const tbody = $('calls-tbody');
 
-  if (!calls.length) {
+  if (!items.length) {
     tbody.innerHTML = `
       <tr><td colspan="10">
         <div class="empty-state">
@@ -184,13 +203,13 @@ function renderCallsList({ calls = [], total = 0, pages = 1 }) {
     return;
   }
 
-  tbody.innerHTML = calls.map(c => {
+  tbody.innerHTML = items.map(raw => {
+    const c = normalizeListItem(raw);
     const tier = c.routingTier;
     const tierBadge = tier ? `<span class="badge tier-${tier}">T${tier}</span>` : '—';
-    const outcome = c.outcome || 'unknown';
-    const outClass = OUTCOME_CLASS[outcome] || 'ob-in_progress';
-    const hasRec = c.hasRecording;
-    const hasTrans = c.hasTranscript;
+    // Map API status values to display-friendly outcome labels
+    const outcomeRaw = c.outcome === 'not_analyzed' ? 'not analyzed' : c.outcome;
+    const outClass = OUTCOME_CLASS[c.outcome] || 'ob-in_progress';
 
     return `
       <tr>
@@ -199,14 +218,14 @@ function renderCallsList({ calls = [], total = 0, pages = 1 }) {
         <td class="td-dur">${fmtDur(c.durationSeconds)}</td>
         <td class="td-turns">${c.turnCount ?? '—'}</td>
         <td>${tierBadge}</td>
-        <td><span class="outcome-badge ${outClass}">${esc(outcome.replace('_', ' '))}</span></td>
-        <td class="td-cost">${c.llmCost ? `$${c.llmCost.toFixed(4)}` : '—'}</td>
-        <td>${hasRec ? `<a class="recording-link" href="#" data-recording="${esc(c.recordingRef || '')}" onclick="playRecording(this,event)">▶ Play</a>` : '—'}</td>
-        <td class="td-sid" title="${esc(c.callId || c.twilioSid || '')}">
-          ${esc((c.callId || c.twilioSid || '').slice(0, 20))}…
+        <td><span class="outcome-badge ${outClass}">${esc(outcomeRaw.replace(/_/g, ' '))}</span></td>
+        <td class="td-cost">${c.llmCost ? `$${Number(c.llmCost).toFixed(4)}` : '—'}</td>
+        <td>${c.hasRecording ? `<a class="recording-link" href="${esc(c.recordingUrl || '#')}" target="_blank">▶ Play</a>` : '—'}</td>
+        <td class="td-sid" title="${esc(c.callSid)}">
+          ${esc(c.callSid.slice(0, 22))}…
         </td>
         <td class="td-actions">
-          ${hasTrans ? `<button class="btn btn-kc btn-sm" onclick="openReport('${esc(c.callId || c.twilioSid || '')}')">View Report</button>` : '<span class="text-muted text-xs">No transcript</span>'}
+          <button class="btn btn-kc btn-sm" onclick="openReport('${esc(c.callSid)}')">View Report</button>
         </td>
       </tr>`;
   }).join('');

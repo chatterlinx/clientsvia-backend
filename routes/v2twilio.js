@@ -5037,6 +5037,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     
     // Add caller turn (what they said)
     let callerTurn = null;
+    // callerTurnWriteOk — must be declared in outer scope so computeTurnPromise closure can read it.
+    // Set true after successful primary write; safety-net at ~line 6423 skips if true.
+    let callerTurnWriteOk = false;
     if (speechResult && speechResult.trim()) {
       callerTurn = {
         speaker: 'caller',
@@ -5046,9 +5049,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       };
       callState.turns.push(callerTurn);
 
-      // callerTurnWriteOk — captured by the computeTurnPromise closure.
-      // Set to true on successful primary write; safety-net skips if true.
-      let callerTurnWriteOk = false;
       try {
         const CallTranscriptV2 = require('../models/CallTranscriptV2');
         logger.info('[V2TWILIO] CALLER_TURN_WRITE_START', {

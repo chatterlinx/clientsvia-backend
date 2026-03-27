@@ -1218,6 +1218,55 @@ router.get('/company/:companyId/summary', async (req, res) => {
 });
 
 /**
+ * GET /api/call-intelligence/company/:companyId/stats
+ * Dashboard stats bar — reads CallSummary (all calls) + CallIntelligence (analyzed calls).
+ * Returns: todayCount, weekCount, total, critical, needsImprovement, performingWell, avgCost
+ */
+router.get('/company/:companyId/stats', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const companyOid = mongoose.Types.ObjectId.isValid(companyId)
+      ? new mongoose.Types.ObjectId(companyId)
+      : companyId;
+
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const weekStart  = new Date(now); weekStart.setDate(now.getDate() - 7);
+
+    const [todayCount, weekCount, total, intelStats] = await Promise.all([
+      CallSummary.countDocuments({ companyId: companyOid, startedAt: { $gte: todayStart } }),
+      CallSummary.countDocuments({ companyId: companyOid, startedAt: { $gte: weekStart } }),
+      CallSummary.countDocuments({ companyId: companyOid }),
+      CallIntelligence.aggregate([
+        { $match: { companyId: companyId.toString() } },
+        { $group: {
+          _id: null,
+          critical:         { $sum: { $cond: [{ $eq: ['$status', 'critical'] }, 1, 0] } },
+          needsImprovement: { $sum: { $cond: [{ $eq: ['$status', 'needs_improvement'] }, 1, 0] } },
+          performingWell:   { $sum: { $cond: [{ $eq: ['$status', 'performing_well'] }, 1, 0] } },
+          avgCost:          { $avg: '$analysis.totalCost' }
+        }}
+      ])
+    ]);
+
+    const intel = intelStats[0] || {};
+    res.json({
+      ok: true,
+      todayCount,
+      weekCount,
+      total,
+      critical:         intel.critical         || 0,
+      needsImprovement: intel.needsImprovement || 0,
+      performingWell:   intel.performingWell   || 0,
+      avgCost:          intel.avgCost          ?? null
+    });
+  } catch (err) {
+    console.error('[call-intelligence stats]', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+/**
  * GET /api/call-intelligence/company/:companyId/list
  * Get paginated intelligence list for company
  * Auto-analyzes recent calls if not yet analyzed
