@@ -820,6 +820,45 @@
         </div>
       </div>
 
+      <!-- Response Tone -->
+      <div class="form-group">
+        <label class="form-label">Response Tone</label>
+        <select id="kbResponseTone" class="form-input">
+          <option value="professional">Professional — formal, business-like</option>
+          <option value="friendly" selected>Friendly — warm, approachable</option>
+          <option value="casual">Casual — relaxed, easygoing</option>
+          <option value="warm">Warm — empathetic, caring</option>
+        </select>
+        <div class="form-hint">Controls the personality and tone of all KC-powered answers.</div>
+      </div>
+
+      <!-- Response Detail Level -->
+      <div class="form-group">
+        <label class="form-label">Response Detail Level</label>
+        <select id="kbResponseStyle" class="form-input">
+          <option value="concise" selected>Concise — quick phone answers</option>
+          <option value="balanced">Balanced — moderate detail (1.5x word limit)</option>
+          <option value="detailed">Detailed — thorough answers (2x word limit)</option>
+        </select>
+        <div class="form-hint">Adjusts effective word limit. Concise = under word limit, Balanced = 1.5x, Detailed = 2x.</div>
+      </div>
+
+      <!-- Personalization toggles -->
+      <div class="form-group full">
+        <div class="form-label">Caller Personalization</div>
+        <div style="display:flex;gap:24px;padding-top:4px;">
+          <div class="toggle-lg">
+            <input type="checkbox" id="kbGreetByName" checked>
+            <label for="kbGreetByName">Address caller by name</label>
+          </div>
+          <div class="toggle-lg">
+            <input type="checkbox" id="kbAcknowledgeHistory" checked>
+            <label for="kbAcknowledgeHistory">Acknowledge returning customers</label>
+          </div>
+        </div>
+        <div class="form-hint">When enabled, Groq personalizes responses using caller info from discoveryNotes.</div>
+      </div>
+
       <!-- Fallback Response -->
       <div class="form-group full">
         <label class="form-label" for="kbFallbackResponse">Fallback Response</label>
@@ -1092,6 +1131,12 @@ function _renderSettings() {
     document.getElementById('kbOfferPhrase').value = s.bookingOfferPhrase || '';
   }
 
+  // Response Tone & Style
+  document.getElementById('kbResponseTone').value            = s.responseTone || 'friendly';
+  document.getElementById('kbResponseStyle').value           = s.responseStyle || 'concise';
+  document.getElementById('kbGreetByName').checked           = s.greetByName !== false;
+  document.getElementById('kbAcknowledgeHistory').checked    = s.acknowledgeHistory !== false;
+
   // Fallback Response
   document.getElementById('kbFallbackResponse').value = s.fallbackResponse || '';
 
@@ -1126,6 +1171,10 @@ async function saveSettings() {
     defaultWordLimit:   parseInt(document.getElementById('kbWordLimit').value, 10) || 20,
     bookingOfferMode:   mode,
     bookingOfferPhrase: mode === 'fixed' ? (document.getElementById('kbOfferPhrase').value || '').trim() : '',
+    responseTone:       document.getElementById('kbResponseTone').value || 'friendly',
+    responseStyle:      document.getElementById('kbResponseStyle').value || 'concise',
+    greetByName:        document.getElementById('kbGreetByName').checked,
+    acknowledgeHistory: document.getElementById('kbAcknowledgeHistory').checked,
     fallbackResponse:   (document.getElementById('kbFallbackResponse').value || '').trim(),
     callerScreening: {
       enabled:             document.getElementById('kbScreeningEnabled').checked,

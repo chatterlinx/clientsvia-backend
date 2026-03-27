@@ -86,6 +86,10 @@ const SETTINGS_FIELDS = [
   'enabled', 'defaultWordLimit', 'bookingOfferMode', 'bookingOfferPhrase',
   'fallbackResponse',   // String — spoken by KC_GRACEFUL_ACK when all AI paths fail
   'callerScreening',    // Object — { enabled, vendorResponse, deliveryResponse, wrongNumberResponse, defaultResponse }
+  'responseTone',       // enum: professional | friendly | casual | warm
+  'responseStyle',      // enum: concise | balanced | detailed
+  'greetByName',        // Boolean — address caller by name in KC answers
+  'acknowledgeHistory', // Boolean — acknowledge returning customers
 ];
 
 /**

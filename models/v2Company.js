@@ -1329,12 +1329,12 @@ const companySchema = new mongoose.Schema({
                 default: 0
             },
             speechDetection: {
-                // V87: Lowered from 3s to 1.5s - 3s creates guaranteed dead air floor!
+                // V87→V126: 3s→1.5s→1.0s — single biggest latency lever per turn
                 speechTimeout: {
                     type: Number,
                     min: 1,
                     max: 10,
-                    default: 1.5
+                    default: 1.0
                 },
                 initialTimeout: {
                     type: Number,
@@ -1363,8 +1363,8 @@ const companySchema = new mongoose.Schema({
             // "Natural Flow Mode" is a preset that optimizes for conversation timing
             callExperience: {
                 // === Response Timing ===
-                // V87: Lowered from 3.0 to 1.5s - 3s creates guaranteed dead air floor!
-                speechTimeout: { type: Number, default: 1.5, min: 1, max: 5 },     // Wait after caller stops
+                // V87→V126: 3s→1.5s→1.0s — single biggest latency lever per turn
+                speechTimeout: { type: Number, default: 1.0, min: 1, max: 5 },     // Wait after caller stops
                 endSilenceTimeout: { type: Number, default: 2.0, min: 0.5, max: 3 }, // Extra silence detection
                 initialTimeout: { type: Number, default: 5, min: 3, max: 15 },     // Wait for caller to start
                 
@@ -3936,7 +3936,7 @@ const companySchema = new mongoose.Schema({
             //          falls back to voiceSettings.speechDetection for legacy companies.
             // MUST be in schema or Mongoose silently drops it on save.
             speechDetection: {
-                speechTimeout:       { type: Number, min: 0.5, max: 10,  default: 1.5 },
+                speechTimeout:       { type: Number, min: 0.5, max: 10,  default: 1.0 },
                 initialTimeout:      { type: Number, min: 3,   max: 15,  default: 7   },
                 bargeIn:             { type: Boolean,                     default: false },
                 enhancedRecognition: { type: Boolean,                     default: true  },
@@ -5455,12 +5455,12 @@ const companySchema = new mongoose.Schema({
                     // Range: 1-10 seconds
                     // - Lower (1-2s) = Faster responses, but may cut off pauses
                     // - Higher (7-10s) = Allows long pauses, but feels slower
-                    // - V87: Lowered default from 3s to 1.5s for faster perceived response
+                    // V87→V126: 3s→1.5s→1.0s — single biggest latency lever per turn
                     speechTimeout: {
                         type: Number,
                         min: 1,
                         max: 10,
-                        default: 1.5 // V87: Optimized for speed - was 3.0
+                        default: 1.0 // V126: 1.0s saves 500ms/turn vs 1.5s
                     },
                     
                     // Initial Timeout: How long to wait for ANY speech to start (in seconds)
@@ -5994,6 +5994,29 @@ const companySchema = new mongoose.Schema({
             trim:      true,
             maxlength: 200,
             comment:   'Used only when bookingOfferMode is "fixed". Appended verbatim after Groq answer.'
+        },
+        // ── V126: Response Tone & Personalization ──────────────────────────────
+        responseTone: {
+            type:    String,
+            enum:    ['professional', 'friendly', 'casual', 'warm'],
+            default: 'friendly',
+            comment: 'Controls the overall tone of KC Groq responses. professional = formal/business, friendly = approachable, casual = relaxed, warm = empathetic/caring.'
+        },
+        responseStyle: {
+            type:    String,
+            enum:    ['concise', 'balanced', 'detailed'],
+            default: 'concise',
+            comment: 'Controls response length. concise = under wordLimit, balanced = wordLimit × 1.5, detailed = wordLimit × 2.'
+        },
+        greetByName: {
+            type:    Boolean,
+            default: true,
+            comment: 'When true and caller name is known, Groq addresses the caller by name in KC answers.'
+        },
+        acknowledgeHistory: {
+            type:    Boolean,
+            default: true,
+            comment: 'When true and caller is a returning customer, Groq acknowledges their history.'
         }
     }
 }, { timestamps: true });

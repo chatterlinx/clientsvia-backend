@@ -167,6 +167,8 @@ function _buildDiscoveryContext(notes) {
   if (notes.callReason) parts.push(`Caller is calling about "${notes.callReason}"`);
   if (notes.entities?.firstName) parts.push(`Caller's name is ${notes.entities.firstName}`);
   if (notes.urgency && notes.urgency !== 'normal') parts.push(`Urgency: ${notes.urgency}`);
+  if (notes.priorVisit === true) parts.push('Caller is a returning customer (has visited before)');
+  if (notes.employeeMentioned) parts.push(`Caller mentioned employee: ${notes.employeeMentioned}`);
   return parts.length ? parts.join('. ') + '.' : null;
 }
 
@@ -288,18 +290,40 @@ class KCDiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // GATE 2 — LOAD SPFUQ ANCHOR + DISCOVERY NOTES  (parallel, ~1ms each)
+    // GATE 2+3 — PARALLEL LOAD: SPFUQ + Notes + Containers + Embeddings
+    // ══════════════════════════════════════════════════════════════════════════
+    // All 5 data sources fire concurrently via Promise.all. Net latency is
+    // max(individual) ≈ 50ms (utterance embedding) instead of sum (~56ms).
+    // Embedding loads are gated on OPENAI_API_KEY — no key = no embedding
+    // work at all (keyword-only, identical to pre-upgrade behavior).
     // ══════════════════════════════════════════════════════════════════════════
 
-    let spfuq = null;
-    let notes = null;
+    let spfuq             = null;
+    let notes             = null;
+    let containers        = [];
+    let containerEmbeddings = new Map();
+    let utteranceEmbedding  = null;
+
     try {
-      [spfuq, notes] = await Promise.all([
+      const hasEmbeddingKey = !!process.env.OPENAI_API_KEY;
+
+      [spfuq, notes, containers, containerEmbeddings, utteranceEmbedding] = await Promise.all([
         SPFUQService.load(companyId, callSid).catch(() => null),
         DiscoveryNotesService.load(companyId, callSid).catch(() => null),
+        KCS.getActiveForCompany(companyId).catch((_e) => {
+          logger.warn('[KC_ENGINE] Failed to load containers — falling to LLM', { companyId, callSid, err: _e.message });
+          return [];
+        }),
+        hasEmbeddingKey
+          ? KCS.getEmbeddingsForCompany(companyId).catch(() => new Map())
+          : Promise.resolve(new Map()),
+        hasEmbeddingKey
+          ? KCS._getUtteranceEmbedding(userInput, callSid, turn).catch(() => null)
+          : Promise.resolve(null),
       ]);
     } catch (_e) {
-      // Redis timeout — continue without anchor or notes
+      // Catastrophic — continue with whatever loaded
+      containers = containers || [];
     }
 
     if (notes) {
@@ -333,19 +357,16 @@ class KCDiscoveryRunner {
       }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // GATE 3 — KNOWLEDGE CONTAINER MATCH  (~2ms, Redis/MongoDB)
-    // ══════════════════════════════════════════════════════════════════════════
-
-    let containers = [];
-    try {
-      containers = await KCS.getActiveForCompany(companyId);
-    } catch (_e) {
-      logger.warn('[KC_ENGINE] Failed to load containers — falling to LLM', { companyId, callSid, err: _e.message });
-    }
-
+    // ── CONTAINER MATCH — keyword-first, embedding fallback on miss ───────
     const discoveryContext = _buildDiscoveryContext(notes);
-    const match = KCS.findContainer(containers, userInput, notes ? { callReason: notes.callReason } : null);
+    const embeddingOpts = (utteranceEmbedding && containerEmbeddings.size > 0)
+      ? { utteranceEmbedding, containerEmbeddings }
+      : null;
+    const match = KCS.findContainer(
+      containers, userInput,
+      notes ? { callReason: notes.callReason } : null,
+      embeddingOpts,
+    );
 
     if (match?.contextAssisted) {
       emit('KC_CONTEXT_MATCH', {
@@ -353,6 +374,19 @@ class KCDiscoveryRunner {
         containerId:    String(match.container._id || match.container.title || ''),
         score:          match.score,
         callReason:     notes?.callReason || null,
+      });
+    }
+
+    if (match?.embeddingAssisted) {
+      emit('KC_EMBEDDING_MATCH', {
+        containerTitle:      match.container.title,
+        containerId:         String(match.container._id || match.container.title || ''),
+        embeddingSimilarity: match.embeddingSimilarity,
+      });
+      logger.info('[KC_ENGINE] Embedding fallback matched container', {
+        companyId, callSid, turn,
+        containerTitle: match.container.title,
+        similarity:     match.embeddingSimilarity?.toFixed(3),
       });
     }
 
@@ -504,6 +538,7 @@ async function _handleSPFUQContinue({
       callSid,
       spfuqContext,                  // ← FIX 1: active topic injected via system prompt
       discoveryContext,              // call-level context from discoveryNotes
+      priorVisit:   notes?.priorVisit || false,
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Groq error on SPFUQ_CONTINUE', { companyId, callSid, err: _e.message });
@@ -639,6 +674,7 @@ async function _handleKCMatch({
       callerName,
       callSid,
       discoveryContext,              // call-level context from discoveryNotes
+      priorVisit:   notes?.priorVisit || false,
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Groq error on direct answer', { companyId, callSid, containerId, err: _e.message });

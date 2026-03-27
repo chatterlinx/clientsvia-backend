@@ -44,6 +44,15 @@ const CompanyKnowledgeContainer  = require('../../../models/CompanyKnowledgeCont
 const CompanyTriggerSettings     = require('../../../models/CompanyTriggerSettings');
 const logger                     = require('../../../utils/logger');
 
+// Lazy-loaded — only when embedding fallback fires (keyword miss + OPENAI_API_KEY set)
+let _embeddingService = null;
+function _getEmbeddingService() {
+  if (!_embeddingService) {
+    _embeddingService = require('../../scenarioEngine/embeddingService');
+  }
+  return _embeddingService;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,6 +195,12 @@ const TIER2_SIGNALS = [
 
 const CACHE_TTL = 900; // 15 minutes
 
+/** Keyword score below this → try embedding fallback (env-configurable) */
+const KEYWORD_CONFIDENCE_THRESHOLD = parseInt(process.env.KC_KEYWORD_THRESHOLD, 10) || 5;
+
+/** Cosine similarity above this → accept embedding match (env-configurable) */
+const EMBEDDING_SIMILARITY_THRESHOLD = parseFloat(process.env.KC_EMBEDDING_THRESHOLD) || 0.45;
+
 let _redis = null;
 function _getRedis() {
   if (_redis) return _redis;
@@ -197,6 +212,10 @@ function _getRedis() {
 
 function _cacheKey(companyId) {
   return `knowledge:${companyId}`;
+}
+
+function _embeddingCacheKey(companyId) {
+  return `knowledge-embeddings:${companyId}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,6 +273,104 @@ function invalidateKCVariablesCache(companyId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EMBEDDING CACHE — separate from container cache because embeddingVector is
+// select: false on the schema. Regular getActiveForCompany() never loads it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * getEmbeddingsForCompany — Load container embedding vectors from Redis cache
+ * or MongoDB fallback. Returns a Map<containerId, number[]> for fast cosine
+ * similarity lookup at runtime.
+ *
+ * Gate: returns empty Map when OPENAI_API_KEY is not set (no embeddings exist).
+ *
+ * @param {string} companyId
+ * @returns {Promise<Map<string, number[]>>}
+ */
+async function getEmbeddingsForCompany(companyId) {
+  if (!companyId || !process.env.OPENAI_API_KEY) return new Map();
+
+  const redis = _getRedis();
+  const key   = _embeddingCacheKey(companyId);
+
+  // ── Try Redis cache first ──────────────────────────────────────────────
+  if (redis) {
+    try {
+      const cached = await redis.get(key);
+      if (cached) {
+        const arr = JSON.parse(cached);
+        return new Map(arr);  // [[id, vec], [id, vec], ...]
+      }
+    } catch (_e) { /* Cache miss — fall through */ }
+  }
+
+  // ── Fetch from MongoDB with +embeddingVector ───────────────────────────
+  try {
+    const docs = await CompanyKnowledgeContainer
+      .find({ companyId, isActive: true })
+      .select('+embeddingVector')
+      .lean();
+
+    const map = new Map();
+    for (const doc of docs) {
+      if (doc.embeddingVector?.length) {
+        map.set(String(doc._id), doc.embeddingVector);
+      }
+    }
+
+    // Backfill cache (non-blocking) — store as [[id, vec], ...] for Map reconstruction
+    if (redis && map.size > 0) {
+      redis.setEx(key, CACHE_TTL, JSON.stringify([...map])).catch(() => {});
+    }
+
+    return map;
+  } catch (err) {
+    logger.warn('[KnowledgeContainer] Embedding fetch failed', { companyId, err: err.message });
+    return new Map();
+  }
+}
+
+/**
+ * _getUtteranceEmbedding — Embed the caller's utterance via OpenAI
+ * text-embedding-3-small (~50ms). Cached per callSid+turn in Redis so
+ * retries don't re-hit OpenAI.
+ *
+ * @param {string} text     — caller utterance
+ * @param {string} callSid  — for cache scoping
+ * @param {number} turn     — turn number for cache scoping
+ * @returns {Promise<number[]|null>}
+ */
+async function _getUtteranceEmbedding(text, callSid, turn) {
+  if (!text?.trim() || !process.env.OPENAI_API_KEY) return null;
+
+  const redis    = _getRedis();
+  const cacheKey = `utterance-emb:${callSid}:${turn}`;
+
+  // ── Check Redis cache (covers retries within same turn) ────────────────
+  if (redis) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached);
+    } catch (_e) { /* miss — generate fresh */ }
+  }
+
+  // ── Generate via embeddingService (OpenAI text-embedding-3-small) ──────
+  try {
+    const embedding = await _getEmbeddingService().getEmbedding(text);
+
+    // Cache for 5 min (non-blocking)
+    if (redis && embedding) {
+      redis.setEx(cacheKey, 300, JSON.stringify(embedding)).catch(() => {});
+    }
+
+    return embedding;
+  } catch (err) {
+    logger.warn('[KnowledgeContainer] Utterance embedding failed', { callSid, turn, err: err.message });
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PROMPT BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -302,6 +419,12 @@ function _buildSystemPrompt({
   closingPrompt,
   spfuqContext,
   discoveryContext,
+  responseTone,
+  responseStyle,
+  greetByName,
+  acknowledgeHistory,
+  callerName,
+  priorVisit,
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -341,13 +464,38 @@ function _buildSystemPrompt({
     ? `\nCALL CONTEXT: ${discoveryContext}\nUse this context to connect your answer to what the caller is specifically calling about.\n`
     : '';
 
+  // ── RESPONSE TONE INSTRUCTION ──────────────────────────────────────────────
+  const toneMap = {
+    professional: 'Use a formal, business-like tone. Be precise and authoritative.',
+    friendly:     'Be warm and approachable. Use a conversational, upbeat tone.',
+    casual:       'Keep it relaxed and easygoing. Talk like a helpful neighbor.',
+    warm:         'Be empathetic and caring. Show genuine concern for the caller.',
+  };
+  const toneInstruction = toneMap[responseTone] || toneMap.friendly;
+
+  // ── RESPONSE STYLE — adjust effective word limit ───────────────────────────
+  const styleMultiplier = responseStyle === 'detailed' ? 2 : responseStyle === 'balanced' ? 1.5 : 1;
+  const effectiveWordLimit = Math.round(wordLimit * styleMultiplier);
+
+  // ── PERSONALIZATION ────────────────────────────────────────────────────────
+  const personalizationLines = [];
+  if (greetByName !== false && callerName) {
+    personalizationLines.push(`Address the caller as "${callerName}".`);
+  }
+  if (acknowledgeHistory !== false && priorVisit) {
+    personalizationLines.push('Acknowledge that the caller is a returning customer — briefly, not every time.');
+  }
+  const personalizationBlock = personalizationLines.length
+    ? '\n' + personalizationLines.join(' ') + '\n'
+    : '';
+
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-${activeTopicBlock}${callContextBlock}
+${activeTopicBlock}${callContextBlock}${personalizationBlock}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
-2. Keep your response under ${wordLimit} words — this is a spoken phone answer.
-3. Be natural and conversational — sound human, not robotic.
+2. Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer.
+3. ${toneInstruction}
 4. If the caller signals readiness to book or schedule, set intent to "BOOKING_READY".
 ${bookingInstruction}
 6. Respond ONLY with valid json — no extra text.
@@ -496,7 +644,10 @@ async function invalidateCache(companyId) {
   const redis = _getRedis();
   if (!redis) return;
   try {
-    await redis.del(_cacheKey(companyId));
+    await Promise.all([
+      redis.del(_cacheKey(companyId)),
+      redis.del(_embeddingCacheKey(companyId)),
+    ]);
   } catch (_e) { /* Silence — next read will re-fetch from MongoDB */ }
 }
 
@@ -512,9 +663,12 @@ async function invalidateCache(companyId) {
  * @param {string} input      — Raw caller utterance
  * @param {Object} [context]  — Optional call context from discoveryNotes
  * @param {string} [context.callReason] — e.g. "annual maintenance" from Turn 1
- * @returns {{ container: Object, score: number, contextAssisted?: boolean } | null}
+ * @param {Object} [embeddingOpts]  — Optional embedding data for semantic fallback
+ * @param {number[]}                [embeddingOpts.utteranceEmbedding]   — caller utterance vector
+ * @param {Map<string, number[]>}   [embeddingOpts.containerEmbeddings]  — containerId → vector map
+ * @returns {{ container: Object, score: number, contextAssisted?: boolean, embeddingAssisted?: boolean } | null}
  */
-function findContainer(containers, input, context = null) {
+function findContainer(containers, input, context = null, embeddingOpts = null) {
   if (!containers?.length || !input) return null;
 
   const norm = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
@@ -613,6 +767,45 @@ function findContainer(containers, input, context = null) {
     }
   }
 
+  // ── EMBEDDING FALLBACK: if keyword + context both missed (or score is weak),
+  // and embedding data was provided, compute cosine similarity against all
+  // container embeddings. Only fires on MISS — keyword matches above threshold
+  // always win (deterministic, 0ms). Embedding adds ~50ms but saves ~750ms
+  // vs Claude LLM fallback.
+  if (
+    (!bestMatch || bestMatch.score < KEYWORD_CONFIDENCE_THRESHOLD) &&
+    embeddingOpts?.utteranceEmbedding &&
+    embeddingOpts?.containerEmbeddings?.size > 0
+  ) {
+    const { cosineSimilarity } = _getEmbeddingService();
+    const utteranceVec   = embeddingOpts.utteranceEmbedding;
+    const containerMap   = embeddingOpts.containerEmbeddings;
+
+    let embBestSim       = 0;
+    let embBestContainer = null;
+
+    for (const container of containers) {
+      const vec = containerMap.get(String(container._id));
+      if (!vec) continue;
+
+      const sim = cosineSimilarity(utteranceVec, vec);
+      if (sim > embBestSim) {
+        embBestSim       = sim;
+        embBestContainer = container;
+      }
+    }
+
+    if (embBestSim >= EMBEDDING_SIMILARITY_THRESHOLD && embBestContainer) {
+      // Embedding match beats weak/absent keyword match
+      return {
+        container:         embBestContainer,
+        score:             Math.round(embBestSim * 100),   // normalized 0–100 for trace
+        embeddingAssisted: true,
+        embeddingSimilarity: embBestSim,
+      };
+    }
+  }
+
   return bestMatch;
 }
 
@@ -640,6 +833,7 @@ async function answer(opts) {
     callSid,
     spfuqContext,       // optional — active topic reminder injected into system prompt for pronoun resolution
     discoveryContext,   // optional — call-level context from discoveryNotes (callReason, entities)
+    priorVisit  = false, // optional — true when caller is a returning customer
   } = opts;
 
   const startMs       = Date.now();
@@ -678,6 +872,12 @@ async function answer(opts) {
     closingPrompt:      container.closingPrompt        || '',
     spfuqContext:       spfuqContext                   || null,
     discoveryContext:   discoveryContext                || null,
+    responseTone:       kbSettings.responseTone        || 'friendly',
+    responseStyle:      kbSettings.responseStyle       || 'concise',
+    greetByName:        kbSettings.greetByName !== false,
+    acknowledgeHistory: kbSettings.acknowledgeHistory !== false,
+    callerName:         callerName                     || null,
+    priorVisit:         priorVisit                     || false,
   });
 
   // User message — personalise with caller name if known
@@ -742,9 +942,12 @@ module.exports = {
   KNOWLEDGE_SIGNALS,
   TIER1_SIGNALS,
   TIER2_SIGNALS,
+  KEYWORD_CONFIDENCE_THRESHOLD,
+  EMBEDDING_SIMILARITY_THRESHOLD,
   detect,
   detectTier,
   getActiveForCompany,
+  getEmbeddingsForCompany,
   invalidateCache,
   invalidateKCVariablesCache,
   findContainer,
@@ -753,4 +956,5 @@ module.exports = {
   _buildContainerBlock,
   _buildSystemPrompt,
   _parseGroqResponse,
+  _getUtteranceEmbedding,
 };

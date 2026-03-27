@@ -1979,6 +1979,70 @@ class Agent2DiscoveryRunner {
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
 
     // ══════════════════════════════════════════════════════════════════════════
+    // TURN-1 FAST PATHS — Booking Short-Circuit + KC Question Path
+    // ══════════════════════════════════════════════════════════════════════════
+    // Before running the full LLM_INTAKE pipeline (8b extraction → 70b response,
+    // ~530ms total), check if we can answer faster:
+    //
+    //   1. BOOKING:  Pure booking intent ("schedule me") → BookingLogicEngine (0ms)
+    //   2. KC:       TIER 1 question ("how much is...") → KC container + Groq (~500ms)
+    //
+    // Both save ~530ms vs intake AND give better answers (container-bounded, not LLM).
+    // On failure: fall through to normal LLM_INTAKE below.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (turn === 1 && discoveryCfg.engine !== 'scrabengine') {
+      // ── 2A: Turn-1 Booking Short-Circuit ────────────────────────────────
+      try {
+        const KCBookingIntentDetector = require('../kc/KCBookingIntentDetector');
+        const _norm1 = (input || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
+        const _hasQuestion1 = _norm1.includes('?') ||
+          /\b(what|how|why|when|which|where|does|do you|can you|is it|is there|include|cover|tell me|explain|about the|more about|offer|know about)\b/.test(_norm1);
+
+        if (!_hasQuestion1 && KCBookingIntentDetector.isBookingIntent(input)) {
+          emit('TURN1_BOOKING_SHORTCIRCUIT', { inputPreview: clip(input, 60) });
+          const KCDiscoveryRunner = require('../kc/KCDiscoveryRunner');
+          const bookingResult = await KCDiscoveryRunner.run({
+            company, companyId, callSid,
+            userInput: input,
+            state: nextState, emitEvent, turn, bridgeToken, redis, onSentence,
+          });
+          if (bookingResult?.response) return bookingResult;
+          emit('TURN1_BOOKING_SHORTCIRCUIT_MISS', { reason: 'kc_no_response' });
+        }
+      } catch (_bkErr) {
+        emit('TURN1_BOOKING_SHORTCIRCUIT_ERROR', { error: _bkErr.message });
+        // Fall through to KC fast path or normal intake
+      }
+
+      // ── 2B: Turn-1 KC Fast Path (TIER 1 questions) ─────────────────────
+      try {
+        const kcTier = KnowledgeContainerService.detectTier(input);
+        if (kcTier.tier === 1) {
+          emit('TURN1_KC_FAST_PATH_ATTEMPT', {
+            tier: 1, matched: kcTier.matched, inputPreview: clip(input, 60),
+          });
+          const KCDiscoveryRunner = require('../kc/KCDiscoveryRunner');
+          const kcFastResult = await KCDiscoveryRunner.run({
+            company, companyId, callSid,
+            userInput: input,
+            state: nextState, emitEvent, turn, bridgeToken, redis, onSentence,
+          });
+          if (kcFastResult?.response) {
+            emit('TURN1_KC_FAST_PATH_HIT', {
+              containerTitle: kcFastResult._123rp?.containerTitle || null,
+              latencyMs: kcFastResult._123rp?.latencyMs || null,
+            });
+            return kcFastResult;
+          }
+          emit('TURN1_KC_FAST_PATH_MISS', { reason: 'no_response' });
+        }
+      } catch (_kcErr) {
+        emit('TURN1_KC_FAST_PATH_ERROR', { error: _kcErr.message });
+        // Fall through to normal intake
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // TURN-1 LLM INTAKE — Structured Entity Extraction (before ScrabEngine)
     // ══════════════════════════════════════════════════════════════════════════
     // On turn 1, if LLM Intake is enabled, bypass ScrabEngine and triggers.

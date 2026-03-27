@@ -99,6 +99,7 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
     callReason: null,
     urgency: null,       // 'low' | 'medium' | 'high'
     priorVisit: null,    // boolean
+    employeeMentioned: null, // string — "Hi is John there?" → "John"
 
     // ── In-call state machine ───────────────────────────────────────────────
     // INTAKE     → gathering name / address / issue
@@ -364,6 +365,9 @@ function formatForLLM(notes) {
   if (notes.priorVisit !== null && notes.priorVisit !== undefined) {
     lines.push(`  prior visit : ${notes.priorVisit ? 'yes' : 'no'}`);
   }
+  if (notes.employeeMentioned) {
+    lines.push(`  employee mentioned : ${notes.employeeMentioned}`);
+  }
 
   // ── Anti-amnesia core ────────────────────────────────────────────────────
   if (notes.doNotReask && notes.doNotReask.length > 0) {
@@ -442,7 +446,7 @@ function _mergePatch(current, patch) {
 
   // ── Scalar fields ────────────────────────────────────────────────────────
   const SCALAR_FIELDS = [
-    'callReason', 'urgency', 'priorVisit',
+    'callReason', 'urgency', 'priorVisit', 'employeeMentioned',
     'objective', 'turnNumber', 'lastMeaningfulInput'
   ];
   for (const field of SCALAR_FIELDS) {
