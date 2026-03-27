@@ -511,6 +511,91 @@
     .health-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
     .health-loading { display: flex; align-items: center; gap: 10px; padding: 30px; justify-content: center; font-size: 14px; color: var(--text-muted); }
 
+    /* ── Health modal tabs ────────────────────────────────────────────────── */
+    .health-tabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 2px solid var(--border); }
+    .health-tab {
+      padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: none; background: none; color: var(--text-muted);
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color .15s, border-color .15s;
+    }
+    .health-tab:hover { color: var(--text-primary); }
+    .health-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    .health-tab-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; border-radius: 9px; font-size: 10px;
+      font-weight: 700; padding: 0 5px; margin-left: 5px;
+    }
+    .health-tab-badge.red  { background: #fee2e2; color: #dc2626; }
+    .health-tab-badge.amber { background: #fef3c7; color: #92400e; }
+    .health-tab-badge.green { background: #dcfce7; color: #15803d; }
+    .health-tab-panel { display: none; flex: 1; overflow-y: auto; }
+    .health-tab-panel.active { display: flex; flex-direction: column; }
+
+    /* ── Quality report cards ────────────────────────────────────────────── */
+    .quality-card {
+      border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 10px; overflow: hidden;
+    }
+    .quality-card-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; background: #f8fafc; border-bottom: 1px solid var(--border);
+    }
+    .quality-grade {
+      width: 34px; height: 34px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 800; flex-shrink: 0;
+    }
+    .grade-A { background: #dcfce7; color: #15803d; }
+    .grade-B { background: #d1fae5; color: #065f46; }
+    .grade-C { background: #fef3c7; color: #92400e; }
+    .grade-D { background: #ffedd5; color: #c2410c; }
+    .grade-F { background: #fee2e2; color: #dc2626; }
+    .quality-card-title { font-weight: 600; font-size: 14px; color: var(--text-primary); flex: 1; }
+    .quality-score-bar-wrap { width: 90px; }
+    .quality-score-label { font-size: 11px; color: var(--text-muted); text-align: right; margin-bottom: 3px; }
+    .quality-score-bar { height: 6px; border-radius: 3px; background: #e2e8f0; overflow: hidden; }
+    .quality-score-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+    .quality-card-body { padding: 12px 14px; }
+    .quality-issues { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+    .quality-issue {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 12px; padding: 7px 10px; border-radius: 6px; line-height: 1.5;
+    }
+    .quality-issue.HIGH { background: #fff5f5; border: 1px solid #fecaca; }
+    .quality-issue.WARN { background: #fffbeb; border: 1px solid #fde68a; }
+    .quality-issue.INFO { background: #f0f9ff; border: 1px solid #bae6fd; }
+    .quality-issue-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+    .quality-kw-tag {
+      display: inline-block; background: #fef2f2; border: 1px solid #fecaca;
+      color: #b91c1c; border-radius: 4px; padding: 1px 6px;
+      font-family: monospace; font-size: 11px; font-weight: 600; margin-right: 3px;
+    }
+    .quality-suggestions { margin-top: 10px; }
+    .quality-suggestions-label {
+      font-size: 11px; font-weight: 700; color: #7c3aed; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: 6px; display: flex; align-items: center; gap: 5px;
+    }
+    .quality-suggest-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .quality-suggest-chip {
+      font-size: 12px; background: #f5f3ff; border: 1px solid #ddd6fe;
+      color: #5b21b6; border-radius: 6px; padding: 4px 10px; cursor: pointer;
+      transition: background .15s; user-select: none;
+    }
+    .quality-suggest-chip:hover { background: #ede9fe; }
+    .quality-suggest-chip:active { background: #ddd6fe; }
+    .quality-clean {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #15803d; padding: 10px 0;
+    }
+    .quality-summary-row {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .quality-summary-chip {
+      font-size: 12px; font-weight: 700; padding: 4px 12px;
+      border-radius: 20px; border: 1px solid; white-space: nowrap;
+    }
+
     .btn-optimize {
       display: flex; align-items: center; gap: 6px;
       padding: 8px 14px; border-radius: 8px;
@@ -838,16 +923,38 @@
 
 <!-- ── Keyword Health modal ──────────────────────────────────────────────── -->
 <div class="health-overlay" id="healthOverlay">
-  <div class="health-box">
+  <div class="health-box" style="max-width:800px;">
     <div class="health-header">
       <span style="font-size:22px;">🧠</span>
       <div class="health-title">Keyword Health Report</div>
       <button class="btn-secondary" style="padding:6px 14px;font-size:12px;" onclick="closeHealthModal()">✕ Close</button>
     </div>
     <div class="health-summary-chips" id="healthSummaryChips"></div>
-    <div class="health-list" id="healthList">
-      <div class="health-loading">Scanning for conflicts…</div>
+
+    <!-- Tabs -->
+    <div class="health-tabs">
+      <button class="health-tab active" id="tabBtnConflicts" onclick="switchHealthTab('conflicts')">
+        ⚔️ Conflicts <span class="health-tab-badge" id="tabBadgeConflicts"></span>
+      </button>
+      <button class="health-tab" id="tabBtnQuality" onclick="switchHealthTab('quality')">
+        🎯 Keyword Quality <span class="health-tab-badge" id="tabBadgeQuality"></span>
+      </button>
     </div>
+
+    <!-- Conflicts tab -->
+    <div class="health-tab-panel active" id="tabPanelConflicts">
+      <div class="health-list" id="healthList">
+        <div class="health-loading">Scanning for conflicts…</div>
+      </div>
+    </div>
+
+    <!-- Keyword Quality tab -->
+    <div class="health-tab-panel" id="tabPanelQuality">
+      <div class="health-list" id="qualityList">
+        <div class="health-loading">Analyzing keyword quality…</div>
+      </div>
+    </div>
+
     <div class="health-footer">
       <button class="btn-secondary" onclick="closeHealthModal()">Close</button>
       <button class="btn-optimize" id="btnRescan" onclick="showKeywordHealth(true)">🔄 Re-scan</button>
@@ -1592,6 +1699,112 @@ function closeHealthModal() {
   document.getElementById('healthOverlay').classList.remove('open');
 }
 
+function switchHealthTab(tab) {
+  ['conflicts','quality'].forEach(t => {
+    document.getElementById(`tabBtn${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.toggle('active', t === tab);
+    document.getElementById(`tabPanel${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.toggle('active', t === tab);
+  });
+}
+
+function _gradeColor(grade) {
+  return { A:'#15803d', B:'#065f46', C:'#92400e', D:'#c2410c', F:'#dc2626' }[grade] || '#64748b';
+}
+function _gradeBarColor(score) {
+  if (score >= 90) return '#22c55e';
+  if (score >= 75) return '#10b981';
+  if (score >= 60) return '#f59e0b';
+  if (score >= 45) return '#f97316';
+  return '#ef4444';
+}
+function _issueIcon(severity) {
+  return { HIGH: '🔴', WARN: '🟡', INFO: 'ℹ️' }[severity] || '•';
+}
+
+function _renderQualityTab(data) {
+  const listEl = document.getElementById('qualityList');
+  const q = data.quality;
+  if (!q || !q.qualityReports?.length) {
+    listEl.innerHTML = '<div class="health-empty"><span>📭</span><span>No containers to analyze.</span></div>';
+    return;
+  }
+
+  // Update tab badge
+  const badIssues = q.qualityReports.filter(r => r.grade === 'D' || r.grade === 'F').length;
+  const tabBadge  = document.getElementById('tabBadgeQuality');
+  tabBadge.textContent = badIssues > 0 ? badIssues : '';
+  tabBadge.className   = 'health-tab-badge ' + (badIssues > 0 ? 'red' : 'green');
+
+  // Summary row
+  const summaryChips = [
+    q.gradeCounts.A ? `<span class="quality-summary-chip" style="background:#dcfce7;border-color:#86efac;color:#15803d;">A: ${q.gradeCounts.A}</span>` : '',
+    q.gradeCounts.B ? `<span class="quality-summary-chip" style="background:#d1fae5;border-color:#6ee7b7;color:#065f46;">B: ${q.gradeCounts.B}</span>` : '',
+    q.gradeCounts.C ? `<span class="quality-summary-chip" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;">C: ${q.gradeCounts.C}</span>` : '',
+    q.gradeCounts.D ? `<span class="quality-summary-chip" style="background:#ffedd5;border-color:#fdba74;color:#c2410c;">D: ${q.gradeCounts.D}</span>` : '',
+    q.gradeCounts.F ? `<span class="quality-summary-chip" style="background:#fee2e2;border-color:#fca5a5;color:#dc2626;">F: ${q.gradeCounts.F}</span>` : '',
+    `<span class="quality-summary-chip" style="background:#f1f5f9;border-color:#e2e8f0;color:#475569;">Overall: ${q.overallScore}/100 (${q.overallGrade})</span>`,
+  ].filter(Boolean).join('');
+
+  // Sort: worst grade first
+  const gradeOrder = { F:0, D:1, C:2, B:3, A:4 };
+  const sorted = [...q.qualityReports].sort((a,b) => gradeOrder[a.grade] - gradeOrder[b.grade]);
+
+  const cards = sorted.map(r => {
+    const issueRows = r.issues.map(issue => {
+      const kwTag = issue.keyword ? `<span class="quality-kw-tag">${_esc(issue.keyword)}</span>` : '';
+      return `<div class="quality-issue ${issue.severity}">
+        <span class="quality-issue-icon">${_issueIcon(issue.severity)}</span>
+        <span>${kwTag}${_esc(issue.message)}</span>
+      </div>`;
+    }).join('');
+
+    const suggestionsBlock = r.suggestions?.length
+      ? `<div class="quality-suggestions">
+          <div class="quality-suggestions-label">✨ AI Suggestions — click to copy</div>
+          <div class="quality-suggest-chips">
+            ${r.suggestions.map(s =>
+              `<span class="quality-suggest-chip" onclick="navigator.clipboard.writeText('${s.replace(/'/g,"\\'")}');this.textContent='✓ Copied!';setTimeout(()=>this.textContent='${s.replace(/'/g,"\\'")}',1500)" title="Click to copy">${_esc(s)}</span>`
+            ).join('')}
+          </div>
+          <div style="font-size:11px;color:#7c3aed;margin-top:6px;">Add these to your container's keyword list to improve Groq routing accuracy.</div>
+        </div>`
+      : '';
+
+    const cleanMsg = r.issues.length === 0
+      ? `<div class="quality-clean">✅ All keywords are specific and well-formed — this container is Groq-ready.</div>`
+      : '';
+
+    const kcBadge = r.kcId ? `<span style="font-size:11px;color:#94a3b8;font-family:monospace;margin-left:4px;">${_esc(r.kcId)}</span>` : '';
+    const editLink = S.companyId
+      ? `<a href="/agent-console/services-item.html?companyId=${S.companyId}&itemId=${r.containerId}" target="_blank" style="font-size:11px;color:var(--color-primary);text-decoration:none;margin-left:auto;">Edit ↗</a>`
+      : '';
+
+    const kwSummary = `<span style="font-size:11px;color:var(--text-muted);">${r.multiWordCount} multi-word · ${r.singleWordCount} single-word · ${r.keywords.length} total</span>`;
+
+    return `<div class="quality-card">
+      <div class="quality-card-header">
+        <div class="quality-grade grade-${r.grade}">${r.grade}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="quality-card-title">${_esc(r.title)}${kcBadge}</div>
+          ${kwSummary}
+        </div>
+        <div class="quality-score-bar-wrap">
+          <div class="quality-score-label">${r.score}/100</div>
+          <div class="quality-score-bar">
+            <div class="quality-score-fill" style="width:${r.score}%;background:${_gradeBarColor(r.score)};"></div>
+          </div>
+        </div>
+        ${editLink}
+      </div>
+      ${r.issues.length || suggestionsBlock ? `<div class="quality-card-body">${issueRows}${cleanMsg}${suggestionsBlock}</div>` : `<div class="quality-card-body">${cleanMsg}</div>`}
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = `<div style="padding:12px;">
+    <div class="quality-summary-row">${summaryChips}</div>
+    ${cards}
+  </div>`;
+}
+
 async function showKeywordHealth(forceRescan = false) {
   if (S.healthLoading) return;
 
@@ -1614,6 +1827,7 @@ async function showKeywordHealth(forceRescan = false) {
   btn.disabled = true;
   rescanBtn.disabled = true;
   listEl.innerHTML  = '<div class="health-loading">🔍 Scanning containers for conflicts…</div>';
+  document.getElementById('qualityList').innerHTML = '<div class="health-loading">🎯 Analyzing keyword quality…</div>';
   chipsEl.innerHTML = '';
 
   try {
@@ -1667,6 +1881,12 @@ function _renderHealthModal(data) {
             ✅ OpenAI confirmed live — full semantic analysis active.
           </div>`);
 
+  // ── Conflicts tab badge ────────────────────────────────────────────────────
+  const conflictBadgeEl = document.getElementById('tabBadgeConflicts');
+  conflictBadgeEl.textContent = data.totalConflicts > 0 ? data.totalConflicts : '';
+  conflictBadgeEl.className   = 'health-tab-badge ' +
+    (data.highCount > 0 ? 'red' : data.warnCount > 0 ? 'amber' : '');
+
   // Summary chips
   if (data.totalConflicts === 0) {
     chipsEl.innerHTML = noSemanticBanner + `
@@ -1677,8 +1897,8 @@ function _renderHealthModal(data) {
         <span>✅</span>
         <span>All ${data.totalContainers} containers are clean — no conflicts detected.</span>
       </div>`;
-    return;
-  }
+    // fall through — quality tab still needs to render
+  } else {
 
   chipsEl.innerHTML = noSemanticBanner + [
     data.highCount ? `<span class="health-chip health-chip-high">🔴 ${data.highCount} HIGH</span>` : '',
@@ -1741,6 +1961,10 @@ function _renderHealthModal(data) {
   }).join('');
 
   listEl.innerHTML = rows;
+  } // end else (totalConflicts > 0)
+
+  // ── Always render keyword quality tab ─────────────────────────────────────
+  _renderQualityTab(data);
 }
 </script>
 </body>

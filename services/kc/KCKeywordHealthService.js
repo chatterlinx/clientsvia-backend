@@ -44,7 +44,43 @@ const { getEmbedding, cosineSimilarity } = require('../scenarioEngine/embeddingS
 
 const SIMILARITY_THRESHOLD = 0.80;   // Flag pairs at or above this cosine score
 const LLM_VALIDATE_CAP     = 8;      // Max pairs to run through Groq per health check
+const GROQ_SUGGEST_CAP     = 4;      // Max containers to run Groq keyword suggestions per check
 const TAG = '[KCKeywordHealth]';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYWORD QUALITY — GENERIC WORD BLOCKLIST
+// Single-word keywords on this list are too broad to reliably identify a
+// specific container. They match almost every caller utterance and cause
+// the wrong container to fire. Any KC container with these as standalone
+// keywords will score HIGH severity in the quality report.
+// ─────────────────────────────────────────────────────────────────────────────
+const GENERIC_SINGLE_WORDS = new Set([
+  // Cost / money — appear in nearly every service call
+  'fee', 'fees', 'cost', 'costs', 'price', 'prices', 'pricing',
+  'rate', 'rates', 'charge', 'charges', 'payment', 'payments', 'bill',
+  // Service actions — universal
+  'service', 'services', 'repair', 'repairs', 'fix', 'fixing', 'help',
+  'call', 'visit', 'come', 'send', 'check', 'inspect', 'inspection',
+  'replace', 'replacement', 'upgrade', 'install', 'installation',
+  // Scheduling / availability — booking intent collision risk
+  'schedule', 'scheduled', 'scheduling', 'available', 'availability', 'book',
+  // Financial modifiers — too ambiguous alone
+  'credit', 'credits', 'included', 'includes', 'include', 'covered', 'coverage', 'cover',
+  'waived', 'waive', 'applied',
+  // Promotions — single word matches any promo question
+  'special', 'specials', 'deal', 'deals', 'promo', 'promotion', 'promotions',
+  'discount', 'discounts', 'offer', 'offers', 'coupon', 'coupons', 'sale',
+  // Warranty / guarantee — too generic
+  'warranty', 'warranties', 'guarantee', 'guarantees', 'guaranteed',
+  // Policy — too broad
+  'policy', 'policies', 'terms', 'contract', 'agreement',
+  // Maintenance — extremely common in HVAC
+  'maintenance', 'plan', 'plans', 'tune', 'tuneup', 'annual',
+  // Generic info words
+  'info', 'information', 'question', 'questions', 'details', 'about',
+  // Common verbs that appear everywhere
+  'need', 'want', 'get', 'have', 'use', 'work', 'time', 'unit', 'system',
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMBEDDING TEXT BUILDER
@@ -354,6 +390,248 @@ async function analyzeConflicts(companyId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// KEYWORD QUALITY — PER-CONTAINER ANALYSIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * _analyzeContainerQuality — Scores a single container's keyword list.
+ *
+ * Issue types (returned in `issues` array):
+ *   TOO_GENERIC   HIGH  — single word in GENERIC_SINGLE_WORDS blocklist
+ *   TOO_SHORT     HIGH  — single word < 5 characters
+ *   NO_MULTI_WORD HIGH  — container has zero multi-word phrases (all single words)
+ *   DUPLICATE     WARN  — exact duplicate within the same container
+ *   LOW_COVERAGE  WARN  — fewer than 4 keywords total
+ *   REDUNDANT     INFO  — single word already covered by a longer phrase in same container
+ *
+ * Grade scale:  A(90-100) B(75-89) C(60-74) D(45-59) F(<45)
+ */
+function _analyzeContainerQuality(container, crossConflictSet) {
+  const rawKeywords = (container.keywords || []).map(k => k.toLowerCase().trim()).filter(Boolean);
+  const issues = [];
+  const seen   = new Set();
+  const multiWordKws  = rawKeywords.filter(k => k.includes(' '));
+  const singleWordKws = rawKeywords.filter(k => !k.includes(' '));
+
+  // ── Structural checks (whole-container) ────────────────────────────────────
+  if (rawKeywords.length < 4) {
+    issues.push({
+      keyword:  null,
+      type:     'LOW_COVERAGE',
+      severity: 'WARN',
+      message:  `Only ${rawKeywords.length} keyword${rawKeywords.length === 1 ? '' : 's'} — add more phrases to capture diverse caller phrasings (aim for 6-10 specific multi-word phrases).`,
+    });
+  }
+
+  if (rawKeywords.length > 0 && multiWordKws.length === 0) {
+    issues.push({
+      keyword:  null,
+      type:     'NO_MULTI_WORD',
+      severity: 'HIGH',
+      message:  'No multi-word phrases — all keywords are single words. Single-word keywords score low in findContainer() and will lose to any multi-word match in competing containers.',
+    });
+  }
+
+  // ── Per-keyword checks ─────────────────────────────────────────────────────
+  for (const kw of rawKeywords) {
+    // Duplicate within same container
+    if (seen.has(kw)) {
+      issues.push({ keyword: kw, type: 'DUPLICATE', severity: 'WARN',
+        message: `"${kw}" appears more than once in this container — remove the duplicate.` });
+      continue;
+    }
+    seen.add(kw);
+
+    // Cross-container conflict: same keyword appears in more than one container.
+    // This is the #1 routing ambiguity cause — the KC engine scores both containers
+    // and may pick the wrong one. Flag all duplicates across containers.
+    if (crossConflictSet.has(kw)) {
+      const isMultiWord = kw.includes(' ');
+      issues.push({ keyword: kw, type: 'CROSS_CONTAINER', severity: 'HIGH',
+        message: `"${kw}" exists in another container — this causes routing confusion and the wrong container may fire. Remove or rephrase this ${isMultiWord ? 'phrase' : 'keyword'} so it only lives in one container.` });
+    }
+
+    if (!kw.includes(' ')) {
+      // Single-word checks
+      if (kw.length < 5) {
+        issues.push({ keyword: kw, type: 'TOO_SHORT', severity: 'HIGH',
+          message: `"${kw}" is ${kw.length} characters — too short to be meaningful as a standalone keyword. Wrap it in a phrase e.g. "${kw} repair cost".` });
+      } else if (GENERIC_SINGLE_WORDS.has(kw)) {
+        issues.push({ keyword: kw, type: 'TOO_GENERIC', severity: 'HIGH',
+          message: `"${kw}" is a common word that appears in almost every caller utterance — this container will fire incorrectly on unrelated questions. Replace with a specific phrase like "${kw} diagnostic cost" or "${kw} service included".` });
+      } else {
+        // Redundant: already covered by a more specific multi-word phrase in same container
+        const coveredBy = multiWordKws.find(mw => mw.split(/\s+/).includes(kw));
+        if (coveredBy) {
+          issues.push({ keyword: kw, type: 'REDUNDANT', severity: 'INFO',
+            message: `"${kw}" is already covered by the more specific "${coveredBy}" — remove the single word to reduce noise.` });
+        }
+      }
+    }
+  }
+
+  // ── Score calculation ───────────────────────────────────────────────────────
+  const highPenalty = issues.filter(i => i.severity === 'HIGH').length * 20;
+  const warnPenalty = issues.filter(i => i.severity === 'WARN').length * 10;
+  const infoPenalty = issues.filter(i => i.severity === 'INFO').length * 3;
+  const multiBonus  = rawKeywords.length >= 5 && multiWordKws.length / rawKeywords.length >= 0.7 ? 5 : 0;
+  const score = Math.max(0, Math.min(100, 100 - highPenalty - warnPenalty - infoPenalty + multiBonus));
+  const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 45 ? 'D' : 'F';
+
+  return {
+    containerId: String(container._id),
+    title:       container.title,
+    kcId:        container.kcId || null,
+    score,
+    grade,
+    issues,
+    keywords:    rawKeywords,
+    multiWordCount:  multiWordKws.length,
+    singleWordCount: singleWordKws.length,
+    suggestions: null, // filled in by Groq below for D/F grades
+  };
+}
+
+/**
+ * _groqSuggestKeywords — Uses Groq to generate 6-8 specific multi-word
+ * replacement phrases for containers with a D or F quality grade.
+ * Returns an array of suggestion strings, or [] on any failure.
+ */
+async function _groqSuggestKeywords(container, qualityResult) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    // Build content summary from sections
+    const contentSummary = (container.sections || [])
+      .slice(0, 3)
+      .map(s => `${s.label ? s.label + ': ' : ''}${(s.content || '').substring(0, 180)}`)
+      .filter(Boolean)
+      .join('\n');
+
+    const weakKeywords = qualityResult.issues
+      .filter(i => i.severity === 'HIGH' && i.keyword)
+      .map(i => i.keyword);
+
+    const goodKeywords = (container.keywords || [])
+      .filter(k => k.includes(' '))   // keep multi-word phrases that passed
+      .slice(0, 5);
+
+    const prompt = `You are a knowledge-base keyword specialist for a phone AI used by home-service companies (HVAC, plumbing, electrical).
+
+CONTAINER TITLE: "${container.title}"
+CONTENT:
+${contentSummary || '(no sections defined yet)'}
+
+WEAK KEYWORDS TO REPLACE (too generic — these cause the container to fire on wrong questions):
+${weakKeywords.length ? weakKeywords.map(k => `"${k}"`).join(', ') : 'none'}
+
+EXISTING GOOD KEYWORDS (keep these, do not repeat):
+${goodKeywords.length ? goodKeywords.map(k => `"${k}"`).join(', ') : 'none'}
+
+Generate 7 specific multi-word replacement phrases for this container.
+STRICT RULES:
+1. Every phrase MUST be 2-6 words (never a single word)
+2. Must sound like natural caller speech — what would a homeowner actually say?
+3. Must be SPECIFIC to this container's exact topic — not general HVAC questions
+4. Must NOT repeat any existing good keywords listed above
+5. Mix question forms ("how much does", "do you charge") with noun phrases ("refrigerant recharge cost")
+
+Return ONLY a valid JSON array of strings — no markdown, no explanation:
+["phrase one", "phrase two", "phrase three", "phrase four", "phrase five", "phrase six", "phrase seven"]`;
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   300,
+      temperature: 0.25,
+      system:      'You are a keyword specialist. Return only valid JSON arrays. No markdown.',
+      messages:    [{ role: 'user', content: prompt }],
+      jsonMode:    false,
+    });
+
+    if (!result.response) return [];
+
+    const raw = result.response.trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '');
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Validate: keep only strings with at least one space (multi-word)
+    return parsed
+      .filter(s => typeof s === 'string' && s.trim().includes(' '))
+      .map(s => s.trim().toLowerCase())
+      .slice(0, 8);
+
+  } catch (err) {
+    logger.warn(`${TAG} _groqSuggestKeywords failed`, { containerId: container._id, err: err.message });
+    return [];
+  }
+}
+
+/**
+ * analyzeKeywordQuality — Full keyword quality audit for all active containers.
+ *
+ * Runs synchronously for scoring, then fires Groq suggestions for D/F containers.
+ * Returns structured per-container quality reports + overall summary.
+ */
+async function analyzeKeywordQuality(companyId) {
+  const containers = await CompanyKnowledgeContainer
+    .find({ companyId, isActive: true })
+    .select('_id kcId title keywords sections')
+    .lean();
+
+  if (!containers.length) {
+    return { qualityReports: [], overallScore: 100, overallGrade: 'A', gradeCounts: { A:0,B:0,C:0,D:0,F:0 } };
+  }
+
+  // Build cross-conflict set: which keywords appear in more than one container?
+  const kwToContainers = new Map();
+  for (const c of containers) {
+    for (const kw of (c.keywords || [])) {
+      const norm = kw.toLowerCase().trim();
+      if (!kwToContainers.has(norm)) kwToContainers.set(norm, new Set());
+      kwToContainers.get(norm).add(String(c._id));
+    }
+  }
+  const crossConflictSet = new Set(
+    [...kwToContainers.entries()]
+      .filter(([, ids]) => ids.size > 1)
+      .map(([kw]) => kw)
+  );
+
+  // Score all containers synchronously
+  const reports = containers.map(c => _analyzeContainerQuality(c, crossConflictSet));
+
+  // Groq suggestions for D/F containers (capped at GROQ_SUGGEST_CAP)
+  const needsSuggestions = reports
+    .filter(r => (r.grade === 'D' || r.grade === 'F') && r.issues.some(i => i.severity === 'HIGH' && i.keyword))
+    .slice(0, GROQ_SUGGEST_CAP);
+
+  if (needsSuggestions.length) {
+    await Promise.all(needsSuggestions.map(async (report) => {
+      const container = containers.find(c => String(c._id) === report.containerId);
+      if (!container) return;
+      report.suggestions = await _groqSuggestKeywords(container, report);
+    }));
+  }
+
+  // Overall score = average of all container scores
+  const overallScore = Math.round(reports.reduce((s, r) => s + r.score, 0) / reports.length);
+  const overallGrade = overallScore >= 90 ? 'A' : overallScore >= 75 ? 'B' : overallScore >= 60 ? 'C' : overallScore >= 45 ? 'D' : 'F';
+  const gradeCounts  = reports.reduce((acc, r) => { acc[r.grade] = (acc[r.grade] || 0) + 1; return acc; }, { A:0,B:0,C:0,D:0,F:0 });
+
+  logger.info(`${TAG} analyzeKeywordQuality complete`, {
+    companyId, containers: reports.length, overallScore, overallGrade,
+    grades: Object.entries(gradeCounts).map(([g,n]) => `${g}:${n}`).join(' '),
+  });
+
+  return { qualityReports: reports, overallScore, overallGrade, gradeCounts };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -379,4 +657,5 @@ module.exports = {
   generateAndStoreEmbedding,
   batchGenerateEmbeddings,
   analyzeConflicts,
+  analyzeKeywordQuality,
 };

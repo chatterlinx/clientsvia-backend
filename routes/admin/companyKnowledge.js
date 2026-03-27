@@ -601,7 +601,11 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
       }
     }
 
-    const report = await KCKeywordHealthService.analyzeConflicts(companyId);
+    // Run conflict analysis + keyword quality in parallel — independent queries
+    const [report, quality] = await Promise.all([
+      KCKeywordHealthService.analyzeConflicts(companyId),
+      KCKeywordHealthService.analyzeKeywordQuality(companyId),
+    ]);
 
     return res.json({
       success: true,
@@ -609,6 +613,7 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
       semanticError:     semanticError || null,
       embeddingBackfill: semanticAvailable ? embeddingBackfill : null,
       ...report,
+      quality,
     });
   } catch (err) {
     logger.error('[companyKnowledge] keyword-health error', { companyId, err: err.message });
