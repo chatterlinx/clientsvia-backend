@@ -606,6 +606,15 @@
     .btn-optimize:hover    { background: #e0f2fe; border-color: #7dd3fc; }
     .btn-optimize:disabled { opacity: .5; cursor: not-allowed; }
 
+    .btn-export {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px;
+      border: 1px solid #bbf7d0; background: #f0fdf4;
+      color: #15803d; font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    .btn-export:hover { background: #dcfce7; border-color: #86efac; }
+
     /* ── Delete confirm dialog ───────────────────────────────────────────── */
     .dialog-overlay {
       display: none; position: fixed; inset: 0;
@@ -878,6 +887,9 @@
   </button>
   <button class="btn-optimize" id="btnOptimize" onclick="optimizePriorities()" title="AI analyzes all cards and suggests optimal priority numbers">
     🎯 Optimize Priorities
+  </button>
+  <button class="btn-export" onclick="downloadContainersJson()" title="Download all containers as a complete JSON file (keywords, sections, all fields)">
+    ⬇️ Export JSON
   </button>
   <span style="font-size:13px;color:var(--text-muted);" id="resultCount"></span>
 </div>
@@ -1965,6 +1977,40 @@ function _renderHealthModal(data) {
 
   // ── Always render keyword quality tab ─────────────────────────────────────
   _renderQualityTab(data);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT — Download all containers as a clean JSON file
+// Uses already-loaded S.containers — no extra API call.
+// Strips embeddingVector (large float array) and __v before export.
+// ─────────────────────────────────────────────────────────────────────────────
+function downloadContainersJson() {
+  if (!S.containers.length) {
+    alert('No containers loaded yet — please wait for the page to finish loading.');
+    return;
+  }
+
+  // Strip internal fields that are useless outside MongoDB
+  const exportData = S.containers.map(({ embeddingVector, embeddingUpdatedAt, __v, ...rest }) => rest);
+
+  const payload = {
+    exportedAt:  new Date().toISOString(),
+    companyId:   S.companyId,
+    totalCards:  exportData.length,
+    containers:  exportData,
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `kb-containers-${S.companyId}-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>
