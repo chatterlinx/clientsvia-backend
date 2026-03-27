@@ -3,225 +3,272 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Call Intelligence Console</title>
-  <link rel="stylesheet" href="/agent-console/call-intelligence.css?v=20260310f">
+  <title>Call Intelligence — ClientsVia</title>
+  <link rel="stylesheet" href="/agent-console/call-intelligence.css?v=20260327">
 </head>
 <body>
-  <!-- Header -->
-  <header class="intelligence-header">
-    <div class="header-left">
-      <a href="#" id="back-link" class="back-link">← Back to Dashboard</a>
-      <div class="header-title">
-        <h1>Call Intelligence Console</h1>
-        <p class="subtitle">Analyze calls, detect gaps, improve trigger coverage</p>
+<div id="app">
+
+  <!-- ═══════════════════════════════════════════════════════
+       SHARED PAGE HEADER  (sticky, always visible)
+       ═══════════════════════════════════════════════════════ -->
+  <header class="page-header" id="page-header">
+    <!-- Dashboard state header content -->
+    <div id="header-dashboard" class="header-brand">
+      <div class="header-brand-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 012 2.18 2 2 0 013.98 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+        </svg>
       </div>
+      Call Intelligence
     </div>
-    <div class="header-right">
-      <button id="refresh-btn" class="btn btn-secondary">
-        <span class="icon">🔄</span> Refresh
+
+    <!-- Report state: back + call identity -->
+    <div id="header-report" style="display:none; flex:1; align-items:center; gap:12px; display:none;">
+      <button class="btn-back" id="btn-back-to-list">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        All Calls
       </button>
-      <button id="settings-btn" class="btn btn-secondary">
-        <span class="icon">⚙️</span> Settings
-      </button>
+      <div class="header-sep"></div>
+      <div class="call-id-bar" id="call-id-bar">
+        <span class="cib-name" id="h-caller-name">Loading…</span>
+        <span class="cib-sid" id="h-call-sid"></span>
+        <span class="cib-meta" id="h-call-meta"></span>
+      </div>
+      <span id="h-health-pill"></span>
+    </div>
+
+    <div class="header-spacer"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;">
+      <!-- Dashboard: refresh + settings -->
+      <div id="header-dashboard-actions" style="display:flex;gap:8px;">
+        <button class="btn-icon-only" id="btn-refresh" title="Refresh">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        </button>
+        <button class="btn-icon-only" id="btn-settings" title="Settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+      </div>
+      <!-- Report: download + export -->
+      <div id="header-report-actions" style="display:none;gap:8px;">
+        <button class="btn btn-ghost btn-sm" id="btn-download-json">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          JSON
+        </button>
+      </div>
     </div>
   </header>
 
-  <!-- Stats Banner -->
-  <section class="stats-banner" id="stats-banner">
-    <div class="stat-card">
-      <span class="stat-label">Today</span>
-      <span class="stat-value" id="stat-today">-</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">This Week</span>
-      <span class="stat-value" id="stat-week">-</span>
-    </div>
-    <div class="stat-card critical">
-      <span class="stat-label">🔴 Critical</span>
-      <span class="stat-value" id="stat-critical">-</span>
-    </div>
-    <div class="stat-card warning">
-      <span class="stat-label">🟡 Needs Work</span>
-      <span class="stat-value" id="stat-needs-work">-</span>
-    </div>
-    <div class="stat-card success">
-      <span class="stat-label">✅ Good</span>
-      <span class="stat-value" id="stat-good">-</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Match Rate</span>
-      <span class="stat-value" id="stat-match-rate">-%</span>
-    </div>
-    <div class="stat-card tier-1-stat">
-      <span class="stat-label">T1 Deterministic</span>
-      <span class="stat-value" id="stat-tier1">-</span>
-    </div>
-    <div class="stat-card tier-2-stat">
-      <span class="stat-label">T2 LLM Agent</span>
-      <span class="stat-value" id="stat-tier2">-</span>
-    </div>
-    <div class="stat-card tier-3-stat">
-      <span class="stat-label">T3 Fallback</span>
-      <span class="stat-value" id="stat-tier3">-</span>
-    </div>
-  </section>
+  <!-- Cost ribbon (report view only) -->
+  <div class="cost-ribbon" id="cost-ribbon" style="display:none;" aria-label="Call cost breakdown">
+    <div class="cr-item" id="cr-tokens"></div>
+    <div class="cr-item" id="cr-model"></div>
+    <div class="cr-item total" id="cr-total"></div>
+    <div class="cr-spacer"></div>
+    <div class="cr-item" id="cr-per-turn" style="border-right:none;"></div>
+  </div>
 
-  <!-- Filters -->
-  <section class="filters-section">
-    <div class="filters-row">
-      <input 
-        type="text" 
-        id="search-input" 
-        class="search-input" 
-        placeholder="Search by phone, CallSid..."
-      >
-      <select id="filter-status" class="filter-select">
-        <option value="">All Calls</option>
-        <option value="critical">🔴 Critical Issues</option>
-        <option value="needs_improvement">🟡 Needs Improvement</option>
-        <option value="performing_well">✅ Performing Well</option>
-      </select>
-      <select id="filter-time" class="filter-select">
-        <option value="today">Today</option>
-        <option value="week">This Week</option>
-        <option value="month">This Month</option>
-      </select>
-      <button id="clear-filters-btn" class="btn btn-text">Clear Filters</button>
+  <!-- ═══════════════════════════════════════════════════════
+       VIEW: LOADING
+       ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-loading">
+    <div class="loading-view">
+      <div class="loading-spinner"></div>
+      <p class="loading-text" id="loading-text">Loading…</p>
     </div>
-  </section>
+  </div>
 
-  <!-- Main Table -->
-  <section class="table-section">
-    <div class="table-header">
-      <h2>Recent Calls</h2>
-      <div class="table-header-right">
-        <button id="delete-selected-btn" class="btn btn-danger" style="display:none;">🗑 Delete Selected (<span id="selected-count">0</span>)</button>
-        <span class="call-count" id="call-count">0 calls</span>
-      </div>
-    </div>
+  <!-- ═══════════════════════════════════════════════════════
+       VIEW: DASHBOARD
+       ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-dashboard">
+    <div class="dashboard-view">
+      <div class="dashboard-inner">
 
-    <div class="table-wrapper">
-      <table class="intelligence-table">
-        <thead>
-          <tr>
-            <th class="col-checkbox"><input type="checkbox" id="select-all"></th>
-            <th class="col-time">TIME</th>
-            <th class="col-from">FROM</th>
-            <th class="col-duration">DURATION</th>
-            <th class="col-turns">TURNS</th>
-            <th class="col-tier">TIER</th>
-            <th class="col-provenance">PROVENANCE</th>
-            <th class="col-recording">RECORDING</th>
-            <th class="col-intelligence">INTELLIGENCE</th>
-            <th class="col-callsid">CALLSID</th>
-          </tr>
-        </thead>
-        <tbody id="calls-tbody">
-          <!-- Rows populated by JavaScript -->
-          <tr class="loading-row">
-            <td colspan="10" class="loading-cell">
-              <div class="loading-spinner"></div>
-              <p>Loading call intelligence...</p>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Pagination -->
-    <div class="pagination" id="pagination">
-      <button id="prev-page" class="btn btn-secondary" disabled>← Previous</button>
-      <span id="page-info">Page 1 of 1</span>
-      <button id="next-page" class="btn btn-secondary" disabled>Next →</button>
-    </div>
-  </section>
-
-  <!-- Analysis Modal (Full Page) -->
-  <div id="analysis-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <button id="close-modal" class="close-btn">✕ Close</button>
-        <h2>Call Intelligence Report</h2>
-        <div class="modal-actions">
-          <button id="download-json-btn" class="btn btn-secondary btn-small" title="Download full call intelligence JSON">📥 Download JSON</button>
-          <button id="copy-all-btn" class="btn btn-secondary">📋 Copy All</button>
-          <button id="export-pdf-btn" class="btn btn-secondary">🔖 Save as PDF</button>
+        <!-- Stats bar -->
+        <div class="stats-bar" id="stats-bar">
+          <div class="stat-card" id="sc-today">
+            <div class="stat-label">Today</div>
+            <div class="stat-value" id="sv-today">—</div>
+          </div>
+          <div class="stat-card" id="sc-week">
+            <div class="stat-label">This Week</div>
+            <div class="stat-value" id="sv-week">—</div>
+          </div>
+          <div class="stat-card s-critical" id="sc-critical">
+            <div class="stat-label">Critical</div>
+            <div class="stat-value" id="sv-critical">—</div>
+          </div>
+          <div class="stat-card s-warn" id="sc-needs">
+            <div class="stat-label">Needs Work</div>
+            <div class="stat-value" id="sv-needs">—</div>
+          </div>
+          <div class="stat-card s-ok" id="sc-good">
+            <div class="stat-label">Performing Well</div>
+            <div class="stat-value" id="sv-good">—</div>
+          </div>
+          <div class="stat-card" id="sc-avgcost">
+            <div class="stat-label">Avg Cost</div>
+            <div class="stat-value" id="sv-avgcost">—</div>
+          </div>
+          <div class="stat-card" id="sc-total">
+            <div class="stat-label">Total Analyzed</div>
+            <div class="stat-value" id="sv-total">—</div>
+          </div>
         </div>
-      </div>
-      <div class="modal-body" id="modal-body">
-        <!-- Analysis content populated by JavaScript -->
+
+        <!-- Filters -->
+        <div class="filters-bar">
+          <input type="text" class="search-input" id="search-input" placeholder="Search by phone or CallSid…">
+          <select class="filter-select" id="filter-status">
+            <option value="">All Status</option>
+            <option value="critical">Critical Issues</option>
+            <option value="needs_improvement">Needs Improvement</option>
+            <option value="performing_well">Performing Well</option>
+          </select>
+          <select class="filter-select" id="filter-time">
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+          <div class="filters-spacer"></div>
+          <span class="text-muted text-sm" id="call-count"></span>
+        </div>
+
+        <!-- Table -->
+        <div class="calls-table-wrap">
+          <table class="calls-table">
+            <thead>
+              <tr>
+                <th>TIME</th>
+                <th>FROM</th>
+                <th>DURATION</th>
+                <th>TURNS</th>
+                <th>TIER</th>
+                <th>OUTCOME</th>
+                <th>COST</th>
+                <th>REC</th>
+                <th>CALLSID</th>
+                <th>REPORT</th>
+              </tr>
+            </thead>
+            <tbody id="calls-tbody">
+              <tr><td colspan="10" style="padding:40px;text-align:center;color:var(--tx-muted);">Loading calls…</td></tr>
+            </tbody>
+          </table>
+          <div class="pagination" id="pagination" style="display:none;">
+            <span class="text-muted text-sm" id="page-info"></span>
+            <div class="page-btns">
+              <button class="page-btn" id="btn-prev" disabled>← Prev</button>
+              <button class="page-btn" id="btn-next" disabled>Next →</button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 
-  <!-- Settings Modal -->
-  <div id="settings-modal" class="modal">
-    <div class="modal-content settings-modal">
-      <div class="modal-header">
-        <button class="close-btn" id="close-settings">✕ Close</button>
-        <h2>Intelligence Settings</h2>
-      </div>
-      <div class="modal-body">
-        <div class="settings-section">
-          <h3>GPT-4 Analysis</h3>
-          <div class="setting-item">
-            <div class="setting-info">
-              <strong>Enable GPT-4 Analysis</strong>
-              <p>Use AI-powered analysis for detailed call insights. Costs approximately $0.01-0.05 per call.</p>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="gpt4-toggle">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <strong>Analysis Model</strong>
-              <p>Choose the AI model for call analysis. Mini is cheapest, GPT-4o is most capable.</p>
-            </div>
-            <select id="analysis-model" class="filter-select">
-              <option value="gpt-4o-mini">GPT-4o Mini (~$0.03/call)</option>
-              <option value="gpt-4o">GPT-4o (~$0.41/call)</option>
-              <option value="gpt-4-turbo">GPT-4 Turbo (~$1.22/call)</option>
-            </select>
-          </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <strong>Analysis Mode</strong>
-              <p>Quick mode: Faster, less detailed. Full mode: Comprehensive analysis.</p>
-            </div>
-            <select id="analysis-mode" class="filter-select">
-              <option value="quick">Quick Analysis</option>
-              <option value="full">Full Analysis</option>
-            </select>
-          </div>
-          <div class="setting-status" id="gpt4-status">
-            <span class="status-indicator">●</span>
-            <span id="status-text">Checking status...</span>
-          </div>
-        </div>
+  <!-- ═══════════════════════════════════════════════════════
+       VIEW: FULL REPORT
+       ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-report">
+    <div class="report-view">
 
-        <div class="settings-section">
-          <h3>Auto-Analysis</h3>
-          <div class="setting-item">
-            <div class="setting-info">
-              <strong>Auto-analyze new calls</strong>
-              <p>Automatically analyze calls as they come in (requires GPT-4 enabled)</p>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="auto-analyze-toggle" disabled>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
+      <!-- Left nav -->
+      <nav class="report-nav" id="report-nav">
+        <div class="nav-heading">Report Sections</div>
+        <div class="nav-item active" data-section="sec-story">
+          <span class="nav-num">1</span> The Story
         </div>
+        <div class="nav-item" data-section="sec-vitals">
+          <span class="nav-num">2</span> Call Vitals
+        </div>
+        <div class="nav-item" data-section="sec-protocol">
+          <span class="nav-num">3</span> Protocol Audit
+        </div>
+        <div class="nav-item" data-section="sec-turns">
+          <span class="nav-num">4</span> Turn-by-Turn Log
+        </div>
+        <div class="nav-item" data-section="sec-kc">
+          <span class="nav-num">5</span> KC Performance
+        </div>
+        <div class="nav-item" data-section="sec-latency">
+          <span class="nav-num">6</span> Latency Profile
+        </div>
+        <div class="nav-item" data-section="sec-entities">
+          <span class="nav-num">7</span> Entity Timeline
+        </div>
+        <div class="nav-item" data-section="sec-issues">
+          <span class="nav-num">8</span> Issues &amp; Actions
+        </div>
+      </nav>
 
-        <div class="settings-actions">
-          <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
-        </div>
-      </div>
+      <!-- Main scrollable content -->
+      <main class="report-content" id="report-content">
+        <!-- Populated by call-intelligence.js renderReport() -->
+      </main>
+
     </div>
   </div>
 
-  <script src="/agent-console/call-intelligence.js?v=20260310f"></script>
+  <!-- ═══════════════════════════════════════════════════════
+       SETTINGS PANEL (absolute overlay, not a modal)
+       ═══════════════════════════════════════════════════════ -->
+  <div id="settings-panel" style="display:none; position:fixed; top:var(--header-h); right:0; width:360px; height:calc(100vh - var(--header-h)); background:var(--surface); border-left:1px solid var(--border); z-index:200; overflow-y:auto; box-shadow:-4px 0 12px rgba(0,0,0,0.1);">
+    <div style="padding:20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-size:15px;font-weight:600;">Intelligence Settings</span>
+      <button class="btn btn-ghost btn-sm" id="btn-close-settings">Close</button>
+    </div>
+    <div style="padding:20px; display:flex; flex-direction:column; gap:20px;">
+      <div>
+        <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--tx-muted); margin-bottom:12px;">GPT-4 Deep Analysis</p>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <div>
+            <p style="font-size:13px; font-weight:500;">Enable GPT-4 Analysis</p>
+            <p style="font-size:12px; color:var(--tx-muted);">~$0.01–$0.05 per call analysis</p>
+          </div>
+          <label style="position:relative; display:inline-block; width:40px; height:22px;">
+            <input type="checkbox" id="gpt4-toggle" style="opacity:0; width:0; height:0;">
+            <span id="gpt4-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:22px; transition:0.3s;"></span>
+          </label>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px; color:var(--tx-muted); display:block; margin-bottom:5px;">Analysis Model</label>
+          <select id="analysis-model" class="filter-select" style="width:100%;">
+            <option value="gpt-4o-mini">GPT-4o Mini (~$0.03/call)</option>
+            <option value="gpt-4o">GPT-4o (~$0.41/call)</option>
+            <option value="gpt-4-turbo">GPT-4 Turbo (~$1.22/call)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px; color:var(--tx-muted); display:block; margin-bottom:5px;">Analysis Mode</label>
+          <select id="analysis-mode" class="filter-select" style="width:100%;">
+            <option value="quick">Quick (faster)</option>
+            <option value="full">Full (comprehensive)</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <div>
+            <p style="font-size:13px; font-weight:500;">Auto-analyze new calls</p>
+            <p style="font-size:12px; color:var(--tx-muted);">Requires GPT-4 enabled</p>
+          </div>
+          <label style="position:relative; display:inline-block; width:40px; height:22px;">
+            <input type="checkbox" id="auto-analyze-toggle" disabled style="opacity:0; width:0; height:0;">
+            <span id="auto-analyze-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:22px; transition:0.3s; opacity:0.5;"></span>
+          </label>
+        </div>
+        <div id="gpt4-status" style="font-size:12px; color:var(--tx-muted); padding:8px; background:var(--surface-2); border-radius:var(--r-md); border:1px solid var(--border);">
+          Checking GPT-4 status…
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-save-settings" style="width:100%;">Save Settings</button>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<script src="/agent-console/call-intelligence.js?v=20260327"></script>
 </body>
 </html>

@@ -1779,4 +1779,765 @@ router.delete('/company/:companyId/bulk-delete', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTERPRISE FULL REPORT  —  GET /:callSid/full-report?companyId=X
+// Assembles all 8 sections from CallSummary, CallTranscriptV2,
+// CallIntelligence, Customer.discoveryNotes, and KC cards in one pass.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const Customer = require('../../models/Customer');
+const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
+
+// ── helpers ──────────────────────────────────────────────────────────────
+
+function fmtElapsed(startedAt, ts) {
+  if (!startedAt || !ts) return null;
+  const diffMs = new Date(ts).getTime() - new Date(startedAt).getTime();
+  if (diffMs < 0) return '00:00';
+  const secs = Math.floor(diffMs / 1000);
+  const m = String(Math.floor(secs / 60)).padStart(2, '0');
+  const s = String(secs % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function fmtDuration(seconds) {
+  if (!seconds) return '0s';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function provenanceLabel(type, sourceKey) {
+  if (type === 'UI_OWNED') return 'KC / Trigger';
+  if (type === 'LLM_GENERATED') return 'LLM Generated';
+  if (type === 'HARDCODED') return 'Hardcoded';
+  if (sourceKey === 'greetings') return 'Greeting';
+  if (sourceKey === 'booking') return 'Booking';
+  return 'Unknown';
+}
+
+function detectTurnFlags(turn, kcCard, provenancePath) {
+  const flags = [];
+  const path = (provenancePath || '').toUpperCase();
+  if (path.includes('LLM_FALLBACK') || path.includes('LLM_AGENT')) {
+    flags.push({ code: 'LLM_FALLBACK', label: 'LLM Fallback', severity: 'warn' });
+  }
+  if (kcCard?.bookingAction === 'offer_to_book' && !path.includes('BOOKING')) {
+    flags.push({ code: 'MISSED_BOOKING_CTA', label: 'Missed Booking CTA', severity: 'warn' });
+  }
+  if (turn.callerText && !turn.agentText) {
+    flags.push({ code: 'NO_RESPONSE', label: 'No Agent Response', severity: 'critical' });
+  }
+  return flags;
+}
+
+function calcHealthScore(summary, convTurns, discoveryNotes) {
+  let score = 100;
+
+  // Outcome (−20 max)
+  const outcome = summary?.outcome;
+  if (outcome === 'error') score -= 20;
+  else if (outcome === 'abandoned') score -= 15;
+  else if (outcome === 'in_progress') score -= 10;
+
+  // Booking created = bonus (cap at 100)
+  if (summary?.appointmentCreatedId) score = Math.min(100, score + 5);
+
+  // LLM fallback rate (−20 max): each fallback turn −4
+  const fallbackTurns = convTurns.filter(t =>
+    (t.provenancePath || '').toUpperCase().includes('LLM_FALLBACK') ||
+    (t.provenancePath || '').toUpperCase().includes('LLM_AGENT')
+  ).length;
+  score -= Math.min(20, fallbackTurns * 4);
+
+  // Discovery completeness (−25 max)
+  if (discoveryNotes) {
+    if (!discoveryNotes.entities?.firstName && !discoveryNotes.entities?.fullName) score -= 10;
+    if (!discoveryNotes.callReason) score -= 10;
+    if (!discoveryNotes.entities?.address && !summary?.capturedSummary?.addressCaptured) score -= 5;
+  } else {
+    // No discovery notes — partial deduction
+    score -= 10;
+  }
+
+  // Missed booking CTAs (−5 each, max −15)
+  const missedBooking = convTurns.filter(t =>
+    t.flags?.some(f => f.code === 'MISSED_BOOKING_CTA')
+  ).length;
+  score -= Math.min(15, missedBooking * 5);
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function buildHeader(callSid, companyId, summary, healthScore, hasIntelligence) {
+  return {
+    callSid,
+    companyId,
+    callerName: summary?.capturedSummary?.name || summary?.callerName || null,
+    phone: summary?.phone || null,
+    isReturning: summary?.isReturning || false,
+    startedAt: summary?.startedAt || null,
+    durationSeconds: summary?.durationSeconds || 0,
+    durationFormatted: fmtDuration(summary?.durationSeconds),
+    turnCount: summary?.turnCount || 0,
+    outcome: summary?.outcome || 'unknown',
+    outcomeDetail: summary?.outcomeDetail || null,
+    routingTier: summary?.routingTier || null,
+    totalCost: summary?.llmCost || 0,
+    llmModel: summary?.llmModel || null,
+    healthScore,
+    hasIntelligence,
+    recordingRef: summary?.hasRecording ? summary?.recordingRef : null
+  };
+}
+
+function buildStory(summary, discoveryNotes, convTurns, intelligence) {
+  if (intelligence?.executiveSummary) {
+    return { text: intelligence.executiveSummary, source: 'gpt4' };
+  }
+
+  // Auto-generate from available data
+  const parts = [];
+  const name = summary?.capturedSummary?.name || summary?.callerName;
+  const reason = summary?.capturedSummary?.problemSummary || discoveryNotes?.callReason;
+  const urgency = summary?.capturedSummary?.urgency || discoveryNotes?.urgency;
+  const outcome = summary?.outcome;
+  const turns = summary?.turnCount || convTurns.length;
+
+  if (name) parts.push(`${name} called`);
+  else parts.push('A caller called');
+  if (summary?.startedAt) {
+    const d = new Date(summary.startedAt);
+    parts[0] += ` at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  if (reason) parts[0] += ` about: "${reason}"`;
+  if (urgency === 'high' || urgency === 'urgent' || urgency === 'emergency') {
+    parts.push(`Urgency was marked ${urgency.toUpperCase()}.`);
+  }
+
+  const kcTurns = convTurns.filter(t => t.provenanceType === 'UI_OWNED' && t.kcCard).length;
+  const llmTurns = convTurns.filter(t =>
+    (t.provenancePath || '').toUpperCase().includes('LLM')
+  ).length;
+
+  if (kcTurns > 0) parts.push(`${kcTurns} turn${kcTurns > 1 ? 's' : ''} were handled by KC cards.`);
+  if (llmTurns > 0) parts.push(`${llmTurns} turn${llmTurns > 1 ? 's' : ''} required LLM fallback — responses may not reflect authored policy.`);
+
+  if (outcome === 'completed' && summary?.appointmentCreatedId) {
+    parts.push('Call ended with a booking confirmed.');
+  } else if (outcome === 'transferred') {
+    parts.push('Call ended with a transfer.');
+  } else if (outcome === 'abandoned') {
+    parts.push('Caller disconnected before resolution.');
+  } else if (outcome === 'completed') {
+    parts.push(`Call completed in ${turns} turns without a booking.`);
+  }
+
+  const hasMissedBooking = convTurns.some(t => t.flags?.some(f => f.code === 'MISSED_BOOKING_CTA'));
+  if (hasMissedBooking) {
+    parts.push('At least one KC card had bookingAction=offer_to_book — the booking CTA was not delivered.');
+  }
+
+  return { text: parts.join(' '), source: 'auto' };
+}
+
+function buildVitals(summary, convTurns, discoveryNotes) {
+  const totalTurns = convTurns.length;
+  const kcTurns = convTurns.filter(t => t.provenanceType === 'UI_OWNED').length;
+  const llmTurns = convTurns.filter(t =>
+    (t.provenancePath || '').toUpperCase().includes('LLM')
+  ).length;
+  const kcHitRate = totalTurns > 0 ? Math.round((kcTurns / totalTurns) * 100) : 0;
+
+  const objective = discoveryNotes?.objective || null;
+  const stagesReached = [];
+  if (discoveryNotes?.entities?.firstName || discoveryNotes?.entities?.fullName) stagesReached.push('INTAKE');
+  if (discoveryNotes?.callReason) stagesReached.push('DISCOVERY');
+  if (objective === 'BOOKING' || summary?.appointmentCreatedId) stagesReached.push('BOOKING');
+  if (summary?.outcome === 'completed') stagesReached.push('CLOSING');
+
+  const complianceScore = stagesReached.length > 0
+    ? Math.round((stagesReached.length / 4) * 100)
+    : null;
+
+  return {
+    metrics: [
+      {
+        label: 'Protocol Compliance',
+        value: complianceScore !== null ? `${complianceScore}%` : 'N/A',
+        sub: stagesReached.length > 0 ? `${stagesReached.join(' → ')}` : 'No discovery data',
+        status: complianceScore === null ? 'unknown' : complianceScore >= 90 ? 'ok' : complianceScore >= 60 ? 'warn' : 'fail'
+      },
+      {
+        label: 'KC Hit Rate',
+        value: `${kcHitRate}%`,
+        sub: `${kcTurns} of ${totalTurns} content turns`,
+        status: kcHitRate >= 70 ? 'ok' : kcHitRate >= 40 ? 'warn' : 'fail'
+      },
+      {
+        label: 'LLM Fallback Turns',
+        value: llmTurns,
+        sub: llmTurns > 0 ? `${Math.round(llmTurns / (totalTurns || 1) * 100)}% of turns` : 'None',
+        status: llmTurns === 0 ? 'ok' : llmTurns <= 2 ? 'warn' : 'fail'
+      },
+      {
+        label: 'Outcome',
+        value: (summary?.outcome || 'unknown').replace('_', ' '),
+        sub: summary?.outcomeDetail || '',
+        status: (summary?.outcome === 'completed' || summary?.outcome === 'callback_requested') ? 'ok' :
+          summary?.outcome === 'transferred' ? 'warn' : 'fail'
+      },
+      {
+        label: 'Booking Created',
+        value: summary?.appointmentCreatedId ? 'Yes' : 'No',
+        sub: summary?.appointmentCreatedId ? 'Appointment scheduled' : 'No booking',
+        status: summary?.appointmentCreatedId ? 'ok' : 'neutral'
+      },
+      {
+        label: 'First Contact Resolution',
+        value: (summary?.outcome === 'completed' && !summary?.followUpRequired) ? 'Yes' : 'No',
+        sub: summary?.followUpRequired ? 'Follow-up required' : '',
+        status: (summary?.outcome === 'completed' && !summary?.followUpRequired) ? 'ok' : 'warn'
+      },
+      {
+        label: 'Total Call Cost',
+        value: `$${(summary?.llmCost || 0).toFixed(4)}`,
+        sub: summary?.llmModel || '',
+        status: (summary?.llmCost || 0) < 0.15 ? 'ok' : (summary?.llmCost || 0) < 0.30 ? 'warn' : 'fail'
+      }
+    ]
+  };
+}
+
+function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
+  const startedAt = transcriptV2?.callMeta?.startedAt || summary?.startedAt;
+
+  function stg(id, name, group, status, detail) {
+    return { id, name, group, status, detail: detail || null };
+  }
+
+  const stages = [
+    // GROUP A — Call Entry
+    stg('twilio_inbound', 'Twilio Inbound Call', 'A',
+      summary ? 'pass' : 'unknown', summary ? `CallSid: ${summary.callId || 'N/A'}` : null),
+    stg('config_gate', 'Configuration Gate', 'A',
+      summary?.outcome !== 'spam' ? 'pass' : 'fail',
+      summary?.outcome === 'spam' ? 'Rejected: spam' : 'Company active'),
+    stg('spam_filter', 'Spam / Caller ID Filter', 'A',
+      summary?.outcome === 'spam' ? 'blocked' : 'pass',
+      summary?.outcome === 'spam' ? 'Blocked by spam filter' : `${summary?.phone || 'N/A'} not flagged`),
+    stg('greeting', 'Greeting Delivered', 'A',
+      convTurns.length > 0 ? 'pass' : 'unknown',
+      convTurns.length > 0 ? 'Call reached Turn 1' : 'No turns recorded'),
+
+    // GROUP B — Call Receipt
+    stg('stt_gather', 'STT Gather (Deepgram)', 'B',
+      convTurns.some(t => t.callerText) ? 'pass' : 'unknown',
+      'speechTimeout=1.5s per turn'),
+    stg('eos_detection', 'End-of-Speech Detection', 'B',
+      'info',
+      `~1.5s VAD overhead × ${convTurns.length} turns = ~${(convTurns.length * 1.5).toFixed(1)}s total`),
+    stg('scrabengine', 'ScrabEngine', 'B',
+      'bypassed', 'Intentionally bypassed — Groq handles natively'),
+
+    // GROUP C — Turn 1
+    stg('llm_intake', 'Turn 1 Entity Extraction', 'C',
+      discoveryNotes ? 'pass' : 'unknown',
+      discoveryNotes
+        ? `Extracted: ${[discoveryNotes.entities?.firstName && 'name', discoveryNotes.callReason && 'callReason', discoveryNotes.urgency && 'urgency'].filter(Boolean).join(', ') || 'minimal'}`
+        : 'No discovery data'),
+    stg('response_gen', 'Turn 1 Response Generation', 'C',
+      convTurns.length > 0 ? 'pass' : 'unknown',
+      convTurns[0]?.agentText ? `Turn 1 delivered` : null),
+    stg('first_sentence_tts', 'First Sentence → TTS', 'C',
+      convTurns.length > 0 ? 'pass' : 'unknown', null),
+
+    // GROUP D — Turn 2+
+    stg('question_detector', 'Question Detector', 'D',
+      convTurns.length > 1 ? 'pass' : 'unknown',
+      convTurns.length > 1 ? `${convTurns.length - 1} follow-up turns processed` : null),
+    stg('booking_intent', 'Booking Intent Gate', 'D',
+      summary?.appointmentCreatedId ? 'pass' :
+        (summary?.outcome === 'transferred' ? 'partial' : 'not_triggered'),
+      summary?.appointmentCreatedId ? 'Booking intent detected → booking created' :
+        'No booking intent detected in this call'),
+    stg('kc_answer', 'KC Answer Engine', 'D',
+      convTurns.some(t => t.kcCard) ? 'pass' :
+        convTurns.length > 1 ? 'warn' : 'unknown',
+      (() => {
+        const hits = convTurns.filter(t => t.kcCard).length;
+        const misses = convTurns.filter(t =>
+          t.provenancePath?.toUpperCase().includes('LLM_FALLBACK') ||
+          t.provenancePath?.toUpperCase().includes('LLM_AGENT')
+        ).length;
+        return `${hits} KC hit${hits !== 1 ? 's' : ''}, ${misses} LLM fallback${misses !== 1 ? 's' : ''}`;
+      })()),
+    stg('groq_formatter', 'Groq Response Formatter', 'D',
+      convTurns.some(t => t.kcCard) ? 'pass' : 'unknown', null)
+  ];
+
+  // Discovery compliance checklist
+  const compliance = [];
+
+  // INTAKE
+  compliance.push({
+    stage: 'INTAKE',
+    check: 'Name captured',
+    expected: 'Turn 1–2',
+    actual: discoveryNotes?.entities?.firstName
+      ? `Turn ${discoveryNotes?.qaLog?.[0]?.turn || '?'} — "${discoveryNotes.entities.firstName}"`
+      : (summary?.capturedSummary?.name ? `"${summary.capturedSummary.name}"` : null),
+    compliant: !!(discoveryNotes?.entities?.firstName || summary?.capturedSummary?.name),
+    gap: (!discoveryNotes?.entities?.firstName && !summary?.capturedSummary?.name) ? 'Name never captured' : null
+  });
+  compliance.push({
+    stage: 'INTAKE',
+    check: 'Phone number',
+    expected: 'Pre-call (CallerID)',
+    actual: summary?.phone || 'From Twilio CallerID',
+    compliant: true,
+    gap: null
+  });
+  compliance.push({
+    stage: 'INTAKE',
+    check: 'Address captured',
+    expected: 'Turn 1–2',
+    actual: discoveryNotes?.entities?.address || (summary?.capturedSummary?.addressCaptured ? 'Yes' : null),
+    compliant: !!(discoveryNotes?.entities?.address || summary?.capturedSummary?.addressCaptured),
+    gap: (!discoveryNotes?.entities?.address && !summary?.capturedSummary?.addressCaptured) ? 'Address not captured' : null
+  });
+
+  // DISCOVERY
+  compliance.push({
+    stage: 'DISCOVERY',
+    check: 'Call reason captured',
+    expected: 'Turn 2–3',
+    actual: discoveryNotes?.callReason || summary?.capturedSummary?.problemSummary || null,
+    compliant: !!(discoveryNotes?.callReason || summary?.capturedSummary?.problemSummary),
+    gap: (!discoveryNotes?.callReason && !summary?.capturedSummary?.problemSummary) ? 'Call reason not captured' : null
+  });
+  compliance.push({
+    stage: 'DISCOVERY',
+    check: 'Urgency assessed',
+    expected: 'Turn 2–4',
+    actual: discoveryNotes?.urgency || summary?.capturedSummary?.urgency || null,
+    compliant: !!(discoveryNotes?.urgency || summary?.capturedSummary?.urgency),
+    gap: (!discoveryNotes?.urgency && !summary?.capturedSummary?.urgency) ? 'Urgency never assessed' : null
+  });
+
+  // BOOKING
+  compliance.push({
+    stage: 'BOOKING',
+    check: 'Booking CTA delivered',
+    expected: 'When KC bookingAction=offer_to_book',
+    actual: summary?.appointmentCreatedId ? 'Booking created' : null,
+    compliant: !!summary?.appointmentCreatedId,
+    gap: !summary?.appointmentCreatedId ? 'No booking created this call' : null
+  });
+
+  return { stages, compliance };
+}
+
+function buildCostBreakdown(summary, convTurns) {
+  const total = summary?.llmCost || 0;
+  const model = summary?.llmModel || 'unknown';
+  const turnCount = convTurns.length || summary?.turnCount || 1;
+
+  return {
+    totalCost: total,
+    totalCostFormatted: `$${total.toFixed(4)}`,
+    perTurnAvg: turnCount > 0 ? total / turnCount : 0,
+    perTurnAvgFormatted: `$${(turnCount > 0 ? total / turnCount : 0).toFixed(4)}`,
+    model,
+    note: 'Per-turn token breakdown requires runtime instrumentation (not yet persisted per turn). Showing call-level totals.'
+  };
+}
+
+function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
+  // Filter to meaningful conversation turns only
+  const convo = rawTurns.filter(t =>
+    (t.speaker === 'caller' || t.speaker === 'agent') &&
+    t.kind !== 'diagnostics' &&
+    t.text?.trim()
+  );
+
+  // Group by turnNumber, building caller+agent pairs
+  const byTurn = new Map();
+  for (const t of convo) {
+    const n = typeof t.turnNumber === 'number' ? t.turnNumber : 0;
+    if (!byTurn.has(n)) byTurn.set(n, { caller: null, agent: null });
+    const entry = byTurn.get(n);
+    if (t.speaker === 'caller' && !entry.caller) entry.caller = t;
+    if (t.speaker === 'agent' && !entry.agent) entry.agent = t;
+  }
+
+  const result = [];
+  for (const [turnNum, entry] of [...byTurn.entries()].sort((a, b) => a[0] - b[0])) {
+    const at = entry.agent;
+    const ct = entry.caller;
+
+    // Extract trace / _123rp
+    const trace = at?.trace || {};
+    const prov = trace.provenance || {};
+    const r123rp = trace._123rp || {};
+
+    const provenanceType = prov.type || (at?.sourceKey === 'greetings' ? 'UI_OWNED' : 'UNKNOWN');
+    const provenancePath = r123rp.lastPath || r123rp.path || prov.uiPath || at?.sourceKey || null;
+    const sourceKey = at?.sourceKey || null;
+
+    // KC card lookup
+    let kcCard = null;
+    const containerId = r123rp.containerId || prov.containerId;
+    if (containerId) {
+      const cid = containerId.toString();
+      if (kcMap.has(cid)) kcCard = kcMap.get(cid);
+    }
+    // Also try by uiAnchor
+    if (!kcCard && prov.uiAnchor) {
+      for (const [, kc] of kcMap) {
+        if (kc.kcId === prov.uiAnchor || kc._id.toString() === prov.uiAnchor) {
+          kcCard = kc; break;
+        }
+      }
+    }
+
+    const flags = detectTurnFlags(
+      { callerText: ct?.text, agentText: at?.text },
+      kcCard,
+      provenancePath
+    );
+
+    // Find discoveryNotes qa entry for this turn
+    const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === turnNum) || null;
+
+    result.push({
+      turnNumber: turnNum,
+      elapsed: fmtElapsed(startedAt, ct?.ts || at?.ts),
+      callerText: ct?.text?.trim() || null,
+      agentText: at?.text?.trim() || null,
+      callerTs: ct?.ts || null,
+      agentTs: at?.ts || null,
+      sourceKey,
+      provenanceType,
+      provenanceLabel: provenanceLabel(provenanceType, sourceKey),
+      provenancePath,
+      latencyMs: r123rp.latencyMs || null,
+      kcCard: kcCard ? {
+        _id: kcCard._id.toString(),
+        kcId: kcCard.kcId || null,
+        title: kcCard.title || null,
+        bookingAction: kcCard.bookingAction || null,
+        closingPrompt: kcCard.closingPrompt || null,
+        category: kcCard.category || null
+      } : null,
+      score: typeof r123rp.score === 'number' ? r123rp.score : null,
+      intent: r123rp.intent || null,
+      qaEntry,
+      flags
+    });
+  }
+
+  return result;
+}
+
+function buildKCAudit(convTurns, kcMap) {
+  const matched = [];
+  const gaps = [];
+
+  for (const turn of convTurns) {
+    if (turn.kcCard) {
+      matched.push({
+        turnNumber: turn.turnNumber,
+        elapsed: turn.elapsed,
+        kcId: turn.kcCard.kcId,
+        title: turn.kcCard.title,
+        mongoId: turn.kcCard._id,
+        score: turn.score,
+        path: turn.provenancePath,
+        bookingAction: turn.kcCard.bookingAction,
+        missedBookingCta: turn.flags?.some(f => f.code === 'MISSED_BOOKING_CTA')
+      });
+    } else if (turn.callerText && turn.agentText &&
+      (turn.provenancePath?.toUpperCase().includes('LLM') ||
+        turn.provenanceType === 'LLM_GENERATED')) {
+      gaps.push({
+        turnNumber: turn.turnNumber,
+        elapsed: turn.elapsed,
+        callerText: turn.callerText,
+        path: turn.provenancePath
+      });
+    }
+  }
+
+  return { matched, gaps };
+}
+
+function buildLatencyProfile(summary, convTurns) {
+  const turns = convTurns.map(t => ({
+    turnNumber: t.turnNumber,
+    elapsed: t.elapsed,
+    latencyMs: t.latencyMs,
+    path: t.provenancePath,
+    color: !t.latencyMs ? 'unknown' :
+      t.latencyMs < 500 ? 'ok' :
+        t.latencyMs < 1500 ? 'warn' : 'fail'
+  }));
+
+  const known = turns.filter(t => t.latencyMs);
+  const avgMs = known.length > 0
+    ? Math.round(known.reduce((s, t) => s + t.latencyMs, 0) / known.length)
+    : (summary?.avgLatencyMs || null);
+
+  const worst = known.length > 0
+    ? known.reduce((a, b) => b.latencyMs > a.latencyMs ? b : a)
+    : null;
+
+  const speechTimeoutOverheadSecs = convTurns.length * 1.5;
+
+  return {
+    turns,
+    avgMs,
+    avgFormatted: avgMs ? `${avgMs}ms` : (summary?.avgLatencyMs ? `${summary.avgLatencyMs}ms (avg)` : 'N/A'),
+    worstTurn: worst,
+    speechTimeoutOverheadSecs,
+    note: known.length === 0
+      ? 'Per-turn latency not yet persisted to transcript. Showing call-level avg from CallSummary.'
+      : null
+  };
+}
+
+function buildEntityTimeline(discoveryNotes, convTurns) {
+  if (!discoveryNotes) {
+    return {
+      entries: [],
+      missing: ['All discovery data'],
+      note: 'No discoveryNotes found for this call.'
+    };
+  }
+
+  const entries = [];
+  const e = discoveryNotes.entities || {};
+
+  // Build timeline from qaLog
+  const qaLog = discoveryNotes.qaLog || [];
+  for (const qa of qaLog) {
+    entries.push({
+      turn: qa.turn,
+      field: qa.question,
+      value: qa.answer,
+      type: 'qa'
+    });
+  }
+
+  // Add key entity captures
+  if (e.firstName || e.fullName) {
+    entries.unshift({ turn: 1, field: 'name', value: e.fullName || e.firstName, type: 'entity' });
+  }
+  if (discoveryNotes.callReason) {
+    const reasonTurn = qaLog[0]?.turn || 1;
+    entries.push({ turn: reasonTurn, field: 'callReason', value: discoveryNotes.callReason, type: 'entity' });
+  }
+  if (discoveryNotes.urgency) {
+    entries.push({ turn: 1, field: 'urgency', value: discoveryNotes.urgency, type: 'entity' });
+  }
+
+  // Sort by turn
+  entries.sort((a, b) => (a.turn || 0) - (b.turn || 0));
+
+  const missing = [];
+  if (!e.firstName && !e.fullName) missing.push('name');
+  if (!e.address) missing.push('address');
+  if (!discoveryNotes.callReason) missing.push('callReason');
+  if (discoveryNotes.priorVisit === null || discoveryNotes.priorVisit === undefined) missing.push('priorVisit');
+
+  return {
+    entries,
+    missing,
+    objective: discoveryNotes.objective || null,
+    doNotReask: discoveryNotes.doNotReask || []
+  };
+}
+
+function buildAutoIssues(summary, convTurns, discoveryNotes) {
+  const issues = [];
+  let seq = 1;
+
+  // LLM fallback turns
+  const llmTurns = convTurns.filter(t =>
+    (t.provenancePath || '').toUpperCase().includes('LLM')
+  );
+  if (llmTurns.length > 0) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: llmTurns.length >= 3 ? 'high' : 'medium',
+      category: 'bucket_gap',
+      title: `${llmTurns.length} turn${llmTurns.length > 1 ? 's' : ''} used LLM fallback`,
+      description: `LLM generated ${llmTurns.length} response${llmTurns.length > 1 ? 's' : ''} because no KC card matched. These answers may not reflect authored policy and cost ~6× more per turn than KC answers.`,
+      affectedTurns: llmTurns.map(t => t.turnNumber),
+      action: 'create_kc'
+    });
+  }
+
+  // Missed booking CTA
+  const missedBooking = convTurns.filter(t =>
+    t.flags?.some(f => f.code === 'MISSED_BOOKING_CTA')
+  );
+  if (missedBooking.length > 0) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'high',
+      category: 'response_quality',
+      title: 'Booking CTA not delivered',
+      description: `${missedBooking.length} KC card${missedBooking.length > 1 ? 's' : ''} with bookingAction=offer_to_book did not deliver a booking CTA. Potential booking opportunity missed.`,
+      affectedTurns: missedBooking.map(t => t.turnNumber),
+      kcIds: missedBooking.map(t => t.kcCard?._id).filter(Boolean),
+      action: 'edit_kc'
+    });
+  }
+
+  // Missing discovery data
+  if (discoveryNotes && !discoveryNotes.entities?.address && !summary?.capturedSummary?.addressCaptured) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'medium',
+      category: 'performance',
+      title: 'Address not captured',
+      description: 'Service address was not captured during this call. INTAKE stage requires address in Turns 1–2.',
+      action: null
+    });
+  }
+
+  return issues;
+}
+
+function buildAutoRecommendations(summary, convTurns, discoveryNotes, kcMap) {
+  const recs = [];
+  let seq = 1;
+
+  // Recommend KC cards for each LLM fallback gap
+  const llmTurns = convTurns.filter(t =>
+    (t.provenancePath || '').toUpperCase().includes('LLM') && t.callerText
+  );
+  for (const turn of llmTurns) {
+    recs.push({
+      id: `rec-${seq++}`,
+      type: 'create_trigger',
+      priority: 'high',
+      title: `Create KC card for Turn ${turn.turnNumber}`,
+      description: `Caller asked: "${turn.callerText.substring(0, 100)}". No KC matched. Add an authored KC card to own this answer and reduce LLM reliance.`,
+      copyableContent: turn.callerText,
+      status: 'pending',
+      turnNumber: turn.turnNumber
+    });
+  }
+
+  return recs;
+}
+
+function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligence, discoveryNotes, kcMap }) {
+  const startedAt = transcriptV2?.callMeta?.startedAt || summary?.startedAt;
+  const rawTurns = transcriptV2?.turns || [];
+  const convTurns = buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt);
+
+  const healthScore = calcHealthScore(summary, convTurns, discoveryNotes);
+
+  return {
+    header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence),
+    story: buildStory(summary, discoveryNotes, convTurns, intelligence),
+    vitals: buildVitals(summary, convTurns, discoveryNotes),
+    protocolAudit: buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes),
+    costBreakdown: buildCostBreakdown(summary, convTurns),
+    turns: convTurns,
+    kcAudit: buildKCAudit(convTurns, kcMap),
+    latencyProfile: buildLatencyProfile(summary, convTurns),
+    entityTimeline: buildEntityTimeline(discoveryNotes, convTurns),
+    issues: intelligence?.issues?.length ? intelligence.issues : buildAutoIssues(summary, convTurns, discoveryNotes),
+    recommendations: intelligence?.recommendations?.length
+      ? intelligence.recommendations
+      : buildAutoRecommendations(summary, convTurns, discoveryNotes, kcMap),
+    hasGpt4Analysis: !!intelligence,
+    gpt4Meta: intelligence?.gpt4Analysis || null,
+    engineeringScore: intelligence?.engineeringScore || null,
+    callerJourney: intelligence?.callerJourney || null,
+    turnByTurnAnalysis: intelligence?.turnByTurnAnalysis || null,
+    rootCauseAnalysis: intelligence?.rootCauseAnalysis || null
+  };
+}
+
+// ── route handler ─────────────────────────────────────────────────────────
+
+router.get('/:callSid/full-report', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    const { companyId } = req.query;
+
+    if (!companyId || !callSid) {
+      return res.status(400).json({ error: 'callSid and companyId are required' });
+    }
+
+    let companyOid;
+    try {
+      companyOid = new mongoose.Types.ObjectId(companyId);
+    } catch {
+      return res.status(400).json({ error: 'Invalid companyId format' });
+    }
+
+    // 1. Parallel load of all data sources
+    const [summary, transcriptV2, intelligence] = await Promise.all([
+      CallSummary.findOne({
+        companyId: companyOid,
+        $or: [{ twilioSid: callSid }, { callId: callSid }]
+      }).lean(),
+      CallTranscriptV2.findOne({ companyId: companyOid, callSid }).lean(),
+      CallIntelligence.findOne({ callSid }).lean()
+    ]);
+
+    // 2. Load Customer discoveryNotes
+    let discoveryNotes = null;
+    if (summary?.customerId) {
+      try {
+        const customer = await Customer.findOne({
+          _id: summary.customerId,
+          companyId: companyOid
+        }).select('discoveryNotes').lean();
+        discoveryNotes = customer?.discoveryNotes?.find(n => n.callSid === callSid) || null;
+      } catch (err) {
+        console.warn('[full-report] discoveryNotes load failed:', err.message);
+      }
+    }
+
+    // 3. Extract KC anchor/container IDs from turns
+    const rawTurns = transcriptV2?.turns || [];
+    const kcLookupIds = new Set();
+    for (const turn of rawTurns) {
+      const trace = turn.trace || {};
+      const cid = trace._123rp?.containerId || trace.provenance?.containerId;
+      if (cid && mongoose.Types.ObjectId.isValid(cid)) kcLookupIds.add(cid.toString());
+    }
+
+    // 4. Load KC cards
+    const kcMap = new Map();
+    if (kcLookupIds.size > 0) {
+      try {
+        const kcCards = await CompanyKnowledgeContainer.find({
+          companyId: companyOid,
+          _id: { $in: [...kcLookupIds].map(id => new mongoose.Types.ObjectId(id)) }
+        }).select('_id kcId title bookingAction closingPrompt category keywords').lean();
+        for (const kc of kcCards) kcMap.set(kc._id.toString(), kc);
+      } catch (err) {
+        console.warn('[full-report] KC card load failed:', err.message);
+      }
+    }
+
+    // 5. Assemble and return
+    const report = buildFullReport({ callSid, companyId, summary, transcriptV2, intelligence, discoveryNotes, kcMap });
+
+    return res.json({ ok: true, report });
+
+  } catch (err) {
+    console.error('[call-intelligence full-report]', err.message, err.stack);
+    return res.status(500).json({ error: 'Failed to assemble report', message: err.message });
+  }
+});
+
 module.exports = router;

@@ -1,2822 +1,1008 @@
 /**
- * Call Intelligence Console - Frontend Logic
- * 
- * Handles UI interactions, API calls, and data rendering
- * for the Call Intelligence system.
- * 
- * @module public/agent-console/call-intelligence
+ * Call Intelligence — Enterprise Frontend
+ * Clean build. Production ready.
+ *
+ * Architecture: Single-page app with 3 views (dashboard → loading → report).
+ * No framework dependencies. Pure ES6+ vanilla JS.
  */
 
-(function() {
-  'use strict';
+'use strict';
 
-  // =============================================================================
-  // STATE MANAGEMENT
-  // =============================================================================
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-  let _playerCounter = 0;
+const PAGE_SIZE = 20;
 
-  const state = {
-    companyId: null,
-    calls: [],
-    currentPage: 1,
-    totalPages: 1,
-    filters: {
-      status: '',
-      timeRange: 'today',
-      search: ''
-    },
-    gpt4Enabled: false,
-    analysisMode: 'full',
-    analysisModel: 'gpt-4o-mini',
-    selectedCallSid: null,
-    selectedCallSids: new Set()
-  };
+const SECTION_ICONS = {
+  pass: '✓', fail: '✗', warn: '!', info: 'i',
+  bypassed: '↷', unknown: '?', not_triggered: '○'
+};
 
-  // =============================================================================
-  // DOM REFERENCES
-  // =============================================================================
+const OUTCOME_CLASS = {
+  completed: 'ob-completed',
+  abandoned: 'ob-abandoned',
+  transferred: 'ob-transferred',
+  error: 'ob-error',
+  in_progress: 'ob-in_progress',
+  callback_requested: 'ob-callback_requested'
+};
 
-  const DOM = {
-    // Stats
-    statToday: document.getElementById('stat-today'),
-    statWeek: document.getElementById('stat-week'),
-    statCritical: document.getElementById('stat-critical'),
-    statNeedsWork: document.getElementById('stat-needs-work'),
-    statGood: document.getElementById('stat-good'),
-    statMatchRate: document.getElementById('stat-match-rate'),
-    statTier1: document.getElementById('stat-tier1'),
-    statTier2: document.getElementById('stat-tier2'),
-    statTier3: document.getElementById('stat-tier3'),
+// ─── Utility functions ────────────────────────────────────────────────────────
 
-    // Filters
-    searchInput: document.getElementById('search-input'),
-    filterStatus: document.getElementById('filter-status'),
-    filterTime: document.getElementById('filter-time'),
-    clearFiltersBtn: document.getElementById('clear-filters-btn'),
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
 
-    // Table
-    callsTbody: document.getElementById('calls-tbody'),
-    callCount: document.getElementById('call-count'),
-    selectAll: document.getElementById('select-all'),
-    deleteSelectedBtn: document.getElementById('delete-selected-btn'),
-    selectedCount: document.getElementById('selected-count'),
+function fmt(date) {
+  if (!date) return '—';
+  const d = new Date(date);
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+}
 
-    // Pagination
-    prevPage: document.getElementById('prev-page'),
-    nextPage: document.getElementById('next-page'),
-    pageInfo: document.getElementById('page-info'),
+function fmtTime(date) {
+  if (!date) return '—';
+  const d = new Date(date);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+}
 
-    // Buttons
-    refreshBtn: document.getElementById('refresh-btn'),
-    settingsBtn: document.getElementById('settings-btn'),
+function fmtDur(secs) {
+  if (!secs) return '—';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 
-    // Modals
-    analysisModal: document.getElementById('analysis-modal'),
-    modalBody: document.getElementById('modal-body'),
-    closeModal: document.getElementById('close-modal'),
-    copyAllBtn: document.getElementById('copy-all-btn'),
-    exportPdfBtn: document.getElementById('export-pdf-btn'),
+function healthClass(score) {
+  if (score == null) return 'unknown';
+  if (score >= 75) return 'ok';
+  if (score >= 50) return 'warn';
+  return 'fail';
+}
 
-    settingsModal: document.getElementById('settings-modal'),
-    closeSettings: document.getElementById('close-settings'),
-    gpt4Toggle: document.getElementById('gpt4-toggle'),
-    analysisModel: document.getElementById('analysis-model'),
-    analysisMode: document.getElementById('analysis-mode'),
-    gpt4Status: document.getElementById('gpt4-status'),
-    statusText: document.getElementById('status-text'),
-    saveSettingsBtn: document.getElementById('save-settings-btn'),
-    autoAnalyzeToggle: document.getElementById('auto-analyze-toggle')
-  };
+function latencyClass(ms) {
+  if (!ms) return 'unknown';
+  if (ms < 500) return 'ok';
+  if (ms < 1500) return 'warn';
+  return 'fail';
+}
 
-  // =============================================================================
-  // INITIALIZATION
-  // =============================================================================
+function getCompanyId() {
+  return new URLSearchParams(window.location.search).get('companyId') || '';
+}
 
-  function init() {
-    state.companyId = getCompanyIdFromUrl();
-    
-    if (!state.companyId) {
-      console.error('Company ID not found in URL');
-      return;
-    }
+// ─── App state ────────────────────────────────────────────────────────────────
 
-    const backLink = document.getElementById('back-link');
-    if (backLink) {
-      backLink.href = `/agent-console/?companyId=${state.companyId}`;
-    }
+const state = {
+  view: 'dashboard',        // 'dashboard' | 'loading' | 'report'
+  companyId: getCompanyId(),
+  page: 1,
+  totalPages: 1,
+  totalCalls: 0,
+  filterStatus: '',
+  filterTime: 'today',
+  searchQuery: '',
+  currentCallSid: null,
+  reportData: null,
+  analyzingCallSid: null
+};
 
-    attachEventListeners();
-    loadGPT4Status();
-    loadSummary();
-    loadCalls();
+// ─── View switching ───────────────────────────────────────────────────────────
+
+function showView(name) {
+  state.view = name;
+  ['dashboard', 'loading', 'report'].forEach(v => {
+    const el = $(`view-${v}`);
+    if (el) el.className = 'view' + (v === name ? ' active' : '');
+  });
+
+  const isDash = name === 'dashboard';
+  const isRep  = name === 'report';
+
+  $('header-dashboard').style.display     = isDash ? '' : 'none';
+  $('header-report').style.display        = isRep  ? 'flex' : 'none';
+  $('header-dashboard-actions').style.display = isDash ? 'flex' : 'none';
+  $('header-report-actions').style.display    = isRep  ? 'flex' : 'none';
+  $('cost-ribbon').style.display          = isRep  ? 'flex' : 'none';
+}
+
+// ─── API helpers ──────────────────────────────────────────────────────────────
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+
+async function loadDashboard() {
+  showView('dashboard');
+  const params = new URLSearchParams({
+    companyId: state.companyId,
+    page: state.page,
+    limit: PAGE_SIZE,
+    timeRange: state.filterTime
+  });
+  if (state.filterStatus) params.set('status', state.filterStatus);
+  if (state.searchQuery)  params.set('search', state.searchQuery);
+
+  try {
+    // Load stats and list in parallel
+    const [statsData, listData] = await Promise.all([
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/summary`).catch(() => null),
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/list?${params}`).catch(() => ({ calls: [], total: 0, pages: 1 }))
+    ]);
+
+    renderStats(statsData);
+    renderCallsList(listData);
+  } catch (err) {
+    console.error('[dashboard]', err);
+    renderCallsError(err.message);
+  }
+}
+
+function renderStats(data) {
+  if (!data) return;
+  $('sv-today').textContent    = data.todayCount  ?? '—';
+  $('sv-week').textContent     = data.weekCount   ?? '—';
+  $('sv-critical').textContent = data.critical    ?? '—';
+  $('sv-needs').textContent    = data.needsImprovement ?? '—';
+  $('sv-good').textContent     = data.performingWell   ?? '—';
+  $('sv-total').textContent    = data.total        ?? '—';
+  if (data.avgCost != null) {
+    $('sv-avgcost').textContent = `$${data.avgCost.toFixed(4)}`;
+  }
+}
+
+function renderCallsList({ calls = [], total = 0, pages = 1 }) {
+  state.totalCalls = total;
+  state.totalPages = pages;
+
+  $('call-count').textContent = `${total} call${total !== 1 ? 's' : ''}`;
+
+  const tbody = $('calls-tbody');
+
+  if (!calls.length) {
+    tbody.innerHTML = `
+      <tr><td colspan="10">
+        <div class="empty-state">
+          <div class="empty-state-icon">📞</div>
+          <h3>No calls found</h3>
+          <p>Try changing the time range or filters.</p>
+        </div>
+      </td></tr>`;
+    $('pagination').style.display = 'none';
+    return;
   }
 
-  function getCompanyIdFromUrl() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('companyId');
+  tbody.innerHTML = calls.map(c => {
+    const tier = c.routingTier;
+    const tierBadge = tier ? `<span class="badge tier-${tier}">T${tier}</span>` : '—';
+    const outcome = c.outcome || 'unknown';
+    const outClass = OUTCOME_CLASS[outcome] || 'ob-in_progress';
+    const hasRec = c.hasRecording;
+    const hasTrans = c.hasTranscript;
+
+    return `
+      <tr>
+        <td class="td-time">${fmtTime(c.startedAt)}</td>
+        <td class="td-phone">${esc(c.phone || '—')}</td>
+        <td class="td-dur">${fmtDur(c.durationSeconds)}</td>
+        <td class="td-turns">${c.turnCount ?? '—'}</td>
+        <td>${tierBadge}</td>
+        <td><span class="outcome-badge ${outClass}">${esc(outcome.replace('_', ' '))}</span></td>
+        <td class="td-cost">${c.llmCost ? `$${c.llmCost.toFixed(4)}` : '—'}</td>
+        <td>${hasRec ? `<a class="recording-link" href="#" data-recording="${esc(c.recordingRef || '')}" onclick="playRecording(this,event)">▶ Play</a>` : '—'}</td>
+        <td class="td-sid" title="${esc(c.callId || c.twilioSid || '')}">
+          ${esc((c.callId || c.twilioSid || '').slice(0, 20))}…
+        </td>
+        <td class="td-actions">
+          ${hasTrans ? `<button class="btn btn-kc btn-sm" onclick="openReport('${esc(c.callId || c.twilioSid || '')}')">View Report</button>` : '<span class="text-muted text-xs">No transcript</span>'}
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Pagination
+  const pg = $('pagination');
+  if (pages > 1) {
+    pg.style.display = 'flex';
+    $('page-info').textContent = `Page ${state.page} of ${pages} · ${total} calls`;
+    $('btn-prev').disabled = state.page <= 1;
+    $('btn-next').disabled = state.page >= pages;
+  } else {
+    pg.style.display = 'none';
+  }
+}
+
+function renderCallsError(msg) {
+  $('calls-tbody').innerHTML = `
+    <tr><td colspan="10" style="padding:32px; text-align:center; color:var(--c-fail);">
+      Failed to load calls: ${esc(msg)}
+    </td></tr>`;
+}
+
+// ─── REPORT ───────────────────────────────────────────────────────────────────
+
+async function openReport(callSid) {
+  if (!callSid) return;
+  state.currentCallSid = callSid;
+  showView('loading');
+  $('loading-text').textContent = 'Assembling call report…';
+
+  try {
+    const data = await apiFetch(
+      `/api/call-intelligence/${callSid}/full-report?companyId=${state.companyId}`
+    );
+    state.reportData = data.report;
+    renderReport(data.report);
+    showView('report');
+  } catch (err) {
+    console.error('[openReport]', err);
+    $('loading-text').textContent = `Error: ${err.message}`;
+    // Show error with back button
+    showView('report');
+    $('report-content').innerHTML = `
+      <div style="padding:40px; text-align:center; color:var(--c-fail);">
+        <p style="font-size:16px; font-weight:600;">Failed to load report</p>
+        <p style="margin-top:8px; color:var(--tx-muted);">${esc(err.message)}</p>
+      </div>`;
+  }
+}
+
+function renderReport(r) {
+  const { header, story, vitals, protocolAudit, costBreakdown,
+          turns, kcAudit, latencyProfile, entityTimeline,
+          issues, recommendations, hasGpt4Analysis, gpt4Meta } = r;
+
+  // ── Sticky header ──────────────────────────────────────────────────────
+  $('h-caller-name').textContent = header.callerName || header.phone || 'Unknown Caller';
+  $('h-call-sid').textContent = header.callSid;
+  $('h-call-meta').textContent =
+    `${fmt(header.startedAt)} · ${header.durationFormatted} · ${header.turnCount} turns` +
+    (header.isReturning ? ' · Returning' : '');
+  const hc = healthClass(header.healthScore);
+  $('h-health-pill').innerHTML =
+    `<span class="health-pill ${hc}">${header.healthScore ?? '—'}/100</span>`;
+
+  // ── Cost ribbon ────────────────────────────────────────────────────────
+  $('cr-total').innerHTML = `<span class="cr-label">Total cost</span><span class="cr-val">${costBreakdown.totalCostFormatted}</span>`;
+  $('cr-model').innerHTML = `<span class="cr-label">Model</span><span class="cr-val">${esc(costBreakdown.model || '—')}</span>`;
+  $('cr-per-turn').innerHTML = `<span class="cr-label">Per-turn avg</span><span class="cr-val">${costBreakdown.perTurnAvgFormatted}</span>`;
+  if (gpt4Meta?.tokensUsed) {
+    $('cr-tokens').innerHTML = `<span class="cr-label">GPT-4 tokens</span><span class="cr-val">${gpt4Meta.tokensUsed.toLocaleString()}</span>`;
   }
 
-  // =============================================================================
-  // EVENT LISTENERS
-  // =============================================================================
+  // ── Render all 8 sections ──────────────────────────────────────────────
+  $('report-content').innerHTML = [
+    renderSectionStory(story, hasGpt4Analysis, header.callSid),
+    renderSectionVitals(vitals),
+    renderSectionProtocol(protocolAudit),
+    renderSectionTurns(turns, header.companyId),
+    renderSectionKC(kcAudit, header.companyId),
+    renderSectionLatency(latencyProfile),
+    renderSectionEntities(entityTimeline),
+    renderSectionIssues(issues, recommendations, header.companyId)
+  ].join('');
 
-  function attachEventListeners() {
-    // Filters
-    DOM.searchInput.addEventListener('input', debounce(handleSearch, 300));
-    DOM.filterStatus.addEventListener('change', handleFilterChange);
-    DOM.filterTime.addEventListener('change', handleFilterChange);
-    DOM.clearFiltersBtn.addEventListener('click', clearFilters);
+  // Attach turn expand/collapse
+  attachTurnToggles();
 
-    // Pagination
-    DOM.prevPage.addEventListener('click', () => changePage(state.currentPage - 1));
-    DOM.nextPage.addEventListener('click', () => changePage(state.currentPage + 1));
+  // Attach scroll-spy for left nav
+  attachScrollSpy();
+}
 
-    // Checkboxes / bulk delete
-    DOM.selectAll.addEventListener('change', handleSelectAll);
-    DOM.deleteSelectedBtn.addEventListener('click', handleDeleteSelected);
+// ─── Section renderers ────────────────────────────────────────────────────────
 
-    // Buttons
-    DOM.refreshBtn.addEventListener('click', handleRefresh);
-    DOM.settingsBtn.addEventListener('click', openSettings);
+function sectionWrap(id, num, title, badge, bodyHtml, noPad = false) {
+  return `
+    <section class="section" id="${id}">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-num">${num}</span>
+          <span class="card-title">${title}</span>
+          ${badge ? `<span class="card-badge">${badge}</span>` : ''}
+        </div>
+        <div class="card-body${noPad ? ' p0' : ''}">${bodyHtml}</div>
+      </div>
+    </section>`;
+}
 
-    // Modals
-    DOM.closeModal.addEventListener('click', closeAnalysisModal);
-    DOM.closeSettings.addEventListener('click', closeSettingsModal);
-    DOM.copyAllBtn.addEventListener('click', copyAnalysisToClipboard);
-    DOM.exportPdfBtn.addEventListener('click', saveAsPdf);
-    DOM.saveSettingsBtn.addEventListener('click', saveSettings);
+// ── S1: Story ─────────────────────────────────────────────────────────────────
 
-    // Close modal on outside click
-    DOM.analysisModal.addEventListener('click', (e) => {
-      if (e.target === DOM.analysisModal) closeAnalysisModal();
-    });
-    DOM.settingsModal.addEventListener('click', (e) => {
-      if (e.target === DOM.settingsModal) closeSettingsModal();
-    });
+function renderSectionStory(story, hasGpt4, callSid) {
+  const srcBadge = story.source === 'gpt4'
+    ? '<span class="badge badge-purple">AI Analysis</span>'
+    : '<span class="badge badge-gray">Auto-generated</span>';
+
+  let aiBanner = '';
+  if (!hasGpt4) {
+    aiBanner = `
+      <div class="ai-banner" id="ai-banner">
+        <div>
+          <p>Deep AI analysis not yet run for this call.</p>
+          <small>Runs GPT-4 to produce turn-by-turn verdicts, root cause analysis, and scored recommendations.</small>
+        </div>
+        <button class="btn btn-ai" id="btn-analyze" onclick="runAiAnalysis('${esc(callSid)}')">
+          Analyze with AI →
+        </button>
+      </div>`;
   }
 
-  // =============================================================================
-  // API CALLS
-  // =============================================================================
+  return sectionWrap('sec-story', '1', 'The Story', null, `
+    <p class="story-text">${esc(story.text)}</p>
+    <div class="story-meta">${srcBadge}</div>
+    ${aiBanner}
+  `);
+}
 
-  async function apiCall(endpoint, options = {}) {
-    try {
-      const response = await fetch(endpoint, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        }
-      });
+// ── S2: Vitals ────────────────────────────────────────────────────────────────
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'API request failed');
-      }
+function renderSectionVitals(vitals) {
+  const items = vitals.metrics.map(m => `
+    <div class="vital ${m.status}">
+      <div class="vital-lbl">${esc(m.label)}</div>
+      <div class="vital-val">${esc(m.value)}</div>
+      ${m.sub ? `<div class="vital-sub" title="${esc(m.sub)}">${esc(m.sub)}</div>` : ''}
+    </div>`).join('');
 
-      return data;
-    } catch (error) {
-      console.error('API Error:', error);
-      showNotification(error.message, 'error');
-      throw error;
-    }
+  return sectionWrap('sec-vitals', '2', 'Call Vitals', `${vitals.metrics.length} metrics`, `
+    <div class="vitals-grid">${items}</div>
+  `);
+}
+
+// ── S3: Protocol Audit ────────────────────────────────────────────────────────
+
+function renderSectionProtocol(audit) {
+  const groups = { A: 'A — Call Entry', B: 'B — Call Receipt', C: 'C — Turn 1 Intake', D: 'D — Turn 2+ KC Engine' };
+  let stagesHtml = '';
+
+  for (const [gKey, gLabel] of Object.entries(groups)) {
+    const groupStages = audit.stages.filter(s => s.group === gKey);
+    if (!groupStages.length) continue;
+    stagesHtml += `<div class="audit-group">
+      <div class="audit-grp-title">${gLabel}</div>
+      <div class="audit-stages">
+        ${groupStages.map(s => `
+          <div class="audit-stage ${s.status}">
+            <span class="stage-icon">${SECTION_ICONS[s.status] || '?'}</span>
+            <span class="stage-name">${esc(s.name)}</span>
+            ${s.detail ? `<span class="stage-detail">${esc(s.detail)}</span>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
   }
 
-  async function loadSummary() {
-    try {
-      const data = await apiCall(
-        `/api/call-intelligence/company/${state.companyId}/summary?timeRange=${state.filters.timeRange}`
-      );
+  const compRows = audit.compliance.map(c => `
+    <tr>
+      <td><span class="stage-pill ${esc(c.stage)}">${esc(c.stage)}</span></td>
+      <td>${esc(c.check)}</td>
+      <td class="text-muted text-sm">${esc(c.expected)}</td>
+      <td>${c.actual ? esc(c.actual) : '<span class="text-muted">—</span>'}</td>
+      <td>
+        <span class="${c.compliant ? 'c-pass' : 'c-fail'}">${c.compliant ? '✓ Pass' : '✗ Fail'}</span>
+        ${c.gap ? `<div class="gap-text">${esc(c.gap)}</div>` : ''}
+      </td>
+    </tr>`).join('');
 
-      updateStats(data.summary);
-    } catch (error) {
-      console.error('Failed to load summary:', error);
-    }
+  return sectionWrap('sec-protocol', '3', 'Protocol Audit',
+    `${audit.stages.filter(s => s.status === 'pass').length}/${audit.stages.length} stages pass`, `
+    ${stagesHtml}
+    <div class="divider"></div>
+    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--tx-muted);margin-bottom:8px;">Discovery Compliance</p>
+    <table class="compliance-table">
+      <thead><tr>
+        <th>Stage</th><th>Check</th><th>Expected</th><th>Actual</th><th>Result</th>
+      </tr></thead>
+      <tbody>${compRows}</tbody>
+    </table>
+  `);
+}
+
+// ── S4: Turn-by-Turn Log ──────────────────────────────────────────────────────
+
+function renderSectionTurns(turns, companyId) {
+  if (!turns?.length) {
+    return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log', '0 turns', `
+      <div class="empty-state"><p>No transcript turns found for this call.</p></div>`);
   }
 
-  async function loadCalls() {
-    try {
-      console.log('[CallIntelligence UI] Loading calls for company:', state.companyId);
-      showLoading();
+  const turnBlocks = turns.map(t => renderTurnBlock(t, companyId)).join('');
 
-      const params = new URLSearchParams({
-        page: state.currentPage,
-        limit: 50,
-        ...(state.filters.status && { status: state.filters.status }),
-        ...(state.filters.timeRange && { timeRange: state.filters.timeRange })
-      });
+  return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log',
+    `${turns.length} turns`, `<div class="turns-list">${turnBlocks}</div>`, true);
+}
 
-      console.log('[CallIntelligence UI] Calling API:', `/api/call-intelligence/company/${state.companyId}/list?${params}`);
+function renderTurnBlock(t, companyId) {
+  const hasFlags = t.flags?.length > 0;
+  const hasCritical = t.flags?.some(f => f.severity === 'critical');
+  const latCls = latencyClass(t.latencyMs);
+  const latLabel = t.latencyMs ? `${t.latencyMs}ms` : '—';
 
-      const data = await apiCall(
-        `/api/call-intelligence/company/${state.companyId}/list?${params}`
-      );
+  const flagsHtml = (t.flags || []).map(f =>
+    `<span class="flag-chip ${f.severity}">${esc(f.label)}</span>`).join('');
 
-      console.log('[CallIntelligence UI] Received', data.items?.length || 0, 'calls');
+  const callerHtml = t.callerText
+    ? `<div class="dial-caller"><span>C:</span> ${esc(t.callerText.substring(0, 120))}${t.callerText.length > 120 ? '…' : ''}</div>`
+    : '';
+  const agentHtml = t.agentText
+    ? `<div class="dial-agent"><span>A:</span> ${esc(t.agentText.substring(0, 120))}${t.agentText.length > 120 ? '…' : ''}</div>`
+    : '';
 
-      // ── CHECKPOINT: Log per-call data health for debugging ──────────────
-      if (data.items?.length > 0) {
-        const sample = data.items.slice(0, 5);
-        console.group('[CallIntelligence UI] 📊 Call Data Health (first 5 calls)');
-        sample.forEach((call, i) => {
-          const dur = call.callMetadata?.duration;
-          const rec = call.recording || {};
-          console.log(
-            `  Call ${i + 1}: ${call.callSid?.substring(0, 12)}...`,
-            `| duration: ${dur === null ? 'NULL (callback missing)' : dur === undefined ? 'UNDEFINED' : dur + 's'}`,
-            `| turns: ${call.callMetadata?.turns || 0}`,
-            `| recording.hasRecording: ${rec.hasRecording}`,
-            `| recording.sid: ${rec.sid || 'NONE'}`,
-            `| recording.url: ${rec.url ? 'YES' : 'NONE'}`,
-            `| status: ${call.status}`
-          );
-        });
-        console.groupEnd();
-      }
+  const provClass = t.provenanceType || 'UNKNOWN';
+  const provLabel = t.provenanceLabel || provClass;
 
-      state.calls = data.items || [];
-      state.totalPages = data.pages || 1;
+  // ── Detail panel ────────────────────────────────────────────────────────
+  // 1) Verbatim
+  const verbatimHtml = `
+    <div class="td-section">
+      <div class="td-sec-title">Verbatim</div>
+      ${t.callerText ? `<div class="vb-caller"><span class="vb-label">Caller</span><span class="vb-text">${esc(t.callerText)}</span></div>` : ''}
+      ${t.agentText  ? `<div class="vb-agent mt-2"><span class="vb-label">Agent</span><span class="vb-text">${esc(t.agentText)}</span></div>` : ''}
+    </div>`;
 
-      renderCalls();
-      updatePagination();
-      updateTierStats(state.calls);
-    } catch (error) {
-      console.error('[CallIntelligence UI] Failed to load calls:', error);
-      showError(error.message);
-    }
+  // 2) Pipeline trace
+  const pathLabel = t.provenancePath || '—';
+  const pipeRows = `
+    <div class="pipe-row"><span class="pr-stage">Provenance type</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
+    <div class="pipe-row"><span class="pr-stage">Path / handler</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
+    ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
+    ${t.score  ? `<div class="pipe-row"><span class="pr-stage">KC match score</span><span class="pr-icon">→</span><span class="pr-detail">${t.score.toFixed(2)}</span></div>` : ''}
+    ${t.latencyMs ? `<div class="pipe-row"><span class="pr-stage">Response latency</span><span class="pr-icon">→</span><span class="pr-detail">${t.latencyMs}ms</span></div>` : ''}
+    ${t.sourceKey  ? `<div class="pipe-row"><span class="pr-stage">Source key</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.sourceKey)}</span></div>` : ''}
+  `;
+  const pipelineHtml = `
+    <div class="td-section">
+      <div class="td-sec-title">Pipeline Trace</div>
+      <div class="pipeline-rows">${pipeRows}</div>
+    </div>`;
+
+  // 3) KC card (if matched)
+  let kcHtml = '';
+  if (t.kcCard) {
+    const editUrl = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(t.kcCard._id)}`;
+    kcHtml = `
+      <div class="td-section">
+        <div class="td-sec-title">KC Card Matched</div>
+        <div class="kc-block">
+          <div class="kb-id">${esc(t.kcCard.kcId || t.kcCard._id)}</div>
+          <div class="kb-title">${esc(t.kcCard.title || 'Untitled')}</div>
+          <div class="kb-meta">
+            ${t.kcCard.category ? `<span>Category: ${esc(t.kcCard.category)}</span>` : ''}
+            ${t.kcCard.bookingAction ? `<span>bookingAction: <strong>${esc(t.kcCard.bookingAction)}</strong></span>` : ''}
+            ${t.score ? `<span>Score: ${t.score.toFixed(2)}</span>` : ''}
+          </div>
+          ${t.kcCard.closingPrompt ? `<div style="font-size:12px;color:var(--tx-secondary);margin-bottom:8px;">closingPrompt: "${esc(t.kcCard.closingPrompt)}"</div>` : ''}
+          <div class="kb-actions">
+            <a class="btn btn-kc" href="${esc(editUrl)}" target="_blank">✎ Edit KC Card</a>
+          </div>
+        </div>
+      </div>`;
   }
 
-  async function loadCallAnalysis(callSid) {
-    console.log('[loadCallAnalysis] ▶ Fetching GET /api/call-intelligence/' + callSid);
-    try {
-      const data = await apiCall(`/api/call-intelligence/${callSid}`);
-      console.log('[loadCallAnalysis] ✅ Received — status:', data?.intelligence?.status, 'gpt4Enabled:', data?.intelligence?.gpt4Analysis?.enabled);
-      return data.intelligence;
-    } catch (error) {
-      console.error('[loadCallAnalysis] ❌ Failed:', error.message);
-      return null;
-    }
+  // 4) Discovery delta
+  let discoveryHtml = '';
+  if (t.qaEntry || t.discoveryObjective) {
+    discoveryHtml = `
+      <div class="td-section">
+        <div class="td-sec-title">Discovery Delta</div>
+        <div class="delta-rows">
+          ${t.qaEntry ? `
+            <div class="delta-row">
+              <span class="dr-key added">+ qaLog</span>
+              <span class="dr-val">${esc(t.qaEntry.question)}: "${esc(t.qaEntry.answer)}"</span>
+            </div>` : ''}
+          ${t.discoveryObjective ? `
+            <div class="delta-row">
+              <span class="dr-key added">objective</span>
+              <span class="dr-val">${esc(t.discoveryObjective)}</span>
+            </div>` : ''}
+          ${!t.qaEntry && !t.discoveryObjective ? `
+            <div class="delta-row">
+              <span class="dr-key none">—</span>
+              <span class="dr-val none">No entities updated this turn</span>
+            </div>` : ''}
+        </div>
+      </div>`;
   }
 
-  async function analyzeCall(callSid) {
-    console.log('[analyzeCall] ▶ Starting analysis for:', callSid);
-    console.log('[analyzeCall] Params — useGPT4:', state.gpt4Enabled, 'mode:', state.analysisMode, 'model:', state.analysisModel);
-    try {
-      showNotification(`Analyzing call with ${state.analysisModel}...`, 'info');
-
-      const data = await apiCall(`/api/call-intelligence/analyze/${callSid}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          useGPT4: state.gpt4Enabled,
-          mode: state.analysisMode,
-          model: state.analysisModel
-        })
-      });
-
-      console.log('[analyzeCall] ✅ API responded — success:', data?.success, 'has intelligence:', !!data?.intelligence);
-      showNotification('Analysis complete!', 'success');
-      return data.intelligence;
-    } catch (error) {
-      console.error('[analyzeCall] ❌ Failed:', error.message);
-      showNotification('Analysis failed: ' + error.message, 'error');
-      throw error;
-    }
+  // 5) Compliance verdict
+  let complianceHtml = '';
+  if (t.flags?.length) {
+    const verdicts = t.flags.map(f => `
+      <div class="cv-block fail mt-2">
+        <div class="cv-label">${esc(f.label)}</div>
+        ${f.code === 'MISSED_BOOKING_CTA' && t.kcCard
+          ? `<div class="cv-gap">KC card has bookingAction=offer_to_book but no booking CTA was delivered in this response.</div>`
+          : ''}
+        ${f.code === 'LLM_FALLBACK'
+          ? `<div class="cv-gap">No KC card matched. LLM generated this response — may not reflect authored policy.</div>`
+          : ''}
+      </div>`).join('');
+    complianceHtml = `
+      <div class="td-section">
+        <div class="td-sec-title">Compliance Flags</div>
+        ${verdicts}
+      </div>`;
   }
 
-  async function loadGPT4Status() {
-    try {
-      const [statusData, settingsData] = await Promise.all([
-        apiCall('/api/call-intelligence/status'),
-        apiCall(`/api/call-intelligence/settings/${state.companyId}`)
-      ]);
-      
-      state.gpt4Enabled = statusData.status.enabled;
-      
-      if (settingsData.settings) {
-        state.analysisMode = settingsData.settings.analysisMode || 'full';
-        state.analysisModel = settingsData.settings.analysisModel || 'gpt-4o-mini';
-        DOM.autoAnalyzeToggle.checked = settingsData.settings.autoAnalyzeEnabled || false;
-      }
-      
-      updateGPT4StatusUI(statusData.status);
-    } catch (error) {
-      console.error('Failed to load GPT-4 status:', error);
-    }
+  return `
+    <div class="turn-block${hasFlags ? ' has-flags' : ''}${hasCritical ? ' has-critical' : ''}" data-turn="${t.turnNumber}">
+      <div class="turn-summary">
+        <span class="turn-num-badge">${t.turnNumber}</span>
+        <span class="turn-ts">${t.elapsed || '—'}</span>
+        <span class="latency-pill ${latCls}">${latLabel}</span>
+        <div class="turn-dialogue">
+          ${callerHtml}
+          ${agentHtml}
+        </div>
+        <span class="prov-badge ${provClass}">${esc(provLabel)}</span>
+        ${hasFlags ? `<div class="turn-flags-row">${flagsHtml}</div>` : ''}
+        <svg class="turn-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="turn-detail">
+        ${verbatimHtml}
+        ${pipelineHtml}
+        ${kcHtml}
+        ${discoveryHtml}
+        ${complianceHtml}
+      </div>
+    </div>`;
+}
+
+// ── S5: KC Performance ────────────────────────────────────────────────────────
+
+function renderSectionKC(kcAudit, companyId) {
+  const matchedRows = kcAudit.matched.map(m => {
+    const score = m.score ?? 0;
+    const editUrl = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(m.mongoId)}`;
+    return `
+      <tr>
+        <td><span class="kc-id-chip">${esc(m.kcId || m.mongoId)}</span></td>
+        <td>${esc(m.title || '—')}</td>
+        <td>Turn ${m.turnNumber}${m.elapsed ? ` <span class="text-muted text-xs">${m.elapsed}</span>` : ''}</td>
+        <td>
+          <div class="score-track">
+            <div class="score-bar-bg"><div class="score-bar-fg" style="width:${Math.round(score*100)}%"></div></div>
+            <span class="score-num">${score.toFixed(2)}</span>
+          </div>
+        </td>
+        <td>${m.missedBookingCta ? '<span class="badge badge-amber">⚠ CTA not sent</span>' : '<span class="badge badge-green">✓</span>'}</td>
+        <td><a class="btn btn-kc" href="${esc(editUrl)}" target="_blank">✎ Edit</a></td>
+      </tr>`;
+  }).join('');
+
+  const gapRows = kcAudit.gaps.map(g => {
+    const newUrl = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&new=1`;
+    return `
+      <tr>
+        <td>Turn ${g.turnNumber}${g.elapsed ? ` <span class="text-muted text-xs">${g.elapsed}</span>` : ''}</td>
+        <td class="gap-text-cell">"${esc(g.callerText?.substring(0, 80) || '—')}"</td>
+        <td>${esc(g.path || 'LLM_FALLBACK')}</td>
+        <td><a class="btn btn-create-kc" href="${esc(newUrl)}" target="_blank">+ Create KC Card</a></td>
+      </tr>`;
+  }).join('');
+
+  const matchedBadge = `${kcAudit.matched.length} matched · ${kcAudit.gaps.length} gap${kcAudit.gaps.length !== 1 ? 's' : ''}`;
+
+  return sectionWrap('sec-kc', '5', 'KC Performance', matchedBadge, `
+    <p class="kc-section-title">KC Cards Used This Call</p>
+    ${kcAudit.matched.length ? `
+      <table class="kc-table">
+        <thead><tr><th>KC ID</th><th>Title</th><th>Turn</th><th>Score</th><th>CTA Status</th><th>Action</th></tr></thead>
+        <tbody>${matchedRows}</tbody>
+      </table>` : '<p class="text-muted text-sm">No KC cards matched in this call.</p>'}
+
+    ${kcAudit.gaps.length ? `
+      <div class="divider"></div>
+      <p class="kc-section-title">Knowledge Gaps (LLM answered, no KC existed)</p>
+      <table class="kc-table">
+        <thead><tr><th>Turn</th><th>Caller Asked</th><th>Path</th><th>Action</th></tr></thead>
+        <tbody>${gapRows}</tbody>
+      </table>` : ''}
+  `);
+}
+
+// ── S6: Latency Profile ───────────────────────────────────────────────────────
+
+function renderSectionLatency(lat) {
+  const maxMs = Math.max(...lat.turns.filter(t => t.latencyMs).map(t => t.latencyMs), 500);
+
+  const bars = lat.turns.map(t => {
+    const pct = t.latencyMs ? Math.min(100, Math.round((t.latencyMs / maxMs) * 100)) : 0;
+    const label = t.latencyMs ? `${t.latencyMs}ms` : '—';
+    return `
+      <div class="lat-row ${t.color}">
+        <span class="lr-turn">Turn ${t.turnNumber}</span>
+        <div class="lr-track">
+          <div class="lr-fill" style="width:${pct}%">${pct > 15 ? label : ''}</div>
+        </div>
+        <span class="lr-path">${esc(t.path || '—')}</span>
+      </div>`;
+  }).join('');
+
+  const worst = lat.worstTurn;
+
+  return sectionWrap('sec-latency', '6', 'Latency Profile', lat.avgFormatted, `
+    <div class="lat-summary">
+      <div class="ls-item"><div class="ls-lbl">Avg latency</div><div class="ls-val">${lat.avgFormatted}</div></div>
+      ${worst ? `<div class="ls-item"><div class="ls-lbl">Slowest turn</div><div class="ls-val">${worst.latencyMs}ms</div></div>` : ''}
+      <div class="ls-item"><div class="ls-lbl">VAD overhead</div><div class="ls-val">~${lat.speechTimeoutOverheadSecs.toFixed(1)}s</div></div>
+    </div>
+    <div class="lat-bars">${bars}</div>
+    <div class="vad-note">
+      ℹ Every turn includes an additional ~1.5s speechTimeout (VAD wait) before the above response time.
+      Total VAD overhead this call: <strong>~${lat.speechTimeoutOverheadSecs.toFixed(1)}s</strong>.
+      ${lat.note ? `<br><span style="color:var(--c-warn)">${esc(lat.note)}</span>` : ''}
+    </div>
+  `);
+}
+
+// ── S7: Entity Timeline ───────────────────────────────────────────────────────
+
+function renderSectionEntities(et) {
+  if (et.note && !et.entries?.length) {
+    return sectionWrap('sec-entities', '7', 'Entity Timeline', 'No data', `
+      <p class="text-muted text-sm">${esc(et.note)}</p>`);
   }
 
-  async function toggleGPT4(enabled) {
-    try {
-      const data = await apiCall('/api/call-intelligence/toggle', {
-        method: 'POST',
-        body: JSON.stringify({ enabled })
-      });
+  const events = (et.entries || []).map(e => `
+    <div class="etl-event ${e.type}">
+      <div class="ev-turn">Turn ${e.turn ?? '?'}</div>
+      <div class="ev-body">
+        <span class="ev-field">${esc(e.field)}</span>
+        ${e.value ? ` → <span class="ev-val">"${esc(e.value)}"</span>` : ''}
+      </div>
+    </div>`).join('');
 
-      state.gpt4Enabled = data.status.enabled;
-      updateGPT4StatusUI(data.status);
-      showNotification(data.message, 'success');
-    } catch (error) {
-      DOM.gpt4Toggle.checked = !enabled;
-      showNotification('Failed to toggle GPT-4', 'error');
-    }
-  }
+  const missingHtml = et.missing?.length ? `
+    <div class="divider"></div>
+    <p class="text-muted text-xs" style="margin-bottom:6px;">Never captured this call:</p>
+    <div class="missing-pills">
+      ${et.missing.map(m => `<span class="missing-pill">✗ ${esc(m)}</span>`).join('')}
+    </div>` : '';
 
-  // =============================================================================
-  // RENDERING
-  // =============================================================================
+  const dnarHtml = et.doNotReask?.length ? `
+    <div class="mt-3">
+      <p class="text-muted text-xs" style="margin-bottom:6px;">doNotReask — will not ask again:</p>
+      <div class="dnar-pills">
+        ${et.doNotReask.map(d => `<span class="dnar-pill">✓ ${esc(d)}</span>`).join('')}
+      </div>
+    </div>` : '';
 
-  function renderCalls() {
-    if (state.calls.length === 0) {
-      DOM.callsTbody.innerHTML = `
-        <tr class="empty-row">
-          <td colspan="10" class="empty-cell">
-            <p>No calls found</p>
-          </td>
-        </tr>
-      `;
-      DOM.callCount.textContent = '0 calls';
-      return;
-    }
+  const badge = et.objective ? `Final stage: ${et.objective}` : null;
 
-    DOM.callCount.textContent = `${state.calls.length} calls`;
+  return sectionWrap('sec-entities', '7', 'Entity Timeline', badge, `
+    <div class="entity-tl">${events || '<p class="text-muted text-sm">No entity events recorded.</p>'}</div>
+    ${missingHtml}
+    ${dnarHtml}
+  `);
+}
 
-    // Reset selection on re-render
-    state.selectedCallSids.clear();
-    DOM.selectAll.checked = false;
-    DOM.selectAll.indeterminate = false;
-    DOM.deleteSelectedBtn.style.display = 'none';
+// ── S8: Issues & Actions ──────────────────────────────────────────────────────
 
-    DOM.callsTbody.innerHTML = state.calls.map(call => {
-      const statusInfo = getStatusInfo(call.status);
-      const timeAgo = formatTimeAgo(call.analyzedAt);
-      
-      return `
-        <tr class="call-row" data-callsid="${call.callSid}">
-          <td><input type="checkbox" class="row-checkbox"></td>
-          <td class="col-time">${timeAgo}</td>
-          <td class="col-from">${call.callMetadata.fromPhone || 'Unknown'}</td>
-          <td class="col-duration">${formatDuration(call.callMetadata.duration)}</td>
-          <td class="col-turns">${call.callMetadata.turns || 0}</td>
-          <td class="col-tier">
-            ${getTierBadge(call.callMetadata?.routingTier)}
-          </td>
-          <td class="col-provenance">
-            <span class="provenance-badge">✓ UI-Owned</span>
-          </td>
-          <td class="col-recording">
-            ${(() => {
-              const rec = call.recording || {};
-              const hasSid = !!rec.sid;
-              const hasUrl = !!rec.url;
-              const hasAny = hasSid || hasUrl;
-              if (!hasAny) return '<span class="text-muted">--</span>';
-              return `
-                <div class="recording-actions">
-                  ${hasSid ? `
-                    <button class="btn-play-recording"
-                      data-recording-url="/api/call-intelligence/recording/${rec.sid}/audio"
-                      title="Quick listen${rec.duration ? ' (' + formatDuration(rec.duration) + ')' : ''}">
-                      <span class="play-icon">&#9654;</span>
-                    </button>
-                  ` : ''}
-                  ${hasSid ? `
-                    <a href="https://www.twilio.com/console/voice/recordings/${rec.sid}"
-                       target="_blank"
-                       class="btn-recording-twilio"
-                       title="Open in Twilio Console">&#8599;</a>
-                  ` : hasUrl ? `
-                    <a href="${rec.url}" target="_blank"
-                       class="btn-recording-twilio"
-                       title="Open recording">&#8599;</a>
-                  ` : ''}
-                </div>
-              `;
-            })()}
-          </td>
-          <td class="col-intelligence">
-            <div class="intelligence-cell ${statusInfo.className}">
-              <div class="intelligence-status">
-                <span class="status-icon">${statusInfo.icon}</span>
-                <span class="status-text">${statusInfo.label}</span>
-              </div>
-              <div class="intelligence-summary">${call.topIssue || 'No issues'}</div>
-              <button class="btn btn-small view-analysis-btn" data-callsid="${call.callSid}">
-                VIEW REPORT
-              </button>
-            </div>
-          </td>
-          <td class="col-callsid">
-            <code class="callsid-text">${call.callSid.substring(0, 10)}...</code>
-          </td>
-        </tr>
-      `;
+function renderSectionIssues(issues, recommendations, companyId) {
+  const order = ['critical', 'high', 'medium', 'low'];
+  const sorted = [...(issues || [])].sort((a, b) =>
+    order.indexOf(a.severity) - order.indexOf(b.severity)
+  );
+
+  const newKcUrl = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&new=1`;
+
+  const issueCards = sorted.map(issue => {
+    const editLinks = (issue.kcIds || []).map(id => {
+      const url = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(id)}`;
+      return `<a class="btn btn-kc" href="${esc(url)}" target="_blank">✎ Edit KC Card</a>`;
     }).join('');
 
-    attachCallRowListeners();
+    const turnsHtml = issue.affectedTurns?.length
+      ? `<div class="ic-turns">
+          <span class="text-xs text-muted" style="margin-right:4px;">Turns:</span>
+          ${issue.affectedTurns.map(n => `<span class="tc-chip">${n}</span>`).join('')}
+         </div>`
+      : '';
+
+    const actionBtns = [];
+    if (issue.action === 'create_kc' || issue.action === 'edit_kc') {
+      if (editLinks) actionBtns.push(editLinks);
+      else actionBtns.push(`<a class="btn btn-create-kc" href="${esc(newKcUrl)}" target="_blank">+ Create KC Card</a>`);
+    }
+
+    return `
+      <div class="issue-card ${esc(issue.severity || 'medium')}">
+        <div class="ic-header">
+          <span class="sev-badge ${esc(issue.severity || 'medium')}">${esc(issue.severity || 'medium')}</span>
+          <span class="ic-title">${esc(issue.title)}</span>
+        </div>
+        <div class="ic-body">
+          <p class="ic-desc">${esc(issue.description)}</p>
+          ${turnsHtml}
+          ${actionBtns.length ? `<div class="ic-actions">${actionBtns.join('')}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Recommendations (from GPT-4 analysis, if any)
+  let recsHtml = '';
+  if (recommendations?.length) {
+    const recs = recommendations.map(rec => `
+      <div class="issue-card ${rec.priority === 'immediate' ? 'critical' : rec.priority || 'medium'}">
+        <div class="ic-header">
+          <span class="sev-badge ${rec.priority === 'immediate' ? 'critical' : rec.priority || 'medium'}">${esc(rec.priority || 'medium')}</span>
+          <span class="ic-title">${esc(rec.title)}</span>
+        </div>
+        <div class="ic-body">
+          <p class="ic-desc">${esc(rec.description)}</p>
+          ${rec.copyableContent ? `
+            <div style="margin-top:8px; padding:8px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-md); font-family:monospace; font-size:12px; color:var(--tx-secondary);">
+              ${esc(rec.copyableContent)}
+            </div>` : ''}
+          <div class="ic-actions">
+            ${rec.type === 'create_trigger' || rec.type === 'add_keyword'
+              ? `<a class="btn btn-create-kc" href="${esc(newKcUrl)}" target="_blank">+ Create KC Card</a>`
+              : ''}
+          </div>
+        </div>
+      </div>`).join('');
+
+    recsHtml = `
+      <div class="divider"></div>
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--tx-muted);margin-bottom:10px;">AI Recommendations</p>
+      <div class="issues-stack">${recs}</div>`;
   }
 
-  function handleSelectAll(e) {
-    const checked = e.target.checked;
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-      cb.checked = checked;
-      const row = cb.closest('tr');
-      const callSid = row.dataset.callsid;
-      if (checked) {
-        state.selectedCallSids.add(callSid);
-        row.classList.add('row-selected');
-      } else {
-        state.selectedCallSids.delete(callSid);
-        row.classList.remove('row-selected');
+  const badge = sorted.length > 0
+    ? `${sorted.filter(i => i.severity === 'critical' || i.severity === 'high').length} high priority`
+    : 'No issues';
+
+  return sectionWrap('sec-issues', '8', 'Issues & Actions', badge, `
+    <div class="issues-stack">
+      ${issueCards || '<p class="text-muted text-sm">No issues detected.</p>'}
+    </div>
+    ${recsHtml}
+  `);
+}
+
+// ─── Turn expand/collapse ─────────────────────────────────────────────────────
+
+function attachTurnToggles() {
+  const content = $('report-content');
+  content.querySelectorAll('.turn-block').forEach(block => {
+    const summary = block.querySelector('.turn-summary');
+    if (!summary) return;
+    summary.addEventListener('click', () => {
+      block.classList.toggle('expanded');
+    });
+  });
+}
+
+// ─── Scroll spy for left nav ──────────────────────────────────────────────────
+
+function attachScrollSpy() {
+  const content = $('report-content');
+  if (!content) return;
+
+  const sections = content.querySelectorAll('.section');
+  const navItems = document.querySelectorAll('.nav-item[data-section]');
+
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navItems.forEach(item => {
+          item.classList.toggle('active', item.dataset.section === id);
+        });
       }
     });
-    updateSelectionUI();
-  }
+  }, { root: content, threshold: 0.3 });
 
-  function updateSelectionUI() {
-    const count = state.selectedCallSids.size;
-    const total = document.querySelectorAll('.row-checkbox').length;
+  sections.forEach(s => obs.observe(s));
 
-    DOM.selectedCount.textContent = count;
-    DOM.deleteSelectedBtn.style.display = count > 0 ? 'inline-flex' : 'none';
-
-    // Sync select-all indeterminate state
-    DOM.selectAll.checked = count > 0 && count === total;
-    DOM.selectAll.indeterminate = count > 0 && count < total;
-  }
-
-  async function handleDeleteSelected() {
-    const callSids = Array.from(state.selectedCallSids);
-    if (callSids.length === 0) return;
-
-    if (!confirm(`Delete ${callSids.length} call record(s)? This cannot be undone.`)) return;
-
-    try {
-      await apiCall(`/api/call-intelligence/company/${state.companyId}/bulk-delete`, {
-        method: 'DELETE',
-        body: JSON.stringify({ callSids })
-      });
-
-      showNotification(`Deleted ${callSids.length} call(s)`, 'success');
-      state.selectedCallSids.clear();
-      DOM.selectAll.checked = false;
-      DOM.selectAll.indeterminate = false;
-      loadCalls();
-    } catch (error) {
-      showNotification('Delete failed: ' + error.message, 'error');
-    }
-  }
-
-  function attachCallRowListeners() {
-    // Row checkboxes
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const row = e.target.closest('tr');
-        const callSid = row.dataset.callsid;
-        if (e.target.checked) {
-          state.selectedCallSids.add(callSid);
-          row.classList.add('row-selected');
-        } else {
-          state.selectedCallSids.delete(callSid);
-          row.classList.remove('row-selected');
-        }
-        updateSelectionUI();
-      });
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const target = $(`${item.dataset.section}`);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
     });
+  });
+}
 
-    document.querySelectorAll('.view-analysis-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const callSid = btn.dataset.callsid;
-        openAnalysisModal(callSid);
-      });
+// ─── AI Analysis trigger ──────────────────────────────────────────────────────
+
+async function runAiAnalysis(callSid) {
+  if (state.analyzingCallSid === callSid) return;
+  state.analyzingCallSid = callSid;
+
+  const btn = $('btn-analyze');
+  const banner = $('ai-banner');
+  if (btn) {
+    btn.classList.add('loading');
+    btn.textContent = 'Analyzing…';
+  }
+  if (banner) {
+    banner.innerHTML = `
+      <div class="ai-analyzing">
+        <div class="spinner"></div>
+        Running GPT-4 analysis — this takes 20–40 seconds…
+      </div>`;
+  }
+
+  try {
+    await apiFetch(`/api/call-intelligence/analyze/${callSid}`, {
+      method: 'POST',
+      body: JSON.stringify({ companyId: state.companyId })
     });
-
-    // Recording play buttons — toggle inline audio player
-    document.querySelectorAll('.btn-play-recording').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const url = btn.dataset.recordingUrl;
-        const row = btn.closest('tr');
-        const existingPlayer = row.nextElementSibling;
-
-        // If player row already exists for this row, toggle it
-        if (existingPlayer && existingPlayer.classList.contains('recording-player-row')) {
-          existingPlayer.remove();
-          btn.classList.remove('active');
-          return;
-        }
-
-        // Remove any other open player rows
-        document.querySelectorAll('.recording-player-row').forEach(r => r.remove());
-        document.querySelectorAll('.btn-play-recording.active').forEach(b => b.classList.remove('active'));
-
-        // Insert player row below this row
-        const playerRow = document.createElement('tr');
-        playerRow.className = 'recording-player-row';
-        playerRow.innerHTML = `
-          <td colspan="10" class="recording-player-cell">
-            <div class="recording-player-wrapper">
-              ${buildCustomPlayer(url)}
-              <a href="${url}" target="_blank" class="recording-external-link" title="Open in new tab">&#8599;</a>
-            </div>
-          </td>
-        `;
-        row.after(playerRow);
-        initAllCustomPlayers(playerRow);
-        // Auto-play after init
-        const audio = playerRow.querySelector('.cv-audio');
-        if (audio) audio.play().catch(() => {});
-        btn.classList.add('active');
-      });
-    });
-  }
-
-  function updateStats(summary) {
-    DOM.statToday.textContent = summary.total || 0;
-    DOM.statWeek.textContent = summary.total || 0;
-    DOM.statCritical.textContent = summary.critical || 0;
-    DOM.statNeedsWork.textContent = summary.needsImprovement || 0;
-    DOM.statGood.textContent = summary.performingWell || 0;
-    DOM.statMatchRate.textContent = `${summary.matchRate || 0}%`;
-  }
-
-  function updatePagination() {
-    DOM.prevPage.disabled = state.currentPage === 1;
-    DOM.nextPage.disabled = state.currentPage === state.totalPages;
-    DOM.pageInfo.textContent = `Page ${state.currentPage} of ${state.totalPages}`;
-  }
-
-  function updateGPT4StatusUI(status) {
-    DOM.gpt4Toggle.checked = status.enabled;
-    
-    const statusIndicator = DOM.gpt4Status.querySelector('.status-indicator');
-    
-    if (status.enabled) {
-      statusIndicator.style.color = '#10B981';
-      DOM.statusText.textContent = `GPT-4 Enabled (${status.modelVersion || 'gpt-4-turbo-preview'})`;
-      DOM.autoAnalyzeToggle.disabled = false;
-    } else if (status.hasApiKey) {
-      statusIndicator.style.color = '#F59E0B';
-      DOM.statusText.textContent = 'GPT-4 Available but Disabled';
-      DOM.autoAnalyzeToggle.disabled = true;
-    } else {
-      statusIndicator.style.color = '#DC2626';
-      DOM.statusText.textContent = 'GPT-4 Not Configured (Missing API Key)';
-      DOM.gpt4Toggle.disabled = true;
-      DOM.autoAnalyzeToggle.disabled = true;
-    }
-  }
-
-  // =============================================================================
-  // MODAL HANDLING
-  // =============================================================================
-
-  async function openAnalysisModal(callSid) {
-    console.log('[openAnalysisModal] ▶ Opening report for callSid:', callSid);
-    state.selectedCallSid = callSid;
-
-    DOM.modalBody.innerHTML = `
-      <div class="loading-container">
-        <div class="loading-spinner"></div>
-        <p>Loading analysis...</p>
-      </div>
-    `;
-
-    DOM.analysisModal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-
-    let intelligence = await loadCallAnalysis(callSid);
-    console.log('[openAnalysisModal] loadCallAnalysis result:', intelligence ? 'has data (status: ' + intelligence.status + ')' : 'null');
-
-    if (!intelligence) {
-      console.log('[openAnalysisModal] ⚠️ No existing analysis — showing on-demand button');
-      DOM.modalBody.innerHTML = `
-        <div class="loading-container" style="padding: 4rem 2rem;">
-          <p style="font-size: 1.125rem; color: #374151; margin-bottom: 0.5rem;">No analysis yet for this call.</p>
-          <p style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1.5rem;">Click below to run GPT-4 analysis on demand.</p>
-          <button class="btn btn-primary" onclick="window.analyzeCallNow('${callSid}')" style="font-size: 1rem; padding: 0.75rem 1.5rem;">
-            Analyze This Call
-          </button>
-          <button class="btn btn-secondary" onclick="document.getElementById('analysis-modal').classList.remove('active'); document.body.style.overflow = '';" style="margin-left: 0.75rem;">
-            Close
-          </button>
-        </div>
-      `;
-      return;
-    }
-
-    renderAnalysisModal(intelligence);
-  }
-
-  function renderAnalysisModal(intelligence) {
-    console.log('[renderAnalysisModal] ▶ Rendering report — callSid:', intelligence.callSid, 'status:', intelligence.status);
-    console.log('[renderAnalysisModal] gpt4Analysis:', JSON.stringify(intelligence.gpt4Analysis || {}));
-    console.log('[renderAnalysisModal] tokenUsage:', JSON.stringify(intelligence.tokenUsage || {}));
-    const statusInfo = getStatusInfo(intelligence.status);
-    const needsGpt4 = !intelligence.gpt4Analysis?.enabled;
-
-    DOM.modalBody.innerHTML = `
-      ${needsGpt4 ? `
-        <div class="gpt4-analyze-banner" style="background: #EFF6FF; border: 2px solid #3B82F6; border-radius: 0.5rem; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between;">
+    // Reload the report
+    await openReport(callSid);
+  } catch (err) {
+    state.analyzingCallSid = null;
+    if (banner) {
+      banner.innerHTML = `
+        <div class="ai-banner" id="ai-banner">
           <div>
-            <strong style="color: #1E40AF; font-size: 0.95rem;">GPT-4 analysis has not been run on this call.</strong>
-            <p style="color: #6B7280; font-size: 0.8rem; margin-top: 0.25rem;">Click to run a full AI-powered analysis for deeper insights.</p>
+            <p style="color:var(--c-fail);">Analysis failed: ${esc(err.message)}</p>
           </div>
-          <button class="btn btn-primary" onclick="window.analyzeCallNow('${intelligence.callSid}')" style="white-space: nowrap;">
-            Analyze with GPT-4
-          </button>
-        </div>
-      ` : ''}
-      ${renderCallOverview(intelligence)}
-      ${renderTurnByTurnFlow(intelligence)}
-      ${renderEngineeringScore(intelligence)}
-      ${renderExecutiveSummary(intelligence)}
-      ${renderCallerJourney(intelligence)}
-      ${renderTurnByTurnAnalysis(intelligence)}
-      ${renderRootCause(intelligence)}
-      ${renderResponseContext(intelligence)}
-      ${renderVoiceDeliverySummary(intelligence)}
-      ${renderIssues(intelligence)}
-      ${renderRecommendations(intelligence)}
-      ${renderTokenUsage(intelligence)}
-      ${renderPerformanceMetrics(intelligence)}
-      ${renderRawDataAccess(intelligence)}
-      ${renderAnalysisFooter(intelligence)}
-    `;
-
-    attachModalEventListeners(intelligence);
-  }
-
-  function renderCallOverview(intel) {
-    const statusInfo = getStatusInfo(intel.status);
-    
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">📞 CALL OVERVIEW</h2>
-        <div class="overview-grid">
-          <div class="overview-item">
-            <span class="overview-label">Call SID:</span>
-            <span class="overview-value"><code>${intel.callSid}</code></span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Time:</span>
-            <span class="overview-value">${formatDate(intel.callMetadata.startTime)}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Duration:</span>
-            <span class="overview-value">${formatDuration(intel.callMetadata.duration)}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">From:</span>
-            <span class="overview-value">${intel.callMetadata.fromPhone || 'Unknown'}</span>
-          </div>
-          <div class="overview-item overview-status">
-            <span class="overview-label">Status:</span>
-            <span class="overview-value ${statusInfo.className}">
-              ${statusInfo.icon} ${statusInfo.fullLabel}
-            </span>
-          </div>
-          ${intel.callContext?.response?.routingTier ? `
-            <div class="overview-item">
-              <span class="overview-label">Routing Tier (123RP):</span>
-              <span class="overview-value">
-                ${getTierBadge(intel.callContext.response.routingTier.tier)}
-              </span>
-            </div>
-          ` : (intel.callMetadata?.routingTier ? `
-            <div class="overview-item">
-              <span class="overview-label">Routing Tier (123RP):</span>
-              <span class="overview-value">
-                ${getTierBadge(intel.callMetadata.routingTier)}
-              </span>
-            </div>
-          ` : '')}
-        </div>
-        ${(() => {
-          const counts = intel.callContext?.turnOutcomeCounts;
-          if (!counts || Object.keys(counts).length === 0) return '';
-          const ORDER = ['KC_ANSWERED','KC_LLM_FALLBACK','TRIGGER_ANSWERED','LLM_ANSWERED',
-                         'INTAKE','BOOKING_STEP','BOOKING_KC_DIGRESSION','BOOKING_COMPLETE','BOOKING_HANDOFF',
-                         'BPFUQ_RESUME','BPFUQ_REASK','BPFUQ_NO_MATCH',
-                         'GRACEFUL_ACK','GHOST_SKIPPED','STT_EMPTY','TRACE_ONLY','UNKNOWN'];
-          const chips = ORDER
-            .filter(k => counts[k])
-            .map(k => `${getTurnOutcomeBadge(k)}<span class="outcome-count">${counts[k]}</span>`)
-            .join('');
-          return `<div class="turn-outcome-bar"><span class="outcome-bar-label">TURN OUTCOMES</span>${chips}</div>`;
-        })()}
-        ${(() => {
-          const rec = intel.recording || {};
-          const audioSrc = rec.sid
-            ? '/api/call-intelligence/recording/' + rec.sid + '/audio'
-            : rec.url || null;
-          if (!audioSrc) return '';
-          return `
-            <div class="overview-recording">
-              <span class="overview-recording-label">CALL RECORDING</span>
-              <div class="overview-recording-player">
-                ${buildCustomPlayer(audioSrc)}
-                <div class="recording-links">
-                  ${rec.sid ? '<a href="https://www.twilio.com/console/voice/recordings/' + rec.sid + '" target="_blank" class="recording-external-link" title="Open in Twilio Console">Twilio Console &#8599;</a>' : ''}
-                  ${rec.url ? '<a href="' + rec.url + '" target="_blank" class="recording-external-link" title="Open recording in new tab">Open in new tab &#8599;</a>' : ''}
-                </div>
-              </div>
-              ${buildTranscriptRailHtml(intel)}
-            </div>
-          `;
-        })()}
-      </section>
-    `;
-  }
-
-  function renderExecutiveSummary(intel) {
-    return `
-      <section class="analysis-section summary-section">
-        <h2 class="section-title">🎯 EXECUTIVE SUMMARY</h2>
-        <p class="summary-text">${intel.executiveSummary}</p>
-        ${intel.topIssue ? `
-          <div class="top-issue">
-            <strong>Top Issue:</strong> ${intel.topIssue}
-          </div>
-        ` : ''}
-      </section>
-    `;
-  }
-
-  // =============================================================================
-  // V2 ENGINEERING-GRADE RENDER FUNCTIONS
-  // =============================================================================
-
-  function renderEngineeringScore(intel) {
-    const score = intel.engineeringScore;
-    if (!score || !score.overall) return '';
-
-    const dimensions = [
-      { key: 'overall', label: 'Overall', icon: '📊' },
-      { key: 'triggerAccuracy', label: 'Trigger Accuracy', icon: '🎯' },
-      { key: 'responseRelevance', label: 'Response Relevance', icon: '💬' },
-      { key: 'callerExperience', label: 'Caller Experience', icon: '😊' },
-      { key: 'conversationFlow', label: 'Conversation Flow', icon: '🔄' },
-      { key: 'nameHandling', label: 'Name Handling', icon: '👤' }
-    ];
-
-    function getScoreColor(val) {
-      if (val <= 3) return 'score-red';
-      if (val <= 6) return 'score-yellow';
-      return 'score-green';
-    }
-
-    return `
-      <section class="analysis-section engineering-score-section">
-        <h2 class="section-title">📊 ENGINEERING SCORE</h2>
-        <div class="engineering-score-grid">
-          ${dimensions.map(d => {
-            const val = score[d.key];
-            if (val === undefined || val === null) return '';
-            return `
-              <div class="score-row">
-                <span class="score-label">${d.icon} ${d.label}</span>
-                <div class="score-bar-track">
-                  <div class="score-bar ${getScoreColor(val)}" style="width: ${val * 10}%"></div>
-                </div>
-                <span class="score-value ${getScoreColor(val)}">${val}/10</span>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </section>
-    `;
-  }
-
-  function renderCallerJourney(intel) {
-    const journey = intel.callerJourney;
-    if (!journey) return '';
-
-    const outcomeLabels = {
-      'wrong_response': '❌ Wrong Response',
-      'correct_booking': '✅ Correct Booking',
-      'correct_info': '✅ Correct Info',
-      'caller_abandoned': '⚠️ Caller Abandoned',
-      'partial_help': '🟡 Partial Help'
-    };
-
-    return `
-      <section class="analysis-section caller-journey-section">
-        <h2 class="section-title">🧭 CALLER JOURNEY</h2>
-
-        ${journey.callerName ? `
-          <div class="journey-name-row">
-            <span class="journey-name-label">Caller:</span>
-            <strong>${journey.callerName}</strong>
-            ${journey.nameDetected !== undefined ? `
-              <span class="journey-name-tag ${journey.nameUsedInResponse ? 'name-used' : 'name-not-used'}">
-                ${journey.nameDetected ? (journey.nameUsedInResponse ? '✅ Name detected & used' : '⚠️ Name detected but NOT used in response') : '❌ Name not detected'}
-              </span>
-            ` : ''}
-          </div>
-        ` : ''}
-
-        ${journey.intentEvolution && journey.intentEvolution.length > 0 ? `
-          <div class="journey-intent-flow">
-            <h3 class="journey-subtitle">Intent Evolution</h3>
-            <div class="intent-timeline">
-              ${journey.intentEvolution.map((intent, idx) => `
-                <div class="intent-step">
-                  <span class="intent-number">${idx + 1}</span>
-                  <span class="intent-text">${intent}</span>
-                </div>
-                ${idx < journey.intentEvolution.length - 1 ? '<span class="intent-arrow">→</span>' : ''}
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <div class="journey-outcome-row">
-          <div class="journey-outcome-item">
-            <span class="journey-meta-label">Final Outcome:</span>
-            <span class="journey-outcome-badge ${journey.wasCallerHelped ? 'outcome-good' : 'outcome-bad'}">
-              ${outcomeLabels[journey.finalOutcome] || journey.finalOutcome || 'Unknown'}
-            </span>
-          </div>
-          <div class="journey-outcome-item">
-            <span class="journey-meta-label">Was Caller Helped?</span>
-            <span class="${journey.wasCallerHelped ? 'verdict-good' : 'verdict-bad'}">
-              ${journey.wasCallerHelped ? '✅ Yes' : '❌ No'}
-            </span>
-          </div>
-        </div>
-
-        ${journey.unaddressedIssues && journey.unaddressedIssues.length > 0 ? `
-          <div class="journey-unaddressed">
-            <h3 class="journey-subtitle">⚠️ Unaddressed Issues</h3>
-            <ul class="unaddressed-list">
-              ${journey.unaddressedIssues.map(issue => `<li>${issue}</li>`).join('')}
-            </ul>
-          </div>
-        ` : ''}
-
-        ${journey.sentimentArc && journey.sentimentArc.length > 0 ? `
-          <div class="journey-sentiment">
-            <h3 class="journey-subtitle">Sentiment Arc</h3>
-            <div class="sentiment-flow">
-              ${journey.sentimentArc.map((s, idx) => `
-                <span class="sentiment-chip sentiment-${s}">${s}</span>
-                ${idx < journey.sentimentArc.length - 1 ? '<span class="intent-arrow">→</span>' : ''}
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-      </section>
-    `;
-  }
-
-  function renderTurnByTurnAnalysis(intel) {
-    const turns = intel.turnByTurnAnalysis;
-    if (!turns || turns.length === 0) return '';
-
-    function getVerdictBadge(verdict) {
-      const badges = {
-        'correct': '<span class="verdict-badge verdict-correct">✅ Correct</span>',
-        'wrong_trigger': '<span class="verdict-badge verdict-wrong">❌ Wrong Trigger</span>',
-        'missed_trigger': '<span class="verdict-badge verdict-wrong">❌ Missed Trigger</span>',
-        'good_llm': '<span class="verdict-badge verdict-good-llm">✅ Good LLM</span>',
-        'good_llm_response': '<span class="verdict-badge verdict-good-llm">✅ Good LLM</span>',
-        'bad_llm': '<span class="verdict-badge verdict-bad-llm">❌ Bad LLM</span>',
-        'bad_llm_response': '<span class="verdict-badge verdict-bad-llm">❌ Bad LLM</span>',
-        'acceptable': '<span class="verdict-badge verdict-acceptable">🟡 Acceptable</span>'
-      };
-      return badges[verdict] || `<span class="verdict-badge verdict-unknown">${verdict || 'Unknown'}</span>`;
-    }
-
-    function getTierBadgeSmall(tier) {
-      if (!tier) return '';
-      switch (tier) {
-        case 'T1':  return '<span class="tier-badge-sm tier-1-sm">T1</span>';
-        case 'T1.5': return '<span class="tier-badge-sm tier-1-5-sm">T1.5</span>';
-        case 'T2':  return '<span class="tier-badge-sm tier-2-sm">T2</span>';
-        case 'T3':  return '<span class="tier-badge-sm tier-3-sm">T3</span>';
-        default: return `<span class="tier-badge-sm">${tier}</span>`;
-      }
-    }
-
-    return `
-      <section class="analysis-section turn-analysis-section">
-        <h2 class="section-title">🔬 TURN-BY-TURN ENGINEERING ANALYSIS</h2>
-        <p class="section-description">Per-turn verdict: what the caller wanted vs what the system did vs what SHOULD have happened.</p>
-
-        ${turns.map(turn => `
-          <div class="turn-analysis-card ${turn.falsePositive ? 'false-positive-card' : ''} ${turn.falseNegative ? 'false-negative-card' : ''}">
-            <div class="turn-analysis-header">
-              <div class="turn-header-left">
-                <span class="turn-num">Turn ${turn.turnNumber}</span>
-                ${getTierBadgeSmall(turn.tier)}
-                ${getVerdictBadge(turn.verdict)}
-                ${turn.falsePositive ? '<span class="fp-flag">🚨 FALSE POSITIVE</span>' : ''}
-                ${turn.falseNegative ? '<span class="fn-flag">⚠️ FALSE NEGATIVE</span>' : ''}
-              </div>
-              <div class="turn-header-right">
-                ${turn.responseQuality !== undefined ? `
-                  <span class="quality-badge quality-${turn.responseQuality <= 3 ? 'low' : (turn.responseQuality <= 6 ? 'mid' : 'high')}">${turn.responseQuality}/10</span>
-                ` : ''}
-                ${turn.callerSentiment ? `
-                  <span class="sentiment-chip sentiment-${turn.callerSentiment}">${turn.callerSentiment}</span>
-                ` : ''}
-              </div>
-            </div>
-
-            <div class="turn-analysis-body">
-              ${turn.callerSaid ? `
-                <div class="turn-row caller-row">
-                  <span class="turn-row-label">🎤 Caller Said:</span>
-                  <span class="turn-row-value">"${turn.callerSaid}"</span>
-                </div>
-              ` : ''}
-              ${turn.callerIntent ? `
-                <div class="turn-row intent-row">
-                  <span class="turn-row-label">🧠 Caller Intent:</span>
-                  <span class="turn-row-value">${turn.callerIntent}</span>
-                </div>
-              ` : ''}
-              ${turn.systemAction ? `
-                <div class="turn-row system-row">
-                  <span class="turn-row-label">⚙️ System Did:</span>
-                  <span class="turn-row-value">${turn.systemAction}</span>
-                </div>
-              ` : ''}
-              ${turn.correctAction && turn.correctAction !== 'correct' ? `
-                <div class="turn-row correct-row">
-                  <span class="turn-row-label">✅ Should Have:</span>
-                  <span class="turn-row-value">${turn.correctAction}</span>
-                </div>
-              ` : ''}
-              ${turn.verdictReason ? `
-                <div class="turn-row reason-row">
-                  <span class="turn-row-label">📝 Why:</span>
-                  <span class="turn-row-value">${turn.verdictReason}</span>
-                </div>
-              ` : ''}
-              ${turn.triggerMatched ? `
-                <div class="turn-row trigger-row">
-                  <span class="turn-row-label">🎯 Trigger Matched:</span>
-                  <span class="turn-row-value"><code>${turn.triggerMatched}</code></span>
-                </div>
-              ` : ''}
-              ${turn.triggerShouldHaveMatched ? `
-                <div class="turn-row trigger-row should-match">
-                  <span class="turn-row-label">🎯 Should Have Matched:</span>
-                  <span class="turn-row-value"><code>${turn.triggerShouldHaveMatched}</code></span>
-                </div>
-              ` : ''}
-              ${turn.responseIssues && turn.responseIssues.length > 0 ? `
-                <div class="turn-row issues-row">
-                  <span class="turn-row-label">⚠️ Response Issues:</span>
-                  <span class="turn-row-value">${turn.responseIssues.join(', ')}</span>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        `).join('')}
-      </section>
-    `;
-  }
-
-  function renderRootCause(intel) {
-    const rc = intel.rootCauseAnalysis;
-    if (!rc) return '';
-
-    return `
-      <section class="analysis-section root-cause-section">
-        <h2 class="section-title">🔍 ROOT CAUSE ANALYSIS</h2>
-
-        ${rc.primaryRootCause ? `
-          <div class="root-cause-box">
-            <div class="root-cause-label">Primary Root Cause</div>
-            <p class="root-cause-text">${rc.primaryRootCause}</p>
-          </div>
-        ` : ''}
-
-        ${rc.triggerGaps && rc.triggerGaps.length > 0 ? `
-          <div class="root-cause-subsection">
-            <h3>⚠️ Trigger Gaps (${rc.triggerGaps.length})</h3>
-            ${rc.triggerGaps.map(gap => `
-              <div class="trigger-gap-card priority-${gap.priority || 'medium'}">
-                <div class="gap-header">
-                  <strong>${gap.triggerLabel || gap.missingTrigger || 'Unknown trigger'}</strong>
-                  <span class="gap-priority">${getPriorityBadge(gap.priority || 'medium')}</span>
-                </div>
-                ${gap.evidence ? `<p class="gap-evidence">Evidence: "${gap.evidence}"</p>` : ''}
-                ${gap.suggestedKeywords && gap.suggestedKeywords.length > 0 ? `
-                  <div class="gap-keywords">
-                    <span class="gap-kw-label">Suggested Keywords:</span>
-                    ${gap.suggestedKeywords.map(kw => `<code class="keyword-chip">${kw}</code>`).join(' ')}
-                  </div>
-                ` : ''}
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-
-        ${rc.falsePositives && rc.falsePositives.length > 0 ? `
-          <div class="root-cause-subsection">
-            <h3>🚨 False Positives (${rc.falsePositives.length})</h3>
-            ${rc.falsePositives.map(fp => `
-              <div class="false-positive-alert">
-                <div class="fp-header">
-                  <strong>${fp.triggerLabel || fp.triggerId}</strong>
-                  <span class="fp-badge">FALSE POSITIVE</span>
-                </div>
-                ${fp.matchedOn ? `<p class="fp-detail"><strong>Matched On:</strong> "${fp.matchedOn}"</p>` : ''}
-                ${fp.actualCallerIntent ? `<p class="fp-detail"><strong>Actual Intent:</strong> ${fp.actualCallerIntent}</p>` : ''}
-                ${fp.fix ? `<p class="fp-fix"><strong>Fix:</strong> ${fp.fix}</p>` : ''}
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-
-        ${rc.systemDesignIssues && rc.systemDesignIssues.length > 0 ? `
-          <div class="root-cause-subsection">
-            <h3>🏗️ System Design Issues</h3>
-            <ul class="system-issues-list">
-              ${rc.systemDesignIssues.map(issue => `<li>${issue}</li>`).join('')}
-            </ul>
-          </div>
-        ` : ''}
-      </section>
-    `;
-  }
-
-  function renderResponseContext(intel) {
-    const response = intel.callContext?.response;
-    if (!response) return '';
-
-    const usedName = response.usedCallerName === true ? 'Yes' : (response.usedCallerName === false ? 'No' : 'Unknown');
-    const callerName = response.callerNameExtracted || 'Not detected';
-    const callerConfidence = response.callerNameConfidence !== null && response.callerNameConfidence !== undefined
-      ? `${Math.round(response.callerNameConfidence * 100)}%`
-      : 'Unknown';
-
-    const extractedRuleId = response.matchedTriggerRuleId || (response.responseSource && response.responseSource.includes('::') 
-      ? response.responseSource.split('::')[1] 
-      : null);
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">🧭 RESPONSE SOURCE & OWNERSHIP</h2>
-        <div class="overview-grid">
-          <div class="overview-item">
-            <span class="overview-label">Response Type:</span>
-            <span class="overview-value">${response.responseType || 'Unknown'}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Response Path:</span>
-            <span class="overview-value">${response.responsePath || 'Unknown'}</span>
-          </div>
-          ${extractedRuleId ? `
-            <div class="overview-item">
-              <span class="overview-label">✨ Trigger ID:</span>
-              <span class="overview-value"><code class="trigger-id-display">${extractedRuleId}</code></span>
-            </div>
-          ` : ''}
-          ${response.matchedTriggerLabel ? `
-            <div class="overview-item">
-              <span class="overview-label">Trigger Name:</span>
-              <span class="overview-value trigger-name">${response.matchedTriggerLabel}</span>
-            </div>
-          ` : ''}
-          <div class="overview-item">
-            <span class="overview-label">Response Source:</span>
-            <span class="overview-value"><code style="font-size: 0.75rem;">${response.responseSource || 'Unknown'}</code></span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Owner:</span>
-            <span class="overview-value">${response.responseOwner || 'Unknown'}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Used Caller Name:</span>
-            <span class="overview-value">${usedName}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Caller Name Detected:</span>
-            <span class="overview-value">${callerName} (${callerConfidence})</span>
-          </div>
-        </div>
-        ${response.responsePreview ? `
-          <div class="subsection">
-            <h3>Response Preview:</h3>
-            <pre class="code-block">${response.responsePreview}</pre>
-          </div>
-        ` : ''}
-      </section>
-    `;
-  }
-
-  function renderVoiceDeliverySummary(intel) {
-    const vd = intel.callContext?.voiceDelivery;
-    if (!vd || !vd.spokenLines || vd.spokenLines.length === 0) return '';
-
-    const hasTwilioFallback = vd.hadTwilioFallback;
-    const alertClass = hasTwilioFallback ? 'voice-alert' : '';
-
-    return `
-      <section class="analysis-section ${alertClass}">
-        <h2 class="section-title">🔊 VOICE DELIVERY AUDIT</h2>
-        <p class="section-description">Everything spoken to the caller — voice provider, bridge lines, and actual text delivered.</p>
-        ${hasTwilioFallback ? `
-          <div class="voice-alert-banner">
-            ⚠️ <strong>Twilio Voice Detected:</strong> ${vd.twilioSayCount} line(s) fell back to Twilio &lt;Say&gt; (default female voice) instead of ElevenLabs.
-          </div>
-        ` : ''}
-        <div class="overview-grid">
-          <div class="overview-item">
-            <span class="overview-label">Total Lines Spoken:</span>
-            <span class="overview-value">${vd.totalSpokenLines}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Voice Providers:</span>
-            <span class="overview-value">${vd.providers.map(p => `<code class="${p === 'twilio_say' ? 'voice-twilio' : 'voice-elevenlabs'}">${p}</code>`).join(', ')}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">ElevenLabs (Play):</span>
-            <span class="overview-value">${vd.elevenLabsPlayCount}</span>
-          </div>
-          <div class="overview-item">
-            <span class="overview-label">Twilio Say (Fallback):</span>
-            <span class="overview-value ${vd.twilioSayCount > 0 ? 'voice-twilio' : ''}">${vd.twilioSayCount}</span>
-          </div>
-        </div>
-        <div class="subsection">
-          <h3>All Spoken Lines:</h3>
-          <div class="spoken-lines-list">
-            ${vd.spokenLines.map((line, i) => `
-              <div class="spoken-line ${line.isBridge ? 'spoken-bridge' : ''} ${line.voiceProvider === 'twilio_say' ? 'spoken-twilio-fallback' : ''}">
-                <div class="spoken-line-meta">
-                  <span class="spoken-line-turn">Turn ${line.turn || '?'}</span>
-                  <span class="spoken-line-provider ${line.voiceProvider === 'twilio_say' ? 'voice-twilio' : 'voice-elevenlabs'}">${line.voiceProvider || 'unknown'}</span>
-                  <code class="spoken-line-verb">${line.verb || 'N/A'}</code>
-                  ${line.isBridge ? '<span class="spoken-line-badge bridge-badge">BRIDGE</span>' : ''}
-                  ${line.source ? `<span class="spoken-line-source">${line.source}</span>` : ''}
-                </div>
-                <div class="spoken-line-text">"${line.text}"</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      </section>
-    `;
-  }
-
-  function renderTranscriptSection(intel) {
-    const transcript = intel.callContext?.transcript || [];
-    if (transcript.length === 0) return '';
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">📝 TRANSCRIPT (LAST ${transcript.length} TURNS)</h2>
-        <div class="transcript-list">
-          ${transcript.map(turn => `
-            <div class="transcript-row transcript-${turn.speaker}">
-              <div class="transcript-meta">
-                <span class="transcript-speaker">${turn.speaker}</span>
-                ${turn.kind ? `<span class="transcript-kind">${turn.kind}</span>` : ''}
-                ${turn.source ? `<span class="transcript-source">${turn.source}</span>` : ''}
-              </div>
-              <div class="transcript-text">${turn.text}</div>
-            </div>
-          `).join('')}
-        </div>
-      </section>
-    `;
-  }
-
-  function renderTurnByTurnFlow(intel) {
-    const flow = intel.callContext?.turnByTurnFlow || [];
-    if (flow.length === 0) return '';
-
-    return `
-      <section class="analysis-section flow-section">
-        <h2 class="section-title">📋 TURN-BY-TURN DECISION FLOW</h2>
-        <p class="section-description">Step-by-step breakdown of every caller input and system decision.</p>
-        
-        ${flow.map(turn => `
-          <div class="turn-flow-card ${turn.traceOnly ? 'trace-only-turn' : ''}">
-            <div class="turn-flow-header">
-              <div class="turn-flow-header-row">
-                <span class="turn-num">Turn ${turn.turnNumber}</span>
-                ${turn.routingTier ? getTierBadgeCompact(turn.routingTier) : ''}
-                ${getTurnOutcomeBadge(turn.turnOutcome)}
-                ${turn.turnVerdict ? `<span class="verdict-pill">${turn.turnVerdict}</span>` : ''}
-                ${turn.ownerSelected ? `<span class="owner-pill">${turn.ownerSelected}</span>` : ''}
-                ${turn.pathSelected?.path ? `<span class="turn-path-pill">${turn.pathSelected.path}</span>` : ''}
-                ${turn.traceOnly ? '<span class="trace-only-label">TRACE ONLY</span>' : ''}
-              </div>
-              ${turn.sectionTrail ? `<div class="turn-section-trail">⬌ ${turn.sectionTrail}</div>` : ''}
-              ${turn.pathSelected?.reason ? `<div class="turn-path-reason">↳ ${turn.pathSelected.reason}</div>` : ''}
-            </div>
-
-            ${turn.callerInput ? `
-              <div class="flow-step caller-step">
-                <div class="step-label">
-                  <span class="step-icon">🎤</span>
-                  <strong>1. CALLER SPOKE</strong>
-                </div>
-                <div class="step-content">
-                  <pre class="code-block">${turn.callerInput.raw}</pre>
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.ghostTurnInfo ? `
-              <div class="flow-step ghost-step ${turn.ghostTurnInfo.type === 'PFUQ_GHOST' ? 'ghost-pfuq' : 'ghost-stt'}">
-                <div class="step-label">
-                  <span class="step-icon">${turn.ghostTurnInfo.type === 'PFUQ_GHOST' ? '👻' : '🔇'}</span>
-                  <strong>${turn.ghostTurnInfo.type === 'PFUQ_GHOST' ? 'GHOST TURN — PFUQ PENDING' : 'SILENT TURN — STT EMPTY'}</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Reason:</span>
-                    <span class="detail-value">${turn.ghostTurnInfo.reason}</span>
-                  </div>
-                  ${turn.ghostTurnInfo.preservedQuestion ? `
-                  <div class="step-detail full-width">
-                    <span class="detail-label">Preserved Question:</span>
-                    <pre class="code-block">${turn.ghostTurnInfo.preservedQuestion}</pre>
-                  </div>` : ''}
-                  ${turn.ghostTurnInfo.pfuqTurn != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">PFUQ Set On Turn:</span>
-                    <span class="detail-value">${turn.ghostTurnInfo.pfuqTurn}</span>
-                  </div>` : ''}
-                  ${turn.ghostTurnInfo.isSilence != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Was Silence:</span>
-                    <span class="detail-value">${turn.ghostTurnInfo.isSilence ? '🔇 Yes' : 'No'}</span>
-                  </div>` : ''}
-                  ${turn.ghostTurnInfo.isTimeout != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Was Timeout:</span>
-                    <span class="detail-value">${turn.ghostTurnInfo.isTimeout ? '⏱️ Yes' : 'No'}</span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.scrabEngineOutput ? `
-              <div class="flow-step scrabengine-step">
-                <div class="step-label">
-                  <span class="step-icon">🧹</span>
-                  <strong>2. SCRABENGINE PROCESSED</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Raw Input:</span>
-                    <span class="detail-value">${turn.scrabEngineOutput.raw || 'N/A'}</span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Normalized:</span>
-                    <span class="detail-value">${turn.scrabEngineOutput.normalized || 'N/A'}</span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Tokens:</span>
-                    <span class="detail-value">${turn.scrabEngineOutput.tokensOriginal} → ${turn.scrabEngineOutput.tokensExpanded}</span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Quality:</span>
-                    <span class="detail-value ${turn.scrabEngineOutput.qualityPassed ? 'quality-pass' : 'quality-fail'}">
-                      ${turn.scrabEngineOutput.qualityPassed ? '✅ Passed' : '❌ Failed'} 
-                      (${turn.scrabEngineOutput.qualityReason})
-                    </span>
-                  </div>
-                  ${turn.scrabEngineOutput.transformations && turn.scrabEngineOutput.transformations.length > 0 ? `
-                    <div class="step-detail">
-                      <span class="detail-label">Transformations:</span>
-                      <span class="detail-value">${turn.scrabEngineOutput.transformations.length} applied</span>
-                    </div>
-                  ` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.scrabHandoff ? `
-              <div class="flow-step handoff-step">
-                <div class="step-label">
-                  <span class="step-icon">🚀</span>
-                  <strong>3. DELIVERED TO TRIGGERS</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Normalized Input:</span>
-                    <pre class="code-block-inline">${turn.scrabHandoff.normalizedInput || 'N/A'}</pre>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Expanded Tokens:</span>
-                    <div class="token-list-small">
-                      ${(turn.scrabHandoff.expandedTokens || []).map(t => `<span class="token-small">${t}</span>`).join('')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.triggerEvaluation ? `
-              <div class="flow-step trigger-step">
-                <div class="step-label">
-                  <span class="step-icon">🎯</span>
-                  <strong>4. TRIGGER MATCHING</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Triggers Evaluated:</span>
-                    <span class="detail-value">${turn.triggerEvaluation.enabledCards} / ${turn.triggerEvaluation.totalCards}</span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Match Result:</span>
-                    <span class="detail-value ${turn.triggerEvaluation.matched ? 'match-success' : 'match-fail'}">
-                      ${turn.triggerEvaluation.matched ? '✅ MATCHED' : '❌ NO MATCH'}
-                    </span>
-                  </div>
-                  ${turn.triggerEvaluation.matched ? (() => {
-                    const _cid = new URLSearchParams(window.location.search).get('companyId') || '';
-                    const _rid = turn.triggerEvaluation.ruleId || '';
-                    const _rawId = turn.triggerEvaluation.cardId || '';
-                    const _editHref = _rid && _cid
-                      ? `/agent-console/triggers.html?companyId=${_cid}&edit=${encodeURIComponent(_rid)}`
-                      : null;
-                    const _editLink = _editHref
-                      ? `<a href="${_editHref}" target="_blank" class="ci-card-link">Edit card ↗</a>`
-                      : '';
-                    return `
-                    <div class="step-detail">
-                      <span class="detail-label">Rule ID:</span>
-                      <span class="detail-value">
-                        <code class="trigger-id-display">${_rid || '<span class="ci-unknown">UNKNOWN — trace gap</span>'}</code>
-                        ${_editLink}
-                      </span>
-                    </div>
-                    ${_rawId && _rawId !== _rid ? `
-                    <div class="step-detail">
-                      <span class="detail-label">Full Card ID:</span>
-                      <span class="detail-value"><code class="trigger-id-display">${_rawId}</code></span>
-                    </div>` : ''}
-                    ${turn.triggerEvaluation.cardLabel ? `
-                    <div class="step-detail">
-                      <span class="detail-label">Card Name:</span>
-                      <span class="detail-value trigger-name">${turn.triggerEvaluation.cardLabel}</span>
-                    </div>` : ''}
-                    <div class="step-detail">
-                      <span class="detail-label">Matched On:</span>
-                      <span class="detail-value">${turn.triggerEvaluation.matchedOn || 'keyword'}</span>
-                    </div>`;
-                  })() : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.pathSelected ? `
-              <div class="flow-step path-step">
-                <div class="step-label">
-                  <span class="step-icon">🔀</span>
-                  <strong>5. PATH DECISION</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Path:</span>
-                    <span class="detail-value path-${turn.pathSelected.path?.toLowerCase().includes('fallback') ? 'fallback' : 'normal'}">
-                      ${turn.pathSelected.path || 'Unknown'}
-                    </span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Reason:</span>
-                    <span class="detail-value">${turn.pathSelected.reason || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.kcEngine ? (() => {
-              const kc = turn.kcEngine;
-              const _cid = new URLSearchParams(window.location.search).get('companyId') || '';
-              const _kcEditHref = kc.containerId && _cid
-                ? '/agent-console/services-item.html?companyId=' + _cid + '&containerId=' + encodeURIComponent(kc.containerId)
-                : null;
-              const _kcEditLink = _kcEditHref
-                ? '<a href="' + _kcEditHref + '" target="_blank" class="ci-card-link">Edit container ↗</a>'
-                : '';
-              // ── LLM Fallback: no container matched ──────────────────────────────
-              // When KC fires but no container has keywords for what the caller said,
-              // the agent answers from Claude's own model knowledge (NOT a KC container).
-              // Show a diagnostic so the user knows WHERE the answer came from and HOW to fix.
-              const _isNoMatch = kc.llmFallback && !kc.containerTitle;
-              const _cidsLink = _cid
-                ? '<a href="/agent-console/services.html?companyId=' + _cid + '" target="_blank" class="ci-card-link" style="color:#dc2626;font-weight:600;">→ Add KC container ↗</a>'
-                : '';
-
-              return '<div class="flow-step kc-engine-step' + (_isNoMatch ? ' kc-no-match-step' : '') + '">' +
-                '<div class="step-label">' +
-                  '<span class="step-icon">🧠</span>' +
-                  '<strong>KC ENGINE</strong>' +
-                  (kc.spfuqActive ? '<span class="spfuq-badge">SPFUQ</span>' : '') +
-                  (kc.bpfuqActive ? '<span class="booking-badge">BPFUQ ↩</span>' : '') +
-                  (kc.pfuqReask ? '<span class="pfuq-badge">PFUQ</span>' : '') +
-                  (kc.bookingFired ? '<span class="booking-badge">BOOKING</span>' : '') +
-                  (kc.llmFallback ? '<span class="fallback-badge">LLM FALLBACK</span>' : '') +
-                  (kc.gracefulAck ? '<span class="ack-badge">GRACEFUL ACK</span>' : '') +
-                  (!kc.llmFallback && !kc.gracefulAck ? '<span class="kc-badge kc-intent-badge ' + (kc.groqIntent === 'ANSWERED' ? 'intent-answered' : 'intent-failed') + '">' + (kc.groqIntent || 'UNKNOWN') + '</span>' : '') +
-                '</div>' +
-                '<div class="step-content">' +
-
-                // ── NO-MATCH diagnostic block ──────────────────────────────────────
-                (_isNoMatch ? (
-                  '<div class="step-detail full-width" style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px;margin-bottom:8px;">' +
-                    '<div style="color:#dc2626;font-weight:700;margin-bottom:6px;">🚫 No KC container matched — Groq answered from its own training (not from your KC)</div>' +
-                    (kc.llmFallbackInput ? '<div style="margin-bottom:6px;"><span style="color:#6b7280;font-size:0.82em;">CALLER SAID:</span> <em style="color:#1f2937;">"' + kc.llmFallbackInput + '"</em></div>' : '') +
-                    (kc.containerCount != null ? '<div style="margin-bottom:6px;color:#6b7280;font-size:0.82em;">' +
-                      (kc.containerCount === 0
-                        ? '⚠️ <strong>No KC containers are configured</strong> for this company.'
-                        : 'Searched <strong>' + kc.containerCount + ' KC container' + (kc.containerCount === 1 ? '' : 's') + '</strong>' +
-                          (kc.containerTitles?.length ? ': ' + kc.containerTitles.map(t => '<code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">' + t + '</code>').join(', ') : '') +
-                          ' — none had keywords matching the caller\'s input.'
-                      ) +
-                    '</div>' : '') +
-                    '<div style="margin-top:6px;">' + _cidsLink + '</div>' +
-                  '</div>'
-                ) : (
-                  // ── Standard container identity ──────────────────────────────────
-                  '<div class="step-detail">' +
-                    '<span class="detail-label">Container:</span>' +
-                    '<span class="detail-value kc-container-name"><strong>' + (kc.containerTitle || 'Unknown') + '</strong> ' + _kcEditLink + '</span>' +
-                  '</div>' +
-                  '<div class="step-detail">' +
-                    '<span class="detail-label">Container ID:</span>' +
-                    '<span class="detail-value"><code class="trigger-id-display">' + (kc.containerId || '<em style=\'color:#dc2626\'>not in trace</em>') + '</code></span>' +
-                  '</div>' +
-                  (kc.kcId ? '<div class="step-detail">' +
-                    '<span class="detail-label">KC ID:</span>' +
-                    '<span class="detail-value"><code class="trigger-id-display">' + kc.kcId + '</code></span>' +
-                  '</div>' : '') +
-                  '<div class="step-detail">' +
-                    '<span class="detail-label">Match Score:</span>' +
-                    '<span class="detail-value">' + (kc.matchScore === 'spfuq' ? '<span class=\'kc-badge spfuq-badge\'>SPFUQ continuation</span>' : (kc.matchScore != null ? kc.matchScore : 'N/A')) + '</span>' +
-                  '</div>'
-                )) +
-
-                // ── Common fields (shown for all paths) ───────────────────────────
-                '<div class="step-detail">' +
-                  '<span class="detail-label">Path:</span>' +
-                  '<span class="detail-value"><code>' + (kc.path || (kc.llmFallback ? 'KC_LLM_FALLBACK' : kc.gracefulAck ? 'KC_GRACEFUL_ACK' : 'N/A')) + '</code></span>' +
-                '</div>' +
-                (kc.containerBlockPreview ? '<div class="step-detail full-width">' +
-                  '<span class="detail-label">📄 Source Material (what Groq read):</span>' +
-                  '<pre class="code-block kc-source-block">' + kc.containerBlockPreview + '</pre>' +
-                '</div>' : '') +
-                (kc.groqConfidence != null ? '<div class="step-detail">' +
-                  '<span class="detail-label">Confidence:</span>' +
-                  '<span class="detail-value">' + kc.groqConfidence + '</span>' +
-                '</div>' : '') +
-                (kc.groqLatencyMs != null ? '<div class="step-detail">' +
-                  '<span class="detail-label">Groq Latency:</span>' +
-                  '<span class="detail-value">' + kc.groqLatencyMs + 'ms</span>' +
-                '</div>' : '') +
-                (kc.groqResponse ? '<div class="step-detail full-width">' +
-                  '<span class="detail-label">Groq Response:</span>' +
-                  '<pre class="code-block">' + kc.groqResponse + '</pre>' +
-                '</div>' : '') +
-                (kc.spfuqContainer ? '<div class="step-detail">' +
-                  '<span class="detail-label">SPFUQ Anchor:</span>' +
-                  '<span class="detail-value">' + kc.spfuqContainer + '</span>' +
-                '</div>' : '') +
-                '</div>' +
-              '</div>';
-            })() : ''}
-
-            ${turn.bookingStep ? `
-              <div class="flow-step" style="border-left:3px solid #6366f1;padding-left:10px;">
-                <div class="step-label">
-                  <span class="step-icon">📅</span>
-                  <strong>BOOKING STEP</strong>
-                  <span class="kc-badge" style="background:#eef2ff;color:#4f46e5;">${turn.bookingStep.currentStep || '?'}</span>
-                  ${turn.bookingStep.isComplete ? '<span class="kc-badge" style="background:#dcfce7;color:#16a34a;">✓ COMPLETE</span>' : ''}
-                </div>
-                <div class="step-content">
-                  ${turn.bookingStep.nameStage ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Name Stage:</span>
-                    <span class="detail-value"><code>${turn.bookingStep.nameStage}</code></span>
-                  </div>` : ''}
-                  ${turn.bookingStep.latencyMs != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Engine Latency:</span>
-                    <span class="detail-value">${turn.bookingStep.latencyMs}ms</span>
-                  </div>` : ''}
-                  ${turn.routingTier?.path && turn.routingTier.path !== 'BK_STEP_NORMAL' ? `
-                  <div class="step-detail">
-                    <span class="detail-label">123RP Path:</span>
-                    <span class="detail-value"><code>${turn.routingTier.path}</code></span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.bpfuqState ? `
-              <div class="flow-step" style="border-left:3px solid #f59e0b;padding-left:10px;">
-                <div class="step-label">
-                  <span class="step-icon">🔄</span>
-                  <strong>BPFUQ CONSENT GATE</strong>
-                  <span class="kc-badge" style="background:${turn.bpfuqState.consent === 'YES' ? '#dcfce7;color:#16a34a' : turn.bpfuqState.consent === 'NO' ? '#fee2e2;color:#dc2626' : '#fef3c7;color:#d97706'};">${turn.bpfuqState.consent}</span>
-                </div>
-                <div class="step-content">
-                  ${turn.bpfuqState.pausedStep ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Paused At Step:</span>
-                    <span class="detail-value"><code>${turn.bpfuqState.pausedStep}</code></span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.pfuqState ? `
-              <div class="flow-step pfuq-step">
-                <div class="step-label">
-                  <span class="step-icon">❓</span>
-                  <strong>PFUQ STATE</strong>
-                  <span class="kc-badge ${turn.pfuqState.type === 'BYPASSED' ? 'pfuq-bypassed-badge' : 'pfuq-set-badge'}">${turn.pfuqState.type}</span>
-                </div>
-                <div class="step-content">
-                  ${turn.pfuqState.question ? `
-                  <div class="step-detail full-width">
-                    <span class="detail-label">Question:</span>
-                    <pre class="code-block">${turn.pfuqState.question}</pre>
-                  </div>` : ''}
-                  ${turn.pfuqState.reason ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Bypass Reason:</span>
-                    <span class="detail-value">${turn.pfuqState.reason}</span>
-                  </div>` : ''}
-                  ${turn.pfuqState.source ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Source:</span>
-                    <span class="detail-value"><code>${turn.pfuqState.source}</code></span>
-                  </div>` : ''}
-                  ${turn.pfuqState.setTurn != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Set On Turn:</span>
-                    <span class="detail-value">${turn.pfuqState.setTurn}</span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.llmAgentCall ? `
-              <div class="flow-step llm-call-step">
-                <div class="step-label">
-                  <span class="step-icon">🤖</span>
-                  <strong>LLM AGENT CALLED</strong>
-                  ${turn.llmAgentCall.provider ? `<span class="kc-badge kc-llm-badge">${turn.llmAgentCall.provider}</span>` : ''}
-                  ${turn.llmAgentCall.bucket ? `<span class="kc-badge">${turn.llmAgentCall.bucket}</span>` : ''}
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Mode:</span>
-                    <span class="detail-value"><code>${turn.llmAgentCall.mode || 'N/A'}</code></span>
-                  </div>
-                  ${turn.llmAgentCall.model ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Model:</span>
-                    <span class="detail-value"><code>${turn.llmAgentCall.model}</code></span>
-                  </div>` : ''}
-                  ${turn.llmAgentCall.historyTurns != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">History Turns:</span>
-                    <span class="detail-value">${turn.llmAgentCall.historyTurns}</span>
-                  </div>` : ''}
-                  ${turn.llmAgentCall.isSttEmpty ? `
-                  <div class="step-detail">
-                    <span class="detail-label">STT Empty Recovery:</span>
-                    <span class="detail-value">⚠️ Yes</span>
-                  </div>` : ''}
-                  ${turn.llmAgentCall.isRecovery ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Recovery Mode:</span>
-                    <span class="detail-value">⚠️ Yes</span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.llmStreamMetrics ? `
-              <div class="flow-step llm-metrics-step">
-                <div class="step-label">
-                  <span class="step-icon">📡</span>
-                  <strong>LLM STREAM METRICS</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Total Latency:</span>
-                    <span class="detail-value latency-value">${turn.llmStreamMetrics.latencyMs != null ? turn.llmStreamMetrics.latencyMs + 'ms' : 'N/A'}</span>
-                  </div>
-                  ${turn.llmStreamMetrics.firstSentenceMs != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">1st Sentence:</span>
-                    <span class="detail-value">${turn.llmStreamMetrics.firstSentenceMs}ms</span>
-                  </div>` : ''}
-                  ${turn.llmStreamMetrics.tokensOutput != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Tokens Out:</span>
-                    <span class="detail-value">${turn.llmStreamMetrics.tokensOutput}</span>
-                  </div>` : ''}
-                  ${turn.llmStreamMetrics.tokensInput != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Tokens In:</span>
-                    <span class="detail-value">${turn.llmStreamMetrics.tokensInput}</span>
-                  </div>` : ''}
-                  ${turn.llmStreamMetrics.sentenceCount != null ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Sentences:</span>
-                    <span class="detail-value">${turn.llmStreamMetrics.sentenceCount}</span>
-                  </div>` : ''}
-                  ${turn.llmStreamMetrics.wasPartial ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Partial Stream:</span>
-                    <span class="detail-value">⚠️ Yes — truncated</span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.agentResponse ? `
-              <div class="flow-step response-step">
-                <div class="step-label">
-                  <span class="step-icon">💬</span>
-                  <strong>6. AGENT RESPONSE</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Response Source:</span>
-                    <span class="detail-value source-${turn.agentResponse.source?.toLowerCase().includes('fallback') ? 'fallback' : 'trigger'}">
-                      ${turn.agentResponse.source || 'Unknown'}
-                    </span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Used Caller Name:</span>
-                    <span class="detail-value">${turn.agentResponse.usedCallerName === true ? '✅ Yes' : (turn.agentResponse.usedCallerName === false ? '❌ No' : 'Unknown')}</span>
-                  </div>
-                  <div class="step-detail full-width">
-                    <span class="detail-label">Response Text:</span>
-                    <pre class="code-block">${turn.agentResponse.text || 'N/A'}</pre>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.voiceDelivery ? `
-              <div class="flow-step voice-delivery-step ${turn.voiceDelivery.textMismatch ? 'voice-mismatch' : ''} ${turn.voiceDelivery.voiceMismatch ? 'voice-fallback' : ''}">
-                <div class="step-label">
-                  <span class="step-icon">🔊</span>
-                  <strong>VOICE DELIVERY</strong>
-                  ${turn.voiceDelivery.textMismatch ? '<span class="mismatch-badge">⚠️ TEXT MISMATCH</span>' : ''}
-                  ${turn.voiceDelivery.voiceMismatch ? '<span class="mismatch-badge voice-badge">📢 TWILIO VOICE</span>' : ''}
-                </div>
-                <div class="step-content">
-                  ${turn.voiceDelivery.hadBridge ? `
-                    <div class="step-detail full-width">
-                      <span class="detail-label">Bridge Lines (${turn.voiceDelivery.bridgeCount}):</span>
-                      <span class="detail-value">${(turn.voiceDelivery.entries || []).filter(e => e.isBridge).map(e => `"${e.text}" <code>${e.voiceProvider}</code>`).join(', ') || 'N/A'}</span>
-                    </div>
-                  ` : ''}
-                  <div class="step-detail">
-                    <span class="detail-label">Voice Provider:</span>
-                    <span class="detail-value ${turn.voiceDelivery.voiceProvider === 'twilio_say' ? 'voice-twilio' : 'voice-elevenlabs'}">${turn.voiceDelivery.voiceProvider || 'Unknown'}</span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">TwiML Verb:</span>
-                    <span class="detail-value"><code>${turn.voiceDelivery.twimlVerb || 'N/A'}</code></span>
-                  </div>
-                  <div class="step-detail full-width">
-                    <span class="detail-label">Caller Heard:</span>
-                    <pre class="code-block ${turn.voiceDelivery.textMismatch ? 'mismatch-text' : ''}">${turn.voiceDelivery.deliveredText || 'N/A'}</pre>
-                  </div>
-                  ${turn.voiceDelivery.textMismatch ? `
-                    <div class="step-detail full-width">
-                      <span class="detail-label">System Intended:</span>
-                      <pre class="code-block intended-text">${turn.voiceDelivery.intendedText || 'N/A'}</pre>
-                    </div>
-                    ${turn.voiceDelivery.sanitizerReason ? `
-                      <div class="step-detail">
-                        <span class="detail-label">Blocked By:</span>
-                        <span class="detail-value voice-twilio">Sanitizer: ${turn.voiceDelivery.sanitizerReason}</span>
-                      </div>
-                    ` : ''}
-                    ${turn.voiceDelivery.bridgePath ? `
-                      <div class="step-detail">
-                        <span class="detail-label">Bridge Path:</span>
-                        <span class="detail-value"><code>${turn.voiceDelivery.bridgePath}</code></span>
-                      </div>
-                    ` : ''}
-                  ` : ''}
-                </div>
-              </div>
-            ` : ''}
-
-            ${turn.routingTier ? `
-              <div class="flow-step tier-step">
-                <div class="step-label">
-                  <span class="step-icon">🏷️</span>
-                  <strong>7. ROUTING TIER (123RP)</strong>
-                </div>
-                <div class="step-content">
-                  <div class="step-detail">
-                    <span class="detail-label">Tier:</span>
-                    <span class="detail-value">
-                      ${getTierBadge(turn.routingTier.tier)}
-                    </span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Source:</span>
-                    <span class="detail-value">${turn.routingTier.source || turn.routingTier.tierLabel || 'Unknown'}</span>
-                  </div>
-                  <div class="step-detail">
-                    <span class="detail-label">Path:</span>
-                    <span class="detail-value"><code>${turn.routingTier.path || turn.routingTier.lastPath || 'Unknown'}</code></span>
-                  </div>
-                  ${turn.routingTier.intent ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Intent:</span>
-                    <span class="detail-value">${turn.routingTier.intent}</span>
-                  </div>` : ''}
-                  ${turn.routingTier.latencyMs ? `
-                  <div class="step-detail">
-                    <span class="detail-label">Latency:</span>
-                    <span class="detail-value">${turn.routingTier.latencyMs}ms</span>
-                  </div>` : ''}
-                </div>
-              </div>
-            ` : ''}
-          </div>
-        `).join('')}
-      </section>
-    `;
-  }
-
-  function renderScrabEngineHandoff(intel) {
-    const scrabHandoff = intel.callContext?.scrabEngineHandoff;
-    if (!scrabHandoff) return '';
-
-    return `
-      <section class="analysis-section scrabengine-handoff-section">
-        <h2 class="section-title">🚀 SCRABENGINE → TRIGGER HANDOFF</h2>
-        <p class="section-description">This is exactly what ScrabEngine delivered to the trigger matching system.</p>
-        
-        <div class="handoff-grid">
-          <div class="handoff-item">
-            <span class="handoff-label">Original Tokens:</span>
-            <span class="handoff-value">${scrabHandoff.originalTokenCount || 0}</span>
-          </div>
-          <div class="handoff-item">
-            <span class="handoff-label">Expanded Tokens:</span>
-            <span class="handoff-value">${scrabHandoff.expandedTokenCount || 0}</span>
-          </div>
-          <div class="handoff-item">
-            <span class="handoff-label">Tokens Added:</span>
-            <span class="handoff-value">+${scrabHandoff.tokensAdded || 0}</span>
-          </div>
-          <div class="handoff-item">
-            <span class="handoff-label">Quality Passed:</span>
-            <span class="handoff-value">${scrabHandoff.qualityPassed ? '✅ Yes' : '❌ No'}</span>
-          </div>
-          <div class="handoff-item">
-            <span class="handoff-label">Quality Reason:</span>
-            <span class="handoff-value">${scrabHandoff.qualityReason || 'N/A'}</span>
-          </div>
-          <div class="handoff-item">
-            <span class="handoff-label">Confidence:</span>
-            <span class="handoff-value">${scrabHandoff.qualityConfidence ? Math.round(scrabHandoff.qualityConfidence * 100) + '%' : 'N/A'}</span>
-          </div>
-        </div>
-
-        ${scrabHandoff.normalizedInput ? `
-          <div class="subsection">
-            <h3>Normalized Input (What Triggers See):</h3>
-            <pre class="code-block">${scrabHandoff.normalizedInput}</pre>
-          </div>
-        ` : ''}
-
-        ${scrabHandoff.expandedTokens && scrabHandoff.expandedTokens.length > 0 ? `
-          <div class="subsection">
-            <h3>Expanded Tokens (${scrabHandoff.expandedTokens.length} tokens):</h3>
-            <div class="token-list">
-              ${scrabHandoff.expandedTokens.map(t => `<span class="token">${t}</span>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        ${scrabHandoff.transformationSummary && scrabHandoff.transformationSummary.length > 0 ? `
-          <div class="subsection">
-            <h3>Transformations Applied (${scrabHandoff.transformationSummary.length}):</h3>
-            <ul class="transformation-list">
-              ${scrabHandoff.transformationSummary.map(t => `
-                <li>
-                  <strong>${t.stage}:</strong> ${t.type} 
-                  ${t.detail ? `(${t.detail})` : ''}
-                </li>
-              `).join('')}
-            </ul>
-          </div>
-        ` : ''}
-
-        ${scrabHandoff.entitiesFound && scrabHandoff.entitiesFound > 0 && scrabHandoff.entities ? `
-          <div class="subsection">
-            <h3>Entities Extracted:</h3>
-            <div class="entities-grid">
-              ${Object.entries(scrabHandoff.entities).filter(([k, v]) => v).map(([key, value]) => `
-                <div class="entity-item">
-                  <span class="entity-label">${key}:</span>
-                  <span class="entity-value">${value}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-      </section>
-    `;
-  }
-
-  function renderTriggerAnalysis(intel) {
-    const analysis = intel.analysis?.triggerAnalysis;
-    if (!analysis) return '';
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">📊 TRIGGER MATCHING ANALYSIS</h2>
-        <div class="trigger-stats">
-          <div class="stat-item">
-            <span class="stat-number">${analysis.totalTriggersEvaluated}</span>
-            <span class="stat-label">Triggers Evaluated</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-number">${analysis.triggersMatched}</span>
-            <span class="stat-label">Triggers Matched</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-number">${analysis.matchRate}%</span>
-            <span class="stat-label">Match Rate</span>
-          </div>
-        </div>
-        ${analysis.normalizedInput ? `
-          <div class="subsection">
-            <h3>Normalized Input:</h3>
-            <pre class="code-block">${analysis.normalizedInput}</pre>
-          </div>
-        ` : ''}
-        ${analysis.tokensDelivered && analysis.tokensDelivered.length > 0 ? `
-          <div class="subsection">
-            <h3>Tokens Delivered:</h3>
-            <div class="token-list">
-              ${analysis.tokensDelivered.slice(0, 20).map(t => `<span class="token">${t}</span>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-      </section>
-    `;
-  }
-
-  function renderIssues(intel) {
-    if (!intel.issues || intel.issues.length === 0) {
-      return `
-        <section class="analysis-section">
-          <h2 class="section-title">✅ NO ISSUES FOUND</h2>
-          <p>This call was handled correctly with no detected issues.</p>
-        </section>
-      `;
-    }
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">🔴 ISSUES DETECTED (${intel.issues.length})</h2>
-        ${intel.issues.map((issue, idx) => `
-          <div class="issue-card severity-${issue.severity}">
-            <div class="issue-header">
-              <span class="issue-number">#${idx + 1}</span>
-              <span class="issue-severity">${getSeverityIcon(issue.severity)} ${issue.severity.toUpperCase()}</span>
-            </div>
-            <h3 class="issue-title">${issue.title}</h3>
-            <p class="issue-description">${issue.description}</p>
-            ${issue.affectedComponent ? `
-              <div class="issue-meta">
-                <strong>Affected Component:</strong> <code class="component-id">${issue.affectedComponent}</code>
-              </div>
-            ` : ''}
-          </div>
-        `).join('')}
-      </section>
-    `;
-  }
-
-  function renderScrabEnginePerformance(intel) {
-    const scrab = intel.analysis?.scrabEnginePerformance;
-    if (!scrab) return '';
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">✅ SCRABENGINE PERFORMANCE</h2>
-        <div class="performance-status ${scrab.overallStatus}">
-          <strong>Overall:</strong> ${scrab.overallStatus?.toUpperCase() || 'UNKNOWN'}
-        </div>
-        <div class="performance-time">
-          <strong>Processing Time:</strong> ${scrab.totalProcessingTime}ms
-        </div>
-      </section>
-    `;
-  }
-
-  function renderRecommendations(intel) {
-    if (!intel.recommendations || intel.recommendations.length === 0) {
-      return '';
-    }
-
-    return `
-      <section class="analysis-section recommendations-section">
-        <h2 class="section-title">🎯 ACTIONABLE RECOMMENDATIONS (${intel.recommendations.length})</h2>
-        ${intel.recommendations.map((rec, idx) => `
-          <div class="recommendation-card priority-${rec.priority}">
-            <div class="rec-header">
-              <span class="rec-number">${idx + 1}.</span>
-              <span class="rec-priority">${getPriorityBadge(rec.priority)}</span>
-            </div>
-            <h3 class="rec-title">${rec.title}</h3>
-            <p class="rec-description">${rec.description}</p>
-            ${rec.copyableContent ? `
-              <div class="copyable-content">
-                <pre class="code-block">${rec.copyableContent}</pre>
-                <button class="btn btn-small copy-btn" data-content="${escapeHtml(rec.copyableContent)}">
-                  📋 COPY
-                </button>
-              </div>
-            ` : ''}
-            ${rec.targetTrigger ? `
-              <div class="rec-meta">
-                <strong>Target Trigger ID:</strong> <code class="trigger-id-display">${rec.targetTrigger}</code>
-              </div>
-            ` : ''}
-            ${rec.targetBucket ? `
-              <div class="rec-meta">
-                <strong>Target Bucket:</strong> <code>${rec.targetBucket}</code>
-              </div>
-            ` : ''}
-          </div>
-        `).join('')}
-      </section>
-    `;
-  }
-
-  function renderTokenUsage(intel) {
-    const t = intel.tokenUsage;
-    if (!t) return '';
-
-    const claudeTokens = t.claude?.totalTokens || 0;
-    const claudeTurns = t.claude?.llmTurns || 0;
-    const openaiTokens = t.openai?.totalTokens || 0;
-    const openaiPrompt = t.openai?.promptTokens || 0;
-    const openaiCompletion = t.openai?.completionTokens || 0;
-    const openaiCostActual = t.openai?.totalCost || 0;
-    const openaiCalls = t.openai?.callCount || 0;
-    const openaiModel = t.openai?.model || null;
-    const gpt4Tokens = t.gpt4Analysis?.totalTokens || 0;
-    const gpt4Ran = t.gpt4Analysis?.enabled;
-    const gpt4Model = t.gpt4Analysis?.model || 'gpt-4o';
-
-    const totalAll = claudeTokens + openaiTokens + gpt4Tokens;
-
-    // ── Accurate cost estimation (per 1M tokens, blended input/output) ──
-    // Claude 3.5 Haiku: $0.25/1M input + $1.25/1M output → blended ~$0.80/1M
-    // OpenAI T3 Fallback: use actual logged cost when available
-    // gpt-4o-mini: $0.15/1M input + $0.60/1M output → blended ~$0.40/1M
-    // gpt-4o: $2.50/1M input + $10/1M output → blended ~$5/1M
-    // gpt-4-turbo: $10/1M input + $30/1M output → blended ~$15/1M (legacy)
-    const claudeCostPer1M = 0.80;
-    const modelCostMap = { 'gpt-4o-mini': 0.40, 'gpt-4o': 5.0, 'gpt-4-turbo': 15.0, 'gpt-4-turbo-preview': 15.0 };
-    const gpt4AnalysisCostPer1M = modelCostMap[gpt4Model] || 5.0;
-
-    const claudeCost = (claudeTokens / 1_000_000) * claudeCostPer1M;
-    const openaiCost = openaiCostActual > 0 ? openaiCostActual : (openaiTokens / 1_000_000) * 3.0;
-    const gpt4Cost = (gpt4Tokens / 1_000_000) * gpt4AnalysisCostPer1M;
-    const totalCost = claudeCost + openaiCost + gpt4Cost;
-
-    function fmtCost(val) {
-      if (val === 0) return '$0.00';
-      if (val < 0.01) return '<$0.01';
-      return '$' + val.toFixed(4);
-    }
-
-    if (totalAll === 0 && !gpt4Ran) {
-      return `
-        <section class="analysis-section">
-          <h2 class="section-title">🔢 TOKEN USAGE & COST</h2>
-          <p style="color: #6B7280; font-size: 0.875rem;">No token usage data recorded for this call.</p>
-        </section>
-      `;
-    }
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">🔢 TOKEN USAGE & COST</h2>
-        <div class="token-table-wrapper">
-          <table class="token-table">
-            <thead>
-              <tr>
-                <th>AI System</th>
-                <th>Tokens</th>
-                <th>Details</th>
-                <th>Est. Cost (This Call)</th>
-                <th>Est. Cost (1,000 Calls)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <span class="token-system-badge claude-badge">🟣 Claude</span>
-                  <span class="token-system-label">T2 LLM Agent</span>
-                </td>
-                <td class="token-number">${claudeTokens.toLocaleString()}</td>
-                <td class="token-detail">${claudeTurns} LLM turn${claudeTurns !== 1 ? 's' : ''}</td>
-                <td class="token-cost">${fmtCost(claudeCost)}</td>
-                <td class="token-cost">${fmtCost(claudeCost * 1000)}</td>
-              </tr>
-              <tr>
-                <td>
-                  <span class="token-system-badge openai-badge">🟢 OpenAI</span>
-                  <span class="token-system-label">T3 Fallback</span>
-                </td>
-                <td class="token-number">${openaiTokens.toLocaleString()}</td>
-                <td class="token-detail">
-                  ${openaiCalls} call${openaiCalls !== 1 ? 's' : ''}${openaiModel ? ' · ' + openaiModel : ''}
-                  ${openaiTokens > 0 ? '<br><small>P: ' + openaiPrompt.toLocaleString() + ' · C: ' + openaiCompletion.toLocaleString() + '</small>' : ''}
-                </td>
-                <td class="token-cost">${fmtCost(openaiCost)}</td>
-                <td class="token-cost">${fmtCost(openaiCost * 1000)}</td>
-              </tr>
-              <tr>
-                <td>
-                  <span class="token-system-badge gpt4-badge">🔵 GPT-4</span>
-                  <span class="token-system-label">Analysis</span>
-                </td>
-                <td class="token-number">${gpt4Ran ? gpt4Tokens.toLocaleString() : '—'}</td>
-                <td class="token-detail">${gpt4Ran ? gpt4Model + ' · Analysis complete' : 'Not yet analyzed'}</td>
-                <td class="token-cost">${gpt4Ran ? fmtCost(gpt4Cost) : '—'}</td>
-                <td class="token-cost">${gpt4Ran ? fmtCost(gpt4Cost * 1000) : '—'}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="token-total-row">
-                <td><strong>📊 Total</strong></td>
-                <td class="token-number"><strong>${totalAll.toLocaleString()}</strong></td>
-                <td class="token-detail">All AI systems</td>
-                <td class="token-cost"><strong>${fmtCost(totalCost)}</strong></td>
-                <td class="token-cost"><strong>${fmtCost(totalCost * 1000)}</strong></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p class="token-disclaimer">Cost estimates are approximate based on current API pricing. Actual costs may vary.</p>
-      </section>
-    `;
-  }
-
-  function renderPerformanceMetrics(intel) {
-    const metrics = intel.analysis?.performanceMetrics;
-    if (!metrics) return '';
-
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">📈 PERFORMANCE METRICS</h2>
-        <div class="metrics-grid">
-          <div class="metric-item">
-            <span class="metric-label">Trigger Evaluation:</span>
-            <span class="metric-value">${metrics.triggerEvaluationTime}ms</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label">ScrabEngine:</span>
-            <span class="metric-value">${metrics.scrabEngineTime}ms</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label">Total Response:</span>
-            <span class="metric-value">${metrics.totalResponseTime}ms</span>
-          </div>
-        </div>
-      </section>
-    `;
-  }
-
-  function renderRawDataAccess(intel) {
-    return `
-      <section class="analysis-section">
-        <h2 class="section-title">📎 RAW DATA ACCESS</h2>
-        <div class="raw-data-actions">
-          <a href="/agent-console/call-report?callSid=${intel.callSid}"
-             class="btn btn-secondary"
-             target="_blank">
-            🔗 Open in Call Console
-          </a>
-        </div>
-      </section>
-    `;
-  }
-
-  function renderAnalysisFooter(intel) {
-    const gpt4 = intel.gpt4Analysis || {};
-
-    return `
-      <footer class="analysis-footer">
-        <p>
-          Analysis generated ${gpt4.enabled ? 'by GPT-4' : (intel.status === 'trace_only' ? 'from trace data' : 'by rule-based engine')}
-          on ${formatDate(intel.analyzedAt)}
-        </p>
-        ${gpt4.enabled ? `
-          <p class="analysis-meta">
-            Model: ${gpt4.modelVersion} •
-            Processing: ${gpt4.processingTime}ms •
-            Tokens: ${gpt4.tokensUsed}
-          </p>
-        ` : ''}
-      </footer>
-    `;
-  }
-
-  // =============================================================================
-  // CUSTOM AUDIO PLAYER
-  // =============================================================================
-
-  function buildCustomPlayer(url) {
-    const id = 'cvp-' + (++_playerCounter);
-    return `
-      <div class="cv-player" id="${id}">
-        <audio class="cv-audio" src="${url}" preload="metadata"></audio>
-        <button class="cv-btn cv-btn-play" title="Play / Pause">&#9654;</button>
-        <button class="cv-btn cv-btn-skip" data-skip="-10" title="Back 10s">&#8722;10s</button>
-        <div class="cv-seek-block">
-          <span class="cv-time cv-time-cur">0:00</span>
-          <input type="range" class="cv-seek" min="0" max="100" value="0" step="0.1">
-          <span class="cv-time cv-time-dur">&#8210;</span>
-        </div>
-        <button class="cv-btn cv-btn-skip" data-skip="10" title="Forward 10s">+10s</button>
-        <select class="cv-speed" title="Playback speed">
-          <option value="0.75">0.75&#215;</option>
-          <option value="1" selected>1&#215;</option>
-          <option value="1.25">1.25&#215;</option>
-          <option value="1.5">1.5&#215;</option>
-          <option value="2">2&#215;</option>
-        </select>
-      </div>
-    `;
-  }
-
-  function initCustomPlayer(wrapper) {
-    const audio   = wrapper.querySelector('.cv-audio');
-    const btnPlay = wrapper.querySelector('.cv-btn-play');
-    const seek    = wrapper.querySelector('.cv-seek');
-    const timeCur = wrapper.querySelector('.cv-time-cur');
-    const timeDur = wrapper.querySelector('.cv-time-dur');
-    const skipBtns = wrapper.querySelectorAll('.cv-btn-skip');
-    const speedSel = wrapper.querySelector('.cv-speed');
-
-    function fmt(s) {
-      if (!s || isNaN(s)) return '0:00';
-      const m = Math.floor(s / 60);
-      return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-    }
-
-    audio.addEventListener('loadedmetadata', () => {
-      seek.max = audio.duration;
-      timeDur.textContent = fmt(audio.duration);
-    });
-
-    audio.addEventListener('timeupdate', () => {
-      seek.value = audio.currentTime;
-      timeCur.textContent = fmt(audio.currentTime);
-    });
-
-    audio.addEventListener('play', () => { btnPlay.innerHTML = '&#9646;&#9646;'; });
-    audio.addEventListener('pause', () => { btnPlay.innerHTML = '&#9654;'; });
-    audio.addEventListener('ended', () => { btnPlay.innerHTML = '&#9654;'; });
-
-    btnPlay.addEventListener('click', () => {
-      if (audio.paused) {
-        document.querySelectorAll('.cv-audio').forEach(a => { if (a !== audio) { a.pause(); } });
-        audio.play();
-      } else {
-        audio.pause();
-      }
-    });
-
-    seek.addEventListener('input', () => { audio.currentTime = seek.value; });
-
-    skipBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + Number(btn.dataset.skip)));
-      });
-    });
-
-    speedSel.addEventListener('change', () => { audio.playbackRate = Number(speedSel.value); });
-  }
-
-  function initAllCustomPlayers(scope) {
-    const root = scope || document;
-    root.querySelectorAll('.cv-player:not([data-initialized])').forEach(wrapper => {
-      wrapper.dataset.initialized = '1';
-      initCustomPlayer(wrapper);
-    });
-  }
-
-  // =============================================================================
-  // SYNCHRONIZED TRANSCRIPT RAIL
-  // =============================================================================
-
-  function cvFmtTime(s) {
-    if (s == null || isNaN(s) || s < 0) return '';
-    const m = Math.floor(s / 60);
-    return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-  }
-
-  function buildTranscriptRailHtml(intel) {
-    const flow = intel.callContext?.turnByTurnFlow || [];
-    if (!flow.length) return '';
-
-    const startMs = intel.callMetadata?.startTime
-      ? new Date(intel.callMetadata.startTime).getTime()
-      : null;
-    const totalDuration = intel.callMetadata?.duration || 0;
-    const totalTurns = flow.length;
-
-    const entries = [];
-
-    // ── Greeting (turnNumber:0, excluded from flow by n>0 filter) ────────
-    const greeting = intel.callContext?.greeting;
-    if (greeting?.text) {
-      const greetTs = greeting.timestamp ? new Date(greeting.timestamp).getTime() : null;
-      entries.push({
-        type: 'agent',
-        turnNumber: 0,
-        text: greeting.text,
-        seekTime: greetTs && startMs ? (greetTs - startMs) / 1000 : 0,
-        hasRealTs: !!(greetTs && startMs),
-        path: 'GREETING',
-        tier: null,
-        reason: 'Initial greeting',
-        source: 'greeting'
-      });
-    }
-
-    flow.forEach((turn, idx) => {
-      const callerTs = turn.callerInput?.timestamp;
-      const agentTs  = turn.agentResponse?.timestamp;
-
-      // Seek time: real timestamp preferred, estimated fallback
-      // Timestamps from MongoDB are ISO strings — must convert to ms before subtracting
-      const callerSeek = callerTs && startMs ? (new Date(callerTs).getTime() - startMs) / 1000
-        : totalDuration > 0 ? (idx / totalTurns) * totalDuration : null;
-      const agentSeek = agentTs && startMs ? (new Date(agentTs).getTime() - startMs) / 1000
-        : callerSeek !== null ? callerSeek + 0.5 : null;
-
-      if (turn.callerInput?.raw) {
-        entries.push({
-          type: 'caller',
-          turnNumber: turn.turnNumber,
-          text: turn.callerInput.raw,
-          seekTime: callerSeek,
-          hasRealTs: !!(callerTs && startMs)
-        });
-      }
-
-      // ── Bridge phrases (hold audio played while LLM is processing) ───────
-      const bridgeLines = (turn.voiceDelivery?.entries || []).filter(e => e.type === 'bridge' && e.text);
-      for (const bl of bridgeLines) {
-        entries.push({
-          type: 'bridge',
-          turnNumber: turn.turnNumber,
-          text: bl.text,
-          seekTime: callerSeek !== null ? callerSeek + 0.2 : agentSeek,
-          hasRealTs: false
-        });
-      }
-
-      const agentText = turn.agentResponse?.text || '';
-      const path      = turn.pathSelected?.path || '';
-      const reason    = turn.pathSelected?.reason || '';
-      const source    = turn.agentResponse?.source || '';
-      const tier      = turn.pathSelected?.tier
-        || (path.startsWith('LLM') ? 2 : path.startsWith('TRIGGER') ? 1 : path.startsWith('FALLBACK') ? 3 : null);
-
-      if (agentText || path) {
-        entries.push({
-          type: 'agent',
-          turnNumber: turn.turnNumber,
-          text: agentText,
-          seekTime: agentSeek,
-          hasRealTs: !!(agentTs && startMs),
-          tier,
-          path,
-          reason,
-          source,
-          cardId: turn.triggerEvaluation?.ruleId || null
-        });
-      }
-    });
-
-    if (!entries.length) return '';
-
-    const companyId = new URLSearchParams(window.location.search).get('companyId') || '';
-    const tierLabel = { 1: 'T1', 2: 'T2', 3: 'T3' };
-    const rows = entries.map((e, i) => {
-      const seekAttr = e.seekTime !== null ? `data-seek="${e.seekTime.toFixed(2)}"` : '';
-      const timeLabel = e.seekTime !== null ? `<span class="tr-time">${cvFmtTime(e.seekTime)}</span>` : '';
-      const tierBadge = e.tier ? `<span class="tr-badge tr-tier-${e.tier}">${tierLabel[e.tier] || 'T?'}</span>` : '';
-      const pathBadge = e.path ? `<span class="tr-badge tr-path">${escapeHtml(e.path)}</span>` : '';
-      const cardLink  = e.cardId && companyId
-        ? ` <a href="/agent-console/triggers.html?companyId=${companyId}&edit=${encodeURIComponent(e.cardId)}" target="_blank" class="tr-card-link" onclick="event.stopPropagation()">Edit card ↗</a>`
-        : '';
-      const reasonEl  = e.reason ? `<div class="tr-reason">&#8618; ${escapeHtml(e.reason)}${cardLink}</div>` : (cardLink ? `<div class="tr-reason">${cardLink}</div>` : '');
-      const clickable = e.seekTime !== null ? 'tr-clickable' : '';
-
-      const speakerLabel = e.type === 'caller' ? '&#127908; CALLER'
-        : e.type === 'bridge' ? '&#9203; BRIDGE'
-        : '&#129302; AGENT';
-
-      return `
-        <div class="tr-entry tr-${e.type} ${clickable}" data-tr-idx="${i}" ${seekAttr}>
-          <div class="tr-meta">
-            ${timeLabel}
-            <span class="tr-speaker tr-speaker-${e.type}">${speakerLabel}</span>
-            ${tierBadge}${pathBadge}
-          </div>
-          <div class="tr-text">${escapeHtml(e.text)}</div>
-          ${reasonEl}
+          <button class="btn btn-ai" onclick="runAiAnalysis('${esc(callSid)}')">Retry →</button>
         </div>`;
-    }).join('');
-
-    return `<div class="transcript-rail" id="modal-transcript-rail">${rows}</div>`;
-  }
-
-  function initTranscriptRail(intelligence) {
-    const rail = document.getElementById('modal-transcript-rail');
-    if (!rail) return;
-
-    const player = DOM.modalBody.querySelector('.cv-player');
-    if (!player) return;
-    const audio = player.querySelector('.cv-audio');
-    if (!audio) return;
-
-    const entries = Array.from(rail.querySelectorAll('.tr-entry[data-seek]'));
-    const seekTimes = entries.map(e => parseFloat(e.dataset.seek));
-
-    // Click to seek
-    entries.forEach((entry, i) => {
-      if (!isNaN(seekTimes[i])) {
-        entry.addEventListener('click', () => {
-          audio.currentTime = seekTimes[i];
-          if (audio.paused) audio.play().catch(() => {});
-        });
-      }
-    });
-
-    // Auto-highlight + auto-scroll on timeupdate
-    audio.addEventListener('timeupdate', () => {
-      const t = audio.currentTime;
-      let activeIdx = -1;
-      for (let i = 0; i < seekTimes.length; i++) {
-        if (!isNaN(seekTimes[i]) && seekTimes[i] <= t) activeIdx = i;
-      }
-      entries.forEach((e, i) => {
-        const isActive = i === activeIdx;
-        if (isActive !== e.classList.contains('tr-active')) {
-          e.classList.toggle('tr-active', isActive);
-        }
-      });
-      if (activeIdx >= 0) {
-        // scrollIntoView avoids the offsetTop/offsetParent mismatch that was
-        // causing the rail to scroll to the wrong position (always the bottom)
-        entries[activeIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
-  }
-
-  function attachModalEventListeners(intelligence) {
-    document.querySelectorAll('.copy-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const content = btn.dataset.content;
-        const success = await copyToClipboard(content);
-        if (success) {
-          showNotification('Copied to clipboard!', 'success');
-        }
-      });
-    });
-    // Wire header download button to this call's SID
-    const headerDownloadBtn = document.getElementById('download-json-btn');
-    if (headerDownloadBtn && intelligence?.callSid) {
-      headerDownloadBtn.onclick = () => window.downloadJSON(intelligence.callSid);
-    }
-    initAllCustomPlayers(DOM.modalBody);
-    if (intelligence) initTranscriptRail(intelligence);
-  }
-
-  function closeAnalysisModal() {
-    DOM.analysisModal.classList.remove('active');
-    document.body.style.overflow = '';
-    state.selectedCallSid = null;
-  }
-
-  function openSettings() {
-    DOM.settingsModal.classList.add('active');
-    DOM.analysisMode.value = state.analysisMode;
-    DOM.analysisModel.value = state.analysisModel;
-  }
-
-  function closeSettingsModal() {
-    DOM.settingsModal.classList.remove('active');
-  }
-
-  async function saveSettings() {
-    const gpt4Enabled = DOM.gpt4Toggle.checked;
-    const analysisMode = DOM.analysisMode.value;
-    const analysisModel = DOM.analysisModel.value;
-    const autoAnalyzeEnabled = DOM.autoAnalyzeToggle.checked;
-
-    try {
-      if (gpt4Enabled !== state.gpt4Enabled) {
-        await toggleGPT4(gpt4Enabled);
-      }
-
-      await apiCall(`/api/call-intelligence/settings/${state.companyId}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          gpt4Enabled,
-          analysisMode,
-          analysisModel,
-          autoAnalyzeEnabled
-        })
-      });
-
-      state.analysisMode = analysisMode;
-      state.analysisModel = analysisModel;
-      
-      showNotification('Settings saved successfully!', 'success');
-      closeSettingsModal();
-    } catch (error) {
-      showNotification('Failed to save settings', 'error');
-      console.error('Save settings error:', error);
     }
   }
+}
 
-  // =============================================================================
-  // UTILITY FUNCTIONS
-  // =============================================================================
+// Expose globally for onclick handlers
+window.openReport = openReport;
+window.runAiAnalysis = runAiAnalysis;
 
-  function getTierBadge(tier) {
-    switch (tier) {
-      case 1:   return '<span class="tier-badge tier-1">T1 DETERMINISTIC</span>';
-      case 1.5: return '<span class="tier-badge tier-1-5">T1.5 KC ENGINE</span>';
-      case 2:   return '<span class="tier-badge tier-2">T2 LLM AGENT</span>';
-      case 3:   return '<span class="tier-badge tier-3">T3 FALLBACK</span>';
-      default:  return '<span class="tier-badge tier-unknown">--</span>';
-    }
+// ─── Settings panel ───────────────────────────────────────────────────────────
+
+async function loadSettings() {
+  try {
+    const data = await apiFetch(`/api/call-intelligence/settings/${state.companyId}`);
+    const gpt4 = $('gpt4-toggle');
+    const auto  = $('auto-analyze-toggle');
+    const model = $('analysis-model');
+    const mode  = $('analysis-mode');
+    const slider = $('gpt4-slider');
+    const autoSlider = $('auto-analyze-slider');
+
+    if (gpt4)  gpt4.checked  = data.gpt4Enabled || false;
+    if (auto)  auto.checked  = data.autoAnalyze || false;
+    if (model) model.value   = data.analysisModel || 'gpt-4o-mini';
+    if (mode)  mode.value    = data.analysisMode  || 'quick';
+    if (slider) slider.style.background = (data.gpt4Enabled) ? '#2563eb' : '#cbd5e1';
+    if (autoSlider) autoSlider.style.opacity = (data.gpt4Enabled) ? '1' : '0.5';
+    if (auto) auto.disabled = !data.gpt4Enabled;
+
+    $('gpt4-status').textContent = data.gpt4Enabled ? '● GPT-4 active' : '○ GPT-4 disabled';
+    $('gpt4-status').style.color = data.gpt4Enabled ? 'var(--c-ok)' : 'var(--tx-muted)';
+  } catch {
+    $('gpt4-status').textContent = 'Could not load settings';
   }
+}
 
-  function getTierBadgeCompact(tierObj) {
-    if (!tierObj) return '';
-    switch (tierObj.tier) {
-      case 1:   return '<span class="tier-badge tier-1">T1</span>';
-      case 1.5: return '<span class="tier-badge tier-1-5">T1.5</span>';
-      case 2:   return '<span class="tier-badge tier-2">T2</span>';
-      case 3:   return '<span class="tier-badge tier-3">T3</span>';
-      default:  return '';
-    }
-  }
-
-  function getTurnOutcomeBadge(outcome) {
-    const map = {
-      'INTAKE':                { label: 'INTAKE',       cls: 'outcome-intake'    },
-      'KC_ANSWERED':           { label: 'KC',            cls: 'outcome-kc'        },
-      'KC_LLM_FALLBACK':       { label: 'KC→LLM',        cls: 'outcome-kc-llm'   },
-      'BOOKING_HANDOFF':       { label: 'BOOKING',       cls: 'outcome-booking'   },
-      'BOOKING_STEP':          { label: 'BK STEP',       cls: 'outcome-booking'   },
-      'BOOKING_COMPLETE':      { label: 'BK DONE ✓',     cls: 'outcome-bk-done'   },
-      'BOOKING_KC_DIGRESSION': { label: 'BK KC',         cls: 'outcome-kc'        },
-      'BPFUQ_RESUME':          { label: 'BPFUQ ↩',       cls: 'outcome-booking'   },
-      'BPFUQ_REASK':           { label: 'BPFUQ ?',       cls: 'outcome-ghost'     },
-      'BPFUQ_NO_MATCH':        { label: 'BK NO KC',      cls: 'outcome-kc-llm'    },
-      'LLM_ANSWERED':          { label: 'LLM',           cls: 'outcome-llm'       },
-      'TRIGGER_ANSWERED':      { label: 'TRIGGER',       cls: 'outcome-trigger'   },
-      'GHOST_SKIPPED':         { label: 'GHOST',         cls: 'outcome-ghost'     },
-      'STT_EMPTY':             { label: 'SILENCE',       cls: 'outcome-stt'       },
-      'GRACEFUL_ACK':          { label: 'ACK',           cls: 'outcome-ack'       },
-      'TRACE_ONLY':            { label: 'TRACE',         cls: 'outcome-trace'     },
-      'UNKNOWN':               { label: '?',             cls: 'outcome-unknown'   },
-    };
-    if (!outcome) return '';
-    const info = map[outcome] || { label: outcome, cls: 'outcome-unknown' };
-    return `<span class="outcome-badge ${info.cls}">${info.label}</span>`;
-  }
-
-  function updateTierStats(calls) {
-    let t1 = 0, t2 = 0, t3 = 0;
-    for (const call of calls) {
-      const tier = call.callMetadata?.routingTier;
-      if (tier === 1 || tier === 1.5) t1++;   // T1 and T1.5 (KC Engine) both count as deterministic
-      else if (tier === 2) t2++;
-      else if (tier === 3) t3++;
-    }
-    if (DOM.statTier1) DOM.statTier1.textContent = t1;
-    if (DOM.statTier2) DOM.statTier2.textContent = t2;
-    if (DOM.statTier3) DOM.statTier3.textContent = t3;
-  }
-
-  function getStatusInfo(status) {
-    switch (status) {
-      case 'critical':
-        return {
-          icon: '🔴',
-          label: 'CRITICAL',
-          fullLabel: 'CRITICAL ISSUES',
-          className: 'status-critical'
-        };
-      case 'needs_improvement':
-        return {
-          icon: '🟡',
-          label: 'IMPROVEMENTS',
-          fullLabel: 'NEEDS IMPROVEMENT',
-          className: 'status-warning'
-        };
-      case 'performing_well':
-        return {
-          icon: '✅',
-          label: 'GOOD',
-          fullLabel: 'PERFORMING WELL',
-          className: 'status-success'
-        };
-      case 'trace_only':
-        return {
-          icon: '🔍',
-          label: 'TRACE ONLY',
-          fullLabel: 'TRACE DATA (GPT-4 NOT RUN)',
-          className: 'status-trace'
-        };
-      case 'not_analyzed':
-        return {
-          icon: '⚪',
-          label: 'NOT ANALYZED',
-          fullLabel: 'NOT ANALYZED',
-          className: 'status-unknown'
-        };
-      default:
-        return {
-          icon: '⚪',
-          label: 'UNKNOWN',
-          fullLabel: 'UNKNOWN',
-          className: 'status-unknown'
-        };
-    }
-  }
-
-  function getSeverityIcon(severity) {
-    switch (severity) {
-      case 'critical': return '🔴';
-      case 'high': return '🟠';
-      case 'medium': return '🟡';
-      case 'low': return '🔵';
-      default: return '⚪';
-    }
-  }
-
-  function getPriorityBadge(priority) {
-    switch (priority) {
-      case 'immediate': return '🔴 IMMEDIATE';
-      case 'high': return '🟠 HIGH';
-      case 'medium': return '🟡 MEDIUM';
-      case 'low': return '🔵 LOW';
-      default: return '⚪ UNKNOWN';
-    }
-  }
-
-  function formatTimeAgo(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-    
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
-  }
-
-  function formatDate(dateString) {
-    if (!dateString) return 'Unknown';
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  }
-
-  /**
-   * Format seconds into M:SS display.
-   * null/undefined = duration unknown (callback hasn't arrived) → shows "--"
-   * 0              = legitimate zero-second call from Twilio    → shows "0:00"
-   */
-  function formatDuration(seconds) {
-    if (seconds === null || seconds === undefined) return '--';
-    if (seconds === 0) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  async function copyToClipboard(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (err) {
-      console.error('Failed to copy:', err);
-      showNotification('Failed to copy to clipboard', 'error');
-      return false;
-    }
-  }
-
-  async function copyAnalysisToClipboard() {
-    const text = DOM.modalBody.innerText;
-    const success = await copyToClipboard(text);
-    if (success) {
-      showNotification('Copied!', 'success');
-    } else {
-      showNotification('Copy failed', 'error');
-    }
-  }
-
-  function saveAsPdf() {
-    showNotification('Preparing PDF...', 'info');
-    setTimeout(() => window.print(), 100);
-  }
-
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-
-  function showNotification(message, type = 'info') {
-    console.log(`[${type.toUpperCase()}] ${message}`);
-    // Micro-toast — small text that fades in/out near top-center
-    const existing = document.querySelector('.micro-toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = `micro-toast micro-toast-${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    // Trigger animation
-    requestAnimationFrame(() => toast.classList.add('show'));
-    setTimeout(() => {
-      toast.classList.remove('show');
-      setTimeout(() => toast.remove(), 300);
-    }, 1800);
-  }
-
-  function showLoading() {
-    DOM.callsTbody.innerHTML = `
-      <tr class="loading-row">
-        <td colspan="9" class="loading-cell">
-          <div class="loading-spinner"></div>
-          <p>Loading call intelligence...</p>
-        </td>
-      </tr>
-    `;
-  }
-
-  function showError(message = 'Failed to load calls. Please try again.') {
-    DOM.callsTbody.innerHTML = `
-      <tr class="error-row">
-        <td colspan="9" class="error-cell">
-          <p>⚠️ ${message}</p>
-          <button class="btn btn-primary" onclick="location.reload()">Retry</button>
-        </td>
-      </tr>
-    `;
-  }
-
-  // =============================================================================
-  // EVENT HANDLERS
-  // =============================================================================
-
-  function handleSearch(e) {
-    state.filters.search = e.target.value;
-    state.currentPage = 1;
-    loadCalls();
-  }
-
-  function handleFilterChange() {
-    state.filters.status = DOM.filterStatus.value;
-    state.filters.timeRange = DOM.filterTime.value;
-    state.currentPage = 1;
-    loadCalls();
-    loadSummary();
-  }
-
-  function clearFilters() {
-    state.filters = {
-      status: '',
-      timeRange: 'today',
-      search: ''
-    };
-    state.currentPage = 1;
-    
-    DOM.searchInput.value = '';
-    DOM.filterStatus.value = '';
-    DOM.filterTime.value = 'today';
-    
-    loadCalls();
-    loadSummary();
-  }
-
-  function changePage(page) {
-    if (page < 1 || page > state.totalPages) return;
-    state.currentPage = page;
-    loadCalls();
-  }
-
-  function handleRefresh() {
-    loadSummary();
-    loadCalls();
-    showNotification('Refreshed!', 'success');
-  }
-
-  
-
-  // =============================================================================
-  // GLOBAL FUNCTIONS (called from HTML)
-  // =============================================================================
-
-  window.analyzeCallNow = async function(callSid) {
-    console.log('[GPT4-ANALYZE] ▶ Button clicked — callSid:', callSid);
-    try {
-      console.log('[GPT4-ANALYZE] 📡 Calling POST /api/call-intelligence/analyze/' + callSid);
-      console.log('[GPT4-ANALYZE] State — gpt4Enabled:', state.gpt4Enabled, 'analysisMode:', state.analysisMode, 'analysisModel:', state.analysisModel);
-      const intelligence = await analyzeCall(callSid);
-      console.log('[GPT4-ANALYZE] ✅ analyzeCall returned:', intelligence ? 'success' : 'null');
-      if (intelligence) {
-        console.log('[GPT4-ANALYZE] 🎨 Rendering analysis modal...');
-        renderAnalysisModal(intelligence);
-        console.log('[GPT4-ANALYZE] ✅ Modal rendered successfully');
-      } else {
-        console.warn('[GPT4-ANALYZE] ⚠️ analyzeCall returned null/undefined — nothing to render');
-        showNotification('Analysis returned no data', 'error');
-      }
-    } catch (err) {
-      console.error('[GPT4-ANALYZE] ❌ Error during analysis:', err);
-      showNotification('Analysis failed: ' + err.message, 'error');
-    }
+async function saveSettings() {
+  const body = {
+    companyId: state.companyId,
+    gpt4Enabled: $('gpt4-toggle')?.checked || false,
+    autoAnalyze: $('auto-analyze-toggle')?.checked || false,
+    analysisModel: $('analysis-model')?.value || 'gpt-4o-mini',
+    analysisMode: $('analysis-mode')?.value || 'quick'
   };
+  try {
+    await apiFetch(`/api/call-intelligence/settings/${state.companyId}`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    $('settings-panel').style.display = 'none';
+    loadDashboard();
+  } catch (err) {
+    alert(`Failed to save: ${err.message}`);
+  }
+}
 
-  window.downloadJSON = async function(callSid) {
-    const btn = document.getElementById('download-json-btn');
-    const origHTML = btn ? btn.innerHTML : null;
-    try {
-      if (btn) { btn.innerHTML = '⏳ Fetching…'; btn.disabled = true; }
-      const resp = await fetch(`/api/call-intelligence/${callSid}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const json = JSON.stringify(data, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `call-intelligence-${callSid}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showNotification('JSON downloaded', 'success');
-    } catch (err) {
-      console.error('[downloadJSON] failed:', err);
-      showNotification('Download failed: ' + err.message, 'error');
-    } finally {
-      if (btn && origHTML !== null) { btn.innerHTML = origHTML; btn.disabled = false; }
+// ─── Download JSON ────────────────────────────────────────────────────────────
+
+function downloadReportJson() {
+  if (!state.reportData) return;
+  const blob = new Blob([JSON.stringify(state.reportData, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `call-report-${state.currentCallSid || 'unknown'}.json`;
+  a.click();
+}
+
+// ─── Event wiring ─────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!state.companyId) {
+    showView('dashboard');
+    $('calls-tbody').innerHTML = `
+      <tr><td colspan="10" style="padding:40px;text-align:center;color:var(--c-fail);">
+        Missing companyId in URL. Use ?companyId=YOUR_COMPANY_ID
+      </td></tr>`;
+    return;
+  }
+
+  // Initial load
+  showView('dashboard');
+  loadDashboard();
+
+  // Back to list
+  $('btn-back-to-list').addEventListener('click', () => {
+    state.currentCallSid = null;
+    state.reportData = null;
+    showView('dashboard');
+    loadDashboard();
+  });
+
+  // Refresh
+  $('btn-refresh').addEventListener('click', () => loadDashboard());
+
+  // Settings
+  $('btn-settings').addEventListener('click', () => {
+    const panel = $('settings-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (panel.style.display === 'block') loadSettings();
+  });
+  $('btn-close-settings').addEventListener('click', () => {
+    $('settings-panel').style.display = 'none';
+  });
+  $('btn-save-settings').addEventListener('click', saveSettings);
+
+  // GPT-4 toggle visual
+  $('gpt4-toggle').addEventListener('change', function() {
+    $('gpt4-slider').style.background = this.checked ? '#2563eb' : '#cbd5e1';
+    $('auto-analyze-toggle').disabled = !this.checked;
+    $('auto-analyze-slider').style.opacity = this.checked ? '1' : '0.5';
+  });
+
+  // Download JSON
+  $('btn-download-json').addEventListener('click', downloadReportJson);
+
+  // Filters
+  $('filter-time').addEventListener('change', e => {
+    state.filterTime = e.target.value;
+    state.page = 1;
+    loadDashboard();
+  });
+  $('filter-status').addEventListener('change', e => {
+    state.filterStatus = e.target.value;
+    state.page = 1;
+    loadDashboard();
+  });
+
+  let searchTimer;
+  $('search-input').addEventListener('input', e => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.searchQuery = e.target.value.trim();
+      state.page = 1;
+      loadDashboard();
+    }, 400);
+  });
+
+  // Pagination
+  $('btn-prev').addEventListener('click', () => {
+    if (state.page > 1) { state.page--; loadDashboard(); }
+  });
+  $('btn-next').addEventListener('click', () => {
+    if (state.page < state.totalPages) { state.page++; loadDashboard(); }
+  });
+
+  // Close settings on outside click
+  document.addEventListener('click', e => {
+    const panel = $('settings-panel');
+    if (panel.style.display !== 'none' &&
+        !panel.contains(e.target) &&
+        e.target !== $('btn-settings') &&
+        !$('btn-settings').contains(e.target)) {
+      panel.style.display = 'none';
     }
-  };
-
-  // =============================================================================
-  // START
-  // =============================================================================
-
-  document.addEventListener('DOMContentLoaded', init);
-
-})();
+  });
+});
