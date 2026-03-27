@@ -108,7 +108,7 @@
 
   function setupEventListeners() {
     // Note: Header Download Truth Button handled by shared/truthButton.js
-    
+
     // Back to Company Profile (both buttons)
     const navigateToCompanyProfile = () => {
       window.location.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
@@ -120,12 +120,12 @@
         window.location.href = `/agent-console/notes.html?companyId=${encodeURIComponent(state.companyId)}`;
       });
     }
-    
+
     // Truth Panel Actions
     DOM.btnRefreshTruth.addEventListener('click', refreshTruthData);
     DOM.btnCopyTruth.addEventListener('click', copyTruthToClipboard);
     DOM.btnDownloadTruthInline.addEventListener('click', downloadTruthJson);
-    
+
     // Navigation Cards
     DOM.navCards.forEach(card => {
       card.addEventListener('click', () => {
@@ -133,6 +133,98 @@
         navigateTo(target);
       });
     });
+
+    // Drag-and-drop reordering
+    initCardDragDrop();
+  }
+
+  /* --------------------------------------------------------------------------
+     CARD DRAG-AND-DROP REORDERING
+     -------------------------------------------------------------------------- */
+  function initCardDragDrop() {
+    const STORAGE_KEY = 'agent-console-card-order';
+    const container = document.querySelector('.single-column-layout-full');
+    if (!container) return;
+
+    let dragSrc = null;
+
+    function saveOrder() {
+      const cards = container.querySelectorAll('.nav-card[data-navigate]');
+      const order = [...cards].map(c => c.dataset.navigate);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
+    }
+
+    function restoreOrder() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return;
+      try {
+        const order = JSON.parse(saved);
+        // The Runtime Truth card (non-nav-card) stays pinned at the bottom
+        const anchor = container.querySelector('.card:not(.nav-card)');
+        order.forEach(id => {
+          const card = container.querySelector(`.nav-card[data-navigate="${CSS.escape(id)}"]`);
+          if (card) container.insertBefore(card, anchor || null);
+        });
+      } catch (e) { /* ignore corrupt storage */ }
+    }
+
+    function clearDropIndicators() {
+      container.querySelectorAll('.nav-card').forEach(c => {
+        c.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+    }
+
+    const navCards = container.querySelectorAll('.nav-card[data-navigate]');
+    navCards.forEach(card => {
+      card.addEventListener('dragstart', e => {
+        dragSrc = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        clearDropIndicators();
+        dragSrc = null;
+      });
+
+      card.addEventListener('dragover', e => {
+        e.preventDefault();
+        if (!dragSrc || dragSrc === card) return;
+        e.dataTransfer.dropEffect = 'move';
+        clearDropIndicators();
+        const rect = card.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          card.classList.add('drag-over-top');
+        } else {
+          card.classList.add('drag-over-bottom');
+        }
+      });
+
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+
+      card.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!dragSrc || dragSrc === card) return;
+        clearDropIndicators();
+        const rect = card.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          container.insertBefore(dragSrc, card);
+        } else {
+          container.insertBefore(dragSrc, card.nextSibling);
+        }
+        saveOrder();
+      });
+    });
+
+    // Prevent drag handle click from navigating
+    container.querySelectorAll('.drag-handle').forEach(handle => {
+      handle.addEventListener('click', e => e.stopPropagation());
+    });
+
+    restoreOrder();
   }
 
   function updateFooter() {

@@ -407,7 +407,7 @@ input, textarea, select {
 .nav-card {
   display: flex;
   flex-direction: column;
-  padding: var(--space-6);
+  padding: var(--space-4);
   cursor: pointer;
   border: 2px solid transparent;
 }
@@ -417,34 +417,68 @@ input, textarea, select {
   background: var(--color-primary-50);
 }
 
+/* Inline header: icon + title + drag handle */
+.nav-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
 .nav-card-icon {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-primary-100);
   border-radius: var(--radius-lg);
   color: var(--color-primary-600);
-  margin-bottom: var(--space-4);
 }
 
 .nav-card-icon svg {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
 }
 
 .nav-card-title {
-  font-size: var(--font-size-lg);
+  flex: 1;
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-gray-900);
-  margin-bottom: var(--space-2);
+  margin-bottom: 0;
+}
+
+/* Drag handle — visible on hover */
+.drag-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-gray-300);
+  opacity: 0;
+  cursor: grab;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  user-select: none;
+}
+
+.nav-card:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--color-gray-500);
+  background: var(--color-gray-100);
 }
 
 .nav-card-description {
   font-size: var(--font-size-sm);
   color: var(--color-gray-500);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
   flex: 1;
 }
 
@@ -465,6 +499,20 @@ input, textarea, select {
 
 .nav-card:hover .nav-card-action svg {
   transform: translateX(4px);
+}
+
+/* Drag-and-drop states */
+.nav-card.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.nav-card.drag-over-top {
+  border-top: 2px solid var(--color-primary-400) !important;
+}
+
+.nav-card.drag-over-bottom {
+  border-bottom: 2px solid var(--color-primary-400) !important;
 }
 
 /* --------------------------------------------------------------------------
