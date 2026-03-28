@@ -497,54 +497,200 @@
         'NOT wired on Turn 1: First-utterance booking signals ("I just want to book") still run the full LLM_INTAKE path. Should short-circuit to booking handoff immediately.',
       ],
 
-      routing: { yes: 'BOOKING HANDOFF → BookingLogicEngine', no: 'kc_answer' },
+      routing: { yes: 'BOOKING HANDOFF → BookingLogicEngine', no: 'engine_hub_runtime' },
     },
 
-    // ── [8] KC Answer ────────────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════════════════
+    // GROUP D-2 — ENGINE HUB + BEHAVIOR CARDS
+    // Sits between the booking gate and KC answer. Engine Hub is the
+    // intelligence layer that governs how KC and the LLM fallback behave.
+    // Behavior Cards govern tone + rules for both KC answers and LLM turns.
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── [8] Engine Hub Runtime — GATE 2 Load ─────────────────────────────
+    {
+      id:       'engine_hub_runtime',
+      order:    13,
+      icon:     '⚙️',
+      name:     'Engine Hub Runtime — GATE 2 Load',
+      subtitle: 'Reads engineHub settings from company document — governs hop threshold, BC injection, policy routing, trace logging',
+      status:   'wired',
+      group:    'Engine Hub + Behavior Cards',
+
+      why: 'Engine Hub is the intelligence layer that sits above KC and SPFUQ. Without it, KC uses a hardcoded 1.5× topic-hop multiplier and no behavioral rules. With it, every routing decision (hop threshold, policy selection, LLM fallback behavior, BC injection) is governed by per-company admin settings. The runtime loads synchronously in GATE 2 alongside SPFUQ at ~0ms cost. It returns null when Engine Hub is disabled — callers fall back to hardcoded defaults with zero impact on live calls.',
+
+      engine:   'EngineHubRuntime.load(company)',
+      provider: 'MongoDB (company.engineHub sub-document)',
+      model:    null,
+      fires:    'Every Turn 2+ — GATE 2, loaded alongside SPFUQ + discoveryNotes + containers (~0ms, sync)',
+      writesTo: 'ehConfig (local) — passed to GATE 3b (hop threshold) and GATE 6 (BC injection)',
+      wiredIn:  [
+        'services/engine/EngineHubRuntime.js — load(), getHopFactor(), getConfidenceThreshold()',
+        'services/engine/kc/KCDiscoveryRunner.js — GATE 2 (after Promise.all, ~line 322)',
+      ],
+      configIn:  'Engine Hub → Engine Control',
+      configUrl: 'enginehub.html',
+
+      configFields: [
+        { key: 'engineHub.enabled', label: 'Master Switch', unit: 'bool', note: 'Admin must flip to ON — seeded as false. Nothing changes until enabled.' },
+        { key: 'engineHub.mode',    label: 'Mode',          unit: 'passive | learning | active', note: 'passive = log-only, no routing changes | learning = apply + trace | active = fully live' },
+        { key: 'engineHub.isConfigured', label: 'Configured Flag', unit: 'bool', note: 'Set true after first seed/save — hides the NOT CONFIGURED banner' },
+      ],
+
+      extracts: [],
+      gaps:     [],
+
+      routing: {
+        'enabled + learning/active': 'spfuq_agenda — Engine Hub governs hop threshold + BC injection',
+        'disabled or passive':       'spfuq_agenda — Engine Hub null, hardcoded defaults apply',
+      },
+    },
+
+    // ── [9] SPFUQ + Engine Hub Agenda State ──────────────────────────────
+    {
+      id:       'spfuq_agenda',
+      order:    14,
+      icon:     '🧵',
+      name:     'SPFUQ + Engine Hub Agenda State',
+      subtitle: 'Topic anchor keeps KC context across turns — hop threshold now governed by Engine Hub instead of hardcoded 1.5×',
+      status:   'partial',
+      group:    'Engine Hub + Behavior Cards',
+
+      why: 'SPFUQ (Single Purpose Follow-Up Query) keeps a KC container "in context" across multiple turns so callers can ask follow-ups without the agent losing their topic. The hop threshold (how much stronger a new container must be to steal the conversation from the anchor) was hardcoded at 1.5×. Engine Hub now governs this: at confidenceThreshold=0.72 the hop factor is 1.39 — slightly more permissive. At 0.50 it is 2.0 — very strict. The Agenda State settings (maxDeferredIntents, autoSurfaceDeferred, deferredTimeoutTurns) are configured and loaded but do not yet replace the single-anchor SPFUQ model.',
+
+      engine:   'SPFUQService (Redis) + EngineHubRuntime.getHopFactor()',
+      provider: 'Redis (SPFUQ anchor key) + MongoDB (Engine Hub config)',
+      model:    null,
+      fires:    'Every Turn 2+ — GATE 2 parallel load, GATE 3b hop evaluation',
+      writesTo: 'spfuq (Redis) — set/updated after each KC answer, cleared on topic hop or booking intent',
+      wiredIn:  [
+        'services/engine/kc/SPFUQService.js — load(), set(), clear(), isExpiredByTurnBudget()',
+        'services/engine/kc/KCDiscoveryRunner.js — GATE 2 (load), GATE 3b (hop threshold, ~line 424)',
+        'services/engine/EngineHubRuntime.js — getHopFactor(), getConfidenceThreshold()',
+      ],
+      configIn:  'Engine Hub → Intent Detection + Agenda State',
+      configUrl: 'enginehub.html',
+
+      configFields: [
+        { key: 'engineHub.intentDetection.confidenceThreshold', label: 'Confidence Threshold',  unit: '0–1',   note: '0.72 → hop factor 1.39 (replaces old hardcoded 1.5×). Lower = more permissive topic hops.' },
+        { key: 'engineHub.intentDetection.multiIntentEnabled',  label: 'Multi-Intent',          unit: 'bool',  note: 'Catch compound questions in a single turn ("how much AND do you have availability?")' },
+        { key: 'engineHub.intentDetection.maxIntentsPerTurn',   label: 'Max Intents Per Turn',  unit: 'number', note: 'Max 2 prevents agenda bloat on compound questions' },
+        { key: 'engineHub.agendaState.maxDeferredIntents',      label: 'Max Deferred Intents',  unit: 'number', note: 'Agenda State tracks up to N open intents (replaces SPFUQ single anchor — not yet live)' },
+        { key: 'engineHub.agendaState.autoSurfaceDeferred',     label: 'Auto-Surface Deferred', unit: 'bool',  note: 'Agent proactively raises deferred topics at natural conversation gaps' },
+        { key: 'engineHub.agendaState.deferredTimeoutTurns',    label: 'Deferred Timeout',      unit: 'turns', note: 'Deferred intents expire after N turns — prevents ghost agenda' },
+      ],
+
+      extracts: [],
+
+      gaps: [
+        'Agenda State is configured and loaded but does not yet replace SPFUQ — SPFUQ single-anchor model still routes calls',
+        'Multi-intent detection flag loaded in config but multi-intent parsing not yet active in the turn router',
+        'SPFUQ subjectBrief (50-char summary) still injected into Groq instead of full Engine Hub conversation context',
+      ],
+
+      routing: {
+        'SPFUQ active + new container scores above hop threshold': 'kc_answer — topic hop confirmed (Engine Hub hop factor governs)',
+        'SPFUQ active + new container scores below hop threshold': 'KC_SPFUQ_CONTINUE — stays in SPFUQ topic',
+        'No SPFUQ anchor': 'kc_answer — fresh KC match attempt',
+      },
+    },
+
+    // ── [10] KC Answer ───────────────────────────────────────────────────
     {
       id:       'kc_answer',
-      order:    13,
+      order:    15,
       icon:     '📦',
       name:     'KC Answer — Knowledge Containers',
       subtitle: 'Groq answers from admin-authored facts only — no hallucination, bounded to your content',
       status:   'wired',
-      group:    'Turn 2+ — KC Engine',
+      group:    'Engine Hub + Behavior Cards',
 
-      why: 'When a caller asks "how much is a service call?" the answer must come from company-authored content, not LLM general knowledge. This stage scores every knowledge container against the utterance, picks the best match, passes its content to Groq, and gets a natural spoken answer bounded entirely to that container. Zero hallucination. Groq also handles multi-turn: if the same container matches again (SPFUQ), it continues that topic. If a new container matches, it topic-hops.',
+      why: 'When a caller asks "how much is a service call?" the answer must come from company-authored content, not LLM general knowledge. This stage scores every knowledge container against the utterance, picks the best match, passes its content to Groq, and gets a natural spoken answer bounded entirely to that container. Zero hallucination. Category-linked Behavior Cards (Stage 16) are injected into the Groq system prompt here — they govern HOW the answer is delivered (tone, rules, CTA shape). SPFUQ/Engine Hub Agenda State keeps the topic in context across multi-turn follow-ups.',
 
-      engine:   'KnowledgeContainerService + KCDiscoveryRunner',
+      engine:   'KnowledgeContainerService.answer() + BehaviorCardService.forCategory()',
       provider: 'Groq',
       model:    'llama-3.3-70b-versatile',
-      fires:    'Turn 2+ when a KC signal is detected (or Turn 1 once Question Detector is built).',
-      writesTo: 'discoveryNotes.callReason (updated to container title), discoveryNotes.qaLog (new entry), SPFUQ anchor (Redis)',
-      wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — Gates 3-4', 'services/engine/agent2/KnowledgeContainerService.js'],
+      fires:    'Turn 2+ when a KC container matches (keyword score or embedding). Also Turn 1 via Question Detector TIER 1 fast path.',
+      writesTo: 'discoveryNotes.callReason (container title), discoveryNotes.qaLog (new entry), SPFUQ anchor (Redis)',
+      wiredIn:  [
+        'services/engine/kc/KCDiscoveryRunner.js — GATE 3 (container match), GATE 4 (Groq answer)',
+        'services/engine/agent2/KnowledgeContainerService.js — findContainer(), answer(), _buildSystemPrompt()',
+        'services/behaviorCards/BehaviorCardService.js — forCategory() (category-linked BC injection)',
+        'services/engine/EngineHubRuntime.js — logTrace() (KC_HOP_BLOCKED / KC_CONTAINER_MATCHED events)',
+      ],
       configIn:  'Knowledge Containers',
       configUrl: 'services.html',
 
       extracts: [],
       gaps:     [],  // enriched dynamically — shows warning if 0 containers configured
 
-      routing: { yes: 'groq_formatter', no: 'llm_fallback' },
+      routing: { yes: 'behavior_card_kc (BC injected) → groq_formatter', no: 'behavior_card_standalone → llm_fallback' },
     },
 
-    // ── [9] Groq Response Formatter ──────────────────────────────────────
+    // ── [11] Behavior Cards — KC Category Link ───────────────────────────
+    {
+      id:       'behavior_card_kc',
+      order:    16,
+      icon:     '🎭',
+      name:     'Behavior Cards — KC Category Link',
+      subtitle: 'One BC per KC category governs tone, do/do-not, example responses, and CTA for every answer in that category',
+      status:   'wired',
+      group:    'Engine Hub + Behavior Cards',
+
+      why: 'KC tells the agent WHAT to say (facts from KC cards). Category-linked Behavior Cards govern HOW to say it — tone descriptor, prohibitions, example spoken responses, and what to do after the answer is delivered. One BC per KC category updates behavior across every KC card in that category. Edit the Pricing BC once and all pricing answers change. The BC is injected as a block into the Groq system prompt between the discoveryNotes block and the CRITICAL RULES section — Groq reads it and calibrates register, length, and follow-up CTA.',
+
+      engine:   'BehaviorCardService.forCategory() → KnowledgeContainerService.answer() → _buildSystemPrompt()',
+      provider: 'MongoDB (behaviorCards collection) + Redis (1h hot cache)',
+      model:    null,
+      fires:    'On every KC container match — loaded via Redis hot path (~1ms), injected before Groq call',
+      writesTo: 'Groq system prompt — behaviorBlock section (between discoveryNotesBlock and CRITICAL RULES)',
+      wiredIn:  [
+        'services/behaviorCards/BehaviorCardService.js — forCategory(), formatForGroq()',
+        'services/engine/agent2/KnowledgeContainerService.js — answer() (forCategory call + behaviorBlock injection)',
+      ],
+      configIn:  'Engine Hub → Behavior Cards → Category-Linked BC',
+      configUrl: 'enginehub.html',
+
+      configFields: [
+        { key: 'bc.category',               label: 'KC Category',       unit: 'string',   note: 'Must match KnowledgeContainer.category exactly — dropdown populated from live KC' },
+        { key: 'bc.tone',                   label: 'Tone',              unit: 'string',   note: 'Free-text descriptor — Groq calibrates voice register and formality from this' },
+        { key: 'bc.rules.do',               label: 'Must Do Rules',     unit: 'string[]', note: 'Affirmative rules injected as bullet list — e.g. "Answer the exact dollar amount"' },
+        { key: 'bc.rules.doNot',            label: 'Must Not Rules',    unit: 'string[]', note: 'Prohibitions — Groq treats as hard constraints — e.g. "Never apologize for the cost"' },
+        { key: 'bc.rules.exampleResponses', label: 'Example Responses', unit: 'string[]', note: 'Groq calibrates length, register, pivot pattern from these spoken examples' },
+        { key: 'bc.afterAction',            label: 'After Action',      unit: 'enum',     note: 'Engine action after response: collect_info_then_book | none | escalate_to_human | route_to_payment | transfer' },
+        { key: 'bc.enabled',                label: 'Enabled',           unit: 'bool',     note: 'Disabled BCs are ignored — use to draft without activating' },
+      ],
+
+      extracts: [],
+      gaps:     [],
+
+      routing: {
+        'BC found': 'groq_formatter — BC rules injected into Groq system prompt, response shaped by tone + rules',
+        'BC not found (no card, disabled, Redis miss)': 'groq_formatter — graceful degrade, Groq answers without BC rules',
+      },
+    },
+
+    // ── [12] Groq Response Formatter ─────────────────────────────────────
     {
       id:       'groq_formatter',
-      order:    14,
+      order:    17,
       icon:     '🤖',
       name:     'Groq Response Formatter',
-      subtitle: 'Applies Groq Protocol to KC answers: name + acknowledgement + answer + CTA',
+      subtitle: 'Applies Groq Protocol to KC answers: name + acknowledgement + answer + CTA — shaped by active Behavior Card',
       status:   'partial',
-      group:    'Turn 2+ — KC Engine',
+      group:    'Engine Hub + Behavior Cards',
 
-      why: 'A correct KC answer delivered without warmth sounds like a robot reading a FAQ. The formatter wraps KC output with the same Groq Protocol used on Turn 1: greet by name if known, acknowledge prior visit or employee relationship, deliver the answer, close with a natural CTA. This is the layer that makes KC answers sound like they come from a real agent, not a database lookup.',
+      why: 'A correct KC answer delivered without warmth sounds like a robot reading a FAQ. The formatter wraps KC output with the Groq Protocol: greet by name if known, acknowledge prior visit or employee relationship, deliver the answer, close with a natural CTA. When a category-linked Behavior Card is active, the CTA shape and tone override is already in the system prompt — Groq uses the BC example responses to calibrate register and length.',
 
       engine:   'KnowledgeContainerService._buildSystemPrompt()',
       provider: 'Groq (same call as KC matching — no extra round-trip)',
       model:    null,
-      fires:    'Every KC Answer response. Same Groq call as container matching.',
+      fires:    'Every KC Answer response. Same Groq call as container matching + BC injection.',
       writesTo: 'agent response text → first-sentence streaming path',
-      wiredIn:  ['services/engine/agent2/KnowledgeContainerService.js — _buildSystemPrompt()', 'services/HybridReceptionistLLM.js — Rules 1, 2, 8, 14'],
+      wiredIn:  [
+        'services/engine/agent2/KnowledgeContainerService.js — _buildSystemPrompt()',
+        'services/HybridReceptionistLLM.js — Rules 1, 2, 8, 14',
+      ],
       configIn:  null,
       configUrl: null,
 
@@ -553,30 +699,81 @@
       gaps: [
         'priorVisit not acknowledged on KC path: HybridReceptionistLLM correctly says "I see we\'ve worked with you before" on Turn 1, but KC engine does not carry this forward on Turn 2+.',
         'employeeMentioned not applied: Cannot reference prior employee relationship in KC responses — field is null.',
-        'Not UI-configurable: Greeting/ack/CTA protocol hardcoded in system prompts. Admins cannot adjust tone or format without a code change.',
+        'Not UI-configurable: Greeting/ack/CTA protocol hardcoded in system prompts. Behavior Cards partially address this via tone + exampleResponses — full UI control is the next step.',
       ],
 
       routing: { always: 'first_sentence_streaming' },
     },
 
-    // ── [10] LLM Fallback ────────────────────────────────────────────────
+    // ── [13] Behavior Cards — Standalone (LLM Fallback) ──────────────────
+    {
+      id:       'behavior_card_standalone',
+      order:    18,
+      icon:     '🃏',
+      name:     'Behavior Cards — Standalone (LLM Fallback)',
+      subtitle: 'discovery_flow BC injected into Claude context when KC misses — governs tone and protocol in unstructured turns',
+      status:   'wired',
+      group:    'Engine Hub + Behavior Cards',
+
+      why: 'When no KC container matches, Claude handles the conversation. Without a Behavior Card, Claude operates on its training defaults — which may not follow your discovery protocol (one question at a time, urgency check before name, etc.). The discovery_flow Standalone BC injects tone + behavioral rules into Claude\'s callContext so it stays on-protocol even during KC misses. Only active when Engine Hub mode is learning or active — passive mode logs what WOULD have been injected without touching the call.',
+
+      engine:   'EngineHubRuntime.getStandaloneBC() → _handleLLMFallback() → callContext.behaviorBlock',
+      provider: 'MongoDB (behaviorCards collection) + Redis (1h hot cache)',
+      model:    null,
+      fires:    'GATE 6 (KC LLM Fallback path) — only when KC misses AND Engine Hub mode is learning/active',
+      writesTo: 'callContext.behaviorBlock — passed to callLLMAgentForFollowUp() (Claude)',
+      wiredIn:  [
+        'services/engine/EngineHubRuntime.js — getStandaloneBC(), formatStandaloneBCForPrompt()',
+        'services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback() GATE 6 (BC load + callContext injection)',
+      ],
+      configIn:  'Engine Hub → Behavior Cards → Standalone BC',
+      configUrl: 'enginehub.html',
+
+      configFields: [
+        { key: 'bc.standaloneType', label: 'Standalone Type', unit: 'enum',     note: 'inbound_greeting | discovery_flow | escalation_ladder | after_hours_intake | mid_flow_interrupt | payment_routing | manager_request' },
+        { key: 'bc.tone',          label: 'Tone',            unit: 'string',   note: 'Governs Claude voice register in unstructured turns — e.g. "Methodical, calm, empathetic"' },
+        { key: 'bc.rules.do',      label: 'Must Do Rules',   unit: 'string[]', note: 'e.g. "One question at a time", "Check urgency before moving to name capture"' },
+        { key: 'bc.rules.doNot',   label: 'Must Not Rules',  unit: 'string[]', note: 'e.g. "Never ask for name before understanding the problem"' },
+        { key: 'bc.afterAction',   label: 'After Action',    unit: 'enum',     note: 'collect_info_then_book | take_message | escalate_to_human | none' },
+        { key: 'bc.enabled',       label: 'Enabled',         unit: 'bool',     note: 'Disabled = graceful degrade, Claude runs without BC rules' },
+      ],
+
+      extracts: [],
+
+      gaps: [
+        'BC rules passed via callContext.behaviorBlock — Claude uses them if callLLMAgentForFollowUp injects behaviorBlock into the system prompt (not yet verified end-to-end)',
+        'inbound_greeting, escalation_ladder, and other standalone types not yet wired into Turn 1 or Agent2DiscoveryRunner paths — only discovery_flow in GATE 6 is active',
+        'Passive mode: BC is looked up and logged (what WOULD inject) but not applied — promote to learning/active to activate',
+      ],
+
+      routing: {
+        'BC found + mode=learning/active': 'llm_fallback — BC tone + rules in Claude callContext',
+        'BC not found OR mode=passive':    'llm_fallback — graceful degrade, Claude runs without BC',
+      },
+    },
+
+    // ── [14] LLM Fallback ────────────────────────────────────────────────
     {
       id:       'llm_fallback',
-      order:    15,
+      order:    19,
       icon:     '🔮',
       name:     'LLM Fallback — Claude',
-      subtitle: 'Claude handles complex questions KC containers could not match',
+      subtitle: 'Claude handles complex questions KC containers could not match — now receives discovery_flow BC rules from Engine Hub',
       status:   'wired',
-      group:    'Turn 2+ — KC Engine',
+      group:    'Engine Hub + Behavior Cards',
 
-      why: 'No KC container library covers every possible caller question. When KC returns NO_DATA, rather than saying "I don\'t know", this stage calls Claude with the full discoveryNotes context (callReason, urgency, entities, qaLog, objective). Claude can reason across topics, handle ambiguity, and give intelligent answers even for edge cases. The discoveryNotes context prevents Claude from asking questions the caller already answered.',
+      why: 'No KC container library covers every possible caller question. When KC returns NO_DATA, rather than saying "I don\'t know", this stage calls Claude with the full discoveryNotes context (callReason, urgency, entities, qaLog, objective) plus — when Engine Hub is in learning/active mode — the discovery_flow Standalone Behavior Card rules. The BC rules tell Claude to stay on the discovery protocol (one question at a time, urgency check, etc.) even when KC misses. The discoveryNotes context prevents Claude from asking questions the caller already answered.',
 
       engine:   'callLLMAgentForFollowUp — Agent2DiscoveryRunner',
       provider: 'Claude (Anthropic)',
       model:    'Reads from company LLM config (llm.html)',
       fires:    'When KC Answer returns NO_DATA or ERROR.',
       writesTo: null,
-      wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback()', 'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForFollowUp()'],
+      wiredIn:  [
+        'services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback() (receives ehConfig + behaviorBlock)',
+        'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForFollowUp()',
+        'services/engine/EngineHubRuntime.js — shouldFallbackToLLM() (knowledgeEngine.onNoKcMatch setting)',
+      ],
       configIn:  'LLM Settings',
       configUrl: 'llm.html',
 
@@ -586,26 +783,35 @@
       routing: { yes: 'first_sentence_streaming', no: 'graceful_ack' },
     },
 
-    // ── [11] Graceful ACK ────────────────────────────────────────────────
+    // ── [15] Graceful ACK ────────────────────────────────────────────────
     {
       id:       'graceful_ack',
-      order:    16,
+      order:    20,
       icon:     '🆗',
       name:     'Graceful ACK',
       subtitle: 'Final safety net — canned acknowledgement when all AI paths are unavailable',
       status:   'wired',
-      group:    'Turn 2+ — KC Engine',
+      group:    'Engine Hub + Behavior Cards',
 
-      why: 'If both KC and Claude fail (network timeout, API outage, rate limit), the caller must not hear silence or an error message. This stage returns a pre-written acknowledgement that acknowledges the problem and buys time. It is the floor that prevents total failure from being caller-visible.',
+      why: 'If both KC and Claude fail (network timeout, API outage, rate limit), the caller must not hear silence or an error message. This stage returns a pre-written acknowledgement that acknowledges the problem and buys time. It is the floor that prevents total failure from being caller-visible. Engine Hub\'s knowledgeEngine.onNoKcMatch setting can change whether the LLM fallback fires at all — set to graceful_ack to skip Claude entirely and go straight here.',
 
       engine:   'Static response (no AI)',
       provider: null,
       model:    null,
       fires:    'Only when KC Answer + LLM Fallback both fail.',
       writesTo: null,
-      wiredIn:  ['services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback() graceful path'],
+      wiredIn:  [
+        'services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback() graceful path',
+        'services/engine/EngineHubRuntime.js — shouldFallbackToLLM() (onNoKcMatch=graceful_ack skips Claude)',
+      ],
       configIn:  'Fallback Response — Knowledge settings',
       configUrl: 'services.html',
+
+      configFields: [
+        { key: 'engineHub.knowledgeEngine.onNoKcMatch',     label: 'On No KC Match',     unit: 'llm_fallback | graceful_ack', note: 'llm_fallback (default) = try Claude first | graceful_ack = skip Claude, go straight to canned response' },
+        { key: 'engineHub.knowledgeEngine.logKcMisses',     label: 'Log KC Misses',      unit: 'bool', note: 'Every KC no-match logged to callTraceLog — surfaces gaps in Call Intelligence' },
+        { key: 'engineHub.knowledgeEngine.strictGroundedMode', label: 'Strict Grounded', unit: 'bool', note: 'When true, agent must answer from KC cards only — prevents Claude from inventing facts' },
+      ],
 
       extracts: [],
       gaps:     [],
@@ -617,10 +823,10 @@
     // GROUP E — RESPONSE DELIVERY
     // ════════════════════════════════════════════════════════════════════════
 
-    // ── [12] Bridge / Post-Gather Config ────────────────────────────────
+    // ── [16] Bridge / Post-Gather Config ─────────────────────────────────
     {
       id:       'bridge_config',
-      order:    17,
+      order:    21,
       icon:     '🌉',
       name:     'Bridge — Post-Gather Delay',
       subtitle: 'postGatherDelayMs controls silence window before next <Gather> fires — critical for response completion',
