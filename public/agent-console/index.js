@@ -421,6 +421,9 @@
       case 'pricing':
         window.location.href = `${baseUrl}/pricing.html${companyParam}`;
         break;
+      case 'interceptors':
+        window.location.href = `${baseUrl}/interceptor.html${companyParam}`;
+        break;
       case 'services':
         window.location.href = `${baseUrl}/services.html${companyParam}`;
         break;
