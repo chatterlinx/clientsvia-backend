@@ -97,6 +97,74 @@
   };
 
   // ==========================================================================
+  // RECOMMENDED DEFAULTS
+  // Mirrors seed-enginehub-defaults.js — single source of truth for what
+  // "optimum performance" looks like. Applied to the form without saving;
+  // admin reviews then hits Save All Settings.
+  // ==========================================================================
+
+  const RECOMMENDED_DEFAULTS = {
+    // Master — always start passive; admin promotes when ready
+    enabled: false,
+    mode:    'passive',
+
+    // Intent Detection
+    intentDetection: {
+      multiIntentEnabled:  true,
+      confidenceThreshold: 0.72,
+      maxIntentsPerTurn:   2,
+    },
+
+    // Policy Router
+    policyRouter: {
+      enabledPolicies: [
+        'answer_then_book',
+        'book_then_defer',
+        'clarify_first',
+        'pause_resume',
+        'de_escalate',
+        'offer_alternatives',
+      ],
+      escalationConfig: {
+        rung1DeEscalate:      true,
+        rung4ConfirmTransfer: true,
+        altVoicemail:         true,
+        altCallback:          true,
+      },
+    },
+
+    // Mid-Flow Interrupts
+    midFlowInterrupt: {
+      bookingSlotSelection:  'pause_resume',
+      bookingAddressCapture: 'pause_resume',
+      bookingConfirmation:   'book_then_defer',
+      afterHoursIntake:      'answer_then_book',
+      transferInProgress:    'block_injection',
+    },
+
+    // Knowledge Engine
+    knowledgeEngine: {
+      strictGroundedMode: true,
+      onNoKcMatch:        'llm_fallback',
+      logKcMisses:        true,
+    },
+
+    // Agenda State
+    agendaState: {
+      maxDeferredIntents:   3,
+      autoSurfaceDeferred:  true,
+      deferredTimeoutTurns: 5,
+    },
+
+    // Trace
+    trace: {
+      enabled:                true,
+      showInCallIntelligence: true,
+      alertOnFallbackCount:   2,
+    },
+  };
+
+  // ==========================================================================
   // STATE
   // ==========================================================================
 
@@ -956,6 +1024,63 @@
   }
 
   // ==========================================================================
+  // RECOMMENDED DEFAULTS — apply to form (no save; admin reviews first)
+  // ==========================================================================
+
+  function applyRecommendedSettings() {
+    const d = RECOMMENDED_DEFAULTS;
+
+    // ── Engine Control ─────────────────────────────────────────────────────
+    if (DOM.fieldEnabled)  DOM.fieldEnabled.checked = d.enabled;
+    // Select the mode card
+    document.querySelectorAll('.eh-mode-card').forEach(card => {
+      card.classList.toggle('selected', card.dataset.mode === d.mode);
+    });
+    if (DOM.fieldMode) DOM.fieldMode.value = d.mode;
+
+    // ── Intent Detection ───────────────────────────────────────────────────
+    if (DOM.fieldMultiIntent)   DOM.fieldMultiIntent.checked = d.intentDetection.multiIntentEnabled;
+    if (DOM.fieldConfidence)    DOM.fieldConfidence.value    = d.intentDetection.confidenceThreshold;
+    if (DOM.fieldMaxIntents)    _setSelectValue(DOM.fieldMaxIntents, String(d.intentDetection.maxIntentsPerTurn));
+
+    // ── Policy Router ──────────────────────────────────────────────────────
+    const policies = d.policyRouter.enabledPolicies;
+    document.querySelectorAll('.eh-policy-item input[type="checkbox"]').forEach(cb => {
+      cb.checked = policies.includes(cb.dataset.policy || cb.value || '');
+    });
+    // Escalation
+    if (DOM.rungDeescalate)      DOM.rungDeescalate.checked      = d.policyRouter.escalationConfig.rung1DeEscalate;
+    if (DOM.rungConfirmTransfer) DOM.rungConfirmTransfer.checked = d.policyRouter.escalationConfig.rung4ConfirmTransfer;
+    if (DOM.altVoicemail)        DOM.altVoicemail.checked        = d.policyRouter.escalationConfig.altVoicemail;
+    if (DOM.altCallback)         DOM.altCallback.checked         = d.policyRouter.escalationConfig.altCallback;
+
+    // ── Mid-Flow Interrupts ────────────────────────────────────────────────
+    const mf = d.midFlowInterrupt;
+    _setSelectValue(document.getElementById('interrupt-booking-slot'),    mf.bookingSlotSelection);
+    _setSelectValue(document.getElementById('interrupt-booking-address'), mf.bookingAddressCapture);
+    _setSelectValue(document.getElementById('interrupt-booking-confirm'), mf.bookingConfirmation);
+    _setSelectValue(document.getElementById('interrupt-after-hours'),     mf.afterHoursIntake);
+    _setSelectValue(document.getElementById('interrupt-transfer'),        mf.transferInProgress);
+
+    // ── Knowledge Engine ───────────────────────────────────────────────────
+    if (DOM.fieldStrictGrounding) DOM.fieldStrictGrounding.checked = d.knowledgeEngine.strictGroundedMode;
+    if (DOM.fieldNoKcMatch)       _setSelectValue(DOM.fieldNoKcMatch, d.knowledgeEngine.onNoKcMatch);
+    if (DOM.fieldLogKcMisses)     DOM.fieldLogKcMisses.checked     = d.knowledgeEngine.logKcMisses;
+
+    // ── Agenda State ───────────────────────────────────────────────────────
+    if (DOM.fieldMaxDeferred)     _setSelectValue(DOM.fieldMaxDeferred, String(d.agendaState.maxDeferredIntents));
+    if (DOM.fieldAutoSurface)     DOM.fieldAutoSurface.checked     = d.agendaState.autoSurfaceDeferred;
+    if (DOM.fieldDeferredTimeout) _setSelectValue(DOM.fieldDeferredTimeout, String(d.agendaState.deferredTimeoutTurns));
+
+    // ── Trace ──────────────────────────────────────────────────────────────
+    if (DOM.fieldTraceEnabled)   DOM.fieldTraceEnabled.checked   = d.trace.enabled;
+    if (DOM.fieldTraceInCI)      DOM.fieldTraceInCI.checked      = d.trace.showInCallIntelligence;
+    if (DOM.fieldAlertFallback)  _setSelectValue(DOM.fieldAlertFallback, String(d.trace.alertOnFallbackCount));
+
+    showToast('success', 'Recommended settings loaded — review and hit Save All Settings to apply.');
+  }
+
+  // ==========================================================================
   // SAVE ALL
   // ==========================================================================
 
@@ -1032,6 +1157,35 @@
 
     // Save All
     DOM.btnSaveAll.addEventListener('click', saveAllSettings);
+
+    // Recommended Settings — open confirm modal
+    const btnDefaults = document.getElementById('btn-load-defaults');
+    const defaultsOverlay = document.getElementById('defaults-overlay');
+    const btnDefaultsCancel  = document.getElementById('btn-defaults-cancel');
+    const btnDefaultsConfirm = document.getElementById('btn-defaults-confirm');
+
+    if (btnDefaults) {
+      btnDefaults.addEventListener('click', () => {
+        if (defaultsOverlay) defaultsOverlay.style.display = 'flex';
+      });
+    }
+    if (btnDefaultsCancel) {
+      btnDefaultsCancel.addEventListener('click', () => {
+        if (defaultsOverlay) defaultsOverlay.style.display = 'none';
+      });
+    }
+    if (btnDefaultsConfirm) {
+      btnDefaultsConfirm.addEventListener('click', () => {
+        if (defaultsOverlay) defaultsOverlay.style.display = 'none';
+        applyRecommendedSettings();
+      });
+    }
+    // Close on overlay click
+    if (defaultsOverlay) {
+      defaultsOverlay.addEventListener('click', e => {
+        if (e.target === defaultsOverlay) defaultsOverlay.style.display = 'none';
+      });
+    }
 
     // BC new buttons
     if (DOM.btnNewCategoryBc) {

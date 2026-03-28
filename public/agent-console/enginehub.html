@@ -48,6 +48,13 @@
   </div>
 
   <div class="eh-header-right">
+    <button class="eh-btn-ghost eh-btn-defaults" id="btn-load-defaults" title="Pre-fill all sections with recommended settings for optimum performance">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8 4.5v3.75l2.25 2.25" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Recommended Settings
+    </button>
     <button class="eh-btn-ghost" id="btn-save-all">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M13 14H3C2.45 14 2 13.55 2 13V3C2 2.45 2.45 2 3 2H11L14 5V13C14 13.55 13.55 14 13 14Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -59,6 +66,35 @@
     </button>
   </div>
 </header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     RECOMMENDED SETTINGS CONFIRM MODAL
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="eh-defaults-overlay" id="defaults-overlay" style="display:none;">
+  <div class="eh-defaults-modal">
+    <div class="eh-defaults-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2Z" stroke="#2563eb" stroke-width="1.5"/>
+        <path d="M12 7v5.5l3 3" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h3 class="eh-defaults-title">Load Recommended Settings?</h3>
+    <p class="eh-defaults-body">This will pre-fill every section with settings tuned for optimum call performance. You can review and adjust anything before saving.</p>
+    <ul class="eh-defaults-list">
+      <li><strong>Mode:</strong> Passive — engine logs decisions, no live call impact until you activate</li>
+      <li><strong>Intent Detection:</strong> Multi-intent on · threshold 0.72 · max 2 per turn</li>
+      <li><strong>Policies:</strong> All 6 routing policies enabled · full escalation ladder on</li>
+      <li><strong>Mid-Flow Interrupts:</strong> pause_resume for most flows · block_injection during transfer</li>
+      <li><strong>Knowledge Engine:</strong> Strict grounding · LLM fallback on no-KC-match · misses logged</li>
+      <li><strong>Agenda State:</strong> Auto-surface deferred · max 3 intents · 5-turn timeout</li>
+      <li><strong>Trace:</strong> Full logging · CI alerts when KC miss fires 2+ times in a call</li>
+    </ul>
+    <div class="eh-defaults-actions">
+      <button class="eh-btn-ghost" id="btn-defaults-cancel">Cancel</button>
+      <button class="eh-btn-primary" id="btn-defaults-confirm">Apply Recommended Settings</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      NOT CONFIGURED BANNER — shown until admin saves settings
