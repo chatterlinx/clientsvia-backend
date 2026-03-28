@@ -62,8 +62,8 @@
  * ============================================================================
  */
 
-const CallTurnTrace            = require('../../models/CallTurnTrace');
-const { getSharedRedisClient } = require('../../redisClientFactory');
+const CallTurnTrace            = require('../../../models/CallTurnTrace');         // 3 levels up: arbitration/ → engine/ → services/ → root
+const { getSharedRedisClient } = require('../../redisClientFactory');              // 2 levels up: arbitration/ → engine/ → services/redisClientFactory
 const logger                   = require('../../../utils/logger');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
