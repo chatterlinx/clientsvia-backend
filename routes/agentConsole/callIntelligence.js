@@ -1856,23 +1856,62 @@ function fmtDuration(seconds) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+// ── Source key → provenanceType inference ──────────────────────────────────
+// When trace.provenance.type is absent from the transcript (older calls, or
+// paths that don't write it explicitly), infer from the sourceKey.
+// KC_ENGINE is UI_OWNED by default; GRACEFUL_ACK/BOOKING_INTENT overrides
+// to HARDCODED below in buildConversationTurns (those are canned scripts).
+const _SOURCE_TYPE_MAP = {
+  'AGENT2_DISCOVERY':     'LLM_GENERATED',  // Turn 1 LLM intake + contextual greeting
+  'KC_ENGINE':            'UI_OWNED',        // KC Answer Engine (authored KC cards)
+  'PRICING_INTERCEPTOR':  'UI_OWNED',        // Admin-configured pricing intercept rule
+  'BOOKING_LOGIC_ENGINE': 'HARDCODED',       // Booking flow collection prompts (scripted)
+  'greetings':            'UI_OWNED',        // Admin-authored greeting text
+  'GREETING':             'UI_OWNED',
+  'TRIGGER_AUDIO':        'UI_OWNED',        // Instant audio trigger responses
+};
+
+// Canned KC paths that produce hardcoded text (not KC card content)
+const _HARDCODED_KC_PATHS = new Set([
+  'KC_GRACEFUL_ACK',    // "I'll have someone follow up with you"
+  'KC_BOOKING_INTENT',  // "Great! Let me get that scheduled for you."
+]);
+
 function provenanceLabel(type, sourceKey) {
-  if (type === 'UI_OWNED') return 'KC / Trigger';
+  if (type === 'UI_OWNED')     return 'KC / Trigger';
   if (type === 'LLM_GENERATED') return 'LLM Generated';
-  if (type === 'HARDCODED') return 'Hardcoded';
-  if (sourceKey === 'greetings') return 'Greeting';
-  if (sourceKey === 'booking') return 'Booking';
+  if (type === 'HARDCODED')    return 'Hardcoded';
+  // Fallback labels by sourceKey for display in the report
+  if (sourceKey === 'AGENT2_DISCOVERY')     return 'LLM Generated';
+  if (sourceKey === 'KC_ENGINE')            return 'KC Answer Engine';
+  if (sourceKey === 'PRICING_INTERCEPTOR')  return 'Pricing Rule';
+  if (sourceKey === 'BOOKING_LOGIC_ENGINE') return 'Booking Script';
+  if (sourceKey === 'greetings')            return 'Greeting';
   return 'Unknown';
 }
 
-function detectTurnFlags(turn, kcCard, provenancePath) {
+function detectTurnFlags(turn, kcCard, provenancePath, sourceKey) {
   const flags = [];
   const path = (provenancePath || '').toUpperCase();
+  const src  = (sourceKey || '').toUpperCase();
+
   if (path.includes('LLM_FALLBACK') || path.includes('LLM_AGENT')) {
     flags.push({ code: 'LLM_FALLBACK', label: 'LLM Fallback', severity: 'warn' });
   }
   if (kcCard?.bookingAction === 'offer_to_book' && !path.includes('BOOKING')) {
     flags.push({ code: 'MISSED_BOOKING_CTA', label: 'Missed Booking CTA', severity: 'warn' });
+  }
+  // KC answered but booking CTA was not delivered — PRICING_INTERCEPTOR took over
+  if (src === 'PRICING_INTERCEPTOR') {
+    flags.push({ code: 'PRICING_INTERCEPTOR_FIRED', label: 'Pricing Rule Intercepted', severity: 'info' });
+  }
+  // KC_GRACEFUL_ACK means no KC card AND no LLM — knowledge gap
+  if (path === 'KC_GRACEFUL_ACK') {
+    flags.push({ code: 'KC_GRACEFUL_ACK', label: 'No KC Match — Canned ACK', severity: 'warn' });
+  }
+  // Booking CTA was delivered but no booking was created (caller didn't commit)
+  if (path === 'KC_BOOKING_INTENT') {
+    flags.push({ code: 'BOOKING_INTENT_FIRED', label: 'Booking Intent Detected', severity: 'info' });
   }
   return flags;
 }
@@ -1989,12 +2028,17 @@ function buildStory(summary, discoveryNotes, convTurns, intelligence) {
 }
 
 function buildVitals(summary, convTurns, discoveryNotes) {
-  const totalTurns = convTurns.length;
-  const kcTurns = convTurns.filter(t => t.provenanceType === 'UI_OWNED').length;
-  const llmTurns = convTurns.filter(t =>
+  const agentTurns = convTurns.filter(t => t.speaker === 'agent');
+  const totalAgentTurns = agentTurns.length || 1;
+  // KC hit = agent turn where KC_ENGINE answered from an authored KC card (UI_OWNED)
+  const kcTurns = agentTurns.filter(t =>
+    t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
+  ).length;
+  const llmTurns = agentTurns.filter(t =>
+    t.provenanceType === 'LLM_GENERATED' ||
     (t.provenancePath || '').toUpperCase().includes('LLM')
   ).length;
-  const kcHitRate = totalTurns > 0 ? Math.round((kcTurns / totalTurns) * 100) : 0;
+  const kcHitRate = Math.round((kcTurns / totalAgentTurns) * 100);
 
   const objective = discoveryNotes?.objective || null;
   const stagesReached = [];
@@ -2018,7 +2062,7 @@ function buildVitals(summary, convTurns, discoveryNotes) {
       {
         label: 'KC Hit Rate',
         value: `${kcHitRate}%`,
-        sub: `${kcTurns} of ${totalTurns} content turns`,
+        sub: `${kcTurns} of ${totalAgentTurns} agent turns`,
         status: kcHitRate >= 70 ? 'ok' : kcHitRate >= 40 ? 'warn' : 'fail'
       },
       {
@@ -2109,10 +2153,19 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
       summary?.appointmentCreatedId ? 'Booking intent detected → booking created' :
         'No booking intent detected in this call'),
     stg('kc_answer', 'KC Answer Engine', 'D',
-      convTurns.some(t => t.kcCard) ? 'pass' :
-        convTurns.length > 1 ? 'warn' : 'unknown',
       (() => {
-        const hits = convTurns.filter(t => t.kcCard).length;
+        // UI_OWNED from KC_ENGINE = KC card answered
+        const hits = convTurns.filter(t =>
+          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
+        ).length;
+        if (hits > 0) return 'pass';
+        if (convTurns.length > 1) return 'warn';
+        return 'unknown';
+      })(),
+      (() => {
+        const hits = convTurns.filter(t =>
+          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
+        ).length;
         const misses = convTurns.filter(t =>
           t.provenancePath?.toUpperCase().includes('LLM_FALLBACK') ||
           t.provenancePath?.toUpperCase().includes('LLM_AGENT')
@@ -2120,7 +2173,55 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
         return `${hits} KC hit${hits !== 1 ? 's' : ''}, ${misses} LLM fallback${misses !== 1 ? 's' : ''}`;
       })()),
     stg('groq_formatter', 'Groq Response Formatter', 'D',
-      convTurns.some(t => t.kcCard) ? 'pass' : 'unknown', null)
+      convTurns.some(t =>
+        t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
+      ) ? 'pass' : 'unknown', null),
+
+    // GROUP E — Engine Hub + Behavior Cards
+    stg('engine_hub_runtime', 'Engine Hub Runtime', 'E',
+      (() => {
+        const eh = summary?._engineHub || null;   // stamped by runtime when EH active
+        if (eh?.mode === 'active')   return 'pass';
+        if (eh?.mode === 'learning') return 'pass';
+        if (eh?.mode === 'passive')  return 'info';
+        // Not yet in CallSummary — show wired status based on any KC turn existing
+        return convTurns.length > 1 ? 'info' : 'unknown';
+      })(),
+      (() => {
+        const eh = summary?._engineHub || null;
+        if (eh?.mode) return `Mode: ${eh.mode.toUpperCase()} | hopFactor: ${eh.hopFactor || '?'}`;
+        return 'Wired in GATE 2 — per-call trace pending runtime persistence';
+      })()),
+
+    stg('spfuq_agenda', 'SPFUQ + Agenda State', 'E',
+      (() => {
+        // If we have a KC hit, SPFUQ ran
+        const kcHit = convTurns.some(t =>
+          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
+        );
+        return kcHit ? 'info' : 'unknown';
+      })(),
+      'Hop factor now governed by Engine Hub getHopFactor() — Agenda State tracking pending'),
+
+    stg('behavior_card_kc', 'Behavior Card — KC Linked', 'E',
+      (() => {
+        // KC card present + behavior card would be injected into Groq
+        const kcTurns = convTurns.filter(t =>
+          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE' && t.kcCard
+        ).length;
+        return kcTurns > 0 ? 'pass' : 'info';
+      })(),
+      'Category-linked BC injected into Groq prompt via KnowledgeContainerService.answer()'),
+
+    stg('behavior_card_standalone', 'Behavior Card — Standalone', 'E',
+      (() => {
+        // Standalone BC fires when KC misses → LLM fallback (discovery_flow BC)
+        const llmFallbacks = convTurns.filter(t =>
+          (t.provenancePath || '').toUpperCase().includes('LLM_FALLBACK')
+        ).length;
+        return llmFallbacks > 0 ? 'pass' : 'info';
+      })(),
+      'discovery_flow BC injected into Claude context on KC miss (GATE 6)')
   ];
 
   // Discovery compliance checklist
@@ -2230,11 +2331,21 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
     const prov  = trace.provenance || {};
     const r123rp = trace._123rp || {};
 
-    const provType = prov.type
-      || (t.kind === 'GREETING' ? 'UI_OWNED' : null)
-      || (t.sourceKey === 'greetings' ? 'UI_OWNED' : 'UNKNOWN');
     const provPath = r123rp.lastPath || r123rp.path || prov.uiPath || t.sourceKey || null;
     const srcKey   = t.sourceKey || null;
+
+    // Derive provenance type — explicit trace value wins, then infer from sourceKey.
+    // _SOURCE_TYPE_MAP gives the most accurate default per source; exceptions below.
+    let provType = prov.type
+      || (t.kind === 'GREETING' ? 'UI_OWNED' : null)
+      || _SOURCE_TYPE_MAP[t.sourceKey]
+      || 'UNKNOWN';
+
+    // Exception: KC canned-script paths produce hardcoded text, not KC card content.
+    // Override UI_OWNED back to HARDCODED when the path is a canned KC response.
+    if (provType === 'UI_OWNED' && _HARDCODED_KC_PATHS.has(provPath)) {
+      provType = 'HARDCODED';
+    }
 
     // KC card lookup from containerId or uiAnchor
     let kcCard = null;
@@ -2250,9 +2361,9 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       }
     }
 
-    // Flags only make sense for agent turns (or call-ending caller turns with no follow-up)
+    // Flags only make sense for agent turns
     const flags = t.speaker === 'agent'
-      ? detectTurnFlags({ callerText: null, agentText: t.text }, kcCard, provPath)
+      ? detectTurnFlags({ callerText: null, agentText: t.text }, kcCard, provPath, srcKey)
       : [];
 
     const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === t.turnNumber) || null;
@@ -2369,30 +2480,39 @@ function buildEntityTimeline(discoveryNotes, convTurns) {
   const entries = [];
   const e = discoveryNotes.entities || {};
 
-  // Build timeline from qaLog
+  // ── Entity captures (structured fields extracted by LLM intake) ───────────
+  // These go first so the entity timeline reads: entities captured → then Q&As
+  if (e.firstName || e.fullName) {
+    entries.push({ turn: 1, field: 'name', value: e.fullName || e.firstName, type: 'entity' });
+  }
+  if (discoveryNotes.callReason) {
+    entries.push({ turn: 1, field: 'callReason', value: discoveryNotes.callReason, type: 'entity' });
+  }
+  if (discoveryNotes.urgency) {
+    entries.push({ turn: 1, field: 'urgency', value: String(discoveryNotes.urgency), type: 'entity' });
+  }
+  if (discoveryNotes.priorVisit === true) {
+    entries.push({ turn: 1, field: 'priorVisit', value: 'Yes', type: 'entity' });
+  }
+  if (e.address) {
+    entries.push({ turn: 1, field: 'address', value: e.address, type: 'entity' });
+  }
+
+  // ── Q&A log (KC card answers delivered during the call) ──────────────────
+  // field/value are NOT question text — use question/answer so the frontend
+  // can render them correctly.  'field' stays as 'qa' for type-switch logic.
   const qaLog = discoveryNotes.qaLog || [];
   for (const qa of qaLog) {
     entries.push({
-      turn: qa.turn,
-      field: qa.question,
-      value: qa.answer,
-      type: 'qa'
+      turn:     qa.turn,
+      field:    'qa',          // type tag — frontend switches on this
+      question: qa.question,   // the caller's utterance that triggered KC
+      value:    qa.answer,     // the KC card answer that was delivered
+      type:     'qa'
     });
   }
 
-  // Add key entity captures
-  if (e.firstName || e.fullName) {
-    entries.unshift({ turn: 1, field: 'name', value: e.fullName || e.firstName, type: 'entity' });
-  }
-  if (discoveryNotes.callReason) {
-    const reasonTurn = qaLog[0]?.turn || 1;
-    entries.push({ turn: reasonTurn, field: 'callReason', value: discoveryNotes.callReason, type: 'entity' });
-  }
-  if (discoveryNotes.urgency) {
-    entries.push({ turn: 1, field: 'urgency', value: discoveryNotes.urgency, type: 'entity' });
-  }
-
-  // Sort by turn
+  // Sort by turn ascending
   entries.sort((a, b) => (a.turn || 0) - (b.turn || 0));
 
   const missing = [];
@@ -2458,6 +2578,60 @@ function buildAutoIssues(summary, convTurns, discoveryNotes) {
     });
   }
 
+  // PRICING_INTERCEPTOR fired — may have blocked the booking flow continuation
+  const pricingTurns = convTurns.filter(t =>
+    t.sourceKey === 'PRICING_INTERCEPTOR' && t.speaker === 'agent'
+  );
+  if (pricingTurns.length > 0) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'info',
+      category: 'routing',
+      title: `Pricing rule intercepted Turn ${pricingTurns.map(t => t.turnNumber).join(', ')}`,
+      description: `The PRICING_INTERCEPTOR rule fired on ${pricingTurns.length} turn(s) and delivered the service call fee instead of the KC or booking engine. Verify this is the intended routing — if the caller had already agreed to book, this may delay scheduling.`,
+      affectedTurns: pricingTurns.map(t => t.turnNumber),
+      action: null
+    });
+  }
+
+  // Name captured in Turn 1 but never used (agent echoed it, discoveryNotes missing)
+  const agentUsedName = convTurns.some(t =>
+    t.speaker === 'agent' && t.turnNumber === 1 &&
+    discoveryNotes?.entities?.firstName &&
+    t.text?.toLowerCase().includes(discoveryNotes.entities.firstName.toLowerCase())
+  );
+  const nameInDiscovery = !!(discoveryNotes?.entities?.firstName || discoveryNotes?.entities?.fullName);
+  if (agentUsedName && !nameInDiscovery) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'medium',
+      category: 'entity_capture',
+      title: 'Name echoed in greeting but missing from discoveryNotes',
+      description: 'The agent addressed the caller by name in Turn 1 but the name was not persisted to discoveryNotes entities. The booking engine may cold-ask for the name again. Check llm_intake entity write timing.',
+      action: null
+    });
+  }
+
+  // KC answered a question but no booking CTA delivered anywhere in the call
+  const kcAnsweredTurns = convTurns.filter(t =>
+    t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
+  );
+  const bookingCreated = !!summary?.appointmentCreatedId;
+  const bookingIntentFired = convTurns.some(t =>
+    t.flags?.some(f => f.code === 'BOOKING_INTENT_FIRED')
+  );
+  if (kcAnsweredTurns.length > 0 && !bookingCreated && !bookingIntentFired) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'high',
+      category: 'response_quality',
+      title: 'KC answered but no booking CTA delivered',
+      description: `KC answered ${kcAnsweredTurns.length} turn(s) but the call ended without a booking or a booking intent signal. Check that KC cards have bookingAction=offer_to_book and that closingPrompts are set to pivot the caller toward scheduling.`,
+      affectedTurns: kcAnsweredTurns.map(t => t.turnNumber),
+      action: 'edit_kc'
+    });
+  }
+
   return issues;
 }
 
@@ -2485,15 +2659,22 @@ function buildAutoRecommendations(summary, convTurns, discoveryNotes, kcMap) {
   return recs;
 }
 
-function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligence, discoveryNotes, kcMap }) {
+function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligence, discoveryNotes, kcMap, company }) {
   const startedAt = transcriptV2?.callMeta?.startedAt || summary?.startedAt;
   const rawTurns = transcriptV2?.turns || [];
   const convTurns = buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt);
+
+  // Engine Hub config — exposed in the report header and protocol audit
+  const eh = company?.engineHub;
+  const ehSummary = (eh?.isConfigured && eh?.enabled)
+    ? { mode: eh.mode || 'passive', isConfigured: true, enabled: true }
+    : { mode: null, isConfigured: !!eh?.isConfigured, enabled: false };
 
   const healthScore = calcHealthScore(summary, convTurns, discoveryNotes);
 
   return {
     header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence),
+    engineHub: ehSummary,      // Engine Hub mode for this company — shown in sticky header
     story: buildStory(summary, discoveryNotes, convTurns, intelligence),
     vitals: buildVitals(summary, convTurns, discoveryNotes),
     protocolAudit: buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes),
@@ -2533,14 +2714,15 @@ router.get('/:callSid/full-report', async (req, res) => {
       return res.status(400).json({ error: 'Invalid companyId format' });
     }
 
-    // 1. Parallel load of all data sources
-    const [summary, transcriptV2, intelligence] = await Promise.all([
+    // 1. Parallel load of all data sources (including company for Engine Hub config)
+    const [summary, transcriptV2, intelligence, company] = await Promise.all([
       CallSummary.findOne({
         companyId: companyOid,
         $or: [{ twilioSid: callSid }, { callId: callSid }]
       }).lean(),
       CallTranscriptV2.findOne({ companyId: companyOid, callSid }).lean(),
-      CallIntelligence.findOne({ callSid }).lean()
+      CallIntelligence.findOne({ callSid }).lean(),
+      Company.findById(companyOid).select('engineHub').lean()
     ]);
 
     // 2. Load Customer discoveryNotes
@@ -2581,7 +2763,7 @@ router.get('/:callSid/full-report', async (req, res) => {
     }
 
     // 5. Assemble and return
-    const report = buildFullReport({ callSid, companyId, summary, transcriptV2, intelligence, discoveryNotes, kcMap });
+    const report = buildFullReport({ callSid, companyId, summary, transcriptV2, intelligence, discoveryNotes, kcMap, company });
 
     return res.json({ ok: true, report });
 
