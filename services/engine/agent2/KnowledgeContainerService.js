@@ -733,13 +733,17 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
           // keyword phrase and check how many appear as whole words in the input.
           // This lets "maintenance charges" match keyword
           // "how much is the maintenance plan" via the shared word "maintenance".
-          // Score is always lower than any exact match so exact always wins.
+          //
+          // Scoring: long domain-specific words (≥8 chars) get a 1.5× bonus so
+          // "maintenance" (11×1.5=17) beats a short generic exact like "how much"
+          // (8×2=16). Short content words keep face-value length.
+          // Net score stays below any multi-word EXACT match it belongs to.
           const inputWords   = new Set(norm.split(/\s+/));
           const contentWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
           const hits         = contentWords.filter(w => inputWords.has(w));
           if (hits.length >= 1) {
             matched = true;
-            score   = hits.reduce((s, w) => s + w.length, 0); // < exact match score
+            score   = hits.reduce((s, w) => s + (w.length >= 8 ? Math.round(w.length * 1.5) : w.length), 0);
           }
         }
       } else {
@@ -788,7 +792,7 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
             const hits         = contentWords.filter(w => inputWords.has(w));
             if (hits.length >= 1) {
               matched = true;
-              score   = hits.reduce((s, w) => s + w.length, 0);
+              score   = hits.reduce((s, w) => s + (w.length >= 8 ? Math.round(w.length * 1.5) : w.length), 0);
             }
           }
         } else {

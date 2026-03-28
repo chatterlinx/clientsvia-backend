@@ -86,6 +86,15 @@ const KC_CONTAINERS = [
       'ac running but not cooling', 'ac making noise', 'ac leaking', 'warm air blowing',
       'ac turned off', 'unit not working', 'compressor', 'refrigerant', 'my ac broken'
     ],
+    // Negative keywords: prevent this REPAIR container from winning on
+    // maintenance / tune-up price questions. "Maintenance" callers go to
+    // the Tune-Up or Comfort Club container instead.
+    negativeKeywords: [
+      'maintenance', 'tune-up', 'tune up', 'tuneup',
+      'annual service', 'seasonal service', 'preventive',
+      'maintenance plan', 'service plan', 'service agreement', 'comfort club',
+      'maintenance visit', 'annual maintenance',
+    ],
     sections: [
       {
         label:   'Our AC Repair Service',
@@ -129,6 +138,14 @@ const KC_CONTAINERS = [
       'heat pump not working', 'heating problem', 'furnace won\'t start',
       'furnace making noise', 'gas furnace issue', 'blower not working', 'no hot air'
     ],
+    // Negative keywords: prevent this REPAIR container from winning on
+    // maintenance / tune-up price questions.
+    negativeKeywords: [
+      'maintenance', 'tune-up', 'tune up', 'tuneup',
+      'annual service', 'seasonal service', 'preventive',
+      'maintenance plan', 'service plan', 'service agreement', 'comfort club',
+      'maintenance visit', 'annual maintenance',
+    ],
     sections: [
       {
         label:   'Our Heating Repair Service',
@@ -166,11 +183,24 @@ const KC_CONTAINERS = [
     title:     'Annual HVAC Tune-Up',
     category:  'Maintenance',
     keywords: [
+      // Topic trigger phrases
       'tune up', 'tuneup', 'tune-up', 'maintenance visit', 'annual service',
       'ac check', 'hvac check', 'system checkup', 'spring tune up', 'fall tune up',
       'preventive service', 'maintenance appointment', 'annual maintenance',
       'ac service', 'hvac service visit', 'seasonal service', 'system inspection',
-      'coil cleaning', 'ac cleaned', 'spring service', 'fall service'
+      'coil cleaning', 'ac cleaned', 'spring service', 'fall service',
+      // Pricing / cost question phrases — exact-match scores beat generic "how much"
+      // Each phrase scores LENGTH × 2 so:
+      //   "how much for maintenance"  → 24×2=48  beats "how much" (8×2=16) ✓
+      //   "maintenance cost"          → 15×2=30  beats "how much" (8×2=16) ✓
+      'how much is a tune up', 'how much does a tune up cost', 'how much for a tune up',
+      'tune up cost', 'tune up price', 'tune up fee',
+      'how much for maintenance', 'how much is maintenance', 'how much does maintenance cost',
+      'how much is a maintenance', 'how much do you charge for maintenance',
+      'maintenance cost', 'maintenance price', 'maintenance fee', 'maintenance charge',
+      'annual service cost', 'annual service price', 'annual service fee',
+      'how much annual service', 'seasonal service cost', 'preventive maintenance cost',
+      'maintenance appointment cost', 'service visit cost', 'service visit price',
     ],
     sections: [
       {
@@ -204,11 +234,19 @@ const KC_CONTAINERS = [
     title:     'Comfort Club Maintenance Plan',
     category:  'Maintenance',
     keywords: [
+      // Topic trigger phrases
       'maintenance plan', 'service plan', 'service agreement', 'comfort club',
       'hvac membership', 'maintenance contract', 'maintenance program', 'annual plan',
       'service membership', 'monthly hvac plan', 'maintenance subscription',
       'hvac agreement', 'protection plan', 'service protection', 'preventive plan',
-      'comfort plan', 'service contract', 'annual hvac plan', 'hvac protection'
+      'comfort plan', 'service contract', 'annual hvac plan', 'hvac protection',
+      // Plan pricing / cost question phrases — exact-match beats generic "how much"
+      'how much is the maintenance plan', 'how much does the maintenance plan cost',
+      'maintenance plan cost', 'maintenance plan price', 'maintenance plan fee',
+      'how much is the service plan', 'service plan cost', 'service plan price',
+      'service agreement cost', 'comfort club cost', 'comfort club price',
+      'how much is comfort club', 'comfort club fee',
+      'monthly hvac plan cost', 'annual plan cost', 'annual plan price',
     ],
     sections: [
       {
@@ -253,6 +291,14 @@ const KC_CONTAINERS = [
       'mini split', 'mini split installation', 'central air installation',
       'replace my ac', 'new cooling system', 'ac install', 'new ductless'
     ],
+    // Negative keywords: INSTALLATION containers must NEVER win on maintenance
+    // or tune-up queries. Any utterance containing these words is NOT about
+    // buying a new system — it's about maintaining an existing one.
+    negativeKeywords: [
+      'maintenance', 'tune-up', 'tune up', 'tuneup',
+      'annual service', 'seasonal service', 'preventive',
+      'maintenance plan', 'service plan', 'service agreement', 'comfort club',
+    ],
     sections: [
       {
         label:   'New AC Systems We Install',
@@ -295,6 +341,13 @@ const KC_CONTAINERS = [
       'new boiler', 'heating system replacement', 'new gas furnace',
       'furnace install', 'replace my furnace', 'new heating unit',
       'gas furnace cost', 'new electric furnace', 'dual fuel system'
+    ],
+    // Negative keywords: INSTALLATION containers must NEVER win on maintenance
+    // or tune-up queries.
+    negativeKeywords: [
+      'maintenance', 'tune-up', 'tune up', 'tuneup',
+      'annual service', 'seasonal service', 'preventive',
+      'maintenance plan', 'service plan', 'service agreement', 'comfort club',
     ],
     sections: [
       {
@@ -1375,7 +1428,9 @@ async function main() {
       { upsert: true }
     );
     counts.kc++;
-    ok('KC', `${kc.kcId} — ${kc.title} [${kc.category}] (${kc.keywords.length} keywords)`);
+    const negKwCount = kc.negativeKeywords?.length || 0;
+    const negSuffix  = negKwCount ? `, ${negKwCount} neg` : '';
+    ok('KC', `${kc.kcId} — ${kc.title} [${kc.category}] (${kc.keywords.length} keywords${negSuffix})`);
   }
 
   // ── 2. Behavior Cards — Category-linked ──────────────────────────────────
