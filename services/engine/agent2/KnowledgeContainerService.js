@@ -43,6 +43,7 @@ const GroqStreamAdapter          = require('../../streaming/adapters/GroqStreamA
 const CompanyKnowledgeContainer  = require('../../../models/CompanyKnowledgeContainer');
 const CompanyTriggerSettings     = require('../../../models/CompanyTriggerSettings');
 const logger                     = require('../../../utils/logger');
+const BehaviorCardService        = require('../../behaviorCards/BehaviorCardService');
 
 // Lazy-loaded — only when embedding fallback fires (keyword miss + OPENAI_API_KEY set)
 let _embeddingService = null;
@@ -427,6 +428,7 @@ function _buildSystemPrompt({
   acknowledgeHistory,
   callerName,
   priorVisit,
+  behaviorBlock = '',  // Engine Hub Behavior Card block — injected when a BC is configured for this KC category
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -492,9 +494,12 @@ function _buildSystemPrompt({
     ? '\n' + personalizationLines.join(' ') + '\n'
     : '';
 
+  // Behavior Card block — present only when a BC is configured for this KC category
+  const behaviorBlockStr = behaviorBlock ? `\n${behaviorBlock}` : '';
+
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-${activeTopicBlock}${callContextBlock}${personalizationBlock}
+${activeTopicBlock}${callContextBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
 2. Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer, not a text message.
@@ -864,6 +869,20 @@ async function answer(opts) {
 
   // Build prompt components — resolve {variables} so Groq sees real values
   const containerBlock = await _resolveKCVariables(companyId, _buildContainerBlock(container));
+
+  // Load Behavior Card for this KC category (Redis → MongoDB, graceful degrade → null)
+  // null = no BC configured for this category; formatForGroq(null) = '' = omit block cleanly
+  const bc            = container.category
+    ? await BehaviorCardService.forCategory(companyId, container.category)
+    : null;
+  const behaviorBlock = BehaviorCardService.formatForGroq(bc);
+
+  if (bc) {
+    logger.debug('[KnowledgeContainer] Behavior Card loaded', {
+      companyId, callSid, category: container.category, bcName: bc.name
+    });
+  }
+
   const systemPrompt   = _buildSystemPrompt({
     companyName,
     containerTitle,
@@ -881,6 +900,7 @@ async function answer(opts) {
     acknowledgeHistory: kbSettings.acknowledgeHistory !== false,
     callerName:         callerName                     || null,
     priorVisit:         priorVisit                     || false,
+    behaviorBlock:      behaviorBlock                  || '',
   });
 
   // User message — personalise with caller name if known
