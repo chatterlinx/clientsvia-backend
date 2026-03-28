@@ -479,6 +479,16 @@ function _mergePatch(current, patch) {
     merged.doNotReask = [...existing];
   }
 
+  // ── rejectedTopics: union/dedup ──────────────────────────────────────────
+  // Populated by KC REJECTION DETECTOR when caller explicitly says the
+  // previous KC answer was wrong. Injected into Groq/LLM context to prevent
+  // re-surfacing the same wrong answer on subsequent turns.
+  if (Array.isArray(patch.rejectedTopics) && patch.rejectedTopics.length > 0) {
+    const existing = new Set(current.rejectedTopics || []);
+    for (const topic of patch.rejectedTopics) if (topic) existing.add(topic);
+    merged.rejectedTopics = [...existing];
+  }
+
   // ── qaLog: append ────────────────────────────────────────────────────────
   if (Array.isArray(patch.qaLog) && patch.qaLog.length > 0) {
     merged.qaLog = [...(current.qaLog || []), ...patch.qaLog];

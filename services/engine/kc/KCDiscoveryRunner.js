@@ -174,6 +174,12 @@ function _buildDiscoveryContext(notes) {
   if (notes.urgency && notes.urgency !== 'normal') parts.push(`Urgency: ${notes.urgency}`);
   if (notes.priorVisit === true) parts.push('Caller is a returning customer (has visited before)');
   if (notes.employeeMentioned) parts.push(`Caller mentioned employee: ${notes.employeeMentioned}`);
+  // Rejected topics: caller explicitly said these answers were WRONG this call.
+  // Inject so Groq/LLM does not repeat them — prevents the loop where the same
+  // wrong answer is served back after explicit rejection.
+  if (Array.isArray(notes.rejectedTopics) && notes.rejectedTopics.length) {
+    parts.push(`IMPORTANT — caller already rejected these responses, do NOT repeat them: ${notes.rejectedTopics.join(', ')}`);
+  }
   return parts.length ? parts.join('. ') + '.' : null;
 }
 
@@ -507,9 +513,12 @@ class KCDiscoveryRunner {
     let notes               = null;
     let containers          = [];
     let containerEmbeddings = new Map();
+    let rejectedContainerIds = new Set();   // IDs caller has explicitly rejected this call
 
     try {
-      [spfuq, notes, containers, containerEmbeddings] = await Promise.all([
+      const _rejKey = `kc-rejected:${companyId}:${callSid}`;
+      let _rejRaw;
+      [spfuq, notes, containers, containerEmbeddings, _rejRaw] = await Promise.all([
         SPFUQService.load(companyId, callSid).catch(() => null),
         DiscoveryNotesService.load(companyId, callSid).catch(() => null),
         KCS.getActiveForCompany(companyId).catch((_e) => {
@@ -519,7 +528,11 @@ class KCDiscoveryRunner {
         hasEmbeddingKey
           ? KCS.getEmbeddingsForCompany(companyId).catch(() => new Map())
           : Promise.resolve(new Map()),
+        redis ? redis.get(_rejKey).catch(() => null) : Promise.resolve(null),
       ]);
+      if (_rejRaw) {
+        try { rejectedContainerIds = new Set(JSON.parse(_rejRaw)); } catch (_) {}
+      }
     } catch (_e) {
       containers = containers || [];
     }
@@ -569,16 +582,92 @@ class KCDiscoveryRunner {
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // REJECTION DETECTOR — fires before container scoring
+    // ══════════════════════════════════════════════════════════════════════════
+    // PROBLEM this fixes (observed in production, March 2026):
+    //   1. KC matches container A (wrong — e.g. "System Replacement").
+    //   2. SPFUQ anchors to container A.
+    //   3. Caller: "No, it's not a system replacement. I need maintenance price."
+    //   4. Engine scores new container B (maintenance) — B.score < hopThreshold.
+    //      Confidence-gap logic stays in A ("not strong enough to hop").
+    //   5. Agent answers with "System Replacement" AGAIN. Loop repeats 5+ turns.
+    //
+    // FIX: When the caller's turn starts with an explicit rejection pattern AND
+    // an SPFUQ anchor is active, treat it as a CANCEL (not a weak hop).
+    //   → Clear SPFUQ immediately (regardless of hop threshold).
+    //   → Add the rejected container ID to `rejectedContainerIds` (Redis, 4h TTL)
+    //     so it is excluded from ALL scoring for the rest of this call.
+    //   → Write the container title to discoveryNotes.rejectedTopics[] so the
+    //     LLM fallback (GATE 4) knows what NOT to repeat.
+    //   → Re-score fresh without the rejected container.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Phrases that signal explicit rejection of the previous answer.
+    // Anchored to start-of-utterance (^) to avoid false matches on:
+    //   "I know that's not right but…" (contains 'not' but not a rejection opener)
+    const _REJECTION_RE = /^(no[,!.\s]|nope[,!.\s]|that'?s?\s+not|it'?s?\s+not|that\s+is\s+not|i\s+said|i\s+don'?t\s+need|i\s+didn'?t\s+ask|i\s+am\s+not\s+(asking|calling|looking)|i'?m\s+not\s+(asking|calling|looking)|wrong\b|not\s+(a|an|the|that|what|this|it)\b)/i;
+
+    if (spfuq && _REJECTION_RE.test((userInput || '').trim())) {
+      const _rejectedId    = String(spfuq.containerId    || '');
+      const _rejectedTitle = String(spfuq.containerTitle || '');
+
+      logger.info('[KC_ENGINE] 🚫 REJECTION DETECTED — cancelling SPFUQ anchor', {
+        companyId, callSid, turn,
+        rejectedContainer: _rejectedTitle,
+        inputPreview: _clip(userInput, 60),
+      });
+      emit('KC_REJECTION_DETECTED', {
+        companyId, callSid, turn,
+        rejectedContainer: _rejectedTitle,
+      });
+
+      if (_rejectedId) {
+        rejectedContainerIds.add(_rejectedId);
+        // Persist rejected list for this call (4h TTL — matches discoveryNotes)
+        if (redis) {
+          const _rk = `kc-rejected:${companyId}:${callSid}`;
+          redis.setex(_rk, 4 * 3600, JSON.stringify([...rejectedContainerIds])).catch(() => {});
+        }
+        // Write rejected topic name to discoveryNotes so Groq/LLM knows to avoid it
+        if (_rejectedTitle) {
+          _writeDiscoveryNotes(companyId, callSid, {
+            rejectedTopics: [_rejectedTitle],
+          }).catch(() => {});
+        }
+      }
+      // Clear the anchor — caller has explicitly cancelled it
+      SPFUQService.clear(companyId, callSid).catch(() => {});
+      spfuq = null;
+    }
+
     // ── CONTAINER MATCH — keyword-first (0ms), embedding fallback ONLY on miss
     // ──────────────────────────────────────────────────────────────────────────
     // PERF CONTRACT: keyword path never touches OpenAI. Embedding fires only
     // when keywords produce no confident match. ~50ms only on miss, vs ~800ms
     // for Claude fallback — net saving ≈ 750ms per keyword miss.
+    //
+    // scorableContainers: containers minus any the caller explicitly rejected
+    // this call (rejectedContainerIds). This prevents re-matching a container
+    // the caller already said was the wrong answer, breaking the loop.
     const discoveryContext = _buildDiscoveryContext(notes);
     const callContext      = notes ? { callReason: notes.callReason } : null;
 
+    const scorableContainers = rejectedContainerIds.size > 0
+      ? containers.filter(c => !rejectedContainerIds.has(String(c._id || c.title || '')))
+      : containers;
+
+    if (rejectedContainerIds.size > 0) {
+      logger.info('[KC_ENGINE] Excluded rejected containers from scoring', {
+        companyId, callSid, turn,
+        rejectedCount:  rejectedContainerIds.size,
+        scorableCount:  scorableContainers.length,
+        totalCount:     containers.length,
+      });
+    }
+
     // Step 1: keyword match (synchronous, ~0ms)
-    let match = KCS.findContainer(containers, userInput, callContext);
+    let match = KCS.findContainer(scorableContainers, userInput, callContext);
 
     if (match?.contextAssisted) {
       emit('KC_CONTEXT_MATCH', {
@@ -594,7 +683,7 @@ class KCDiscoveryRunner {
       try {
         const utteranceEmbedding = await KCS._getUtteranceEmbedding(userInput, callSid, turn);
         if (utteranceEmbedding) {
-          const embMatch = KCS.findContainer(containers, userInput, callContext, {
+          const embMatch = KCS.findContainer(scorableContainers, userInput, callContext, {
             utteranceEmbedding,
             containerEmbeddings,
           });
