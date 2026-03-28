@@ -691,7 +691,7 @@
           <div class="eh-bc-empty" id="bc-empty-category">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" rx="4" stroke="#CBD5E1" stroke-width="2"/><path d="M10 16h12M16 10v12" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round"/></svg>
             <p>No category Behavior Cards yet.</p>
-            <button class="eh-btn-primary" onclick="document.getElementById('btn-new-category-bc').click()">Create your first one</button>
+            <button class="eh-btn-primary" id="btn-empty-category-bc">Create your first one</button>
           </div>
         </div>
       </div>
@@ -709,7 +709,7 @@
           <div class="eh-bc-empty" id="bc-empty-standalone">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" rx="4" stroke="#CBD5E1" stroke-width="2"/><path d="M10 16h12M16 10v12" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round"/></svg>
             <p>No standalone Behavior Cards yet.</p>
-            <button class="eh-btn-primary" onclick="document.getElementById('btn-new-standalone-bc').click()">Create your first one</button>
+            <button class="eh-btn-primary" id="btn-empty-standalone-bc">Create your first one</button>
           </div>
         </div>
       </div>
@@ -780,6 +780,19 @@
         <label class="eh-label">Example Responses <span class="eh-label-sub">Groq calibrates tone and length from these</span></label>
         <div class="eh-rules-list" id="bc-examples-list"></div>
         <button class="eh-btn-add" data-list="exampleResponses">+ Add example</button>
+      </div>
+
+      <div class="eh-form-group">
+        <div class="eh-field-row eh-field-row--between">
+          <div>
+            <label class="eh-label" for="bc-enabled">Card Active</label>
+            <p class="eh-hint">When off, this Behavior Card is ignored by the engine — the agent falls back to no-BC behavior for this category or flow scenario.</p>
+          </div>
+          <label class="eh-toggle">
+            <input type="checkbox" id="bc-enabled" checked>
+            <span class="eh-toggle-track"></span>
+          </label>
+        </div>
       </div>
 
       <div class="eh-form-group">

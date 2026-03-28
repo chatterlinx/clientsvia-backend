@@ -205,6 +205,7 @@
     DOM.bcDoList           = document.getElementById('bc-do-list');
     DOM.bcDoNotList        = document.getElementById('bc-donot-list');
     DOM.bcExamplesList     = document.getElementById('bc-examples-list');
+    DOM.bcEnabled          = document.getElementById('bc-enabled');
     DOM.bcAfterAction      = document.getElementById('bc-after-action');
     DOM.bcModalClose       = document.getElementById('bc-modal-close');
     DOM.bcModalCancel      = document.getElementById('bc-modal-cancel');
@@ -382,10 +383,10 @@
     DOM.fieldAutoSurface.checked = ag.autoSurfaceDeferred !== false;
     _setSelectValue(DOM.fieldDeferredTimeout, String(ag.deferredTimeoutTurns ?? 5));
 
-    // ── Escalation (stored in policyRouter.escalationConfig or dedicated field)
-    // NOTE: The escalation config is not yet wired to a dedicated DB field.
-    // These fields will be serialised as part of policyRouter.escalationConfig
-    // when the backend adds that sub-schema. For now, render from defaults.
+    // ── Escalation (stored in company.engineHub.policyRouter.escalationConfig)
+    // Persisted via dot-notation $set in the PATCH route.
+    // Round-trip: collectSettings() → PATCH → MongoDB → GET settings → renderSettings()
+    // Missing keys default to checked=true (all rungs enabled on first load).
     const esc = (settings.policyRouter || {}).escalationConfig || {};
     DOM.rungDeescalate.checked      = esc.rung1DeEscalate !== false;
     DOM.rungConfirmTransfer.checked = esc.rung4ConfirmTransfer !== false;
@@ -648,6 +649,7 @@
       _renderRulesList(DOM.bcExamplesList, card.rules && card.rules.exampleResponses || []);
 
       _setSelectValue(DOM.bcAfterAction, card.afterAction || 'none');
+      DOM.bcEnabled.checked = card.enabled !== false;  // default true if not set
 
       DOM.bcModalDelete.style.display = 'inline-flex';
 
@@ -685,6 +687,7 @@
       _renderRulesList(DOM.bcExamplesList, []);
 
       _setSelectValue(DOM.bcAfterAction, 'none');
+      DOM.bcEnabled.checked = true;  // new cards default to active
 
       DOM.bcModalDelete.style.display = 'none';
     }
@@ -779,7 +782,8 @@
         doNot:            _collectRulesFromList(DOM.bcDoNotList),
         exampleResponses: _collectRulesFromList(DOM.bcExamplesList)
       },
-      afterAction: DOM.bcAfterAction.value || 'none'
+      afterAction: DOM.bcAfterAction.value || 'none',
+      enabled:     DOM.bcEnabled.checked
     };
 
     DOM.bcModalSave.disabled    = true;
@@ -787,12 +791,13 @@
 
     try {
       if (state.editingBcId) {
-        // PATCH — only patchable fields
+        // PATCH — only patchable fields (name, tone, rules, afterAction, enabled)
         const patchPayload = {
           name:        payload.name,
           tone:        payload.tone,
           rules:       payload.rules,
-          afterAction: payload.afterAction
+          afterAction: payload.afterAction,
+          enabled:     payload.enabled
         };
         await apiUpdateBehaviorCard(state.editingBcId, patchPayload);
         showToast('success', `Behavior Card "${name}" updated`);
@@ -985,6 +990,12 @@
     if (DOM.btnNewStandaloneBc) {
       DOM.btnNewStandaloneBc.addEventListener('click', () => openBcModal(null));
     }
+
+    // Empty-state "Create your first one" buttons — delegate to openBcModal
+    const btnEmptyCategory   = document.getElementById('btn-empty-category-bc');
+    const btnEmptyStandalone = document.getElementById('btn-empty-standalone-bc');
+    if (btnEmptyCategory)   btnEmptyCategory.addEventListener('click',   () => openBcModal(null));
+    if (btnEmptyStandalone) btnEmptyStandalone.addEventListener('click', () => openBcModal(null));
 
     // BC Modal — close/cancel
     DOM.bcModalClose.addEventListener('click',  closeBcModal);
