@@ -2034,9 +2034,13 @@ function buildVitals(summary, convTurns, discoveryNotes) {
   const kcTurns = agentTurns.filter(t =>
     t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
   ).length;
+  // LLM fallback = Turn 2+ agent turns where KC couldn't answer and fell to Claude.
+  // Turn 1 is always LLM (intake/greeting) — exclude it from the fallback count.
   const llmTurns = agentTurns.filter(t =>
-    t.provenanceType === 'LLM_GENERATED' ||
-    (t.provenancePath || '').toUpperCase().includes('LLM')
+    t.turnNumber > 1 && (
+      (t.provenancePath || '').toUpperCase().includes('LLM_FALLBACK') ||
+      (t.provenancePath || '').toUpperCase().includes('KC_LLM_FALLBACK')
+    )
   ).length;
   const kcHitRate = Math.round((kcTurns / totalAgentTurns) * 100);
 
@@ -2334,16 +2338,31 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
     const provPath = r123rp.lastPath || r123rp.path || prov.uiPath || t.sourceKey || null;
     const srcKey   = t.sourceKey || null;
 
-    // Derive provenance type — explicit trace value wins, then infer from sourceKey.
-    // _SOURCE_TYPE_MAP gives the most accurate default per source; exceptions below.
-    let provType = prov.type
-      || (t.kind === 'GREETING' ? 'UI_OWNED' : null)
-      || _SOURCE_TYPE_MAP[t.sourceKey]
-      || 'UNKNOWN';
+    // Derive provenance type.
+    //
+    // The transcript frequently stores provenance.type = 'HARDCODED' as a
+    // catch-all default, even for KC_ENGINE turns that answered from an authored
+    // KC card, and for PRICING_INTERCEPTOR (admin-configured rule).
+    // _SOURCE_TYPE_MAP corrects this per sourceKey; we override the stored value
+    // when the sourceKey is a known UI_OWNED source and the stored type is the
+    // generic HARDCODED default.
+    const mappedType = _SOURCE_TYPE_MAP[t.sourceKey] || null;
+    let provType;
+
+    if (mappedType && (prov.type === 'HARDCODED' || !prov.type)) {
+      // Transcript stored a generic HARDCODED — use the more accurate sourceKey map
+      provType = mappedType;
+    } else {
+      // Explicit non-HARDCODED type in trace wins (LLM_GENERATED, UI_OWNED set at runtime)
+      provType = prov.type
+        || (t.kind === 'GREETING' ? 'UI_OWNED' : null)
+        || mappedType
+        || 'UNKNOWN';
+    }
 
     // Exception: KC canned-script paths produce hardcoded text, not KC card content.
-    // Override UI_OWNED back to HARDCODED when the path is a canned KC response.
-    if (provType === 'UI_OWNED' && _HARDCODED_KC_PATHS.has(provPath)) {
+    // If the path is a known canned response, override back to HARDCODED regardless.
+    if (_HARDCODED_KC_PATHS.has(provPath)) {
       provType = 'HARDCODED';
     }
 
