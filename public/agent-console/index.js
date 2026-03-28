@@ -424,6 +424,9 @@
       case 'services':
         window.location.href = `${baseUrl}/services.html${companyParam}`;
         break;
+      case 'enginehub':
+        window.location.href = `${baseUrl}/enginehub.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }

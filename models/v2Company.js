@@ -6018,7 +6018,145 @@ const companySchema = new mongoose.Schema({
             default: true,
             comment: 'When true and caller is a returning customer, Groq acknowledges their history.'
         }
+    },
+
+    // ============================================================================
+    // ENGINE HUB — Conversational Intelligence Engine Settings
+    // ============================================================================
+    //
+    // Per-company configuration for the Engine Hub governing engine.
+    // Controls intent detection, policy routing, mid-flow interrupt handling,
+    // knowledge engine behavior, agenda state, escalation ladder, and trace.
+    //
+    // UI:  /agent-console/enginehub.html
+    // API: GET/PATCH /api/admin/engine-hub/company/:companyId/engine-hub/settings
+    //
+    // RULE: If engineHub is not configured (never saved by admin), the engine
+    //       runs in passive mode (log only — no active call routing changes).
+    //       Surface the gap in the UI. Never silently default to active behavior.
+    //
+    // MULTI-TENANT: This block is per-companyId. Zero shared config across tenants.
+    // ============================================================================
+    engineHub: {
+
+        // ── Master controls ────────────────────────────────────────────────────
+        enabled: {
+            type:    Boolean,
+            default: false,
+            comment: 'Master switch. False = engine does not influence call routing.'
+        },
+        mode: {
+            type:    String,
+            enum:    ['active', 'learning', 'passive'],
+            default: 'passive',
+            comment: 'active = full routing. learning = log decisions, do not execute. passive = log only.'
+        },
+
+        // ── Intent Detection ──────────────────────────────────────────────────
+        intentDetection: {
+            multiIntentEnabled: {
+                type:    Boolean,
+                default: true,
+                comment: 'When true, engine detects multiple intents per turn simultaneously.'
+            },
+            confidenceThreshold: {
+                type:    Number,
+                default: 0.75,
+                min:     0.50,
+                max:     0.99,
+                comment: 'Minimum confidence for a secondary intent to be acted upon. Intents below this threshold are dropped.'
+            },
+            maxIntentsPerTurn: {
+                type:    Number,
+                default: 2,
+                min:     1,
+                max:     3,
+                comment: 'Maximum number of intents processed in a single caller turn.'
+            }
+        },
+
+        // ── Policy Router ─────────────────────────────────────────────────────
+        policyRouter: {
+            enabledPolicies: {
+                type:    [String],
+                default: ['answer_then_book', 'book_then_defer', 'clarify_first', 'pause_resume', 'de_escalate', 'offer_alternatives'],
+                comment: 'Allowlist of policies the router may select. Policies not in this list are never chosen regardless of intent match.'
+            }
+        },
+
+        // ── Mid-Flow Interrupt Handling ───────────────────────────────────────
+        // Configures what happens when a caller injects a question into an active flow.
+        midFlowInterrupt: {
+            bookingSlotSelection:  { type: String, default: 'pause_resume',    comment: 'Caller asks something while agent is offering booking slots.' },
+            bookingAddressCapture: { type: String, default: 'pause_resume',    comment: 'Caller asks something while agent is capturing address.' },
+            bookingConfirmation:   { type: String, default: 'book_then_defer', comment: 'Caller asks something while agent is confirming the booking.' },
+            afterHoursIntake:      { type: String, default: 'answer_then_book', comment: 'Caller asks something during after-hours message capture.' },
+            transferInProgress:    { type: String, default: 'block_injection', comment: 'Transfer is already in progress — block new intents from interrupting.' }
+        },
+
+        // ── Knowledge Engine ──────────────────────────────────────────────────
+        knowledgeEngine: {
+            strictGroundedMode: {
+                type:    Boolean,
+                default: true,
+                comment: 'When true, agent may only answer from KC cards. Never generates pricing, policy, or scheduling commitments from memory.'
+            },
+            onNoKcMatch: {
+                type:    String,
+                enum:    ['abstain', 'llm_fallback', 'escalate'],
+                default: 'abstain',
+                comment: 'What to do when no KC card matches the detected intent. abstain = acknowledge and offer alternatives. llm_fallback = use Claude (non-factual only). escalate = trigger escalation ladder.'
+            },
+            logKcMisses: {
+                type:    Boolean,
+                default: true,
+                comment: 'Log all KC no-match events to callTraceLog for gap analysis in Call Intelligence.'
+            }
+        },
+
+        // ── Agenda State ──────────────────────────────────────────────────────
+        // Replaces the single SPFUQ anchor. Tracks all open intents per call.
+        agendaState: {
+            maxDeferredIntents: {
+                type:    Number,
+                default: 3,
+                min:     1,
+                comment: 'Maximum intents tracked as deferred at any one time. Oldest is dropped when limit is hit.'
+            },
+            autoSurfaceDeferred: {
+                type:    Boolean,
+                default: true,
+                comment: 'When true, agent automatically raises deferred intents at the next natural conversational opening.'
+            },
+            deferredTimeoutTurns: {
+                type:    Number,
+                default: 5,
+                min:     1,
+                comment: 'Drop a deferred intent from the agenda after N turns without surfacing it. Prevents stale agenda bloat.'
+            }
+        },
+
+        // ── Trace & Diagnostics ───────────────────────────────────────────────
+        trace: {
+            enabled: {
+                type:    Boolean,
+                default: true,
+                comment: 'Log all Engine Hub decisions per turn to callTraceLog collection.'
+            },
+            showInCallIntelligence: {
+                type:    Boolean,
+                default: true,
+                comment: 'Surface Engine Hub trace events in the Call Intelligence report UI.'
+            },
+            alertOnFallbackCount: {
+                type:    Number,
+                default: 2,
+                min:     1,
+                comment: 'Flag a call in Call Intelligence when KC no-match fallback fires more than N times in one call.'
+            }
+        }
     }
+
 }, { timestamps: true });
 
 // V2 DELETED: V2 AI Intelligence Control Center - massive legacy bloat eliminated

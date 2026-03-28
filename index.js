@@ -283,11 +283,15 @@ async function loadAllRoutes() {
         // llm0TraceRoutes REMOVED Dec 2025 - LLM-0 Cortex-Intel nuked, Black Box is better
         routes.frontlineScriptBuilderRoutes = await loadRouteWithTimeout('./routes/admin/frontlineScriptBuilder', 'frontlineScriptBuilderRoutes'); // Frontline Script Builder: LLM-powered script generation
         routes.chatRoutes = await loadRouteWithTimeout('./routes/api/chat', 'chatRoutes'); // 🌐 Website Chat API (unified AI brain for website visitors)
-        
+
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
-        
+
         // DELETED: Legacy V2 Trade Categories - replaced by V2 Global Trade Categories system
-        
+
+        // ⚙️ Engine Hub (V1 March 2026 — Governed Voice Operating System)
+        routes.engineHubRoutes     = await loadRouteWithTimeout('./routes/admin/engineHub',     'engineHubRoutes');     // ⚙️ Engine Hub Settings (per-company CRUD)
+        routes.behaviorCardsRoutes = await loadRouteWithTimeout('./routes/admin/behaviorCards', 'behaviorCardsRoutes'); // 🃏 Behavior Cards (governs HOW the agent operates per category/flow)
+
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -685,6 +689,11 @@ function registerRoutes(routes) {
     app.use('/api/admin/agent2/company', routes.companyPromotionsRoutes);      // 🎟️ Promotions (coupons/specials — runtime interceptor + admin CRUD)
     app.use('/api/admin/agent2/company', routes.companyPricingRoutes);         // 💰 Pricing (service pricing facts + 3-layer responses + advisor callback)
     app.use('/api/admin/agent2/company', routes.companyKnowledgeRoutes);       // 🧠 Knowledge Base (unified containers — all informational Q&A)
+
+    // ⚙️ Engine Hub — Governed Voice Operating System (V1 March 2026)
+    app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)
+    app.use('/api/admin/behavior-cards', routes.behaviorCardsRoutes); // 🃏 Behavior Cards (governs HOW the agent operates per KC category + flow scenarios)
+
     app.use('/api/admin/agent2', routes.greetingsRoutes); // 🎙️ Greetings (Call Start + Greeting Interceptor)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
     app.use('/api/admin/globalshare', routes.globalShareRoutes); // 🌐 GlobalShare (secure name dictionaries gateway)
