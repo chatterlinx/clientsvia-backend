@@ -173,6 +173,13 @@ button { cursor: pointer; font-family: inherit; }
 }
 .btn-icon-only:hover { background: rgba(255,255,255,0.13); color: var(--tx-inv); }
 
+/* Spinning state — applied to #btn-refresh while a fetch is in flight */
+@keyframes ci-spin { to { transform: rotate(360deg); } }
+#btn-refresh.spinning svg {
+  animation: ci-spin 0.7s linear infinite;
+  transform-origin: center;
+}
+
 /* ── Dashboard View ──────────────────────────────────────── */
 .dashboard-view { flex: 1; padding: 24px 20px; }
 .dashboard-inner { max-width: 1360px; margin: 0 auto; }

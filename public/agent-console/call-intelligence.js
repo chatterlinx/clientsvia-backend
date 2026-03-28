@@ -10,7 +10,9 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE        = 20;
+const AUTO_REFRESH_MS  = 30_000;   // poll dashboard every 30 s
+let   _autoRefreshTimer = null;    // setInterval handle
 
 const SECTION_ICONS = {
   pass: '✓', fail: '✗', warn: '!', info: 'i',
@@ -89,6 +91,64 @@ const state = {
   analyzingCallSid: null
 };
 
+// ─── Auto-refresh ─────────────────────────────────────────────────────────────
+
+function startAutoRefresh() {
+  stopAutoRefresh();   // clear any existing timer first
+  _autoRefreshTimer = setInterval(() => {
+    if (state.view === 'dashboard') {
+      _silentRefreshDashboard();
+    }
+  }, AUTO_REFRESH_MS);
+}
+
+function stopAutoRefresh() {
+  if (_autoRefreshTimer) {
+    clearInterval(_autoRefreshTimer);
+    _autoRefreshTimer = null;
+  }
+}
+
+// Silent refresh — updates data without showing the loading spinner or
+// resetting the view. Only fires while on the dashboard.
+async function _silentRefreshDashboard() {
+  if (state.view !== 'dashboard') return;
+  try {
+    const params = new URLSearchParams({
+      companyId: state.companyId,
+      page: state.page,
+      limit: PAGE_SIZE,
+      timeRange: state.filterTime
+    });
+    if (state.filterStatus) params.set('status', state.filterStatus);
+    if (state.searchQuery)  params.set('search', state.searchQuery);
+
+    const [statsData, listData] = await Promise.all([
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/stats?timeRange=${state.filterTime}`).catch(() => null),
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/list?${params}`).catch(() => null)
+    ]);
+
+    if (statsData) renderStats(statsData);
+    if (listData)  renderCallsList(listData);
+    _stampLastUpdated();
+  } catch (_e) { /* silent — don't interrupt the user */ }
+}
+
+function _stampLastUpdated() {
+  const el = $('last-updated');
+  if (el) {
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el.textContent = `Updated ${t}`;
+  }
+}
+
+function _setRefreshSpinning(on) {
+  const btn = $('btn-refresh');
+  if (!btn) return;
+  if (on) btn.classList.add('spinning');
+  else    btn.classList.remove('spinning');
+}
+
 // ─── View switching ───────────────────────────────────────────────────────────
 
 function showView(name) {
@@ -126,6 +186,9 @@ async function apiFetch(path, opts = {}) {
 
 async function loadDashboard() {
   showView('dashboard');
+  startAutoRefresh();    // restart 30-s poll whenever dashboard loads
+
+  _setRefreshSpinning(true);
   const params = new URLSearchParams({
     companyId: state.companyId,
     page: state.page,
@@ -144,9 +207,12 @@ async function loadDashboard() {
 
     renderStats(statsData);
     renderCallsList(listData);
+    _stampLastUpdated();
   } catch (err) {
     console.error('[dashboard]', err);
     renderCallsError(err.message);
+  } finally {
+    _setRefreshSpinning(false);
   }
 }
 
@@ -254,6 +320,8 @@ function renderCallsError(msg) {
 async function openReport(callSid) {
   if (!callSid) return;
   state.currentCallSid = callSid;
+  stopAutoRefresh();     // pause poll while viewing a report
+  _setRefreshSpinning(true);
   showView('loading');
   $('loading-text').textContent = 'Assembling call report…';
 
@@ -267,13 +335,14 @@ async function openReport(callSid) {
   } catch (err) {
     console.error('[openReport]', err);
     $('loading-text').textContent = `Error: ${err.message}`;
-    // Show error with back button
     showView('report');
     $('report-content').innerHTML = `
       <div style="padding:40px; text-align:center; color:var(--c-fail);">
         <p style="font-size:16px; font-weight:600;">Failed to load report</p>
         <p style="margin-top:8px; color:var(--tx-muted);">${esc(err.message)}</p>
       </div>`;
+  } finally {
+    _setRefreshSpinning(false);
   }
 }
 
