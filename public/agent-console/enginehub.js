@@ -229,7 +229,11 @@
   }
 
   function getAuthHeaders() {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    // Use centralized auth lib (token key: 'adminToken')
+    const token = (typeof AgentConsoleAuth !== 'undefined' && AgentConsoleAuth.getToken())
+      || localStorage.getItem('adminToken')
+      || localStorage.getItem('token')
+      || sessionStorage.getItem('token');
     return token
       ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
       : { 'Content-Type': 'application/json' };
@@ -1030,6 +1034,9 @@
   // ==========================================================================
 
   async function init() {
+    // Guard: redirect to login if token is missing or expired
+    if (typeof AgentConsoleAuth !== 'undefined' && !AgentConsoleAuth.requireAuth()) return;
+
     state.companyId = getCompanyId();
 
     if (!state.companyId) {
