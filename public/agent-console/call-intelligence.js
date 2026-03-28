@@ -975,8 +975,14 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDashboard();
   });
 
-  // Refresh
-  $('btn-refresh').addEventListener('click', () => loadDashboard());
+  // Refresh — re-load whichever view is currently active
+  $('btn-refresh').addEventListener('click', () => {
+    if (state.view === 'report' && state.currentCallSid) {
+      openReport(state.currentCallSid);   // re-fetch the current report
+    } else {
+      loadDashboard();                    // refresh the call list
+    }
+  });
 
   // Settings
   $('btn-settings').addEventListener('click', () => {
