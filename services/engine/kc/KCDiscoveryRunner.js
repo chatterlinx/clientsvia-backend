@@ -52,6 +52,7 @@ const KCBookingIntentDetector = require('./KCBookingIntentDetector');
 const KCS                     = require('../agent2/KnowledgeContainerService');
 const { callLLMAgentForFollowUp } = require('../agent2/Agent2DiscoveryRunner');
 const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesService');
+const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');
 
 // ============================================================================
@@ -321,6 +322,21 @@ class KCDiscoveryRunner {
       containers = containers || [];
     }
 
+    // ── Engine Hub Runtime — load config from company document (sync, ~0ms) ──
+    // Returns null if Engine Hub is disabled, not configured, or passive mode.
+    // Passive = settings loaded for logging only, no routing changes applied.
+    // Learning / Active = settings govern hop threshold, policy selection, BC injection.
+    const ehConfig = EngineHubRuntime.load(company);
+    if (ehConfig) {
+      EngineHubRuntime.logTrace(companyId, callSid, 'EH_ACTIVE', {
+        mode:              ehConfig.mode,
+        confidenceThresh:  ehConfig.intentDetection.confidenceThreshold,
+        hopFactor:         EngineHubRuntime.getHopFactor(ehConfig).toFixed(2),
+        spfuqActive:       !!spfuq,
+        containerCount:    containers.length,
+      }, ehConfig);
+    }
+
     if (notes) {
       emit('KC_DISCOVERY_NOTES_LOADED', {
         callReason:  notes.callReason || null,
@@ -421,7 +437,15 @@ class KCDiscoveryRunner {
         );
         const anchorMatch   = anchorContainer ? KCS.findContainer([anchorContainer], userInput) : null;
         const anchorScore   = anchorMatch?.score ?? 0;
-        const hopThreshold  = Math.max(anchorScore * 1.5, 1);  // at least 1.5× anchor, min threshold of 1
+
+        // Engine Hub governs the hop factor — replaces hardcoded 1.5×.
+        // getHopFactor() returns 1/confidenceThreshold so:
+        //   threshold=0.72 → factor=1.39 (slightly more permissive than old 1.5×)
+        //   threshold=0.50 → factor=2.00 (very strict, stays in topic longer)
+        //   threshold=0.90 → factor=1.11 (permissive, easy topic hops)
+        // Falls back to 1.39 when Engine Hub is disabled/passive.
+        const hopFactor     = EngineHubRuntime.getHopFactor(ehConfig);
+        const hopThreshold  = Math.max(anchorScore * hopFactor, 1);
 
         if (match.score < hopThreshold) {
           // New match not strong enough — stay in SPFUQ topic.
@@ -429,8 +453,12 @@ class KCDiscoveryRunner {
           logger.info('[KC_ENGINE] Topic hop blocked (confidence gap) — staying in SPFUQ topic', {
             companyId, callSid,
             from: spfuq.containerTitle, to: match.container.title,
-            matchScore: match.score, anchorScore, hopThreshold,
+            matchScore: match.score, anchorScore, hopThreshold, hopFactor,
           });
+          EngineHubRuntime.logTrace(companyId, callSid, 'KC_HOP_BLOCKED', {
+            from: spfuq.containerTitle, to: match.container.title,
+            matchScore: match.score, anchorScore, hopThreshold, hopFactor,
+          }, ehConfig);
           match = null; // Force SPFUQ continue path below
         } else {
           // Caller clearly moved to a different topic — clear old anchor, hop
@@ -482,6 +510,7 @@ class KCDiscoveryRunner {
       userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
       bridgeToken, redis, callerName, onSentence,
       containers,   // passed so fallback event records what was searched
+      ehConfig,     // Engine Hub config — drives BC injection + trace logging
       notes,        // discoveryNotes for building Claude callContext
     });
   }
@@ -842,6 +871,7 @@ async function _handleLLMFallback({
   startMs, turn, bridgeToken, redis, callerName, onSentence,
   containers = [],
   notes      = null,
+  ehConfig   = null,   // Engine Hub runtime config (null = disabled/passive)
 }) {
   logger.info('[KC_ENGINE] No KC match — firing LLM fallback (Claude COMPLEX)', {
     companyId, callSid, turn, inputPreview: _clip(userInput, 40),
@@ -859,12 +889,46 @@ async function _handleLLMFallback({
     callReason:      notes?.callReason || null,
   });
 
-  // Build callContext from discoveryNotes so Claude has call-level awareness
+  // ── Engine Hub: load discovery_flow Standalone BC ─────────────────────────
+  // When KC misses, we are in unstructured discovery territory.
+  // The discovery_flow BC injects tone + rules into Claude's context so the
+  // LLM stays on-protocol (one question at a time, urgency check, etc.).
+  // Only injected in learning/active mode — passive = log only.
+  let discoveryFlowBC = null;
+  if (ehConfig && !ehConfig.isPassive) {
+    discoveryFlowBC = await EngineHubRuntime.getStandaloneBC('discovery_flow', companyId);
+    if (discoveryFlowBC) {
+      EngineHubRuntime.logTrace(companyId, callSid, 'BC_INJECTED', {
+        standaloneType: 'discovery_flow',
+        bcName:         discoveryFlowBC.name,
+        afterAction:    discoveryFlowBC.afterAction,
+      }, ehConfig);
+    }
+  } else if (ehConfig?.isPassive) {
+    // Passive mode: log what WOULD have happened but don't inject
+    EngineHubRuntime.getStandaloneBC('discovery_flow', companyId).then(bc => {
+      if (bc) {
+        EngineHubRuntime.logTrace(companyId, callSid, 'BC_WOULD_INJECT', {
+          standaloneType: 'discovery_flow',
+          bcName:         bc.name,
+          mode:           'passive',
+          note:           'Promote to learning/active to apply BC rules',
+        }, ehConfig);
+      }
+    }).catch(() => {});
+  }
+
+  const behaviorBlock = EngineHubRuntime.formatStandaloneBCForPrompt(discoveryFlowBC);
+
+  // Build callContext from discoveryNotes so Claude has call-level awareness.
+  // behaviorBlock (Engine Hub BC rules) is included so Claude follows the
+  // discovery_flow tone + rules when no KC card is guiding the response.
   const callContext = notes ? {
-    caller: notes.entities?.firstName ? { firstName: notes.entities.firstName, speakable: true } : null,
-    issue:  notes.callReason ? { summary: notes.callReason } : null,
-    urgency: notes.urgency === 'high' ? { level: 'high', reason: notes.callReason } : null,
-  } : null;
+    caller:        notes.entities?.firstName ? { firstName: notes.entities.firstName, speakable: true } : null,
+    issue:         notes.callReason ? { summary: notes.callReason } : null,
+    urgency:       notes.urgency === 'high' ? { level: 'high', reason: notes.callReason } : null,
+    behaviorBlock: behaviorBlock || null,   // Engine Hub discovery_flow BC rules
+  } : (behaviorBlock ? { behaviorBlock } : null);
 
   let llmResult = null;
   try {
