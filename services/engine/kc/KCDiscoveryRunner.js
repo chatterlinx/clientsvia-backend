@@ -249,8 +249,20 @@ class KCDiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
 
     const _norm = (userInput || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
-    const _inputHasQuestion = _norm.includes('?') ||
-      /\b(what|how|why|when|which|where|does|do you|can you|is it|is there|include|cover|tell me|explain|about|more|offer|know)\b/.test(_norm);
+
+    // ── Question filter: protect caller's follow-up questions from being
+    // swallowed by the booking intent gate.
+    //
+    // BUG FIX (2026-03-28): '?' was checked on _norm which had already stripped
+    // all punctuation — _norm.includes('?') was dead code and always false.
+    // Fix: check RAW userInput for '?' before normalization.
+    //
+    // Regex expansion: "we can", "is that", "wondering if", "possible",
+    // "add", "also" added to catch compound questions like:
+    //   "yes, however I was wondering if we can also add a maintenance to that. Is that possible?"
+    // Without this, "yes" fires BOOKING_INTENT and the question is dropped.
+    const _inputHasQuestion = (userInput || '').includes('?') ||
+      /\b(what|how|why|when|which|where|does|do you|can you|can we|we can|is it|is there|is that|include|cover|tell me|explain|about|more|offer|know|wondering|possible|add|also|and also)\b/.test(_norm);
 
     if (!_inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput)) {
       logger.info('[KC_ENGINE] Booking intent detected — routing to KC_BOOKING_INTENT', {
