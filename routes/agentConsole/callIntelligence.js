@@ -2068,7 +2068,7 @@ function buildVitals(summary, convTurns, discoveryNotes) {
       {
         label: 'LLM Fallback Turns',
         value: llmTurns,
-        sub: llmTurns > 0 ? `${Math.round(llmTurns / (totalTurns || 1) * 100)}% of turns` : 'None',
+        sub: llmTurns > 0 ? `${Math.round(llmTurns / (totalAgentTurns || 1) * 100)}% of turns` : 'None',
         status: llmTurns === 0 ? 'ok' : llmTurns <= 2 ? 'warn' : 'fail'
       },
       {
