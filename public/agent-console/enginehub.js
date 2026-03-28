@@ -289,6 +289,25 @@
   }
 
   // ==========================================================================
+  // API — KC CATEGORIES (read-only, drives BC category dropdown)
+  // ==========================================================================
+
+  async function apiGetKCCategories() {
+    // Reuses the existing KC active-containers endpoint — extract unique categories
+    const url = `/api/admin/agent2/company/${state.companyId}/knowledge/active`;
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error(`GET KC containers failed: ${res.status}`);
+    const data = await res.json();
+    const containers = data.containers || [];
+    // Deduplicate and sort — blank/null category excluded
+    const seen = new Set();
+    return containers
+      .map(c => c.category || '')
+      .filter(cat => cat && !seen.has(cat) && seen.add(cat))
+      .sort();
+  }
+
+  // ==========================================================================
   // API — BEHAVIOR CARDS
   // ==========================================================================
 
@@ -641,7 +660,8 @@
       if (card.type === 'category_linked') {
         DOM.bcCategoryGroup.style.display   = '';
         DOM.bcStandaloneGroup.style.display = 'none';
-        DOM.bcCategory.value = card.category || '';
+        // Repopulate dropdown with saved categories, pre-select existing value
+        _populateCategorySelect(state.kcCategories || [], card.category || '');
       } else {
         DOM.bcCategoryGroup.style.display   = 'none';
         DOM.bcStandaloneGroup.style.display = '';
@@ -675,12 +695,13 @@
 
       DOM.bcName.value  = '';
       DOM.bcTone.value  = '';
-      DOM.bcCategory.value = '';
       _setSelectValue(DOM.bcStandaloneType, '');
 
       if (type === 'category_linked') {
         DOM.bcCategoryGroup.style.display   = '';
         DOM.bcStandaloneGroup.style.display = 'none';
+        // Repopulate dropdown — no pre-selection for new card
+        _populateCategorySelect(state.kcCategories || [], '');
       } else {
         DOM.bcCategoryGroup.style.display   = 'none';
         DOM.bcStandaloneGroup.style.display = '';
@@ -899,6 +920,31 @@
     }
   }
 
+  async function loadKCCategories() {
+    try {
+      const categories = await apiGetKCCategories();
+      state.kcCategories = categories;
+      _populateCategorySelect(categories, '');
+    } catch (err) {
+      // Non-fatal — leave the placeholder option; admin can still see an empty dropdown
+      console.warn('[ENGINE HUB] loadKCCategories failed', err);
+      state.kcCategories = [];
+    }
+  }
+
+  function _populateCategorySelect(categories, selectedValue) {
+    const sel = DOM.bcCategory;
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— select a category —</option>';
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      if (cat === selectedValue) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   async function loadBehaviorCards() {
     try {
       const data = await apiGetBehaviorCards();
@@ -1062,11 +1108,12 @@
     // Show loading state on status badge
     renderStatusBadge('NOT_CONFIGURED');
 
-    // Load all data in parallel
+    // Load all data in parallel — KC categories must resolve before BC modal opens
     await Promise.all([
       loadSettings(),
       loadHealth(),
-      loadBehaviorCards()
+      loadBehaviorCards(),
+      loadKCCategories()
     ]);
   }
 

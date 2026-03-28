@@ -751,8 +751,10 @@
 
       <div class="eh-form-group" id="bc-category-group">
         <label class="eh-label" for="bc-category">KC Category</label>
-        <input type="text" id="bc-category" class="eh-input" placeholder='Must match KC category exactly — e.g. "Pricing &amp; Trust"'>
-        <p class="eh-hint">This must match the Category field on your Knowledge Cards exactly.</p>
+        <select id="bc-category" class="eh-select">
+          <option value="">— loading categories… —</option>
+        </select>
+        <p class="eh-hint">Applies this Behavior Card to every KC card in the selected category. Categories are pulled live from your Knowledge Base.</p>
       </div>
 
       <div class="eh-form-group" id="bc-standalone-type-group" style="display:none;">
