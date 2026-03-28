@@ -366,6 +366,17 @@
       });
     }
 
+    // ⚖️ Intent Arbitration Console link
+    const linkInterceptorsConsole = document.getElementById('link-interceptors-console');
+    if (linkInterceptorsConsole) {
+      linkInterceptorsConsole.addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateWithUnsavedGuard(() => {
+          window.location.href = `/agent-console/interceptor.html?companyId=${encodeURIComponent(state.companyId)}`;
+        });
+      });
+    }
+
     const statBoxTriggers = document.getElementById('stat-box-triggers');
     if (statBoxTriggers) {
       statBoxTriggers.addEventListener('click', () => {
