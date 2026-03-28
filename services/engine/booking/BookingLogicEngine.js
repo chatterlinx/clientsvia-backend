@@ -833,8 +833,34 @@ async function processInit(ctx, config, companyId, isTest, events) {
     }
 
     if (hasFirst && !hasLast) {
-      // First name only — confirm it ONLY (one question per turn rule).
-      // If caller confirms YES, CONFIRM_FIRST_ASK_LAST handler collects last name next.
+      // First name only — check confidence before deciding whether to confirm.
+      //
+      // HIGH CONFIDENCE (≥ 0.80): Name was clearly stated and captured by llm_intake.
+      //   The agent already echoed the name back in the Turn 1 greeting response.
+      //   Asking the caller to confirm it creates an "amnesia" UX — they hear the
+      //   agent forget who they are two turns later. Skip confirmation entirely and
+      //   go straight to last name.
+      //   → "Great, Mark! And what is your last name?"
+      //
+      // LOW CONFIDENCE (< 0.80): Name is uncertain (partial extraction, low model
+      //   confidence, or no discoveryNotes available). Confirm before proceeding.
+      //   → "I show your first name as Mark — is that right? And your last name?"
+      const firstNameConf  = ctx.discoveryNotes?.entities?.confidence?.firstName || 0;
+      const highConfidence = firstNameConf >= 0.80;
+
+      if (highConfidence) {
+        // Skip confirmation — go straight to last name collection
+        ctx.step             = STEPS.CONFIRM_NAME;
+        ctx._nameConfirmMode = 'ASK_LAST_ONLY';
+        events.push({ type: 'BL1_SKIP_NAME_CONFIRM_HIGH_CONF', firstName: ctx.collectedFields.firstName, confidence: firstNameConf, timestamp: Date.now() });
+        return {
+          nextPrompt: `${bridge}${config.confirmFirstNameGotLastAsk.replace('{firstName}', ctx.collectedFields.firstName)}`,
+          bookingCtx: ctx,
+          completed:  false
+        };
+      }
+
+      // Low confidence — confirm with caller before proceeding
       ctx.step             = STEPS.CONFIRM_NAME;
       ctx._nameConfirmMode = 'CONFIRM_FIRST_ASK_LAST';
       events.push({ type: 'BL1_CONFIRMING_FIRST_NAME', firstName: ctx.collectedFields.firstName, timestamp: Date.now() });
@@ -1024,16 +1050,28 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
   const isNo  = /\b(no|nope|wrong|incorrect|not (right|correct)|different|nah|neither)\b/.test(lower);
 
   // ── Re-ask if empty input ─────────────────────────────────────────────────
+  // IMPORTANT: Do NOT repeat the verbatim prompt on a no-response turn.
+  // A caller who didn't hear or is confused will hear an identical question
+  // as a loop — it sounds like a broken system. Rephrase to a shorter,
+  // simpler fallback so the caller gets a different cue to respond to.
   if (!userInput?.trim()) {
     if (mode === 'CONFIRM_FULL') {
       const full = `${ctx.collectedFields.firstName} ${ctx.collectedFields.lastName}`;
       return { nextPrompt: config.confirmFullName.replace('{name}', full), bookingCtx: ctx, completed: false };
     }
     if (mode === 'CONFIRM_FIRST_ASK_LAST') {
-      return { nextPrompt: config.confirmFirstNameAskLast.replace('{firstName}', ctx.collectedFields.firstName), bookingCtx: ctx, completed: false };
+      // Shorten — drop the "I show your first name as..." preamble
+      const first = ctx.collectedFields.firstName;
+      return { nextPrompt: `Just to confirm — is your first name ${first}?`, bookingCtx: ctx, completed: false };
     }
     if (mode === 'ASK_LAST_ONLY') {
-      return { nextPrompt: config.askLastNameOnly, bookingCtx: ctx, completed: false };
+      // Shorten — personalise with first name so it doesn't sound robotic
+      const first = ctx.collectedFields.firstName || '';
+      return {
+        nextPrompt: first ? `What's your last name, ${first}?` : config.askLastNameOnly,
+        bookingCtx: ctx,
+        completed:  false
+      };
     }
   }
 
