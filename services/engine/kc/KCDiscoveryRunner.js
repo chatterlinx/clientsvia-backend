@@ -49,6 +49,7 @@
 
 const SPFUQService            = require('./SPFUQService');
 const KCBookingIntentDetector = require('./KCBookingIntentDetector');
+const KCTransferIntentDetector = require('./KCTransferIntentDetector');
 const KCS                     = require('../agent2/KnowledgeContainerService');
 const { callLLMAgentForFollowUp } = require('../agent2/Agent2DiscoveryRunner');
 const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesService');
@@ -67,6 +68,9 @@ const PATH = {
   KC_LLM_FALLBACK:   'KC_LLM_FALLBACK',   // No KC match → Claude LLM
   KC_GRACEFUL_ACK:   'KC_GRACEFUL_ACK',   // No KC + LLM unavailable
   KC_PFUQ_REASK:     'KC_PFUQ_REASK',     // KC answered follow-up, re-asked booking Q
+  // ── Transfer paths ────────────────────────────────────────────────────────
+  KC_TRANSFER_INTENT:   'KC_TRANSFER_INTENT',    // Transfer intent detected → transfer executing
+  KC_TRANSFER_OVERFLOW: 'KC_TRANSFER_OVERFLOW',  // Transfer intent, destination unavailable → overflow
 };
 
 // ============================================================================
@@ -233,6 +237,187 @@ class KCDiscoveryRunner {
     emit('KC_RUNNER_START', {
       companyId, callSid, turn, inputPreview: _clip(userInput, 60),
     });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 0.5 — TRANSFER INTENT CHECK  (~0ms synchronous, ~2ms with Redis)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Fires BEFORE the booking gate. A caller asking for a human wants a human
+    // immediately — booking can always be completed by the agent post-transfer.
+    //
+    // FAST PATH: isTransferIntent() is purely synchronous (~0ms).
+    // Only if true do we hit Redis/MongoDB for policy + destinations (~2ms cached).
+    //
+    // HIERARCHY (mirrors TransferPolicy 5-level design):
+    //   1. Emergency override active → overflow immediately (all transfers blocked)
+    //   2. Destination found + available → execute transfer (set state, announce)
+    //   3. Destination found + unavailable → overflow (voicemail/message)
+    //   4. No destinations configured → fall through to GATE 1 (KC answers)
+    //
+    // GRACEFUL DEGRADE: any error falls through silently to GATE 1.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    if (KCTransferIntentDetector.isTransferIntent(userInput)) {
+      logger.info('[KC_ENGINE] 🔀 GATE 0.5: Transfer intent detected', {
+        companyId, callSid, turn, inputPreview: _clip(userInput, 40),
+      });
+      emit('KC_TRANSFER_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_TRANSFER_INTENT });
+
+      try {
+        // ── Lazy-require models (keeps non-transfer turns clean) ─────────────
+        const TransferPolicy      = require('../../../models/TransferPolicy');
+        const TransferDestination = require('../../../models/TransferDestination');
+
+        // ── Load policy + active destinations (Redis-cached, ~1ms) ──────────
+        const [policy, destinations] = await Promise.all([
+          TransferPolicy.getForCompany(companyId).catch(() => null),
+          TransferDestination.findActiveForCompany(companyId).catch(() => []),
+        ]);
+
+        // ── LEVEL 1: Emergency override — block all transfers ────────────────
+        if (policy?.emergencyOverride?.active) {
+          const emergencyMsg = policy.emergencyOverride.message ||
+            'We are currently unable to take calls at this time. Please call back later.';
+
+          logger.info('[KC_ENGINE] GATE 0.5: Emergency override active — transfer blocked', {
+            companyId, callSid, turn,
+          });
+          emit('KC_TRANSFER_OVERFLOW_FIRED', { companyId, callSid, reason: 'emergency_override' });
+
+          nextState.agent2              = nextState.agent2 || {};
+          nextState.agent2.discovery    = nextState.agent2.discovery || {};
+          nextState.agent2.discovery.lastPath = PATH.KC_TRANSFER_OVERFLOW;
+          nextState.transferOverflow    = { action: 'emergency', reason: 'emergency_override' };
+
+          return {
+            response:    emergencyMsg,
+            matchSource: 'KC_ENGINE',
+            state:       nextState,
+            _123rp:      _build123rp(PATH.KC_TRANSFER_OVERFLOW, {
+              latencyMs: Date.now() - startMs,
+              transferOverflowReason: 'emergency_override',
+            }),
+          };
+        }
+
+        // ── Extract routing hints from the caller's utterance ────────────────
+        const hint = KCTransferIntentDetector.getTransferHint(userInput);
+
+        // ── Find best matching destination ────────────────────────────────────
+        // Priority: caller-named person → department keyword → first active dest
+        let bestDest = null;
+
+        if (hint.personName && destinations.length) {
+          bestDest = destinations.find(d =>
+            d.type === 'agent' &&
+            d.name && d.name.toLowerCase().includes(hint.personName.toLowerCase())
+          ) || null;
+        }
+
+        if (!bestDest && hint.department && destinations.length) {
+          const deptNorm = hint.department.toLowerCase();
+          bestDest = destinations.find(d =>
+            d.type === 'department' &&
+            d.name && d.name.toLowerCase().includes(deptNorm)
+          ) || destinations.find(d =>
+            d.departmentTag && d.departmentTag.toLowerCase().includes(deptNorm)
+          ) || null;
+        }
+
+        // Fallback: first active, enabled destination (sorted by priority)
+        if (!bestDest && destinations.length) {
+          bestDest = destinations[0] || null;
+        }
+
+        if (!bestDest) {
+          // No destinations configured — fall through to GATE 1 (KC will answer)
+          logger.info('[KC_ENGINE] GATE 0.5: No transfer destinations configured — falling through', {
+            companyId, callSid,
+          });
+          // ── intentional fall-through to GATE 1 ────────────────────────────
+        } else {
+
+          // ── Determine effective transfer mode ──────────────────────────────
+          const transferMode = bestDest.transferContext?.transferMode
+            || policy?.defaultTransferMode
+            || 'warm';
+
+          // ── Build transfer announcement text ──────────────────────────────
+          // AI says this before bridging so the caller isn't dropped into silence.
+          let announcement = '';
+          if (policy?.announceTransfer?.enabled !== false) {
+            const template = policy?.announceTransfer?.template
+              || "I'm going to connect you now. Please hold for just a moment.";
+            announcement = template
+              .replace('{name}',       bestDest.name        || 'our team')
+              .replace('{department}', bestDest.departmentTag || bestDest.name || 'our team')
+              .replace('{title}',      bestDest.title        || '')
+              .trim();
+          }
+
+          // ── Wire transfer state — v2twilio reads these to execute the dial ─
+          nextState.justTransitionedToTransfer = true;
+          nextState.sessionMode   = 'TRANSFER';
+          // transferTarget shape: E.164 string for backward compat,
+          // plus metadata object for the new v2twilio handler.
+          nextState.transferTarget = bestDest.phoneNumber || null;
+          nextState.transferMeta  = {
+            destinationId: String(bestDest._id),
+            name:          bestDest.name,
+            type:          bestDest.type,
+            mode:          transferMode,
+            urgency:       hint.urgency || 'normal',
+            department:    hint.department || bestDest.departmentTag || null,
+            personName:    hint.personName || null,
+            // Overflow config — v2twilio uses this if the dial fails
+            overflowAction:  bestDest.overflow?.action || policy?.defaultOverflowAction || 'voicemail',
+            overflowMessage: bestDest.overflow?.message || policy?.defaultOverflowMessage || null,
+          };
+
+          nextState.agent2              = nextState.agent2 || {};
+          nextState.agent2.discovery    = nextState.agent2.discovery || {};
+          nextState.agent2.discovery.lastPath = PATH.KC_TRANSFER_INTENT;
+
+          // ── discoveryNotes: mark objective as TRANSFER ────────────────────
+          _writeDiscoveryNotes(companyId, callSid, {
+            objective:  'TRANSFER',
+            turnNumber: turn ?? 0,
+            ...(callerName ? { entities: { firstName: callerName } } : {}),
+          }).catch(() => {});
+
+          // Clear any active SPFUQ — transfer intent ends the topic anchor
+          SPFUQService.clear(companyId, callSid).catch(() => {});
+
+          logger.info('[KC_ENGINE] GATE 0.5: Transfer executing', {
+            companyId, callSid, turn,
+            dest: bestDest.name, mode: transferMode, urgency: hint.urgency,
+            hasPhone: !!bestDest.phoneNumber,
+          });
+
+          emit('KC_TRANSFER_EXECUTING', {
+            companyId, callSid, turn,
+            destName: bestDest.name, mode: transferMode,
+          });
+
+          return {
+            response:    announcement || null,
+            matchSource: 'KC_ENGINE',
+            state:       nextState,
+            _123rp:      _build123rp(PATH.KC_TRANSFER_INTENT, {
+              latencyMs:    Date.now() - startMs,
+              transferDest: bestDest.name,
+              transferMode,
+              urgency:      hint.urgency,
+            }),
+          };
+        }
+
+      } catch (_transferErr) {
+        // GATE 0.5 error — fall through silently to GATE 1 (booking check)
+        logger.warn('[KC_ENGINE] GATE 0.5 error — falling through to GATE 1', {
+          companyId, callSid, err: _transferErr.message,
+        });
+      }
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // GATE 1 — BOOKING INTENT CHECK  (~0ms, synchronous)

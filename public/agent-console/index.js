@@ -424,6 +424,9 @@
       case 'interceptors':
         window.location.href = `${baseUrl}/interceptor.html${companyParam}`;
         break;
+      case 'transfer':
+        window.location.href = `${baseUrl}/transfer.html${companyParam}`;
+        break;
       case 'services':
         window.location.href = `${baseUrl}/services.html${companyParam}`;
         break;

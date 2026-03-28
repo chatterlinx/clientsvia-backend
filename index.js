@@ -259,6 +259,7 @@ async function loadAllRoutes() {
         routes.companyKnowledgeRoutes     = await loadRouteWithTimeout('./routes/admin/companyKnowledge',     'companyKnowledgeRoutes');     // 🧠 Knowledge Base (unified containers — pricing, specials, FAQs, policies)
         routes.companyInterceptorsRoutes  = await loadRouteWithTimeout('./routes/admin/companyInterceptors',  'companyInterceptorsRoutes');  // 🔀 Interceptors (custom intent rules — keywords → action routing)
         routes.companyArbitrationRoutes   = await loadRouteWithTimeout('./routes/admin/companyArbitration',   'companyArbitrationRoutes');   // ⚖️ Arbitration (policy config + call turn traces + active lane state)
+        routes.companyTransferRoutes      = await loadRouteWithTimeout('./routes/admin/companyTransfer',      'companyTransferRoutes');      // 📞 Transfer (destinations, policy, screening, scheduling)
         routes.greetingsRoutes = await loadRouteWithTimeout('./routes/admin/greetings', 'greetingsRoutes'); // 🎙️ Greetings (Call Start + Greeting Interceptor)
         routes.globalHubRoutes = await loadRouteWithTimeout('./routes/admin/globalHub', 'globalHubRoutes'); // 🌐 Global Hub (cross-tenant shared resources)
         routes.globalShareRoutes = await loadRouteWithTimeout('./routes/admin/globalshare', 'globalShareRoutes'); // 🌐 GlobalShare (secure name dictionaries gateway)
@@ -693,6 +694,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/agent2/company', routes.companyKnowledgeRoutes);       // 🧠 Knowledge Base (unified containers — all informational Q&A)
     app.use('/api/admin/agent2/company', routes.companyInterceptorsRoutes);    // 🔀 Interceptors (custom intent rules — keywords → action routing)
     app.use('/api/admin/agent2/company', routes.companyArbitrationRoutes);     // ⚖️ Arbitration (policy config + call turn traces + active lane state)
+    app.use('/api/admin/agent2/company', routes.companyTransferRoutes);        // 📞 Transfer (destinations, policy, screening, scheduling)
 
     // ⚙️ Engine Hub — Governed Voice Operating System (V1 March 2026)
     app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)

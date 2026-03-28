@@ -6208,6 +6208,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const isBookingNow     = (persistedState?.sessionMode === 'BOOKING' || persistedState?.lane === 'BOOKING');
       const justTransitionedToBooking = isBookingNow && !wasBookingBefore;
 
+      // ── TRANSFER: justTransitionedToTransfer flag set by KC GATE 0.5 or SmartInterceptor
+      // transferTarget is an E.164 phone string (legacy) or we pull it from transferMeta.
+      const justTransitionedToTransfer = persistedState?.justTransitionedToTransfer === true;
+
       // ── CALLER SCREENING: speak response then end the call ────────────────────
       // Set when Agent2DiscoveryRunner's caller screening gate intercepts a
       // non-customer caller (VENDOR_SALES, DELIVERY, WRONG_NUMBER).
@@ -6225,6 +6229,86 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             data: { reason: 'endCallAfterResponse — caller screening intercept' }
           }).catch(() => {});
         }
+
+      } else if (justTransitionedToTransfer) {
+        // ── TRANSFER HANDOFF ──────────────────────────────────────────────────
+        // Set by KC GATE 0.5 (KCTransferIntentDetector) or SmartInterceptor.
+        // transferTarget is an E.164 phone string or null if no number is configured.
+        // transferMeta carries enriched routing context (name, mode, overflow).
+        //
+        // Flow: say announcement (if any) → dial transferTarget.
+        // If no phone number configured: play fallback and hang up gracefully.
+        // ─────────────────────────────────────────────────────────────────────
+        const transferPhone = persistedState?.transferTarget || null;
+        const transferMeta  = persistedState?.transferMeta  || {};
+        const transferMode  = transferMeta.mode || 'warm';
+
+        // Speak the transfer announcement first (e.g. "I'm connecting you now…")
+        if (responseText && responseText.trim()) {
+          if (audioUrl) twiml.play(audioUrl);
+          else twiml.say(escapeTwiML(responseText));
+        }
+
+        if (transferPhone) {
+          // ── Execute the dial ────────────────────────────────────────────────
+          logger.info('[V2TWILIO] 🔀 Transfer dialing', {
+            callSid: callSid?.slice(-8),
+            destName: transferMeta.name,
+            mode: transferMode,
+            hasPhone: true,
+          });
+
+          // Build caller ID: use the company's Twilio number (From on the inbound
+          // leg) so the receiving agent sees the business number, not the caller's.
+          const dialCallerId = company?.twilioPhoneNumber
+            || company?.aiAgentSettings?.twilioPhoneNumber
+            || null;
+
+          const dialOpts = {
+            timeout:  30,
+            action:   `${getSecureBaseUrl(req)}/api/twilio/status-callback/${companyID}`,
+            ...(dialCallerId ? { callerId: dialCallerId } : {}),
+          };
+          const dialVerb = twiml.dial(dialOpts);
+          dialVerb.number(transferPhone);
+
+          if (CallLogger && callSid) {
+            CallLogger.logEvent({
+              callId: callSid, companyId: companyID,
+              type: 'TRANSFER_DIAL_INITIATED',
+              turn: turnNumber,
+              data: {
+                destName:  transferMeta.name       || null,
+                destId:    transferMeta.destinationId || null,
+                mode:      transferMode,
+                urgency:   transferMeta.urgency     || 'normal',
+                department: transferMeta.department || null,
+              }
+            }).catch(() => {});
+          }
+
+        } else {
+          // ── No phone number configured — play overflow and hang up ──────────
+          const fallbackMsg = transferMeta.overflowMessage
+            || "I'm sorry, I'm unable to connect you right now. Please call back and we'll make sure someone assists you.";
+
+          logger.info('[V2TWILIO] Transfer: no phone number configured — overflow fallback', {
+            callSid: callSid?.slice(-8), destName: transferMeta.name,
+          });
+
+          twiml.say(escapeTwiML(fallbackMsg));
+          twiml.hangup();
+
+          if (CallLogger && callSid) {
+            CallLogger.logEvent({
+              callId: callSid, companyId: companyID,
+              type: 'TRANSFER_NO_PHONE_OVERFLOW',
+              turn: turnNumber,
+              data: { destName: transferMeta.name || null, reason: 'no_phone_number' }
+            }).catch(() => {});
+          }
+        }
+
       } else if (justTransitionedToBooking) {
         // Play consent YES response, then booking bridge phrase, then redirect.
         // BookingLogicEngine fires on the redirect and immediately asks its
