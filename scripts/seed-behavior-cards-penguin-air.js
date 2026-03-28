@@ -322,7 +322,7 @@ async function main() {
   console.log('  ✅  MongoDB connected\n');
 
   const db   = client.db('clientsvia');
-  const col  = db.collection('behaviorcards');
+  const col  = db.collection('behaviorCards');
 
   // Verify company
   const company = await db.collection('companiesCollection')
