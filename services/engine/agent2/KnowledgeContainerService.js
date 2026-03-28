@@ -681,10 +681,38 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
 
   const norm = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
 
+  // ── NEGATIVE KEYWORD EXCLUSION ────────────────────────────────────────────
+  // If a container has negativeKeywords, check each one against the utterance.
+  // Any single match DISQUALIFIES that container for this turn (regardless of
+  // how well its positive keywords score). This lets admins prevent containers
+  // with broad positive keywords (e.g. "price") from firing on utterances that
+  // belong to a different topic (e.g. "maintenance price" → not system replacement).
+  //
+  // Matching rules mirror positive-keyword matching:
+  //   Multi-word negative keyword → exact substring match in normalised input
+  //   Single-word negative keyword → whole-word match in normalised input
+  // ─────────────────────────────────────────────────────────────────────────
+  const _isNegativelyExcluded = (container) => {
+    const negKws = container.negativeKeywords;
+    if (!Array.isArray(negKws) || !negKws.length) return false;
+    const inputWords = new Set(norm.split(/\s+/));
+    for (const nk of negKws) {
+      const nkNorm = nk.toLowerCase().trim();
+      if (!nkNorm) continue;
+      if (nkNorm.includes(' ')) {
+        if (norm.includes(nkNorm)) return true;          // multi-word exact hit
+      } else {
+        if (inputWords.has(nkNorm)) return true;         // single-word whole-word hit
+      }
+    }
+    return false;
+  };
+
   let bestMatch = null;
   let bestScore = 0;
 
   for (const container of containers) {
+    if (_isNegativelyExcluded(container)) continue;      // ← exclusion gate
     const keywords = container.keywords || [];
     if (!keywords.length) continue;
 
@@ -739,6 +767,7 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
     const augNorm   = augmented.toLowerCase().replace(/[^a-z\s]/g, ' ');
 
     for (const container of containers) {
+      if (_isNegativelyExcluded(container)) continue;    // ← exclusion gate (context pass too)
       const keywords = container.keywords || [];
       if (!keywords.length) continue;
 

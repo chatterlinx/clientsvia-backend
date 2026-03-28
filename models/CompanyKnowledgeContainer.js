@@ -150,6 +150,12 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'Trigger phrases — what a caller might say when asking about this topic. Auto-generate via POST .../generate-keywords.'
     },
 
+    negativeKeywords: {
+      type:    [String],
+      default: [],
+      comment: 'Exclusion phrases — if ANY of these appear in the caller\'s utterance, this container is immediately excluded from scoring for that turn. Use to prevent containers with broad positive keywords from firing on unrelated topics. E.g. "System Replacement" container adds negativeKeywords: ["maintenance", "tune-up"] to stop matching maintenance price questions.'
+    },
+
     // ─────────────────────────────────────────────────────────────────────────
     // RESPONSE SETTINGS — per-container overrides
     // ─────────────────────────────────────────────────────────────────────────

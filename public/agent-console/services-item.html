@@ -217,6 +217,32 @@
     .kw-tag button:hover { color: #dc2626; }
     .kw-tag.conflict { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
     .kw-tag.conflict button { color: #dc2626; }
+    /* Negative keyword chips — red theme */
+    .keyword-input-wrap.neg-wrap { border-color: #fca5a5; background: #fff8f8; }
+    .keyword-input-wrap.neg-wrap:focus-within { border-color: #dc2626; }
+    .kw-tag.negative { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .kw-tag.negative button { color: #b91c1c; }
+    .kw-tag.negative button:hover { color: #7f1d1d; }
+    /* Test match panel */
+    .test-match-panel { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 8px; }
+    .test-match-input-row { display:flex; gap:8px; }
+    .test-match-input { flex:1; border:1px solid var(--border); border-radius:8px; padding:9px 12px; font-size:13px; font-family:inherit; }
+    .test-match-input:focus { outline:none; border-color:var(--border-focus); }
+    .btn-test-match { padding:9px 18px; border-radius:8px; border:none; background:var(--color-primary); color:#fff; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .btn-test-match:hover { background:#0284c7; }
+    .test-match-result { margin-top:12px; font-size:13px; }
+    .tmr-winner { padding:10px 14px; border-radius:8px; margin-bottom:10px; }
+    .tmr-winner.win  { background:#dcfce7; border:1px solid #86efac; color:#14532d; }
+    .tmr-winner.miss { background:#fef9c3; border:1px solid #fde047; color:#713f12; }
+    .tmr-winner.excluded { background:#fee2e2; border:1px solid #fca5a5; color:#7f1d1d; }
+    .tmr-scores-header { font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+    .tmr-score-row { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:6px; margin-bottom:3px; font-size:12.5px; }
+    .tmr-score-row.winner-row { background:#dcfce7; font-weight:600; }
+    .tmr-score-row.excluded-row { background:#fff8f8; text-decoration:line-through; color:#9ca3af; }
+    .tmr-score-badge { font-size:11px; font-weight:700; padding:2px 7px; border-radius:20px; background:#e0f2fe; color:#075985; }
+    .tmr-score-badge.high { background:#bbf7d0; color:#166534; }
+    .tmr-score-badge.zero { background:#f1f5f9; color:#94a3b8; }
+    .tmr-neg-badge { font-size:11px; padding:2px 7px; border-radius:20px; background:#fee2e2; color:#b91c1c; }
     .kw-conflict-tip { font-size: 11px; cursor: help; line-height: 1; }
     .kw-input-inner {
       border: none; outline: none; font-size: 13px; min-width: 120px;
@@ -489,6 +515,36 @@
         </div>
         <div class="kw-hint">Press <strong>Enter</strong> or <strong>,</strong> to add a phrase. Click × to remove. Multi-word phrases score higher than single words.</div>
       </div>
+
+      <!-- Negative keywords -->
+      <div class="form-group full" style="margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <span class="form-label" style="color:#b91c1c;">🚫 Exclusion Keywords <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(negative)</span></span>
+        </div>
+        <div class="keyword-input-wrap neg-wrap" id="negKwWrap" onclick="document.getElementById('negKwInner').focus()">
+          <input type="text" id="negKwInner" class="kw-input-inner"
+            placeholder="Type an exclusion phrase and press Enter…"
+            onkeydown="negKwKeydown(event)">
+        </div>
+        <div class="kw-hint">If <em>any</em> of these words/phrases appear in the caller's utterance this container is <strong>skipped</strong>, even if its positive keywords match. Example: add <code>maintenance</code> to a "System Replacement" container so it never fires when callers ask about maintenance pricing.</div>
+      </div>
+
+      <!-- Live test-match diagnostic -->
+      <div class="form-group full" style="margin-top:20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="form-label">🔬 Test Utterance — see which container wins</span>
+        </div>
+        <div class="test-match-panel">
+          <div class="test-match-input-row">
+            <input type="text" id="testMatchInput" class="test-match-input"
+              placeholder='E.g. "How much do you charge for a maintenance?"'
+              onkeydown="if(event.key==='Enter') runTestMatch()">
+            <button class="btn-test-match" onclick="runTestMatch()">Test →</button>
+          </div>
+          <div id="testMatchResult" class="test-match-result" style="display:none;"></div>
+        </div>
+        <div class="kw-hint" style="margin-top:6px;">Tests all <em>saved</em> containers — save first to include your latest keyword changes in results.</div>
+      </div>
     </div>
   </div>
 
@@ -659,14 +715,15 @@ async function apiFetch(path, opts = {}) {
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
 const S = {
-  companyId:   null,
-  itemId:      null,       // null = create mode; string = edit mode
-  isEdit:      false,
-  keywords:    [],         // current keyword list
-  sectionSeq:  0,          // monotonic ID for section DOM nodes
-  conflictMap: {},         // { keyword: [{id, title}] } — from keyword-health endpoint
-  evalResult:  null,       // last evaluation result from /evaluate
-  evalLoading: false,
+  companyId:        null,
+  itemId:           null,       // null = create mode; string = edit mode
+  isEdit:           false,
+  keywords:         [],         // positive trigger keywords
+  negativeKeywords: [],         // exclusion keywords (any match → container skipped)
+  sectionSeq:       0,          // monotonic ID for section DOM nodes
+  conflictMap:      {},         // { keyword: [{id, title}] } — from keyword-health endpoint
+  evalResult:       null,       // last evaluation result from /evaluate
+  evalLoading:      false,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -801,6 +858,10 @@ function _populateForm(c) {
   // Keywords
   S.keywords = [...(c.keywords || [])];
   _renderKeywords();
+
+  // Negative keywords
+  S.negativeKeywords = [...(c.negativeKeywords || [])];
+  _renderNegKeywords();
 
   // Sections
   const sorted = [...(c.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -972,6 +1033,109 @@ function removeKeyword(kw) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NEGATIVE KEYWORDS
+// ─────────────────────────────────────────────────────────────────────────────
+function _renderNegKeywords() {
+  const wrap  = document.getElementById('negKwWrap');
+  const input = document.getElementById('negKwInner');
+  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
+  S.negativeKeywords.forEach(kw => {
+    const tag     = document.createElement('span');
+    tag.className = 'kw-tag negative';
+    tag.innerHTML = `🚫 ${_esc(kw)} <button type="button" onclick="removeNegKeyword('${_esc(kw).replace(/'/g, "\\'")}')">×</button>`;
+    wrap.insertBefore(tag, input);
+  });
+}
+
+function negKwKeydown(e) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.trim().replace(/,/g, '').toLowerCase();
+    if (val && !S.negativeKeywords.includes(val)) {
+      S.negativeKeywords.push(val);
+      _renderNegKeywords();
+    }
+    e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && S.negativeKeywords.length) {
+    S.negativeKeywords.pop();
+    _renderNegKeywords();
+  }
+}
+
+function removeNegKeyword(kw) {
+  S.negativeKeywords = S.negativeKeywords.filter(k => k !== kw);
+  _renderNegKeywords();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEST MATCH — live diagnostic
+// ─────────────────────────────────────────────────────────────────────────────
+async function runTestMatch() {
+  const utterance = (document.getElementById('testMatchInput')?.value || '').trim();
+  if (!utterance) { _toast('Enter a test utterance first', 'error'); return; }
+  const resultEl = document.getElementById('testMatchResult');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">⏳ Testing…</div>';
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/test-match`,
+      { method: 'POST', body: JSON.stringify({ utterance }) }
+    );
+
+    if (!data.ok) throw new Error(data.error || 'Test failed');
+
+    const w = data.winner;
+    let html = '';
+
+    // Winner banner
+    if (w && w.score > 0) {
+      html += `<div class="tmr-winner win">
+        ✅ <strong>"${_esc(w.title)}"</strong> would match &mdash;
+        keyword: <code>${_esc(w.matchedKeyword)}</code>, score: <strong>${w.score}</strong>
+        ${w.contextAssisted ? '<span style="font-size:11px;color:#166534;">(context-assisted)</span>' : ''}
+      </div>`;
+    } else if (data.excluded.length && !w) {
+      html += `<div class="tmr-winner miss">⚠️ All matching containers were negatively excluded — would fall through to LLM.</div>`;
+    } else {
+      html += `<div class="tmr-winner miss">⚠️ No container matched — would fall through to LLM (KC miss).</div>`;
+    }
+
+    // Scores table
+    const nonZero = data.scores.filter(s => s.score > 0);
+    const zero    = data.scores.filter(s => s.score === 0);
+
+    if (nonZero.length || data.excluded.length) {
+      html += `<div class="tmr-scores-header">All container scores</div>`;
+      [...nonZero, ...data.excluded, ...zero].forEach((s, i) => {
+        const isWinner  = s.wouldWin;
+        const isExcl    = !!s.excludedBy;
+        const badge     = isExcl ? `<span class="tmr-neg-badge">🚫 excluded by: "${_esc(s.excludedBy)}"</span>`
+          : s.score > 0 ? `<span class="tmr-score-badge ${isWinner ? 'high' : ''}">${s.score}</span>`
+          : `<span class="tmr-score-badge zero">0</span>`;
+        const kw = s.matchedKeyword ? `<span style="color:var(--text-muted);font-size:12px;"> — keyword: <em>${_esc(s.matchedKeyword)}</em></span>` : '';
+        html += `<div class="tmr-score-row ${isWinner ? 'winner-row' : ''} ${isExcl ? 'excluded-row' : ''}">
+          ${badge} <span>${_esc(s.title)}</span>${kw}
+        </div>`;
+      });
+    }
+
+    if (data.excluded.length) {
+      html += `<div style="font-size:12px;color:#b91c1c;margin-top:8px;">🚫 ${data.excluded.length} container${data.excluded.length!==1?'s':''} negatively excluded</div>`;
+    }
+
+    html += `<div style="font-size:11px;color:var(--text-muted);margin-top:10px;">
+      ${data.totalContainers} total containers · threshold: ${data.threshold} · utterance norm: <code>${_esc(data.utteranceNorm)}</code>
+    </div>`;
+
+    resultEl.innerHTML = html;
+  } catch (err) {
+    resultEl.innerHTML = `<div style="color:#dc2626;font-size:13px;">❌ ${_esc(err.message)}</div>`;
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AI QUALITY EVALUATION
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -995,10 +1159,11 @@ async function runEvaluation() {
     title,
     category,
     sections,
-    keywords:      S.keywords,
-    wordLimit:     (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
-    bookingAction: document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
-    closingPrompt: (document.getElementById('fClosingPrompt')?.value || '').trim(),
+    keywords:         S.keywords,
+    negativeKeywords: S.negativeKeywords,
+    wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
   };
 
   try {
@@ -1222,8 +1387,9 @@ async function saveContainer() {
     title,
     category:       document.getElementById('fCategory').value?.trim() || '',
     sections,
-    keywords:       S.keywords,
-    wordLimit:      (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    keywords:         S.keywords,
+    negativeKeywords: S.negativeKeywords,
+    wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     bookingAction:  document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
     closingPrompt:  (document.getElementById('fClosingPrompt')?.value || '').trim(),
     followUpDepth:  (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,

@@ -71,10 +71,11 @@ function _validateCompanyAccess(req, res, companyId) {
 // Allowed fields for container CRUD operations
 const ALLOWED_FIELDS = [
   'title', 'category',
-  'sections',        // [{ label, content, order }]
+  'sections',           // [{ label, content, order }]
   'keywords',
+  'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
   'wordLimit',
-  'followUpDepth',   // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
+  'followUpDepth',      // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
   'bookingAction',
   'closingPrompt',
   'isActive',
@@ -109,6 +110,13 @@ function _sanitiseBody(body) {
   if (Array.isArray(out.keywords)) {
     out.keywords = [...new Set(
       out.keywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
+    )];
+  }
+
+  // Normalise negativeKeywords — same rules as keywords
+  if (Array.isArray(out.negativeKeywords)) {
+    out.negativeKeywords = [...new Set(
+      out.negativeKeywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
     )];
   }
 
@@ -539,6 +547,145 @@ router.post('/:companyId/knowledge/reorder', async (req, res) => {
   } catch (err) {
     logger.error('[companyKnowledge] reorder error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Failed to reorder containers' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/test-match
+// Diagnostic: run the live KC scoring algorithm against a test utterance and
+// return a ranked breakdown of every container's score, the winning container,
+// which containers were negatively excluded, and why.
+//
+// Body: { utterance: string, callReason?: string }
+// Returns: { winner, scores[], excluded[], utteranceNorm }
+//
+// ⚠️ MUST be before GET /:id — Express will match 'test-match' as id otherwise
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res) => {
+  const { companyId }  = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { utterance, callReason } = req.body || {};
+  if (!utterance || typeof utterance !== 'string' || !utterance.trim()) {
+    return res.status(400).json({ ok: false, error: 'utterance is required' });
+  }
+
+  try {
+    const KCS = require('../../services/engine/agent2/KnowledgeContainerService');
+    const containers = await KCS.getActiveForCompany(companyId);
+
+    if (!containers.length) {
+      return res.json({ ok: true, winner: null, scores: [], excluded: [], utteranceNorm: utterance.trim(), note: 'No active containers found for this company.' });
+    }
+
+    const norm = utterance.toLowerCase().replace(/[^a-z\s]/g, ' ');
+
+    // ── Score EVERY container (including negatively-excluded ones for the report)
+    const scores   = [];
+    const excluded = [];
+
+    const _scoreContainer = (container, inputNorm) => {
+      const keywords = container.keywords || [];
+      let bestKw = null, bestScore = 0;
+      for (const kw of keywords) {
+        const kwNorm = kw.toLowerCase().trim();
+        if (!kwNorm) continue;
+        let score = 0;
+        if (kwNorm.includes(' ')) {
+          if (inputNorm.includes(kwNorm)) {
+            score = kwNorm.length * 2;
+          } else {
+            const iWords = new Set(inputNorm.split(/\s+/));
+            const cWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
+            const hits   = cWords.filter(w => iWords.has(w));
+            if (hits.length) score = hits.reduce((s, w) => s + w.length, 0);
+          }
+        } else {
+          score = inputNorm.split(/\s+/).includes(kwNorm) ? kwNorm.length : 0;
+        }
+        if (score > bestScore) { bestScore = score; bestKw = kw; }
+      }
+      return { score: bestScore, matchedKeyword: bestKw };
+    };
+
+    const _checkNegative = (container) => {
+      const negKws = container.negativeKeywords || [];
+      const iWords = new Set(norm.split(/\s+/));
+      for (const nk of negKws) {
+        const nkNorm = nk.toLowerCase().trim();
+        if (!nkNorm) continue;
+        if (nkNorm.includes(' ') ? norm.includes(nkNorm) : iWords.has(nkNorm)) {
+          return nk;   // Return the trigger negative keyword
+        }
+      }
+      return null;
+    };
+
+    for (const c of containers) {
+      const negHit = _checkNegative(c);
+      const { score, matchedKeyword } = _scoreContainer(c, norm);
+
+      if (negHit) {
+        excluded.push({
+          id:                String(c._id),
+          title:             c.title,
+          positiveScore:     score,
+          matchedKeyword:    matchedKeyword || null,
+          excludedBy:        negHit,
+          negativeKeywords:  c.negativeKeywords || [],
+        });
+      } else {
+        scores.push({
+          id:               String(c._id),
+          title:            c.title,
+          score,
+          matchedKeyword:   matchedKeyword || null,
+          keywords:         c.keywords     || [],
+          negativeKeywords: c.negativeKeywords || [],
+          wouldWin:         false, // filled below
+        });
+      }
+    }
+
+    // Sort by score desc, mark winner
+    scores.sort((a, b) => b.score - a.score);
+    const winner = scores.find(s => s.score > 0) || null;
+    if (winner) winner.wouldWin = true;
+
+    // Also run context-augmented pass if callReason provided and no winner
+    let contextWinner = null;
+    if (!winner && callReason) {
+      const augNorm = `${callReason} ${utterance}`.toLowerCase().replace(/[^a-z\s]/g, ' ');
+      for (const c of containers) {
+        if (_checkNegative(c)) continue;
+        const { score, matchedKeyword } = _scoreContainer(c, augNorm);
+        if (score > 0) {
+          contextWinner = { id: String(c._id), title: c.title, score, matchedKeyword, contextAssisted: true };
+          break;
+        }
+      }
+    }
+
+    return res.json({
+      ok:           true,
+      utterance:    utterance.trim(),
+      utteranceNorm: norm.trim(),
+      callReason:   callReason || null,
+      winner:       winner   || contextWinner || null,
+      scores,
+      excluded,
+      totalContainers:  containers.length,
+      activeScored:     scores.length,
+      negativeExcluded: excluded.length,
+      threshold:        KCS.KEYWORD_CONFIDENCE_THRESHOLD,
+      note: winner
+        ? `"${winner.matchedKeyword}" scored ${winner.score} in "${winner.title}"`
+        : (contextWinner ? `Context-assisted match via callReason: "${contextWinner.matchedKeyword}" → "${contextWinner.title}"` : 'No container matched — would fall through to LLM'),
+    });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] test-match error', { companyId, err: err.message });
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
