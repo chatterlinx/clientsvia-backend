@@ -264,6 +264,11 @@ class KCDiscoveryRunner {
     const _inputHasQuestion = (userInput || '').includes('?') ||
       /\b(what|how|why|when|which|where|does|do you|can you|can we|we can|is it|is there|is that|include|cover|tell me|explain|about|more|offer|know|wondering|possible|add|also|and also)\b/.test(_norm);
 
+    // Compound intent: utterance has BOTH a booking signal AND a question/topic.
+    // When true: skip immediate booking handoff, answer the KC question this turn,
+    // then transition to BOOKING lane so v2twilio redirects after the response plays.
+    const _hasCompoundBookingIntent = _inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput);
+
     if (!_inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput)) {
       logger.info('[KC_ENGINE] Booking intent detected — routing to KC_BOOKING_INTENT', {
         companyId, callSid, turn, inputPreview: _clip(userInput, 40),
@@ -501,6 +506,7 @@ class KCDiscoveryRunner {
         containers, channel, nextState, emit, startMs, turn,
         bridgeToken, redis, onSentence, pendingBookingQuestion,
         discoveryContext, priorVisit,
+        compoundBookingIntent: _hasCompoundBookingIntent,
       });
     }
 
@@ -511,6 +517,7 @@ class KCDiscoveryRunner {
         channel, nextState, emit, startMs, turn,
         bridgeToken, redis, onSentence, pendingBookingQuestion,
         discoveryContext, priorVisit,
+        compoundBookingIntent: _hasCompoundBookingIntent,
       });
     }
 
@@ -536,12 +543,13 @@ async function _handleSPFUQContinue({
   spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
   containers,   // already loaded in run() — no second DB round-trip
   channel, nextState, emit, startMs, turn,
-  bridgeToken           = null,
-  redis                 = null,
-  onSentence            = null,
+  bridgeToken            = null,
+  redis                  = null,
+  onSentence             = null,
   pendingBookingQuestion = null,
   discoveryContext       = null,
   priorVisit             = false,
+  compoundBookingIntent  = false,
 }) {
   const containerTitle = spfuq.containerTitle || 'this topic';
 
@@ -643,6 +651,26 @@ async function _handleSPFUQContinue({
     }],
   }).catch(() => {});
 
+  // ── Compound booking intent: KC answered the question; now transition to booking ──
+  // Caller had both a booking signal and a topic question in the same utterance.
+  // Set lane = 'BOOKING' so v2twilio redirects to BookingLogicEngine after this response.
+  if (compoundBookingIntent && !nextState.lane) {
+    logger.info('[KC_ENGINE] Compound booking intent (SPFUQ) — transitioning to BOOKING after KC answer', {
+      companyId, callSid, containerTitle: anchorMatch.title, turn,
+    });
+    nextState.lane        = 'BOOKING';
+    nextState.sessionMode = 'BOOKING';
+    nextState.agent2 = nextState.agent2 || {};
+    nextState.agent2.discovery = nextState.agent2.discovery || {};
+    nextState.agent2.discovery.pendingBookingFromKC = true;
+    _writeDiscoveryNotes(companyId, callSid, {
+      callReason: anchorMatch.title,
+      objective:  'BOOKING',
+      turnNumber: turn ?? 0,
+    }).catch(() => {});
+    SPFUQService.clear(companyId, callSid).catch(() => {});
+  }
+
   // ── Path: KC_PFUQ_REASK when booking consent was pending ──────────────────
   // Groq's closingPrompt already asked the booking question naturally as part
   // of its response. We re-assert PFUQ in state ONLY — no second question is
@@ -704,12 +732,13 @@ async function _handleSPFUQContinue({
 async function _handleKCMatch({
   match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
   channel, nextState, emit, startMs, turn,
-  bridgeToken           = null,
-  redis                 = null,
-  onSentence            = null,
+  bridgeToken            = null,
+  redis                  = null,
+  onSentence             = null,
   pendingBookingQuestion = null,
   discoveryContext       = null,
   priorVisit             = false,
+  compoundBookingIntent  = false,
 }) {
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
@@ -826,6 +855,27 @@ async function _handleKCMatch({
       timestamp: new Date().toISOString(),
     }],
   }).catch(() => {});
+
+  // ── Compound booking intent: KC answered the question; now transition to booking ──
+  // Caller had both a booking signal and a topic question in the same utterance.
+  // Set lane = 'BOOKING' so v2twilio redirects to BookingLogicEngine after this response.
+  if (compoundBookingIntent && !nextState.lane) {
+    logger.info('[KC_ENGINE] Compound booking intent — transitioning to BOOKING after KC answer', {
+      companyId, callSid, containerTitle, turn,
+    });
+    nextState.lane        = 'BOOKING';
+    nextState.sessionMode = 'BOOKING';
+    nextState.agent2 = nextState.agent2 || {};
+    nextState.agent2.discovery = nextState.agent2.discovery || {};
+    nextState.agent2.discovery.pendingBookingFromKC = true;
+    _writeDiscoveryNotes(companyId, callSid, {
+      callReason: containerTitle,
+      objective:  'BOOKING',
+      turnNumber: turn ?? 0,
+      ...(callerName ? { entities: { firstName: callerName } } : {}),
+    }).catch(() => {});
+    SPFUQService.clear(companyId, callSid).catch(() => {});
+  }
 
   // ── Path: KC_PFUQ_REASK when booking consent was pending ──────────────────
   // Groq's closingPrompt already asked the booking question naturally as part

@@ -102,6 +102,15 @@ const PromotionsInterceptor  = require('./PromotionsInterceptor');
 const PricingInterceptor          = require('./PricingInterceptor');          // 💰 Service pricing fact intercept
 const PricingConversationService  = require('./PricingConversationService');   // 🤖 Groq pricing Q&A with catalog guardrails
 const KnowledgeContainerService   = require('./KnowledgeContainerService');    // 🧠 Unified knowledge Q&A — fires first in all intercept paths
+
+// ════════════════════════════════════════════════════════════════════════════
+// ⚖️ INTENT ARBITRATION ENGINE
+// ════════════════════════════════════════════════════════════════════════════
+// Feature-flagged: aiAgentSettings.agent2.discovery.arbitrationEnabled
+// Lazy-loaded at CHECKPOINT D — only imported when the feature is active.
+// All modules are path-relative from this file's location in agent2/.
+// ════════════════════════════════════════════════════════════════════════════
+// (Lazy requires in CHECKPOINT D block — see below)
 const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt, composeIntakeExtractionPrompt, composeIntakeResponsePrompt } = require('../../../config/llmAgentDefaults');
@@ -3923,6 +3932,22 @@ class Agent2DiscoveryRunner {
               };
             }
 
+            // ── COMPOUND BOOKING INTENT: pricing question + booking signal in same utterance
+            // e.g. "yeah I'd like to schedule that... how much is the service call?"
+            // Answer the price question this turn, then auto-transition to booking.
+            // Guards: not already routing to advisor (has its own BOOKING path);
+            //         not already in BOOKING origin (returnPrompt handles that case).
+            if (!requiresAdvisor && digressionOrigin === 'DISCOVERY') {
+              const { isBookingIntent } = require('../kc/KCBookingIntentDetector');
+              if (isBookingIntent(input)) {
+                nextState.lane        = 'BOOKING';
+                nextState.sessionMode = 'BOOKING';
+                logger.info('[A2] Compound booking intent — transitioning to BOOKING after pricing answer', {
+                  companyId, callSid, itemLabel: item.label,
+                });
+              }
+            }
+
             emit('A2_PRICING_INTERCEPTED', {
               digressionOrigin,
               itemLabel:       item.label,
@@ -3962,6 +3987,236 @@ class Agent2DiscoveryRunner {
         logger.warn('[A2] PricingInterceptor error — falling through to normal pipeline', {
           callSid, error: pricingErr.message
         });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ⚖️  ARBITRATION ENGINE — CHECKPOINT D: CUSTOM RULES + LANE MANAGEMENT
+    // ══════════════════════════════════════════════════════════════════════════
+    // Feature-flagged per company: aiAgentSettings.agent2.discovery.arbitrationEnabled
+    //
+    // Runs AFTER platform interceptors (Greeting/Promotions/Pricing) have had
+    // their turn. Its purpose is to evaluate user-configured custom rules built
+    // via interceptor.html, manage lane state (sticky routing), and record a
+    // forensic TurnTrace for every call turn.
+    //
+    // Decision flow:
+    //   1. SmartInterceptorService evaluates custom rules against caller input
+    //   2. KCBookingIntentDetector contributes a BOOKING candidate if detected
+    //   3. ArbitrationEngine.decide() selects the winning action
+    //   4. Winner is executed; lane state is written to Redis
+    //   5. TurnTracer.record() fires asynchronously (never delays the call)
+    //
+    // Action outcomes:
+    //   RESPOND      (CUSTOM_RULE) → return rule's configured response text
+    //   BOOK         (any)         → lock BOOKING lane, fall through to KC booking gate
+    //   TRANSFER     (CUSTOM_RULE) → lock TRANSFER lane, return transfer payload
+    //   ROUTE_KC     (CUSTOM_RULE) → pass kcContainerHint to KC engine, fall through
+    //   GRACEFUL_ACK / no match   → fall through silently to KC engine
+    //
+    // Graceful degrade: any error here falls through to KC — call never breaks.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (discoveryCfg.arbitrationEnabled === true) {
+      try {
+        // ── Lazy-load arbitration modules (only when feature is active) ──────
+        const LaneController           = require('../arbitration/LaneController');
+        const { decide: arbDecide,
+                CANDIDATE_TYPES,
+                ACTIONS: ARB_ACTIONS,
+                LANES }                = require('../arbitration/ArbitrationEngine');
+        const SmartInterceptorService  = require('../arbitration/SmartInterceptorService');
+        const TurnTracer               = require('../arbitration/TurnTracer');
+        const CompanyArbitrationPolicy = require('../../../models/CompanyArbitrationPolicy');
+        const KCBookingIntentDetector  = require('../kc/KCBookingIntentDetector');
+
+        // ── Step 1: Build candidate set ──────────────────────────────────────
+        const candidates = [];
+
+        // 1a. Custom SmartInterceptor rules (user-configured via interceptor.html)
+        const ruleResult = await SmartInterceptorService.evaluate(input, companyId);
+        if (ruleResult && ruleResult.matched && ruleResult.rule) {
+          candidates.push({
+            type:     CANDIDATE_TYPES.CUSTOM_RULE,
+            score:    ruleResult.score,
+            signal:   `rule:${ruleResult.rule.name}`,
+            detector: 'SmartInterceptorService',
+            meta: {
+              actionType:     ruleResult.rule.action?.type,
+              responseText:   ruleResult.rule.action?.response,
+              kcContainerId:  ruleResult.rule.action?.kcContainerId,
+              transferTarget: ruleResult.rule.action?.transferTarget,
+              bookingMode:    ruleResult.rule.action?.bookingMode,
+              ruleId:         ruleResult.rule._id?.toString()
+            }
+          });
+        }
+
+        // 1b. Booking intent detector
+        if (KCBookingIntentDetector.isBookingIntent(input)) {
+          candidates.push({
+            type:     CANDIDATE_TYPES.BOOKING,
+            score:    0.85,
+            signal:   'booking_intent_detected',
+            detector: 'KCBookingIntentDetector'
+          });
+        }
+
+        // ── Step 2: Lane state ───────────────────────────────────────────────
+        const policy  = await CompanyArbitrationPolicy.getForCompany(companyId);
+        const curLane = await LaneController.getLane(callSid);
+        const escaped = LaneController.isEscapeKeyword(input, policy.escapeKeywords || []);
+
+        if (escaped && curLane) {
+          await LaneController.clearLane(callSid);
+          emit('ARBITRATION_LANE_ESCAPED', {
+            callSid,
+            previousLane: curLane,
+            inputPreview: clip(input, 60)
+          });
+        }
+
+        const laneState = {
+          current:         escaped ? null : curLane,
+          locked:          !escaped && !!curLane,
+          escapeTriggered: escaped
+        };
+
+        // ── Step 3: Arbitrate ────────────────────────────────────────────────
+        const candidateSet = {
+          normalized: input.toLowerCase().trim(),
+          candidates
+        };
+        const decision = arbDecide(candidateSet, laneState, policy);
+
+        emit('ARBITRATION_DECISION', {
+          callSid,
+          companyId,
+          turn,
+          action:         decision.action,
+          winner:         decision.winner?.type   || null,
+          winnerSignal:   decision.winner?.signal || null,
+          reason:         decision.reason,
+          policyApplied:  decision.policyApplied,
+          scoreGap:       decision.scoreGap,
+          candidateCount: candidates.length
+        });
+
+        // ── Step 4: TurnTrace (fire-and-forget — never delays the call) ───────
+        TurnTracer.record({
+          callId:          callSid,
+          companyId,
+          turn,
+          input,
+          candidateSet,
+          laneStateBefore: { current: curLane,                 locked: !!curLane },
+          laneStateAfter:  { current: decision.newLane || curLane, locked: !!(decision.newLane || curLane) },
+          decision,
+          policy:          policy?.toObject ? policy.toObject() : policy
+        });
+
+        // ── Step 5: Execute winning action ───────────────────────────────────
+
+        if (decision.action === ARB_ACTIONS.RESPOND &&
+            decision.winner?.type === CANDIDATE_TYPES.CUSTOM_RULE) {
+          // ── CUSTOM_RULE → RESPOND ─────────────────────────────────────────
+          const meta = candidates.find(c => c.type === CANDIDATE_TYPES.CUSTOM_RULE)?.meta;
+          if (meta?.responseText) {
+            SmartInterceptorService.recordMatch(meta.ruleId).catch(() => {});
+            if (decision.newLane) {
+              await LaneController.setLane(callSid, decision.newLane, policy.laneTimeoutMs);
+            }
+            nextState.agent2                    = nextState.agent2 || {};
+            nextState.agent2.discovery          = nextState.agent2.discovery || {};
+            nextState.agent2.discovery.lastPath = 'SMART_INTERCEPTOR';
+            emit('A2_RESPONSE_READY', {
+              path:            'SMART_INTERCEPTOR',
+              responsePreview: clip(meta.responseText, 120),
+              ruleId:          meta.ruleId
+            });
+            return {
+              response:    meta.responseText,
+              matchSource: 'SMART_INTERCEPTOR',
+              state:       nextState,
+              _123rp:      build123rpMeta('SMART_INTERCEPTOR')
+            };
+          }
+          // responseText absent → fall through to KC
+
+        } else if (decision.action === ARB_ACTIONS.TRANSFER &&
+                   decision.winner?.type === CANDIDATE_TYPES.CUSTOM_RULE) {
+          // ── CUSTOM_RULE → TRANSFER ────────────────────────────────────────
+          const meta = candidates.find(c => c.type === CANDIDATE_TYPES.CUSTOM_RULE)?.meta;
+          if (meta?.transferTarget) {
+            SmartInterceptorService.recordMatch(meta.ruleId).catch(() => {});
+            await LaneController.setLane(callSid, LANES.TRANSFER, policy.laneTimeoutMs);
+            nextState.agent2                         = nextState.agent2 || {};
+            nextState.agent2.discovery               = nextState.agent2.discovery || {};
+            nextState.agent2.discovery.lastPath      = 'SMART_INTERCEPTOR_TRANSFER';
+            nextState.justTransitionedToTransfer     = true;
+            nextState.transferTarget                 = meta.transferTarget;
+            emit('ARBITRATION_TRANSFER', {
+              callSid,
+              target: meta.transferTarget,
+              ruleId: meta.ruleId
+            });
+            return {
+              response:    null,
+              matchSource: 'SMART_INTERCEPTOR',
+              state:       nextState,
+              _123rp:      build123rpMeta('SMART_INTERCEPTOR_TRANSFER')
+            };
+          }
+          // transferTarget absent → fall through
+
+        } else if (decision.action === ARB_ACTIONS.ROUTE_KC &&
+                   decision.winner?.type === CANDIDATE_TYPES.CUSTOM_RULE) {
+          // ── CUSTOM_RULE → ROUTE_KC ────────────────────────────────────────
+          // Pass a KC container hint so KCDiscoveryRunner can target the right container.
+          const meta = candidates.find(c => c.type === CANDIDATE_TYPES.CUSTOM_RULE)?.meta;
+          if (meta?.kcContainerId) {
+            SmartInterceptorService.recordMatch(meta.ruleId).catch(() => {});
+            if (decision.newLane) {
+              await LaneController.setLane(callSid, decision.newLane, policy.laneTimeoutMs);
+            }
+            nextState.agent2                           = nextState.agent2 || {};
+            nextState.agent2.discovery                 = nextState.agent2.discovery || {};
+            nextState.agent2.discovery.kcContainerHint = meta.kcContainerId;
+            nextState.agent2.discovery.lastPath        = 'SMART_INTERCEPTOR_ROUTE_KC';
+          }
+          // Fall through to KC engine — it picks up kcContainerHint from state
+
+        } else if (decision.action === ARB_ACTIONS.BOOK) {
+          // ── BOOKING intent (from any detector) ───────────────────────────
+          // Lock the BOOKING lane and fall through — KCDiscoveryRunner's GATE 1
+          // (KCBookingIntentDetector) will handle the actual booking handoff.
+          await LaneController.setLane(callSid, LANES.BOOKING, policy.laneTimeoutMs);
+          emit('ARBITRATION_LANE_SET', {
+            callSid,
+            lane:   LANES.BOOKING,
+            reason: decision.reason
+          });
+          // Fall through to KC engine
+
+        } else if (decision.newLane) {
+          // Any other action that produced a new lane assignment
+          await LaneController.setLane(callSid, decision.newLane, policy.laneTimeoutMs);
+          emit('ARBITRATION_LANE_SET', {
+            callSid,
+            lane:   decision.newLane,
+            reason: decision.reason
+          });
+        }
+
+        // All remaining actions (GRACEFUL_ACK, CLARIFY, ROUTE_KC with no meta)
+        // fall through silently to the KC Discovery Engine below.
+
+      } catch (arbitrationErr) {
+        // Arbitration failures MUST NOT break a live call — fall through silently.
+        logger.warn('[A2] Arbitration CHECKPOINT D error — falling through to KC engine', {
+          callSid,
+          error: arbitrationErr.message
+        });
+        emit('ARBITRATION_ERROR', { callSid, error: arbitrationErr.message });
       }
     }
 

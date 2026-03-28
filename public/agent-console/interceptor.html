@@ -1,0 +1,2364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intent Arbitration Console</title>
+
+  <!-- ============================================================
+       INTENT ARBITRATION CONSOLE
+       ClientsVia Agent Console · Enterprise Edition
+
+       WHAT THIS PAGE IS:
+         The unified control center for the Intent Arbitration Engine.
+         Every decision the AI agent makes about "what to do with this
+         caller utterance" is governed by rules configured here.
+
+       FOUR TABS:
+         1. Rules       — Build custom rule intents (keyword → action)
+                          View platform-tier interceptors with live stats.
+         2. Arbitration — Configure the decision policy: signal weights,
+                          lane locking, mixed-intent handling, thresholds.
+         3. Live Calls  — Watch active calls and their current lane state.
+         4. Trace Replay— Forensic turn-by-turn decision replay for any call.
+
+       ARCHITECTURE:
+         Platform Tier (locked) → Custom Rules → KC Semantic Engine → LLM → ACK
+         All rules and policy are per-companyId. Zero cross-tenant leakage.
+
+       API BASE: /api/admin/agent2/company/:companyId/interceptors
+                 /api/admin/agent2/company/:companyId/arbitration
+  ============================================================ -->
+
+  <style>
+    /* ================================================================
+       DESIGN TOKENS — matches services.html / pricing.html palette
+    ================================================================ */
+    :root {
+      --color-primary:      #0ea5e9;
+      --color-primary-dk:   #0284c7;
+      --color-primary-lt:   #e0f2fe;
+      --color-success:      #10b981;
+      --color-success-lt:   #d1fae5;
+      --color-warning:      #f59e0b;
+      --color-warning-lt:   #fef3c7;
+      --color-danger:       #ef4444;
+      --color-danger-lt:    #fee2e2;
+      --color-purple:       #8b5cf6;
+      --color-purple-lt:    #ede9fe;
+      --color-teal:         #14b8a6;
+      --color-teal-lt:      #ccfbf1;
+      --color-indigo:       #6366f1;
+      --color-locked:       #64748b;
+
+      --bg-page:            #f0f9ff;
+      --bg-card:            #ffffff;
+      --bg-header:          #ffffff;
+      --bg-sidebar:         #f8fafc;
+      --bg-locked:          #f8fafc;
+
+      --text-primary:       #0f172a;
+      --text-secondary:     #334155;
+      --text-muted:         #64748b;
+      --text-xs:            #94a3b8;
+
+      --border:             #e2e8f0;
+      --border-focus:       #0ea5e9;
+      --border-strong:      #cbd5e1;
+
+      --radius-card:        12px;
+      --radius-sm:          8px;
+      --radius-xs:          6px;
+      --radius-pill:        999px;
+
+      --shadow-card:        0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-raised:      0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+      --shadow-modal:       0 20px 60px rgba(0,0,0,.20);
+
+      --font-mono:          'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+
+      --transition:         150ms ease;
+      --transition-slow:    250ms ease;
+    }
+
+    /* ================================================================
+       RESET & BASE
+    ================================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 14px; scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ================================================================
+       PAGE HEADER — sticky, matches services.html
+    ================================================================ */
+    .page-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+      height: 56px;
+      box-shadow: 0 1px 0 var(--border);
+    }
+
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); cursor: pointer;
+      color: var(--text-muted); font-size: .813rem; font-weight: 500;
+      text-decoration: none; transition: all var(--transition);
+      white-space: nowrap;
+    }
+    .btn-back:hover { background: var(--bg-page); color: var(--text-secondary); border-color: var(--border-strong); }
+
+    .header-title-group { flex: 1; display: flex; align-items: baseline; gap: 10px; }
+
+    .header-title {
+      font-size: 1rem; font-weight: 700; color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .header-company {
+      font-size: .813rem; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .header-badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-primary-lt); color: var(--color-primary-dk);
+      border: 1px solid #bae6fd; white-space: nowrap;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ================================================================
+       TAB NAVIGATION
+    ================================================================ */
+    .tab-nav {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; gap: 0;
+    }
+
+    .tab-btn {
+      padding: 12px 20px;
+      background: none; border: none; cursor: pointer;
+      font-size: .813rem; font-weight: 500; color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      display: flex; align-items: center; gap: 6px;
+      transition: all var(--transition); white-space: nowrap;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active {
+      color: var(--color-primary); border-bottom-color: var(--color-primary);
+      font-weight: 600;
+    }
+    .tab-btn .tab-count {
+      font-size: .688rem; font-weight: 700; padding: 1px 6px;
+      background: var(--bg-page); border-radius: var(--radius-pill);
+      color: var(--text-muted); border: 1px solid var(--border);
+    }
+    .tab-btn.active .tab-count {
+      background: var(--color-primary-lt); color: var(--color-primary-dk);
+      border-color: #bae6fd;
+    }
+
+    /* ================================================================
+       TAB PANELS
+    ================================================================ */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ================================================================
+       PAGE BODY
+    ================================================================ */
+    .page-body { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+    /* ================================================================
+       INFO BANNER — collapsible, matches services.html pattern
+    ================================================================ */
+    .info-banner {
+      background: #f0f9ff; border: 1px solid #bae6fd;
+      border-radius: var(--radius-card); padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+    .info-banner-header {
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+    }
+    .info-banner-icon { color: var(--color-primary); font-size: 1.1rem; }
+    .info-banner-title { font-weight: 600; color: var(--color-primary-dk); font-size: .875rem; flex: 1; }
+    .info-banner-toggle {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: .75rem; padding: 2px 6px;
+      border-radius: var(--radius-xs);
+    }
+    .info-banner-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid #bae6fd; }
+    .info-banner-body p { font-size: .813rem; color: var(--text-secondary); margin-bottom: 6px; }
+    .info-banner-body p:last-child { margin-bottom: 0; }
+    .info-banner-body.hidden { display: none; }
+
+    /* ================================================================
+       STATS BAR
+    ================================================================ */
+    .stats-bar {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px 18px;
+      display: flex; align-items: center; gap: 10px;
+      flex: 1; min-width: 120px;
+      box-shadow: var(--shadow-card);
+    }
+    .stat-icon { font-size: 1.25rem; }
+    .stat-body { }
+    .stat-value { font-size: 1.375rem; font-weight: 700; color: var(--text-primary); line-height: 1; }
+    .stat-label { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* ================================================================
+       PIPELINE VISUALIZATION — Tab 1
+    ================================================================ */
+    .pipeline {
+      display: flex; flex-direction: column; gap: 0;
+    }
+
+    /* Tier Section */
+    .pipeline-tier {
+      margin-bottom: 8px;
+    }
+
+    .tier-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      font-size: .75rem; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .tier-header-line { flex: 1; height: 1px; background: var(--border); }
+    .tier-label { white-space: nowrap; }
+    .tier-lock-badge {
+      font-size: .625rem; font-weight: 700; padding: 2px 6px;
+      border-radius: var(--radius-pill); background: var(--bg-locked);
+      color: var(--text-muted); border: 1px solid var(--border);
+    }
+
+    /* Pipeline Connector */
+    .pipeline-connector {
+      display: flex; justify-content: center; align-items: center;
+      padding: 4px 0; color: var(--text-muted); font-size: .813rem;
+      position: relative;
+    }
+    .pipeline-connector::before {
+      content: '';
+      position: absolute; left: 50%; top: 0; bottom: 0;
+      width: 2px; background: var(--border); transform: translateX(-50%);
+    }
+    .connector-label {
+      background: var(--bg-page); padding: 0 8px;
+      font-size: .7rem; color: var(--text-muted); position: relative; z-index: 1;
+    }
+
+    /* Interceptor Cards */
+    .interceptor-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); padding: 14px 16px;
+      margin-bottom: 6px;
+      box-shadow: var(--shadow-card);
+      transition: box-shadow var(--transition), border-color var(--transition);
+    }
+    .interceptor-card:hover { box-shadow: var(--shadow-raised); }
+    .interceptor-card.is-locked { background: var(--bg-locked); }
+    .interceptor-card.is-disabled { opacity: .55; }
+    .interceptor-card.is-dragging {
+      box-shadow: var(--shadow-modal); border-color: var(--color-primary);
+      transform: rotate(1.5deg);
+    }
+
+    .card-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .drag-handle {
+      color: var(--text-muted); cursor: grab; font-size: .875rem;
+      padding: 4px; border-radius: var(--radius-xs);
+      transition: color var(--transition);
+      flex-shrink: 0;
+    }
+    .drag-handle:hover { color: var(--text-secondary); }
+    .drag-handle.locked { cursor: default; opacity: .3; }
+
+    .priority-badge {
+      font-family: var(--font-mono); font-size: .688rem; font-weight: 700;
+      padding: 2px 7px; border-radius: var(--radius-pill);
+      background: var(--bg-page); border: 1px solid var(--border);
+      color: var(--text-muted); flex-shrink: 0; min-width: 36px;
+      text-align: center;
+    }
+
+    .card-info { flex: 1; min-width: 0; }
+
+    .card-name {
+      font-size: .875rem; font-weight: 600; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .card-meta {
+      display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap;
+    }
+
+    .card-keywords-preview {
+      font-size: .75rem; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 300px;
+    }
+
+    .card-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill); white-space: nowrap;
+    }
+    .badge-action-respond   { background: var(--color-primary-lt); color: var(--color-primary-dk); border: 1px solid #bae6fd; }
+    .badge-action-book      { background: var(--color-success-lt); color: #065f46; border: 1px solid #a7f3d0; }
+    .badge-action-route-kc  { background: var(--color-purple-lt); color: #5b21b6; border: 1px solid #ddd6fe; }
+    .badge-action-transfer  { background: var(--color-warning-lt); color: #92400e; border: 1px solid #fde68a; }
+    .badge-platform         { background: var(--bg-locked); color: var(--text-muted); border: 1px solid var(--border); }
+    .badge-locked           { background: var(--bg-locked); color: var(--color-locked); border: 1px solid var(--border); }
+    .badge-kw-count         { background: var(--bg-page); color: var(--text-muted); border: 1px solid var(--border); }
+    .badge-match-count      { background: var(--color-teal-lt); color: #0f766e; border: 1px solid #99f6e4; }
+    .badge-lane-booking     { background: var(--color-success-lt); color: #065f46; border: 1px solid #a7f3d0; }
+    .badge-lane-discovery   { background: var(--color-primary-lt); color: var(--color-primary-dk); border: 1px solid #bae6fd; }
+    .badge-lane-pricing     { background: var(--color-warning-lt); color: #92400e; border: 1px solid #fde68a; }
+    .badge-lane-transfer    { background: var(--color-danger-lt); color: #991b1b; border: 1px solid #fecaca; }
+    .badge-lane-intake      { background: var(--bg-page); color: var(--text-muted); border: 1px solid var(--border); }
+    .badge-winner           { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+    .badge-suppressed       { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+    /* Toggle */
+    .toggle {
+      position: relative; width: 36px; height: 20px;
+      display: inline-block; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: #cbd5e1; border-radius: var(--radius-pill);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute;
+      height: 14px; width: 14px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%;
+      transition: transform var(--transition);
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    .toggle input:checked + .toggle-slider { background: var(--color-success); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+    .toggle.locked { pointer-events: none; opacity: .6; }
+
+    /* Icon Buttons */
+    .icon-btn {
+      background: none; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); padding: 5px 8px;
+      cursor: pointer; color: var(--text-muted); font-size: .813rem;
+      transition: all var(--transition); display: inline-flex; align-items: center;
+    }
+    .icon-btn:hover { background: var(--bg-page); color: var(--text-primary); border-color: var(--border-strong); }
+    .icon-btn.danger:hover { background: var(--color-danger-lt); color: var(--color-danger); border-color: #fca5a5; }
+    .icon-btn.primary:hover { background: var(--color-primary-lt); color: var(--color-primary); border-color: #bae6fd; }
+
+    /* External Link Arrow */
+    .link-arrow {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .75rem; color: var(--color-primary); cursor: pointer;
+      border: none; background: none; padding: 4px 8px;
+      border-radius: var(--radius-xs); text-decoration: none;
+      transition: background var(--transition);
+    }
+    .link-arrow:hover { background: var(--color-primary-lt); }
+
+    /* Primary Button */
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; background: var(--color-primary);
+      color: white; border: none; border-radius: var(--radius-xs);
+      font-size: .813rem; font-weight: 600; cursor: pointer;
+      transition: background var(--transition);
+    }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; background: var(--bg-card);
+      color: var(--text-secondary); border: 1px solid var(--border-strong);
+      border-radius: var(--radius-xs); font-size: .813rem; font-weight: 500;
+      cursor: pointer; transition: all var(--transition);
+    }
+    .btn-secondary:hover { background: var(--bg-page); border-color: var(--border-strong); }
+
+    .btn-danger {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; background: white;
+      color: var(--color-danger); border: 1px solid #fca5a5;
+      border-radius: var(--radius-xs); font-size: .813rem; font-weight: 500;
+      cursor: pointer; transition: all var(--transition);
+    }
+    .btn-danger:hover { background: var(--color-danger-lt); }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center; padding: 40px 20px;
+      background: var(--bg-card); border: 2px dashed var(--border);
+      border-radius: var(--radius-card); color: var(--text-muted);
+    }
+    .empty-state-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state h3 { font-size: 1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-state p { font-size: .813rem; margin-bottom: 16px; }
+
+    /* ================================================================
+       TAB 1 — RULES: Section toolbar
+    ================================================================ */
+    .section-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .section-title {
+      font-size: .875rem; font-weight: 700; color: var(--text-primary);
+      flex: 1;
+    }
+    .search-wrap {
+      position: relative;
+    }
+    .search-wrap input {
+      padding: 6px 10px 6px 30px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .813rem; background: var(--bg-card); color: var(--text-primary);
+      width: 200px; transition: border-color var(--transition);
+    }
+    .search-wrap input:focus { outline: none; border-color: var(--border-focus); }
+    .search-icon {
+      position: absolute; left: 9px; top: 50%;
+      transform: translateY(-50%); color: var(--text-muted); font-size: .875rem;
+    }
+
+    /* ================================================================
+       TAB 2 — ARBITRATION POLICY
+    ================================================================ */
+    .policy-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    @media (max-width: 768px) { .policy-grid { grid-template-columns: 1fr; } }
+
+    .policy-section {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); padding: 20px;
+      box-shadow: var(--shadow-card);
+    }
+    .policy-section.full-width { grid-column: 1 / -1; }
+
+    .policy-section-title {
+      font-size: .875rem; font-weight: 700; color: var(--text-primary);
+      margin-bottom: 16px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .policy-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .policy-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .policy-label-group { flex: 1; }
+    .policy-label { font-size: .813rem; font-weight: 600; color: var(--text-primary); }
+    .policy-desc { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+
+    .policy-control { flex-shrink: 0; }
+
+    /* Slider */
+    .slider-wrap {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .weight-slider {
+      -webkit-appearance: none; width: 140px; height: 6px;
+      border-radius: var(--radius-pill); outline: none;
+      background: linear-gradient(to right, var(--color-primary) 0%, var(--color-primary) var(--pct, 50%), #e2e8f0 var(--pct, 50%), #e2e8f0 100%);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .weight-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: white;
+      border: 2px solid var(--color-primary);
+      box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: pointer;
+    }
+    .weight-value {
+      font-family: var(--font-mono); font-size: .813rem; font-weight: 700;
+      color: var(--text-primary); min-width: 32px; text-align: right;
+    }
+
+    /* Number input */
+    .number-input {
+      width: 80px; padding: 6px 10px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .813rem; font-family: var(--font-mono); font-weight: 600;
+      color: var(--text-primary); text-align: center;
+      transition: border-color var(--transition);
+    }
+    .number-input:focus { outline: none; border-color: var(--border-focus); }
+
+    /* Tag input for escape keywords */
+    .tag-input-wrap {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 8px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); background: var(--bg-card);
+      min-height: 42px; cursor: text;
+      transition: border-color var(--transition);
+    }
+    .tag-input-wrap:focus-within { border-color: var(--border-focus); }
+    .tag-item {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .75rem; padding: 2px 8px;
+      background: var(--color-primary-lt); color: var(--color-primary-dk);
+      border: 1px solid #bae6fd; border-radius: var(--radius-pill);
+    }
+    .tag-remove {
+      background: none; border: none; cursor: pointer;
+      color: var(--color-primary-dk); font-size: .875rem; line-height: 1;
+      padding: 0 1px;
+    }
+    .tag-input {
+      border: none; outline: none; background: transparent;
+      font-size: .75rem; color: var(--text-primary);
+      min-width: 100px; flex: 1;
+    }
+
+    /* Policy save bar */
+    .policy-save-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); margin-top: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .policy-save-bar .save-status {
+      font-size: .813rem; color: var(--text-muted);
+    }
+    .policy-save-bar .save-status.saved { color: var(--color-success); font-weight: 600; }
+    .policy-save-bar .save-status.saving { color: var(--color-primary); }
+
+    /* ================================================================
+       TAB 3 — LIVE CALLS
+    ================================================================ */
+    .live-calls-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .live-indicator {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .813rem; color: var(--text-muted);
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--color-success);
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .6; transform: scale(.8); }
+    }
+
+    .live-calls-table {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+    .table-header {
+      display: grid; grid-template-columns: 1fr 120px 80px 100px 120px;
+      padding: 10px 16px;
+      background: var(--bg-sidebar); border-bottom: 1px solid var(--border);
+      font-size: .75rem; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .table-row {
+      display: grid; grid-template-columns: 1fr 120px 80px 100px 120px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      align-items: center; transition: background var(--transition);
+    }
+    .table-row:last-child { border-bottom: none; }
+    .table-row:hover { background: var(--bg-page); }
+    .table-cell { font-size: .813rem; }
+    .table-cell.call-id { font-family: var(--font-mono); font-size: .75rem; color: var(--text-muted); }
+    .table-cell.turn-count { font-weight: 700; color: var(--text-secondary); }
+    .table-cell.duration { font-family: var(--font-mono); font-size: .75rem; color: var(--text-muted); }
+
+    /* ================================================================
+       TAB 4 — TRACE REPLAY
+    ================================================================ */
+    .trace-layout {
+      display: grid; grid-template-columns: 300px 1fr; gap: 16px;
+      min-height: 600px;
+    }
+    @media (max-width: 900px) { .trace-layout { grid-template-columns: 1fr; } }
+
+    .trace-sidebar {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      overflow: hidden; display: flex; flex-direction: column;
+      box-shadow: var(--shadow-card);
+    }
+    .trace-sidebar-header {
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+      font-size: .813rem; font-weight: 700; color: var(--text-primary);
+      background: var(--bg-sidebar);
+    }
+    .trace-search {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+    }
+    .trace-search input {
+      width: 100%; padding: 6px 10px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .813rem; color: var(--text-primary); background: var(--bg-page);
+      transition: border-color var(--transition);
+    }
+    .trace-search input:focus { outline: none; border-color: var(--border-focus); }
+    .trace-call-list { flex: 1; overflow-y: auto; }
+    .trace-call-item {
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .trace-call-item:hover { background: var(--bg-page); }
+    .trace-call-item.active { background: var(--color-primary-lt); border-left: 3px solid var(--color-primary); }
+    .trace-call-id { font-family: var(--font-mono); font-size: .75rem; color: var(--text-muted); }
+    .trace-call-meta { font-size: .813rem; color: var(--text-secondary); margin-top: 2px; }
+    .trace-call-time { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* Trace Detail Panel */
+    .trace-detail {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); overflow: hidden;
+      display: flex; flex-direction: column;
+      box-shadow: var(--shadow-card);
+    }
+    .trace-detail-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      background: var(--bg-sidebar); display: flex; align-items: center; gap: 12px;
+    }
+    .trace-detail-placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted); font-size: .875rem; padding: 60px;
+      text-align: center;
+    }
+
+    /* Turn List */
+    .turn-list { flex: 1; overflow-y: auto; }
+    .turn-item {
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .turn-item:hover { background: var(--bg-page); }
+    .turn-item.active { background: #f0f9ff; border-left: 3px solid var(--color-primary); }
+    .turn-summary {
+      padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+    }
+    .turn-num {
+      font-family: var(--font-mono); font-size: .688rem; font-weight: 700;
+      color: var(--text-muted); min-width: 28px;
+    }
+    .turn-utterance {
+      font-size: .813rem; color: var(--text-secondary); flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .turn-action-badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 6px;
+      border-radius: var(--radius-pill);
+    }
+
+    /* Turn Detail */
+    .turn-detail {
+      padding: 16px 18px;
+      border-top: 1px solid var(--border);
+      background: #fafbfc; display: none;
+    }
+    .turn-item.active .turn-detail { display: block; }
+
+    .detail-section-title {
+      font-size: .75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-muted);
+      margin-bottom: 8px; margin-top: 14px;
+    }
+    .detail-section-title:first-child { margin-top: 0; }
+
+    .detail-row {
+      display: flex; gap: 8px; align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    .detail-key {
+      font-size: .75rem; color: var(--text-muted); min-width: 90px; flex-shrink: 0;
+    }
+    .detail-val {
+      font-size: .813rem; color: var(--text-primary); word-break: break-word;
+    }
+    .detail-val.mono { font-family: var(--font-mono); font-size: .75rem; }
+
+    /* Candidate Score Table */
+    .candidate-table {
+      width: 100%; border-collapse: collapse;
+      font-size: .813rem; margin-top: 4px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      overflow: hidden;
+    }
+    .candidate-table thead { background: var(--bg-sidebar); }
+    .candidate-table th {
+      padding: 7px 12px; text-align: left;
+      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .candidate-table td {
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .candidate-table tr:last-child td { border-bottom: none; }
+    .candidate-table tr.winner-row { background: #f0fdf4; }
+    .candidate-table tr.suppressed-row { background: #fff8f8; opacity: .8; }
+
+    /* Score Bar */
+    .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .score-bar {
+      height: 6px; border-radius: var(--radius-pill);
+      background: var(--border); flex: 1; overflow: hidden; min-width: 60px;
+    }
+    .score-bar-fill {
+      height: 100%; border-radius: var(--radius-pill);
+      background: var(--color-primary); transition: width .3s ease;
+    }
+    .score-bar-fill.winner { background: var(--color-success); }
+    .score-bar-fill.suppressed { background: var(--color-danger); }
+    .score-num { font-family: var(--font-mono); font-size: .75rem; font-weight: 700; min-width: 30px; }
+
+    /* Decision Box */
+    .decision-box {
+      background: #f0fdf4; border: 1px solid #a7f3d0;
+      border-radius: var(--radius-sm); padding: 12px 14px;
+      margin-top: 4px;
+    }
+    .decision-box .decision-action {
+      font-size: .875rem; font-weight: 700; color: #065f46;
+    }
+    .decision-box .decision-reason {
+      font-size: .813rem; color: #047857; margin-top: 4px;
+    }
+    .decision-box .decision-meta {
+      font-size: .75rem; color: #059669; margin-top: 6px;
+      font-family: var(--font-mono);
+    }
+
+    /* ================================================================
+       MODAL
+    ================================================================ */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.5); backdrop-filter: blur(2px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-card); border-radius: var(--radius-card);
+      box-shadow: var(--shadow-modal); width: 100%;
+      max-width: 480px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      padding: 18px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+    .modal-close {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 1.25rem; padding: 2px;
+    }
+    .modal-body { padding: 20px; }
+    .modal-footer {
+      padding: 16px 20px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    /* ================================================================
+       LOADING STATES
+    ================================================================ */
+    .skeleton {
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: skeleton-shimmer 1.5s infinite;
+      border-radius: var(--radius-xs);
+    }
+    @keyframes skeleton-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-card { height: 72px; margin-bottom: 6px; border-radius: var(--radius-card); }
+
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border); border-top-color: var(--color-primary);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ================================================================
+       TOAST NOTIFICATIONS
+    ================================================================ */
+    #toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 2000;
+      display: flex; flex-direction: column-reverse; gap: 8px;
+    }
+    .toast {
+      padding: 12px 16px; border-radius: var(--radius-sm);
+      font-size: .813rem; font-weight: 500; max-width: 320px;
+      box-shadow: var(--shadow-raised);
+      display: flex; align-items: center; gap: 8px;
+      animation: toast-in .2s ease;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .toast-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .toast-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+    .toast-info    { background: #f0f9ff; color: var(--color-primary-dk); border: 1px solid #bae6fd; }
+
+    /* ================================================================
+       UTILITY
+    ================================================================ */
+    .hidden { display: none !important; }
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+    .gap-8 { gap: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .text-muted { color: var(--text-muted); }
+    .text-sm { font-size: .813rem; }
+    .font-mono { font-family: var(--font-mono); }
+    hr.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  </style>
+</head>
+
+<body>
+
+<!-- ================================================================
+     PAGE HEADER
+================================================================ -->
+<header class="page-header">
+  <a href="javascript:history.back()" class="btn-back">
+    &#8592; Back
+  </a>
+
+  <div class="header-title-group">
+    <span class="header-title">Intent Arbitration Console</span>
+    <span class="header-company" id="hdr-company-name">Loading…</span>
+    <span class="header-badge">Enterprise</span>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn-primary" id="btn-add-rule" onclick="openAddRule()">
+      + Add Rule
+    </button>
+  </div>
+</header>
+
+<!-- ================================================================
+     TAB NAVIGATION
+================================================================ -->
+<nav class="tab-nav" role="tablist">
+  <button class="tab-btn active" role="tab" data-tab="rules" onclick="switchTab('rules')">
+    &#9781; Rules
+    <span class="tab-count" id="tab-count-rules">—</span>
+  </button>
+  <button class="tab-btn" role="tab" data-tab="arbitration" onclick="switchTab('arbitration')">
+    &#9878; Arbitration Policy
+  </button>
+  <button class="tab-btn" role="tab" data-tab="live" onclick="switchTab('live')">
+    &#9679; Live Calls
+    <span class="tab-count" id="tab-count-live">0</span>
+  </button>
+  <button class="tab-btn" role="tab" data-tab="trace" onclick="switchTab('trace')">
+    &#9635; Trace Replay
+  </button>
+</nav>
+
+<!-- ================================================================
+     TAB 1 — RULES PIPELINE
+================================================================ -->
+<div class="tab-panel active" id="tab-rules">
+  <div class="page-body">
+
+    <!-- Info Banner -->
+    <div class="info-banner" id="rules-banner">
+      <div class="info-banner-header" onclick="toggleBanner('rules-banner')">
+        <span class="info-banner-icon">&#9432;</span>
+        <span class="info-banner-title">How the Arbitration Pipeline Works</span>
+        <button class="info-banner-toggle" tabindex="-1">&#9660;</button>
+      </div>
+      <div class="info-banner-body" id="rules-banner-body">
+        <p><strong>Platform Tier (locked)</strong> — Built-in interceptors that fire first on every call. The Greeting Interceptor handles turn 1. Promotions and Pricing are anti-hallucination guardrails that read from MongoDB. Their signals can be extended per company.</p>
+        <p><strong>Rule Intents (your custom rules)</strong> — Keyword-based rules you build here. Evaluated in priority order after platform rules. First match wins. Use rules to give instant, guaranteed answers for specific phrases — no AI scoring needed.</p>
+        <p><strong>KC Semantic Engine</strong> — Scores all Knowledge Containers against the utterance. Fires when no rule matches. Manages SPFUQ topic anchors. Fast lane via Groq.</p>
+        <p><strong>LLM Fallback → Graceful ACK</strong> — Claude handles anything KC cannot confidently answer. Graceful ACK is the terminal catch-all.</p>
+      </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <span class="stat-icon">&#9781;</span>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-total-rules">—</div>
+          <div class="stat-label">Total Rules</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon" style="color:var(--color-success)">&#9679;</span>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-active-rules">—</div>
+          <div class="stat-label">Active</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon" style="color:var(--color-teal)">&#8635;</span>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-total-matches">—</div>
+          <div class="stat-label">Total Matches</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon" style="color:var(--color-warning)">&#9775;</span>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-kc-containers">—</div>
+          <div class="stat-label">KC Containers</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="pipeline" id="pipeline-view">
+
+      <!-- ── PLATFORM TIER ── -->
+      <div class="pipeline-tier">
+        <div class="tier-header">
+          <span class="tier-label">Platform Tier</span>
+          <span class="tier-lock-badge">&#128274; Locked</span>
+          <div class="tier-header-line"></div>
+        </div>
+
+        <!-- Greeting Interceptor -->
+        <div class="interceptor-card is-locked">
+          <div class="card-row">
+            <span class="drag-handle locked">&#9776;</span>
+            <span class="priority-badge">—</span>
+            <div class="card-info">
+              <div class="card-name">&#128075; Greeting Interceptor</div>
+              <div class="card-meta">
+                <span class="badge badge-platform">Platform</span>
+                <span class="badge badge-locked">&#128274; Structural</span>
+                <span class="text-sm text-muted">Fires on turn 1 only — not keyword-based</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <label class="toggle locked">
+                <input type="checkbox" checked disabled />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Promotions Interceptor -->
+        <div class="interceptor-card is-locked" id="card-promotions">
+          <div class="card-row">
+            <span class="drag-handle locked">&#9776;</span>
+            <span class="priority-badge">A</span>
+            <div class="card-info">
+              <div class="card-name">&#127915; Promotions Interceptor</div>
+              <div class="card-meta">
+                <span class="badge badge-platform">Platform</span>
+                <span class="badge badge-action-respond">RESPOND</span>
+                <span class="badge badge-kw-count" id="promo-signal-count">150+ signals</span>
+                <span class="badge badge-match-count" id="promo-active-count">— active promos</span>
+              </div>
+              <div class="card-keywords-preview" id="promo-signals-preview">coupon, promo, special, discount, deal, offer…</div>
+            </div>
+            <div class="card-actions">
+              <a class="link-arrow" href="javascript:void(0)" onclick="navTo('promotions.html')">
+                Manage &#8594;
+              </a>
+              <label class="toggle" id="toggle-promotions">
+                <input type="checkbox" id="chk-promotions" checked onchange="toggleSystemInterceptor('promotions', this.checked)" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing Interceptor -->
+        <div class="interceptor-card is-locked" id="card-pricing">
+          <div class="card-row">
+            <span class="drag-handle locked">&#9776;</span>
+            <span class="priority-badge">C</span>
+            <div class="card-info">
+              <div class="card-name">&#128176; Pricing Interceptor</div>
+              <div class="card-meta">
+                <span class="badge badge-platform">Platform</span>
+                <span class="badge badge-action-respond">RESPOND</span>
+                <span class="badge badge-kw-count" id="pricing-signal-count">60+ signals</span>
+                <span class="badge badge-match-count" id="pricing-active-count">— active items</span>
+              </div>
+              <div class="card-keywords-preview" id="pricing-signals-preview">how much, cost, price, fee, service call, diagnostic…</div>
+            </div>
+            <div class="card-actions">
+              <a class="link-arrow" href="javascript:void(0)" onclick="navTo('pricing.html')">
+                Manage &#8594;
+              </a>
+              <label class="toggle" id="toggle-pricing">
+                <input type="checkbox" id="chk-pricing" checked onchange="toggleSystemInterceptor('pricing', this.checked)" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline Connector -->
+      <div class="pipeline-connector">
+        <span class="connector-label">no platform match → Rule Intents evaluated</span>
+      </div>
+
+      <!-- ── RULE INTENTS TIER ── -->
+      <div class="pipeline-tier">
+        <div class="tier-header">
+          <span class="tier-label">Rule Intents</span>
+          <span style="font-size:.75rem;color:var(--text-muted)">drag to reorder · first match wins</span>
+          <div class="tier-header-line"></div>
+          <div class="search-wrap">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="rules-search" placeholder="Search rules…" oninput="filterRules(this.value)" />
+          </div>
+        </div>
+
+        <!-- Custom Rules List (drag-and-drop) -->
+        <div id="custom-rules-list" class="custom-rules-container">
+          <!-- Populated by renderRules() -->
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+        </div>
+      </div>
+
+      <!-- Pipeline Connector -->
+      <div class="pipeline-connector">
+        <span class="connector-label">no rule match → KC semantic scoring</span>
+      </div>
+
+      <!-- ── SEMANTIC ENGINE ── -->
+      <div class="pipeline-tier">
+        <div class="tier-header">
+          <span class="tier-label">Semantic Engine</span>
+          <span class="tier-lock-badge">Auto</span>
+          <div class="tier-header-line"></div>
+        </div>
+        <div class="interceptor-card is-locked">
+          <div class="card-row">
+            <span class="drag-handle locked">&#9776;</span>
+            <span class="priority-badge">—</span>
+            <div class="card-info">
+              <div class="card-name">&#129504; KC Engine — Knowledge Containers</div>
+              <div class="card-meta">
+                <span class="badge badge-action-route-kc">Semantic</span>
+                <span class="badge badge-kw-count" id="kc-container-count">— containers</span>
+                <span class="text-sm text-muted">Groq fast lane · SPFUQ topic anchoring</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <a class="link-arrow" href="javascript:void(0)" onclick="navTo('services.html')">
+                Manage &#8594;
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline Connector -->
+      <div class="pipeline-connector">
+        <span class="connector-label">no KC match → LLM fallback</span>
+      </div>
+
+      <!-- ── LLM FALLBACK ── -->
+      <div class="pipeline-tier">
+        <div class="tier-header">
+          <span class="tier-label">LLM Fallback</span>
+          <span class="tier-lock-badge">Auto</span>
+          <div class="tier-header-line"></div>
+        </div>
+        <div class="interceptor-card is-locked">
+          <div class="card-row">
+            <span class="drag-handle locked">&#9776;</span>
+            <span class="priority-badge">—</span>
+            <div class="card-info">
+              <div class="card-name">&#129302; Claude — LLM Agent</div>
+              <div class="card-meta">
+                <span class="badge badge-platform">Fallback</span>
+                <span class="text-sm text-muted">Handles anything KC cannot answer · BC rules injected</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Terminal -->
+        <div class="interceptor-card is-locked" style="margin-top:6px;background:#fafafa;">
+          <div class="card-row">
+            <span class="drag-handle locked">&#9776;</span>
+            <span class="priority-badge">—</span>
+            <div class="card-info">
+              <div class="card-name">&#128683; Graceful ACK</div>
+              <div class="card-meta">
+                <span class="badge badge-platform">Terminal</span>
+                <span class="text-sm text-muted">Canned acknowledgment — never leaves caller in silence</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pipeline -->
+  </div><!-- /page-body -->
+</div><!-- /tab-rules -->
+
+<!-- ================================================================
+     TAB 2 — ARBITRATION POLICY
+================================================================ -->
+<div class="tab-panel" id="tab-arbitration">
+  <div class="page-body">
+
+    <div class="info-banner" id="arb-banner">
+      <div class="info-banner-header" onclick="toggleBanner('arb-banner')">
+        <span class="info-banner-icon">&#9432;</span>
+        <span class="info-banner-title">Arbitration Policy — How Decisions Are Made</span>
+        <button class="info-banner-toggle" tabindex="-1">&#9660;</button>
+      </div>
+      <div class="info-banner-body" id="arb-banner-body">
+        <p>When a caller utterance contains multiple signals (e.g. booking intent + pricing keyword), the Arbitration Engine scores all candidates simultaneously and applies this policy to decide what wins. No more first-match-wins. No more pricing hijacking booking turns.</p>
+        <p><strong>Signal Weights</strong> control how much each signal type contributes. Pricing weight (0.50) is intentionally lower than Booking (0.90) — this is why "I'd like to schedule, how much is it?" correctly routes to booking, not pricing.</p>
+        <p><strong>Lane Locking</strong> keeps the agent inside the active task (booking, discovery) across multiple turns — exactly how Rasa CALM sticky routing works. Escape keywords let callers override at any time.</p>
+      </div>
+    </div>
+
+    <div class="policy-grid">
+
+      <!-- Lane Behavior -->
+      <div class="policy-section">
+        <div class="policy-section-title">&#128274; Lane Behavior</div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Lane Locking</div>
+            <div class="policy-desc">Keep agent in active task lane across turns (Rasa sticky routing pattern)</div>
+          </div>
+          <div class="policy-control">
+            <label class="toggle">
+              <input type="checkbox" id="pol-lane-sticky" onchange="markPolicyDirty()" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Auto-Release After</div>
+            <div class="policy-desc">Minutes of silence before lane lock expires</div>
+          </div>
+          <div class="policy-control">
+            <input type="number" class="number-input" id="pol-lane-timeout"
+              min="1" max="30" step="1" value="5" onchange="markPolicyDirty()" />
+          </div>
+        </div>
+
+        <div class="policy-row" style="flex-direction:column;align-items:stretch;">
+          <div class="policy-label-group" style="margin-bottom:8px;">
+            <div class="policy-label">Escape Keywords</div>
+            <div class="policy-desc">These words override the lane lock and allow full re-evaluation</div>
+          </div>
+          <div class="tag-input-wrap" id="escape-keywords-wrap" onclick="focusTagInput(this)">
+            <!-- Tags rendered here -->
+            <input type="text" class="tag-input" id="escape-kw-input"
+              placeholder="Type a keyword and press Enter…"
+              onkeydown="handleTagInput(event, 'escapeKeywords')" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Signal Weights -->
+      <div class="policy-section">
+        <div class="policy-section-title">&#9878; Signal Weights
+          <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">Higher weight = more likely to win</span>
+        </div>
+
+        <div class="policy-row" id="weight-row-booking">
+          <div class="policy-label-group">
+            <div class="policy-label">&#128197; Booking Intent</div>
+            <div class="policy-desc">schedule, book, set it up, let's do it…</div>
+          </div>
+          <div class="policy-control">
+            <div class="slider-wrap">
+              <input type="range" class="weight-slider" id="w-booking"
+                min="0" max="1" step="0.05" value="0.90"
+                oninput="updateWeight(this, 'booking')" />
+              <span class="weight-value" id="wv-booking">0.90</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">&#128100; Transfer Intent</div>
+            <div class="policy-desc">speak to agent, manager, transfer, person…</div>
+          </div>
+          <div class="policy-control">
+            <div class="slider-wrap">
+              <input type="range" class="weight-slider" id="w-transfer"
+                min="0" max="1" step="0.05" value="0.95"
+                oninput="updateWeight(this, 'transfer')" />
+              <span class="weight-value" id="wv-transfer">0.95</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">&#128176; Pricing Signal</div>
+            <div class="policy-desc">how much, cost, fee, service call… (intentionally low — prevents hijack)</div>
+          </div>
+          <div class="policy-control">
+            <div class="slider-wrap">
+              <input type="range" class="weight-slider" id="w-pricing"
+                min="0" max="1" step="0.05" value="0.50"
+                oninput="updateWeight(this, 'pricing')" />
+              <span class="weight-value" id="wv-pricing">0.50</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">&#127915; Promo Signal</div>
+            <div class="policy-desc">coupon, deal, special, discount…</div>
+          </div>
+          <div class="policy-control">
+            <div class="slider-wrap">
+              <input type="range" class="weight-slider" id="w-promo"
+                min="0" max="1" step="0.05" value="0.50"
+                oninput="updateWeight(this, 'promo')" />
+              <span class="weight-value" id="wv-promo">0.50</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">&#9873; Custom Rule Match</div>
+            <div class="policy-desc">Rules you configure in the Rules tab</div>
+          </div>
+          <div class="policy-control">
+            <div class="slider-wrap">
+              <input type="range" class="weight-slider" id="w-custom"
+                min="0" max="1" step="0.05" value="1.00"
+                oninput="updateWeight(this, 'customRule')" />
+              <span class="weight-value" id="wv-custom">1.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">&#129504; KC Semantic Match</div>
+            <div class="policy-desc">Knowledge Container scored by Groq</div>
+          </div>
+          <div class="policy-control">
+            <div class="slider-wrap">
+              <input type="range" class="weight-slider" id="w-kc"
+                min="0" max="1" step="0.05" value="0.65"
+                oninput="updateWeight(this, 'kc')" />
+              <span class="weight-value" id="wv-kc">0.65</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mixed Intent Policy -->
+      <div class="policy-section">
+        <div class="policy-section-title">&#8644; Mixed Intent Policy</div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Booking Beats All</div>
+            <div class="policy-desc">When booking intent detected in same utterance as pricing/promo, booking always wins (fixes the original hijack bug)</div>
+          </div>
+          <div class="policy-control">
+            <label class="toggle">
+              <input type="checkbox" id="pol-booking-beats" checked onchange="markPolicyDirty()" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Queue Secondary Intent</div>
+            <div class="policy-desc">After booking wins, answer the secondary question (e.g. pricing) on the next turn automatically</div>
+          </div>
+          <div class="policy-control">
+            <label class="toggle">
+              <input type="checkbox" id="pol-queue-secondary" checked onchange="markPolicyDirty()" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ambiguity Thresholds -->
+      <div class="policy-section">
+        <div class="policy-section-title">&#127919; Ambiguity Thresholds
+          <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">(Amazon Lex V2 score-gap pattern)</span>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Auto-Route Min Score</div>
+            <div class="policy-desc">Above this score → auto-route to winner without clarifying</div>
+          </div>
+          <div class="policy-control">
+            <input type="number" class="number-input" id="pol-auto-route"
+              min="0.5" max="1.0" step="0.05" value="0.75" onchange="markPolicyDirty()" />
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Min Score Gap</div>
+            <div class="policy-desc">Gap between #1 and #2 must exceed this to auto-route (prevents narrow-margin mistakes)</div>
+          </div>
+          <div class="policy-control">
+            <input type="number" class="number-input" id="pol-score-gap"
+              min="0.05" max="0.5" step="0.05" value="0.15" onchange="markPolicyDirty()" />
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Disambiguation Floor</div>
+            <div class="policy-desc">Below this score → Graceful ACK (don't guess)</div>
+          </div>
+          <div class="policy-control">
+            <input type="number" class="number-input" id="pol-disambig-floor"
+              min="0.1" max="0.6" step="0.05" value="0.40" onchange="markPolicyDirty()" />
+          </div>
+        </div>
+
+        <div class="policy-row">
+          <div class="policy-label-group">
+            <div class="policy-label">Max Clarify Attempts</div>
+            <div class="policy-desc">Retries before falling back to Graceful ACK</div>
+          </div>
+          <div class="policy-control">
+            <input type="number" class="number-input" id="pol-max-attempts"
+              min="1" max="5" step="1" value="2" onchange="markPolicyDirty()" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /policy-grid -->
+
+    <!-- Save Bar -->
+    <div class="policy-save-bar">
+      <span class="save-status" id="policy-save-status">All changes saved</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-danger" onclick="resetPolicyToDefaults()">Reset to Defaults</button>
+        <button class="btn-primary" id="btn-save-policy" onclick="savePolicy()" disabled>Save Policy</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /tab-arbitration -->
+
+<!-- ================================================================
+     TAB 3 — LIVE CALLS
+================================================================ -->
+<div class="tab-panel" id="tab-live">
+  <div class="page-body">
+
+    <div class="live-calls-header">
+      <div>
+        <h2 style="font-size:.938rem;font-weight:700;color:var(--text-primary)">Active Call Lanes</h2>
+        <p class="text-sm text-muted">Real-time lane state for calls currently in progress</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="live-indicator">
+          <span class="live-dot"></span>
+          <span id="live-refresh-label">Refreshes in 5s</span>
+        </div>
+        <button class="btn-secondary" onclick="refreshLiveCalls()">&#8635; Refresh</button>
+      </div>
+    </div>
+
+    <div class="live-calls-table" id="live-calls-table">
+      <div class="table-header">
+        <div>Call ID</div>
+        <div>Lane</div>
+        <div>Turn</div>
+        <div>Duration</div>
+        <div>Actions</div>
+      </div>
+      <div id="live-calls-body">
+        <!-- Populated by renderLiveCalls() -->
+        <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:.875rem;">
+          <div class="spinner" style="margin:0 auto 12px;"></div>
+          Loading active calls…
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /tab-live -->
+
+<!-- ================================================================
+     TAB 4 — TRACE REPLAY
+================================================================ -->
+<div class="tab-panel" id="tab-trace">
+  <div class="page-body">
+
+    <div class="info-banner" id="trace-banner" style="margin-bottom:16px;">
+      <div class="info-banner-header" onclick="toggleBanner('trace-banner')">
+        <span class="info-banner-icon">&#9432;</span>
+        <span class="info-banner-title">Trace Replay — Forensic Decision Audit</span>
+        <button class="info-banner-toggle" tabindex="-1">&#9660;</button>
+      </div>
+      <div class="info-banner-body" id="trace-banner-body">
+        <p>Every turn is recorded: the normalized utterance, all scored candidates, which rule/lane/policy was applied, what was suppressed and why, and the final action taken. Select a call from the list, then a turn, to see the full decision breakdown.</p>
+      </div>
+    </div>
+
+    <div class="trace-layout">
+
+      <!-- Sidebar: Call List -->
+      <div class="trace-sidebar">
+        <div class="trace-sidebar-header">Recent Calls</div>
+        <div class="trace-search">
+          <input type="text" id="trace-search-input"
+            placeholder="Search by Call ID…"
+            oninput="filterTraceCalls(this.value)" />
+        </div>
+        <div class="trace-call-list" id="trace-call-list">
+          <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:.813rem;">
+            <div class="spinner" style="margin:0 auto 10px;"></div>
+            Loading recent calls…
+          </div>
+        </div>
+      </div>
+
+      <!-- Main: Trace Detail -->
+      <div class="trace-detail" id="trace-detail">
+        <div class="trace-detail-placeholder">
+          <div>
+            <div style="font-size:2rem;margin-bottom:10px;">&#9635;</div>
+            <div style="font-weight:600;margin-bottom:6px;">Select a call to begin replay</div>
+            <div style="font-size:.813rem;">Choose any call from the sidebar to see its turn-by-turn decision log</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /tab-trace -->
+
+<!-- ================================================================
+     CONFIRM DELETE MODAL
+================================================================ -->
+<div class="modal-overlay" id="modal-delete">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Delete Rule</span>
+      <button class="modal-close" onclick="closeModal('modal-delete')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.875rem;color:var(--text-secondary);">
+        Are you sure you want to delete <strong id="delete-rule-name">this rule</strong>?
+        This cannot be undone.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-delete')">Cancel</button>
+      <button class="btn-danger" id="btn-confirm-delete" onclick="confirmDelete()">Delete Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     TOAST CONTAINER
+================================================================ -->
+<div id="toast-container"></div>
+
+<!-- ================================================================
+     JAVASCRIPT
+================================================================ -->
+<script>
+'use strict';
+
+/* ================================================================
+   STATE
+================================================================ */
+const State = {
+  companyId:       new URLSearchParams(location.search).get('companyId') || '',
+  rules:           [],          // CompanyInterceptor docs
+  policy:          null,        // CompanyArbitrationPolicy doc
+  policyDirty:     false,
+  escapeKeywords:  [],          // tag list for escape keywords
+  deleteTargetId:  null,        // id of rule pending delete confirmation
+  liveCallsTimer:  null,        // setInterval handle for live calls
+  liveCountdown:   5,           // countdown seconds
+  traceCalls:      [],          // recent trace call list
+  activeTraceCall: null,        // selected callId
+  activeTurn:      null,        // selected turn number
+};
+
+/* ================================================================
+   API — all fetch calls in one place, no spaghetti
+================================================================ */
+const API = {
+  base: () => `/api/admin/agent2/company/${State.companyId}`,
+
+  async getRules() {
+    const r = await fetch(`${API.base()}/interceptors`, { headers: _authHeaders() });
+    return r.json();
+  },
+  async toggleRule(id, enabled) {
+    const r = await fetch(`${API.base()}/interceptors/${id}`, {
+      method: 'PATCH', headers: _authHeaders(),
+      body: JSON.stringify({ enabled }),
+    });
+    return r.json();
+  },
+  async deleteRule(id) {
+    const r = await fetch(`${API.base()}/interceptors/${id}/hard`, {
+      method: 'DELETE', headers: _authHeaders(),
+    });
+    return r.json();
+  },
+  async reorderRules(items) {
+    const r = await fetch(`${API.base()}/interceptors/reorder`, {
+      method: 'POST', headers: _authHeaders(),
+      body: JSON.stringify({ items }),
+    });
+    return r.json();
+  },
+  async getPolicy() {
+    const r = await fetch(`${API.base()}/arbitration/policy`, { headers: _authHeaders() });
+    return r.json();
+  },
+  async savePolicy(payload) {
+    const r = await fetch(`${API.base()}/arbitration/policy`, {
+      method: 'PATCH', headers: _authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return r.json();
+  },
+  async resetPolicy() {
+    const r = await fetch(`${API.base()}/arbitration/policy`, {
+      method: 'DELETE', headers: _authHeaders(),
+    });
+    return r.json();
+  },
+  async getActiveLanes() {
+    const r = await fetch(`${API.base()}/arbitration/lanes/active`, { headers: _authHeaders() });
+    return r.json();
+  },
+  async getRecentTraces() {
+    const r = await fetch(`${API.base()}/arbitration/trace?limit=30`, { headers: _authHeaders() });
+    return r.json();
+  },
+  async getCallTrace(callId) {
+    const r = await fetch(`${API.base()}/arbitration/trace/${callId}`, { headers: _authHeaders() });
+    return r.json();
+  },
+  async toggleSystemInterceptor(type, enabled) {
+    const r = await fetch(`${API.base()}/arbitration/policy`, {
+      method: 'PATCH', headers: _authHeaders(),
+      body: JSON.stringify({ [`${type}InterceptorEnabled`]: enabled }),
+    });
+    return r.json();
+  },
+};
+
+function _authHeaders() {
+  const token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+(async function init() {
+  if (!State.companyId) {
+    document.getElementById('hdr-company-name').textContent = 'No company selected';
+    return;
+  }
+  _loadCompanyName();
+  await loadRules();
+  loadPolicy();
+})();
+
+async function _loadCompanyName() {
+  try {
+    const r = await fetch(`/api/company/${State.companyId}/basic`, { headers: _authHeaders() });
+    if (r.ok) {
+      const d = await r.json();
+      const name = d.companyName || d.name || State.companyId;
+      document.getElementById('hdr-company-name').textContent = name;
+    }
+  } catch (_) {
+    document.getElementById('hdr-company-name').textContent = State.companyId;
+  }
+}
+
+/* ================================================================
+   TAB SWITCHING
+================================================================ */
+function switchTab(name) {
+  // Deactivate all
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+
+  // On-demand loads
+  if (name === 'live') startLiveCallsPolling();
+  else stopLiveCallsPolling();
+
+  if (name === 'trace') loadRecentTraces();
+}
+
+/* ================================================================
+   TAB 1 — RULES
+================================================================ */
+async function loadRules() {
+  if (!State.companyId) return;
+  try {
+    const data = await API.getRules();
+    State.rules = Array.isArray(data) ? data : (data.rules || []);
+    renderRules(State.rules);
+    updateRuleStats();
+  } catch (err) {
+    console.error('[Interceptor] loadRules failed', err);
+    document.getElementById('custom-rules-list').innerHTML = renderErrorState('Could not load rules');
+  }
+}
+
+function renderRules(rules) {
+  const container = document.getElementById('custom-rules-list');
+  document.getElementById('tab-count-rules').textContent = rules.length;
+
+  if (!rules.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">&#9873;</div>
+        <h3>No Custom Rules Yet</h3>
+        <p>Add rule intents to intercept specific phrases before the KC engine evaluates them.</p>
+        <button class="btn-primary" onclick="openAddRule()">+ Add Your First Rule</button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = rules.map((rule, idx) => `
+    <div class="interceptor-card ${rule.enabled ? '' : 'is-disabled'}"
+         draggable="true"
+         data-id="${rule._id}"
+         data-priority="${rule.priority}"
+         ondragstart="onDragStart(event, '${rule._id}')"
+         ondragover="onDragOver(event)"
+         ondrop="onDrop(event, '${rule._id}')"
+         ondragend="onDragEnd(event)">
+      <div class="card-row">
+        <span class="drag-handle" title="Drag to reorder">&#8942;&#8942;</span>
+        <span class="priority-badge">${rule.priority}</span>
+        <div class="card-info">
+          <div class="card-name">${_escHtml(rule.name)}</div>
+          <div class="card-meta">
+            ${_actionBadge(rule.action?.type)}
+            <span class="badge badge-kw-count">${rule.keywords?.length || 0} keywords</span>
+            <span class="badge" style="background:${_matchModeBg(rule.matchMode)};color:#334155;border:1px solid #e2e8f0;font-size:.688rem;">${rule.matchMode || 'ANY'}</span>
+            ${rule.stats?.matchCount ? `<span class="badge badge-match-count">&#8635; ${rule.stats.matchCount} matches</span>` : ''}
+          </div>
+          <div class="card-keywords-preview">${_keywordsPreview(rule.keywords)}</div>
+        </div>
+        <div class="card-actions">
+          <label class="toggle">
+            <input type="checkbox" ${rule.enabled ? 'checked' : ''}
+              onchange="toggleRule('${rule._id}', this.checked)" />
+            <span class="toggle-slider"></span>
+          </label>
+          <button class="icon-btn primary" title="Edit rule" onclick="editRule('${rule._id}')">&#9998;</button>
+          <button class="icon-btn danger" title="Delete rule" onclick="promptDelete('${rule._id}', '${_escAttr(rule.name)}')">&#128465;</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterRules(query) {
+  const q = query.toLowerCase().trim();
+  const filtered = q ? State.rules.filter(r =>
+    r.name.toLowerCase().includes(q) ||
+    (r.keywords || []).some(k => k.includes(q)) ||
+    (r.description || '').toLowerCase().includes(q)
+  ) : State.rules;
+  renderRules(filtered);
+}
+
+function updateRuleStats() {
+  const active = State.rules.filter(r => r.enabled).length;
+  const totalMatches = State.rules.reduce((s, r) => s + (r.stats?.matchCount || 0), 0);
+  document.getElementById('stat-total-rules').textContent = State.rules.length;
+  document.getElementById('stat-active-rules').textContent = active;
+  document.getElementById('stat-total-matches').textContent = totalMatches;
+  document.getElementById('tab-count-rules').textContent = State.rules.length;
+}
+
+async function toggleRule(id, enabled) {
+  try {
+    await API.toggleRule(id, enabled);
+    const rule = State.rules.find(r => r._id === id);
+    if (rule) rule.enabled = enabled;
+    updateRuleStats();
+    showToast(enabled ? 'Rule enabled' : 'Rule disabled', 'success');
+  } catch (err) {
+    showToast('Failed to update rule', 'error');
+    loadRules(); // reload to reset toggle state
+  }
+}
+
+function openAddRule() {
+  const qs = new URLSearchParams({ companyId: State.companyId });
+  window.location.href = `interceptor-item.html?${qs}`;
+}
+
+function editRule(id) {
+  const qs = new URLSearchParams({ companyId: State.companyId, id });
+  window.location.href = `interceptor-item.html?${qs}`;
+}
+
+function promptDelete(id, name) {
+  State.deleteTargetId = id;
+  document.getElementById('delete-rule-name').textContent = name;
+  openModal('modal-delete');
+}
+
+async function confirmDelete() {
+  if (!State.deleteTargetId) return;
+  try {
+    await API.deleteRule(State.deleteTargetId);
+    State.rules = State.rules.filter(r => r._id !== State.deleteTargetId);
+    renderRules(State.rules);
+    updateRuleStats();
+    closeModal('modal-delete');
+    showToast('Rule deleted', 'success');
+  } catch (err) {
+    showToast('Failed to delete rule', 'error');
+  }
+  State.deleteTargetId = null;
+}
+
+async function toggleSystemInterceptor(type, enabled) {
+  try {
+    await API.toggleSystemInterceptor(type, enabled);
+    showToast(`${type === 'pricing' ? 'Pricing' : 'Promotions'} interceptor ${enabled ? 'enabled' : 'disabled'}`, 'success');
+  } catch (err) {
+    showToast('Failed to update interceptor', 'error');
+    // Reset toggle
+    document.getElementById(`chk-${type}`).checked = !enabled;
+  }
+}
+
+/* ── Drag-and-Drop ────────────────────────────────────────────────── */
+let _dragId = null;
+
+function onDragStart(e, id) {
+  _dragId = id;
+  e.currentTarget.classList.add('is-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function onDrop(e, targetId) {
+  e.preventDefault();
+  if (_dragId === targetId) return;
+
+  const items = [...document.querySelectorAll('#custom-rules-list .interceptor-card')];
+  const fromIdx = items.findIndex(el => el.dataset.id === _dragId);
+  const toIdx   = items.findIndex(el => el.dataset.id === targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  // Reorder State.rules
+  const [moved] = State.rules.splice(fromIdx, 1);
+  State.rules.splice(toIdx, 0, moved);
+
+  // Reassign priorities: 10, 20, 30…
+  State.rules.forEach((r, i) => { r.priority = (i + 1) * 10; });
+
+  renderRules(State.rules);
+
+  // Persist reorder
+  const payload = State.rules.map(r => ({ id: r._id, priority: r.priority }));
+  API.reorderRules(payload)
+    .then(() => showToast('Order saved', 'success'))
+    .catch(() => showToast('Failed to save order', 'error'));
+}
+
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('is-dragging');
+  _dragId = null;
+}
+
+/* ================================================================
+   TAB 2 — ARBITRATION POLICY
+================================================================ */
+async function loadPolicy() {
+  if (!State.companyId) return;
+  try {
+    const data = await API.getPolicy();
+    State.policy = data.policy || data;
+    _applyPolicyToUI(State.policy);
+    State.policyDirty = false;
+    _updateSaveBtn();
+  } catch (err) {
+    console.error('[Interceptor] loadPolicy failed', err);
+  }
+}
+
+function _applyPolicyToUI(p) {
+  if (!p) return;
+
+  // Lane
+  document.getElementById('pol-lane-sticky').checked = p.laneStickyEnabled !== false;
+  document.getElementById('pol-lane-timeout').value  = Math.round((p.laneTimeoutMs || 300000) / 60000);
+
+  // Escape keywords
+  State.escapeKeywords = Array.isArray(p.escapeKeywords) ? [...p.escapeKeywords]
+    : ['cancel','stop','transfer','agent','person','manager','emergency','urgent'];
+  _renderEscapeKeywords();
+
+  // Weights
+  const w = p.weights || {};
+  _setSlider('booking',    w.booking    ?? 0.90);
+  _setSlider('transfer',   w.transfer   ?? 0.95);
+  _setSlider('pricing',    w.pricing    ?? 0.50);
+  _setSlider('promo',      w.promo      ?? 0.50);
+  _setSlider('custom',     w.customRule ?? 1.00);
+  _setSlider('kc',         w.kc        ?? 0.65);
+
+  // Mixed intent
+  document.getElementById('pol-booking-beats').checked    = p.bookingBeatsAll !== false;
+  document.getElementById('pol-queue-secondary').checked  = p.queueSecondaryIntent !== false;
+
+  // Thresholds
+  document.getElementById('pol-auto-route').value     = p.autoRouteMinScore  ?? 0.75;
+  document.getElementById('pol-score-gap').value      = p.minScoreGap        ?? 0.15;
+  document.getElementById('pol-disambig-floor').value = p.disambiguateFloor  ?? 0.40;
+  document.getElementById('pol-max-attempts').value   = p.maxDisambiguateAttempts ?? 2;
+}
+
+function _setSlider(key, value) {
+  const slider = document.getElementById(`w-${key}`);
+  const display = document.getElementById(`wv-${key}`);
+  if (!slider || !display) return;
+  slider.value = value;
+  display.textContent = Number(value).toFixed(2);
+  _updateSliderBg(slider, value);
+}
+
+function updateWeight(slider, key) {
+  const val = parseFloat(slider.value);
+  const display = document.getElementById(`wv-${key}`);
+  if (display) display.textContent = val.toFixed(2);
+  _updateSliderBg(slider, val);
+  markPolicyDirty();
+}
+
+function _updateSliderBg(slider, val) {
+  slider.style.setProperty('--pct', `${val * 100}%`);
+}
+
+function markPolicyDirty() {
+  State.policyDirty = true;
+  _updateSaveBtn();
+  document.getElementById('policy-save-status').textContent = 'Unsaved changes';
+  document.getElementById('policy-save-status').className = 'save-status';
+}
+
+function _updateSaveBtn() {
+  document.getElementById('btn-save-policy').disabled = !State.policyDirty;
+}
+
+function _readPolicyFromUI() {
+  const timeoutMin = parseInt(document.getElementById('pol-lane-timeout').value) || 5;
+  return {
+    laneStickyEnabled:        document.getElementById('pol-lane-sticky').checked,
+    laneTimeoutMs:            timeoutMin * 60000,
+    escapeKeywords:           [...State.escapeKeywords],
+    weights: {
+      booking:    parseFloat(document.getElementById('w-booking').value),
+      transfer:   parseFloat(document.getElementById('w-transfer').value),
+      pricing:    parseFloat(document.getElementById('w-pricing').value),
+      promo:      parseFloat(document.getElementById('w-promo').value),
+      customRule: parseFloat(document.getElementById('w-custom').value),
+      kc:         parseFloat(document.getElementById('w-kc').value),
+    },
+    bookingBeatsAll:          document.getElementById('pol-booking-beats').checked,
+    queueSecondaryIntent:     document.getElementById('pol-queue-secondary').checked,
+    autoRouteMinScore:        parseFloat(document.getElementById('pol-auto-route').value),
+    minScoreGap:              parseFloat(document.getElementById('pol-score-gap').value),
+    disambiguateFloor:        parseFloat(document.getElementById('pol-disambig-floor').value),
+    maxDisambiguateAttempts:  parseInt(document.getElementById('pol-max-attempts').value),
+  };
+}
+
+async function savePolicy() {
+  const payload = _readPolicyFromUI();
+  const btn = document.getElementById('btn-save-policy');
+  const status = document.getElementById('policy-save-status');
+
+  btn.disabled = true;
+  status.textContent = 'Saving…';
+  status.className = 'save-status saving';
+
+  try {
+    await API.savePolicy(payload);
+    State.policy = payload;
+    State.policyDirty = false;
+    status.textContent = '✓ Saved';
+    status.className = 'save-status saved';
+    showToast('Arbitration policy saved', 'success');
+    setTimeout(() => {
+      status.textContent = 'All changes saved';
+      status.className = 'save-status';
+    }, 3000);
+  } catch (err) {
+    status.textContent = 'Save failed — try again';
+    status.className = 'save-status';
+    btn.disabled = false;
+    showToast('Failed to save policy', 'error');
+  }
+}
+
+async function resetPolicyToDefaults() {
+  if (!confirm('Reset all arbitration settings to platform defaults?')) return;
+  try {
+    await API.resetPolicy();
+    await loadPolicy();
+    showToast('Policy reset to defaults', 'success');
+  } catch (err) {
+    showToast('Failed to reset policy', 'error');
+  }
+}
+
+/* ── Escape Keyword Tags ─────────────────────────────────────────── */
+function _renderEscapeKeywords() {
+  const wrap = document.getElementById('escape-keywords-wrap');
+  const input = document.getElementById('escape-kw-input');
+  // Remove existing tags (keep input)
+  wrap.querySelectorAll('.tag-item').forEach(t => t.remove());
+  // Render tags before input
+  State.escapeKeywords.forEach(kw => {
+    const tag = document.createElement('span');
+    tag.className = 'tag-item';
+    tag.innerHTML = `${_escHtml(kw)} <button class="tag-remove" onclick="removeEscapeKw('${_escAttr(kw)}')">&times;</button>`;
+    wrap.insertBefore(tag, input);
+  });
+}
+
+function removeEscapeKw(kw) {
+  State.escapeKeywords = State.escapeKeywords.filter(k => k !== kw);
+  _renderEscapeKeywords();
+  markPolicyDirty();
+}
+
+function handleTagInput(event, field) {
+  if (event.key !== 'Enter' && event.key !== ',') return;
+  event.preventDefault();
+  const input = event.target;
+  const val = input.value.trim().toLowerCase();
+  if (!val) return;
+  if (field === 'escapeKeywords' && !State.escapeKeywords.includes(val)) {
+    State.escapeKeywords.push(val);
+    _renderEscapeKeywords();
+    markPolicyDirty();
+  }
+  input.value = '';
+}
+
+function focusTagInput(wrap) {
+  wrap.querySelector('.tag-input')?.focus();
+}
+
+/* ================================================================
+   TAB 3 — LIVE CALLS
+================================================================ */
+function startLiveCallsPolling() {
+  refreshLiveCalls();
+  State.liveCountdown = 5;
+  stopLiveCallsPolling(); // clear any existing
+  State.liveCallsTimer = setInterval(() => {
+    State.liveCountdown--;
+    const label = document.getElementById('live-refresh-label');
+    if (label) label.textContent = `Refreshes in ${State.liveCountdown}s`;
+    if (State.liveCountdown <= 0) {
+      State.liveCountdown = 5;
+      refreshLiveCalls();
+    }
+  }, 1000);
+}
+
+function stopLiveCallsPolling() {
+  if (State.liveCallsTimer) clearInterval(State.liveCallsTimer);
+  State.liveCallsTimer = null;
+}
+
+async function refreshLiveCalls() {
+  if (!State.companyId) return;
+  try {
+    const data = await API.getActiveLanes();
+    const lanes = Array.isArray(data) ? data : (data.lanes || []);
+    renderLiveCalls(lanes);
+    document.getElementById('tab-count-live').textContent = lanes.length;
+  } catch (_) {
+    renderLiveCalls([]);
+  }
+}
+
+function renderLiveCalls(lanes) {
+  const tbody = document.getElementById('live-calls-body');
+  if (!lanes.length) {
+    tbody.innerHTML = `
+      <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:.875rem;">
+        <div style="font-size:1.5rem;margin-bottom:8px;">&#128514;</div>
+        No active calls right now
+      </div>`;
+    return;
+  }
+  tbody.innerHTML = lanes.map(lane => `
+    <div class="table-row">
+      <div class="table-cell call-id">${_escHtml(lane.callId || '—')}</div>
+      <div class="table-cell">${_laneBadge(lane.lane)}</div>
+      <div class="table-cell turn-count">${lane.turn || '—'}</div>
+      <div class="table-cell duration">${lane.duration || '—'}</div>
+      <div class="table-cell">
+        <button class="icon-btn primary" onclick="viewCallTrace('${_escAttr(lane.callId)}')" title="View trace">
+          &#9635; Trace
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ================================================================
+   TAB 4 — TRACE REPLAY
+================================================================ */
+async function loadRecentTraces() {
+  if (!State.companyId) return;
+  try {
+    const data = await API.getRecentTraces();
+    State.traceCalls = Array.isArray(data) ? data : (data.calls || []);
+    renderTraceCallList(State.traceCalls);
+  } catch (err) {
+    document.getElementById('trace-call-list').innerHTML =
+      `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.813rem;">Could not load traces</div>`;
+  }
+}
+
+function renderTraceCallList(calls) {
+  const list = document.getElementById('trace-call-list');
+  if (!calls.length) {
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.813rem;">No trace records yet</div>`;
+    return;
+  }
+  list.innerHTML = calls.map(call => `
+    <div class="trace-call-item ${call.callId === State.activeTraceCall ? 'active' : ''}"
+         onclick="selectTraceCall('${_escAttr(call.callId)}')">
+      <div class="trace-call-id">${_escHtml(call.callId)}</div>
+      <div class="trace-call-meta">${call.turns || 0} turns · ${_laneBadge(call.finalLane)}</div>
+      <div class="trace-call-time">${_relTime(call.createdAt)}</div>
+    </div>
+  `).join('');
+}
+
+function filterTraceCalls(query) {
+  const q = query.toLowerCase().trim();
+  const filtered = q ? State.traceCalls.filter(c => c.callId?.toLowerCase().includes(q)) : State.traceCalls;
+  renderTraceCallList(filtered);
+}
+
+async function selectTraceCall(callId) {
+  State.activeTraceCall = callId;
+  renderTraceCallList(State.traceCalls); // re-render to highlight active
+  const detail = document.getElementById('trace-detail');
+  detail.innerHTML = `
+    <div class="trace-detail-header">
+      <div style="font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted);">${callId}</div>
+      <div class="spinner" style="margin-left:auto;"></div>
+    </div>`;
+  try {
+    const data = await API.getCallTrace(callId);
+    const turns = Array.isArray(data) ? data : (data.turns || []);
+    renderTraceDetail(callId, turns);
+  } catch (_) {
+    detail.innerHTML = `<div class="trace-detail-placeholder">Could not load trace for this call</div>`;
+  }
+}
+
+function viewCallTrace(callId) {
+  switchTab('trace');
+  selectTraceCall(callId);
+}
+
+function renderTraceDetail(callId, turns) {
+  const detail = document.getElementById('trace-detail');
+  detail.innerHTML = `
+    <div class="trace-detail-header">
+      <div>
+        <div style="font-size:.813rem;font-weight:700;color:var(--text-primary);">Call Trace</div>
+        <div style="font-family:var(--font-mono);font-size:.688rem;color:var(--text-muted);">${callId}</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        <span class="badge badge-kw-count">${turns.length} turns</span>
+      </div>
+    </div>
+    <div class="turn-list">
+      ${turns.map(t => renderTurnItem(t)).join('')}
+    </div>
+  `;
+}
+
+function renderTurnItem(t) {
+  const actionBadge = _actionBadge(t.decision?.action);
+  const candidates = t.candidates || [];
+  const winner = candidates.find(c => !c.suppressed);
+  const suppressed = candidates.filter(c => c.suppressed);
+
+  return `
+    <div class="turn-item" onclick="toggleTurnDetail(this)">
+      <div class="turn-summary">
+        <span class="turn-num">#${t.turn}</span>
+        <span class="turn-utterance">"${_escHtml(t.input?.raw || '')}"</span>
+        ${_laneBadge(t.lane?.after)}
+        ${actionBadge}
+      </div>
+      <div class="turn-detail">
+
+        <div class="detail-section-title">Input</div>
+        <div class="detail-row">
+          <span class="detail-key">Raw</span>
+          <span class="detail-val">"${_escHtml(t.input?.raw || '—')}"</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">Normalized</span>
+          <span class="detail-val mono">${_escHtml(t.input?.normalized || '—')}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">Lane Before</span>
+          <span class="detail-val">${_laneBadge(t.lane?.before) || '<span style="color:var(--text-muted)">None</span>'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">Lane After</span>
+          <span class="detail-val">${_laneBadge(t.lane?.after) || '<span style="color:var(--text-muted)">None</span>'}
+            ${t.lane?.locked ? '<span class="badge badge-locked" style="margin-left:4px;">&#128274; Locked</span>' : ''}
+          </span>
+        </div>
+
+        <div class="detail-section-title">Candidates Scored</div>
+        <table class="candidate-table">
+          <thead>
+            <tr>
+              <th>Signal</th>
+              <th>Type</th>
+              <th>Score</th>
+              <th>Matched On</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${candidates.map(c => `
+              <tr class="${c.suppressed ? 'suppressed-row' : 'winner-row'}">
+                <td style="font-size:.75rem;color:var(--text-muted);">${_escHtml(c.detector || '—')}</td>
+                <td><strong>${_escHtml(c.type || '—')}</strong></td>
+                <td>
+                  <div class="score-bar-wrap">
+                    <div class="score-bar">
+                      <div class="score-bar-fill ${c.suppressed ? 'suppressed' : 'winner'}"
+                           style="width:${Math.round((c.score||0)*100)}%"></div>
+                    </div>
+                    <span class="score-num">${(c.score||0).toFixed(2)}</span>
+                  </div>
+                </td>
+                <td style="font-size:.75rem;">${_escHtml(c.signal || '—')}</td>
+                <td>
+                  ${c.suppressed
+                    ? `<span class="badge badge-suppressed">&#10007; ${_escHtml(c.suppressReason||'suppressed')}</span>`
+                    : `<span class="badge badge-winner">&#10003; Winner</span>`}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="detail-section-title">Decision</div>
+        <div class="decision-box">
+          <div class="decision-action">&#9658; ${_escHtml(t.decision?.action || '—')}</div>
+          <div class="decision-reason">${_escHtml(t.decision?.reason || '—')}</div>
+          <div class="decision-meta">
+            Policy: ${_escHtml(t.decision?.policyApplied || '—')} &nbsp;·&nbsp;
+            Score Gap: ${(t.decision?.scoreGap||0).toFixed(2)} &nbsp;·&nbsp;
+            Arbitration: ${t.decision?.arbitrationMs || 0}ms
+          </div>
+        </div>
+
+        ${t.execution?.responsePreview ? `
+          <div class="detail-section-title">Execution</div>
+          <div class="detail-row">
+            <span class="detail-key">Response</span>
+            <span class="detail-val">"${_escHtml(t.execution.responsePreview)}"</span>
+          </div>
+          ${t.execution.laneRedirect ? `
+          <div class="detail-row">
+            <span class="detail-key">Redirected To</span>
+            <span class="detail-val">${_escHtml(t.execution.laneRedirect)}</span>
+          </div>` : ''}
+          <div class="detail-row">
+            <span class="detail-key">Total Latency</span>
+            <span class="detail-val mono">${t.execution.executionMs || 0}ms</span>
+          </div>
+        ` : ''}
+
+      </div>
+    </div>
+  `;
+}
+
+function toggleTurnDetail(el) {
+  // Close all others, open this one
+  document.querySelectorAll('.turn-item.active').forEach(t => { if (t !== el) t.classList.remove('active'); });
+  el.classList.toggle('active');
+}
+
+/* ================================================================
+   MODAL HELPERS
+================================================================ */
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+/* ================================================================
+   INFO BANNER TOGGLE
+================================================================ */
+function toggleBanner(bannerId) {
+  const body = document.getElementById(`${bannerId}-body`);
+  body.classList.toggle('hidden');
+}
+
+/* ================================================================
+   NAVIGATION
+================================================================ */
+function navTo(page) {
+  const qs = State.companyId ? `?companyId=${State.companyId}` : '';
+  window.location.href = page + qs;
+}
+
+/* ================================================================
+   TOAST
+================================================================ */
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `${type === 'success' ? '&#10003;' : type === 'error' ? '&#10007;' : 'ℹ'} ${_escHtml(message)}`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+/* ================================================================
+   RENDER HELPERS
+================================================================ */
+function _actionBadge(type) {
+  const map = {
+    'RESPOND':   `<span class="badge badge-action-respond">&#9654; RESPOND</span>`,
+    'BOOK':      `<span class="badge badge-action-book">&#128197; BOOK</span>`,
+    'ROUTE_KC':  `<span class="badge badge-action-route-kc">&#129504; KC</span>`,
+    'TRANSFER':  `<span class="badge badge-action-transfer">&#128100; TRANSFER</span>`,
+    'CLARIFY':   `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">&#63; CLARIFY</span>`,
+    'GRACEFUL_ACK': `<span class="badge badge-platform">&#9675; ACK</span>`,
+  };
+  return map[type] || `<span class="badge badge-platform">${_escHtml(type||'—')}</span>`;
+}
+
+function _laneBadge(lane) {
+  if (!lane || lane === 'INTAKE') return `<span class="badge badge-lane-intake">INTAKE</span>`;
+  const map = {
+    'BOOKING':   'badge-lane-booking',
+    'DISCOVERY': 'badge-lane-discovery',
+    'PRICING':   'badge-lane-pricing',
+    'TRANSFER':  'badge-lane-transfer',
+  };
+  return `<span class="badge ${map[lane] || 'badge-lane-intake'}">${lane}</span>`;
+}
+
+function _matchModeBg(mode) {
+  return mode === 'ALL' ? '#ede9fe' : mode === 'PHRASE' ? '#fef3c7' : '#f8fafc';
+}
+
+function _keywordsPreview(keywords = []) {
+  const preview = keywords.slice(0, 4).join(', ');
+  const more = keywords.length > 4 ? ` +${keywords.length - 4} more` : '';
+  return _escHtml(preview) + (more ? `<em style="color:var(--text-muted)">${more}</em>` : '');
+}
+
+function _relTime(iso) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000)  return `${Math.round(diff/1000)}s ago`;
+  if (diff < 3600000) return `${Math.round(diff/60000)}m ago`;
+  if (diff < 86400000) return `${Math.round(diff/3600000)}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function _escHtml(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _escAttr(str) {
+  return String(str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function renderErrorState(msg) {
+  return `<div class="empty-state"><div class="empty-state-icon">&#9888;</div><h3>${msg}</h3></div>`;
+}
+</script>
+
+</body>
+</html>

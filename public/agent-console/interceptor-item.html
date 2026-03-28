@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interceptor Rule</title>
+
+  <!-- ============================================================
+       INTERCEPTOR RULE — Create / Edit
+       ClientsVia Agent Console · Enterprise Edition
+
+       WHAT THIS PAGE IS:
+         Full CRUD form for a single CompanyInterceptor rule.
+         Used for both creating new rules and editing existing ones.
+
+       URL PARAMS:
+         companyId  (required) — tenant ID
+         id         (optional) — if present, loads existing rule for edit
+
+       FORM SECTIONS:
+         1. Rule Settings    — name, description, priority, status
+         2. Trigger Keywords — keyword list + match mode selector
+         3. Action           — what to do when keywords match
+         4. Live Test Panel  — test input against current keyword config
+  ============================================================ -->
+
+  <style>
+    /* ================================================================
+       DESIGN TOKENS — exact match to interceptor.html / services.html
+    ================================================================ */
+    :root {
+      --color-primary:      #0ea5e9;
+      --color-primary-dk:   #0284c7;
+      --color-primary-lt:   #e0f2fe;
+      --color-success:      #10b981;
+      --color-success-lt:   #d1fae5;
+      --color-warning:      #f59e0b;
+      --color-warning-lt:   #fef3c7;
+      --color-danger:       #ef4444;
+      --color-danger-lt:    #fee2e2;
+      --color-purple:       #8b5cf6;
+      --color-purple-lt:    #ede9fe;
+
+      --bg-page:            #f0f9ff;
+      --bg-card:            #ffffff;
+      --bg-header:          #ffffff;
+      --bg-sidebar:         #f8fafc;
+
+      --text-primary:       #0f172a;
+      --text-secondary:     #334155;
+      --text-muted:         #64748b;
+      --text-xs:            #94a3b8;
+
+      --border:             #e2e8f0;
+      --border-focus:       #0ea5e9;
+      --border-strong:      #cbd5e1;
+
+      --radius-card:        12px;
+      --radius-sm:          8px;
+      --radius-xs:          6px;
+      --radius-pill:        999px;
+
+      --shadow-card:        0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-raised:      0 4px 12px rgba(0,0,0,.10);
+      --shadow-modal:       0 20px 60px rgba(0,0,0,.20);
+
+      --font-mono:          'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      --transition:         150ms ease;
+    }
+
+    /* ================================================================
+       RESET & BASE
+    ================================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ================================================================
+       PAGE HEADER
+    ================================================================ */
+    .page-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+      height: 56px;
+    }
+
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); cursor: pointer;
+      color: var(--text-muted); font-size: .813rem; font-weight: 500;
+      text-decoration: none; transition: all var(--transition);
+    }
+    .btn-back:hover { background: var(--bg-page); border-color: var(--border-strong); }
+
+    .header-title {
+      flex: 1; font-size: 1rem; font-weight: 700; color: var(--text-primary);
+    }
+
+    .header-actions { display: flex; gap: 8px; }
+
+    /* ================================================================
+       LAYOUT
+    ================================================================ */
+    .page-body {
+      max-width: 760px; margin: 0 auto; padding: 28px 24px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* ================================================================
+       FORM SECTIONS
+    ================================================================ */
+    .form-section {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); padding: 20px 24px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .section-title {
+      font-size: .875rem; font-weight: 700; color: var(--text-primary);
+      margin-bottom: 16px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title-icon { font-size: 1rem; }
+
+    /* ================================================================
+       FORM FIELDS
+    ================================================================ */
+    .field-group { margin-bottom: 16px; }
+    .field-group:last-child { margin-bottom: 0; }
+
+    .field-label {
+      display: block; font-size: .813rem; font-weight: 600;
+      color: var(--text-secondary); margin-bottom: 5px;
+    }
+    .field-label span.required { color: var(--color-danger); margin-left: 2px; }
+    .field-hint { font-size: .75rem; color: var(--text-muted); margin-top: 4px; }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 600px) { .field-row { grid-template-columns: 1fr; } }
+
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .875rem; color: var(--text-primary);
+      background: var(--bg-card); transition: border-color var(--transition);
+      font-family: inherit;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none; border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(14,165,233,.1);
+    }
+    input.error, textarea.error { border-color: var(--color-danger); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .char-count {
+      font-size: .75rem; color: var(--text-muted); text-align: right;
+      margin-top: 3px;
+    }
+    .char-count.near-limit { color: var(--color-warning); }
+    .char-count.at-limit   { color: var(--color-danger); }
+
+    /* Field errors */
+    .field-error {
+      font-size: .75rem; color: var(--color-danger);
+      margin-top: 4px; display: none;
+    }
+    .field-error.visible { display: block; }
+
+    /* ================================================================
+       STATUS TOGGLE ROW
+    ================================================================ */
+    .status-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      background: var(--bg-page); border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+    }
+    .status-row-label { flex: 1; font-size: .875rem; font-weight: 500; color: var(--text-primary); }
+    .status-row-desc { font-size: .75rem; color: var(--text-muted); }
+
+    .toggle {
+      position: relative; width: 40px; height: 22px; display: inline-block; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: #cbd5e1; border-radius: var(--radius-pill);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute;
+      height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%;
+      transition: transform var(--transition);
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    .toggle input:checked + .toggle-slider { background: var(--color-success); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+    /* ================================================================
+       MATCH MODE — Radio Cards
+    ================================================================ */
+    .match-mode-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    @media (max-width: 500px) { .match-mode-grid { grid-template-columns: 1fr; } }
+
+    .match-mode-card {
+      position: relative; cursor: pointer;
+    }
+    .match-mode-card input[type="radio"] {
+      position: absolute; opacity: 0; width: 0; height: 0;
+    }
+    .match-mode-label {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 12px 14px;
+      border: 2px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg-card); cursor: pointer;
+      transition: all var(--transition);
+    }
+    .match-mode-label:hover { border-color: var(--border-strong); background: var(--bg-page); }
+    .match-mode-card input:checked + .match-mode-label {
+      border-color: var(--color-primary); background: var(--color-primary-lt);
+    }
+    .match-mode-name {
+      font-size: .813rem; font-weight: 700; color: var(--text-primary);
+    }
+    .match-mode-card input:checked + .match-mode-label .match-mode-name {
+      color: var(--color-primary-dk);
+    }
+    .match-mode-desc { font-size: .75rem; color: var(--text-muted); }
+
+    /* ================================================================
+       KEYWORD TAG INPUT
+    ================================================================ */
+    .keyword-input-wrap {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      padding: 8px 10px; min-height: 48px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      background: var(--bg-card); cursor: text;
+      transition: border-color var(--transition);
+    }
+    .keyword-input-wrap:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+    .keyword-input-wrap.error { border-color: var(--color-danger); }
+
+    .kw-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; font-size: .813rem;
+      background: var(--color-primary-lt); color: var(--color-primary-dk);
+      border: 1px solid #bae6fd; border-radius: var(--radius-pill);
+      cursor: default; user-select: none;
+    }
+    .kw-tag-remove {
+      background: none; border: none; cursor: pointer;
+      color: var(--color-primary-dk); font-size: 1rem; line-height: 1;
+      padding: 0 1px; opacity: .7; transition: opacity var(--transition);
+    }
+    .kw-tag-remove:hover { opacity: 1; }
+
+    .kw-input {
+      border: none; outline: none; background: transparent;
+      font-size: .875rem; color: var(--text-primary);
+      flex: 1; min-width: 140px; padding: 2px 0;
+    }
+
+    .keywords-help {
+      font-size: .75rem; color: var(--text-muted); margin-top: 4px;
+      display: flex; align-items: flex-start; gap: 4px;
+    }
+
+    /* ================================================================
+       ACTION TYPE — Radio Cards (2-column)
+    ================================================================ */
+    .action-type-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    @media (max-width: 500px) { .action-type-grid { grid-template-columns: 1fr; } }
+
+    .action-card {
+      position: relative;
+    }
+    .action-card input[type="radio"] {
+      position: absolute; opacity: 0; width: 0; height: 0;
+    }
+    .action-label {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 14px 14px;
+      border: 2px solid var(--border); border-radius: var(--radius-sm);
+      cursor: pointer; transition: all var(--transition); background: var(--bg-card);
+    }
+    .action-label:hover { border-color: var(--border-strong); background: var(--bg-page); }
+    .action-card input:checked + .action-label { border-color: var(--color-primary); }
+
+    .action-icon { font-size: 1.25rem; flex-shrink: 0; margin-top: 1px; }
+    .action-text-name { font-size: .875rem; font-weight: 700; color: var(--text-primary); }
+    .action-card input:checked + .action-label .action-text-name { color: var(--color-primary-dk); }
+    .action-text-desc { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* Conditional action fields */
+    .action-fields { margin-top: 14px; }
+    .action-field-group { display: none; }
+    .action-field-group.visible { display: block; }
+
+    /* KC Container dropdown */
+    .kc-select {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .875rem; background: var(--bg-card);
+      transition: border-color var(--transition);
+    }
+    .kc-select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+
+    /* ================================================================
+       LIVE TEST PANEL
+    ================================================================ */
+    .test-panel {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); padding: 20px 24px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .test-input-row {
+      display: flex; gap: 10px; align-items: center;
+    }
+    .test-input {
+      flex: 1; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .875rem; background: var(--bg-page);
+      transition: border-color var(--transition);
+    }
+    .test-input:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+    .test-input::placeholder { color: var(--text-muted); }
+
+    .btn-test {
+      padding: 10px 18px; background: var(--bg-sidebar);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-xs);
+      font-size: .813rem; font-weight: 600; color: var(--text-secondary);
+      cursor: pointer; white-space: nowrap; transition: all var(--transition);
+    }
+    .btn-test:hover { background: var(--color-primary-lt); border-color: #bae6fd; color: var(--color-primary-dk); }
+
+    .test-result {
+      margin-top: 12px; padding: 12px 16px;
+      border-radius: var(--radius-sm); font-size: .875rem;
+      display: none;
+    }
+    .test-result.visible { display: block; }
+    .test-result.match {
+      background: var(--color-success-lt); border: 1px solid #a7f3d0;
+    }
+    .test-result.no-match {
+      background: #fff7ed; border: 1px solid #fed7aa;
+    }
+    .test-result-title {
+      font-weight: 700; margin-bottom: 4px;
+    }
+    .test-result.match .test-result-title { color: #065f46; }
+    .test-result.no-match .test-result-title { color: #9a3412; }
+    .test-result-detail {
+      font-size: .813rem; color: var(--text-secondary);
+    }
+    .test-matched-kw {
+      display: inline-flex; padding: 1px 8px;
+      background: white; border: 1px solid #a7f3d0;
+      border-radius: var(--radius-pill); font-weight: 600;
+      color: #065f46; font-family: var(--font-mono); font-size: .75rem;
+    }
+    .test-normalized {
+      font-family: var(--font-mono); font-size: .75rem; color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ================================================================
+       BUTTONS
+    ================================================================ */
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 20px; background: var(--color-primary);
+      color: white; border: none; border-radius: var(--radius-xs);
+      font-size: .875rem; font-weight: 600; cursor: pointer;
+      transition: background var(--transition);
+    }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 20px; background: var(--bg-card);
+      color: var(--text-secondary); border: 1px solid var(--border-strong);
+      border-radius: var(--radius-xs); font-size: .875rem; font-weight: 500;
+      cursor: pointer; transition: all var(--transition); text-decoration: none;
+    }
+    .btn-secondary:hover { background: var(--bg-page); }
+
+    .save-bar {
+      position: sticky; bottom: 0; z-index: 50;
+      background: var(--bg-header); border-top: 1px solid var(--border);
+      padding: 14px 24px; margin: 0 -24px -28px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 -4px 12px rgba(0,0,0,.06);
+    }
+    .save-bar-info { font-size: .813rem; color: var(--text-muted); }
+
+    /* ================================================================
+       LOADING / ERROR STATES
+    ================================================================ */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border); border-top-color: var(--color-primary);
+      border-radius: 50%; animation: spin .7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .page-loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 200px; gap: 12px; color: var(--text-muted); font-size: .875rem;
+    }
+
+    /* ================================================================
+       TOAST
+    ================================================================ */
+    #toast-container {
+      position: fixed; bottom: 80px; right: 24px; z-index: 2000;
+      display: flex; flex-direction: column-reverse; gap: 8px;
+    }
+    .toast {
+      padding: 12px 16px; border-radius: var(--radius-sm);
+      font-size: .813rem; font-weight: 500; max-width: 300px;
+      box-shadow: var(--shadow-raised);
+      display: flex; align-items: center; gap: 8px;
+      animation: toast-in .2s ease;
+    }
+    @keyframes toast-in { from { opacity:0;transform:translateY(8px); } to { opacity:1;transform:translateY(0); } }
+    .toast-success { background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0; }
+    .toast-error   { background:#fef2f2;color:#991b1b;border:1px solid #fca5a5; }
+    .toast-info    { background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+
+<body>
+
+<!-- ================================================================
+     PAGE HEADER
+================================================================ -->
+<header class="page-header">
+  <a class="btn-back" id="btn-back" href="javascript:void(0)" onclick="goBack()">
+    &#8592; Back to Console
+  </a>
+  <span class="header-title" id="hdr-title">New Rule</span>
+  <div class="header-actions">
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+    <button class="btn-primary" id="btn-save" onclick="saveRule()">
+      <span id="save-label">Save Rule</span>
+      <span id="save-spinner" class="spinner hidden" style="width:16px;height:16px;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:white;"></span>
+    </button>
+  </div>
+</header>
+
+<!-- ================================================================
+     PAGE BODY — Loading state shown initially
+================================================================ -->
+<div class="page-body" id="page-body">
+
+  <div class="page-loading" id="page-loading">
+    <div class="spinner"></div>
+    Loading…
+  </div>
+
+  <!-- Form rendered here once data is ready -->
+  <div id="form-root" class="hidden">
+
+    <!-- ── SECTION 1: RULE SETTINGS ── -->
+    <div class="form-section">
+      <div class="section-title">
+        <span class="section-title-icon">&#9881;</span>
+        Rule Settings
+      </div>
+
+      <div class="field-row">
+        <div class="field-group">
+          <label class="field-label" for="f-name">
+            Rule Name <span class="required">*</span>
+          </label>
+          <input type="text" id="f-name" maxlength="100" placeholder="e.g. Bundling Policy"
+            oninput="updateCharCount('f-name', 100)" />
+          <div class="char-count" id="cc-f-name">0 / 100</div>
+          <div class="field-error" id="err-name">Name is required</div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="f-priority">Priority</label>
+          <input type="number" id="f-priority" min="1" max="9999" value="100"
+            placeholder="100" />
+          <div class="field-hint">Lower number = fires first. Platform rules use A/B/C. Custom rules use numbers.</div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="f-description">Description <em style="font-weight:400;">(optional — for your team)</em></label>
+        <textarea id="f-description" maxlength="300" rows="2"
+          placeholder="e.g. Handles callers asking whether they can combine a maintenance plan with an emergency service call"
+          oninput="updateCharCount('f-description', 300)"></textarea>
+        <div class="char-count" id="cc-f-description">0 / 300</div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Status</label>
+        <div class="status-row">
+          <div>
+            <div class="status-row-label">Active</div>
+            <div class="status-row-desc">Rule fires on live calls when enabled</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="f-enabled" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 2: TRIGGER KEYWORDS ── -->
+    <div class="form-section">
+      <div class="section-title">
+        <span class="section-title-icon">&#128269;</span>
+        Trigger Keywords
+        <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">— What the caller must say to activate this rule</span>
+      </div>
+
+      <!-- Match Mode -->
+      <div class="field-group">
+        <label class="field-label">Match Mode</label>
+        <div class="match-mode-grid">
+
+          <label class="match-mode-card">
+            <input type="radio" name="matchMode" value="ANY" checked onchange="onMatchModeChange()" />
+            <div class="match-mode-label">
+              <div class="match-mode-name">ANY keyword</div>
+              <div class="match-mode-desc">Match if ANY one keyword is found in the utterance. Most flexible.</div>
+            </div>
+          </label>
+
+          <label class="match-mode-card">
+            <input type="radio" name="matchMode" value="ALL" onchange="onMatchModeChange()" />
+            <div class="match-mode-label">
+              <div class="match-mode-name">ALL keywords</div>
+              <div class="match-mode-desc">Match only if ALL keywords are present. Most precise.</div>
+            </div>
+          </label>
+
+          <label class="match-mode-card">
+            <input type="radio" name="matchMode" value="PHRASE" onchange="onMatchModeChange()" />
+            <div class="match-mode-label">
+              <div class="match-mode-name">Exact phrase</div>
+              <div class="match-mode-desc">Match only the exact phrase(s) listed. Strictest.</div>
+            </div>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- Keyword Tag Input -->
+      <div class="field-group">
+        <label class="field-label">
+          Keywords <span class="required">*</span>
+        </label>
+        <div class="keyword-input-wrap" id="kw-wrap" onclick="document.getElementById('kw-input').focus()">
+          <input type="text" class="kw-input" id="kw-input"
+            placeholder="Type a keyword or phrase, press Enter to add…"
+            onkeydown="handleKwInput(event)"
+            oninput="updateTestLive()" />
+        </div>
+        <div class="field-error" id="err-keywords">Add at least one keyword</div>
+        <div class="keywords-help">
+          <span>&#9432;</span>
+          <span>
+            Keywords are normalized automatically (lowercase, punctuation stripped).
+            Multi-word phrases match as substrings.
+            Single words match whole-word only (so "service" won't match "services").
+          </span>
+        </div>
+      </div>
+
+      <!-- Keyword Examples by Match Mode -->
+      <div id="kw-mode-hint" style="margin-top:-8px;padding:10px 14px;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius-xs);">
+        <div style="font-size:.75rem;color:var(--text-muted);" id="kw-mode-hint-text">
+          <strong>ANY mode:</strong> "combine" OR "bundle" OR "can I combine" — any one of these present → match.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 3: ACTION ── -->
+    <div class="form-section">
+      <div class="section-title">
+        <span class="section-title-icon">&#9654;</span>
+        Action
+        <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">— What the agent does when this rule matches</span>
+      </div>
+
+      <div class="action-type-grid">
+
+        <label class="action-card">
+          <input type="radio" name="actionType" value="RESPOND" checked onchange="onActionTypeChange('RESPOND')" />
+          <div class="action-label">
+            <span class="action-icon">&#128172;</span>
+            <div>
+              <div class="action-text-name">Answer with text</div>
+              <div class="action-text-desc">Agent speaks your custom response. Best for policy Q&amp;A and specific fact answers.</div>
+            </div>
+          </div>
+        </label>
+
+        <label class="action-card">
+          <input type="radio" name="actionType" value="ROUTE_KC" onchange="onActionTypeChange('ROUTE_KC')" />
+          <div class="action-label">
+            <span class="action-icon">&#129504;</span>
+            <div>
+              <div class="action-text-name">Go to Knowledge Container</div>
+              <div class="action-text-desc">Skip KC scoring — jump directly to a specific container and let Groq answer from it.</div>
+            </div>
+          </div>
+        </label>
+
+        <label class="action-card">
+          <input type="radio" name="actionType" value="BOOK" onchange="onActionTypeChange('BOOK')" />
+          <div class="action-label">
+            <span class="action-icon">&#128197;</span>
+            <div>
+              <div class="action-text-name">Start booking flow</div>
+              <div class="action-text-desc">Immediately transitions to the booking engine. Use for strong booking signals.</div>
+            </div>
+          </div>
+        </label>
+
+        <label class="action-card">
+          <input type="radio" name="actionType" value="TRANSFER" onchange="onActionTypeChange('TRANSFER')" />
+          <div class="action-label">
+            <span class="action-icon">&#128100;</span>
+            <div>
+              <div class="action-text-name">Transfer to live agent</div>
+              <div class="action-text-desc">Routes caller to a live agent or queue. Use for escalation keywords.</div>
+            </div>
+          </div>
+        </label>
+
+      </div>
+
+      <!-- Conditional Action Fields -->
+      <div class="action-fields">
+
+        <!-- RESPOND fields -->
+        <div class="action-field-group visible" id="af-respond">
+          <div class="field-group" style="margin-top:14px;">
+            <label class="field-label" for="f-response">
+              Response Text <span class="required">*</span>
+            </label>
+            <textarea id="f-response" maxlength="600" rows="4"
+              placeholder="The text the agent will speak when this rule matches. Keep it conversational and concise — 1-3 sentences."
+              oninput="updateCharCount('f-response', 600)"></textarea>
+            <div class="char-count" id="cc-f-response">0 / 600</div>
+            <div class="field-error" id="err-response">Response text is required for this action type</div>
+          </div>
+        </div>
+
+        <!-- ROUTE_KC fields -->
+        <div class="action-field-group" id="af-route-kc">
+          <div class="field-group" style="margin-top:14px;">
+            <label class="field-label" for="f-kc-container">
+              Knowledge Container <span class="required">*</span>
+            </label>
+            <select class="kc-select" id="f-kc-container" onchange="onKcContainerChange()">
+              <option value="">— Loading containers…</option>
+            </select>
+            <div class="field-hint">Groq will answer using the sections of this container. The keyword scoring step is skipped — this rule routes directly to the selected container.</div>
+            <div class="field-error" id="err-kc">Please select a Knowledge Container</div>
+          </div>
+        </div>
+
+        <!-- BOOK fields -->
+        <div class="action-field-group" id="af-book">
+          <div style="margin-top:14px;padding:12px 14px;background:var(--color-success-lt);border:1px solid #a7f3d0;border-radius:var(--radius-xs);">
+            <div style="font-size:.875rem;font-weight:600;color:#065f46;">&#10003; Booking flow will start immediately</div>
+            <div style="font-size:.813rem;color:#047857;margin-top:4px;">The caller will be redirected to the BookingLogicEngine to collect name, phone, address, and preferred time. No additional configuration needed.</div>
+          </div>
+          <div class="field-group" style="margin-top:12px;">
+            <label class="field-label" for="f-booking-mode">Service Type Hint <em style="font-weight:400;">(optional)</em></label>
+            <input type="text" id="f-booking-mode" maxlength="80"
+              placeholder="e.g. maintenance, repair, inspection" />
+            <div class="field-hint">If known, this hint pre-selects the service type in the booking engine.</div>
+          </div>
+        </div>
+
+        <!-- TRANSFER fields -->
+        <div class="action-field-group" id="af-transfer">
+          <div class="field-group" style="margin-top:14px;">
+            <label class="field-label" for="f-transfer-target">
+              Transfer Target <span class="required">*</span>
+            </label>
+            <input type="text" id="f-transfer-target" maxlength="100"
+              placeholder="e.g. general-queue, dispatcher, manager-line" />
+            <div class="field-hint">The queue or skill name to route to. Must match your Twilio Flex or telephony configuration.</div>
+            <div class="field-error" id="err-transfer">Transfer target is required</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── SECTION 4: LIVE TEST PANEL ── -->
+    <div class="test-panel">
+      <div class="section-title" style="margin-bottom:14px;">
+        <span class="section-title-icon">&#9889;</span>
+        Live Test Panel
+        <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">— Test your keywords before saving</span>
+      </div>
+
+      <p style="font-size:.813rem;color:var(--text-secondary);margin-bottom:12px;">
+        Type something a caller might say and see if your keywords would match. Tests your current keyword settings — no save required.
+      </p>
+
+      <div class="test-input-row">
+        <input type="text" class="test-input" id="test-input"
+          placeholder="e.g. yeah I'd like to schedule but can I also combine that with the maintenance plan?"
+          onkeydown="if(event.key==='Enter') runTest()" />
+        <button class="btn-test" onclick="runTest()">&#9889; Test</button>
+      </div>
+
+      <div class="test-result" id="test-result">
+        <!-- Populated by runTest() -->
+      </div>
+    </div>
+
+    <!-- ── SAVE BAR ── -->
+    <div class="save-bar">
+      <span class="save-bar-info" id="save-bar-info">All changes will be saved to this company only</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" onclick="goBack()">Cancel</button>
+        <button class="btn-primary" id="btn-save-bottom" onclick="saveRule()">
+          <span id="save-label-bottom">Save Rule</span>
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /form-root -->
+</div><!-- /page-body -->
+
+<div id="toast-container"></div>
+
+<!-- ================================================================
+     JAVASCRIPT
+================================================================ -->
+<script>
+'use strict';
+
+/* ================================================================
+   STATE
+================================================================ */
+const State = {
+  companyId:   new URLSearchParams(location.search).get('companyId') || '',
+  ruleId:      new URLSearchParams(location.search).get('id') || '',
+  isEdit:      false,
+  keywords:    [],
+  kcContainers: [],        // { _id, title } for dropdown
+  saving:      false,
+};
+
+/* ================================================================
+   API
+================================================================ */
+const API = {
+  base: () => `/api/admin/agent2/company/${State.companyId}`,
+
+  async getRule(id) {
+    const r = await fetch(`${API.base()}/interceptors/${id}`, { headers: _auth() });
+    return r.json();
+  },
+  async createRule(payload) {
+    const r = await fetch(`${API.base()}/interceptors`, {
+      method: 'POST', headers: _auth(), body: JSON.stringify(payload),
+    });
+    return r.json();
+  },
+  async updateRule(id, payload) {
+    const r = await fetch(`${API.base()}/interceptors/${id}`, {
+      method: 'PATCH', headers: _auth(), body: JSON.stringify(payload),
+    });
+    return r.json();
+  },
+  async testRule(input, keywords, matchMode) {
+    const r = await fetch(`${API.base()}/interceptors/test`, {
+      method: 'POST', headers: _auth(),
+      body: JSON.stringify({ input, keywords, matchMode }),
+    });
+    return r.json();
+  },
+  async getKcContainers() {
+    const r = await fetch(`${API.base()}/knowledge-containers?state=published&enabled=true`, { headers: _auth() });
+    return r.json();
+  },
+};
+
+function _auth() {
+  const token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+(async function init() {
+  State.isEdit = !!State.ruleId;
+  document.getElementById('hdr-title').textContent = State.isEdit ? 'Edit Rule' : 'New Rule';
+  document.getElementById('save-label').textContent         = State.isEdit ? 'Save Changes' : 'Save Rule';
+  document.getElementById('save-label-bottom').textContent  = State.isEdit ? 'Save Changes' : 'Save Rule';
+
+  // Load KC containers (for dropdown — load in parallel with rule load)
+  const [, _kc] = await Promise.all([
+    State.isEdit ? _loadExistingRule() : Promise.resolve(),
+    _loadKcContainers(),
+  ]);
+
+  document.getElementById('page-loading').classList.add('hidden');
+  document.getElementById('form-root').classList.remove('hidden');
+})();
+
+async function _loadExistingRule() {
+  try {
+    const data = await API.getRule(State.ruleId);
+    const rule = data.interceptor || data;
+    _populateForm(rule);
+  } catch (err) {
+    showToast('Could not load rule', 'error');
+  }
+}
+
+async function _loadKcContainers() {
+  try {
+    const data = await API.getKcContainers();
+    State.kcContainers = Array.isArray(data) ? data : (data.containers || []);
+    _populateKcDropdown();
+  } catch (_) {
+    // Non-fatal — KC dropdown will be empty but form still works
+  }
+}
+
+function _populateKcDropdown() {
+  const sel = document.getElementById('f-kc-container');
+  sel.innerHTML = '<option value="">— Select a Knowledge Container —</option>';
+  State.kcContainers.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c._id;
+    opt.textContent = c.title || c.name || c._id;
+    sel.appendChild(opt);
+  });
+}
+
+function _populateForm(rule) {
+  document.getElementById('f-name').value        = rule.name || '';
+  document.getElementById('f-priority').value    = rule.priority ?? 100;
+  document.getElementById('f-description').value = rule.description || '';
+  document.getElementById('f-enabled').checked   = rule.enabled !== false;
+
+  // Match mode
+  const mode = rule.matchMode || 'ANY';
+  document.querySelector(`input[name="matchMode"][value="${mode}"]`).checked = true;
+  onMatchModeChange();
+
+  // Keywords
+  State.keywords = Array.isArray(rule.keywords) ? [...rule.keywords] : [];
+  _renderKeywords();
+
+  // Action
+  const actionType = rule.action?.type || 'RESPOND';
+  document.querySelector(`input[name="actionType"][value="${actionType}"]`).checked = true;
+  onActionTypeChange(actionType, rule.action);
+
+  // Update char counts
+  updateCharCount('f-name', 100);
+  updateCharCount('f-description', 300);
+}
+
+/* ================================================================
+   KEYWORDS
+================================================================ */
+function handleKwInput(event) {
+  if (event.key !== 'Enter' && event.key !== ',') return;
+  event.preventDefault();
+  const input = document.getElementById('kw-input');
+  const val = input.value.trim().toLowerCase().replace(/[^\w\s']/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!val) return;
+  if (!State.keywords.includes(val)) {
+    State.keywords.push(val);
+    _renderKeywords();
+    clearError('err-keywords');
+    document.getElementById('kw-wrap').classList.remove('error');
+  }
+  input.value = '';
+}
+
+function removeKeyword(kw) {
+  State.keywords = State.keywords.filter(k => k !== kw);
+  _renderKeywords();
+}
+
+function _renderKeywords() {
+  const wrap = document.getElementById('kw-wrap');
+  const input = document.getElementById('kw-input');
+  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
+  State.keywords.forEach(kw => {
+    const tag = document.createElement('span');
+    tag.className = 'kw-tag';
+    tag.innerHTML = `${_esc(kw)} <button class="kw-tag-remove" onclick="removeKeyword('${_escAttr(kw)}')">&times;</button>`;
+    wrap.insertBefore(tag, input);
+  });
+}
+
+/* ================================================================
+   MATCH MODE
+================================================================ */
+function onMatchModeChange() {
+  const mode = document.querySelector('input[name="matchMode"]:checked')?.value || 'ANY';
+  const hints = {
+    ANY:    '<strong>ANY mode:</strong> "combine" OR "bundle" OR "can I combine" — any one of these present → match.',
+    ALL:    '<strong>ALL mode:</strong> ALL keywords must appear in the same utterance. Use for precise compound conditions.',
+    PHRASE: '<strong>Exact phrase mode:</strong> Matches the phrase exactly as typed. "can I combine" will not match "can someone combine".',
+  };
+  document.getElementById('kw-mode-hint-text').innerHTML = hints[mode] || '';
+}
+
+/* ================================================================
+   ACTION TYPE
+================================================================ */
+function onActionTypeChange(type, existingAction) {
+  // Show/hide conditional fields
+  ['respond', 'route-kc', 'book', 'transfer'].forEach(k => {
+    document.getElementById(`af-${k}`).classList.toggle('visible', false);
+  });
+  const map = { RESPOND: 'respond', ROUTE_KC: 'route-kc', BOOK: 'book', TRANSFER: 'transfer' };
+  if (map[type]) document.getElementById(`af-${map[type]}`).classList.add('visible');
+
+  // Populate existing values if editing
+  if (existingAction) {
+    if (type === 'RESPOND' && existingAction.response)
+      document.getElementById('f-response').value = existingAction.response;
+    if (type === 'ROUTE_KC' && existingAction.kcContainerId) {
+      document.getElementById('f-kc-container').value = existingAction.kcContainerId;
+    }
+    if (type === 'BOOK' && existingAction.bookingMode)
+      document.getElementById('f-booking-mode').value = existingAction.bookingMode;
+    if (type === 'TRANSFER' && existingAction.transferTarget)
+      document.getElementById('f-transfer-target').value = existingAction.transferTarget;
+  }
+
+  // Update char count for response
+  if (type === 'RESPOND') updateCharCount('f-response', 600);
+}
+
+function onKcContainerChange() {
+  clearError('err-kc');
+}
+
+/* ================================================================
+   LIVE TEST
+================================================================ */
+let _testDebounce = null;
+
+function updateTestLive() {
+  // Debounced — called on keyword input changes
+  clearTimeout(_testDebounce);
+  _testDebounce = setTimeout(() => {
+    const testInput = document.getElementById('test-input').value;
+    if (testInput.trim()) runTest();
+  }, 300);
+}
+
+async function runTest() {
+  const input = document.getElementById('test-input').value.trim();
+  if (!input) return;
+  if (!State.keywords.length) {
+    showTestResult(false, null, 'normalized', 'Add at least one keyword first');
+    return;
+  }
+
+  const matchMode = document.querySelector('input[name="matchMode"]:checked')?.value || 'ANY';
+
+  try {
+    const data = await API.testRule(input, State.keywords, matchMode);
+    showTestResult(data.matched, data.matchedKeyword, data.normalizedInput);
+  } catch (_) {
+    // Fallback to client-side test
+    const { matched, matchedKeyword } = _clientSideTest(input, State.keywords, matchMode);
+    const normalized = _normalize(input);
+    showTestResult(matched, matchedKeyword, normalized);
+  }
+}
+
+function _clientSideTest(input, keywords, mode) {
+  const norm = _normalize(input);
+  if (mode === 'ALL') {
+    const allMatch = keywords.every(k => _matchSingle(norm, k));
+    return { matched: allMatch, matchedKeyword: allMatch ? keywords.join(' + ') : null };
+  }
+  for (const kw of keywords) {
+    if (_matchSingle(norm, kw)) return { matched: true, matchedKeyword: kw };
+  }
+  return { matched: false, matchedKeyword: null };
+}
+
+function _normalize(s) {
+  return (s || '').toLowerCase().replace(/[^a-z'\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function _matchSingle(norm, phrase) {
+  if (phrase.includes(' ')) return norm.includes(phrase);
+  return norm.split(/\s+/).includes(phrase);
+}
+
+function showTestResult(matched, keyword, normalized, customMsg) {
+  const el = document.getElementById('test-result');
+  el.classList.remove('match', 'no-match');
+  el.classList.add('visible', matched ? 'match' : 'no-match');
+
+  if (customMsg) {
+    el.innerHTML = `<div class="test-result-title">${_esc(customMsg)}</div>`;
+    return;
+  }
+
+  if (matched) {
+    el.innerHTML = `
+      <div class="test-result-title">&#10003; MATCHED</div>
+      <div class="test-result-detail">
+        Keyword triggered: <span class="test-matched-kw">${_esc(keyword || '—')}</span>
+      </div>
+      <div class="test-normalized">Normalized input: "${_esc(normalized)}"</div>`;
+  } else {
+    el.innerHTML = `
+      <div class="test-result-title">&#10007; NO MATCH</div>
+      <div class="test-result-detail">None of your keywords were found in this utterance. Try adjusting your keywords or match mode.</div>
+      <div class="test-normalized">Normalized input: "${_esc(normalized)}"</div>`;
+  }
+}
+
+/* ================================================================
+   SAVE
+================================================================ */
+async function saveRule() {
+  if (State.saving) return;
+
+  // Validate
+  const errors = _validate();
+  if (errors) return;
+
+  // Build payload
+  const payload = _buildPayload();
+
+  // Save
+  State.saving = true;
+  _setSavingState(true);
+
+  try {
+    let result;
+    if (State.isEdit) {
+      result = await API.updateRule(State.ruleId, payload);
+    } else {
+      result = await API.createRule(payload);
+    }
+
+    if (result.error) throw new Error(result.error);
+
+    showToast(State.isEdit ? 'Rule updated' : 'Rule created', 'success');
+    setTimeout(() => goBack(), 800);
+
+  } catch (err) {
+    showToast(err.message || 'Failed to save rule', 'error');
+    State.saving = false;
+    _setSavingState(false);
+  }
+}
+
+function _validate() {
+  let hasError = false;
+
+  // Name
+  if (!document.getElementById('f-name').value.trim()) {
+    showError('err-name'); document.getElementById('f-name').classList.add('error'); hasError = true;
+  }
+
+  // Keywords
+  if (!State.keywords.length) {
+    showError('err-keywords'); document.getElementById('kw-wrap').classList.add('error'); hasError = true;
+  }
+
+  // Action-specific
+  const actionType = document.querySelector('input[name="actionType"]:checked')?.value;
+  if (actionType === 'RESPOND' && !document.getElementById('f-response').value.trim()) {
+    showError('err-response'); hasError = true;
+  }
+  if (actionType === 'ROUTE_KC' && !document.getElementById('f-kc-container').value) {
+    showError('err-kc'); hasError = true;
+  }
+  if (actionType === 'TRANSFER' && !document.getElementById('f-transfer-target').value.trim()) {
+    showError('err-transfer'); hasError = true;
+  }
+
+  return hasError;
+}
+
+function _buildPayload() {
+  const actionType = document.querySelector('input[name="actionType"]:checked')?.value || 'RESPOND';
+
+  const action = { type: actionType };
+  if (actionType === 'RESPOND')  action.response = document.getElementById('f-response').value.trim();
+  if (actionType === 'ROUTE_KC') {
+    const sel = document.getElementById('f-kc-container');
+    action.kcContainerId = sel.value;
+    action.kcContainerName = sel.options[sel.selectedIndex]?.textContent || '';
+  }
+  if (actionType === 'BOOK')     action.bookingMode = document.getElementById('f-booking-mode').value.trim();
+  if (actionType === 'TRANSFER') action.transferTarget = document.getElementById('f-transfer-target').value.trim();
+
+  return {
+    name:        document.getElementById('f-name').value.trim(),
+    description: document.getElementById('f-description').value.trim(),
+    priority:    parseInt(document.getElementById('f-priority').value) || 100,
+    enabled:     document.getElementById('f-enabled').checked,
+    matchMode:   document.querySelector('input[name="matchMode"]:checked')?.value || 'ANY',
+    keywords:    [...State.keywords],
+    action,
+  };
+}
+
+function _setSavingState(saving) {
+  const btns = [document.getElementById('btn-save'), document.getElementById('btn-save-bottom')];
+  btns.forEach(b => { if (b) b.disabled = saving; });
+  document.getElementById('save-spinner').classList.toggle('hidden', !saving);
+  document.getElementById('save-label').textContent = saving ? 'Saving…' : (State.isEdit ? 'Save Changes' : 'Save Rule');
+}
+
+/* ================================================================
+   HELPERS
+================================================================ */
+function goBack() {
+  const qs = State.companyId ? `?companyId=${State.companyId}` : '';
+  window.location.href = `interceptor.html${qs}`;
+}
+
+function updateCharCount(fieldId, max) {
+  const field = document.getElementById(fieldId);
+  const counter = document.getElementById(`cc-${fieldId}`);
+  if (!field || !counter) return;
+  const len = field.value.length;
+  counter.textContent = `${len} / ${max}`;
+  counter.className = 'char-count' +
+    (len >= max ? ' at-limit' : len >= max * .85 ? ' near-limit' : '');
+}
+
+function showError(id) { document.getElementById(id)?.classList.add('visible'); }
+function clearError(id) { document.getElementById(id)?.classList.remove('visible'); }
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ';
+  el.innerHTML = `${icon} ${_esc(message)}`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escAttr(s) { return String(s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+</script>
+
+</body>
+</html>
