@@ -321,7 +321,7 @@ function renderReport(r) {
 
 // ─── Section renderers ────────────────────────────────────────────────────────
 
-function sectionWrap(id, num, title, badge, bodyHtml, noPad = false) {
+function sectionWrap(id, num, title, badge, bodyHtml, noPad = false, actionsHtml = '') {
   return `
     <section class="section" id="${id}">
       <div class="card">
@@ -329,6 +329,7 @@ function sectionWrap(id, num, title, badge, bodyHtml, noPad = false) {
           <span class="card-num">${num}</span>
           <span class="card-title">${title}</span>
           ${badge ? `<span class="card-badge">${badge}</span>` : ''}
+          ${actionsHtml ? `<div class="card-header-actions">${actionsHtml}</div>` : ''}
         </div>
         <div class="card-body${noPad ? ' p0' : ''}">${bodyHtml}</div>
       </div>
@@ -446,15 +447,90 @@ function renderSectionProtocol(audit) {
 // ── S4: Turn-by-Turn Log ──────────────────────────────────────────────────────
 
 function renderSectionTurns(turns, companyId) {
+  const dlActions = `
+    <button class="btn-dl btn-dl-json" title="Download turn log as JSON"
+      onclick="downloadTurnsJson()">⬇ JSON</button>
+    <button class="btn-dl btn-dl-pdf" title="Download turn log as PDF"
+      onclick="downloadTurnsPdf()">⬇ PDF</button>`;
+
   if (!turns?.length) {
     return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log', '0 turns', `
-      <div class="empty-state"><p>No transcript turns found for this call.</p></div>`);
+      <div class="empty-state"><p>No transcript turns found for this call.</p></div>`,
+      false, dlActions);
   }
 
   const turnBlocks = turns.map(t => renderTurnBlock(t, companyId)).join('');
 
   return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log',
-    `${turns.length} turns`, `<div class="turns-list">${turnBlocks}</div>`, true);
+    `${turns.length} turns`, `<div class="turns-list">${turnBlocks}</div>`,
+    true, dlActions);
+}
+
+// ── Turn log downloads ────────────────────────────────────────────────────────
+
+function downloadTurnsJson() {
+  const turns = state.reportData?.turns;
+  if (!turns?.length) return;
+  const sid   = state.currentCallSid || 'unknown';
+  const blob  = new Blob([JSON.stringify(turns, null, 2)], { type: 'application/json' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = `turn-log-${sid}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTurnsPdf() {
+  const turns = state.reportData?.turns;
+  const hdr   = state.reportData?.header;
+  if (!turns?.length) return;
+
+  const sid      = hdr?.callSid  || state.currentCallSid || '';
+  const phone    = hdr?.phone    || '';
+  const duration = hdr?.durationFormatted || '';
+  const started  = hdr?.startedAt ? new Date(hdr.startedAt).toLocaleString() : '';
+
+  // Build print-ready HTML — one speaker per row, no external deps
+  const rows = turns.map(t => {
+    const isCaller = t.speaker === 'caller';
+    const label    = isCaller ? 'Caller' : 'Agent';
+    const bg       = isCaller ? '#f0f4ff' : '#f6fff0';
+    const badge    = t.provenanceLabel && !isCaller
+      ? `<span style="font-size:10px;background:#e2e8f0;border-radius:4px;padding:1px 6px;margin-left:8px;color:#475569">${esc(t.provenanceLabel)}</span>`
+      : '';
+    const flags    = (t.flags || []).map(f =>
+      `<span style="font-size:10px;background:#fef3c7;border-radius:4px;padding:1px 6px;margin-left:4px;color:#92400e">⚑ ${esc(f.label)}</span>`
+    ).join('');
+    return `
+      <tr style="background:${bg}">
+        <td style="padding:6px 10px;font-size:11px;color:#64748b;white-space:nowrap;vertical-align:top">${esc(t.elapsed || '')}</td>
+        <td style="padding:6px 10px;font-size:11px;font-weight:600;white-space:nowrap;vertical-align:top">${label} ${badge}${flags}</td>
+        <td style="padding:6px 10px;font-size:12px;line-height:1.5">${esc(t.text || '')}</td>
+      </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Turn Log — ${esc(sid)}</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+      h1   { font-size: 16px; margin: 0 0 4px; }
+      p    { font-size: 12px; color: #64748b; margin: 0 0 16px; }
+      table{ border-collapse: collapse; width: 100%; }
+      tr   { border-bottom: 1px solid #e2e8f0; }
+      @media print { body { padding: 12px; } }
+    </style>
+  </head><body>
+    <h1>Turn-by-Turn Log</h1>
+    <p>${esc(phone)} · ${esc(started)} · ${esc(duration)} · ${esc(sid)}</p>
+    <table><tbody>${rows}</tbody></table>
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=860,height=700');
+  if (!win) { alert('Please allow pop-ups to download the PDF.'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 function renderTurnBlock(t, companyId) {
