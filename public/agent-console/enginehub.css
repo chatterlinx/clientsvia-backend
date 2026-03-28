@@ -373,9 +373,14 @@ a:hover { text-decoration: underline; }
   flex-shrink: 0;
 }
 
-/* Adjust layout when banner is visible */
-.eh-banner-warn ~ .eh-layout {
+/* Adjust layout when banner is ACTUALLY visible (class toggled by JS, not CSS sibling selector)
+   Using ~ selector caused margin-top:0 to persist even when banner was display:none */
+body.eh-has-banner .eh-layout {
   margin-top: 0;
+}
+/* Sidenav also needs to drop below the banner when it's visible */
+body.eh-has-banner .eh-sidenav {
+  top: calc(var(--header-height) + var(--banner-height, 56px));
 }
 
 /* ============================================================================

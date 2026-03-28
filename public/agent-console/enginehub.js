@@ -296,6 +296,19 @@
     return params.get('companyId') || '';
   }
 
+  /**
+   * _setBannerVisible — show or hide the not-configured banner AND sync the
+   * body class that controls layout margin-top.
+   * The CSS sibling selector (~) fires even when banner is display:none, so
+   * we use a body class instead of relying on it.
+   */
+  function _setBannerVisible(visible) {
+    if (DOM.bannerNotConfigured) {
+      DOM.bannerNotConfigured.style.display = visible ? 'flex' : 'none';
+    }
+    document.body.classList.toggle('eh-has-banner', !!visible);
+  }
+
   function getAuthHeaders() {
     // Use centralized auth lib (token key: 'adminToken')
     const token = (typeof AgentConsoleAuth !== 'undefined' && AgentConsoleAuth.getToken())
@@ -969,9 +982,8 @@
       renderSettings(data.settings);
 
       // Banner — shown when never configured
-      if (DOM.bannerNotConfigured) {
-        DOM.bannerNotConfigured.style.display = data.isConfigured ? 'none' : 'flex';
-      }
+      // Body class drives the layout margin (sibling selector ~ fails with display:none)
+      _setBannerVisible(!data.isConfigured);
 
     } catch (err) {
       showToast('error', 'Failed to load Engine Hub settings. Check auth.');
@@ -1099,7 +1111,7 @@
       state.isConfigured = true;
 
       // Hide the not-configured banner after first save
-      if (DOM.bannerNotConfigured) DOM.bannerNotConfigured.style.display = 'none';
+      _setBannerVisible(false);
 
       // Refresh health badge
       await loadHealth();
