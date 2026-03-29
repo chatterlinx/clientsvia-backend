@@ -261,6 +261,7 @@
     updateFooter();
     loadCompanyInfo();
     loadCalls();
+    window.loadLostLeads();
   }
 
   /**
@@ -2875,9 +2876,122 @@
   }
 
   /* ==========================================================================
-     SECTION 16: BOOTSTRAP
+     SECTION 16: LOST LEADS
      ========================================================================== */
-  
+
+  /**
+   * Load and render the Lost Leads panel.
+   * Called on init and whenever the filter or refresh button fires.
+   */
+  window.loadLostLeads = async function loadLostLeads() {
+    const body    = document.getElementById('lostLeadsBody');
+    const badge   = document.getElementById('lostLeadsBadge');
+    const filter  = document.getElementById('lostLeadsFilter');
+    if (!body || !state.companyId) return;
+
+    const status = filter ? filter.value : 'NEW';
+
+    body.innerHTML = `<div style="padding:32px;text-align:center;color:#94a3b8;font-size:.875rem;">
+      <div style="font-size:1.5rem;margin-bottom:6px;">⏳</div>Loading…</div>`;
+
+    try {
+      const params = new URLSearchParams({ status, limit: '50' });
+      const res    = await AgentConsoleAuth.apiFetch(
+        `${CONFIG.API_BASE}/${state.companyId}/lost-leads?${params.toString()}`
+      );
+      const leads  = res.leads || [];
+
+      // Update badge
+      if (badge) {
+        if (leads.length > 0) {
+          badge.textContent = leads.length;
+          badge.style.display = '';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      if (leads.length === 0) {
+        body.innerHTML = `<div style="padding:40px;text-align:center;color:#94a3b8;font-size:.875rem;">
+          <div style="font-size:2rem;margin-bottom:8px;">✅</div>
+          No ${status === 'all' ? '' : status.toLowerCase() + ' '}lost leads found.</div>`;
+        return;
+      }
+
+      body.innerHTML = leads.map(lead => {
+        const snap     = lead.discoverySnapshot || {};
+        const name     = lead.callerName || '—';
+        const phone    = lead.callerPhone || '—';
+        const reason   = snap.callReason || snap.serviceType || '—';
+        const urgency  = snap.urgency    ? `<span style="color:#f59e0b;font-size:.7rem;font-weight:600;margin-left:4px;">${snap.urgency}</span>` : '';
+        const dateStr  = lead.callEndedAt
+          ? new Date(lead.callEndedAt).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+          : '—';
+        const timeStr  = lead.callEndedAt
+          ? new Date(lead.callEndedAt).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' })
+          : '';
+        const statusClass = (lead.status || 'NEW').replace(/[^A-Z_]/g, '');
+
+        const statusOptions = ['NEW','CONTACTED','CONVERTED','NOT_INTERESTED','UNREACHABLE','INVALID']
+          .map(s => `<option value="${s}"${s === lead.status ? ' selected' : ''}>${s.replace(/_/g,' ')}</option>`)
+          .join('');
+
+        return `
+          <div class="ll-row" data-lead-id="${lead._id}">
+            <div class="ll-caller">${name}<br><span style="font-weight:400;font-size:.75rem;color:#64748b;">${phone}</span></div>
+            <div class="ll-reason">${reason}${urgency}</div>
+            <div class="ll-date">${dateStr}<br>${timeStr}</div>
+            <div class="ll-status"><span class="ll-badge ${statusClass}">${(lead.status||'NEW').replace(/_/g,' ')}</span></div>
+            <div class="ll-actions">
+              <select data-lead-id="${lead._id}" class="ll-status-select">
+                ${statusOptions}
+              </select>
+              <button class="btn btn-primary btn-sm ll-save-btn" data-lead-id="${lead._id}" style="font-size:.72rem;padding:3px 10px;">Save</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      // Wire save buttons
+      body.querySelectorAll('.ll-save-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const leadId = btn.dataset.leadId;
+          const sel    = body.querySelector(`.ll-status-select[data-lead-id="${leadId}"]`);
+          if (!sel) return;
+          const newStatus = sel.value;
+          try {
+            btn.disabled = true;
+            btn.textContent = '…';
+            await AgentConsoleAuth.apiFetch(
+              `${CONFIG.API_BASE}/${state.companyId}/lost-leads/${leadId}`,
+              { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }) }
+            );
+            showToast('success', 'Saved', `Lead status updated to ${newStatus.replace(/_/g,' ')}.`);
+            // Re-render the badge in that row immediately
+            const row        = body.querySelector(`.ll-row[data-lead-id="${leadId}"]`);
+            const badgeEl    = row && row.querySelector('.ll-badge');
+            if (badgeEl) { badgeEl.className = `ll-badge ${newStatus}`; badgeEl.textContent = newStatus.replace(/_/g,' '); }
+            btn.disabled = false;
+            btn.textContent = 'Save';
+          } catch (err) {
+            showToast('error', 'Save Failed', 'Could not update status. Try again.');
+            btn.disabled = false;
+            btn.textContent = 'Save';
+          }
+        });
+      });
+
+    } catch (err) {
+      console.error('[LostLeads] load error', err);
+      body.innerHTML = `<div style="padding:32px;text-align:center;color:#ef4444;font-size:.875rem;">
+        Failed to load lost leads. Please refresh.</div>`;
+    }
+  };
+
+  /* ==========================================================================
+     SECTION 17: BOOTSTRAP
+     ========================================================================== */
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

@@ -2794,4 +2794,92 @@ JSON array only:`;
   }
 );
 
+// ════════════════════════════════════════════════════════════════════════════
+// LOST LEADS  (Step 14)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/lost-leads
+ * List open lost leads for a company (status = NEW | CONTACTED).
+ * Query params: status (NEW|CONTACTED|all, default=NEW), limit (default=50)
+ */
+router.get(
+  '/:companyId/lost-leads',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { status = 'NEW', limit = 50 } = req.query;
+      const LostLead = require('../../models/LostLead');
+
+      const query = { companyId };
+      if (status === 'all') {
+        // return all statuses
+      } else if (['NEW', 'CONTACTED', 'CONVERTED', 'NOT_INTERESTED', 'UNREACHABLE', 'INVALID'].includes(status)) {
+        query.status = status;
+      } else {
+        query.status = { $in: ['NEW', 'CONTACTED'] };
+      }
+
+      const leads = await LostLead.find(query)
+        .sort({ callEndedAt: -1 })
+        .limit(Math.min(parseInt(limit) || 50, 200))
+        .lean();
+
+      return res.json({ success: true, leads, count: leads.length });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] lost-leads list failed: ${error.message}`);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * PATCH /:companyId/lost-leads/:leadId
+ * Update a lost lead's status + optional follow-up notes.
+ * Body: { status, followUpNotes }
+ */
+router.patch(
+  '/:companyId/lost-leads/:leadId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId, leadId } = req.params;
+      const { status, followUpNotes } = req.body;
+      const LostLead = require('../../models/LostLead');
+      const { STATUSES } = LostLead;
+
+      const validStatuses = ['NEW', 'CONTACTED', 'CONVERTED', 'NOT_INTERESTED', 'UNREACHABLE', 'INVALID'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+
+      const $set = {};
+      if (status)           $set.status          = status;
+      if (followUpNotes !== undefined) $set.followUpNotes = followUpNotes;
+
+      // Set timestamps for lifecycle tracking
+      if (status === 'CONTACTED' && !req.body.contactedAt) $set.contactedAt = new Date();
+      if (['CONVERTED','NOT_INTERESTED','UNREACHABLE','INVALID'].includes(status)) $set.resolvedAt = new Date();
+
+      const result = await LostLead.findOneAndUpdate(
+        { _id: leadId, companyId },
+        { $set },
+        { new: true }
+      ).lean();
+
+      if (!result) {
+        return res.status(404).json({ success: false, error: 'Lost lead not found' });
+      }
+
+      return res.json({ success: true, lead: result });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] lost-leads patch failed: ${error.message}`);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 module.exports = router;
