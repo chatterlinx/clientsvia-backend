@@ -83,7 +83,11 @@ const discoveryNoteSchema = new Schema({
     turnCount:  { type: Number, default: 0 },
     qaLog:      [{ type: Schema.Types.Mixed }],              // { turn, question, answer, timestamp }
     startedAt:  { type: String, default: null },
-    updatedAt:  { type: Date, default: Date.now }
+    updatedAt:  { type: Date, default: Date.now },
+    // Step 9 — CallOutcome classifier: written at call end (status-callback), non-blocking
+    callOutcome:  { type: String, default: null },           // CONVERTED|BOOKING_STARTED|TRANSFERRED|etc.
+    isLostLead:   { type: Boolean, default: false },         // true = qualifies for LostLeads (Step 10)
+    classifiedAt: { type: Date, default: null }
 }, { _id: true });
 
 // --- Main Customer Schema ---

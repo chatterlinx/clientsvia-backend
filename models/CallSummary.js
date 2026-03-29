@@ -1078,6 +1078,16 @@ const CallSummarySchema = new mongoose.Schema({
     },
 
     /**
+     * Step 9 — Discovery-based business outcome (CallOutcomeClassifier).
+     * Written at call end from discoveryNotes analysis. Separate from the
+     * Twilio-level 'outcome' field which only captures call status (completed/abandoned/error).
+     * Values: CONVERTED|BOOKING_STARTED|CLOSING_INCOMPLETE|TRANSFERRED|
+     *         DISCOVERY_COMPLETE|INTAKE_COMPLETE|ABANDONED|UNKNOWN
+     */
+    callOutcome: { type: String, default: null, index: true },
+    isLostLead:  { type: Boolean, default: false, index: true },
+
+    /**
      * KPI bucket for duration metrics (median/p90 by bucket)
      */
     bucket: {

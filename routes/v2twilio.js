@@ -8846,16 +8846,20 @@ router.post('/status-callback/:companyId', async (req, res) => {
         // ── DISCOVERY NOTES: persist to Customer record + purge Redis ───────
         // Non-blocking — runs after call end, never affects response path.
         if (callSummary.customerId) {
-          const DiscoveryNotesService = require('../services/discoveryNotes/DiscoveryNotesService');
-          DiscoveryNotesService.persist(
-            String(callSummary.companyId),
-            CallSid,
-            String(callSummary.customerId)
-          ).then(() => DiscoveryNotesService.purge(String(callSummary.companyId), CallSid))
-           .catch(e => logger.warn('[CALL STATUS] DiscoveryNotes persist/purge failed (non-fatal)', {
-             callSid: CallSid,
-             error: e.message
-           }));
+          const DiscoveryNotesService   = require('../services/discoveryNotes/DiscoveryNotesService');
+          const CallOutcomeClassifier   = require('../services/engine/CallOutcomeClassifier');
+          const _parsedDur              = parseInt(CallDuration) || 0;
+          const _customerId             = String(callSummary.customerId);
+          const _companyId              = String(callSummary.companyId);
+          const _callSummaryId          = String(callSummary._id);
+
+          DiscoveryNotesService.persist(_companyId, CallSid, _customerId)
+            .then(() => DiscoveryNotesService.purge(_companyId, CallSid))
+            .then(() => CallOutcomeClassifier.persist(_companyId, CallSid, _customerId, _callSummaryId, _parsedDur))
+            .catch(e => logger.warn('[CALL STATUS] DiscoveryNotes persist/purge/classify failed (non-fatal)', {
+              callSid: CallSid,
+              error: e.message
+            }));
         }
 
         logger.info('[CALL STATUS] Company CallSummary updated successfully', {
