@@ -768,24 +768,86 @@ async function _runStepHandler(ctx, userInput, config, companyId, isTest, events
 }
 
 /* ============================================================================
-   STEP: DISCRIMINATOR  (Phase 0 — fires before everything else)
+   STEP: DISCRIMINATOR  (Phase 0 — fires before field collection)
    ============================================================================
-   Receives the caller's answer to the ONE pre-qualifying question.
-   Matches against options[] using keyword detection (no Groq needed — it's
-   a forced choice, not open-ended). Sets ctx._discriminatorAnswered and
-   writes the result into discoveryNotes.temp (fire-and-forget).
-   Falls through to INIT on any match; re-asks on no-match.
+   Two sub-phases — both handled by this single step:
+
+   Phase 0a — Question answer: match caller's reply against options[].
+     · No match  → re-ask with explicit option list.
+     · Match found, option has responseScript → Phase 0b: deliver the script,
+       stay in DISCRIMINATOR step, set ctx._discriminatorPhase = 'CONFIRM'.
+     · Match found, no responseScript → apply overrides, fall through to INIT.
+
+   Phase 0b — Script + confirmation: option has responseScript so agent just
+   delivered a pitch. Now receiving yes/no:
+     · YES → apply overrides, advance to INIT (field collection begins).
+     · NO  → graceful close with option.declineResponse (or default). completed=true.
+     · AMBIGUOUS → re-ask "Shall we go ahead and schedule?"
+
+   Each option may carry:
+     responseScript      — spoken VERBATIM after match before any field collection
+     requiresConfirmation— true = wait for yes/no after script (default true if script set)
+     declineResponse     — what the agent says if caller says NO to the script
+     serviceTypeOverride — sets discoveryNotes.temp.serviceType
+     schedPriority       — 'high'|'urgent' pre-fills ASAP, 'normal' is default
+     keywords[]          — owner-defined match words (e.g. "yes", "I have", "plan")
    ============================================================================ */
 
 async function processDiscriminator(ctx, userInput, config, companyId, events) {
-  const dq   = ctx._discriminatorQuestion || config.discriminatorQuestion;
+  const dq    = ctx._discriminatorQuestion || config.discriminatorQuestion;
   const opts  = dq?.options || [];
   const input = (userInput || '').toLowerCase().trim();
 
+  // ── Phase 0b: Receiving confirmation after script delivery ────────────────
+  if (ctx._discriminatorPhase === 'CONFIRM') {
+    const matched = ctx._discriminatorMatchedOption;
+
+    events.push({ type: 'BL0_DISCRIMINATOR_CONFIRM_RECEIVE', input: input.slice(0, 80), timestamp: Date.now() });
+
+    // Detect yes / no / ambiguous
+    const YES_RE = /\b(yes|yeah|yep|sure|absolutely|go ahead|please|proceed|schedule|book|let's do it|sounds good|do it)\b/i;
+    const NO_RE  = /\b(no|nope|not today|maybe later|not right now|nevermind|cancel|don't|do not|no thanks)\b/i;
+
+    const isYes = YES_RE.test(input);
+    const isNo  = NO_RE.test(input);
+
+    if (isYes || (!isNo && input.length <= 3)) {
+      // Caller confirmed — apply overrides and fall through to field collection
+      events.push({ type: 'BL0_DISCRIMINATOR_CONFIRM_YES', value: matched?.value, timestamp: Date.now() });
+      ctx._discriminatorPhase = null;
+      ctx.step = STEPS.INIT;
+      return processInit(ctx, config, companyId, false, events);
+    }
+
+    if (isNo) {
+      // Caller declined — graceful close
+      const declineMsg = matched?.declineResponse
+        || "No problem at all — give us a call whenever you're ready. Have a great day!";
+      events.push({ type: 'BL0_DISCRIMINATOR_CONFIRM_NO', value: matched?.value, timestamp: Date.now() });
+      ctx._discriminatorPhase    = null;
+      ctx._discriminatorAnswered = true;
+      return {
+        nextPrompt: declineMsg,
+        bookingCtx: { ...ctx, completed: true },
+        completed:  true,
+        _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_DECLINED' }
+      };
+    }
+
+    // Ambiguous — re-ask gently
+    const reAskConfirm = matched?.confirmReAsk || 'Would you like to go ahead and schedule?';
+    return {
+      nextPrompt: reAskConfirm,
+      bookingCtx: ctx,
+      completed:  false,
+      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_CONFIRM_REASK' }
+    };
+  }
+
+  // ── Phase 0a: Receiving answer to the discriminator question ─────────────
   events.push({ type: 'BL0_DISCRIMINATOR_RECEIVE', input: input.slice(0, 80), timestamp: Date.now() });
 
   if (!input || opts.length === 0) {
-    // Empty input — re-ask
     return {
       nextPrompt: dq?.reAskText || dq?.text || 'Could you clarify which option applies to you?',
       bookingCtx: ctx,
@@ -794,7 +856,7 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
     };
   }
 
-  // ── Match caller input to one of the options ─────────────────────────────
+  // ── Match caller input to one of the options ──────────────────────────────
   // Strategy: each option has a `keywords[]` array (owner-defined); fall back
   // to matching against the option label words. First match wins.
   let matched = null;
@@ -807,30 +869,37 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
     if (hit) { matched = opt; break; }
   }
 
-  // Fallback: first/second ordinal detection ("first option", "option 1")
+  // Fallback: plain yes/no → first/second option (common for binary questions)
+  if (!matched) {
+    const plainYes = /^(yes|yeah|yep|yup|sure|i do|i am|i have|correct|right)$/.test(input);
+    const plainNo  = /^(no|nope|no i don't|no i'm not|not really|negative)/.test(input);
+    if (plainYes && opts[0])  matched = opts[0];
+    else if (plainNo && opts[1]) matched = opts[1];
+  }
+
+  // Fallback: ordinal detection ("first option", "option 1")
   if (!matched) {
     if (/\b(first|option\s*1|one|1st)\b/.test(input) && opts[0]) matched = opts[0];
     else if (/\b(second|option\s*2|two|2nd)\b/.test(input) && opts[1]) matched = opts[1];
   }
 
   if (!matched) {
-    // No match — re-ask with option labels listed explicitly
     const optList = opts.map((o, i) => `${i + 1}. ${o.label}`).join(' or ');
     events.push({ type: 'BL0_DISCRIMINATOR_NO_MATCH', input: input.slice(0, 80), timestamp: Date.now() });
     return {
-      nextPrompt: dq?.reAskText
-        || `I want to make sure I route you correctly — ${optList}?`,
+      nextPrompt: dq?.reAskText || `I want to make sure I route you correctly — ${optList}?`,
       bookingCtx: ctx,
       completed:  false,
       _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_REASK_NOMATCH' }
     };
   }
 
-  // ── Match found — apply overrides ─────────────────────────────────────────
-  ctx._discriminatorAnswered       = true;
-  ctx._discriminatorValue          = matched.value;
+  // ── Match found — apply classification overrides ──────────────────────────
+  ctx._discriminatorAnswered      = true;
+  ctx._discriminatorValue         = matched.value;
+  ctx._discriminatorMatchedOption = matched;   // stashed for Phase 0b
   if (matched.serviceTypeOverride) {
-    ctx._discriminatorServiceType  = matched.serviceTypeOverride;
+    ctx._discriminatorServiceType = matched.serviceTypeOverride;
   }
   if (matched.schedPriority) {
     ctx._discriminatorSchedPriority = matched.schedPriority;
@@ -840,13 +909,13 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
     }
   }
 
-  // Store the answer in collectedCustomFields so the CONFIRM readback can include it
+  // Store in collectedCustomFields so CONFIRM readback can reference it
   if (dq.field) {
     ctx.collectedCustomFields = ctx.collectedCustomFields || {};
     ctx.collectedCustomFields[dq.field] = matched.value;
   }
 
-  // Fire-and-forget: write to discoveryNotes.temp so the LLM knows from this turn on
+  // Fire-and-forget: write classification to discoveryNotes.temp immediately
   if (ctx.callSid && dq.field) {
     const DiscoveryNotesService = require('../../discoveryNotes/DiscoveryNotesService');
     const dnPatch = { temp: { [dq.field]: matched.value } };
@@ -860,10 +929,38 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
     value:         matched.value,
     serviceType:   matched.serviceTypeOverride || null,
     schedPriority: matched.schedPriority || null,
+    hasScript:     !!matched.responseScript,
     timestamp:     Date.now()
   });
 
-  // Advance to INIT — the discriminator check will now be skipped (_discriminatorAnswered = true)
+  // ── Phase 0b gate: if option has a responseScript, deliver it and wait ────
+  // requiresConfirmation defaults to true whenever a responseScript is present.
+  const hasScript      = !!(matched.responseScript?.trim());
+  const needsConfirm   = hasScript && (matched.requiresConfirmation !== false);
+
+  if (needsConfirm) {
+    // Deliver the script — stay in DISCRIMINATOR step, set phase to 'CONFIRM'
+    ctx._discriminatorPhase = 'CONFIRM';
+    return {
+      nextPrompt: matched.responseScript.trim(),
+      bookingCtx: ctx,
+      completed:  false,
+      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_SCRIPT' }
+    };
+  }
+
+  if (hasScript && !needsConfirm) {
+    // Script exists but no confirmation needed — deliver script and immediately fall through
+    // Return the script as a prefix; next turn INIT runs automatically via step advance
+    ctx.step = STEPS.INIT;
+    const initResult = await processInit(ctx, config, companyId, false, events);
+    return {
+      ...initResult,
+      nextPrompt: `${matched.responseScript.trim()} ${initResult.nextPrompt}`,
+    };
+  }
+
+  // No script — fall straight through to field collection
   ctx.step = STEPS.INIT;
   return processInit(ctx, config, companyId, false, events);
 }

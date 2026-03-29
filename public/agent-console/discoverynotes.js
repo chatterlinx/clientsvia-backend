@@ -360,23 +360,42 @@
       return;
     }
     list.innerHTML = opts.map((opt, i) => `
-      <div class="dq-option-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-        <div>
-          <label class="form-label" style="font-size:.7rem;">Label (shown in logs)</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.label || '')}" oninput="window.DNPage.updateDqOption(${i},'label',this.value)" placeholder="Plan Member" />
+      <div class="dq-option-row" data-idx="${i}" style="margin-bottom:14px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:10px;">
+          <div>
+            <label class="form-label" style="font-size:.7rem;">Label (logs)</label>
+            <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.label || '')}" oninput="window.DNPage.updateDqOption(${i},'label',this.value)" placeholder="Plan Member" />
+          </div>
+          <div>
+            <label class="form-label" style="font-size:.7rem;">Value (stored in temp)</label>
+            <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.value || '')}" oninput="window.DNPage.updateDqOption(${i},'value',this.value)" placeholder="member" />
+          </div>
+          <div>
+            <label class="form-label" style="font-size:.7rem;">serviceType override</label>
+            <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.serviceTypeOverride || '')}" oninput="window.DNPage.updateDqOption(${i},'serviceTypeOverride',this.value)" placeholder="service_call_member" />
+          </div>
+          <button onclick="window.DNPage.removeDqOption(${i})" title="Remove" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1rem;padding:4px;align-self:center;">✕</button>
         </div>
-        <div>
-          <label class="form-label" style="font-size:.7rem;">Value (stored in temp)</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.value || '')}" oninput="window.DNPage.updateDqOption(${i},'value',this.value)" placeholder="member" />
+        <div style="margin-bottom:8px;">
+          <label class="form-label" style="font-size:.7rem;">Match keywords (comma separated — what caller says to pick this option)</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords || []).join(', '))}" oninput="window.DNPage.updateDqOption(${i},'keywords',this.value)" placeholder="yes, I have the plan, plan member, gold member, I am" />
         </div>
-        <div>
-          <label class="form-label" style="font-size:.7rem;">serviceType override</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.serviceTypeOverride || '')}" oninput="window.DNPage.updateDqOption(${i},'serviceTypeOverride',this.value)" placeholder="maintenance_plan_visit" />
+        <div style="margin-bottom:8px;">
+          <label class="form-label" style="font-size:.7rem;">
+            Response Script
+            <span style="font-weight:400;color:#64748b;margin-left:4px;">— spoken verbatim after match, should end with a yes/no question to confirm scheduling</span>
+          </label>
+          <textarea class="form-input" style="font-size:.8rem;min-height:72px;resize:vertical;" oninput="window.DNPage.updateDqOption(${i},'responseScript',this.value)" placeholder="Great! Since you're on our plan, there's no charge for the service call on repairs over $89 — and you save an additional 10% on parts. Would you like to go ahead and schedule?">${_esc(opt.responseScript || '')}</textarea>
         </div>
-        <button onclick="window.DNPage.removeDqOption(${i})" title="Remove option" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1rem;padding:4px;align-self:center;">✕</button>
-        <div style="grid-column:1/-1;">
-          <label class="form-label" style="font-size:.7rem;">Match keywords (comma separated — what the caller might say)</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords || []).join(', '))}" oninput="window.DNPage.updateDqOption(${i},'keywords',this.value)" placeholder="plan, member, yes, I am, annual" />
+        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:.75rem;cursor:pointer;padding-top:4px;white-space:nowrap;">
+            <input type="checkbox" ${opt.requiresConfirmation !== false && opt.responseScript ? 'checked' : ''} onchange="window.DNPage.updateDqOption(${i},'requiresConfirmation',this.checked)" />
+            Wait for yes/no before collecting fields
+          </label>
+          <div style="flex:1;min-width:200px;">
+            <label class="form-label" style="font-size:.7rem;">If caller declines (says no)</label>
+            <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.declineResponse || '')}" oninput="window.DNPage.updateDqOption(${i},'declineResponse',this.value)" placeholder="No problem — give us a call whenever you're ready. Have a great day!" />
+          </div>
         </div>
       </div>`).join('');
   }
