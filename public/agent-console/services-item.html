@@ -588,16 +588,34 @@
     <div class="form-card-body">
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="fWordLimit">Caller Response Budget</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <label class="form-label" for="fWordLimit" style="margin:0;">Caller Response Budget</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer;">
+              <input type="checkbox" id="fWordLimitEnabled" onchange="_toggleWordLimitEnabled()" checked>
+              <span>Enforce cap</span>
+            </label>
+          </div>
           <div style="display:flex;align-items:center;gap:10px;">
             <input type="number" id="fWordLimit" class="form-input" min="5" max="300" placeholder="(use global default)"
               style="width:130px;" oninput="_updateWordLimitHint()">
             <span style="font-size:13px;color:var(--text-muted);">words Groq speaks</span>
           </div>
-          <div class="form-hint">How many words Groq says OUT LOUD to the caller — not the section content. Simple answers: 30–50. Complex topics (pricing tiers, multi-step, warranties): 60–120+.</div>
+          <div class="form-hint">Simple answers: 25–40 words. Complex topics (pricing tiers, multi-step troubleshooting): 60–100. Uncheck "Enforce cap" to let Groq judge length — the style setting still applies.</div>
           <div id="wordLimitHint" class="form-hint" style="margin-top:4px;font-style:italic;"></div>
           <div id="complexityIndicator" style="margin-top:8px;display:none;"></div>
         </div>
+      </div>
+
+      <!-- Sample ideal response -->
+      <div class="form-group full" style="margin-top:4px;">
+        <label class="form-label" for="fSampleResponse">
+          Ideal Response Example
+          <span class="form-label-badge" style="background:#e0f2fe;color:#0369a1;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Guardrail</span>
+        </label>
+        <textarea id="fSampleResponse" class="form-input" rows="3" maxlength="600"
+          placeholder="Paste one perfect answer for this topic. Groq uses it to calibrate length and tone — it will never copy it word for word, just match the style.&#10;&#10;Example: &quot;Our annual maintenance plan is $149 and covers two tune-ups a year, plus priority scheduling. Would you like to get that set up today?&quot;"
+          style="resize:vertical;font-size:.82rem;line-height:1.5;"></textarea>
+        <div class="form-hint">Optional but powerful. A 30-word example teaches Groq more about your preferred answer style than any instruction. Leave blank to rely on the word cap alone.</div>
       </div>
 
       <!-- Booking action -->
@@ -935,6 +953,15 @@ function _populateForm(c) {
   if (typeof c.wordLimit === 'number' && c.wordLimit >= 5) {
     document.getElementById('fWordLimit').value = c.wordLimit;
   }
+  // wordLimitEnabled — default true; uncheck only when explicitly false
+  const wlEnabled = document.getElementById('fWordLimitEnabled');
+  if (wlEnabled) {
+    wlEnabled.checked = c.wordLimitEnabled !== false;
+    _toggleWordLimitEnabled();
+  }
+  // sampleResponse
+  const srEl = document.getElementById('fSampleResponse');
+  if (srEl) srEl.value = c.sampleResponse || '';
   _updateWordLimitHint();
 
   if (c.closingPrompt) {
@@ -1597,6 +1624,8 @@ async function saveContainer() {
     keywords:         S.keywords,
     negativeKeywords: S.negativeKeywords,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
+    sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
     bookingAction:  document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
     closingPrompt:  (document.getElementById('fClosingPrompt')?.value || '').trim(),
     followUpDepth:  (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
@@ -1893,10 +1922,24 @@ function _wordCount(str) {
   return str.trim() ? str.trim().split(/\s+/).length : 0;
 }
 
-function _updateWordLimitHint() {
+function _toggleWordLimitEnabled() {
+  const cb    = document.getElementById('fWordLimitEnabled');
   const input = document.getElementById('fWordLimit');
-  const hint  = document.getElementById('wordLimitHint');
+  if (!cb || !input) return;
+  input.disabled = !cb.checked;
+  input.style.opacity = cb.checked ? '1' : '0.4';
+  _updateWordLimitHint();
+}
+
+function _updateWordLimitHint() {
+  const input   = document.getElementById('fWordLimit');
+  const hint    = document.getElementById('wordLimitHint');
+  const enabled = document.getElementById('fWordLimitEnabled');
   if (!hint || !input) return;
+  if (enabled && !enabled.checked) {
+    hint.textContent = 'Cap disabled — Groq decides length. Style setting (concise/balanced/detailed) still applies.';
+    return;
+  }
   const val = parseInt(input.value, 10);
   if (!isNaN(val) && val >= 5) {
     hint.textContent = `Groq speaks up to ${val} words to the caller per answer`;

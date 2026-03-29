@@ -404,6 +404,8 @@ function _buildContainerBlock(container) {
  * @param {string}  opts.containerTitle
  * @param {string}  opts.containerBlock    — formatted LABEL: content sections
  * @param {number}  opts.wordLimit         — resolved effective word limit
+ * @param {boolean} opts.wordLimitEnabled  — false = omit the hard word cap from the prompt
+ * @param {string}  [opts.sampleResponse]  — ideal example answer; injected as a guardrail so Groq matches length + tone
  * @param {string}  opts.bookingOfferMode  — 'groq' | 'fixed'
  * @param {string}  opts.bookingOfferPhrase — used when mode is 'fixed'
  * @param {string}  opts.bookingAction     — container-level booking action
@@ -416,6 +418,8 @@ function _buildSystemPrompt({
   containerTitle,
   containerBlock,
   wordLimit,
+  wordLimitEnabled = true,
+  sampleResponse,
   bookingOfferMode,
   bookingOfferPhrase,
   bookingAction,
@@ -479,8 +483,16 @@ function _buildSystemPrompt({
   const toneDescriptor = toneMap[responseTone] || toneMap.friendly;
 
   // ── RESPONSE STYLE — adjust effective word limit ───────────────────────────
-  const styleMultiplier = responseStyle === 'detailed' ? 2 : responseStyle === 'balanced' ? 1.5 : 1;
+  const styleMultiplier    = responseStyle === 'detailed' ? 2 : responseStyle === 'balanced' ? 1.5 : 1;
   const effectiveWordLimit = Math.round(wordLimit * styleMultiplier);
+  // Word cap rule — omitted entirely when owner disables the limit for this container
+  const wordCapRule        = wordLimitEnabled
+    ? `Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer, not a text message.`
+    : 'Keep your response concise and spoken-word natural — phone call, not a text message.';
+  // Sample response guardrail — teaches Groq length and tone without prescribing exact words
+  const sampleBlock        = sampleResponse?.trim()
+    ? `\nIDEAL RESPONSE EXAMPLE (match this length and tone — do NOT copy verbatim, generate a fresh natural response):\n"${sampleResponse.trim()}"\n`
+    : '';
 
   // ── PERSONALIZATION ────────────────────────────────────────────────────────
   const personalizationLines = [];
@@ -499,10 +511,10 @@ function _buildSystemPrompt({
 
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-${activeTopicBlock}${callContextBlock}${personalizationBlock}${behaviorBlockStr}
+${activeTopicBlock}${callContextBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
-2. Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer, not a text message.
+2. ${wordCapRule}
 3. Be natural and conversational — sound human, never robotic or scripted. Tone: ${toneDescriptor}.
 4. If the caller signals readiness to book or schedule, set intent to "BOOKING_READY".
 ${bookingInstruction}
@@ -921,19 +933,21 @@ async function answer(opts) {
     containerTitle,
     containerBlock,
     wordLimit,
-    bookingOfferMode:   kbSettings.bookingOfferMode   || 'groq',
-    bookingOfferPhrase: kbSettings.bookingOfferPhrase || BUILT_IN_BOOKING_OFFER,
-    bookingAction:      container.bookingAction        || 'offer_to_book',
-    closingPrompt:      container.closingPrompt        || '',
-    spfuqContext:       spfuqContext                   || null,
-    discoveryContext:   discoveryContext                || null,
-    responseTone:       kbSettings.responseTone        || 'friendly',
-    responseStyle:      kbSettings.responseStyle       || 'concise',
+    wordLimitEnabled:   container.wordLimitEnabled !== false,   // default true — false = no hard cap
+    sampleResponse:     container.sampleResponse               || null,
+    bookingOfferMode:   kbSettings.bookingOfferMode            || 'groq',
+    bookingOfferPhrase: kbSettings.bookingOfferPhrase          || BUILT_IN_BOOKING_OFFER,
+    bookingAction:      container.bookingAction                || 'offer_to_book',
+    closingPrompt:      container.closingPrompt                || '',
+    spfuqContext:       spfuqContext                           || null,
+    discoveryContext:   discoveryContext                        || null,
+    responseTone:       kbSettings.responseTone                || 'friendly',
+    responseStyle:      kbSettings.responseStyle               || 'concise',
     greetByName:        kbSettings.greetByName !== false,
     acknowledgeHistory: kbSettings.acknowledgeHistory !== false,
-    callerName:         callerName                     || null,
-    priorVisit:         priorVisit                     || false,
-    behaviorBlock:      behaviorBlock                  || '',
+    callerName:         callerName                             || null,
+    priorVisit:         priorVisit                             || false,
+    behaviorBlock:      behaviorBlock                          || '',
   });
 
   // User message — personalise with caller name if known

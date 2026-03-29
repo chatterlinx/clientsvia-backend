@@ -167,6 +167,20 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'Max words Groq may use in its response. null = use company knowledgeBaseSettings.defaultWordLimit.'
     },
 
+    wordLimitEnabled: {
+      type:    Boolean,
+      default: true,
+      comment: 'When false, the word cap is omitted from the Groq prompt — no hard ceiling, style multiplier still applies.'
+    },
+
+    sampleResponse: {
+      type:      String,
+      default:   null,
+      trim:      true,
+      maxlength: 600,
+      comment:   'Ideal example answer for this container. Injected into Groq prompt as a length/tone guardrail — shows Groq exactly what a perfect response looks like.'
+    },
+
     bookingAction: {
       type:    String,
       enum:    ['offer_to_book', 'advisor_callback', 'none'],
