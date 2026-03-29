@@ -172,8 +172,37 @@ async function init(companyId, callSid, customerId = null) {
     }
 
     const key = _buildKey(companyId, callSid);
-    const notes = _buildEmptyNotes(companyId, callSid, customerId);
 
+    // ── CallerRecognition pre-warm check ─────────────────────────────────────
+    // CallerRecognitionService.preWarm() may have already written notes to Redis
+    // (fires at the inbound voice webhook before turn 1). If so, preserve them.
+    // Only update customerId if it wasn't known at pre-warm time.
+    const existing = await redis.get(key);
+    if (existing) {
+      try {
+        const existingNotes = JSON.parse(existing);
+        if (existingNotes?._preWarmed === true) {
+          if (customerId && !existingNotes.customerId) {
+            existingNotes.customerId = String(customerId);
+            await redis.set(key, JSON.stringify(existingNotes), { EX: CONFIG.REDIS_TTL_SECONDS });
+          } else {
+            await redis.expire(key, CONFIG.REDIS_TTL_SECONDS); // refresh TTL at call start
+          }
+          if (customerId && !existingNotes._mongoStubPushed) {
+            existingNotes._mongoStubPushed = true;
+            _initMongoStubFireAndForget(existingNotes);
+          }
+          logger.info('[DISCOVERY NOTES] ✅ Pre-warmed notes preserved (CallerRecognition)', {
+            callSid, companyId: String(companyId),
+            customerId: customerId || existingNotes.customerId
+          });
+          return existingNotes;
+        }
+      } catch (_e) { /* bad JSON → fall through to fresh init */ }
+    }
+
+    // ── Normal init: no pre-warm found — create empty notes ─────────────────
+    const notes = _buildEmptyNotes(companyId, callSid, customerId);
     await redis.set(key, JSON.stringify(notes), { EX: CONFIG.REDIS_TTL_SECONDS });
 
     // BUG-12 FIX: Push stub entry to MongoDB immediately so _persistToMongoFireAndForget

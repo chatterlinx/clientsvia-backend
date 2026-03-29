@@ -1691,7 +1691,21 @@ router.post('/voice', async (req, res) => {
           companyId: companyIdStr
         });
       });
-    
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🧠 CALLER RECOGNITION PRE-WARM (Step 11): Non-blocking, fire-and-forget.
+    // Looks up caller phone → finds prior confirmed discoveryNotes + LostLeads →
+    // writes pre-warmed DN to Redis before turn 1. DiscoveryNotesService.init()
+    // will find it and preserve it (never start from a blank canvas).
+    // ════════════════════════════════════════════════════════════════════════════
+    if (req.body.CallSid && req.body.From) {
+      const CallerRecognitionService = require('../services/engine/CallerRecognitionService');
+      CallerRecognitionService.preWarm(companyIdStr, req.body.CallSid, req.body.From)
+        .catch(err => logger.warn('[CALLER RECOGNITION] Pre-warm failed (non-blocking)', {
+          companyId: companyIdStr, callSid: req.body.CallSid, error: err.message
+        }));
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // 📞 CALL CENTER MODULE V2: Customer Recognition
     // ════════════════════════════════════════════════════════════════════════════
