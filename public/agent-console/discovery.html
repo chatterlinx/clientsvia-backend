@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Discovery Pipeline — Agent Console</title>
+  <title>Platform Pipeline — Agent Console</title>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -581,7 +581,7 @@
           <span class="logo-text">ClientVia</span>
         </div>
         <span class="header-divider">|</span>
-        <span class="header-page-title">Discovery Pipeline</span>
+        <span class="header-page-title">Platform Pipeline</span>
       </div>
       <div class="header-center">
         <span class="header-company-name" id="header-company-name">Loading…</span>
@@ -604,14 +604,26 @@
     <main class="main-content single-column-layout-full">
 
       <!-- Page title + subtitle -->
-      <div class="page-header" style="margin-bottom: 20px;">
-        <div>
-          <h1 class="page-title">Turn Processing Pipeline</h1>
-          <p class="page-subtitle">
-            Every caller utterance runs through this pipeline in order.
-            This page shows what is wired, what has gaps, and what is not yet built —
-            so you never need to read code to understand what the agent does.
+      <div class="page-header" style="margin-bottom: 16px;">
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px;">
+            <h1 class="page-title" style="margin:0;">Platform Pipeline — Turn-by-Turn Architecture</h1>
+            <span style="font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; border-radius:999px; padding:3px 10px;">v1.0 Milestone</span>
+          </div>
+          <p class="page-subtitle" style="margin:0 0 10px 0;">
+            The north star. Every stage in order — what is wired, what is partial, what is not yet built.
+            When a call fails, open this first. When planning the next build, read this first.
+            Five months from now, this is still where the conversation starts.
           </p>
+          <!-- v1.0 build summary bar -->
+          <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:11px; line-height:1;">
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:6px; padding:4px 10px; font-weight:600;">✅ discoveryNotes v2 (temp/confirmed)</span>
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:6px; padding:4px 10px; font-weight:600;">✅ UAPArray model + uap.html</span>
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:6px; padding:4px 10px; font-weight:600;">✅ discoveryNotes settings + discoverynotes.html</span>
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:6px; padding:4px 10px; font-weight:600;">✅ Transfer + Routing system</span>
+            <span style="background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; border-radius:6px; padding:4px 10px; font-weight:600;">🔜 UAP runtime (step 6)</span>
+            <span style="background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; border-radius:6px; padding:4px 10px; font-weight:600;">🔜 UAPB Booking Confirm (step 8b)</span>
+          </div>
         </div>
       </div>
 
@@ -646,8 +658,11 @@
           <!-- discoveryNotes monitor -->
           <div class="dp-panel-card" id="dp-notes-panel">
             <div class="dp-panel-header">
-              <span class="dp-panel-title">🧠 discoveryNotes Schema</span>
-              <button class="dp-link-btn" id="btn-notes-detail">Full detail →</button>
+              <span class="dp-panel-title">🧠 discoveryNotes Schema (v2)</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <a class="dp-config-link" id="dp-link-discoverynotes" href="#" style="padding:4px 8px; font-size:11px; margin:0;" title="Open Discovery Notes Settings">⚙️ Configure</a>
+                <button class="dp-link-btn" id="btn-notes-detail">Full detail →</button>
+              </div>
             </div>
             <div class="dp-panel-body" id="dp-notes-fields">
               <!-- Rendered by JS -->
@@ -704,18 +719,29 @@
       <div class="modal-body">
 
         <!-- Redis / MongoDB path info -->
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:20px; font-size:12px; color:#374151; line-height:1.8;">
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:16px; font-size:12px; color:#374151; line-height:1.8;">
+          <strong>Schema version:</strong> <span class="dp-monospace">v2</span> · Auto-migrated from v1 (entities{} → temp{} + confirmed{}) on first Redis load<br>
           <strong>Redis key:</strong> <span class="dp-monospace">discovery-notes:{companyId}:{callSid}</span> · TTL=4h<br>
           <strong>MongoDB:</strong> <span class="dp-monospace">Customer.discoveryNotes[]</span> · fire-and-forget mid-call, full $push at call end<br>
-          <strong>Wire point (read):</strong> HybridReceptionistLLM.js · KCDiscoveryRunner.js (Gate 2)
+          <strong>Wire point (write):</strong> LLM_INTAKE (Turn 1) · KCDiscoveryRunner.js (Turn 2+) · v2twilio.js status-callback (call end)<br>
+          <strong>Wire point (read):</strong> HybridReceptionistLLM.js (formatForLLM) · KCDiscoveryRunner.js (Gate 2) · callconsole.html (DN panel)
+        </div>
+
+        <!-- Two-phase model explanation -->
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:14px; margin-bottom:16px; font-size:12px; color:#1e40af; line-height:1.7;">
+          <strong>Two-Phase Model (v2):</strong><br>
+          <strong>temp{}</strong> — Everything the system <em>heard</em>. Extracted turn-by-turn, unverified. Agent accumulates freely and reasons from it. Never stated to caller as confirmed fact.<br>
+          <strong>confirmed{}</strong> — Locked at ONE event only: <strong>UAPB BOOKING_CONFIRM</strong> (booking readback + caller says "yes"). All temp fields lock simultaneously. No per-field mid-call tracking — one moment locks everything.<br>
+          <strong>Rule:</strong> ONLY confirmed{} builds the permanent chart (callHistory + callerProfile). temp{} is working memory only.
         </div>
 
         <!-- How it works -->
-        <div style="font-size:13px; color:#374151; line-height:1.7; margin-bottom:20px;">
-          <strong>How it works:</strong> On Turn 1, the LLM intake extracts entities from the caller's first utterance
-          and writes them to Redis. Every subsequent turn reads this live state before Groq is called,
-          so the agent never re-asks what it already knows and can answer in context
-          (e.g. "Caller is calling about annual maintenance — Caller's name is Mark").
+        <div style="font-size:13px; color:#374151; line-height:1.7; margin-bottom:16px;">
+          <strong>How it works:</strong> On Turn 1, LLM_INTAKE extracts caller entities into <span class="dp-monospace">temp{}</span> and writes to Redis (~30ms).
+          Every subsequent turn reads this live state before Groq is called — the agent knows the caller's name, what's wrong, and urgency level
+          before generating any response. When the caller confirms a booking ("yes, that's correct"), UAPB fires
+          <span class="dp-monospace">patch.confirmed = 'LOCK_ALL_TEMP'</span> which copies all temp fields into confirmed{} simultaneously
+          and pushes the confirmed chart to MongoDB. <strong>No caller is ever a stranger twice.</strong>
         </div>
 
         <!-- Fields table -->

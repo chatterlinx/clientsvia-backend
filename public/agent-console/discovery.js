@@ -34,8 +34,8 @@
 
   const CONFIG = {
     API_BASE:    '/api/agent-console',
-    VERSION:     'DISCOVERY_V1.0',
-    PAGE_TITLE:  'Discovery Pipeline',
+    VERSION:     'PIPELINE_V1.0',  // v1.0 milestone — discoveryNotes v2 + UAP model + Transfer
+    PAGE_TITLE:  'Platform Pipeline',
   };
 
   /* =========================================================================
@@ -470,10 +470,58 @@
       routing: { 'tier1 + KC hit': 'KC Answer (direct, skips T1.5)', 'tier1 miss / tier2 / no signal': 'T1.5 → Pricing → KC → Claude' },
     },
 
-    // ── [7] Booking Intent Gate ──────────────────────────────────────────
+    // ── [12] Transfer Intent Gate — GATE 0.5 ─────────────────────────────
+    {
+      id:       'transfer_intent',
+      order:    12,
+      icon:     '🔀',
+      name:     'Transfer Intent Gate — GATE 0.5',
+      subtitle: 'Fires BEFORE booking gate — named staff, department, explicit transfer phrases route to transfer engine immediately',
+      status:   'wired',
+      group:    'Turn 2+ — KC Engine',
+
+      why: 'Transfer intent must be detected BEFORE booking intent. If a caller says "I want to speak to a manager" after a dispute, running booking intent first would produce the wrong route. GATE 0.5 fires before all other gates — it detects named staff references ("I want Mike"), department requests ("billing department"), and explicit transfer phrases. When it fires, it writes staffMentioned to discoveryNotes.temp, sets objective=TRANSFER, and routes to the transfer engine. TransferDestination and TransferPolicy models govern exactly where the call goes, what message is offered to the caller, and what context is passed through. The intelligence layer (callHistory scan for prior staff relationship, MessageOffer pre-filled from discoveryNotes) is planned for build step 8d.',
+
+      engine:   'KCTransferIntentDetector — GATE 0.5',
+      provider: 'Synchronous (no AI) — phrase + entity matching',
+      model:    null,
+      fires:    'Turn 2+ — GATE 0.5, runs FIRST before booking intent and KC scoring.',
+      writesTo: 'discoveryNotes.temp.staffMentioned, discoveryNotes.objective = TRANSFER',
+      wiredIn:  [
+        'services/engine/kc/KCTransferIntentDetector.js — GATE 0.5',
+        'services/engine/kc/KCDiscoveryRunner.js — GATE 0.5 block (before GATE 1)',
+        'models/TransferDestination.js — routing targets + contact info',
+        'models/TransferPolicy.js — per-company transfer rules + message templates',
+        'routes/admin/companyTransfer.js — admin CRUD',
+        'public/agent-console/transfer.html — 4-tab admin UI',
+      ],
+      configIn:  'Transfer & Routing',
+      configUrl: 'transfer.html',
+
+      configFields: [
+        { key: 'transferDestination.name',     label: 'Destination Name',   unit: 'string', note: 'e.g. "Billing", "Mike Garcia" — matched against staffMentioned entity' },
+        { key: 'transferDestination.phone',    label: 'Transfer Phone',     unit: 'string', note: 'Twilio <Dial> target number' },
+        { key: 'transferPolicy.messageOffer',  label: 'Message Offer',      unit: 'string', note: 'What agent says before transferring ("Let me connect you now…")' },
+        { key: 'transferPolicy.contextPassthrough', label: 'Context Passthrough', unit: 'bool', note: 'Pass discoveryNotes context to the destination agent (planned step 8d)' },
+      ],
+
+      extracts: [
+        { field: 'temp.staffMentioned', label: 'Staff Mentioned', status: 'partial', note: 'Extracted when caller names a person. Destination match + callHistory relationship scan planned for step 8d.' },
+      ],
+
+      gaps: [
+        'staffMentioned → TransferDestination match: entity is extracted and stored in temp, but callHistory scan (prior staff relationship) is planned for build step 8d.',
+        'MessageOffer pre-fill from discoveryNotes (context-aware transfer message): planned for build step 8d.',
+        'staffRelationships in callerProfile (long-term staff preference tracking): planned for build step 13.',
+      ],
+
+      routing: { yes: 'TRANSFER FLOW → TransferPolicy → Twilio <Dial>', no: 'booking_intent' },
+    },
+
+    // ── [13] Booking Intent Gate ──────────────────────────────────────────
     {
       id:       'booking_intent',
-      order:    12,
+      order:    13,
       icon:     '🔒',
       name:     'Booking Intent Gate',
       subtitle: 'Pure booking signals skip straight to handoff — no KC or LLM needed',
@@ -497,7 +545,58 @@
         'NOT wired on Turn 1: First-utterance booking signals ("I just want to book") still run the full LLM_INTAKE path. Should short-circuit to booking handoff immediately.',
       ],
 
-      routing: { yes: 'BOOKING HANDOFF → BookingLogicEngine', no: 'engine_hub_runtime' },
+      routing: { yes: 'BOOKING HANDOFF → BookingLogicEngine', no: 'uap_layer1' },
+    },
+
+    // ── [14] UAP — Utterance Act Parser (Layer 1) ─────────────────────────
+    {
+      id:       'uap_layer1',
+      order:    14,
+      icon:     '🧠',
+      name:     'UAP — Utterance Act Parser (Layer 1)',
+      subtitle: 'Rule-based daType intent classifier. UAPArrays, model, UI, and APIs built. Runtime parser is build step 6.',
+      status:   'partial',
+      group:    'Turn 2+ — KC Engine',
+
+      why: 'Every utterance has an intent (daType). UAP Layer 1 classifies it in zero latency using company-owned trigger phrase arrays stored in MongoDB (UAPArrays collection). No LLM call — pure rule-based matching. The result is a ParsedUtterance { daType, daSubTypes[], confidence, topicWords[] } that feeds the Bridge to retrieve the matching KC container instantly. Layer 1 must hit ~80% for the zero-latency promise to hold — if it misses, Layer 2 (Groq fallback) handles it. UAP replaces the old _REJECTION_RE keyword filter in KCDiscoveryRunner (build step 7). CURRENT STATE: UAPArray model, seed data, admin UI (uap.html), and CRUD routes are all built (v1.0). UtteranceActParser runtime (build step 6) and Bridge cache (build step 5) are the next two build steps.',
+
+      engine:   'UtteranceActParser — NOT YET BUILT (build step 6)',
+      provider: 'Synchronous (no AI) — rule-based phrase matching against UAPArrays in Redis/MongoDB',
+      model:    null,
+      fires:    '⚠️ NOT YET WIRED — intended to fire Turn 2+ before Engine Hub, after booking gate.',
+      writesTo: 'ParsedUtterance { daType, daSubTypes[], confidence, topicWords[] } → Bridge lookup → KC container',
+      wiredIn:  [
+        '⚠️ UtteranceActParser — NOT YET BUILT (build step 6)',
+        '⚠️ Bridge Redis cache — NOT YET BUILT (build step 5)',
+        'models/UAPArray.js — utterance vocabulary schema ✅ BUILT v1.0',
+        'routes/admin/uapArrays.js — CRUD + seed + pending endpoints ✅ BUILT v1.0',
+        'public/agent-console/uap.html — 4-tab admin UI ✅ BUILT v1.0',
+      ],
+      configIn:  'UAP Intelligence',
+      configUrl: 'uap.html',
+
+      configFields: [
+        { key: 'uapArray.daType',           label: 'daType',               unit: 'string',   note: 'e.g. PRICING_QUERY, AVAILABILITY_QUERY, SERVICE_QUERY — the utterance intent category' },
+        { key: 'uapArray.daSubTypes',        label: 'Sub-Types',            unit: 'array',    note: 'Each daType has sub-types with their own trigger phrases (e.g. FINANCING, WARRANTY)' },
+        { key: 'uapArray.triggerPhrases',    label: 'Trigger Phrases',      unit: 'string[]', note: 'Phrases that match this daType — add/remove in uap.html. Auto-generated at KC save (step 4).' },
+        { key: 'uapArray.classificationStatus', label: 'Classification',   unit: 'enum',     note: 'AUTO_CONFIRMED | MANUAL | PENDING — pending items appear in UAP → Pending tab' },
+      ],
+
+      extracts: [],
+
+      gaps: [
+        'UtteranceActParser runtime (step 6) not yet built — UAPArrays exist in DB, parser code is the next step.',
+        'Bridge Redis cache (step 5) not yet built — maps daType → KC container ID at near-zero latency.',
+        'Semantic auto-map at KC save (step 4) not yet built — LLM generates trigger phrases + infers daType when a KC card is saved.',
+        'Wire UAP into KCDiscoveryRunner (step 7) not yet done — will replace _REJECTION_RE, feed topicWords + daSubTypes to Bridge.',
+        'UAP accuracy unknown until real calls run — Layer 1 ~80% is the target. First 500 PSTN calls = calibration data.',
+      ],
+
+      routing: {
+        'Layer 1 hit (confidence ≥ 0.8)': 'Bridge → KC container (zero LLM latency)',
+        'Layer 1 miss / confidence < 0.8': 'Layer 2 Groq fallback (planned)',
+        'UNKNOWN daType':                   'topicWords passed to Gate 3 KC scoring (G5)',
+      },
     },
 
     // ════════════════════════════════════════════════════════════════════════
@@ -507,10 +606,10 @@
     // Behavior Cards govern tone + rules for both KC answers and LLM turns.
     // ════════════════════════════════════════════════════════════════════════
 
-    // ── [8] Engine Hub Runtime — GATE 2 Load ─────────────────────────────
+    // ── [15] Engine Hub Runtime — GATE 2 Load ─────────────────────────────
     {
       id:       'engine_hub_runtime',
-      order:    13,
+      order:    15,
       icon:     '⚙️',
       name:     'Engine Hub Runtime — GATE 2 Load',
       subtitle: 'Reads engineHub settings from company document — governs hop threshold, BC injection, policy routing, trace logging',
@@ -546,10 +645,10 @@
       },
     },
 
-    // ── [9] SPFUQ + Engine Hub Agenda State ──────────────────────────────
+    // ── [16] SPFUQ + Engine Hub Agenda State ─────────────────────────────
     {
       id:       'spfuq_agenda',
-      order:    14,
+      order:    16,
       icon:     '🧵',
       name:     'SPFUQ + Engine Hub Agenda State',
       subtitle: 'Topic anchor keeps KC context across turns — hop threshold now governed by Engine Hub instead of hardcoded 1.5×',
@@ -595,10 +694,10 @@
       },
     },
 
-    // ── [10] KC Answer ───────────────────────────────────────────────────
+    // ── [17] KC Answer ───────────────────────────────────────────────────
     {
       id:       'kc_answer',
-      order:    15,
+      order:    17,
       icon:     '📦',
       name:     'KC Answer — Knowledge Containers',
       subtitle: 'Groq answers from admin-authored facts only — no hallucination, bounded to your content',
@@ -627,10 +726,10 @@
       routing: { yes: 'behavior_card_kc (BC injected) → groq_formatter', no: 'behavior_card_standalone → llm_fallback' },
     },
 
-    // ── [11] Behavior Cards — KC Category Link ───────────────────────────
+    // ── [18] Behavior Cards — KC Category Link ───────────────────────────
     {
       id:       'behavior_card_kc',
-      order:    16,
+      order:    18,
       icon:     '🎭',
       name:     'Behavior Cards — KC Category Link',
       subtitle: 'One BC per KC category governs tone, do/do-not, example responses, and CTA for every answer in that category',
@@ -670,10 +769,10 @@
       },
     },
 
-    // ── [12] Groq Response Formatter ─────────────────────────────────────
+    // ── [19] Groq Response Formatter ─────────────────────────────────────
     {
       id:       'groq_formatter',
-      order:    17,
+      order:    19,
       icon:     '🤖',
       name:     'Groq Response Formatter',
       subtitle: 'Applies Groq Protocol to KC answers: name + acknowledgement + answer + CTA — shaped by active Behavior Card',
@@ -705,10 +804,10 @@
       routing: { always: 'first_sentence_streaming' },
     },
 
-    // ── [13] Behavior Cards — Standalone (LLM Fallback) ──────────────────
+    // ── [20] Behavior Cards — Standalone (LLM Fallback) ──────────────────
     {
       id:       'behavior_card_standalone',
-      order:    18,
+      order:    20,
       icon:     '🃏',
       name:     'Behavior Cards — Standalone (LLM Fallback)',
       subtitle: 'discovery_flow BC injected into Claude context when KC misses — governs tone and protocol in unstructured turns',
@@ -752,10 +851,10 @@
       },
     },
 
-    // ── [14] LLM Fallback ────────────────────────────────────────────────
+    // ── [21] LLM Fallback ────────────────────────────────────────────────
     {
       id:       'llm_fallback',
-      order:    19,
+      order:    21,
       icon:     '🔮',
       name:     'LLM Fallback — Claude',
       subtitle: 'Claude handles complex questions KC containers could not match — now receives discovery_flow BC rules from Engine Hub',
@@ -783,10 +882,10 @@
       routing: { yes: 'first_sentence_streaming', no: 'graceful_ack' },
     },
 
-    // ── [15] Graceful ACK ────────────────────────────────────────────────
+    // ── [22] Graceful ACK ────────────────────────────────────────────────
     {
       id:       'graceful_ack',
-      order:    20,
+      order:    22,
       icon:     '🆗',
       name:     'Graceful ACK',
       subtitle: 'Final safety net — canned acknowledgement when all AI paths are unavailable',
@@ -823,10 +922,10 @@
     // GROUP E — RESPONSE DELIVERY
     // ════════════════════════════════════════════════════════════════════════
 
-    // ── [16] Bridge / Post-Gather Config ─────────────────────────────────
+    // ── [23] Bridge / Post-Gather Config ─────────────────────────────────
     {
       id:       'bridge_config',
-      order:    21,
+      order:    23,
       icon:     '🌉',
       name:     'Bridge — Post-Gather Delay',
       subtitle: 'postGatherDelayMs controls silence window before next <Gather> fires — critical for response completion',
@@ -865,22 +964,43 @@
      This is merged with the API response (which may add gap annotations).
      ========================================================================= */
 
+  // ── Schema Version: v2  (March 2026 — entities{} replaced by temp{} + confirmed{})
+  // ── Migration: DiscoveryNotesService._migrateNotes() auto-upgrades v1 Redis keys on load.
+  // ── Rule: ONLY confirmed{} builds the permanent chart (Customer.callHistory + callerProfile).
+  //          temp{} is accumulated freely — never promoted directly. Never discarded.
+  //          confirmed{} is locked at ONE event: UAPB BOOKING_CONFIRM (all temp → confirmed simultaneously).
   const DISCOVERY_NOTES_SCHEMA = [
-    { key: 'entities.firstName',  label: 'First Name',          status: 'active',  source: 'LLM_INTAKE — extracted from caller\'s first utterance' },
-    { key: 'entities.lastName',   label: 'Last Name',           status: 'partial', source: 'LLM_INTAKE — only when caller states full name' },
-    { key: 'entities.fullName',   label: 'Full Name',           status: 'partial', source: 'LLM_INTAKE — composed when both names extracted' },
-    { key: 'entities.phone',      label: 'Phone Number',        status: 'booking', source: 'BookingLogicEngine — collected during booking flow' },
-    { key: 'entities.address',    label: 'Service Address',     status: 'booking', source: 'BookingLogicEngine — collected during booking flow' },
-    { key: 'callReason',          label: 'Call Reason',         status: 'active',  source: 'LLM_INTAKE + KC Engine updates on each container match' },
-    { key: 'urgency',             label: 'Urgency Level',       status: 'active',  source: 'LLM_INTAKE (low / normal / high / emergency)' },
-    { key: 'objective',           label: 'Objective',           status: 'active',  source: 'KC Engine (INTAKE / DISCOVERY / BOOKING / TRANSFER / CLOSING)' },
-    { key: 'priorVisit',          label: 'Prior Visit Flag',    status: 'active',  source: 'LLM_INTAKE — true when caller mentions prior service' },
-    { key: 'sameDayRequested',    label: 'Same-Day Request',    status: 'active',  source: 'LLM_INTAKE — true when caller implies urgency or today' },
-    { key: 'employeeMentioned',   label: 'Employee Mentioned',  status: 'gap',     source: '⚠️ NOT EXTRACTED — caller says "Hi John", field stays null' },
-    { key: 'doNotReask',          label: 'Do Not Re-ask List',  status: 'active',  source: 'Populated after each extraction — prevents repeated questions' },
-    { key: 'qaLog',               label: 'Q&A Log (per turn)',  status: 'active',  source: 'KC Engine — appends { turn, question, answer } on each KC response' },
-    { key: 'turnNumber',          label: 'Current Turn',        status: 'active',  source: 'Incremented at every gather completion' },
+
+    // ── TEMP — Working Hypothesis (accumulates freely each turn) ─────────
+    // Agent reads and builds on these freely. Never stated to caller as confirmed fact.
+    { key: 'temp.firstName',     label: 'First Name',          status: 'active',  source: 'LLM_INTAKE — extracted from caller\'s first utterance (v2 schema)' },
+    { key: 'temp.lastName',      label: 'Last Name',           status: 'partial', source: 'LLM_INTAKE — only when caller states full name (v2 schema)' },
+    { key: 'temp.fullName',      label: 'Full Name',           status: 'partial', source: 'LLM_INTAKE — composed when both names extracted (v2 schema)' },
+    { key: 'temp.phone',         label: 'Phone Number',        status: 'booking', source: 'BookingLogicEngine — collected during booking flow (build step 8b)' },
+    { key: 'temp.address',       label: 'Service Address',     status: 'booking', source: 'BookingLogicEngine — collected during booking flow (build step 8b)' },
+    { key: 'temp.issue',         label: 'Issue Description',   status: 'active',  source: 'LLM_INTAKE — what\'s wrong ("AC not cooling", "pipe burst", etc.)' },
+    { key: 'temp.serviceType',   label: 'Service Type',        status: 'active',  source: 'LLM_INTAKE — service_call / maintenance / installation' },
+    { key: 'temp.staffMentioned', label: 'Staff Mentioned',    status: 'partial', source: 'Transfer Gate (GATE 0.5) — "I want Mike" → entity extracted. Destination match + callHistory scan: step 8d.' },
+    { key: 'temp.preferredDate', label: 'Preferred Date',      status: 'booking', source: 'BookingLogicEngine — collected during booking flow (build step 8b)' },
+    { key: 'temp.preferredTime', label: 'Preferred Time',      status: 'booking', source: 'BookingLogicEngine — collected during booking flow (build step 8b)' },
+    { key: 'temp.confidence',    label: 'Field Confidence{}',  status: 'active',  source: 'LLM_INTAKE — per-field extraction confidence scores (e.g. { firstName: 0.95 })' },
+
+    // ── CONFIRMED — Locked at UAPB BOOKING_CONFIRM ───────────────────────
+    // All temp fields lock simultaneously when caller says "yes" to readback.
+    // This is the ONLY write path to confirmed{}. No per-field mid-call tracking.
+    { key: 'confirmed.*',        label: 'Confirmed (all fields)', status: 'booking', source: 'UAPB BOOKING_CONFIRM — booking readback + caller "yes" → all temp locks at once. Build step 8b.' },
+
+    // ── Top-level metadata (not in temp or confirmed) ────────────────────
+    { key: 'callReason',         label: 'Call Reason',         status: 'active',  source: 'LLM_INTAKE + KC Engine updates on each container match' },
+    { key: 'urgency',            label: 'Urgency Level',       status: 'active',  source: 'LLM_INTAKE (low / normal / high / emergency)' },
+    { key: 'objective',          label: 'Objective',           status: 'active',  source: 'KC Engine (INTAKE / DISCOVERY / BOOKING / TRANSFER / CLOSING)' },
+    { key: 'priorVisit',         label: 'Prior Visit Flag',    status: 'active',  source: 'LLM_INTAKE — true when caller mentions prior service or existing relationship' },
+    { key: 'sameDayRequested',   label: 'Same-Day Request',    status: 'active',  source: 'LLM_INTAKE — true when caller implies urgency or "today"' },
+    { key: 'doNotReask',         label: 'Do Not Re-ask List',  status: 'active',  source: 'Populated after each extraction — prevents agent from repeating questions' },
+    { key: 'qaLog',              label: 'Q&A Log (per turn)',  status: 'active',  source: 'KC Engine — appends { turn, question, answer } on each KC response' },
+    { key: 'turnNumber',         label: 'Current Turn',        status: 'active',  source: 'Incremented at every gather completion' },
     { key: 'lastMeaningfulInput', label: 'Last Meaningful Input', status: 'active', source: 'KC Engine — the raw utterance that produced the last KC answer' },
+    { key: 'version',            label: 'Schema Version',      status: 'active',  source: 'DiscoveryNotesService — 1=legacy entities{}, 2=v2 temp/confirmed. Auto-migrated on load.' },
   ];
 
   /* =========================================================================
@@ -890,9 +1010,10 @@
      ========================================================================= */
 
   const DOM = {
-    headerBackLink:    document.getElementById('header-back-link'),
-    headerCompanyName: document.getElementById('header-company-name'),
-    headerCompanyId:   document.getElementById('header-company-id'),
+    headerBackLink:      document.getElementById('header-back-link'),
+    headerCompanyName:   document.getElementById('header-company-name'),
+    headerCompanyId:     document.getElementById('header-company-id'),
+    linkDiscoveryNotes:  document.getElementById('dp-link-discoverynotes'),
     btnRefresh:        document.getElementById('btn-refresh'),
     liveBadge:         document.getElementById('dp-live-badge'),
     liveTimestamp:     document.getElementById('dp-live-timestamp'),
@@ -1104,6 +1225,26 @@
         enriched.dynamicBadge = count > 0 ? `${count} consent phrases` : null;
         if (count === 0) {
           enriched.gaps.push('No consent phrases configured — booking intent detection may be unreliable. Add phrases in Agent 2.0 Settings.');
+        }
+      }
+
+      // Transfer Intent Gate: warn if no destinations configured
+      if (stage.id === 'transfer_intent') {
+        const count = apiData.pipeline?.transferDestinationCount ?? 0;
+        enriched.dynamicBadge = count > 0 ? `${count} destination${count !== 1 ? 's' : ''}` : null;
+        if (count === 0) {
+          enriched.gaps.push('No transfer destinations configured — transfer routing will not fire. Add destinations in transfer.html → Destinations.');
+        }
+      }
+
+      // UAP Layer 1: show array count and warn if unseeded
+      if (stage.id === 'uap_layer1') {
+        const count = apiData.pipeline?.uapArraysCount ?? 0;
+        if (count > 0) {
+          enriched.dynamicBadge = `${count} daType array${count !== 1 ? 's' : ''} seeded`;
+        } else {
+          enriched.dynamicBadge = '⚠️ Not seeded — click Seed in uap.html';
+          enriched.gaps.push('No UAP arrays seeded — go to uap.html and click "Seed Standard Arrays" to initialize utterance vocabulary for this company.');
         }
       }
 
@@ -2070,8 +2211,13 @@
     }
 
     // ── Header back link ──────────────────────────────────────────────
-    DOM.headerBackLink.href = `/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}`;
+    DOM.headerBackLink.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
     DOM.headerCompanyId.textContent = `${state.companyId.slice(0, 8)}…${state.companyId.slice(-4)}`;
+
+    // ── Side panel config links ───────────────────────────────────────
+    if (DOM.linkDiscoveryNotes) {
+      DOM.linkDiscoveryNotes.href = `/agent-console/discoverynotes.html?companyId=${encodeURIComponent(state.companyId)}`;
+    }
 
     // ── Refresh button ────────────────────────────────────────────────
     DOM.btnRefresh?.addEventListener('click', () => loadAndRender());
