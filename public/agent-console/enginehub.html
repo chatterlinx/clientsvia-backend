@@ -771,9 +771,14 @@
   <div class="eh-modal">
     <div class="eh-modal-header">
       <h3 id="bc-modal-title">New Behavior Card</h3>
-      <button class="eh-btn-ghost" id="bc-modal-close">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="eh-btn-primary" id="bc-btn-generate" style="font-size:.78rem;padding:5px 12px;" title="Generate tone, rules, and examples with AI">
+          ✨ Generate with AI
+        </button>
+        <button class="eh-btn-ghost" id="bc-modal-close">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </div>
     <div class="eh-modal-body">
 
@@ -843,17 +848,9 @@
         </div>
       </div>
 
-      <div class="eh-form-group">
-        <label class="eh-label" for="bc-after-action">After Action</label>
-        <select id="bc-after-action" class="eh-select">
-          <option value="none">None — informational response only</option>
-          <option value="collect_info_then_book">collect_info_then_book — continue to booking</option>
-          <option value="route_to_payment">route_to_payment — payment flow</option>
-          <option value="escalate_to_human">escalate_to_human — escalation ladder</option>
-          <option value="take_message">take_message — after-hours capture</option>
-          <option value="schedule_callback">schedule_callback — callback queue</option>
-          <option value="transfer">transfer — live agent connect</option>
-        </select>
+      <!-- Generate status banner — shown while Groq is running -->
+      <div id="bc-generate-banner" style="display:none;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:.8rem;color:#166534;">
+        <span id="bc-generate-msg">✨ Generating…</span>
       </div>
 
     </div>

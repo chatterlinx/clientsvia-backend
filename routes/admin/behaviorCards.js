@@ -5,7 +5,7 @@
  * BEHAVIOR CARDS — ADMIN API ROUTES
  * ============================================================================
  *
- * Full CRUD for Behavior Cards (BC) per company.
+ * Full CRUD + AI generation for Behavior Cards (BC) per company.
  *
  * ALL routes enforce:
  *   - companyId scoping (multi-tenant — no cross-tenant reads possible)
@@ -14,11 +14,12 @@
  *   - Idempotency-safe operations (MongoDB findOneAndUpdate, not upsert)
  *
  * ROUTE TABLE:
- *   GET    /company/:companyId/behavior-cards            List all BC for company
- *   GET    /company/:companyId/behavior-cards/:bcId      Get single BC
- *   POST   /company/:companyId/behavior-cards            Create new BC
- *   PATCH  /company/:companyId/behavior-cards/:bcId      Update BC (partial)
- *   DELETE /company/:companyId/behavior-cards/:bcId      Delete BC
+ *   GET    /company/:companyId/behavior-cards                List all BC for company
+ *   GET    /company/:companyId/behavior-cards/:bcId          Get single BC
+ *   POST   /company/:companyId/behavior-cards                Create new BC
+ *   PATCH  /company/:companyId/behavior-cards/:bcId          Update BC (partial)
+ *   DELETE /company/:companyId/behavior-cards/:bcId          Delete BC
+ *   POST   /company/:companyId/behavior-cards/generate       AI-generate draft BC
  *
  * BASE PATH registered in index.js:
  *   /api/admin/behavior-cards
@@ -30,13 +31,15 @@
  * ============================================================================
  */
 
-const express             = require('express');
-const router              = express.Router();
-const mongoose            = require('mongoose');
-const BehaviorCard        = require('../../models/BehaviorCard');
-const BehaviorCardService = require('../../services/behaviorCards/BehaviorCardService');
-const { authenticateJWT } = require('../../middleware/auth');
-const logger              = require('../../utils/logger');
+const express              = require('express');
+const router               = express.Router();
+const mongoose             = require('mongoose');
+const BehaviorCard         = require('../../models/BehaviorCard');
+const BehaviorCardService  = require('../../services/behaviorCards/BehaviorCardService');
+const GroqStreamAdapter    = require('../../services/streaming/adapters/GroqStreamAdapter');
+const v2Company            = require('../../models/v2Company');
+const { authenticateJWT }  = require('../../middleware/auth');
+const logger               = require('../../utils/logger');
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -50,10 +53,6 @@ function _isValidObjectId(id) {
 /**
  * Invalidate the BC Redis cache after any write.
  * Always fire-and-forget — never awaited, never blocks the API response.
- *
- * @param {string} companyId
- * @param {string} type         'category_linked' | 'standalone'
- * @param {string} identifier   category or standaloneType
  */
 function _invalidateCacheFAF(companyId, type, identifier) {
   if (!identifier) return;
@@ -76,14 +75,12 @@ router.get('/company/:companyId/behavior-cards', authenticateJWT, async (req, re
   }
 
   try {
-    // companyId in every query — zero cross-tenant reads possible
     const cards = await BehaviorCard
       .find({ companyId })
       .sort({ type: 1, name: 1 })
       .lean();
 
     logger.info('[BC ROUTES] GET list', { companyId, count: cards.length });
-
     return res.json({ ok: true, cards, total: cards.length });
 
   } catch (err) {
@@ -106,13 +103,8 @@ router.get('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async (r
   }
 
   try {
-    // Both _id AND companyId required — cross-tenant bcId returns 404 not the doc
     const card = await BehaviorCard.findOne({ _id: bcId, companyId }).lean();
-
-    if (!card) {
-      return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
-    }
-
+    if (!card) return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
     return res.json({ ok: true, card });
 
   } catch (err) {
@@ -120,6 +112,153 @@ router.get('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async (r
     return res.status(500).json({ ok: false, error: 'Failed to load Behavior Card' });
   }
 });
+
+// ============================================================================
+// POST /company/:companyId/behavior-cards/generate
+// AI-generate a draft Behavior Card. Does NOT save — returns a draft for the
+// owner to review and edit before saving via the normal POST endpoint.
+//
+// Body: { type, category?, standaloneType? }
+//   type          — 'category_linked' | 'standalone'
+//   category      — KC category name (category_linked only)
+//   standaloneType— one of STANDALONE_TYPES (standalone only)
+//
+// Returns: { ok, draft: { name, tone, rules: { do[], doNot[], exampleResponses[] } } }
+// ============================================================================
+
+router.post('/company/:companyId/behavior-cards/generate', authenticateJWT, async (req, res) => {
+  const { companyId } = req.params;
+
+  if (!_isValidObjectId(companyId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid companyId' });
+  }
+
+  const { type, category, standaloneType } = req.body;
+
+  if (!type || !['category_linked', 'standalone'].includes(type)) {
+    return res.status(400).json({ ok: false, error: 'type must be "category_linked" or "standalone"' });
+  }
+  if (type === 'category_linked' && !category?.trim()) {
+    return res.status(400).json({ ok: false, error: 'category is required for category_linked' });
+  }
+  if (type === 'standalone' && !standaloneType) {
+    return res.status(400).json({ ok: false, error: 'standaloneType is required for standalone' });
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ ok: false, error: 'Groq API key not configured' });
+  }
+
+  try {
+    // Load company context so Groq generates trade-specific rules
+    const company = await v2Company.findById(companyId)
+      .select('companyName tradeCategories')
+      .lean();
+
+    const companyName = company?.companyName || 'this company';
+    const trade       = (company?.tradeCategories || []).join(', ') || 'home services';
+
+    // Build the scenario description for Groq
+    const scenario = type === 'category_linked'
+      ? `a caller asking about "${category}" topics`
+      : _standaloneScenarioDesc(standaloneType);
+
+    const systemPrompt = `You are an expert phone agent behavior designer for home-service companies.
+You write Behavior Cards — structured rules that govern how a phone agent speaks in a specific situation.
+Behavior Cards are injected into the Groq system prompt. They must be clear, actionable, and spoken-word natural.
+
+COMPANY: ${companyName}
+TRADE/INDUSTRY: ${trade}
+SCENARIO: ${scenario}
+
+OUTPUT FORMAT — respond ONLY with valid JSON, no extra text:
+{
+  "name": "<short descriptive name, e.g. Pricing & Trust Behavior>",
+  "tone": "<one sentence describing voice register and personality for this scenario>",
+  "rules": {
+    "do": ["<rule 1>", "<rule 2>", "<rule 3>", "<rule 4>"],
+    "doNot": ["<rule 1>", "<rule 2>", "<rule 3>"],
+    "exampleResponses": ["<30-word example 1>", "<30-word example 2>"]
+  }
+}
+
+GUIDELINES:
+- tone: voice register description, not a persona name. e.g. "Direct and confident — never apologetic about pricing. Moves naturally toward scheduling."
+- do rules: specific, actionable. e.g. "State the exact price without hesitation" not "Be helpful"
+- doNot rules: concrete prohibitions. e.g. "Never apologize for cost" not "Don't be rude"
+- exampleResponses: 2 spoken examples that show the exact tone and length expected. These are calibration anchors — Groq pattern-matches from them.
+- All rules must be specific to ${trade} and the "${type === 'category_linked' ? category : standaloneType}" scenario.
+- Do NOT generate generic rules. Every rule must be specific to this trade and scenario.`;
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:      'llama-3.3-70b-versatile',
+      maxTokens:  600,
+      temperature: 0.4,
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: `Generate a Behavior Card for: ${scenario}` }],
+      jsonMode:   true,
+    });
+
+    if (!result.response) {
+      return res.status(502).json({ ok: false, error: 'Groq returned no response' });
+    }
+
+    // Parse the draft
+    let draft;
+    try {
+      draft = JSON.parse(result.response.trim());
+    } catch (_e) {
+      logger.warn('[BC ROUTES] generate — JSON parse failed, attempting extraction', { companyId });
+      // Try to extract from malformed response
+      const match = result.response.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { draft = JSON.parse(match[0]); } catch { /* fall through */ }
+      }
+      if (!draft) {
+        return res.status(502).json({ ok: false, error: 'Failed to parse Groq response — try again' });
+      }
+    }
+
+    // Sanitize output — never trust LLM to follow schema exactly
+    const sanitized = {
+      name:  typeof draft.name === 'string' ? draft.name.trim().slice(0, 120) : '',
+      tone:  typeof draft.tone === 'string' ? draft.tone.trim().slice(0, 400) : '',
+      rules: {
+        do:               Array.isArray(draft.rules?.do)               ? draft.rules.do.filter(r => typeof r === 'string' && r.trim()).map(r => r.trim())               : [],
+        doNot:            Array.isArray(draft.rules?.doNot)            ? draft.rules.doNot.filter(r => typeof r === 'string' && r.trim()).map(r => r.trim())            : [],
+        exampleResponses: Array.isArray(draft.rules?.exampleResponses) ? draft.rules.exampleResponses.filter(r => typeof r === 'string' && r.trim()).map(r => r.trim()) : [],
+      }
+    };
+
+    logger.info('[BC ROUTES] ✅ Generated draft BC', {
+      companyId, type,
+      target: type === 'category_linked' ? category : standaloneType,
+      name:   sanitized.name
+    });
+
+    return res.json({ ok: true, draft: sanitized });
+
+  } catch (err) {
+    logger.error('[BC ROUTES] generate failed', { companyId, error: err.message });
+    return res.status(500).json({ ok: false, error: 'Failed to generate Behavior Card' });
+  }
+});
+
+/** Human-readable scenario descriptions for standalone types. */
+function _standaloneScenarioDesc(standaloneType) {
+  const map = {
+    inbound_greeting:  'the opening of every inbound call — first words the agent speaks',
+    discovery_flow:    'collecting caller name, address, issue, and urgency',
+    escalation_ladder: 'a caller who is upset, angry, or asking to speak to a manager',
+    after_hours_intake:'a caller reaching the agent outside of business hours',
+    mid_flow_interrupt:'a caller who interrupts an active booking or discovery flow with a side question',
+    payment_routing:   'a caller asking about payment, billing, or financing',
+    manager_request:   'a caller who explicitly asks to speak to a manager or supervisor',
+  };
+  return map[standaloneType] || standaloneType;
+}
 
 // ============================================================================
 // POST /company/:companyId/behavior-cards
@@ -135,58 +274,28 @@ router.post('/company/:companyId/behavior-cards', authenticateJWT, async (req, r
     return res.status(400).json({ ok: false, error: 'Invalid companyId' });
   }
 
-  const {
-    name,
-    type,
-    category,
-    standaloneType,
-    tone,
-    rules,
-    afterAction,
-    escalationConfig,
-    enabled
-  } = req.body;
-
-  // ── Required field validation ──────────────────────────────────────────────
+  const { name, type, category, standaloneType, tone, rules, enabled } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'name is required' });
   }
 
   if (!type || !['category_linked', 'standalone'].includes(type)) {
-    return res.status(400).json({
-      ok:    false,
-      error: 'type must be "category_linked" or "standalone"'
-    });
+    return res.status(400).json({ ok: false, error: 'type must be "category_linked" or "standalone"' });
   }
 
   if (type === 'category_linked' && (!category || category.trim().length === 0)) {
-    return res.status(400).json({
-      ok:    false,
-      error: 'category is required for category_linked type'
-    });
+    return res.status(400).json({ ok: false, error: 'category is required for category_linked type' });
   }
 
   if (type === 'standalone' && !standaloneType) {
-    return res.status(400).json({
-      ok:    false,
-      error: 'standaloneType is required for standalone type'
-    });
+    return res.status(400).json({ ok: false, error: 'standaloneType is required for standalone type' });
   }
 
-  // Validate standaloneType against allowed enum
   if (type === 'standalone' && !BehaviorCard.STANDALONE_TYPES.includes(standaloneType)) {
     return res.status(400).json({
       ok:    false,
       error: `Invalid standaloneType. Allowed: ${BehaviorCard.STANDALONE_TYPES.join(', ')}`
-    });
-  }
-
-  // Validate afterAction against allowed enum
-  if (afterAction && !BehaviorCard.AFTER_ACTIONS.includes(afterAction)) {
-    return res.status(400).json({
-      ok:    false,
-      error: `Invalid afterAction. Allowed: ${BehaviorCard.AFTER_ACTIONS.join(', ')}`
     });
   }
 
@@ -203,33 +312,22 @@ router.post('/company/:companyId/behavior-cards', authenticateJWT, async (req, r
         doNot:            (rules?.doNot            || []).filter(r => r && r.trim().length > 0),
         exampleResponses: (rules?.exampleResponses || []).filter(r => r && r.trim().length > 0)
       },
-      afterAction:      afterAction || 'none',
-      escalationConfig: escalationConfig || undefined,
-      enabled:          enabled !== false  // default true unless explicitly false
+      enabled: enabled !== false
     });
 
     await card.save();
 
-    // Invalidate Redis cache for this BC's lookup key (fire-and-forget)
     const identifier = type === 'category_linked' ? card.category : card.standaloneType;
     _invalidateCacheFAF(companyId, type, identifier);
 
-    logger.info('[BC ROUTES] ✅ Created', {
-      companyId,
-      bcId: card._id.toString(),
-      type,
-      name: card.name
-    });
-
+    logger.info('[BC ROUTES] ✅ Created', { companyId, bcId: card._id.toString(), type, name: card.name });
     return res.status(201).json({ ok: true, card });
 
   } catch (err) {
-    // Unique index violation — duplicate category or standaloneType for this company
     if (err.code === 11000) {
       const description = type === 'category_linked'
         ? `A Behavior Card for category "${category}" already exists for this company`
         : `A Behavior Card for standalone type "${standaloneType}" already exists for this company`;
-
       return res.status(409).json({ ok: false, error: description });
     }
 
@@ -251,15 +349,11 @@ router.patch('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async 
     return res.status(400).json({ ok: false, error: 'Invalid companyId or bcId' });
   }
 
-  // Only these fields may be updated after creation.
-  // type, category, standaloneType, companyId are intentionally excluded.
-  const PATCHABLE_FIELDS = ['name', 'tone', 'rules', 'afterAction', 'escalationConfig', 'enabled'];
+  const PATCHABLE_FIELDS = ['name', 'tone', 'rules', 'enabled'];
 
   const patch = {};
   for (const field of PATCHABLE_FIELDS) {
-    if (req.body[field] !== undefined) {
-      patch[field] = req.body[field];
-    }
+    if (req.body[field] !== undefined) patch[field] = req.body[field];
   }
 
   if (Object.keys(patch).length === 0) {
@@ -269,36 +363,19 @@ router.patch('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async 
     });
   }
 
-  // Validate afterAction if provided
-  if (patch.afterAction && !BehaviorCard.AFTER_ACTIONS.includes(patch.afterAction)) {
-    return res.status(400).json({
-      ok:    false,
-      error: `Invalid afterAction. Allowed: ${BehaviorCard.AFTER_ACTIONS.join(', ')}`
-    });
-  }
-
   try {
-    // companyId in filter enforces tenant isolation — cannot patch another tenant's BC
     const card = await BehaviorCard.findOneAndUpdate(
       { _id: bcId, companyId },
       { $set: patch },
       { new: true, runValidators: true }
     ).lean();
 
-    if (!card) {
-      return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
-    }
+    if (!card) return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
 
-    // Invalidate Redis cache (fire-and-forget)
     const identifier = card.type === 'category_linked' ? card.category : card.standaloneType;
     _invalidateCacheFAF(companyId, card.type, identifier);
 
-    logger.info('[BC ROUTES] ✅ Updated', {
-      companyId,
-      bcId,
-      fields: Object.keys(patch)
-    });
-
+    logger.info('[BC ROUTES] ✅ Updated', { companyId, bcId, fields: Object.keys(patch) });
     return res.json({ ok: true, card });
 
   } catch (err) {
@@ -320,23 +397,13 @@ router.delete('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async
   }
 
   try {
-    // companyId in filter enforces tenant isolation
     const card = await BehaviorCard.findOneAndDelete({ _id: bcId, companyId }).lean();
+    if (!card) return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
 
-    if (!card) {
-      return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
-    }
-
-    // Invalidate Redis cache (fire-and-forget)
     const identifier = card.type === 'category_linked' ? card.category : card.standaloneType;
     _invalidateCacheFAF(companyId, card.type, identifier);
 
-    logger.info('[BC ROUTES] ✅ Deleted', {
-      companyId,
-      bcId,
-      name: card.name
-    });
-
+    logger.info('[BC ROUTES] ✅ Deleted', { companyId, bcId, name: card.name });
     return res.json({ ok: true, message: `Behavior Card "${card.name}" deleted` });
 
   } catch (err) {

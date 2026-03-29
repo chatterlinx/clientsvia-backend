@@ -69,16 +69,6 @@
       manager_request:     'Manager Request'
     },
 
-    AFTER_ACTION_LABELS: {
-      none:                  'None — informational response only',
-      collect_info_then_book:'collect_info_then_book — continue to booking',
-      route_to_payment:      'route_to_payment — payment flow',
-      escalate_to_human:     'escalate_to_human — escalation ladder',
-      take_message:          'take_message — after-hours capture',
-      schedule_callback:     'schedule_callback — callback queue',
-      transfer:              'transfer — live agent connect'
-    },
-
     STATUS_COLORS: {
       NOT_CONFIGURED: 'status-unconfigured',
       DISABLED:       'status-disabled',
@@ -274,7 +264,9 @@
     DOM.bcDoNotList        = document.getElementById('bc-donot-list');
     DOM.bcExamplesList     = document.getElementById('bc-examples-list');
     DOM.bcEnabled          = document.getElementById('bc-enabled');
-    DOM.bcAfterAction      = document.getElementById('bc-after-action');
+    DOM.bcGenerateBtn      = document.getElementById('bc-btn-generate');
+    DOM.bcGenerateBanner   = document.getElementById('bc-generate-banner');
+    DOM.bcGenerateMsg      = document.getElementById('bc-generate-msg');
     DOM.bcModalClose       = document.getElementById('bc-modal-close');
     DOM.bcModalCancel      = document.getElementById('bc-modal-cancel');
     DOM.bcModalSave        = document.getElementById('bc-modal-save');
@@ -685,8 +677,9 @@
       ? '<span class="eh-bc-badge eh-bc-badge--on">Enabled</span>'
       : '<span class="eh-bc-badge eh-bc-badge--off">Disabled</span>';
 
-    const doCount   = (card.rules && card.rules.do)   ? card.rules.do.length   : 0;
-    const dontCount = (card.rules && card.rules.doNot) ? card.rules.doNot.length : 0;
+    const doCount   = (card.rules && card.rules.do)               ? card.rules.do.length               : 0;
+    const dontCount = (card.rules && card.rules.doNot)            ? card.rules.doNot.length            : 0;
+    const exCount   = (card.rules && card.rules.exampleResponses) ? card.rules.exampleResponses.length : 0;
 
     el.innerHTML = `
       <div class="eh-bc-card-header">
@@ -703,9 +696,7 @@
       <div class="eh-bc-card-stats">
         ${doCount > 0   ? `<span>${doCount} Do rule${doCount !== 1 ? 's' : ''}</span>` : ''}
         ${dontCount > 0 ? `<span>${dontCount} Do Not rule${dontCount !== 1 ? 's' : ''}</span>` : ''}
-        ${card.afterAction && card.afterAction !== 'none'
-          ? `<span class="eh-bc-after-action">After: ${_escHtml(card.afterAction)}</span>`
-          : ''}
+        ${exCount > 0   ? `<span>${exCount} example${exCount !== 1 ? 's' : ''}</span>` : ''}
       </div>
     `;
 
@@ -753,7 +744,6 @@
       _renderRulesList(DOM.bcDoNotList,    card.rules && card.rules.doNot            || []);
       _renderRulesList(DOM.bcExamplesList, card.rules && card.rules.exampleResponses || []);
 
-      _setSelectValue(DOM.bcAfterAction, card.afterAction || 'none');
       DOM.bcEnabled.checked = card.enabled !== false;  // default true if not set
 
       DOM.bcModalDelete.style.display = 'inline-flex';
@@ -792,7 +782,6 @@
       _renderRulesList(DOM.bcDoNotList,    []);
       _renderRulesList(DOM.bcExamplesList, []);
 
-      _setSelectValue(DOM.bcAfterAction, 'none');
       DOM.bcEnabled.checked = true;  // new cards default to active
 
       DOM.bcModalDelete.style.display = 'none';
@@ -888,7 +877,6 @@
         doNot:            _collectRulesFromList(DOM.bcDoNotList),
         exampleResponses: _collectRulesFromList(DOM.bcExamplesList)
       },
-      afterAction: DOM.bcAfterAction.value || 'none',
       enabled:     DOM.bcEnabled.checked
     };
 
@@ -897,13 +885,12 @@
 
     try {
       if (state.editingBcId) {
-        // PATCH — only patchable fields (name, tone, rules, afterAction, enabled)
+        // PATCH — only patchable fields (name, tone, rules, enabled)
         const patchPayload = {
-          name:        payload.name,
-          tone:        payload.tone,
-          rules:       payload.rules,
-          afterAction: payload.afterAction,
-          enabled:     payload.enabled
+          name:    payload.name,
+          tone:    payload.tone,
+          rules:   payload.rules,
+          enabled: payload.enabled
         };
         await apiUpdateBehaviorCard(state.editingBcId, patchPayload);
         showToast('success', `Behavior Card "${name}" updated`);
@@ -1157,6 +1144,64 @@
   }
 
   // ==========================================================================
+  // BC AI GENERATION
+  // ==========================================================================
+
+  /**
+   * _generateBC — Call the /generate endpoint, then populate all modal fields
+   * with the draft. Owner reviews and edits before clicking Save.
+   */
+  async function _generateBC() {
+    const type         = state.editingBcType || (DOM.bcCategoryGroup?.style.display !== 'none' ? 'category_linked' : 'standalone');
+    const category     = DOM.bcCategory?.value?.trim();
+    const standaloneType = DOM.bcStandaloneType?.value?.trim();
+
+    if (type === 'category_linked' && !category) {
+      showToast('error', 'Select a KC Category first, then Generate');
+      return;
+    }
+    if (type === 'standalone' && !standaloneType) {
+      showToast('error', 'Select a Standalone Type first, then Generate');
+      return;
+    }
+
+    // Show in-progress banner
+    if (DOM.bcGenerateBanner) DOM.bcGenerateBanner.style.display = 'block';
+    if (DOM.bcGenerateMsg)    DOM.bcGenerateMsg.textContent       = '✨ Generating rules and examples with AI…';
+    if (DOM.bcGenerateBtn)    DOM.bcGenerateBtn.disabled          = true;
+
+    try {
+      const body = { type, category, standaloneType };
+      const data = await apiFetch(
+        `/api/admin/behavior-cards/company/${state.companyId}/behavior-cards/generate`,
+        { method: 'POST', body: JSON.stringify(body) }
+      );
+
+      if (!data.ok || !data.draft) throw new Error(data.error || 'No draft returned');
+
+      const d = data.draft;
+
+      // Populate form fields with the AI draft
+      if (d.name && DOM.bcName)  DOM.bcName.value = d.name;
+      if (d.tone && DOM.bcTone)  DOM.bcTone.value = d.tone;
+      if (d.rules?.do)               _renderRulesList(DOM.bcDoList,      d.rules.do);
+      if (d.rules?.doNot)            _renderRulesList(DOM.bcDoNotList,   d.rules.doNot);
+      if (d.rules?.exampleResponses) _renderRulesList(DOM.bcExamplesList, d.rules.exampleResponses);
+
+      if (DOM.bcGenerateMsg) {
+        DOM.bcGenerateMsg.textContent = `✓ Generated — review the rules below and edit as needed before saving.`;
+        DOM.bcGenerateBanner.style.background = '#f0fdf4';
+      }
+
+    } catch (err) {
+      showToast('error', err.message || 'AI generation failed — try again');
+      if (DOM.bcGenerateBanner) DOM.bcGenerateBanner.style.display = 'none';
+    } finally {
+      if (DOM.bcGenerateBtn) DOM.bcGenerateBtn.disabled = false;
+    }
+  }
+
+  // ==========================================================================
   // EVENT LISTENERS
   // ==========================================================================
 
@@ -1227,6 +1272,11 @@
     DOM.bcModal.addEventListener('click', e => {
       if (e.target === DOM.bcModal) closeBcModal();
     });
+
+    // BC Modal — Generate with AI
+    if (DOM.bcGenerateBtn) {
+      DOM.bcGenerateBtn.addEventListener('click', _generateBC);
+    }
 
     // BC Modal — Add rule/example buttons
     DOM.btnAddDo.addEventListener('click',      () => _addRuleToList('do'));

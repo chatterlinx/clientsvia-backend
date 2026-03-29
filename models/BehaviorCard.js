@@ -12,7 +12,7 @@
  *
  *   KC answers the question.
  *   BC governs how the answer is delivered — tone, rules, do/do-not, and
- *   what the engine does after the response is spoken.
+ *   example responses Groq calibrates from.
  *
  * TWO TYPES:
  *
@@ -25,6 +25,11 @@
  *     Governs call flow scenarios that have no KC card underneath.
  *     Examples: inbound_greeting, discovery_flow, escalation_ladder,
  *               after_hours_intake, mid_flow_interrupt.
+ *
+ *     NOTE: standalone BC documents are stored but not yet consumed by any
+ *     engine flow. forStandalone() in BehaviorCardService is built and ready —
+ *     wire it when building each standalone scenario (build steps 8b–11 in
+ *     the platform build plan). Category-linked BC is fully wired today.
  *
  * UNIQUENESS:
  *   One category_linked BC per company per category.
@@ -50,20 +55,6 @@ const mongoose = require('mongoose');
 // ============================================================================
 // CONSTANTS  (exported for use in routes and services)
 // ============================================================================
-
-/**
- * Valid values for the afterAction field.
- * The Engine Hub reads this after Groq speaks to determine the next step.
- */
-const AFTER_ACTIONS = [
-  'collect_info_then_book', // Continue to collect name/address/phone, then book
-  'route_to_payment',       // Route to payment handling flow
-  'escalate_to_human',      // Trigger the 4-rung escalation ladder
-  'take_message',           // After-hours: capture caller info for callback
-  'schedule_callback',      // Add caller to callback queue with time window
-  'transfer',               // Live transfer to available human agent
-  'none'                    // Pure informational response — no follow-up action
-];
 
 /**
  * Valid values for standaloneType.
@@ -133,8 +124,9 @@ const behaviorCardSchema = new mongoose.Schema({
   },
 
   // ── Behavior rules ────────────────────────────────────────────────────────────
-  // These fields are injected into the Groq context package on every relevant turn.
+  // These fields are injected into the Groq system prompt on every relevant turn.
   // Groq reads them to calibrate tone, apply restrictions, and shape the response.
+  // AI-generated via POST /generate endpoint in behaviorCards.js — owners review/edit.
 
   tone: {
     type:      String,
@@ -160,68 +152,13 @@ const behaviorCardSchema = new mongoose.Schema({
       comment: 'Prohibition rules. e.g. ["Never volunteer extra pricing not asked about", "Never apologize for the cost"]'
     },
 
-    // Model spoken responses — Groq calibrates voice register and length from these
+    // Model spoken responses — Groq calibrates voice register and length from these.
+    // These are the single most powerful calibration signal — two good examples
+    // teach Groq more about expected length and tone than any amount of rules.
     exampleResponses: {
       type:    [String],
       default: [],
-      comment: 'Example utterances that show the correct tone, length, and pivot pattern.'
-    }
-  },
-
-  // ── After action ─────────────────────────────────────────────────────────────
-  // The Engine Hub reads this field after Groq has spoken to determine what to do next.
-  // This is the bridge between Groq's spoken response and the engine's next routing decision.
-  afterAction: {
-    type:    String,
-    enum:    AFTER_ACTIONS,
-    default: 'none',
-    comment: 'Routing action the engine executes after delivering this BC response.'
-  },
-
-  // ── Escalation config  (escalation_ladder standalone only) ──────────────────
-  // Populated only when standaloneType === 'escalation_ladder'.
-  // Controls the 4-rung escalation ladder behavior for this company.
-  // All other BC types should leave this as default (not null — Mongoose embedded).
-  escalationConfig: {
-    tryHoldAndDeescalate: {
-      type:    Boolean,
-      default: true,
-      comment: 'Rung 1: attempt de-escalation before climbing the ladder.'
-    },
-    confirmBeforeTransfer: {
-      type:    Boolean,
-      default: true,
-      comment: 'Rung 4: ask caller to confirm before connecting to live agent.'
-    },
-    offerAlternatives: {
-      voicemail: {
-        type:    Boolean,
-        default: true,
-        comment: 'Rung 3 option: offer to leave a voicemail.'
-      },
-      callbackScheduling: {
-        type:    Boolean,
-        default: true,
-        comment: 'Rung 3 option: offer to schedule a callback with a time window.'
-      },
-      serviceAppointment: {
-        type:    Boolean,
-        default: false,
-        comment: 'Rung 3 option: offer to book a service appointment as an alternative.'
-      }
-    },
-    emergencyLine: {
-      enabled: {
-        type:    Boolean,
-        default: false,
-        comment: 'When true, emergency line option is presented at Rung 3.'
-      },
-      number: {
-        type:    String,
-        default: null,
-        trim:    true,
-        comment: 'Emergency line phone number. Only used when enabled is true.'
-      }
+      comment: 'Example utterances showing correct tone, length, and pivot pattern. Groq pattern-matches these.'
     }
   },
 
@@ -288,7 +225,7 @@ behaviorCardSchema.index(
 /**
  * findForCategory — Load the Behavior Card for a given KC category.
  *
- * Called by the Engine Hub when delivering a KC card response.
+ * Called by KnowledgeContainerService.answer() when delivering a KC response.
  * Returns null if no BC is configured for this category — engine degrades
  * gracefully (Groq responds without BC behavior rules).
  *
@@ -308,8 +245,14 @@ behaviorCardSchema.statics.findForCategory = function (companyId, category) {
 /**
  * findStandalone — Load a standalone Behavior Card by standaloneType.
  *
- * Called by the Engine Hub for flow-governing scenarios (greeting,
- * escalation, after-hours, etc.) that operate without a KC card.
+ * Called by BehaviorCardService.forStandalone(). Service is built and ready.
+ * Wire call sites when building each standalone scenario:
+ *   - inbound_greeting   → HybridReceptionistLLM.js (build step 11)
+ *   - discovery_flow     → DiscoveryNotesService (build step 11)
+ *   - escalation_ladder  → escalation engine (build step 8c)
+ *   - after_hours_intake → v2twilio.js after-hours gate (build step TBD)
+ *   - mid_flow_interrupt → ConversationEngine.js (build step TBD)
+ *
  * Returns null if not configured — engine degrades gracefully.
  *
  * @param  {string}          companyId
@@ -331,6 +274,5 @@ behaviorCardSchema.statics.findStandalone = function (companyId, standaloneType)
 
 const BehaviorCard = mongoose.model('BehaviorCard', behaviorCardSchema, 'behaviorCards');
 
-module.exports                   = BehaviorCard;
-module.exports.AFTER_ACTIONS     = AFTER_ACTIONS;
-module.exports.STANDALONE_TYPES  = STANDALONE_TYPES;
+module.exports                  = BehaviorCard;
+module.exports.STANDALONE_TYPES = STANDALONE_TYPES;

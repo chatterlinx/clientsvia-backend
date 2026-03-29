@@ -282,7 +282,6 @@ function formatForGroq(bc) {
     bc.rules.exampleResponses.forEach((ex, i) => lines.push(`  [${i + 1}] "${ex}"`));
   }
 
-  lines.push(`\nAFTER ACTION: ${bc.afterAction}`);
   lines.push(divider + '\n');
 
   return lines.join('\n');
