@@ -55,6 +55,7 @@
 
 const logger   = require('../../utils/logger');
 const Customer = require('../../models/Customer');
+const LostLead = require('../../models/LostLead');
 
 // ── Outcome constants ────────────────────────────────────────────────────────
 
@@ -195,6 +196,52 @@ async function persist(companyId, callSid, customerId, callSummaryId, durationSe
         logger.warn('[CallOutcome] Failed to write to CallSummary (non-fatal)', {
           callSummaryId, error: csErr.message
         });
+      }
+    }
+
+    // ── LOST LEAD: write to LostLeads collection (Step 10) ──────────────────
+    // Fires when outcome === BOOKING_STARTED — caller had CommittedAct intent
+    // but left without confirming.  Idempotent — unique index on callSid prevents
+    // duplicates if status-callback fires twice.
+    if (result.isLostLead) {
+      try {
+        const dn        = notesEntry || {};
+        const tempFields = dn.temp || {};
+
+        // Build caller name from temp fields or Customer record
+        const callerFirstName = tempFields.firstName || null;
+        const callerLastName  = tempFields.lastName  || null;
+        const callerFullName  = [callerFirstName, callerLastName].filter(Boolean).join(' ') || null;
+
+        await LostLead.create({
+          companyId:  companyId,
+          callSid,
+          customerId: customerId || null,
+          callerPhone: tempFields.phone || null,
+          callerName:  callerFullName,
+          discoverySnapshot: {
+            callReason:    dn.callReason    || null,
+            serviceType:   tempFields.serviceType  || null,
+            urgency:       dn.urgency       || tempFields.urgency       || null,
+            issue:         tempFields.issue || null,
+            preferredDate: tempFields.preferredDate || null,
+            preferredTime: tempFields.preferredTime || null,
+            objective:     dn.objective     || null,
+            turnCount:     dn.turnNumber    || dn.turnCount || 0,
+          },
+          callStartedAt:       dn.startedAt ? new Date(dn.startedAt) : null,
+          callEndedAt:         new Date(),
+          callDurationSeconds: durationSeconds,
+          status: 'NEW',
+        });
+
+        logger.info('[CallOutcome] LostLead written', { companyId, callSid, callerName: callerFullName });
+
+      } catch (llErr) {
+        // Duplicate key = already written (idempotent) — not an error
+        if (llErr.code !== 11000) {
+          logger.warn('[CallOutcome] LostLead write failed (non-fatal)', { callSid, error: llErr.message });
+        }
       }
     }
 
