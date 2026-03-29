@@ -131,6 +131,10 @@
       const data = await _api('GET', `${apiBase}/settings`);
       bookingFieldConfig = data.bookingFieldConfig || {};
       _renderFieldList();
+      // Load discriminator if one is saved
+      if (data.discriminatorQuestion) {
+        _loadDiscriminatorUI(data.discriminatorQuestion);
+      }
     } catch (err) {
       _toast('error', `Failed to load settings: ${err.message}`);
     }
@@ -333,6 +337,116 @@
       .replace(/[^a-zA-Z0-9_]/g, '');
   }
 
+  // ── Discriminator Question ────────────────────────────────────────────────
+  // State for the in-memory discriminator being edited
+  let discriminatorConfig = null; // { text, field, silentAboutPlan, options: [] }
+
+  function toggleDiscriminator(enabled) {
+    const body = document.getElementById('discriminatorBody');
+    if (body) body.style.display = enabled ? '' : 'none';
+    if (enabled && discriminatorConfig === null) {
+      // First open — init with empty config
+      discriminatorConfig = { text: '', field: 'planStatus', silentAboutPlan: true, options: [] };
+      _renderDiscriminatorOptions();
+    }
+  }
+
+  function _renderDiscriminatorOptions() {
+    const list = document.getElementById('dqOptionsList');
+    if (!list) return;
+    const opts = discriminatorConfig?.options || [];
+    if (opts.length === 0) {
+      list.innerHTML = `<p style="font-size:.75rem;color:#94a3b8;margin:0;">No options yet — add at least 2.</p>`;
+      return;
+    }
+    list.innerHTML = opts.map((opt, i) => `
+      <div class="dq-option-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+        <div>
+          <label class="form-label" style="font-size:.7rem;">Label (shown in logs)</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.label || '')}" oninput="window.DNPage.updateDqOption(${i},'label',this.value)" placeholder="Plan Member" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size:.7rem;">Value (stored in temp)</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.value || '')}" oninput="window.DNPage.updateDqOption(${i},'value',this.value)" placeholder="member" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size:.7rem;">serviceType override</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.serviceTypeOverride || '')}" oninput="window.DNPage.updateDqOption(${i},'serviceTypeOverride',this.value)" placeholder="maintenance_plan_visit" />
+        </div>
+        <button onclick="window.DNPage.removeDqOption(${i})" title="Remove option" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1rem;padding:4px;align-self:center;">✕</button>
+        <div style="grid-column:1/-1;">
+          <label class="form-label" style="font-size:.7rem;">Match keywords (comma separated — what the caller might say)</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords || []).join(', '))}" oninput="window.DNPage.updateDqOption(${i},'keywords',this.value)" placeholder="plan, member, yes, I am, annual" />
+        </div>
+      </div>`).join('');
+  }
+
+  function _esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function addDiscriminatorOption() {
+    if (!discriminatorConfig) discriminatorConfig = { text: '', field: 'planStatus', silentAboutPlan: true, options: [] };
+    discriminatorConfig.options.push({ label: '', value: '', serviceTypeOverride: '', keywords: [] });
+    _renderDiscriminatorOptions();
+  }
+
+  function updateDqOption(idx, key, value) {
+    if (!discriminatorConfig?.options[idx]) return;
+    if (key === 'keywords') {
+      discriminatorConfig.options[idx].keywords = value.split(',').map(s => s.trim()).filter(Boolean);
+    } else {
+      discriminatorConfig.options[idx][key] = value;
+    }
+  }
+
+  function removeDqOption(idx) {
+    if (!discriminatorConfig) return;
+    discriminatorConfig.options.splice(idx, 1);
+    _renderDiscriminatorOptions();
+  }
+
+  async function saveDiscriminator() {
+    if (!companyId) return _toast('error', 'No company selected');
+    // Read current UI values
+    const text   = document.getElementById('dqText')?.value?.trim();
+    const field  = document.getElementById('dqField')?.value?.trim() || 'planStatus';
+    const silent = document.getElementById('dqSilent')?.checked || false;
+    if (!text) return _toast('error', 'Question text is required');
+    if (!discriminatorConfig?.options?.length || discriminatorConfig.options.length < 2) {
+      return _toast('error', 'Add at least 2 answer options');
+    }
+    // Validate options
+    for (const opt of discriminatorConfig.options) {
+      if (!opt.label || !opt.value) return _toast('error', 'Each option needs a label and a value');
+    }
+    const dq = { text, field, silentAboutPlan: silent, options: discriminatorConfig.options };
+    try {
+      await _api('PATCH', `${apiBase}/settings`, { discriminatorQuestion: dq });
+      discriminatorConfig = dq;
+      _toast('success', 'Pre-collection question saved');
+    } catch (err) {
+      _toast('error', `Save failed: ${err.message}`);
+    }
+  }
+
+  function _loadDiscriminatorUI(dq) {
+    if (!dq) return;
+    discriminatorConfig = dq;
+    const enabledEl = document.getElementById('discriminatorEnabled');
+    if (enabledEl) {
+      enabledEl.checked = true;
+      toggleDiscriminator(true);
+    }
+    const textEl   = document.getElementById('dqText');
+    const fieldEl  = document.getElementById('dqField');
+    const silentEl = document.getElementById('dqSilent');
+    if (textEl)   textEl.value   = dq.text   || '';
+    if (fieldEl)  fieldEl.value  = dq.field  || 'planStatus';
+    if (silentEl) silentEl.checked = dq.silentAboutPlan !== false;
+    _renderDiscriminatorOptions();
+  }
+
   // ── Public surface ────────────────────────────────────────────────────────
   window.DNPage = {
     loadSettings,
@@ -344,7 +458,13 @@
     closeAddField,
     saveNewField,
     toggleRequired,
-    removeField
+    removeField,
+    // Discriminator
+    toggleDiscriminator,
+    addDiscriminatorOption,
+    updateDqOption,
+    removeDqOption,
+    saveDiscriminator,
   };
 
 })();

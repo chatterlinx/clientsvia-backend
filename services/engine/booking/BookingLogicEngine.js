@@ -48,6 +48,10 @@ const RETURN_TO_BOOKING_Q = "Does that answer your question? Shall we get back t
 
 const STEPS = {
   INIT:                 'INIT',
+  DISCRIMINATOR:        'DISCRIMINATOR',         // Phase 0 — ONE pre-qualifying question before any collection
+                                                 // Classifies caller type (e.g. plan member vs first-timer)
+                                                 // Sets serviceType override + custom field in discoveryNotes.temp
+                                                 // Configured per company in bookingFieldConfig.discriminatorQuestion
   CONFIRM_RECOGNITION:  'CONFIRM_RECOGNITION',  // T0 — confirm CRM-matched caller identity
   CONFIRM_NAME:         'CONFIRM_NAME',          // T0 — confirm LLM-prefilled name from discovery
   COLLECT_NAME:         'COLLECT_NAME',
@@ -212,6 +216,13 @@ async function loadCompanyConfig(companyId) {
 
       // Caller recognition (new)
       callerRecognition: bc.callerRecognition || { enabled: false },
+
+      // Discriminator question — ONE pre-qualifying question asked BEFORE any field collection.
+      // Classifies caller type (e.g. "plan member" vs "first-time visit") so the engine
+      // can set the correct serviceType, schedPriority, and pricing tier before gathering name/phone.
+      // Null = no discriminator (skip phase entirely, go straight to collection).
+      // Stored in Company.aiAgentSettings.agent2.bookingConfig.discriminatorQuestion per company.
+      discriminatorQuestion: bc.discriminatorQuestion || null,
 
       // Calendar connection
       calendarConnected: !!(company.googleCalendar?.accessToken),
@@ -680,6 +691,10 @@ function _isClearQuestion(userInput) {
  */
 function _getStepReAnchor(step, config) {
   switch (step) {
+    case STEPS.DISCRIMINATOR: {
+      const dq = config.discriminatorQuestion;
+      return dq?.text || 'Could you let me know which option applies to you?';
+    }
     case STEPS.COLLECT_NAME:          return config.nameReAnchor    || config.askNamePrompt    || 'Could I get your first and last name?';
     case STEPS.COLLECT_PHONE:         return config.phoneReAnchor   || config.askPhonePrompt   || 'What phone number should we use to reach you?';
     case STEPS.COLLECT_ADDRESS:       return config.addressReAnchor || config.askAddressPrompt || 'What is the service address?';
@@ -723,6 +738,7 @@ function _getMissingRequiredFields(ctx, config) {
  */
 async function _runStepHandler(ctx, userInput, config, companyId, isTest, events) {
   switch (ctx.step) {
+    case STEPS.DISCRIMINATOR:       return processDiscriminator(ctx, userInput, config, companyId, events);
     case STEPS.INIT:                return processInit(ctx, config, companyId, isTest, events);
     case STEPS.CONFIRM_RECOGNITION: return processConfirmRecognition(ctx, userInput, config, companyId, isTest, events);
     case STEPS.CONFIRM_NAME:        return processConfirmName(ctx, userInput, config, companyId, isTest, events);
@@ -752,6 +768,107 @@ async function _runStepHandler(ctx, userInput, config, companyId, isTest, events
 }
 
 /* ============================================================================
+   STEP: DISCRIMINATOR  (Phase 0 — fires before everything else)
+   ============================================================================
+   Receives the caller's answer to the ONE pre-qualifying question.
+   Matches against options[] using keyword detection (no Groq needed — it's
+   a forced choice, not open-ended). Sets ctx._discriminatorAnswered and
+   writes the result into discoveryNotes.temp (fire-and-forget).
+   Falls through to INIT on any match; re-asks on no-match.
+   ============================================================================ */
+
+async function processDiscriminator(ctx, userInput, config, companyId, events) {
+  const dq   = ctx._discriminatorQuestion || config.discriminatorQuestion;
+  const opts  = dq?.options || [];
+  const input = (userInput || '').toLowerCase().trim();
+
+  events.push({ type: 'BL0_DISCRIMINATOR_RECEIVE', input: input.slice(0, 80), timestamp: Date.now() });
+
+  if (!input || opts.length === 0) {
+    // Empty input — re-ask
+    return {
+      nextPrompt: dq?.reAskText || dq?.text || 'Could you clarify which option applies to you?',
+      bookingCtx: ctx,
+      completed:  false,
+      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_REASK_EMPTY' }
+    };
+  }
+
+  // ── Match caller input to one of the options ─────────────────────────────
+  // Strategy: each option has a `keywords[]` array (owner-defined); fall back
+  // to matching against the option label words. First match wins.
+  let matched = null;
+  for (const opt of opts) {
+    const searchTerms = [
+      ...(Array.isArray(opt.keywords) ? opt.keywords : []),
+      ...(opt.label ? opt.label.toLowerCase().split(/\W+/).filter(w => w.length > 2) : []),
+    ];
+    const hit = searchTerms.some(kw => input.includes(kw.toLowerCase()));
+    if (hit) { matched = opt; break; }
+  }
+
+  // Fallback: first/second ordinal detection ("first option", "option 1")
+  if (!matched) {
+    if (/\b(first|option\s*1|one|1st)\b/.test(input) && opts[0]) matched = opts[0];
+    else if (/\b(second|option\s*2|two|2nd)\b/.test(input) && opts[1]) matched = opts[1];
+  }
+
+  if (!matched) {
+    // No match — re-ask with option labels listed explicitly
+    const optList = opts.map((o, i) => `${i + 1}. ${o.label}`).join(' or ');
+    events.push({ type: 'BL0_DISCRIMINATOR_NO_MATCH', input: input.slice(0, 80), timestamp: Date.now() });
+    return {
+      nextPrompt: dq?.reAskText
+        || `I want to make sure I route you correctly — ${optList}?`,
+      bookingCtx: ctx,
+      completed:  false,
+      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_REASK_NOMATCH' }
+    };
+  }
+
+  // ── Match found — apply overrides ─────────────────────────────────────────
+  ctx._discriminatorAnswered       = true;
+  ctx._discriminatorValue          = matched.value;
+  if (matched.serviceTypeOverride) {
+    ctx._discriminatorServiceType  = matched.serviceTypeOverride;
+  }
+  if (matched.schedPriority) {
+    ctx._discriminatorSchedPriority = matched.schedPriority;
+    if (matched.schedPriority === 'high' || matched.schedPriority === 'urgent') {
+      ctx.preferredDay  = ctx.preferredDay  || 'asap';
+      ctx.preferredTime = ctx.preferredTime || 'earliest';
+    }
+  }
+
+  // Store the answer in collectedCustomFields so the CONFIRM readback can include it
+  if (dq.field) {
+    ctx.collectedCustomFields = ctx.collectedCustomFields || {};
+    ctx.collectedCustomFields[dq.field] = matched.value;
+  }
+
+  // Fire-and-forget: write to discoveryNotes.temp so the LLM knows from this turn on
+  if (ctx.callSid && dq.field) {
+    const DiscoveryNotesService = require('../../discoveryNotes/DiscoveryNotesService');
+    const dnPatch = { temp: { [dq.field]: matched.value } };
+    if (matched.serviceTypeOverride) dnPatch.temp.serviceType = matched.serviceTypeOverride;
+    DiscoveryNotesService.update(companyId, ctx.callSid, dnPatch)
+      .catch(e => logger.warn(`[${ENGINE_ID}] Discriminator DN update failed`, { companyId, err: e.message }));
+  }
+
+  events.push({
+    type:          'BL0_DISCRIMINATOR_MATCHED',
+    value:         matched.value,
+    serviceType:   matched.serviceTypeOverride || null,
+    schedPriority: matched.schedPriority || null,
+    timestamp:     Date.now()
+  });
+
+  // Advance to INIT — the discriminator check will now be skipped (_discriminatorAnswered = true)
+  ctx.step = STEPS.INIT;
+  return processInit(ctx, config, companyId, false, events);
+}
+
+/* ============================================================================
    STEP: INIT
    ============================================================================ */
 
@@ -762,6 +879,25 @@ async function processInit(ctx, config, companyId, isTest, events) {
   // Plays ONCE at booking entry (this function is only ever called once per
   // booking flow).  Pre-cached as InstantAudio on admin save for <50 ms play.
   const bridge = config.bridgePhrase ? `${config.bridgePhrase} ` : '';
+
+  // ── Phase 0: Discriminator ────────────────────────────────────────────────
+  // If the company has a discriminatorQuestion configured AND we haven't asked it yet,
+  // ask it FIRST — before caller recognition, before collecting any fields.
+  // ONE question. ONE answer. Sets serviceType + custom discriminator field in temp.
+  // Example: "Are you on our annual plan, or is this a first-time visit?"
+  // Skipped if: no discriminatorQuestion configured, or already answered this session.
+  if (config.discriminatorQuestion && !ctx._discriminatorAnswered) {
+    const dq = config.discriminatorQuestion;
+    ctx.step = STEPS.DISCRIMINATOR;
+    ctx._discriminatorQuestion = dq; // stash so processDiscriminator has it without re-loading config
+    events.push({ type: 'BL0_DISCRIMINATOR_ASK', field: dq.field, timestamp: Date.now() });
+    return {
+      nextPrompt: `${bridge}${dq.text}`,
+      bookingCtx: ctx,
+      completed:  false,
+      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_ASK' }
+    };
+  }
 
   // ── T0: Caller Recognition ─────────────────────────────────────────────────
   // If enabled and Twilio ANI is present, look up the caller in the CRM.

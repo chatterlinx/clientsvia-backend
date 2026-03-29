@@ -676,6 +676,59 @@ CALL DISCOVERY STATE  (v2 — live, turn by turn)
     </div>
   </div>
 
+  <!-- ── Discriminator Question ──────────────────────────────────────── -->
+  <div class="card" style="margin-top:20px;">
+    <div class="card-header">
+      <span class="card-title">Pre-Collection Question <span style="font-size:.75rem;font-weight:400;color:#64748b;margin-left:6px;">— asked ONCE before any field collection begins</span></span>
+      <label class="toggle" style="margin:0;">
+        <input type="checkbox" id="discriminatorEnabled" onchange="window.DNPage.toggleDiscriminator(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="card-body" id="discriminatorBody" style="display:none;">
+
+      <p style="font-size:.8125rem;color:#475569;margin:0 0 16px;">
+        One qualifying question asked before name, phone, or address — the answer sets the service type
+        and can change scheduling priority. Use this to route callers before collecting their information.
+        <strong>Example:</strong> "Are you on our annual plan, or is this a first-time visit?"
+      </p>
+
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">Question Text <span style="color:#ef4444;">*</span></label>
+        <input type="text" class="form-input" id="dqText"
+          placeholder="Are you currently on our annual maintenance plan, or would this be a first-time tune-up visit?" />
+        <p style="font-size:.75rem;color:#64748b;margin:4px 0 0;">Spoken verbatim to the caller. Keep it under 25 words.</p>
+      </div>
+
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">Field Key</label>
+        <input type="text" class="form-input" id="dqField" placeholder="planStatus"
+          style="max-width:220px;" />
+        <p style="font-size:.75rem;color:#64748b;margin:4px 0 0;">Stored in discoveryNotes.temp under this key.</p>
+      </div>
+
+      <div class="form-group" style="margin-bottom:4px;">
+        <label class="toggle" style="gap:8px;">
+          <input type="checkbox" id="dqSilent" />
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">Silent about details — do not explain options unless caller asks</span>
+        </label>
+      </div>
+
+      <div style="margin:20px 0 12px;">
+        <div style="font-size:.8125rem;font-weight:600;color:#0f172a;margin-bottom:8px;">Answer Options</div>
+        <p style="font-size:.75rem;color:#64748b;margin:0 0 10px;">Define what each answer means. The agent matches what the caller says to the first matching option.</p>
+        <div id="dqOptionsList"></div>
+        <button class="btn btn-ghost" onclick="window.DNPage.addDiscriminatorOption()" style="margin-top:8px;font-size:.75rem;">+ Add Option</button>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" onclick="window.DNPage.saveDiscriminator()">Save Pre-Collection Question</button>
+      </div>
+
+    </div>
+  </div>
+
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════
