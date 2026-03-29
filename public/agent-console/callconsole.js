@@ -460,9 +460,74 @@
       };
       renderCallDetail();
       openModal();
+      // Async load DN panel — non-blocking, graceful degrade if no data
+      loadDiscoveryNotes(callSid).catch(() => {});
     } catch (error) {
       console.error('[CallConsole] Failed to load call details:', error);
       showToast('error', 'Load Failed', 'Could not load call details.');
+    }
+  }
+
+  /**
+   * Fetch and render the Discovery Notes panel for the open call detail.
+   * Fires after renderCallDetail() so the DN panel DOM elements exist.
+   */
+  async function loadDiscoveryNotes(callSid) {
+    const objEl   = document.getElementById('dnObjective');
+    const metaEl  = document.getElementById('dnTurnMeta');
+    const bodyEl  = document.getElementById('dnPanelBody');
+    if (!bodyEl) return;
+
+    try {
+      const res  = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/calls/${callSid}/discovery-notes`);
+      const dn   = res?.discoveryNotes;
+
+      if (!dn) {
+        if (objEl) objEl.textContent = 'No data';
+        bodyEl.innerHTML = '<div class="dn-empty" style="padding:8px 0;">No discoveryNotes found for this call.</div>';
+        return;
+      }
+
+      // Update panel header
+      if (objEl) {
+        objEl.textContent = dn.objective || 'INTAKE';
+        objEl.className   = `dn-panel-objective obj-${dn.objective || 'INTAKE'}`;
+      }
+      if (metaEl) {
+        metaEl.textContent = `${dn.turnCount || 0} turns`;
+      }
+
+      // Build field rows
+      const tempFields = Object.entries(dn.temp || {}).filter(([k, v]) => k !== 'confidence' && v != null);
+      const confFields = Object.entries(dn.confirmed || {}).filter(([, v]) => v != null);
+
+      const tempRows = tempFields.length
+        ? tempFields.map(([k, v]) => `<div class="dn-field-item"><span class="dn-field-key">${escapeHtml(k)}</span><span class="dn-field-value">${escapeHtml(String(v))}</span></div>`).join('')
+        : '<div class="dn-empty">No temp fields captured</div>';
+
+      const confRows = confFields.length
+        ? confFields.map(([k, v]) => `<div class="dn-field-item"><span class="dn-field-key">${escapeHtml(k)}</span><span class="dn-field-value">${escapeHtml(String(v))}</span></div>`).join('')
+        : '<div class="dn-empty">Not confirmed (BOOKING_CONFIRM not reached)</div>';
+
+      bodyEl.innerHTML = `
+        <div class="dn-cols">
+          <div>
+            <div class="dn-col-label temp">🔵 TEMP (at call end)</div>
+            ${tempRows}
+          </div>
+          <div>
+            <div class="dn-col-label confirmed">🟢 CONFIRMED (locked)</div>
+            ${confRows}
+          </div>
+        </div>
+        <div class="dn-meta-row">
+          <span>Reason: <strong>${escapeHtml(dn.callReason || '—')}</strong></span>
+          <span>Urgency: <strong>${escapeHtml(dn.urgency || '—')}</strong></span>
+          <span>Turns: <strong>${dn.turnCount || 0}</strong></span>
+          ${dn.callerName ? `<span>Caller: <strong>${escapeHtml(dn.callerName)}</strong></span>` : ''}
+        </div>`;
+    } catch (err) {
+      if (bodyEl) bodyEl.innerHTML = `<div class="dn-empty" style="padding:8px 0;">Could not load discovery notes: ${escapeHtml(err.message)}</div>`;
     }
   }
 
@@ -626,6 +691,20 @@
               <div class="llm-stat-label">Total</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Discovery Notes Panel -->
+      <div class="dn-panel" id="dnPanel">
+        <div class="dn-panel-header" id="dnPanelHeader" onclick="this.classList.toggle('open');document.getElementById('dnPanelBody').classList.toggle('open');">
+          <span>🧠</span>
+          <span class="dn-panel-title">Discovery Notes</span>
+          <span class="dn-panel-objective" id="dnObjective">Loading...</span>
+          <span class="dn-panel-meta" id="dnTurnMeta"></span>
+          <span class="dn-chevron">▼</span>
+        </div>
+        <div class="dn-panel-body" id="dnPanelBody">
+          <div style="font-size:.75rem;color:#64748b;padding:8px 0;">Loading discovery notes...</div>
         </div>
       </div>
 

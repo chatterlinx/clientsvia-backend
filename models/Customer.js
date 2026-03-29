@@ -74,7 +74,9 @@ const preferencesSchema = new Schema({
 const discoveryNoteSchema = new Schema({
     callSid:    { type: String, trim: true },
     capturedAt: { type: Date, default: Date.now },
-    entities:   { type: Schema.Types.Mixed, default: {} },   // { firstName, address, phone, confidence: {} }
+    // v2 two-phase model: temp{} = working hypothesis, confirmed{} = locked at UAPB BOOKING_CONFIRM
+    temp:       { type: Schema.Types.Mixed, default: {} },   // { firstName, address, phone, issue, serviceType, ..., confidence:{} }
+    confirmed:  { type: Schema.Types.Mixed, default: {} },   // locked snapshot — source of truth for charts
     callReason: { type: String, default: null },
     urgency:    { type: String, enum: ['low', 'medium', 'high', null], default: null },
     objective:  { type: String, enum: ['INTAKE', 'DISCOVERY', 'BOOKING', 'TRANSFER', 'CLOSING'], default: 'INTAKE' },

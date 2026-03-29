@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UAP Intelligence — ClientsVia</title>
+
+  <!-- ============================================================
+       UAP INTELLIGENCE CONSOLE
+       ClientsVia Agent Console · Version 1.0
+
+       WHAT THIS PAGE IS:
+         Utterance Act Parser — the vocabulary that routes every
+         caller utterance to the right knowledge in zero latency.
+         No Groq round-trip for classification. Pure rule-based
+         Layer 1 → Groq Layer 2 only on misses.
+
+       FOUR TABS:
+         1. Arrays    — daType grid + sub-types + trigger phrases.
+                        "Seed Standard Arrays" button.
+         2. UAPB      — Booking confirmation settings. IntentHold.
+                        GracefulPivot + ResumePrompt templates.
+                        Booking Fields (same source as DN page).
+         3. Pending   — Sub-types with classificationStatus=PENDING.
+                        Owner approves or overrides.
+         4. Calibration — Layer 1 hit rate once real calls run.
+                          Empty state until first 500 calls.
+
+       API BASE: /api/admin/agent2/company/:companyId/uap
+  ============================================================ -->
+
+  <style>
+    :root {
+      --color-primary:    #0ea5e9;
+      --color-primary-dk: #0284c7;
+      --color-primary-lt: #e0f2fe;
+      --color-success:    #10b981;
+      --color-success-lt: #d1fae5;
+      --color-success-dk: #059669;
+      --color-warning:    #f59e0b;
+      --color-warning-lt: #fef3c7;
+      --color-danger:     #ef4444;
+      --color-danger-lt:  #fee2e2;
+      --color-purple:     #8b5cf6;
+      --color-purple-lt:  #ede9fe;
+      --color-indigo:     #6366f1;
+      --color-indigo-lt:  #eef2ff;
+      --color-orange:     #f97316;
+      --color-orange-lt:  #ffedd5;
+      --color-teal:       #14b8a6;
+      --color-teal-lt:    #ccfbf1;
+
+      --bg-page:      #f0f9ff;
+      --bg-card:      #ffffff;
+      --bg-header:    #ffffff;
+
+      --text-primary:   #0f172a;
+      --text-secondary: #334155;
+      --text-muted:     #64748b;
+      --text-xs:        #94a3b8;
+
+      --border:        #e2e8f0;
+      --border-focus:  #0ea5e9;
+      --border-strong: #cbd5e1;
+
+      --radius-card: 12px;
+      --radius-sm:    8px;
+      --radius-xs:    6px;
+      --radius-pill:  999px;
+
+      --shadow-card:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-raised: 0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+
+      --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+
+      --transition: 150ms ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Page Header ─────────────────────────────────────────── */
+    .page-header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+      height: 56px;
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); cursor: pointer;
+      color: var(--text-muted); font-size: .813rem; font-weight: 500;
+      text-decoration: none; transition: all var(--transition); white-space: nowrap;
+    }
+    .btn-back:hover { background: var(--bg-page); }
+    .header-title-group { flex: 1; display: flex; align-items: baseline; gap: 10px; }
+    .header-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+    .header-company { font-size: .813rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+    .header-badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-orange-lt); color: var(--color-orange);
+      border: 1px solid #fed7aa; white-space: nowrap;
+    }
+    .header-version {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-purple-lt); color: var(--color-purple);
+      border: 1px solid #ddd6fe; white-space: nowrap;
+    }
+
+    /* ── Tab Nav ─────────────────────────────────────────────── */
+    .tab-nav {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; position: sticky; top: 56px; z-index: 100;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      background: none; border: none; cursor: pointer;
+      font-size: .813rem; font-weight: 500; color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      display: flex; align-items: center; gap: 6px;
+      transition: all var(--transition); white-space: nowrap;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    .tab-badge {
+      background: var(--color-danger); color: #fff;
+      font-size: .625rem; font-weight: 700; padding: 1px 5px;
+      border-radius: var(--radius-pill); min-width: 16px; text-align: center;
+    }
+
+    /* ── Content ─────────────────────────────────────────────── */
+    .tab-content { display: none; padding: 32px 24px; max-width: 1200px; margin: 0 auto; }
+    .tab-content.active { display: block; }
+
+    /* ── Hero Banner ─────────────────────────────────────────── */
+    .uap-hero {
+      border-radius: var(--radius-card);
+      padding: 32px 36px;
+      color: #fff;
+      margin-bottom: 28px;
+      position: relative; overflow: hidden;
+    }
+    .uap-hero::after {
+      content: '';
+      position: absolute; right: -40px; top: -40px;
+      width: 200px; height: 200px;
+      background: rgba(255,255,255,.04);
+      border-radius: 50%;
+    }
+    .uap-hero-title  { font-size: 1.375rem; font-weight: 700; margin-bottom: 8px; position:relative;z-index:1; }
+    .uap-hero-sub    { font-size: .875rem; opacity: .8; max-width: 560px; line-height: 1.6; position:relative;z-index:1; }
+    .uap-hero-meta   { margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; position:relative;z-index:1; }
+    .uap-hero-chip   {
+      font-size: .75rem; font-weight: 600; padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    }
+
+    /* ── Cards ───────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card-title { font-size: .875rem; font-weight: 700; color: var(--text-primary); flex: 1; }
+    .card-body  { padding: 20px; }
+
+    /* ── Array grid ──────────────────────────────────────────── */
+    .uap-array-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .uap-array-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .uap-array-card.inactive { opacity: .55; }
+    .uap-array-header {
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-page);
+      border-bottom: 1px solid var(--border);
+    }
+    .uap-array-title { font-size: .875rem; font-weight: 700; flex: 1; }
+    .uap-array-body  { padding: 12px 14px; }
+
+    .badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill); white-space: nowrap; display: inline-block;
+    }
+    .badge-standard { background: var(--bg-page); color: var(--text-muted); border: 1px solid var(--border); }
+    .badge-custom   { background: var(--color-orange-lt); color: var(--color-orange); border: 1px solid #fed7aa; }
+    .badge-active   { background: var(--color-success-lt); color: var(--color-success-dk); border: 1px solid #a7f3d0; }
+    .badge-inactive { background: var(--color-danger-lt); color: var(--color-danger); border: 1px solid #fca5a5; }
+    .badge-primary  { background: var(--color-primary-lt); color: var(--color-primary-dk); border: 1px solid #bae6fd; }
+
+    /* Sub-type row */
+    .uap-subtype { margin-bottom: 10px; }
+    .uap-subtype-label {
+      font-size: .75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .phrase-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .phrase-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: var(--radius-pill);
+      background: var(--color-indigo-lt); color: var(--color-indigo);
+      border: 1px solid #c7d2fe;
+      font-size: .688rem; font-weight: 500;
+    }
+    .phrase-pill .remove-phrase {
+      cursor: pointer; font-size: .625rem; opacity: .6;
+      border: none; background: none; padding: 0; color: inherit;
+      line-height: 1;
+    }
+    .phrase-pill .remove-phrase:hover { opacity: 1; }
+    .add-phrase-form { display: flex; gap: 6px; margin-top: 6px; }
+    .add-phrase-input {
+      flex: 1; padding: 4px 8px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); font-size: .75rem;
+      outline: none; transition: border-color var(--transition);
+    }
+    .add-phrase-input:focus { border-color: var(--color-primary); }
+    .add-phrase-btn {
+      padding: 4px 10px; background: var(--color-primary); color: #fff;
+      border: none; border-radius: var(--radius-xs); cursor: pointer;
+      font-size: .75rem; font-weight: 600;
+    }
+
+    /* Seed prompt overlay */
+    .seed-prompt {
+      text-align: center; padding: 48px 24px;
+    }
+    .seed-prompt-icon { font-size: 3rem; margin-bottom: 16px; }
+    .seed-prompt-title { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .seed-prompt-sub { font-size: .875rem; color: var(--text-muted); margin-bottom: 24px; max-width: 400px; margin-left: auto; margin-right: auto; }
+
+    /* ── UAPB tab ────────────────────────────────────────────── */
+    .uapb-section { margin-bottom: 24px; }
+    .uapb-section-title {
+      font-size: .875rem; font-weight: 700; color: var(--text-secondary);
+      margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .uapb-row {
+      display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px;
+    }
+    .uapb-label {
+      font-size: .813rem; font-weight: 600; color: var(--text-secondary);
+    }
+    .uapb-description {
+      font-size: .75rem; color: var(--text-muted); margin-bottom: 4px;
+    }
+    .form-textarea {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: .875rem; font-family: inherit; resize: vertical; min-height: 80px;
+      outline: none; transition: border-color var(--transition);
+    }
+    .form-textarea:focus { border-color: var(--color-primary); }
+    .form-hint {
+      font-size: .75rem; color: var(--text-muted); font-style: italic; margin-top: 3px;
+    }
+
+    /* Toggle */
+    .toggle-wrap { display: flex; align-items: center; gap: 6px; }
+    .toggle {
+      position: relative; display: inline-block;
+      width: 36px; height: 20px; cursor: pointer; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: var(--border-strong); border-radius: var(--radius-pill);
+      transition: background var(--transition);
+    }
+    .toggle-slider::after {
+      content: ''; position: absolute;
+      left: 2px; top: 2px; width: 16px; height: 16px;
+      background: #fff; border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform var(--transition);
+    }
+    .toggle input:checked + .toggle-slider { background: var(--color-success); }
+    .toggle input:checked + .toggle-slider::after { transform: translateX(16px); }
+
+    /* ── Pending tab ─────────────────────────────────────────── */
+    .pending-table { width: 100%; border-collapse: collapse; font-size: .813rem; }
+    .pending-table th {
+      text-align: left; padding: 8px 12px;
+      background: var(--bg-page); color: var(--text-muted);
+      font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .pending-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .pending-table tr:last-child td { border-bottom: none; }
+    .pending-table tr:hover td { background: var(--bg-page); }
+
+    .score-bar { background: var(--border); border-radius: 4px; height: 6px; width: 80px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 4px; background: var(--color-primary); }
+
+    /* ── Calibration tab ─────────────────────────────────────── */
+    .cal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .cal-stat {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 20px;
+      text-align: center;
+    }
+    .cal-stat-value { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
+    .cal-stat-label { font-size: .75rem; color: var(--text-muted); font-weight: 500; }
+    .cal-stat.layer1 .cal-stat-value  { color: var(--color-success); }
+    .cal-stat.layer2 .cal-stat-value  { color: var(--color-warning); }
+    .cal-stat.unknown .cal-stat-value { color: var(--color-danger); }
+
+    /* ── Buttons ─────────────────────────────────────────────── */
+    .btn {
+      padding: 8px 18px; border-radius: var(--radius-xs); border: none; cursor: pointer;
+      font-size: .813rem; font-weight: 600; transition: all var(--transition);
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--color-primary); color: #fff; }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg-page); }
+    .btn-seed {
+      background: linear-gradient(135deg, #0f172a, #1d4ed8);
+      color: #fff; font-size: .875rem; padding: 12px 28px;
+      border-radius: var(--radius-sm); border: none; cursor: pointer; font-weight: 700;
+      transition: all var(--transition);
+    }
+    .btn-seed:hover { box-shadow: 0 4px 16px rgba(29,78,216,.35); transform: translateY(-1px); }
+    .btn-seed.seeded {
+      background: var(--color-success-lt); color: var(--color-success-dk);
+      border: 1px solid #a7f3d0;
+    }
+
+    /* Service tab mini */
+    .service-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .service-tab-btn {
+      padding: 5px 14px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+      background: var(--bg-card); cursor: pointer;
+      font-size: .813rem; font-weight: 500; color: var(--text-muted);
+      transition: all var(--transition);
+    }
+    .service-tab-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .service-tab-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+    /* Booking field row (UAPB tab) */
+    .field-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      border-radius: var(--radius-xs); border: 1px solid var(--border);
+      background: var(--bg-card); margin-bottom: 8px;
+    }
+    .field-row.is-standard { background: var(--bg-page); }
+    .field-info { flex: 1; }
+    .field-label-txt { font-size: .875rem; font-weight: 600; }
+    .field-key-txt   { font-size: .75rem; color: var(--text-muted); font-family: var(--font-mono); }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center; padding: 48px 24px; color: var(--text-muted);
+    }
+    .empty-icon  { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-title { font-size: .875rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-sub   { font-size: .813rem; }
+
+    /* Toast */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-radius: var(--radius-sm);
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+      font-size: .875rem; font-weight: 500; color: #fff;
+      animation: toastIn .2s ease;
+      min-width: 240px; max-width: 360px;
+    }
+    .toast.success { background: var(--color-success); }
+    .toast.error   { background: var(--color-danger); }
+    @keyframes toastIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- ─── Page Header ─────────────────────────────────────────────── -->
+<header class="page-header">
+  <a class="btn-back" id="btnBack" href="#">
+    <span>←</span> Back
+  </a>
+  <div class="header-title-group">
+    <span class="header-title">UAP Intelligence</span>
+    <span class="header-company" id="companyName"></span>
+  </div>
+  <span class="header-badge">LAYER 1 ROUTER</span>
+  <span class="header-version">v1.0</span>
+</header>
+
+<!-- ─── Tab Navigation ──────────────────────────────────────────── -->
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="arrays">
+    📦 Arrays
+  </button>
+  <button class="tab-btn" data-tab="uapb">
+    ✅ UAPB
+  </button>
+  <button class="tab-btn" data-tab="pending">
+    ⏳ Pending
+    <span class="tab-badge" id="pendingBadge" style="display:none;">0</span>
+  </button>
+  <button class="tab-btn" data-tab="calibration">
+    📊 Calibration
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 1 — ARRAYS
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content active" id="tab-arrays">
+
+  <div class="uap-hero" style="background:linear-gradient(135deg,#0c0a1e 0%,#1e1b4b 60%,#4338ca 100%);">
+    <div class="uap-hero-title">UAP routes every caller utterance to the right knowledge.</div>
+    <div class="uap-hero-sub">
+      Zero latency. Zero confusion. Layer 1 rule-based classifier fires first —
+      no Groq round-trip for known intents. Groq is fallback only.
+      Every trigger phrase is yours to tune at any time.
+    </div>
+    <div class="uap-hero-meta">
+      <span class="uap-hero-chip">Layer 1 — rule-based</span>
+      <span class="uap-hero-chip">Layer 2 — Groq fallback</span>
+      <span class="uap-hero-chip">Zero hardcoding</span>
+      <span class="uap-hero-chip">DB-driven</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">daType Arrays</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="arrayCountBadge" class="badge badge-primary" style="display:none;"></span>
+        <button class="btn btn-ghost" onclick="window.UAPPage.loadArrays()" style="font-size:.75rem;padding:5px 12px;">↺ Refresh</button>
+        <button class="btn btn-primary" id="btnSeedArrays" onclick="window.UAPPage.seedArrays()" style="font-size:.75rem;padding:5px 12px;">
+          🌱 Seed Standard Arrays
+        </button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:20px;" id="arraysContainer">
+      <div class="empty-state">
+        <div class="empty-icon">⏳</div>
+        <div class="empty-title">Loading arrays...</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 2 — UAPB (BOOKING CONFIRMATION)
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-uapb">
+
+  <div class="uap-hero" style="background:linear-gradient(135deg,#064e3b 0%,#065f46 60%,#10b981 100%);">
+    <div class="uap-hero-title">UAPB confirms what discoveryNotes already knows.</div>
+    <div class="uap-hero-sub">
+      One caller "yes" locks every temp field into confirmed simultaneously.
+      The agent never re-asks for what it already heard.
+      IntentHold keeps the booking thread alive through tangential questions.
+    </div>
+    <div class="uap-hero-meta">
+      <span class="uap-hero-chip">Single lock event</span>
+      <span class="uap-hero-chip">IntentHold — topic-switch TTL</span>
+      <span class="uap-hero-chip">BOOKING_CONFIRM</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header"><span class="card-title">IntentHold Settings</span></div>
+    <div class="card-body">
+
+      <div class="uapb-row">
+        <div class="uapb-label">IntentHold TTL</div>
+        <div class="uapb-description">When does the booking hold expire?</div>
+        <div class="toggle-wrap">
+          <label class="toggle">
+            <input type="checkbox" checked disabled />
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:.813rem;color:var(--text-secondary);">Topic-switch only (recommended)</span>
+        </div>
+        <div class="form-hint">
+          Hold expires only when caller hard-pivots to a different topic.
+          Caller asking 5 questions about the same service stays in booking mode.
+          Turn-count TTL is intentionally disabled — wrong signal.
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
+
+      <div class="uapb-row">
+        <div class="uapb-label">GracefulPivot Template</div>
+        <div class="uapb-description">
+          Message the agent uses when caller pivots mid-booking.
+          Leave blank → Groq generates contextually.
+        </div>
+        <textarea class="form-textarea" id="gracefulPivotTpl"
+          placeholder="e.g. No problem — before we answer that, let me just confirm your booking details..."
+          rows="3"></textarea>
+        <div class="form-hint">Blank = Groq-generated (recommended for most companies). Set a template to control the exact wording.</div>
+      </div>
+
+      <div class="uapb-row">
+        <div class="uapb-label">ResumePrompt Template</div>
+        <div class="uapb-description">
+          Message the agent uses to resume booking after answering a pivot question.
+          Leave blank → Groq generates contextually.
+        </div>
+        <textarea class="form-textarea" id="resumePromptTpl"
+          placeholder="e.g. Great — now let me get you scheduled..."
+          rows="3"></textarea>
+        <div class="form-hint">Blank = Groq-generated (recommended). These templates are stored per company — runtime never uses hardcoded values.</div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" onclick="window.UAPPage.saveUAPBSettings()">Save UAPB Settings</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Booking Fields (same source as discoverynotes.html Tab 2) -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Booking Fields</span>
+      <span style="font-size:.75rem;color:var(--text-muted);">Same settings as Discovery Notes → Booking Fields</span>
+    </div>
+    <div class="card-body">
+
+      <div class="service-tabs" id="uapbServiceTabs">
+        <button class="service-tab-btn active" data-service="service_call">Service Call</button>
+        <button class="service-tab-btn" data-service="maintenance">Maintenance</button>
+        <button class="service-tab-btn" data-service="installation">Installation</button>
+        <button class="service-tab-btn" data-service="custom">Custom</button>
+      </div>
+
+      <div id="uapbFieldList">
+        <div class="empty-state" style="padding:24px;">
+          <div class="empty-icon">⏳</div>
+          <div class="empty-title">Loading booking fields...</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+        <a href="#" id="linkDNBookingFields" style="font-size:.813rem;color:var(--color-primary);">
+          → Manage full booking fields in Discovery Notes →
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 3 — PENDING
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-pending">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Pending Classifications</span>
+      <span id="pendingCountBadge" class="badge" style="background:var(--color-danger-lt);color:var(--color-danger);border:1px solid #fca5a5;display:none;"></span>
+      <button class="btn btn-ghost" onclick="window.UAPPage.loadPending()" style="font-size:.75rem;padding:5px 12px;">↺ Refresh</button>
+    </div>
+    <div class="card-body" style="padding:0;" id="pendingContainer">
+      <div class="empty-state" style="padding:40px;">
+        <div class="empty-icon">⏳</div>
+        <div class="empty-title">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 4 — CALIBRATION
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-calibration">
+
+  <div class="uap-hero" style="background:linear-gradient(135deg,#1c1917 0%,#292524 60%,#78716c 100%);">
+    <div class="uap-hero-title">Layer 1 accuracy builds with real calls.</div>
+    <div class="uap-hero-sub">
+      The rule-based classifier has no accuracy data until real calls run.
+      First 500 calls establish the calibration baseline.
+      Every qaLog entry feeds this dashboard automatically.
+    </div>
+    <div class="uap-hero-meta">
+      <span class="uap-hero-chip">qaLog[] driven</span>
+      <span class="uap-hero-chip">Automatic</span>
+      <span class="uap-hero-chip">No manual input needed</span>
+    </div>
+  </div>
+
+  <div class="cal-grid" id="calStats">
+    <div class="cal-stat layer1">
+      <div class="cal-stat-value" id="calLayer1Pct">—</div>
+      <div class="cal-stat-label">Layer 1 Hits<br><small style="opacity:.7;">Rule-based</small></div>
+    </div>
+    <div class="cal-stat layer2">
+      <div class="cal-stat-value" id="calLayer2Pct">—</div>
+      <div class="cal-stat-label">Layer 2 Fallback<br><small style="opacity:.7;">Groq</small></div>
+    </div>
+    <div class="cal-stat unknown">
+      <div class="cal-stat-value" id="calUnknownPct">—</div>
+      <div class="cal-stat-label">UNKNOWN<br><small style="opacity:.7;">No match</small></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Collection Progress</span></div>
+    <div class="card-body" id="calBody">
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">Collecting first call data...</div>
+        <div class="empty-sub">
+          Calibration data populates automatically as calls come in via qaLog[] entries.
+          Target: 500 calls for meaningful baseline accuracy.
+          No action required — this updates automatically.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ─── Toast Container ──────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="uap.js"></script>
+</body>
+</html>

@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discovery Notes — ClientsVia</title>
+
+  <!-- ============================================================
+       DISCOVERY NOTES CONSOLE
+       ClientsVia Agent Console · Version 1.0
+
+       WHAT THIS PAGE IS:
+         The owner-facing management UI for the discoveryNotes system —
+         the center of every call. Every caller's state is built
+         turn-by-turn here and carried forward like a patient chart.
+         Nothing is ever discarded. Nothing starts from a blank canvas.
+
+       THREE TABS:
+         1. Schema      — Live schema diagram. temp{} → BOOKING_CONFIRM
+                          → confirmed{}. Field table + LLM view.
+         2. Booking Fields — What fields the agent collects per service type.
+                          Standard fields (system required) + custom fields.
+                          "Build backwards — define what you want to collect."
+         3. Monitor     — Last 5 calls' discoveryNotes snapshots. Live view.
+
+       API BASE: /api/admin/agent2/company/:companyId/discovery
+  ============================================================ -->
+
+  <style>
+    :root {
+      --color-primary:    #0ea5e9;
+      --color-primary-dk: #0284c7;
+      --color-primary-lt: #e0f2fe;
+      --color-success:    #10b981;
+      --color-success-lt: #d1fae5;
+      --color-success-dk: #059669;
+      --color-warning:    #f59e0b;
+      --color-warning-lt: #fef3c7;
+      --color-danger:     #ef4444;
+      --color-danger-lt:  #fee2e2;
+      --color-purple:     #8b5cf6;
+      --color-purple-lt:  #ede9fe;
+      --color-indigo:     #6366f1;
+      --color-indigo-lt:  #eef2ff;
+
+      --bg-page:      #f0f9ff;
+      --bg-card:      #ffffff;
+      --bg-header:    #ffffff;
+
+      --text-primary:   #0f172a;
+      --text-secondary: #334155;
+      --text-muted:     #64748b;
+      --text-xs:        #94a3b8;
+
+      --border:        #e2e8f0;
+      --border-focus:  #0ea5e9;
+      --border-strong: #cbd5e1;
+
+      --radius-card: 12px;
+      --radius-sm:    8px;
+      --radius-xs:    6px;
+      --radius-pill:  999px;
+
+      --shadow-card:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-raised: 0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+
+      --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+
+      --transition: 150ms ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Page Header ─────────────────────────────────────────── */
+    .page-header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+      height: 56px;
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); cursor: pointer;
+      color: var(--text-muted); font-size: .813rem; font-weight: 500;
+      text-decoration: none; transition: all var(--transition); white-space: nowrap;
+    }
+    .btn-back:hover { background: var(--bg-page); color: var(--text-secondary); }
+    .header-title-group { flex: 1; display: flex; align-items: baseline; gap: 10px; }
+    .header-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+    .header-company { font-size: .813rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+    .header-badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-primary-lt); color: var(--color-primary-dk);
+      border: 1px solid #bae6fd; white-space: nowrap;
+    }
+    .header-version {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-purple-lt); color: var(--color-purple);
+      border: 1px solid #ddd6fe; white-space: nowrap;
+    }
+
+    /* ── Tab Nav ─────────────────────────────────────────────── */
+    .tab-nav {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; position: sticky; top: 56px; z-index: 100;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      background: none; border: none; cursor: pointer;
+      font-size: .813rem; font-weight: 500; color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      display: flex; align-items: center; gap: 6px;
+      transition: all var(--transition); white-space: nowrap;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+
+    /* ── Content ─────────────────────────────────────────────── */
+    .tab-content { display: none; padding: 32px 24px; max-width: 1100px; margin: 0 auto; }
+    .tab-content.active { display: block; }
+
+    /* ── Hero Banner ─────────────────────────────────────────── */
+    .dn-hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #0ea5e9 100%);
+      border-radius: var(--radius-card);
+      padding: 32px 36px;
+      color: #fff;
+      margin-bottom: 28px;
+      position: relative; overflow: hidden;
+    }
+    .dn-hero::after {
+      content: '';
+      position: absolute; right: -40px; top: -40px;
+      width: 200px; height: 200px;
+      background: rgba(255,255,255,.04);
+      border-radius: 50%;
+    }
+    .dn-hero-title {
+      font-size: 1.375rem; font-weight: 700; margin-bottom: 8px;
+      position: relative; z-index: 1;
+    }
+    .dn-hero-sub {
+      font-size: .875rem; opacity: .8; max-width: 560px; line-height: 1.6;
+      position: relative; z-index: 1;
+    }
+    .dn-hero-meta {
+      margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;
+      position: relative; z-index: 1;
+    }
+    .dn-hero-chip {
+      font-size: .75rem; font-weight: 600; padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    }
+
+    /* ── Cards ───────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card-title {
+      font-size: .875rem; font-weight: 700; color: var(--text-primary);
+      flex: 1;
+    }
+    .card-body { padding: 20px; }
+
+    /* ── Schema diagram ──────────────────────────────────────── */
+    .dn-diagram {
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 0;
+      align-items: stretch; margin-bottom: 28px;
+    }
+    .dn-diagram-col {
+      border-radius: var(--radius-card);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .dn-diagram-col-header {
+      padding: 12px 16px;
+      font-size: .813rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    }
+    .dn-col-temp .dn-diagram-col-header { background: #eff6ff; color: #1d4ed8; border-bottom: 1px solid #bfdbfe; }
+    .dn-col-confirmed .dn-diagram-col-header { background: #f0fdf4; color: #15803d; border-bottom: 1px solid #bbf7d0; }
+    .dn-diagram-col-body { padding: 16px; }
+    .dn-field-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: var(--radius-pill);
+      font-size: .75rem; font-weight: 500;
+      margin: 3px;
+    }
+    .dn-field-pill.temp { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .dn-field-pill.confirmed { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .dn-arrow-col {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 0 16px; gap: 6px;
+    }
+    .dn-arrow-icon { font-size: 1.5rem; color: var(--color-warning); }
+    .dn-arrow-label {
+      font-size: .688rem; font-weight: 700; text-align: center;
+      color: var(--color-warning); text-transform: uppercase; letter-spacing: .05em;
+      max-width: 80px; line-height: 1.3;
+    }
+
+    /* ── Field table ─────────────────────────────────────────── */
+    .dn-table { width: 100%; border-collapse: collapse; font-size: .813rem; }
+    .dn-table th {
+      text-align: left; padding: 8px 12px;
+      background: var(--bg-page);
+      color: var(--text-muted); font-weight: 600; font-size: .75rem;
+      text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .dn-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .dn-table tr:last-child td { border-bottom: none; }
+    .dn-table tr:hover td { background: var(--bg-page); }
+    .badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill); white-space: nowrap;
+    }
+    .badge-standard { background: var(--bg-page); color: var(--text-muted); border: 1px solid var(--border); }
+    .badge-v2       { background: var(--color-primary-lt); color: var(--color-primary-dk); border: 1px solid #bae6fd; }
+    .badge-success  { background: var(--color-success-lt); color: var(--color-success-dk); border: 1px solid #a7f3d0; }
+
+    /* ── Collapsible LLM view ────────────────────────────────── */
+    .collapsible-trigger {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      cursor: pointer; background: none; border: none; width: 100%; text-align: left;
+      font-size: .875rem; font-weight: 600; color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      transition: background var(--transition);
+    }
+    .collapsible-trigger:hover { background: var(--bg-page); }
+    .collapsible-trigger .chevron { transition: transform var(--transition); font-size: .75rem; color: var(--text-muted); }
+    .collapsible-trigger.open .chevron { transform: rotate(180deg); }
+    .collapsible-body { display: none; }
+    .collapsible-body.open { display: block; }
+    .code-block {
+      background: #0f172a; color: #e2e8f0;
+      font-family: var(--font-mono); font-size: .75rem; line-height: 1.7;
+      padding: 20px 24px; border-radius: var(--radius-sm);
+      overflow-x: auto; white-space: pre;
+    }
+    .code-comment { color: #64748b; }
+    .code-key     { color: #93c5fd; }
+    .code-value   { color: #86efac; }
+    .code-heading { color: #fde68a; font-weight: 700; }
+    .code-rule    { color: #f9a8d4; }
+
+    /* ── Booking Fields tab ──────────────────────────────────── */
+    .service-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .service-tab-btn {
+      padding: 6px 16px;
+      border: 1px solid var(--border); border-radius: var(--radius-pill);
+      background: var(--bg-card); cursor: pointer;
+      font-size: .813rem; font-weight: 500; color: var(--text-muted);
+      transition: all var(--transition);
+    }
+    .service-tab-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .service-tab-btn.active {
+      background: var(--color-primary); color: #fff; border-color: var(--color-primary);
+    }
+
+    .field-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .field-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-card);
+    }
+    .field-row.is-standard { background: var(--bg-page); }
+    .field-icon { font-size: 1rem; width: 20px; text-align: center; }
+    .field-info { flex: 1; }
+    .field-label { font-size: .875rem; font-weight: 600; color: var(--text-primary); }
+    .field-key { font-size: .75rem; color: var(--text-muted); font-family: var(--font-mono); }
+    .field-actions { display: flex; align-items: center; gap: 8px; }
+
+    .toggle-wrap { display: flex; align-items: center; gap: 6px; }
+    .toggle {
+      position: relative; display: inline-block;
+      width: 36px; height: 20px; cursor: pointer; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: var(--border-strong); border-radius: var(--radius-pill);
+      transition: background var(--transition);
+    }
+    .toggle-slider::after {
+      content: ''; position: absolute;
+      left: 2px; top: 2px; width: 16px; height: 16px;
+      background: #fff; border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform var(--transition);
+    }
+    .toggle input:checked + .toggle-slider { background: var(--color-success); }
+    .toggle input:checked + .toggle-slider::after { transform: translateX(16px); }
+    .toggle-label { font-size: .75rem; color: var(--text-muted); }
+
+    .btn-icon {
+      width: 28px; height: 28px; border-radius: var(--radius-xs);
+      border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: .875rem; transition: all var(--transition); background: transparent;
+    }
+    .btn-icon:hover { background: var(--bg-page); }
+    .btn-icon.danger:hover { background: var(--color-danger-lt); color: var(--color-danger); }
+
+    /* Add field inline form */
+    .add-field-form {
+      display: none; padding: 14px; border-radius: var(--radius-sm);
+      border: 1px dashed var(--color-primary); background: var(--color-primary-lt);
+      margin-bottom: 16px;
+    }
+    .add-field-form.open { display: block; }
+    .add-field-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+    .form-label { font-size: .75rem; font-weight: 600; color: var(--text-secondary); }
+    .form-input {
+      padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-size: .875rem; color: var(--text-primary); background: var(--bg-card);
+      outline: none; transition: border-color var(--transition);
+    }
+    .form-input:focus { border-color: var(--color-primary); }
+    .btn {
+      padding: 7px 16px; border-radius: var(--radius-xs); border: none; cursor: pointer;
+      font-size: .813rem; font-weight: 600; transition: all var(--transition);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--color-primary); color: #fff; }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg-page); }
+
+    /* ── Monitor tab ─────────────────────────────────────────── */
+    .monitor-grid { display: flex; flex-direction: column; gap: 12px; }
+    .snapshot-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-card);
+      cursor: pointer; transition: all var(--transition);
+      text-decoration: none; color: inherit;
+    }
+    .snapshot-row:hover { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-lt); }
+    .snapshot-dt { font-size: .75rem; color: var(--text-muted); white-space: nowrap; min-width: 110px; }
+    .snapshot-caller { font-weight: 600; font-size: .875rem; flex: 1; }
+    .snapshot-obj { font-size: .75rem; }
+    .snapshot-fields { font-size: .75rem; color: var(--text-muted); }
+    .snapshot-confirmed { font-size: .75rem; font-weight: 600; color: var(--color-success-dk); }
+
+    /* Objective color badges */
+    .obj-INTAKE    { background: var(--bg-page);         color: var(--text-muted);       border: 1px solid var(--border); }
+    .obj-DISCOVERY { background: #fef3c7;                color: #92400e;                 border: 1px solid #fde68a; }
+    .obj-BOOKING   { background: var(--color-primary-lt); color: var(--color-primary-dk); border: 1px solid #bae6fd; }
+    .obj-TRANSFER  { background: var(--color-purple-lt); color: var(--color-purple);     border: 1px solid #ddd6fe; }
+    .obj-CLOSING   { background: var(--color-success-lt); color: var(--color-success-dk); border: 1px solid #a7f3d0; }
+
+    .empty-state {
+      text-align: center; padding: 48px 24px; color: var(--text-muted);
+    }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-title { font-size: .875rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-sub { font-size: .813rem; }
+
+    /* ── Toast ───────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-radius: var(--radius-sm);
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+      font-size: .875rem; font-weight: 500; color: #fff;
+      animation: toastIn .2s ease;
+      min-width: 240px; max-width: 360px;
+    }
+    .toast.success { background: var(--color-success); }
+    .toast.error   { background: var(--color-danger); }
+    @keyframes toastIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- ─── Page Header ─────────────────────────────────────────────── -->
+<header class="page-header">
+  <a class="btn-back" id="btnBack" href="#">
+    <span>←</span> Back
+  </a>
+  <div class="header-title-group">
+    <span class="header-title">Discovery Notes</span>
+    <span class="header-company" id="companyName"></span>
+  </div>
+  <span class="header-badge">CORE SYSTEM</span>
+  <span class="header-version">v1.0</span>
+</header>
+
+<!-- ─── Tab Navigation ──────────────────────────────────────────── -->
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="schema">
+    🧠 Schema
+  </button>
+  <button class="tab-btn" data-tab="booking-fields">
+    📋 Booking Fields
+  </button>
+  <button class="tab-btn" data-tab="monitor">
+    📡 Monitor
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 1 — SCHEMA
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content active" id="tab-schema">
+
+  <div class="dn-hero">
+    <div class="dn-hero-title">Every call writes here. Nothing is ever forgotten.</div>
+    <div class="dn-hero-sub">
+      discoveryNotes is the center of every call. Every component fills it, confirms it,
+      or carries it forward. It is not a log — it is a live patient chart for every caller,
+      never discarded, never started from a blank canvas.
+    </div>
+    <div class="dn-hero-meta">
+      <span class="dn-hero-chip">Schema v2</span>
+      <span class="dn-hero-chip">Redis TTL 4h</span>
+      <span class="dn-hero-chip">temp{} + confirmed{}</span>
+      <span class="dn-hero-chip">UAPB BOOKING_CONFIRM lock</span>
+    </div>
+  </div>
+
+  <!-- Two-phase diagram -->
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header">
+      <span class="card-title">Two-Phase Entity Model</span>
+      <span class="badge badge-v2">v2 Architecture</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size:.813rem;color:var(--text-muted);margin-bottom:20px;">
+        Everything the agent hears goes into <strong>temp{}</strong> immediately — unverified, living hypothesis.
+        At UAPB BOOKING_CONFIRM, when the caller says "yes" to the booking readback,
+        <strong>all temp fields lock simultaneously into confirmed{}</strong>. The confirmed{} snapshot is
+        what powers caller charts, handoff context, and call history.
+      </p>
+      <div class="dn-diagram">
+        <div class="dn-diagram-col dn-col-temp">
+          <div class="dn-diagram-col-header">🔵 TEMP{} — Working Hypothesis</div>
+          <div class="dn-diagram-col-body">
+            <div>
+              <span class="dn-field-pill temp">firstName</span>
+              <span class="dn-field-pill temp">lastName</span>
+              <span class="dn-field-pill temp">fullName</span>
+              <span class="dn-field-pill temp">address</span>
+              <span class="dn-field-pill temp">phone</span>
+              <span class="dn-field-pill temp">email</span>
+              <span class="dn-field-pill temp">issue</span>
+              <span class="dn-field-pill temp">serviceType</span>
+              <span class="dn-field-pill temp">staffMentioned</span>
+              <span class="dn-field-pill temp">preferredDate</span>
+              <span class="dn-field-pill temp">preferredTime</span>
+              <span class="dn-field-pill temp">confidence{}</span>
+            </div>
+            <p style="font-size:.75rem;color:#1e40af;margin-top:12px;line-height:1.5;">
+              Agent accumulates freely every turn.<br>
+              Never locked mid-call. Never re-asked once present.
+            </p>
+          </div>
+        </div>
+        <div class="dn-arrow-col">
+          <div class="dn-arrow-icon">⚡</div>
+          <div class="dn-arrow-label">UAPB BOOKING CONFIRM</div>
+          <div style="font-size:.688rem;color:var(--text-muted);text-align:center;margin-top:4px;">One "yes" locks everything</div>
+        </div>
+        <div class="dn-diagram-col dn-col-confirmed">
+          <div class="dn-diagram-col-header">🟢 CONFIRMED{} — Locked Truth</div>
+          <div class="dn-diagram-col-body">
+            <div>
+              <span class="dn-field-pill confirmed">firstName</span>
+              <span class="dn-field-pill confirmed">lastName</span>
+              <span class="dn-field-pill confirmed">fullName</span>
+              <span class="dn-field-pill confirmed">address</span>
+              <span class="dn-field-pill confirmed">phone</span>
+              <span class="dn-field-pill confirmed">issue</span>
+              <span class="dn-field-pill confirmed">serviceType</span>
+              <span class="dn-field-pill confirmed">preferredDate</span>
+              <span class="dn-field-pill confirmed">preferredTime</span>
+            </div>
+            <p style="font-size:.75rem;color:#166534;margin-top:12px;line-height:1.5;">
+              Locked at booking confirmation only.<br>
+              Powers caller charts + handoff context.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Field table -->
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header">
+      <span class="card-title">Schema Field Reference</span>
+      <span class="badge badge-v2">Schema v2</span>
+    </div>
+    <div class="card-body" style="padding:0;">
+      <table class="dn-table">
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Phase</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>temp.firstName</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Extracted first name — unverified until BOOKING_CONFIRM</td></tr>
+          <tr><td><code>temp.lastName</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Extracted last name</td></tr>
+          <tr><td><code>temp.fullName</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Full name as spoken by caller</td></tr>
+          <tr><td><code>temp.address</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Service address extracted from conversation</td></tr>
+          <tr><td><code>temp.phone</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Callback phone (if provided verbally)</td></tr>
+          <tr><td><code>temp.email</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Email (if provided verbally)</td></tr>
+          <tr><td><code>temp.issue</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>What's wrong — free-text issue description</td></tr>
+          <tr><td><code>temp.serviceType</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>service_call / maintenance / installation / other</td></tr>
+          <tr><td><code>temp.staffMentioned</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>"I want Mike" — named staff member extracted</td></tr>
+          <tr><td><code>temp.preferredDate</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Caller's preferred appointment date</td></tr>
+          <tr><td><code>temp.preferredTime</code></td><td><span class="badge badge-v2">TEMP</span></td><td>String</td><td>Caller's preferred appointment time</td></tr>
+          <tr><td><code>temp.confidence</code></td><td><span class="badge badge-v2">TEMP</span></td><td>Object</td><td>Per-field extraction confidence scores (0–1)</td></tr>
+          <tr><td><code>confirmed</code></td><td><span class="badge badge-success">CONFIRMED</span></td><td>Object</td><td>Locked snapshot of temp{} at BOOKING_CONFIRM — excludes confidence</td></tr>
+          <tr><td><code>callReason</code></td><td><span class="badge badge-standard">CALL</span></td><td>String</td><td>Summary of why caller called — set during DISCOVERY phase</td></tr>
+          <tr><td><code>objective</code></td><td><span class="badge badge-standard">CALL</span></td><td>String</td><td>INTAKE / DISCOVERY / BOOKING / TRANSFER / CLOSING</td></tr>
+          <tr><td><code>urgency</code></td><td><span class="badge badge-standard">CALL</span></td><td>String</td><td>low / medium / high</td></tr>
+          <tr><td><code>doNotReask</code></td><td><span class="badge badge-standard">CALL</span></td><td>Array</td><td>Field keys agent must never ask again (confirmed once, locked)</td></tr>
+          <tr><td><code>rejectedTopics</code></td><td><span class="badge badge-standard">CALL</span></td><td>Array</td><td>KC topics the caller explicitly rejected — excluded from re-surfacing</td></tr>
+          <tr><td><code>qaLog</code></td><td><span class="badge badge-standard">CALL</span></td><td>Array</td><td>Turn-by-turn Q&amp;A log — last 3 shown to LLM each turn</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- How the LLM sees this -->
+  <div class="card">
+    <div class="card-header" style="padding:0;">
+      <button class="collapsible-trigger" onclick="window.DNPage.toggleCollapsible(this)">
+        <span>🤖</span>
+        <span>How the LLM sees this — formatForLLM() sample output</span>
+        <span class="chevron">▼</span>
+      </button>
+    </div>
+    <div class="collapsible-body">
+      <div class="card-body" style="padding:0;">
+        <div class="code-block"><span class="code-heading">────────────────────────────────────────────────────────────────
+CALL DISCOVERY STATE  (v2 — live, turn by turn)
+────────────────────────────────────────────────────────────────</span>
+<span class="code-key">OBJECTIVE</span> : <span class="code-value">BOOKING</span>    <span class="code-key">TURN</span> : <span class="code-value">5</span>
+
+<span class="code-heading">CONFIRMED (locked — do not re-ask, do not re-verify):</span>
+  <span class="code-key">name</span>    : <span class="code-value">Jessica James</span>
+  <span class="code-key">address</span> : <span class="code-value">123 Market Street Fort Myers FL</span>
+
+<span class="code-heading">TEMP (working — agent accumulates freely):</span>
+  <span class="code-key">issue</span>       : <span class="code-value">AC not cooling</span>
+  <span class="code-key">serviceType</span> : <span class="code-value">service_call</span>
+  <span class="code-key">urgency</span>     : <span class="code-value">high</span>
+
+<span class="code-key">DO NOT RE-ASK</span> : <span class="code-value">name, address</span>
+<span class="code-key">CALLER LAST SAID</span> : <span class="code-value">"It's been broken for 3 days"</span>
+
+<span class="code-heading">RULES:</span>
+<span class="code-rule">• CONFIRMED = locked truth. Never re-ask. Never re-verify.</span>
+<span class="code-rule">• TEMP = hypothesis. Reason from it. Do not state as confirmed fact.</span>
+<span class="code-rule">• Booking readback (UAPB BOOKING_CONFIRM) locks ALL temp → confirmed.</span>
+<span class="code-heading">────────────────────────────────────────────────────────────────</span></div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 2 — BOOKING FIELDS
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-booking-fields">
+
+  <div class="dn-hero" style="background:linear-gradient(135deg,#134e4a 0%,#0f766e 60%,#2dd4bf 100%);">
+    <div class="dn-hero-title">Built backwards — define what you want to collect.</div>
+    <div class="dn-hero-sub">
+      Add the fields you need per service type. The agent collects them automatically.
+      Standard fields are system-required and cannot be removed.
+      Custom fields are yours to define, label, and configure.
+    </div>
+    <div class="dn-hero-meta">
+      <span class="dn-hero-chip">Per companyId</span>
+      <span class="dn-hero-chip">Standard + Custom</span>
+      <span class="dn-hero-chip">UAPB driven</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Booking Fields by Service Type</span>
+      <button class="btn btn-ghost" id="btnSeedFields" style="font-size:.75rem;padding:5px 12px;">
+        🌱 Seed Standard Fields
+      </button>
+    </div>
+    <div class="card-body">
+
+      <div class="service-tabs" id="serviceTypeTabs">
+        <button class="service-tab-btn active" data-service="service_call">Service Call</button>
+        <button class="service-tab-btn" data-service="maintenance">Maintenance</button>
+        <button class="service-tab-btn" data-service="installation">Installation</button>
+        <button class="service-tab-btn" data-service="custom">Custom</button>
+      </div>
+
+      <div id="fieldListContainer">
+        <div class="empty-state" style="padding:24px;">
+          <div class="empty-icon">⏳</div>
+          <div class="empty-title">Loading fields...</div>
+        </div>
+      </div>
+
+      <!-- Add field inline form -->
+      <div class="add-field-form" id="addFieldForm">
+        <div class="add-field-row">
+          <div class="form-group">
+            <label class="form-label">Field Label</label>
+            <input type="text" class="form-input" id="newFieldLabel" placeholder="e.g. Membership Number" />
+          </div>
+          <div class="form-group" style="max-width:160px;">
+            <label class="form-label">Field Key</label>
+            <input type="text" class="form-input" id="newFieldKey" placeholder="e.g. membershipNumber" />
+          </div>
+          <div class="toggle-wrap" style="padding-bottom:2px;">
+            <label class="toggle">
+              <input type="checkbox" id="newFieldRequired" />
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="toggle-label">Required</span>
+          </div>
+          <div style="display:flex;gap:8px;padding-bottom:2px;">
+            <button class="btn btn-primary" onclick="window.DNPage.saveNewField()">Add Field</button>
+            <button class="btn btn-ghost" onclick="window.DNPage.closeAddField()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-ghost" id="btnAddField" onclick="window.DNPage.openAddField()" style="width:100%;justify-content:center;margin-top:8px;">
+        + Add Custom Field
+      </button>
+
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" id="btnSaveFields" onclick="window.DNPage.saveFields()">
+          Save Booking Fields
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 3 — MONITOR
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-monitor">
+
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header">
+      <span class="card-title">Recent Calls — Discovery Notes Snapshots</span>
+      <button class="btn btn-ghost" onclick="window.DNPage.loadSnapshots()" style="font-size:.75rem;padding:5px 12px;">
+        ↺ Refresh
+      </button>
+    </div>
+    <div class="card-body" style="padding:0;">
+      <div id="snapshotList">
+        <div class="empty-state">
+          <div class="empty-icon">⏳</div>
+          <div class="empty-title">Loading snapshots...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Legend</span></div>
+    <div class="card-body" style="display:flex;gap:16px;flex-wrap:wrap;">
+      <span class="badge obj-INTAKE badge">INTAKE</span>
+      <span class="badge obj-DISCOVERY badge">DISCOVERY</span>
+      <span class="badge obj-BOOKING badge">BOOKING</span>
+      <span class="badge obj-TRANSFER badge">TRANSFER</span>
+      <span class="badge obj-CLOSING badge">CLOSING</span>
+      <span style="font-size:.75rem;color:var(--text-muted);margin-left:8px;">
+        Objective reached when call ended. Confirmed count = fields locked at BOOKING_CONFIRM.
+      </span>
+    </div>
+  </div>
+
+</section>
+
+<!-- ─── Toast Container ──────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="discoverynotes.js"></script>
+</body>
+</html>

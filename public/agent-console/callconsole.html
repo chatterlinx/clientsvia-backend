@@ -1317,6 +1317,67 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    /* ================================================================
+       DISCOVERY NOTES PANEL — Call Console inline panel
+       Injected into call detail modal, above transcript.
+    ================================================================ */
+    .dn-panel {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .dn-panel-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      cursor: pointer;
+      background: #f0f9ff;
+      border-bottom: 1px solid #e2e8f0;
+      user-select: none;
+    }
+    .dn-panel-header:hover { background: #e0f2fe; }
+    .dn-panel-title {
+      font-size: .813rem; font-weight: 700; color: #0c4a6e; flex: 1;
+    }
+    .dn-panel-objective {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: 999px; background: #e0f2fe; color: #0369a1;
+      border: 1px solid #bae6fd;
+    }
+    .dn-panel-meta {
+      font-size: .688rem; color: #64748b;
+    }
+    .dn-chevron { font-size: .75rem; color: #64748b; transition: transform 150ms ease; }
+    .dn-panel-header.open .dn-chevron { transform: rotate(180deg); }
+
+    .dn-panel-body {
+      display: none; padding: 16px;
+    }
+    .dn-panel-body.open { display: block; }
+
+    .dn-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+    .dn-col-label {
+      font-size: .688rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: 8px;
+    }
+    .dn-col-label.temp      { color: #1d4ed8; }
+    .dn-col-label.confirmed { color: #15803d; }
+
+    .dn-field-item {
+      display: flex; gap: 6px; margin-bottom: 4px; font-size: .75rem;
+    }
+    .dn-field-key   { color: #64748b; font-weight: 500; min-width: 80px; }
+    .dn-field-value { color: #0f172a; font-weight: 600; }
+    .dn-empty       { font-size: .75rem; color: #94a3b8; font-style: italic; }
+
+    .dn-meta-row {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      padding-top: 10px; border-top: 1px solid #e2e8f0;
+      font-size: .75rem; color: #64748b;
+    }
+    .dn-meta-row strong { color: #334155; }
   </style>
 </head>
 <body>

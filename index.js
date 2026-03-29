@@ -295,6 +295,10 @@ async function loadAllRoutes() {
         routes.engineHubRoutes     = await loadRouteWithTimeout('./routes/admin/engineHub',     'engineHubRoutes');     // ⚙️ Engine Hub Settings (per-company CRUD)
         routes.behaviorCardsRoutes = await loadRouteWithTimeout('./routes/admin/behaviorCards', 'behaviorCardsRoutes'); // 🃏 Behavior Cards (governs HOW the agent operates per category/flow)
 
+        // 🧠 Version 1.0 — discoveryNotes + UAP Intelligence
+        routes.discoveryNotesSettingsRoutes = await loadRouteWithTimeout('./routes/admin/discoveryNotesSettings', 'discoveryNotesSettingsRoutes'); // 📋 Discovery Notes Settings (bookingFieldConfig, snapshots)
+        routes.uapArraysRoutes              = await loadRouteWithTimeout('./routes/admin/uapArrays',              'uapArraysRoutes');              // 🧩 UAP Arrays + Booking Fields (daType vocabulary, CRUD, pending)
+
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -695,6 +699,10 @@ function registerRoutes(routes) {
     app.use('/api/admin/agent2/company', routes.companyInterceptorsRoutes);    // 🔀 Interceptors (custom intent rules — keywords → action routing)
     app.use('/api/admin/agent2/company', routes.companyArbitrationRoutes);     // ⚖️ Arbitration (policy config + call turn traces + active lane state)
     app.use('/api/admin/agent2/company', routes.companyTransferRoutes);        // 📞 Transfer (destinations, policy, screening, scheduling)
+
+    // 🧠 Version 1.0 — discoveryNotes + UAP Intelligence
+    app.use('/api/admin/agent2/company', routes.discoveryNotesSettingsRoutes); // 📋 Discovery Notes Settings (bookingFieldConfig, snapshots)
+    app.use('/api/admin/agent2/company', routes.uapArraysRoutes);              // 🧩 UAP Arrays + Booking Fields (daType vocabulary, CRUD, pending)
 
     // ⚙️ Engine Hub — Governed Voice Operating System (V1 March 2026)
     app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)

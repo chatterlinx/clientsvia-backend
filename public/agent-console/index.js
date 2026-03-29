@@ -433,6 +433,12 @@
       case 'enginehub':
         window.location.href = `${baseUrl}/enginehub.html${companyParam}`;
         break;
+      case 'discoverynotes':
+        window.location.href = `${baseUrl}/discoverynotes.html${companyParam}`;
+        break;
+      case 'uap':
+        window.location.href = `${baseUrl}/uap.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }

@@ -60,7 +60,7 @@ const logger = require('../../utils/logger');
 const CONFIG = {
   REDIS_TTL_SECONDS: 14400,      // 4 hours — matches max call session TTL
   KEY_PREFIX: 'discovery-notes', // Redis key prefix
-  CURRENT_VERSION: 1,            // Schema version — increment on breaking changes
+  CURRENT_VERSION: 2,            // v2: entities→temp + confirmed (2026-03-29)
   QA_LOG_PROMPT_LIMIT: 3         // Max recent Q&A entries injected into LLM prompt
 };
 
@@ -84,16 +84,29 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
     callSid: String(callSid),
     customerId: customerId ? String(customerId) : null,
 
-    // ── Captured entities ───────────────────────────────────────────────────
-    entities: {
-      firstName: null,
-      lastName: null,
-      fullName: null,
-      address: null,
-      phone: null,
-      email: null,
-      confidence: {}   // { firstName: 0.95, address: 0.9 }
+    // ── TEMP — everything the system heard (extracted, unverified) ──────────
+    // Agent accumulates freely. NEVER state as confirmed fact.
+    // Locked to confirmed{} ONLY at UAPB BOOKING_CONFIRM (one event, all fields).
+    // Backward compat: patch.entities merges here (callers updated progressively).
+    temp: {
+      firstName:     null,
+      lastName:      null,
+      fullName:      null,
+      address:       null,
+      phone:         null,
+      email:         null,
+      issue:         null,    // what's wrong ("AC not cooling")
+      serviceType:   null,    // 'service_call' | 'maintenance' | 'installation'
+      staffMentioned: null,   // "I want Mike" → name extracted
+      preferredDate: null,
+      preferredTime: null,
+      confidence:    {}       // { firstName: 0.95, address: 0.9 }
     },
+
+    // ── CONFIRMED — locked by UAPB BOOKING_CONFIRM only ────────────────────
+    // All temp fields copy here simultaneously on BOOKING_CONFIRM.
+    // Once here: NEVER re-asked. NEVER re-verified. Feeds callHistory + CallerProfile.
+    confirmed: {},
 
     // ── Call understanding ──────────────────────────────────────────────────
     callReason: null,
@@ -202,7 +215,8 @@ async function load(companyId, callSid) {
     const raw = await redis.get(key);
     if (!raw) return null;
 
-    return JSON.parse(raw);
+    const notes = JSON.parse(raw);
+    return _migrateNotes(notes, companyId, callSid, redis, key);
 
   } catch (err) {
     logger.warn('[DISCOVERY NOTES] load failed (non-fatal)', { callSid, error: err.message });
@@ -284,7 +298,8 @@ async function persist(companyId, callSid, customerId) {
       { _id: customerId, companyId, 'discoveryNotes.callSid': callSid },
       {
         $set: {
-          'discoveryNotes.$[elem].entities':   notes.entities || {},
+          'discoveryNotes.$[elem].temp':       notes.temp      || {},
+          'discoveryNotes.$[elem].confirmed':  notes.confirmed || {},
           'discoveryNotes.$[elem].callReason': notes.callReason || null,
           'discoveryNotes.$[elem].urgency':    notes.urgency || null,
           'discoveryNotes.$[elem].objective':  notes.objective || 'INTAKE',
@@ -305,15 +320,16 @@ async function persist(companyId, callSid, customerId) {
           $push: {
             discoveryNotes: {
               callSid,
-              capturedAt: new Date(),
-              entities: notes.entities || {},
-              callReason: notes.callReason || null,
-              urgency: notes.urgency || null,
-              objective: notes.objective || 'INTAKE',
-              turnCount: notes.turnNumber || 0,
-              qaLog: notes.qaLog || [],
-              startedAt: notes.startedAt || null,
-              updatedAt: new Date()
+              capturedAt:  new Date(),
+              temp:        notes.temp      || {},
+              confirmed:   notes.confirmed || {},
+              callReason:  notes.callReason || null,
+              urgency:     notes.urgency || null,
+              objective:   notes.objective || 'INTAKE',
+              turnCount:   notes.turnNumber || 0,
+              qaLog:       notes.qaLog || [],
+              startedAt:   notes.startedAt || null,
+              updatedAt:   new Date()
             }
           }
         }
@@ -348,26 +364,43 @@ function formatForLLM(notes) {
   const divider = '─'.repeat(63);
 
   lines.push(divider);
-  lines.push('CALL DISCOVERY STATE (live — built turn by turn)');
+  lines.push('CALL DISCOVERY STATE  (v2 — live, turn by turn)');
   lines.push(divider);
-  lines.push(`OBJECTIVE : ${notes.objective}`);
-  lines.push(`TURN      : ${notes.turnNumber}`);
+  lines.push(`OBJECTIVE : ${notes.objective}    TURN : ${notes.turnNumber}`);
 
-  // ── Captured entities ────────────────────────────────────────────────────
-  lines.push('\nCAPTURED SO FAR:');
-  const e = notes.entities || {};
-  lines.push(`  name    : ${e.fullName || e.firstName || '(not yet captured)'}`);
-  lines.push(`  address : ${e.address || '(not yet captured)'}`);
-  lines.push(`  phone   : ${e.phone || '(not yet captured)'}`);
+  // ── CONFIRMED — locked truth (all fields confirmed at UAPB BOOKING_CONFIRM) ──
+  const c = notes.confirmed || {};
+  const confirmedEntries = Object.entries(c).filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (confirmedEntries.length > 0) {
+    lines.push('\nCONFIRMED (locked — do not re-ask, do not re-verify):');
+    for (const [k, v] of confirmedEntries) {
+      lines.push(`  ${k.padEnd(12)}: ${v}`);
+    }
+  }
 
-  if (notes.callReason) lines.push(`  issue   : ${notes.callReason}`);
-  if (notes.urgency)    lines.push(`  urgency : ${notes.urgency}`);
-  if (notes.priorVisit !== null && notes.priorVisit !== undefined) {
-    lines.push(`  prior visit : ${notes.priorVisit ? 'yes' : 'no'}`);
+  // ── TEMP — working hypothesis (accumulate freely, confirmed at booking readback) ──
+  const t = notes.temp || {};
+  const tempName    = t.fullName || (t.firstName ? `${t.firstName} ${t.lastName || ''}`.trim() : null);
+  const tempEntries = [
+    tempName                 && ['name',          tempName],
+    t.address                && ['address',        t.address],
+    t.phone                  && ['phone',          t.phone],
+    t.issue                  && ['issue',          t.issue],
+    t.serviceType            && ['serviceType',    t.serviceType],
+    notes.urgency            && ['urgency',        notes.urgency],
+    t.staffMentioned         && ['staff mentioned', t.staffMentioned],
+    t.preferredDate          && ['preferred date', t.preferredDate],
+    notes.priorVisit != null && ['prior visit',    notes.priorVisit ? 'yes' : 'no'],
+  ].filter(Boolean);
+
+  if (tempEntries.length > 0) {
+    lines.push('\nTEMP (working — do not state as confirmed fact):');
+    for (const [k, v] of tempEntries) {
+      lines.push(`  ${k.padEnd(12)}: ${v}`);
+    }
   }
-  if (notes.employeeMentioned) {
-    lines.push(`  employee mentioned : ${notes.employeeMentioned}`);
-  }
+
+  if (notes.callReason) lines.push(`\ncallReason   : ${notes.callReason}`);
 
   // ── Anti-amnesia core ────────────────────────────────────────────────────
   if (notes.doNotReask && notes.doNotReask.length > 0) {
@@ -397,8 +430,10 @@ function formatForLLM(notes) {
   // ── Standing rules for LLM ──────────────────────────────────────────────
   lines.push(`\n${divider}`);
   lines.push('RULES:');
-  lines.push('• NEVER ask for anything listed in DO NOT RE-ASK — it is already known.');
-  lines.push('• Treat CAPTURED data as confirmed fact — do not re-verify unless caller corrects it.');
+  lines.push('• CONFIRMED = locked truth. Never re-ask. Never re-verify under any circumstances.');
+  lines.push('• TEMP = working hypothesis. Reason from it freely. Do NOT state as confirmed fact.');
+  lines.push('• NEVER ask for anything in DO NOT RE-ASK — it is already known.');
+  lines.push('• Booking readback (UAPB BOOKING_CONFIRM) locks ALL temp → confirmed simultaneously.');
   lines.push('• Advance OBJECTIVE when current stage is complete. BOOKING when caller is ready to schedule.');
   lines.push(`${divider}\n`);
 
@@ -455,21 +490,34 @@ function _mergePatch(current, patch) {
     }
   }
 
-  // ── Deep merge entities ──────────────────────────────────────────────────
-  if (patch.entities) {
-    merged.entities = { ...(current.entities || {}) };
-    for (const [k, v] of Object.entries(patch.entities)) {
+  // ── Deep merge temp (accepts patch.temp OR legacy patch.entities) ────────
+  // Backward compat: callers that send patch.entities are merged into temp.
+  // New callers send patch.temp. Both work. Internal field is always temp{}.
+  const tempPatch = patch.temp || patch.entities;
+  if (tempPatch) {
+    merged.temp = { ...(current.temp || {}) };
+    for (const [k, v] of Object.entries(tempPatch)) {
       if (k === 'confidence') continue; // handled separately below
-      if (v !== undefined && v !== null) {
-        merged.entities[k] = v;
-      }
+      if (v !== undefined && v !== null) merged.temp[k] = v;
     }
-    if (patch.entities.confidence) {
-      merged.entities.confidence = {
-        ...(current.entities?.confidence || {}),
-        ...patch.entities.confidence
+    if (tempPatch.confidence) {
+      merged.temp.confidence = {
+        ...(current.temp?.confidence || {}),
+        ...tempPatch.confidence
       };
     }
+  }
+
+  // ── BOOKING_CONFIRM: lock all temp → confirmed simultaneously ─────────────
+  // patch.confirmed = 'LOCK_ALL_TEMP' is the single lock event (UAPB BOOKING_CONFIRM).
+  // All temp fields copy to confirmed. confidence is temp-internal, excluded from chart.
+  if (patch.confirmed === 'LOCK_ALL_TEMP') {
+    const snapshot = { ...(merged.temp || {}) };
+    delete snapshot.confidence;
+    merged.confirmed = snapshot;
+  } else if (patch.confirmed && typeof patch.confirmed === 'object') {
+    // Allow direct confirmed patch for edge cases (e.g. CallerRecognition pre-load)
+    merged.confirmed = { ...(current.confirmed || {}), ...patch.confirmed };
   }
 
   // ── doNotReask: union/dedup ──────────────────────────────────────────────
@@ -498,6 +546,36 @@ function _mergePatch(current, patch) {
 }
 
 /**
+ * _migrateNotes — Transparent in-place schema migration for live Redis keys.
+ *
+ * v1 schema used entities{} flat object.
+ * v2 schema uses temp{} + confirmed{} two-phase model.
+ *
+ * Called at top of load() so all callers always receive v2 shape.
+ * Writes migrated notes back to Redis so subsequent reads stay migrated.
+ * Fully non-breaking — v1 Redis keys are silently promoted to v2.
+ */
+async function _migrateNotes(notes, companyId, callSid, redis, key) {
+  if (!notes || notes.version === CONFIG.CURRENT_VERSION) return notes;
+
+  if (notes.version === 1) {
+    notes.temp      = notes.entities || {};
+    notes.confirmed = {};
+    delete notes.entities;
+    notes.version   = CONFIG.CURRENT_VERSION;
+    notes.updatedAt = new Date().toISOString();
+
+    try {
+      await redis.set(key, JSON.stringify(notes), { EX: CONFIG.REDIS_TTL_SECONDS });
+    } catch (_) {
+      // non-fatal — migrated shape is still returned to caller even if Redis write fails
+    }
+  }
+
+  return notes;
+}
+
+/**
  * _initMongoStubFireAndForget — Push an empty stub entry at call start.
  *
  * Called once by init() so _persistToMongoFireAndForget can $set in-place
@@ -513,7 +591,8 @@ function _initMongoStubFireAndForget(notes) {
         discoveryNotes: {
           callSid:    notes.callSid,
           capturedAt: new Date(),
-          entities:   notes.entities || {},
+          temp:       notes.temp      || {},
+          confirmed:  notes.confirmed || {},
           callReason: null,
           urgency:    null,
           objective:  'INTAKE',
@@ -547,9 +626,10 @@ function _persistToMongoFireAndForget(notes) {
     { _id: notes.customerId, companyId: notes.companyId },
     {
       $set: {
-        'discoveryNotes.$[elem].entities': notes.entities,
+        'discoveryNotes.$[elem].temp':      notes.temp      || {},
+        'discoveryNotes.$[elem].confirmed': notes.confirmed || {},
         'discoveryNotes.$[elem].callReason': notes.callReason,
-        'discoveryNotes.$[elem].urgency': notes.urgency,
+        'discoveryNotes.$[elem].urgency':   notes.urgency,
         'discoveryNotes.$[elem].objective': notes.objective,
         'discoveryNotes.$[elem].turnCount': notes.turnNumber,
         'discoveryNotes.$[elem].updatedAt': new Date()

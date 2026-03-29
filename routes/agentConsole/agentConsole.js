@@ -2588,6 +2588,51 @@ router.get('/:companyId/calls/:callSid',
 );
 
 /**
+ * GET /:companyId/calls/:callSid/discovery-notes
+ * Discovery Notes snapshot for a specific call.
+ * Used by the Call Console DN panel to show temp{} + confirmed{} at call end.
+ * Looks up Customer.discoveryNotes[] by callSid.
+ */
+router.get('/:companyId/calls/:callSid/discovery-notes',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    try {
+      const { companyId, callSid } = req.params;
+      const Customer = require('../../models/Customer');
+
+      const customer = await Customer.findOne(
+        { companyId, 'discoveryNotes.callSid': callSid },
+        { name: 1, phone: 1, 'discoveryNotes.$': 1 }
+      ).lean();
+
+      if (!customer || !customer.discoveryNotes?.[0]) {
+        return res.json({ success: true, discoveryNotes: null });
+      }
+
+      const dn = customer.discoveryNotes[0];
+      return res.json({
+        success: true,
+        discoveryNotes: {
+          callSid:    dn.callSid,
+          capturedAt: dn.capturedAt,
+          temp:       dn.temp       || {},
+          confirmed:  dn.confirmed  || {},
+          callReason: dn.callReason || null,
+          urgency:    dn.urgency    || null,
+          objective:  dn.objective  || 'INTAKE',
+          turnCount:  dn.turnCount  || 0,
+          callerName: customer.name || customer.phone || null
+        }
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Discovery notes fetch failed: ${error.message}`);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
  * GET /:companyId/calls/export
  * Export calls as CSV
  */
