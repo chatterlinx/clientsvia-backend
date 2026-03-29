@@ -1032,14 +1032,22 @@ Return ONLY a valid JSON array — no markdown, no explanation:
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/suggest-label
-// Body: { content: string }   — one section's text content
-// Returns: { success, suggestion }
+// Body: { content: string, sectionLabel?: string, containerId?: string }
+// — sectionLabel: existing label if already typed (improves classification accuracy)
+// — containerId: if provided, used for attachedTo when upserting daSubType
+//
+// Single Groq call → returns:
+//   { success, suggestion, daType, daTypeLabel, subTypeKey, subTypeLabel,
+//     triggerPhrases[], arrayExists, needsArray, suggestedArrayLabel }
+//
+// If arrayExists → fire-and-forget upsert sub-type into UAPArray.
+// If !arrayExists → needsArray:true, UI shows "Create '[label]' array" prompt.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  const { content } = req.body;
+  const { content, sectionLabel = '', containerId = null } = req.body;
   if (!content?.trim()) {
     return res.status(400).json({ success: false, error: 'No content provided' });
   }
@@ -1050,36 +1058,134 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
   }
 
   try {
+    // Load company's UAP arrays so Groq can match against what already exists
+    const uapArrays    = await UAPArray.find({ companyId, isActive: true }).lean();
+    const arraysCat    = uapArrays.length > 0
+      ? uapArrays.map(a => `${a.daType}: "${a.label}"`).join('\n')
+      : 'No arrays seeded yet — infer the most logical daType for this content.';
+
+    const labelHint = sectionLabel?.trim()
+      ? `Current label hint: "${sectionLabel.trim()}"\n`
+      : '';
+
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   40,
-      temperature: 0.3,
-      system: `You are a label writer for a phone AI knowledge base used by service companies.
-Given a section's content, write a short label (5-10 words max) that describes the scenario or question this section answers.
-Rules:
-- Plain English only — no markdown, no asterisks, no brackets
-- Describe the situation or caller's question, NOT the answer
-- Be specific and descriptive
-- Use title-case or sentence-case (not ALL CAPS)
-Examples of good labels:
-  "Cost Objection — Caller Pushes Back on Price"
-  "What's Included in Each Tune-Up Visit"
-  "Monthly vs Annual Payment Options"
-  "Caller Asks What the Technician Does On-Site"
-  "General Pricing — How Much Is the Plan"
-Return ONLY the label text. No quotes. No extra text.`,
-      messages: [{ role: 'user', content: content.trim().slice(0, 600) }],
-      jsonMode: false,
+      maxTokens:   220,
+      temperature: 0.2,
+      jsonMode:    true,
+      system: `You are a Knowledge Section classifier for a phone AI platform used by service companies.
+Given a section's content (and optional current label hint), you will:
+1. Write a concise label (5-10 words, plain English, title-case, describes the caller's question NOT the answer)
+2. Classify which intent category (daType) this section answers
+3. Generate 6-10 trigger phrases a caller would say to get routed here
+
+STANDARD daType vocabulary (prefer these unless a better fit exists):
+PRICING_QUERY | AVAILABILITY_QUERY | BOOKING_INTENT | SERVICE_DETAILS_QUERY
+PROMOTIONS_QUERY | WARRANTY_QUERY | EMERGENCY_QUERY | COMPANY_INFO_QUERY
+PAYMENT_QUERY | CANCELLATION_QUERY | COMPLAINT_QUERY
+
+If none fit, invent a logical UPPERCASE_SNAKE_CASE daType.
+
+Return ONLY valid JSON — no markdown:
+{"suggestion":"General Pricing — How Much Is the Plan","daType":"PRICING_QUERY","daTypeLabel":"Pricing Questions","subTypeKey":"maintenance_pricing","subTypeLabel":"Maintenance Visit Pricing","triggerPhrases":["how much does it cost","what's the price","how much for a tune-up"]}`,
+      messages: [{
+        role: 'user',
+        content: `UAP ARRAYS:\n${arraysCat}\n\n${labelHint}SECTION CONTENT:\n${content.trim().slice(0, 600)}`
+      }],
     });
 
-    const suggestion = (result.response || '').trim().replace(/^["'`]|["'`]$/g, '');
-    if (!suggestion) {
-      return res.status(500).json({ success: false, error: 'Groq returned no suggestion' });
+    if (!result.response) {
+      return res.status(500).json({ success: false, error: 'Groq returned no response' });
     }
 
-    logger.debug('[companyKnowledge] suggest-label', { companyId, suggestion });
-    return res.json({ success: true, suggestion });
+    // Parse response
+    let parsed;
+    try {
+      const raw = result.response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      const m   = raw.match(/\{[\s\S]*\}/);
+      parsed    = JSON.parse(m ? m[0] : raw);
+      if (!parsed.suggestion) throw new Error('missing suggestion field');
+    } catch (pe) {
+      logger.warn('[companyKnowledge] suggest-label: parse failed', { companyId, err: pe.message });
+      return res.status(500).json({ success: false, error: 'Could not parse Groq response' });
+    }
+
+    const {
+      suggestion,
+      daType        = null,
+      daTypeLabel   = daType,
+      subTypeKey    = null,
+      subTypeLabel  = null,
+      triggerPhrases = [],
+    } = parsed;
+
+    const cleanPhrases = [...new Set(
+      (Array.isArray(triggerPhrases) ? triggerPhrases : [])
+        .filter(p => typeof p === 'string')
+        .map(p => p.toLowerCase().trim())
+        .filter(p => p.length > 2 && p.length < 120)
+    )].slice(0, 14);
+
+    // Check if matching UAPArray already exists for this company
+    const matchingArray = daType
+      ? uapArrays.find(a => a.daType === daType)
+      : null;
+    const arrayExists   = !!matchingArray;
+    const needsArray    = !!daType && !arrayExists;
+
+    // If array exists → fire-and-forget upsert sub-type + trigger phrases
+    if (arrayExists && cleanPhrases.length > 0) {
+      setImmediate(async () => {
+        try {
+          if (subTypeKey) {
+            const subExists = (matchingArray.daSubTypes || []).some(s => s.key === subTypeKey);
+            if (subExists) {
+              await UAPArray.updateOne(
+                { companyId, daType, 'daSubTypes.key': subTypeKey },
+                {
+                  $addToSet: { 'daSubTypes.$.triggerPhrases': { $each: cleanPhrases },
+                               ...(containerId ? { 'daSubTypes.$.attachedTo': String(containerId) } : {}) },
+                }
+              );
+            } else {
+              await UAPArray.findOneAndUpdate(
+                { companyId, daType },
+                { $push: { daSubTypes: {
+                    key: subTypeKey, label: subTypeLabel || subTypeKey,
+                    triggerPhrases: cleanPhrases,
+                    attachedTo: containerId ? [String(containerId)] : [],
+                    classificationStatus: 'AUTO_CONFIRMED',
+                } } }
+              );
+            }
+          }
+          BridgeService.invalidate(companyId).catch(() => {});
+          logger.info('[companyKnowledge] suggest-label: UAP sub-type upserted', {
+            companyId, daType, subTypeKey, phrasesAdded: cleanPhrases.length
+          });
+        } catch (uapErr) {
+          logger.warn('[companyKnowledge] suggest-label: UAP upsert failed (non-blocking)', {
+            companyId, daType, err: uapErr.message
+          });
+        }
+      });
+    }
+
+    logger.debug('[companyKnowledge] suggest-label', { companyId, suggestion, daType, arrayExists });
+    return res.json({
+      success:            true,
+      suggestion:         suggestion.trim().replace(/^["'`]|["'`]$/g, ''),
+      daType,
+      daTypeLabel,
+      subTypeKey,
+      subTypeLabel,
+      triggerPhrases:     cleanPhrases,
+      arrayExists,
+      needsArray,
+      suggestedArrayLabel: daTypeLabel || daType,
+    });
+
   } catch (err) {
     logger.error('[companyKnowledge] suggest-label error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Failed to generate label suggestion' });

@@ -167,6 +167,54 @@ router.get('/:companyId/uap/arrays', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// POST /:companyId/uap/arrays
+// Create a single custom UAPArray (e.g. from the "suggest array" flow in KC).
+// Body: { daType, label, daSubTypes? }
+// Idempotent: if daType already exists for this company, returns it unchanged.
+// ⚠️  MUST be registered BEFORE /seed so Express doesn't match 'seed' as :id
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/uap/arrays', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { daType, label, daSubTypes } = req.body;
+  if (!daType?.trim() || !label?.trim()) {
+    return res.status(400).json({ success: false, error: 'daType and label are required' });
+  }
+
+  const cleanDaType = daType.trim().toUpperCase().replace(/\s+/g, '_');
+  const cleanLabel  = label.trim();
+
+  try {
+    // Idempotent — return existing if already present
+    const existing = await UAPArray.findOne({ companyId, daType: cleanDaType }).lean();
+    if (existing) {
+      return res.json({ success: true, array: existing, created: false });
+    }
+
+    const newArray = await UAPArray.create({
+      companyId,
+      daType:     cleanDaType,
+      label:      cleanLabel,
+      isStandard: false,
+      daSubTypes: Array.isArray(daSubTypes) ? daSubTypes : [],
+      isActive:   true,
+    });
+
+    logger.info('[UAPArrays] POST arrays: created custom array', { companyId, daType: cleanDaType });
+    return res.json({ success: true, array: newArray.toObject(), created: true });
+  } catch (err) {
+    if (err.code === 11000) {
+      // Race condition — another request created it; load and return
+      const existing = await UAPArray.findOne({ companyId, daType: cleanDaType }).lean();
+      return res.json({ success: true, array: existing, created: false });
+    }
+    logger.error('[UAPArrays] POST arrays error', { companyId, daType: cleanDaType, error: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to create array' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // POST /:companyId/uap/arrays/seed
 // Seed standard arrays (idempotent — skips existing daTypes).
 // Safe to call multiple times.
