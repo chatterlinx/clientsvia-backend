@@ -73,7 +73,10 @@
 
   // ── Auth + API helpers ────────────────────────────────────────────────────
   function _getToken() {
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return localStorage.getItem('adminToken')
+        || localStorage.getItem('token')
+        || sessionStorage.getItem('token')
+        || '';
   }
 
   async function _api(method, path, body) {
