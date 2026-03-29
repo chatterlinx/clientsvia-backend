@@ -1034,7 +1034,10 @@ Return ONLY a valid JSON array — no markdown, no explanation:
 // POST /:companyId/knowledge/suggest-label
 // Body: { content: string, sectionLabel?: string, containerId?: string }
 // — sectionLabel: existing label if already typed (improves classification accuracy)
-// — containerId: if provided, used for attachedTo when upserting daSubType
+// — containerId: loads container title+category + used for attachedTo on upsert
+//
+// Groq receives: company name + trade/industry + container title + category + section content
+// → industry-specific trigger phrases, not generic ones (multi-tenant requirement)
 //
 // Single Groq call → returns:
 //   { success, suggestion, daType, daTypeLabel, subTypeKey, subTypeLabel,
@@ -1058,27 +1061,51 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
   }
 
   try {
-    // Load company's UAP arrays so Groq can match against what already exists
-    const uapArrays    = await UAPArray.find({ companyId, isActive: true }).lean();
-    const arraysCat    = uapArrays.length > 0
+    // Load in parallel: UAP arrays + company identity + container meta
+    const [uapArrays, company, container] = await Promise.all([
+      UAPArray.find({ companyId, isActive: true }).lean(),
+      v2Company.findById(companyId, 'companyName tradeCategories').lean(),
+      containerId
+        ? CompanyKnowledgeContainer.findOne({ _id: containerId, companyId }, 'title category').lean()
+        : Promise.resolve(null),
+    ]);
+
+    // ── Company context for trade-aware trigger phrases ─────────────────────
+    const companyName  = company?.companyName?.trim()   || null;
+    const trades       = (company?.tradeCategories || []).filter(Boolean);
+    const tradeString  = trades.length > 0 ? trades.join(', ') : null;
+
+    // ── Container context (title + category tell us the topic scope) ─────────
+    const containerTitle    = container?.title?.trim()    || null;
+    const containerCategory = container?.category?.trim() || null;
+
+    // ── UAP arrays catalogue ─────────────────────────────────────────────────
+    const arraysCat = uapArrays.length > 0
       ? uapArrays.map(a => `${a.daType}: "${a.label}"`).join('\n')
       : 'No arrays seeded yet — infer the most logical daType for this content.';
 
-    const labelHint = sectionLabel?.trim()
-      ? `Current label hint: "${sectionLabel.trim()}"\n`
+    // ── Build context block for Groq ─────────────────────────────────────────
+    const contextLines = [];
+    if (companyName)         contextLines.push(`Company: "${companyName}"`);
+    if (tradeString)         contextLines.push(`Trade/Industry: ${tradeString}`);
+    if (containerTitle)      contextLines.push(`Container title: "${containerTitle}"`);
+    if (containerCategory)   contextLines.push(`Container category: "${containerCategory}"`);
+    if (sectionLabel?.trim()) contextLines.push(`Current section label hint: "${sectionLabel.trim()}"`);
+    const contextBlock = contextLines.length > 0
+      ? `CONTEXT:\n${contextLines.join('\n')}\n\n`
       : '';
 
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   220,
+      maxTokens:   260,
       temperature: 0.2,
       jsonMode:    true,
       system: `You are a Knowledge Section classifier for a phone AI platform used by service companies.
-Given a section's content (and optional current label hint), you will:
+Given a section's content and company context, you will:
 1. Write a concise label (5-10 words, plain English, title-case, describes the caller's question NOT the answer)
 2. Classify which intent category (daType) this section answers
-3. Generate 6-10 trigger phrases a caller would say to get routed here
+3. Generate 6-10 trigger phrases — phrases must be INDUSTRY-SPECIFIC using the company's trade (e.g. for HVAC: "how much is an AC tune-up", not just "how much does it cost")
 
 STANDARD daType vocabulary (prefer these unless a better fit exists):
 PRICING_QUERY | AVAILABILITY_QUERY | BOOKING_INTENT | SERVICE_DETAILS_QUERY
@@ -1087,11 +1114,16 @@ PAYMENT_QUERY | CANCELLATION_QUERY | COMPLAINT_QUERY
 
 If none fit, invent a logical UPPERCASE_SNAKE_CASE daType.
 
+Critical for multi-tenant accuracy:
+- Use the company's trade/industry to make trigger phrases specific (not generic)
+- Use the container title + category to scope the sub-type key correctly
+- subTypeKey must reflect BOTH the topic and the trade (e.g. "hvac_maintenance_pricing" not "pricing")
+
 Return ONLY valid JSON — no markdown:
-{"suggestion":"General Pricing — How Much Is the Plan","daType":"PRICING_QUERY","daTypeLabel":"Pricing Questions","subTypeKey":"maintenance_pricing","subTypeLabel":"Maintenance Visit Pricing","triggerPhrases":["how much does it cost","what's the price","how much for a tune-up"]}`,
+{"suggestion":"Annual Maintenance Plan Cost","daType":"PRICING_QUERY","daTypeLabel":"Pricing Questions","subTypeKey":"hvac_maintenance_pricing","subTypeLabel":"HVAC Maintenance Plan Pricing","triggerPhrases":["how much is the AC maintenance plan","what does the annual HVAC service cost","price for the maintenance agreement"]}`,
       messages: [{
         role: 'user',
-        content: `UAP ARRAYS:\n${arraysCat}\n\n${labelHint}SECTION CONTENT:\n${content.trim().slice(0, 600)}`
+        content: `UAP ARRAYS:\n${arraysCat}\n\n${contextBlock}SECTION CONTENT:\n${content.trim().slice(0, 600)}`
       }],
     });
 
