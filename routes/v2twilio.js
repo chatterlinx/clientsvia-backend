@@ -8857,11 +8857,13 @@ router.post('/status-callback/:companyId', async (req, res) => {
           }}
         );
 
-        // ── DISCOVERY NOTES: persist to Customer record + purge Redis ───────
-        // Non-blocking — runs after call end, never affects response path.
+        // ── DISCOVERY NOTES: persist → purge → classify → chart stamp ───────
+        // Non-blocking chain — runs after call end, never affects response path.
+        // Order matters: persist must complete before classify reads from MongoDB.
         if (callSummary.customerId) {
           const DiscoveryNotesService   = require('../services/discoveryNotes/DiscoveryNotesService');
           const CallOutcomeClassifier   = require('../services/engine/CallOutcomeClassifier');
+          const CustomerProfileService  = require('../services/engine/CustomerProfileService');
           const _parsedDur              = parseInt(CallDuration) || 0;
           const _customerId             = String(callSummary.customerId);
           const _companyId              = String(callSummary.companyId);
@@ -8870,7 +8872,8 @@ router.post('/status-callback/:companyId', async (req, res) => {
           DiscoveryNotesService.persist(_companyId, CallSid, _customerId)
             .then(() => DiscoveryNotesService.purge(_companyId, CallSid))
             .then(() => CallOutcomeClassifier.persist(_companyId, CallSid, _customerId, _callSummaryId, _parsedDur))
-            .catch(e => logger.warn('[CALL STATUS] DiscoveryNotes persist/purge/classify failed (non-fatal)', {
+            .then(() => CustomerProfileService.stamp(_companyId, CallSid, _customerId, _parsedDur))
+            .catch(e => logger.warn('[CALL STATUS] End-of-call chain failed (non-fatal)', {
               callSid: CallSid,
               error: e.message
             }));

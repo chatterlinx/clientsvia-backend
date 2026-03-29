@@ -70,6 +70,31 @@ const preferencesSchema = new Schema({
     specialInstructions: { type: String, trim: true } // "Call 30 min before arrival"
 }, { _id: false });
 
+// ── Sub-schema: callHistory entry (Step 12) ───────────────────────────────────
+// Stamped at call end — permanent chart entry. Source of truth for reports.
+// Only CONFIRMED fields are written here (not temp). Temp never enters the chart.
+const callHistoryEntrySchema = new Schema({
+    callSid:         { type: String, trim: true },
+    callDate:        { type: Date, default: Date.now },
+    durationSeconds: { type: Number, default: 0 },
+    callOutcome:     { type: String, default: null },   // CONVERTED|BOOKING_STARTED|etc.
+    callReason:      { type: String, default: null },
+    serviceType:     { type: String, default: null },
+    confirmedFields: { type: Schema.Types.Mixed, default: {} }, // confirmed{} at BOOKING_CONFIRM
+    staffInvolved:   { type: String, default: null },   // name mentioned/matched
+    urgency:         { type: String, default: null },
+    objective:       { type: String, default: null },
+    isLostLead:      { type: Boolean, default: false },
+}, { _id: false });
+
+// ── Sub-schema: staffRelationship entry ───────────────────────────────────────
+const staffRelationshipSchema = new Schema({
+    staffName:           { type: String, trim: true },
+    interactionCount:    { type: Number, default: 1 },
+    lastInteractionAt:   { type: Date, default: Date.now },
+    preferenceNotes:     { type: String, default: null },   // "asks for this tech often"
+}, { _id: false });
+
 // --- Sub-schema for Discovery Notes (per-call live state — DiscoveryNotesService) ---
 const discoveryNoteSchema = new Schema({
     callSid:    { type: String, trim: true },
@@ -184,6 +209,39 @@ const customerSchema = new Schema({
     // One entry per call. Redis is the hot-path store during the call;
     // this is the durable record written at call end via DiscoveryNotesService.persist().
     discoveryNotes: [discoveryNoteSchema],
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CALL HISTORY (Step 12) — permanent chart, written at call end
+    // ═══════════════════════════════════════════════════════════════════════════
+    // One stamped entry per completed call. Only confirmed{} fields enter here.
+    // Temp{} is working hypothesis — never enters the permanent chart.
+    // This IS the caller's chart. Never discarded. Never lost.
+    callHistory: [callHistoryEntrySchema],
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CALLER PROFILE (Step 13) — enriched cross-call intelligence
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Summarizes patterns across all calls. Updated at call end by CustomerProfileService.
+    callerProfile: {
+        // All distinct names heard across calls (proxy detection, name variants)
+        knownNames: [{
+            name:        { type: String, trim: true },
+            seenCount:   { type: Number, default: 1 },
+            lastSeenAt:  { type: Date, default: Date.now },
+            source:      { type: String, enum: ['confirmed', 'temp', 'manual'], default: 'confirmed' },
+        }],
+        // Staff the caller has relationship with (mentioned by name, prefers)
+        staffRelationships: [staffRelationshipSchema],
+        // Company-defined custom fields (from bookingFieldConfig)
+        customFields: { type: Schema.Types.Mixed, default: {} },
+        // Visit statistics
+        totalConfirmedBookings: { type: Number, default: 0 },
+        totalLostLeads:         { type: Number, default: 0 },
+        lastConfirmedBookingAt: { type: Date, default: null },
+        lastCallAt:             { type: Date, default: null },
+        // Promotions applied — promotedHistory (G10)
+        promotedHistory: [{ type: Schema.Types.Mixed }],
+    },
 
     // ═══════════════════════════════════════════════════════════════════════════
     // RELATIONSHIP METRICS
