@@ -47,6 +47,7 @@ const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
 const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthService');
 const UAPArray                     = require('../../models/UAPArray');
+const BridgeService                = require('../../services/engine/kc/BridgeService');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -275,6 +276,11 @@ router.post('/:companyId/knowledge', async (req, res) => {
     KnowledgeContainerService.invalidateCache(companyId).catch(e =>
       logger.warn('[companyKnowledge] cache invalidation failed on POST', { companyId, e: e.message })
     );
+
+    // Invalidate Bridge if container has a daType (it's now part of the routing table)
+    if (body.daType) {
+      BridgeService.invalidate(companyId).catch(() => {});
+    }
 
     // Generate semantic embedding fire-and-forget — failure never blocks the response
     setImmediate(() =>
@@ -842,6 +848,13 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
       logger.warn('[companyKnowledge] cache invalidation failed on PATCH', { companyId, e: e.message })
     );
 
+    // Invalidate Bridge if daType changed (routing table must be rebuilt)
+    if (updates.daType !== undefined || updates.isActive !== undefined) {
+      BridgeService.invalidate(companyId).catch(e =>
+        logger.warn('[companyKnowledge] Bridge invalidation failed (non-blocking)', { companyId, e: e.message })
+      );
+    }
+
     // Re-embed if title or sections changed (the fields that affect semantic meaning)
     if (updates.title !== undefined || updates.sections !== undefined) {
       setImmediate(() =>
@@ -1295,8 +1308,9 @@ Return ONLY valid JSON. No markdown.
       });
     }
 
-    // Invalidate KC cache (daType field changed)
+    // Invalidate KC cache + Bridge (daType field changed)
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
 
     logger.info('[companyKnowledge] auto-classify complete', {
       companyId, id, daType, confidence, phrasesGenerated: cleanedPhrases.length

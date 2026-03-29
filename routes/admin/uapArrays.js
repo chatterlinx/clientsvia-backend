@@ -38,6 +38,7 @@ const logger              = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
 const UAPArray            = require('../../models/UAPArray');
 const Company             = require('../../models/v2Company');
+const BridgeService       = require('../../services/engine/kc/BridgeService');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -264,6 +265,12 @@ router.patch('/:companyId/uap/arrays/:id', async (req, res) => {
     }
 
     await array.save();
+
+    // Invalidate Bridge — trigger phrase changes require a fresh routing table
+    BridgeService.invalidate(companyId).catch(e =>
+      logger.warn('[UAPArrays] Bridge invalidation failed (non-blocking)', { companyId, e: e.message })
+    );
+
     logger.info('[UAPArrays] Array updated', { companyId, id, subTypeKey });
     return res.json({ success: true, array });
   } catch (err) {

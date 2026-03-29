@@ -56,6 +56,13 @@ const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesServ
 const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');
 
+// ── UAP Layer 1 (Step 6 — Build Step 5+6) ────────────────────────────────────
+const UtteranceActParser      = require('./UtteranceActParser');
+const BridgeService           = require('./BridgeService');
+
+// UAP confidence threshold (G12: UAP confidence ≥ 0.8 wins, else keyword scoring)
+const UAP_CONFIDENCE_THRESHOLD = 0.80;
+
 // ============================================================================
 // PATH CONSTANTS
 // ============================================================================
@@ -666,8 +673,108 @@ class KCDiscoveryRunner {
       });
     }
 
-    // Step 1: keyword match (synchronous, ~0ms)
-    let match = KCS.findContainer(scorableContainers, userInput, callContext);
+    // ══════════════════════════════════════════════════════════════════════════
+    // UAP LAYER 1 — Zero-latency intent fast path  (~1ms)
+    // ══════════════════════════════════════════════════════════════════════════
+    // UtteranceActParser classifies the utterance against the company's Bridge
+    // phrase index (pre-built from UAPArrays, cached in Redis).
+    //
+    // G12 RULE: UAP confidence ≥ 0.8 → Bridge lookup → direct container match.
+    //           UAP confidence  < 0.8 → fall through to Gate 3 keyword scoring.
+    //
+    // SPFUQ INTERLOCK: If an SPFUQ anchor is active AND UAP hits with confidence
+    // ≥ 0.8 on a DIFFERENT daType than the anchored container → UAP wins (topic hop).
+    // If same daType → SPFUQ continuation takes priority (answered below).
+    //
+    // GRACEFUL DEGRADE: Any UAP error returns NONE (confidence=0) → keyword scoring.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    let match = null;  // declared here so UAP can set it before keyword scoring
+    let uapResult = null;
+
+    try {
+      uapResult = await UtteranceActParser.parse(companyId, userInput);
+
+      if (uapResult.daType && uapResult.confidence >= UAP_CONFIDENCE_THRESHOLD) {
+        logger.info('[KC_ENGINE] 🧠 UAP Layer 1 HIT', {
+          companyId, callSid, turn,
+          daType:        uapResult.daType,
+          confidence:    uapResult.confidence,
+          matchType:     uapResult.matchType,
+          matchedPhrase: uapResult.matchedPhrase,
+        });
+        emit('KC_UAP_HIT', {
+          companyId, callSid, turn,
+          daType:     uapResult.daType,
+          confidence: uapResult.confidence,
+          matchType:  uapResult.matchType,
+        });
+
+        // Look up KC containers for this daType via Bridge
+        const bridgeContainers = await BridgeService.lookup(companyId, uapResult.daType);
+
+        if (bridgeContainers?.length > 0) {
+          // Find the first scorable container (not rejected) from the bridge result
+          const bridgeContainer = bridgeContainers.find(bc =>
+            !rejectedContainerIds.has(bc.id) &&
+            scorableContainers.some(c => String(c._id || '') === bc.id)
+          );
+
+          if (bridgeContainer) {
+            // Hydrate — find the full container object from our already-loaded list
+            const fullContainer = scorableContainers.find(c =>
+              String(c._id || '') === bridgeContainer.id
+            );
+
+            if (fullContainer) {
+              match = {
+                container:    fullContainer,
+                score:        Math.round(uapResult.confidence * 100),
+                matchSource:  'UAP_LAYER1',
+                uapResult,
+              };
+
+              logger.info('[KC_ENGINE] 🧠 UAP Bridge resolved container', {
+                companyId, callSid, turn,
+                containerTitle: fullContainer.title,
+                daType:         uapResult.daType,
+                confidence:     uapResult.confidence,
+              });
+            }
+          }
+        }
+
+        // Log UAP parse result to discoveryNotes qaLog (diagnostic, fire-and-forget)
+        _writeDiscoveryNotes(companyId, callSid, {
+          qaLog: [{
+            type:      'UAP_LAYER1',
+            daType:    uapResult.daType,
+            confidence: uapResult.confidence,
+            matchType:  uapResult.matchType,
+            phrase:    uapResult.matchedPhrase,
+            hit:       !!match,
+            turn:      turn ?? 0,
+          }],
+        }).catch(() => {});
+
+      } else if (uapResult.daType) {
+        // UAP hit but below threshold — log for calibration diagnostics
+        logger.debug('[KC_ENGINE] UAP Layer 1 below threshold — keyword scoring', {
+          companyId, callSid, turn,
+          daType:     uapResult.daType,
+          confidence: uapResult.confidence,
+          threshold:  UAP_CONFIDENCE_THRESHOLD,
+        });
+      }
+    } catch (_uapErr) {
+      // UAP error — graceful degrade to keyword scoring, never block the call
+      logger.warn('[KC_ENGINE] UAP Layer 1 error — falling through to keyword scoring', {
+        companyId, callSid, err: _uapErr.message,
+      });
+    }
+
+    // Step 1: keyword match (synchronous, ~0ms) — skipped if UAP already found match
+    if (!match) match = KCS.findContainer(scorableContainers, userInput, callContext);
 
     if (match?.contextAssisted) {
       emit('KC_CONTEXT_MATCH', {
