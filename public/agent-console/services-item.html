@@ -680,6 +680,70 @@
     </div>
   </div>
 
+  <!-- ── 8. UAP Classification ─────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">🧠</span>
+      <div>
+        <div class="form-card-title">UAP Classification</div>
+        <div class="form-card-subtitle">Links this container to an intent array so the agent can route here at zero latency</div>
+      </div>
+      <span class="form-card-badge optional" id="uapStatusBadge" style="display:none;"></span>
+    </div>
+    <div class="form-card-body">
+
+      <!-- daType selector row -->
+      <div class="form-row" style="align-items:flex-end;">
+        <div class="form-group">
+          <label class="form-label">Intent Array (daType)</label>
+          <select id="fDaType" class="form-select" onchange="onDaTypeChange()">
+            <option value="">— Unclassified —</option>
+            <!-- Populated from /uap-arrays API -->
+          </select>
+          <div class="form-hint" style="margin-top:4px;">Which type of caller question does this container answer?
+            <a href="#" id="uapManageLink" style="color:var(--color-primary);text-decoration:none;font-size:11px;display:inline-block;margin-left:4px;" target="_blank">Manage arrays ↗</a>
+          </div>
+        </div>
+        <div class="form-group" id="grpDaSubType" style="display:none;">
+          <label class="form-label">Sub-Type (optional)</label>
+          <select id="fDaSubType" class="form-select">
+            <option value="">— Any sub-type —</option>
+          </select>
+          <div class="form-hint" style="margin-top:4px;">Narrow down to a specific sub-category within this array.</div>
+        </div>
+      </div>
+
+      <!-- Current classification status -->
+      <div id="uapClassificationStatus" style="display:none; padding:10px 14px; border-radius:8px; font-size:12px; background:#f8fafc; border:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span id="uapStatusLabel" style="font-weight:600;"></span>
+          <span id="uapScoreChip" style="display:none;font-size:11px;padding:1px 7px;border-radius:10px;background:#dbeafe;color:#1d4ed8;"></span>
+          <span id="uapClassifiedAt" style="color:var(--text-muted);font-size:11px;"></span>
+        </div>
+        <div id="uapTriggerPhrasesWrap" style="display:none;margin-top:8px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">Trigger phrases generated:</div>
+          <div id="uapTriggerPhrases" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        </div>
+      </div>
+
+      <!-- Auto-classify button -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button type="button" class="btn-secondary" id="btnAutoClassify" onclick="autoClassify()"
+          title="Ask Groq to infer the best daType and generate trigger phrases from this container's content"
+          style="display:flex;align-items:center;gap:6px;">
+          <span>⚡</span><span>Auto-classify from Content</span>
+        </button>
+        <div id="uapAutoClassifyStatus" style="font-size:12px;color:var(--text-muted);display:none;"></div>
+      </div>
+
+      <div class="form-hint">
+        <strong>How it works:</strong> Auto-classify reads this container's title and sections, infers the best intent category, and generates caller trigger phrases — which are automatically added to the matching UAP array.
+        The agent uses these at runtime for zero-latency routing (before KC keyword scoring).
+        You can also set the daType manually and leave auto-classify for trigger phrase generation.
+      </div>
+    </div>
+  </div>
+
   <!-- ── Bottom action bar ──────────────────────────────────────────────────── -->
   <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px;">
     <button class="btn-secondary" onclick="goBack()">Cancel</button>
@@ -724,6 +788,13 @@ const S = {
   conflictMap:      {},         // { keyword: [{id, title}] } — from keyword-health endpoint
   evalResult:       null,       // last evaluation result from /evaluate
   evalLoading:      false,
+  // UAP classification state
+  uapArrays:        [],         // [{daType, label, daSubTypes:[{key,label}]}] — loaded on init
+  daType:           null,       // currently selected daType (string or null)
+  daSubType:        null,       // currently selected sub-type key (string or null)
+  classificationStatus: null,   // AUTO_CONFIRMED | MANUAL | PENDING | UNCLASSIFIED
+  classificationScore:  null,
+  autoClassifiedAt:     null,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -774,6 +845,9 @@ const LABEL_SUGGESTIONS = [
 
   // Populate category datalist from existing containers
   _loadCategoryOptions();
+
+  // Populate UAP daType dropdown + manage link
+  _loadUAPArrays();
 })();
 
 async function _loadCategoryOptions() {
@@ -872,6 +946,14 @@ function _populateForm(c) {
   }
   // Complexity indicator needs sections in DOM — update now that they are rendered
   _updateComplexityIndicator();
+
+  // UAP classification state — populate after uapArrays loaded (may race; _loadUAPArrays handles re-render)
+  S.daType              = c.daType              || null;
+  S.daSubType           = (c.daSubTypes || [])[0] || null;
+  S.classificationStatus = c.classificationStatus || 'UNCLASSIFIED';
+  S.classificationScore  = c.classificationScore  || null;
+  S.autoClassifiedAt     = c.autoClassifiedAt     || null;
+  _renderUAPStatus();
 }
 
 function _showForm() {
@@ -1383,6 +1465,10 @@ async function saveContainer() {
   // Build payload
   const wordLimitVal    = parseInt(document.getElementById('fWordLimit').value, 10);
   const followUpDepthRaw = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
+  // UAP classification fields — manual daType selection
+  const selectedDaType    = document.getElementById('fDaType')?.value?.trim() || null;
+  const selectedDaSubType = document.getElementById('fDaSubType')?.value?.trim() || null;
+
   const payload = {
     title,
     category:       document.getElementById('fCategory').value?.trim() || '',
@@ -1395,6 +1481,12 @@ async function saveContainer() {
     followUpDepth:  (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
     isActive:       document.getElementById('fActive').checked,
     priority:       parseInt(document.getElementById('fPriority').value, 10) || 100,
+    // UAP classification — manual selection only; auto-classify writes its own fields via separate route
+    daType:               selectedDaType   || null,
+    daSubTypes:           selectedDaSubType ? [selectedDaSubType] : [],
+    classificationStatus: selectedDaType
+      ? (S.classificationStatus === 'AUTO_CONFIRMED' ? 'AUTO_CONFIRMED' : 'MANUAL')
+      : 'UNCLASSIFIED',
   };
 
   _setLoading(true);
@@ -1416,6 +1508,198 @@ async function saveContainer() {
   } catch (err) {
     _toast(err.message || 'Failed to save', 'error');
     _setLoading(false);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UAP CLASSIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _loadUAPArrays() {
+  try {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/uap-arrays`);
+    S.uapArrays = data.arrays || [];
+  } catch (_e) {
+    S.uapArrays = [];
+  }
+
+  // Wire manage link
+  const manageLink = document.getElementById('uapManageLink');
+  if (manageLink) {
+    manageLink.href = `/agent-console/uap.html?companyId=${S.companyId}`;
+  }
+
+  // Populate daType dropdown
+  const sel = document.getElementById('fDaType');
+  if (!sel) return;
+
+  // Keep placeholder option, add all daTypes
+  sel.innerHTML = '<option value="">— Unclassified —</option>' +
+    S.uapArrays.map(a =>
+      `<option value="${_esc(a.daType)}">${_esc(a.label)} (${_esc(a.daType)})</option>`
+    ).join('');
+
+  // Set current value from state (may have been populated by _populateForm already)
+  if (S.daType) {
+    sel.value = S.daType;
+    _populateSubTypeDropdown(S.daType, S.daSubType);
+  }
+
+  // Render status block after arrays are loaded
+  _renderUAPStatus();
+}
+
+function onDaTypeChange() {
+  const sel = document.getElementById('fDaType');
+  S.daType  = sel?.value?.trim() || null;
+  S.daSubType = null;
+  _populateSubTypeDropdown(S.daType, null);
+  // Update status badge
+  const badge = document.getElementById('uapStatusBadge');
+  if (badge) {
+    if (S.daType) {
+      badge.textContent = 'MANUAL';
+      badge.style.cssText = 'display:;background:#fef9c3;border-color:#fde047;color:#854d0e;';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+function _populateSubTypeDropdown(daType, selectedSubTypeKey) {
+  const grp = document.getElementById('grpDaSubType');
+  const sel = document.getElementById('fDaSubType');
+  if (!grp || !sel) return;
+
+  if (!daType) {
+    grp.style.display = 'none';
+    sel.innerHTML = '<option value="">— Any sub-type —</option>';
+    return;
+  }
+
+  const array = S.uapArrays.find(a => a.daType === daType);
+  const subTypes = array?.daSubTypes || [];
+
+  if (!subTypes.length) {
+    grp.style.display = 'none';
+    return;
+  }
+
+  grp.style.display = '';
+  sel.innerHTML = '<option value="">— Any sub-type —</option>' +
+    subTypes.map(s =>
+      `<option value="${_esc(s.key)}" ${selectedSubTypeKey === s.key ? 'selected' : ''}>${_esc(s.label)}</option>`
+    ).join('');
+}
+
+function _renderUAPStatus() {
+  const statusWrap = document.getElementById('uapClassificationStatus');
+  const badge      = document.getElementById('uapStatusBadge');
+  if (!statusWrap) return;
+
+  if (!S.classificationStatus || S.classificationStatus === 'UNCLASSIFIED') {
+    statusWrap.style.display = 'none';
+    if (badge) badge.style.display = 'none';
+    return;
+  }
+
+  statusWrap.style.display = '';
+
+  // Badge
+  const BADGE_STYLES = {
+    AUTO_CONFIRMED: 'background:#dcfce7;border-color:#86efac;color:#166534;',
+    MANUAL:         'background:#fef9c3;border-color:#fde047;color:#854d0e;',
+    PENDING:        'background:#fef3c7;border-color:#fcd34d;color:#92400e;',
+  };
+  if (badge) {
+    badge.style.cssText = BADGE_STYLES[S.classificationStatus] || '';
+    badge.textContent   = S.classificationStatus.replace('_', ' ');
+    badge.style.display = '';
+  }
+
+  // Status label
+  const labelMap = {
+    AUTO_CONFIRMED: '✅ Auto-classified by Groq',
+    MANUAL:         '✏️ Manually set',
+    PENDING:        '⏳ Pending review',
+  };
+  const statusLabel = document.getElementById('uapStatusLabel');
+  if (statusLabel) statusLabel.textContent = labelMap[S.classificationStatus] || S.classificationStatus;
+
+  // Confidence score chip
+  const scoreChip = document.getElementById('uapScoreChip');
+  if (scoreChip) {
+    if (S.classificationScore !== null && S.classificationScore !== undefined) {
+      const pct = Math.round(S.classificationScore * 100);
+      scoreChip.textContent = `${pct}% confidence`;
+      scoreChip.style.display = '';
+    } else {
+      scoreChip.style.display = 'none';
+    }
+  }
+
+  // Classified at timestamp
+  const classifiedAt = document.getElementById('uapClassifiedAt');
+  if (classifiedAt && S.autoClassifiedAt) {
+    const d = new Date(S.autoClassifiedAt);
+    classifiedAt.textContent = `Classified ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+  }
+
+  // Set dropdowns to current state
+  const daTypeSel = document.getElementById('fDaType');
+  if (daTypeSel && S.daType) {
+    daTypeSel.value = S.daType;
+    _populateSubTypeDropdown(S.daType, S.daSubType);
+  }
+}
+
+async function autoClassify() {
+  if (!S.itemId) {
+    _toast('Save the container first, then auto-classify', 'error');
+    return;
+  }
+
+  const btn    = document.getElementById('btnAutoClassify');
+  const status = document.getElementById('uapAutoClassifyStatus');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span>⚡</span><span>Classifying…</span>'; }
+  if (status) { status.textContent = 'Running Groq classification…'; status.style.display = ''; }
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}/auto-classify`,
+      { method: 'POST' }
+    );
+    if (!data.success) throw new Error(data.error || 'Classification failed');
+
+    // Update local state
+    S.daType              = data.daType;
+    S.daSubType           = data.subTypeKey || null;
+    S.classificationStatus = 'AUTO_CONFIRMED';
+    S.classificationScore  = data.classificationScore;
+    S.autoClassifiedAt     = new Date().toISOString();
+
+    // Reload UAP arrays (trigger phrases were added — sub-types may have changed)
+    await _loadUAPArrays();
+
+    // Show trigger phrases
+    const phrasesWrap = document.getElementById('uapTriggerPhrasesWrap');
+    const phrasesDiv  = document.getElementById('uapTriggerPhrases');
+    if (phrasesWrap && phrasesDiv && data.triggerPhrases?.length) {
+      phrasesDiv.innerHTML = data.triggerPhrases.map(p =>
+        `<span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;border:1px solid #bfdbfe;">${_esc(p)}</span>`
+      ).join('');
+      phrasesWrap.style.display = '';
+    }
+
+    _renderUAPStatus();
+    if (status) { status.textContent = `✓ ${data.message || 'Classification complete'}`; }
+    _toast(`Classified as ${data.daTypeLabel || data.daType} ✓`, 'success');
+
+  } catch (err) {
+    if (status) { status.textContent = ''; status.style.display = 'none'; }
+    _toast(err.message || 'Auto-classification failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span>⚡</span><span>Auto-classify from Content</span>'; }
   }
 }
 

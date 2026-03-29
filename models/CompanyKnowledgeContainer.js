@@ -220,6 +220,52 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
     },
 
     // ─────────────────────────────────────────────────────────────────────────
+    // UAP CLASSIFICATION — which daType array this container maps to
+    // Set manually from UI or auto-generated via POST .../auto-classify.
+    // Runtime Bridge uses this for zero-latency intent routing.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // The UAP daType this container belongs to (e.g. 'PRICING_QUERY', 'AVAILABILITY_QUERY').
+    // null = unclassified → runtime falls through to Gate 3 keyword scoring.
+    daType: {
+      type:    String,
+      default: null,
+      trim:    true,
+      comment: 'UAP daType key — links this container to a UAPArray. null = unclassified.'
+    },
+
+    // Sub-type keys within the daType array that point back to this container.
+    // Populated by the auto-classify route → upserted onto the UAPArray.daSubTypes[].attachedTo[].
+    daSubTypes: {
+      type:    [String],
+      default: [],
+      comment: 'UAPArray daSubType keys that reference this container. Set by auto-classify.'
+    },
+
+    // Classification provenance — how the daType was determined.
+    classificationStatus: {
+      type:    String,
+      enum:    ['AUTO_CONFIRMED', 'MANUAL', 'PENDING', 'UNCLASSIFIED'],
+      default: 'UNCLASSIFIED',
+      index:   true,
+      comment: 'How daType was set: AUTO_CONFIRMED=Groq inferred, MANUAL=owner set, PENDING=needs review, UNCLASSIFIED=not yet set.'
+    },
+
+    // Groq confidence score (0–1) from auto-classify — null if manually set.
+    classificationScore: {
+      type:    Number,
+      default: null,
+      comment: 'Auto-classify confidence score (0–1). null if manually classified.'
+    },
+
+    // Timestamp of last auto-classify run.
+    autoClassifiedAt: {
+      type:    Date,
+      default: null,
+      comment: 'Timestamp of last successful auto-classify run.'
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // STATE & ORDERING
     // ─────────────────────────────────────────────────────────────────────────
     isActive: {
@@ -258,6 +304,9 @@ companyKnowledgeContainerSchema.index({ companyId: 1, category: 1 });
 
 // kcId lookup — unique per company (sparse: containers created before this feature have no kcId)
 companyKnowledgeContainerSchema.index({ companyId: 1, kcId: 1 }, { unique: true, sparse: true });
+
+// UAP Bridge lookup — find all containers for a company + daType (zero-latency routing)
+companyKnowledgeContainerSchema.index({ companyId: 1, daType: 1, isActive: 1 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATIC HELPERS

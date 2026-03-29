@@ -46,6 +46,7 @@ const CompanyTriggerSettings       = require('../../models/CompanyTriggerSetting
 const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
 const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthService');
+const UAPArray                     = require('../../models/UAPArray');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -79,7 +80,11 @@ const ALLOWED_FIELDS = [
   'bookingAction',
   'closingPrompt',
   'isActive',
-  'priority'
+  'priority',
+  // UAP classification fields — owner can manually set daType, auto-classify sets the rest
+  'daType',
+  'daSubTypes',
+  'classificationStatus',
 ];
 
 // Allowed fields for settings PATCH
@@ -773,6 +778,28 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/uap-arrays — UAP array list for classification card
+// Returns daType, label, and daSubTypes key/label for the UI dropdown.
+// ⚠️ MUST be before GET /:id — Express will match 'uap-arrays' as :id otherwise
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/uap-arrays', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const arrays = await UAPArray.find({ companyId, isActive: true })
+      .select('daType label daSubTypes.key daSubTypes.label')
+      .sort({ daType: 1 })
+      .lean();
+
+    return res.json({ success: true, arrays });
+  } catch (err) {
+    logger.error('[companyKnowledge] uap-arrays error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to load UAP arrays' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge/:id — Get single container
 // ⚠️ Must be AFTER all literal-segment routes above
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1062,6 +1089,233 @@ router.post('/:companyId/knowledge/generate-embeddings', async (req, res) => {
   } catch (err) {
     logger.error('[companyKnowledge] generate-embeddings error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Embedding generation failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/:id/auto-classify
+// ⚠️  MUST be registered AFTER /:id routes to avoid :id capturing the literal
+//
+// Uses Groq to:
+//   1. Infer the best daType from company's UAPArrays
+//   2. Generate trigger phrases for the matching UAPArray sub-type
+//   3. Upsert those trigger phrases onto the UAPArray (fire-and-forget)
+//   4. Update container: daType, classificationStatus, classificationScore, autoClassifiedAt
+//
+// Returns:
+//   { success, daType, daTypeLabel, triggerPhrases, classificationScore, message }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/:id/auto-classify', async (req, res) => {
+  const { companyId, id } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
+  }
+
+  try {
+    // Load container
+    const container = await CompanyKnowledgeContainer.findOne({ _id: id, companyId }).lean();
+    if (!container) {
+      return res.status(404).json({ success: false, error: 'Knowledge container not found' });
+    }
+
+    // Load company's UAP arrays — if none seeded, can still classify (result won't attach)
+    const uapArrays = await UAPArray.find({ companyId, isActive: true }).lean();
+
+    // Build content block for Groq
+    const sectionBlock = (container.sections || [])
+      .filter(s => s.label?.trim() && s.content?.trim())
+      .map(s => `${s.label.trim()}: ${s.content.trim().slice(0, 400)}`)
+      .join('\n');
+
+    const containerContent = [
+      `Title: "${container.title || ''}"`,
+      container.category ? `Category: "${container.category}"` : null,
+      sectionBlock ? `Sections:\n${sectionBlock}` : null,
+    ].filter(Boolean).join('\n\n');
+
+    // Build UAP array catalogue for Groq
+    const arraysCatalogue = uapArrays.length > 0
+      ? uapArrays.map(a =>
+          `daType: ${a.daType} | label: "${a.label}" | subTypes: [${
+            (a.daSubTypes || []).map(s => `${s.key}: "${s.label}"`).join(', ')
+          }]`
+        ).join('\n')
+      : 'No UAP arrays seeded yet — infer the most logical daType for this content.';
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   600,
+      temperature: 0.15,
+      jsonMode:    true,
+      system: `You are a UAP (Utterance Act Parser) classifier for a phone AI platform.
+Given a Knowledge Container and a catalogue of daType arrays, classify the container into the BEST matching daType.
+Then generate 8–14 trigger phrases a caller might say that would route to this container.
+
+Rules:
+- Pick the SINGLE best daType. If no array matches well, invent the most logical daType key (UPPERCASE_SNAKE_CASE).
+- Trigger phrases must sound like real caller speech ("how much does it cost", "what's covered", "can I get a tune-up").
+- confidence: 0.0–1.0 — how certain you are this daType is correct.
+- subTypeKey: snake_case key for the sub-type within this daType that best describes this container (or null if not applicable).
+- subTypeLabel: human-readable label for that sub-type (or null).
+
+Return ONLY valid JSON. No markdown.
+{"daType":"PRICING_QUERY","daTypeLabel":"Pricing Questions","subTypeKey":"maintenance","subTypeLabel":"Maintenance Visit Pricing","confidence":0.92,"triggerPhrases":["how much is a tune-up","what does the maintenance cost","price for annual service"]}`,
+      messages: [{
+        role: 'user',
+        content: `UAP ARRAYS:\n${arraysCatalogue}\n\nCONTAINER:\n${containerContent}`
+      }],
+    });
+
+    if (!result.response) {
+      return res.status(500).json({ success: false, error: 'Groq returned no response' });
+    }
+
+    // Parse Groq response
+    let classification;
+    try {
+      const raw = result.response.trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/, '');
+      const objMatch = raw.match(/\{[\s\S]*\}/);
+      classification = JSON.parse(objMatch ? objMatch[0] : raw);
+      if (!classification.daType) throw new Error('missing daType field');
+    } catch (parseErr) {
+      logger.warn('[companyKnowledge] auto-classify: parse failed', {
+        companyId, id, err: parseErr.message, preview: result.response?.slice(0, 300)
+      });
+      return res.status(500).json({ success: false, error: 'Could not parse classification response' });
+    }
+
+    const {
+      daType,
+      daTypeLabel    = daType,
+      subTypeKey     = null,
+      subTypeLabel   = null,
+      confidence     = null,
+      triggerPhrases = [],
+    } = classification;
+
+    // Clean trigger phrases
+    const cleanedPhrases = [...new Set(
+      (Array.isArray(triggerPhrases) ? triggerPhrases : [])
+        .filter(p => typeof p === 'string')
+        .map(p => p.toLowerCase().trim())
+        .filter(p => p.length > 2 && p.length < 120)
+    )].slice(0, 16);
+
+    // ── 1. Update the container record ───────────────────────────────────────
+    const containerUpdate = {
+      $set: {
+        daType,
+        classificationStatus: 'AUTO_CONFIRMED',
+        classificationScore:  typeof confidence === 'number' ? Math.round(confidence * 100) / 100 : null,
+        autoClassifiedAt:     new Date(),
+      },
+    };
+    if (subTypeKey) {
+      containerUpdate.$addToSet = { daSubTypes: subTypeKey };
+    }
+    await CompanyKnowledgeContainer.findOneAndUpdate(
+      { _id: id, companyId },
+      containerUpdate,
+      { new: true }
+    );
+
+    // ── 2. Upsert trigger phrases onto matching UAPArray (fire-and-forget) ───
+    if (cleanedPhrases.length > 0 && uapArrays.length > 0) {
+      setImmediate(async () => {
+        try {
+          const matchingArray = uapArrays.find(a => a.daType === daType);
+          if (matchingArray) {
+            // If subTypeKey specified — upsert into that sub-type's triggerPhrases
+            if (subTypeKey) {
+              const subExists = (matchingArray.daSubTypes || []).some(s => s.key === subTypeKey);
+              if (subExists) {
+                // Add trigger phrases + attachedTo to existing sub-type in one atomic update.
+                // $push with $each and $addToSet can be combined on DIFFERENT paths in the same update.
+                await UAPArray.updateOne(
+                  { companyId, daType, 'daSubTypes.key': subTypeKey },
+                  {
+                    $push:    { 'daSubTypes.$.triggerPhrases': { $each: cleanedPhrases } },
+                    $addToSet: { 'daSubTypes.$.attachedTo': String(id) },
+                  }
+                );
+              } else {
+                // Create new sub-type entry
+                await UAPArray.findOneAndUpdate(
+                  { companyId, daType },
+                  {
+                    $push: {
+                      daSubTypes: {
+                        key:              subTypeKey,
+                        label:            subTypeLabel || subTypeKey,
+                        triggerPhrases:   cleanedPhrases,
+                        attachedTo:       [String(id)],
+                        classificationStatus: 'AUTO_CONFIRMED',
+                        classificationScore:  typeof confidence === 'number' ? confidence : null,
+                      }
+                    }
+                  }
+                );
+              }
+            } else {
+              // No sub-type — just ensure container is listed in first sub-type's attachedTo
+              // (graceful degrade — not blocking)
+            }
+          } else {
+            // No matching UAPArray found — create it so owner can see + edit it
+            await UAPArray.create({
+              companyId,
+              daType,
+              label:     daTypeLabel,
+              isStandard: false,
+              daSubTypes: subTypeKey ? [{
+                key:              subTypeKey,
+                label:            subTypeLabel || subTypeKey,
+                triggerPhrases:   cleanedPhrases,
+                attachedTo:       [String(id)],
+                classificationStatus: 'AUTO_CONFIRMED',
+                classificationScore:  typeof confidence === 'number' ? confidence : null,
+              }] : [],
+              isActive: true,
+            });
+          }
+          logger.info('[companyKnowledge] auto-classify: UAPArray upserted', {
+            companyId, daType, subTypeKey, phrasesAdded: cleanedPhrases.length
+          });
+        } catch (uapErr) {
+          logger.warn('[companyKnowledge] auto-classify: UAPArray upsert failed (non-blocking)', {
+            companyId, id, daType, err: uapErr.message
+          });
+        }
+      });
+    }
+
+    // Invalidate KC cache (daType field changed)
+    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+
+    logger.info('[companyKnowledge] auto-classify complete', {
+      companyId, id, daType, confidence, phrasesGenerated: cleanedPhrases.length
+    });
+
+    return res.json({
+      success:           true,
+      daType,
+      daTypeLabel,
+      subTypeKey,
+      subTypeLabel,
+      classificationScore: typeof confidence === 'number' ? confidence : null,
+      triggerPhrases:    cleanedPhrases,
+      message:           `Classified as ${daTypeLabel} (${daType}) with ${cleanedPhrases.length} trigger phrases generated`,
+    });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] auto-classify error', { companyId, id, err: err.message });
+    return res.status(500).json({ success: false, error: 'Auto-classification failed' });
   }
 });
 
