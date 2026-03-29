@@ -34,6 +34,7 @@ const GroqFieldExtractorService      = require('./GroqFieldExtractorService');
 const GlobalHubService     = require('../../GlobalHubService');
 const KCS                  = require('../agent2/KnowledgeContainerService');
 const BPFUQService         = require('../kc/BPFUQService');
+const DiscoveryNotesService = require('../../discoveryNotes/DiscoveryNotesService');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -288,7 +289,8 @@ function initializeContext(payload, config) {
   // discoveryNotes carry everything the LLM learned during intake/discovery —
   // entities (name, phone, technician preference), urgency, callReason, etc.
   const dn         = payload?.discoveryNotes || null;
-  const dnEntities = dn?.entities            || {};
+  // v2 schema uses temp{}, v1 used entities{} — support both for backward compat
+  const dnEntities = dn?.temp || dn?.entities || {};
 
   // ── Urgency pre-seeding ────────────────────────────────────────────────────
   // If the discovery phase already established urgency/ASAP intent, seed it here
@@ -303,6 +305,7 @@ function initializeContext(payload, config) {
 
   return {
     step:        STEPS.INIT,
+    callSid:     payload?.callSid || null,   // threaded for UAPB BOOKING_CONFIRM DN lock
     bookingMode: payload?.assumptions?.bookingMode || null,
     collectedFields: {
       // ScrabEngine assumptions take priority; discoveryNotes entities are fallback.
@@ -845,7 +848,10 @@ async function processInit(ctx, config, companyId, isTest, events) {
       // LOW CONFIDENCE (< 0.80): Name is uncertain (partial extraction, low model
       //   confidence, or no discoveryNotes available). Confirm before proceeding.
       //   → "I show your first name as Mark — is that right? And your last name?"
-      const firstNameConf  = ctx.discoveryNotes?.entities?.confidence?.firstName || 0;
+      // v2 schema: temp.confidence | v1 compat: entities.confidence
+      const firstNameConf  = ctx.discoveryNotes?.temp?.confidence?.firstName
+                          || ctx.discoveryNotes?.entities?.confidence?.firstName
+                          || 0;
       const highConfidence = firstNameConf >= 0.80;
 
       if (highConfidence) {
@@ -1664,7 +1670,7 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
           ctx._callerIdAsked      = true;
           ctx._confirmingCallerId = true;
           const _pDn   = ctx.discoveryNotes;
-          const _pSvc  = _pDn?.callReason || _pDn?.entities?.serviceType || null;
+          const _pSvc  = _pDn?.callReason || _pDn?.temp?.serviceType || _pDn?.entities?.serviceType || null;
           const _pSvcT = _pSvc ? `your ${_pSvc} ` : '';
           events.push({ type: 'BL1_NAME_Q_IN_PHONE_STEP', knownName: _pName, timestamp: Date.now() });
           return {
@@ -1697,7 +1703,7 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
       events.push({ type: 'BL1_CALLER_ID_OFFERED', callerPhone: formattedCallerId, timestamp: Date.now() });
       // Inject discoveryNotes service type for a personalized, context-aware offer
       const _dn          = ctx.discoveryNotes;
-      const _serviceCtx  = _dn?.callReason || _dn?.entities?.serviceType || null;
+      const _serviceCtx  = _dn?.callReason || _dn?.temp?.serviceType || _dn?.entities?.serviceType || null;
       const _serviceText = _serviceCtx ? `your ${_serviceCtx} ` : '';
       return {
         nextPrompt: `Is ${formattedCallerId} a good number for your ${_serviceText}confirmation text?`,
@@ -2982,7 +2988,8 @@ async function processOfferTimes(ctx, userInput, config, companyId, isTest, even
  */
 function buildFullConfirmSummary(ctx) {
   const dn      = ctx.discoveryNotes;
-  const service = dn?.callReason || dn?.entities?.serviceType || ctx.bookingMode || null;
+  // v2 schema uses temp.serviceType; v1 used entities.serviceType — support both
+  const service = dn?.callReason || dn?.temp?.serviceType || dn?.entities?.serviceType || ctx.bookingMode || null;
   const first   = ctx.collectedFields?.firstName || '';
   const last    = ctx.collectedFields?.lastName  || '';
   const name    = [first, last].filter(Boolean).join(' ');
@@ -3038,10 +3045,23 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
     ctx.step      = STEPS.COMPLETED;
     ctx.completed = true;
 
+    // ── UAPB BOOKING_CONFIRM — lock all temp → confirmed in DiscoveryNotes ──
+    // Single event: all temp fields lock simultaneously. This is the ONLY
+    // promotion path — confirmed{} is never written mid-call per-field.
+    if (ctx.callSid) {
+      DiscoveryNotesService.update(companyId, ctx.callSid, {
+        confirmed:  'LOCK_ALL_TEMP',
+        objective:  'CLOSING',
+      }).catch(err => logger.warn(`[${ENGINE_ID}] DN BOOKING_CONFIRM lock failed`, {
+        companyId, callSid: ctx.callSid, err: err.message
+      }));
+    }
+
     // Build a discovery-aware closing that references what was booked and who the caller is.
     // Falls back to the company-configured confirmationMessage if discoveryNotes are absent.
     const _closingDn          = ctx.discoveryNotes;
-    const _closingService     = _closingDn?.callReason || _closingDn?.entities?.serviceType || null;
+    // v2 schema uses temp.serviceType; v1 used entities.serviceType — support both
+    const _closingService     = _closingDn?.callReason || _closingDn?.temp?.serviceType || _closingDn?.entities?.serviceType || null;
     const _closingFirstName   = ctx.collectedFields?.firstName || '';
     const _closingSlot        = ctx.selectedTime?.display || 'the scheduled time';
 

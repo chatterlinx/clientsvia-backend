@@ -71,10 +71,11 @@ router.get('/:companyId/discovery/settings', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Company not found' });
     }
 
-    const bookingFieldConfig =
-      company?.agentSettings?.discoverySettings?.bookingFieldConfig || {};
+    const discoverySettings  = company?.agentSettings?.discoverySettings || {};
+    const bookingFieldConfig = discoverySettings.bookingFieldConfig || {};
+    const uapbTemplates      = discoverySettings.uapbTemplates      || {};
 
-    return res.json({ success: true, bookingFieldConfig });
+    return res.json({ success: true, bookingFieldConfig, uapbTemplates });
   } catch (err) {
     logger.error('[DNSettings] GET settings error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Failed to load settings' });
@@ -96,28 +97,39 @@ router.patch('/:companyId/discovery/settings', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  const { bookingFieldConfig } = req.body;
+  const { bookingFieldConfig, uapbTemplates } = req.body;
 
-  if (bookingFieldConfig === undefined) {
-    return res.status(400).json({ success: false, error: 'bookingFieldConfig is required' });
+  if (bookingFieldConfig === undefined && uapbTemplates === undefined) {
+    return res.status(400).json({ success: false, error: 'bookingFieldConfig or uapbTemplates is required' });
   }
 
-  if (typeof bookingFieldConfig !== 'object' || Array.isArray(bookingFieldConfig)) {
+  if (bookingFieldConfig !== undefined && (typeof bookingFieldConfig !== 'object' || Array.isArray(bookingFieldConfig))) {
     return res.status(400).json({ success: false, error: 'bookingFieldConfig must be an object' });
   }
 
   try {
-    const result = await Company.updateOne(
-      { _id: companyId },
-      { $set: { 'agentSettings.discoverySettings.bookingFieldConfig': bookingFieldConfig } }
-    );
+    const $set = {};
+    if (bookingFieldConfig !== undefined) {
+      $set['agentSettings.discoverySettings.bookingFieldConfig'] = bookingFieldConfig;
+    }
+    // uapbTemplates: { gracefulPivot, resumePrompt } — stored per company; runtime reads from DB
+    if (uapbTemplates && typeof uapbTemplates === 'object') {
+      if (uapbTemplates.gracefulPivot !== undefined) {
+        $set['agentSettings.discoverySettings.uapbTemplates.gracefulPivot'] = uapbTemplates.gracefulPivot;
+      }
+      if (uapbTemplates.resumePrompt !== undefined) {
+        $set['agentSettings.discoverySettings.uapbTemplates.resumePrompt'] = uapbTemplates.resumePrompt;
+      }
+    }
+
+    const result = await Company.updateOne({ _id: companyId }, { $set });
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ success: false, error: 'Company not found' });
     }
 
-    logger.info('[DNSettings] bookingFieldConfig saved', { companyId });
-    return res.json({ success: true, bookingFieldConfig });
+    logger.info('[DNSettings] settings saved', { companyId, fields: Object.keys($set) });
+    return res.json({ success: true, bookingFieldConfig, uapbTemplates });
   } catch (err) {
     logger.error('[DNSettings] PATCH settings error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Failed to save settings' });

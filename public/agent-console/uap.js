@@ -247,9 +247,16 @@
   async function _loadBookingFields() {
     if (!companyId) return;
     try {
-      const data = await _api('GET', `${apiBase}/booking-fields`);
+      // Load booking fields + UAPB templates from the same discovery settings endpoint
+      const data = await _api('GET', `${dnApi}/settings`);
       bookingFieldConfig = data.bookingFieldConfig || {};
       _renderUAPBFields();
+      // Populate UAPB template fields
+      const tpl = data.uapbTemplates || {};
+      const gpEl = document.getElementById('gracefulPivotTpl');
+      const rpEl = document.getElementById('resumePromptTpl');
+      if (gpEl) gpEl.value = tpl.gracefulPivot || '';
+      if (rpEl) rpEl.value = tpl.resumePrompt  || '';
     } catch (err) {
       _toast('error', `Failed to load booking fields: ${err.message}`);
     }
