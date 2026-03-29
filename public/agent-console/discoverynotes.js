@@ -100,11 +100,18 @@
     if (btn) btn.addEventListener('click', seedStandardFields);
   }
 
-  // ── API helpers ──────────────────────────────────────────────────────────
+  // ── Auth + API helpers ────────────────────────────────────────────────────
+  function _getToken() {
+    return localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+  }
+
   async function _api(method, path, body) {
     const opts = {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${_getToken()}`
+      },
       credentials: 'same-origin'
     };
     if (body !== undefined) opts.body = JSON.stringify(body);
