@@ -465,6 +465,100 @@
       color: #ef4444; font-size: 13px; padding: 1px 6px;
     }
 
+    /* ── Pre-Qualify Redesign ────────────────────────────────────────────── */
+    .pq-toggle-switch {
+      position: relative; display: inline-block;
+      width: 38px; height: 21px; flex-shrink: 0;
+    }
+    .pq-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .pq-toggle-knob {
+      position: absolute; inset: 0; background: #d1d5db;
+      border-radius: 99px; cursor: pointer; transition: background .2s;
+    }
+    .pq-toggle-knob::before {
+      content: ''; position: absolute;
+      width: 15px; height: 15px; border-radius: 50%; background: white;
+      top: 3px; left: 3px; transition: transform .2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .pq-toggle-switch input:checked + .pq-toggle-knob { background: #7c3aed; }
+    .pq-toggle-switch input:checked + .pq-toggle-knob::before { transform: translateX(17px); }
+
+    .pq-body { transition: opacity .2s; }
+    .pq-section-inner { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .pq-field-group { display: flex; flex-direction: column; gap: 5px; }
+    .pq-field-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .045em; color: #6b7280;
+    }
+    .pq-field-hint {
+      font-size: 10.5px; color: #9ca3af; font-weight: 400;
+      text-transform: none; letter-spacing: 0;
+    }
+    .pq-textarea {
+      width: 100%; padding: 9px 11px;
+      border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: 13.5px; line-height: 1.55; color: var(--text-primary);
+      background: white; resize: vertical; min-height: 58px;
+      font-family: inherit; box-sizing: border-box;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .pq-textarea:focus {
+      outline: none; border-color: #7c3aed;
+      box-shadow: 0 0 0 3px rgba(124,58,237,.1);
+    }
+    .pq-textarea::placeholder { color: #9ca3af; }
+    .pq-input {
+      padding: 8px 11px; border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: 13px; color: var(--text-primary); background: white;
+      font-family: inherit; box-sizing: border-box; width: 100%;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .pq-input:focus {
+      outline: none; border-color: #7c3aed;
+      box-shadow: 0 0 0 3px rgba(124,58,237,.1);
+    }
+    .pq-input::placeholder { color: #9ca3af; }
+    .pq-option-card {
+      background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 14px; margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .pq-option-card:hover { border-color: #c4b5fd; box-shadow: 0 2px 8px rgba(124,58,237,.07); }
+    .pq-option-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f3f4f6;
+    }
+    .pq-option-card-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: #7c3aed;
+    }
+    .pq-option-grid-2 {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
+    }
+    .pq-option-field { display: flex; flex-direction: column; gap: 5px; }
+    .pq-option-field + .pq-option-field { margin-top: 10px; }
+    .pq-remove-btn {
+      border: 1px solid #fecaca; border-radius: 6px; background: none;
+      color: #ef4444; font-size: 11.5px; font-weight: 600;
+      padding: 3px 10px; cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .pq-remove-btn:hover { background: #fee2e2; border-color: #ef4444; }
+    .pq-empty-hint {
+      padding: 16px; background: #fafafa; border: 1px dashed #e5e7eb;
+      border-radius: 8px; text-align: center;
+      font-size: 12.5px; color: #9ca3af; line-height: 1.6;
+    }
+    .pq-add-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; padding: 9px 16px; border-radius: 8px;
+      border: 1.5px dashed #c4b5fd; background: #faf5ff;
+      color: #7c3aed; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .pq-add-btn:hover { background: #f3e8ff; border-color: #7c3aed; border-style: solid; }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .form-row { grid-template-columns: 1fr; }
@@ -1196,34 +1290,43 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <div class="funnel-sub-header">
           <span class="funnel-sub-icon">🎯</span>
           <span class="funnel-sub-title">Pre-Qualify Question</span>
-          <span class="funnel-sub-hint">Ask before answering — routes Groq to the right response for each caller type</span>
-          <label class="funnel-toggle-label">
-            <input type="checkbox" id="pq-en-${id}" onchange="toggleSectionPQ(${id})" ${pqEnabled ? 'checked' : ''}> Enable
+          <span class="funnel-sub-hint">Screen the caller before answering — Groq adapts its response based on their type</span>
+          <label class="funnel-toggle-label" style="gap:8px;">
+            <label class="pq-toggle-switch">
+              <input type="checkbox" id="pq-en-${id}" onchange="toggleSectionPQ(${id})" ${pqEnabled ? 'checked' : ''}>
+              <span class="pq-toggle-knob"></span>
+            </label>
+            <span id="pq-en-label-${id}" style="font-size:11px;font-weight:600;color:${pqEnabled ? '#7c3aed' : '#9ca3af'}">${pqEnabled ? 'Active' : 'Off'}</span>
           </label>
         </div>
-        <div id="pq-body-${id}" class="funnel-sub-body"
-          style="display:${(pqEnabled || pqHasContent) ? 'flex' : 'none'};opacity:${(pqEnabled || !pqHasContent) ? '1' : '0.45'};pointer-events:${(pqEnabled || !pqHasContent) ? '' : 'none'};"
-          title="${(!pqEnabled && pqHasContent) ? 'Pre-qualify is OFF — agent will read the text content above. Your question is preserved.' : ''}">
-          <div class="funnel-field-row">
-            <label class="form-label">Question the agent asks</label>
-            <input type="text" class="form-input" id="pq-text-${id}" maxlength="300"
-              value="${_esc(pq.text || '')}"
-              oninput="S.sectionData.get(${id}).pq.text=this.value"
-              placeholder="Are you a plan member, or calling for the first time?" />
-          </div>
-          <div class="funnel-field-row">
-            <label class="form-label" style="flex-direction:row;gap:6px;">discoveryNotes key
-              <span class="form-hint">written to temp[key] — unique per section</span>
-            </label>
-            <input type="text" class="form-input" id="pq-key-${id}" maxlength="60" style="max-width:240px;"
-              value="${_esc(pq.fieldKey || 'preQualifyAnswer')}"
-              oninput="S.sectionData.get(${id}).pq.fieldKey=this.value.trim()||'preQualifyAnswer'"
-              placeholder="preQualifyAnswer" />
-          </div>
-          <div class="funnel-field-row">
-            <label class="form-label">Answer Options <span class="form-hint">map what caller says → Groq context</span></label>
-            <div id="pq-opts-${id}"></div>
-            <button type="button" class="btn-funnel-add" onclick="addSectionPqOption(${id})" style="margin-top:4px;">+ Add Option</button>
+        <div id="pq-body-${id}" class="pq-body"
+          style="display:${(pqEnabled || pqHasContent) ? 'block' : 'none'};opacity:${(pqEnabled || !pqHasContent) ? '1' : '0.5'};pointer-events:${(pqEnabled || !pqHasContent) ? '' : 'none'};"
+          title="${(!pqEnabled && pqHasContent) ? 'Pre-qualify is OFF — data preserved. Enable to activate.' : ''}">
+          <div class="pq-section-inner">
+            <div class="pq-field-group">
+              <div class="pq-field-label">Question the agent asks the caller</div>
+              <textarea class="pq-textarea" id="pq-text-${id}" maxlength="300" rows="2"
+                oninput="S.sectionData.get(${id}).pq.text=this.value"
+                placeholder="Are you a plan member, or calling for the first time?">${_esc(pq.text || '')}</textarea>
+            </div>
+            <div class="pq-field-group">
+              <div class="pq-field-label">
+                discoveryNotes field key
+                <span class="pq-field-hint"> — written to temp[key] when caller answers</span>
+              </div>
+              <input type="text" class="pq-input" id="pq-key-${id}" maxlength="60" style="max-width:220px;"
+                value="${_esc(pq.fieldKey || 'preQualifyAnswer')}"
+                oninput="S.sectionData.get(${id}).pq.fieldKey=this.value.trim()||'preQualifyAnswer'"
+                placeholder="preQualifyAnswer" />
+            </div>
+            <div class="pq-field-group">
+              <div class="pq-field-label">
+                Caller Answer Options
+                <span class="pq-field-hint"> — define how each answer routes Groq's response</span>
+              </div>
+              <div id="pq-opts-${id}"></div>
+              <button type="button" class="pq-add-btn" onclick="addSectionPqOption(${id})">+ Add Answer Option</button>
+            </div>
           </div>
         </div>
       </div>
@@ -2032,18 +2135,26 @@ function toggleSectionPQ(sid) {
   if (!data) return;
   const checked = document.getElementById(`pq-en-${sid}`)?.checked;
   data.pq.enabled = !!checked;
+
+  // Update toggle label text + colour
+  const lbl = document.getElementById(`pq-en-label-${sid}`);
+  if (lbl) {
+    lbl.textContent = checked ? 'Active' : 'Off';
+    lbl.style.color = checked ? '#7c3aed' : '#9ca3af';
+  }
+
   const body = document.getElementById(`pq-body-${sid}`);
   if (body) {
     const hasContent = !!(data.pq.text?.trim() || data.pq.options?.length);
     if (hasContent) {
-      // Data exists — always show so it's never invisible (lost). Dim when inactive.
-      body.style.display       = 'flex';
-      body.style.opacity       = checked ? '1' : '0.45';
+      // Data exists — always visible, just dimmed when inactive so nothing is ever lost
+      body.style.display       = 'block';
+      body.style.opacity       = checked ? '1' : '0.5';
       body.style.pointerEvents = checked ? '' : 'none';
-      body.title               = checked ? '' : 'Pre-qualify is OFF — agent will read the text content above. Your question is preserved.';
+      body.title               = checked ? '' : 'Pre-qualify is OFF — data preserved. Enable to activate.';
     } else {
       // No data yet — normal show/hide
-      body.style.display       = checked ? 'flex' : 'none';
+      body.style.display       = checked ? 'block' : 'none';
       body.style.opacity       = '1';
       body.style.pointerEvents = '';
       body.title               = '';
@@ -2058,38 +2169,50 @@ function renderSectionPqOptions(sid) {
   if (!list || !data) return;
   const opts = data.pq.options || [];
   if (!opts.length) {
-    list.innerHTML = `<p style="font-size:.78rem;color:#9ca3af;margin:4px 0;">No options yet — add one per caller type (e.g. "Plan Member", "First-Time")</p>`;
+    list.innerHTML = `
+      <div class="pq-empty-hint">
+        No answer options yet — add one per caller type.<br>
+        <span style="font-size:11px;">e.g. "Plan Member", "First-Time Caller", "Commercial Account"</span>
+      </div>`;
     return;
   }
   list.innerHTML = opts.map((opt, i) => `
-    <div class="funnel-pq-option">
-      <div class="funnel-pq-option-grid">
-        <div>
-          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Label (for logs)</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.label)}"
+    <div class="pq-option-card">
+      <div class="pq-option-card-header">
+        <span class="pq-option-card-title">Option ${i + 1}</span>
+        <button onclick="removeSectionPqOption(${sid},${i})" class="pq-remove-btn">✕ Remove</button>
+      </div>
+      <div class="pq-option-grid-2">
+        <div class="pq-option-field">
+          <div class="pq-field-label">Display Label</div>
+          <input class="pq-input" value="${_esc(opt.label)}"
             oninput="S.sectionData.get(${sid}).pq.options[${i}].label=this.value"
             placeholder="Plan Member" />
         </div>
-        <div>
-          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Stored value</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.value)}"
+        <div class="pq-option-field">
+          <div class="pq-field-label">Stored Value</div>
+          <input class="pq-input" value="${_esc(opt.value)}"
             oninput="S.sectionData.get(${sid}).pq.options[${i}].value=this.value"
             placeholder="plan_member" />
         </div>
-        <button onclick="removeSectionPqOption(${sid},${i})" title="Remove"
-          class="btn-funnel-remove">✕</button>
       </div>
-      <div style="margin-bottom:6px;">
-        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Caller keywords <span style="color:#9ca3af;">(comma-separated)</span></label>
-        <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords||[]).join(', '))}"
+      <div class="pq-option-field" style="margin-bottom:10px;">
+        <div class="pq-field-label">
+          Caller Keywords
+          <span class="pq-field-hint">(comma-separated — fuzzy-matched against what caller says)</span>
+        </div>
+        <input class="pq-input" value="${_esc((opt.keywords || []).join(', '))}"
           oninput="S.sectionData.get(${sid}).pq.options[${i}].keywords=this.value.split(',').map(s=>s.trim()).filter(Boolean)"
           placeholder="member, plan, maintenance plan" />
       </div>
-      <div>
-        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Groq context <span style="color:#9ca3af;">(injected as CALLER TYPE into Groq)</span></label>
-        <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.responseContext)}"
+      <div class="pq-option-field">
+        <div class="pq-field-label">
+          Groq Context
+          <span class="pq-field-hint">(injected as CALLER TYPE into Groq when this option matches)</span>
+        </div>
+        <textarea class="pq-textarea" rows="2"
           oninput="S.sectionData.get(${sid}).pq.options[${i}].responseContext=this.value"
-          placeholder='Caller IS a plan member — use plan-member pricing.' />
+          placeholder="Caller IS a plan member — use member pricing and member-only service options.">${_esc(opt.responseContext)}</textarea>
       </div>
     </div>`).join('');
 }

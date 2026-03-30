@@ -71,6 +71,17 @@ function _validateCompanyAccess(req, res, companyId) {
   return true;
 }
 
+/**
+ * _resolveContainerQuery — build the right MongoDB filter for a container `:id` param.
+ * Accepts both MongoDB ObjectId (24-char hex) and human-readable kcId (e.g. "700c4-25").
+ * This is the SINGLE source of truth for all container lookups by route param.
+ */
+function _resolveContainerQuery(id, companyId) {
+  return mongoose.Types.ObjectId.isValid(id)
+    ? { _id: id, companyId }
+    : { kcId: id, companyId };
+}
+
 // Allowed fields for container CRUD operations
 const ALLOWED_FIELDS = [
   'title', 'category',
@@ -909,12 +920,7 @@ router.get('/:companyId/knowledge/:id', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    // Prefer _id lookup for valid ObjectIds; fall back to kcId for human-readable keys
-    const query = mongoose.Types.ObjectId.isValid(id)
-      ? { _id: id, companyId }
-      : { kcId: id, companyId };
-
-    const container = await CompanyKnowledgeContainer.findOne(query).lean();
+    const container = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId)).lean();
     if (!container) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
     return res.json({ success: true, container });
   } catch (err) {
@@ -940,7 +946,7 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
     // When sections change, diff old vs new to find orphaned UAP sub-types
     let oldSubTypeKeys = [];
     if (updates.sections !== undefined) {
-      const old = await CompanyKnowledgeContainer.findOne({ _id: id, companyId })
+      const old = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId))
         .select('sections.daSubTypeKey').lean();
       if (old) {
         oldSubTypeKeys = (old.sections || []).map(s => s.daSubTypeKey).filter(Boolean);
@@ -948,7 +954,7 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
     }
 
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
-      { _id: id, companyId },
+      _resolveContainerQuery(id, companyId),
       { $set: updates },
       { new: true, runValidators: true }
     ).lean();
@@ -1011,14 +1017,14 @@ router.delete('/:companyId/knowledge/:id', async (req, res) => {
 
   try {
     // Capture section daSubTypeKeys BEFORE deactivation for Option C cleanup
-    const preDelete = await CompanyKnowledgeContainer.findOne({ _id: id, companyId })
+    const preDelete = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId))
       .select('sections.daSubTypeKey').lean();
     const keysToOrphan = preDelete
       ? (preDelete.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
       : [];
 
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
-      { _id: id, companyId },
+      _resolveContainerQuery(id, companyId),
       { $set: { isActive: false } },
       { new: true }
     ).lean();
@@ -1060,13 +1066,13 @@ router.delete('/:companyId/knowledge/:id/hard', async (req, res) => {
 
   try {
     // Capture section daSubTypeKeys BEFORE deletion for Option C cleanup
-    const preDelete = await CompanyKnowledgeContainer.findOne({ _id: id, companyId })
+    const preDelete = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId))
       .select('sections.daSubTypeKey').lean();
     const keysToOrphan = preDelete
       ? (preDelete.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
       : [];
 
-    const result = await CompanyKnowledgeContainer.deleteOne({ _id: id, companyId });
+    const result = await CompanyKnowledgeContainer.deleteOne(_resolveContainerQuery(id, companyId));
     if (!result.deletedCount) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
@@ -1105,7 +1111,7 @@ router.post('/:companyId/knowledge/:id/generate-keywords', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    const container = await CompanyKnowledgeContainer.findOne({ _id: id, companyId }).lean();
+    const container = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId)).lean();
     if (!container) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
 
     return _runKeywordGeneration(companyId, container.title, container.sections, res);
@@ -1458,7 +1464,7 @@ router.post('/:companyId/knowledge/:id/auto-classify', async (req, res) => {
 
   try {
     // Load container
-    const container = await CompanyKnowledgeContainer.findOne({ _id: id, companyId }).lean();
+    const container = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId)).lean();
     if (!container) {
       return res.status(404).json({ success: false, error: 'Knowledge container not found' });
     }
@@ -1562,7 +1568,7 @@ Return ONLY valid JSON. No markdown.
       containerUpdate.$addToSet = { daSubTypes: subTypeKey };
     }
     await CompanyKnowledgeContainer.findOneAndUpdate(
-      { _id: id, companyId },
+      _resolveContainerQuery(id, companyId),
       containerUpdate,
       { new: true }
     );
