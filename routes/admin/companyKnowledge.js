@@ -156,10 +156,13 @@ function _sanitiseBody(body) {
         }
 
         // Per-section pre-qualify question
+        // Always saved when text exists — enabled is a mode switch, not a data gate.
+        // enabled=false → agent reads text content above; enabled=true → agent asks prequal.
         if (s.preQualifyQuestion && typeof s.preQualifyQuestion === 'object') {
           const pq = s.preQualifyQuestion;
           if (typeof pq.text === 'string' && pq.text.trim()) {
             section.preQualifyQuestion = {
+              enabled:  pq.enabled !== false,  // default true; false preserved when explicitly set
               text:     pq.text.trim().slice(0, 300),
               fieldKey: (typeof pq.fieldKey === 'string' && pq.fieldKey.trim())
                 ? pq.fieldKey.trim().slice(0, 60)

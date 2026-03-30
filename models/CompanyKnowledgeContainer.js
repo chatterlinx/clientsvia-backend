@@ -146,6 +146,11 @@ const sectionSchema = new mongoose.Schema(
     // State tracked per-call via Redis: kc-prequal:{companyId}:{callSid}
     // Engine: KCDiscoveryRunner GATE 3.5 / _handlePrequalResponse
     preQualifyQuestion: {
+      enabled: {
+        type:    Boolean,
+        default: true,
+        comment: 'Toggle — false means agent reads text content above, ignores pre-qualify. Data is preserved either way.'
+      },
       text: {
         type:      String,
         default:   '',

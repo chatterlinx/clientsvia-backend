@@ -1120,7 +1120,9 @@ function addSection(label = '', content = '', sectionMeta = null) {
 
   // Initialise per-section funnel state
   const pq = sectionMeta?.preQualifyQuestion || {};
-  const pqEnabled = !!(pq.text?.trim() || pq.options?.length);
+  const pqHasContent = !!(pq.text?.trim() || pq.options?.length);
+  // enabled: read explicit field from DB (default true when content exists and field not set)
+  const pqEnabled = pqHasContent && pq.enabled !== false;
   S.sectionData.set(id, {
     daSubTypeKey: sectionMeta?.daSubTypeKey || null,
     pq: {
@@ -1199,7 +1201,9 @@ function addSection(label = '', content = '', sectionMeta = null) {
             <input type="checkbox" id="pq-en-${id}" onchange="toggleSectionPQ(${id})" ${pqEnabled ? 'checked' : ''}> Enable
           </label>
         </div>
-        <div id="pq-body-${id}" class="funnel-sub-body" style="display:${pqEnabled ? 'flex' : 'none'};">
+        <div id="pq-body-${id}" class="funnel-sub-body"
+          style="display:${(pqEnabled || pqHasContent) ? 'flex' : 'none'};opacity:${(pqEnabled || !pqHasContent) ? '1' : '0.45'};pointer-events:${(pqEnabled || !pqHasContent) ? '' : 'none'};"
+          title="${(!pqEnabled && pqHasContent) ? 'Pre-qualify is OFF — agent will read the text content above. Your question is preserved.' : ''}">
           <div class="funnel-field-row">
             <label class="form-label">Question the agent asks</label>
             <input type="text" class="form-input" id="pq-text-${id}" maxlength="300"
@@ -1440,9 +1444,13 @@ function _getSections() {
       const data = S.sectionData.get(sid) || {};
 
       // Build per-section preQualifyQuestion
+      // ALWAYS saved when text exists — enabled is a mode switch, not a data gate.
+      // enabled=false → agent reads text content above, ignores prequal.
+      // enabled=true  → agent asks the pre-qualify question before answering.
       let preQualifyQuestion = null;
-      if (data.pq?.enabled && data.pq.text?.trim()) {
+      if (data.pq?.text?.trim()) {
         preQualifyQuestion = {
+          enabled:  data.pq.enabled !== false,
           text:     data.pq.text.trim(),
           fieldKey: data.pq.fieldKey?.trim() || 'preQualifyAnswer',
           options:  (data.pq.options || []).filter(o => o.label || o.value || o.keywords?.length),
@@ -2025,7 +2033,22 @@ function toggleSectionPQ(sid) {
   const checked = document.getElementById(`pq-en-${sid}`)?.checked;
   data.pq.enabled = !!checked;
   const body = document.getElementById(`pq-body-${sid}`);
-  if (body) body.style.display = checked ? 'flex' : 'none';
+  if (body) {
+    const hasContent = !!(data.pq.text?.trim() || data.pq.options?.length);
+    if (hasContent) {
+      // Data exists — always show so it's never invisible (lost). Dim when inactive.
+      body.style.display       = 'flex';
+      body.style.opacity       = checked ? '1' : '0.45';
+      body.style.pointerEvents = checked ? '' : 'none';
+      body.title               = checked ? '' : 'Pre-qualify is OFF — agent will read the text content above. Your question is preserved.';
+    } else {
+      // No data yet — normal show/hide
+      body.style.display       = checked ? 'flex' : 'none';
+      body.style.opacity       = '1';
+      body.style.pointerEvents = '';
+      body.title               = '';
+    }
+  }
   _updateSectionFunnelBadges(sid);
 }
 

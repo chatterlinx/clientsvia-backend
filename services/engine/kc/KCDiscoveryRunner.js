@@ -1436,7 +1436,9 @@ async function _handleKCMatch({
   // (legacy) when targetSection is null or has no prequal configured.
   // The caller's next utterance is their answer → GATE 0.7 → _handlePrequalResponse().
   // Skip if redis is unavailable — graceful degrade to answering without prequal.
-  const _activePQ = targetSection?.preQualifyQuestion?.text?.trim()
+  // enabled defaults to true — only skip when explicitly set false (owner toggled it off)
+  const _activePQ = targetSection?.preQualifyQuestion?.text?.trim() &&
+                    targetSection?.preQualifyQuestion?.enabled !== false
     ? targetSection.preQualifyQuestion
     : null;   // section-level only — container-level prequal is now legacy
 
