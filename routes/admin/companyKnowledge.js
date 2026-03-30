@@ -77,11 +77,16 @@ const ALLOWED_FIELDS = [
   'keywords',
   'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
   'wordLimit',
+  'wordLimitEnabled',   // Boolean — when false, omits hard word cap from Groq prompt
+  'sampleResponse',     // String — ideal example answer injected as guardrail into Groq prompt
   'followUpDepth',      // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
   'bookingAction',
   'closingPrompt',
   'isActive',
   'priority',
+  // Sales funnel — pre-qualify question + sequential upsell chain
+  'preQualifyQuestion', // { text, fieldKey, options[{ label, value, keywords[], responseContext }] }
+  'upsellChain',        // [{ offerScript, yesScript, noScript, itemKey, price }]
   // UAP classification fields — owner can manually set daType, auto-classify sets the rest
   'daType',
   'daSubTypes',

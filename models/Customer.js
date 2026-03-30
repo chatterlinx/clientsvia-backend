@@ -241,6 +241,27 @@ const customerSchema = new Schema({
         lastCallAt:             { type: Date, default: null },
         // Promotions applied — promotedHistory (G10)
         promotedHistory: [{ type: Schema.Types.Mixed }],
+        // ── UPSELL INTELLIGENCE ───────────────────────────────────────────────
+        // Every upsell offer presented to this caller across all calls.
+        // Stamped at call end by CustomerProfileService from discoveryNotes.temp.upsellOffers[].
+        // Enables per-caller upsell history and cross-call buyer behavior patterns.
+        upsellHistory: [{
+            itemKey:  { type: String, trim: true, default: null },  // "uv_light", "duct_cleaning"
+            accepted: { type: Boolean },                              // true = caller said yes
+            price:    { type: Number, default: null },               // offer price in dollars
+            date:     { type: Date },                                 // offer timestamp
+            callSid:  { type: String },                              // which call
+        }],
+        // Buyer behavior tag — computed by CustomerProfileService from upsellHistory
+        // once ≥3 data points exist. Refreshed at every call end that had upsell offers.
+        //   impulse_buyer → accepts ≥75% of offers
+        //   moderate      → accepts 10–74%
+        //   never_buys    → accepts <10%
+        buyerProfile: {
+            type:    String,
+            enum:    ['impulse_buyer', 'moderate', 'never_buys', null],
+            default: null,
+        },
     },
 
     // ═══════════════════════════════════════════════════════════════════════════

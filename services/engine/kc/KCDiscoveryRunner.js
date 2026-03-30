@@ -78,6 +78,9 @@ const PATH = {
   // ── Transfer paths ────────────────────────────────────────────────────────
   KC_TRANSFER_INTENT:   'KC_TRANSFER_INTENT',    // Transfer intent detected → transfer executing
   KC_TRANSFER_OVERFLOW: 'KC_TRANSFER_OVERFLOW',  // Transfer intent, destination unavailable → overflow
+  // ── Sales funnel paths ────────────────────────────────────────────────────
+  KC_PREQUAL_PENDING: 'KC_PREQUAL_PENDING',  // Pre-qualify question asked, waiting for caller answer
+  KC_UPSELL_PENDING:  'KC_UPSELL_PENDING',   // Upsell offer sent, waiting for YES / NO
 };
 
 // ============================================================================
@@ -428,6 +431,56 @@ class KCDiscoveryRunner {
         // GATE 0.5 error — fall through silently to GATE 1 (booking check)
         logger.warn('[KC_ENGINE] GATE 0.5 error — falling through to GATE 1', {
           companyId, callSid, err: _transferErr.message,
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 0.7 — PENDING PRE-QUALIFY OR UPSELL STATE
+    // ══════════════════════════════════════════════════════════════════════════
+    // Fires after transfer check, before booking intent or KC scoring.
+    // If a prior turn left a pending pre-qualify question or upsell offer for
+    // this call, the caller's current utterance is the ANSWER to that — route
+    // to the dedicated handler before any other gate processes the input.
+    //
+    // Redis keys (TTL 4h — matches discoveryNotes):
+    //   kc-prequal:{companyId}:{callSid}  → set by GATE 3.5, cleared on answer
+    //   kc-upsell:{companyId}:{callSid}   → set by GATE 4.5, cleared when chain exhausted
+    //
+    // GRACEFUL DEGRADE: redis=null or any error → falls through to GATE 1.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (redis) {
+      try {
+        const [_pqRaw, _upRaw] = await Promise.all([
+          redis.get(`kc-prequal:${companyId}:${callSid}`).catch(() => null),
+          redis.get(`kc-upsell:${companyId}:${callSid}`).catch(() => null),
+        ]);
+
+        if (_pqRaw) {
+          logger.info('[KC_ENGINE] 🎯 GATE 0.7: Pending pre-qualify — routing to handler', {
+            companyId, callSid, turn,
+          });
+          return await _handlePrequalResponse({
+            companyId, callSid, userInput, redis,
+            pendingPrequal: _pqRaw,
+            emit, nextState, startMs, turn, company, kbSettings, callerName,
+          });
+        }
+
+        if (_upRaw) {
+          logger.info('[KC_ENGINE] 💰 GATE 0.7: Pending upsell — routing to handler', {
+            companyId, callSid, turn,
+          });
+          return await _handleUpsellResponse({
+            companyId, callSid, userInput, redis,
+            pendingUpsell: _upRaw,
+            emit, nextState, startMs, turn, company,
+          });
+        }
+      } catch (_gate07Err) {
+        // Non-fatal — fall through to GATE 1
+        logger.warn('[KC_ENGINE] GATE 0.7 error — falling through', {
+          companyId, callSid, err: _gate07Err.message,
         });
       }
     }
@@ -1107,6 +1160,178 @@ async function _handleSPFUQContinue({
 }
 
 // ============================================================================
+// HANDLER: PRE-QUALIFY RESPONSE
+// Called by GATE 0.7 when there is a pending kc-prequal Redis key for this call.
+// The caller's current utterance is their answer to the pre-qualify question.
+// ============================================================================
+
+/**
+ * _handlePrequalResponse
+ *
+ * Receives the caller's answer to a pre-qualify question that was asked on a
+ * prior turn (GATE 3.5). Matches the answer against option keywords, writes
+ * the matched value to discoveryNotes.temp, then calls KCS.answer() with the
+ * matched responseContext so Groq calibrates its reply to the right caller type.
+ *
+ * If no option matches, re-asks the pre-qualify question (does NOT clear Redis).
+ * If the container can no longer be found, clears Redis and falls through gracefully.
+ */
+async function _handlePrequalResponse({
+  companyId, callSid, userInput, redis,
+  pendingPrequal,   // raw JSON string from Redis
+  emit, nextState, startMs, turn, company, kbSettings, callerName,
+}) {
+  const input = (userInput || '').trim().toLowerCase();
+
+  let _pqState;
+  try {
+    _pqState = JSON.parse(pendingPrequal);
+  } catch (_) {
+    // Corrupt Redis state — clear and fall through gracefully
+    await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
+    return {
+      response:    "I'm sorry, let me start over. What can I help you with today?",
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_PARSE_ERROR', latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  const { containerId } = _pqState;
+
+  // Load the container — fall through gracefully if not found
+  const containers = await KCS.getActiveForCompany(companyId).catch(() => []);
+  const container  = containers.find(c => String(c._id || c.title) === containerId);
+
+  if (!container) {
+    logger.warn('[KC_ENGINE] Pre-qualify: container not found — clearing state', { companyId, callSid, containerId });
+    await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
+    return {
+      response:    "I'm sorry, let me start over. What can I help you with today?",
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_CONTAINER_MISSING', latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  const pq      = container.preQualifyQuestion || {};
+  const options = pq.options || [];
+  const fieldKey = pq.fieldKey || 'preQualifyAnswer';
+
+  // ── Match caller input against option keywords ────────────────────────────
+  let matchedOption = null;
+  for (const opt of options) {
+    const keywords = (opt.keywords || []).map(k => k.trim().toLowerCase()).filter(Boolean);
+    if (keywords.length && keywords.some(kw => input.includes(kw))) {
+      matchedOption = opt;
+      break;
+    }
+  }
+
+  // ── No keyword match — re-ask ─────────────────────────────────────────────
+  if (!matchedOption) {
+    logger.info('[KC_ENGINE] Pre-qualify: no keyword match — re-asking', { companyId, callSid, containerId, input: input.slice(0, 40) });
+    emit('KC_PREQUAL_REASKED', { containerId, turn });
+    return {
+      response:    pq.text || "I didn't quite catch that — could you let me know which applies to you?",
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, { containerId, intent: 'PREQUAL_REASKED', latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  // ── Matched — record in discoveryNotes.temp ───────────────────────────────
+  const _pqNotesBefore  = await DiscoveryNotesService.load(companyId, callSid).catch(() => null);
+  const _alreadyAnswered = (_pqNotesBefore?.temp?.preQualifyAnswered || []).map(String);
+  DiscoveryNotesService.update(companyId, callSid, {
+    temp: {
+      [fieldKey]:          matchedOption.value,
+      preQualifyAnswered:  [..._alreadyAnswered, containerId],
+    },
+  }).catch(() => {});
+
+  // Delete prequal Redis key — this call has now answered the question
+  await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
+
+  emit('KC_PREQUAL_ANSWERED', { containerId, optionValue: matchedOption.value, turn });
+  logger.info('[KC_ENGINE] ✅ Pre-qualify answered', {
+    companyId, callSid, containerId, optionValue: matchedOption.value, turn,
+  });
+
+  // ── Call KCS.answer() with the matched responseContext ────────────────────
+  const preQualifyContext = matchedOption.responseContext || '';
+  const containerTitle    = container.title || 'Knowledge Container';
+
+  let kcResult;
+  try {
+    kcResult = await KCS.answer({
+      container,
+      question:          userInput,
+      kbSettings,
+      company,
+      callerName,
+      callSid,
+      preQualifyContext,  // injects CALLER TYPE block into Groq system prompt
+    });
+  } catch (_e) {
+    logger.error('[KC_ENGINE] Pre-qualify: Groq error after match', { companyId, callSid, containerId, err: _e.message });
+    kcResult = { response: null, intent: KCS.INTENT.ERROR };
+  }
+
+  if (!kcResult?.response) {
+    return {
+      response:    "I'm sorry, I wasn't able to get that answer. Let me connect you with someone who can help.",
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_GROQ_ERROR', latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  // ── Handle BOOKING_READY from Groq ────────────────────────────────────────
+  if (kcResult.intent === KCS.INTENT.BOOKING_READY) {
+    emit('KC_BOOKING_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_BOOKING_INTENT, source: 'prequal_groq' });
+    nextState.lane        = 'BOOKING';
+    nextState.sessionMode = 'BOOKING';
+    nextState.agent2      = nextState.agent2 || {};
+    nextState.agent2.discovery = nextState.agent2.discovery || {};
+    nextState.agent2.discovery.pendingBookingFromKC = true;
+    nextState.agent2.discovery.lastPath             = PATH.KC_BOOKING_INTENT;
+    SPFUQService.clear(companyId, callSid).catch(() => {});
+    return {
+      response:    kcResult.response,
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, { containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  // ── Answered normally ─────────────────────────────────────────────────────
+  nextState.agent2            = nextState.agent2 || {};
+  nextState.agent2.discovery  = nextState.agent2.discovery || {};
+  nextState.agent2.discovery.lastPath    = PATH.KC_DIRECT_ANSWER;
+  nextState.agent2.discovery.lastKCTitle = containerTitle;
+
+  emit('KC_GROQ_ANSWERED', {
+    intent:          kcResult.intent,
+    latencyMs:       kcResult.latencyMs,
+    path:            PATH.KC_DIRECT_ANSWER,
+    responsePreview: _clip(kcResult.response, 200),
+    containerTitle,
+    containerId,
+    source:          'prequal',
+  });
+
+  return {
+    response:    kcResult.response,
+    matchSource: 'KC_ENGINE',
+    state:       nextState,
+    _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, {
+      containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs,
+    }),
+  };
+}
+
+// ============================================================================
 // HANDLER: KC DIRECT ANSWER / TOPIC HOP
 // ============================================================================
 
@@ -1137,6 +1362,70 @@ async function _handleKCMatch({
     path:         PATH.KC_DIRECT_ANSWER,
   });
 
+  // ── GATE 3.5 — PRE-QUALIFY QUESTION ───────────────────────────────────────
+  // Before calling Groq, check if this container has a pre-qualify question
+  // and the caller hasn't answered it yet this call. If so, ask the question
+  // first — caller's next utterance will be their answer, handled by GATE 0.7
+  // → _handlePrequalResponse() on the next turn.
+  // Skip if redis is unavailable — graceful degrade to answering without prequal.
+  if (redis && container.preQualifyQuestion?.text?.trim()) {
+    try {
+      const _pqKey      = `kc-prequal:${companyId}:${callSid}`;
+      const _pqExisting = await redis.get(_pqKey).catch(() => null);
+
+      if (!_pqExisting) {
+        // Not currently waiting — check if already answered for this container this call
+        const _pqNotes    = await DiscoveryNotesService.load(companyId, callSid).catch(() => null);
+        const _pqAnswered = (_pqNotes?.temp?.preQualifyAnswered || []).map(String);
+
+        if (!_pqAnswered.includes(containerId)) {
+          // First match this call — set Redis and ask the pre-qualify question
+          await redis.setex(_pqKey, 4 * 3600, JSON.stringify({ containerId, status: 'ASKING' })).catch(() => {});
+
+          emit('KC_PREQUAL_ASKED', { containerId, containerTitle, kcId: container.kcId || null, turn });
+          logger.info('[KC_ENGINE] 🎯 GATE 3.5: Pre-qualify question asked', {
+            companyId, callSid, containerId, containerTitle, turn,
+          });
+
+          return {
+            response:    container.preQualifyQuestion.text,
+            matchSource: 'KC_ENGINE',
+            state:       nextState,
+            _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, {
+              containerId, containerTitle, kcId: container.kcId || null,
+              intent: 'PREQUAL_ASKED', latencyMs: Date.now() - startMs,
+            }),
+          };
+        }
+      }
+    } catch (_gate35Err) {
+      // Non-fatal — fall through to KCS.answer() without pre-qualify
+      logger.warn('[KC_ENGINE] GATE 3.5 error — skipping pre-qualify', {
+        companyId, callSid, containerId, err: _gate35Err.message,
+      });
+    }
+  }
+  // ── End GATE 3.5 ──────────────────────────────────────────────────────────
+
+  // preQualifyContext — injected into Groq when caller already answered the
+  // pre-qualify question this call (loaded by _handlePrequalResponse and
+  // passed back via Redis; retrieved here for normal turns after the answer).
+  // If no prequal is configured or not yet answered, this is '' (no injection).
+  let _preQualifyContext = '';
+  if (redis && container.preQualifyQuestion?.text?.trim()) {
+    try {
+      const _pqNotes  = await DiscoveryNotesService.load(companyId, callSid).catch(() => null);
+      const _fieldKey = container.preQualifyQuestion.fieldKey || 'preQualifyAnswer';
+      const _answer   = _pqNotes?.temp?.[_fieldKey];
+      if (_answer) {
+        // Find the matching option to get responseContext
+        const _opts = container.preQualifyQuestion.options || [];
+        const _opt  = _opts.find(o => o.value === _answer);
+        _preQualifyContext = _opt?.responseContext || '';
+      }
+    } catch (_) { /* non-fatal */ }
+  }
+
   let kcResult;
   try {
     kcResult = await KCS.answer({
@@ -1147,7 +1436,8 @@ async function _handleKCMatch({
       callerName,
       callSid,
       discoveryContext,
-      priorVisit,   // passed from run() — was notes?.priorVisit (out-of-scope bug fixed)
+      priorVisit,           // passed from run() — was notes?.priorVisit (out-of-scope bug fixed)
+      preQualifyContext: _preQualifyContext,  // injected into Groq CALLER TYPE block
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Groq error on direct answer', { companyId, callSid, containerId, err: _e.message });
@@ -1170,6 +1460,51 @@ async function _handleKCMatch({
     logger.info('[KC_ENGINE] BOOKING_READY from Groq — routing to KC_BOOKING_INTENT', {
       companyId, callSid, containerTitle,
     });
+
+    // ── GATE 4.5 — UPSELL CHAIN ────────────────────────────────────────────
+    // Before routing to booking, check if this container has upsell offers.
+    // If so, work through the chain first — each offer fires on a separate turn.
+    //   YES → advance to next upsell or booking.
+    //   NO  → skip to next upsell or booking.
+    // GATE 0.7 → _handleUpsellResponse() handles each subsequent YES/NO turn.
+    // Skip silently (fall to booking) if redis unavailable or on any error.
+    // ───────────────────────────────────────────────────────────────────────
+    if (redis && container.upsellChain?.length > 0) {
+      try {
+        const _upKey      = `kc-upsell:${companyId}:${callSid}`;
+        const _upExisting = await redis.get(_upKey).catch(() => null);
+        if (!_upExisting) {
+          const first = container.upsellChain[0];
+          if (first?.offerScript?.trim()) {
+            await redis.setex(
+              _upKey, 4 * 3600,
+              JSON.stringify({ containerId, idx: 0, status: 'PENDING', currentUpsell: first })
+            ).catch(() => {});
+
+            emit('KC_UPSELL_FIRED', { containerId, containerTitle, idx: 0, itemKey: first.itemKey || null, turn });
+            logger.info('[KC_ENGINE] 💰 GATE 4.5: Upsell chain started', {
+              companyId, callSid, containerId, idx: 0, itemKey: first.itemKey || null, turn,
+            });
+
+            return {
+              response:    first.offerScript,
+              matchSource: 'KC_ENGINE',
+              state:       nextState,
+              _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, {
+                containerId, containerTitle, kcId: container.kcId || null,
+                intent: 'UPSELL_ASKED', idx: 0, latencyMs: Date.now() - startMs,
+              }),
+            };
+          }
+        }
+      } catch (_gate45Err) {
+        // Non-fatal — fall through to booking normally
+        logger.warn('[KC_ENGINE] GATE 4.5 error — skipping upsell chain', {
+          companyId, callSid, containerId, err: _gate45Err.message,
+        });
+      }
+    }
+    // ── End GATE 4.5 ─────────────────────────────────────────────────────────
 
     emit('KC_BOOKING_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_BOOKING_INTENT, source: 'groq' });
 
@@ -1302,6 +1637,140 @@ async function _handleKCMatch({
       latencyMs:   Date.now() - startMs,
       spfuqActive: false,
     }),
+  };
+}
+
+// ============================================================================
+// HANDLER: UPSELL RESPONSE
+// Called by GATE 0.7 when there is a pending kc-upsell Redis key for this call.
+// The caller's current utterance is their YES or NO to the upsell offer.
+// ============================================================================
+
+/**
+ * _handleUpsellResponse
+ *
+ * Receives the caller's YES/NO to a upsell offer that was presented on a prior
+ * turn (GATE 4.5). Detects acceptance or decline, writes the outcome to
+ * discoveryNotes.temp.upsellOffers[], then either:
+ *   - Fires the next upsell in the chain (updates Redis idx)
+ *   - OR transitions to booking when the chain is exhausted
+ */
+async function _handleUpsellResponse({
+  companyId, callSid, userInput, redis,
+  pendingUpsell,   // raw JSON string from Redis
+  emit, nextState, startMs, turn, company,
+}) {
+  const _YES_RE = /\b(yes|yeah|yep|sure|absolutely|go ahead|please|proceed|add it|let's do it|sounds good|do it|i'll take it|throw it in)\b/i;
+  const _NO_RE  = /\b(no|nope|not today|maybe later|not right now|nevermind|skip it|no thanks|pass|don't|i'm good)\b/i;
+
+  let _upState;
+  try {
+    _upState = JSON.parse(pendingUpsell);
+  } catch (_) {
+    await redis.del(`kc-upsell:${companyId}:${callSid}`).catch(() => {});
+    return _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs });
+  }
+
+  const { containerId, idx, currentUpsell } = _upState;
+  const isYes = _YES_RE.test(userInput);
+  const isNo  = _NO_RE.test(userInput) && !isYes;
+
+  // Ambiguous (no clear signal) → re-ask with a gentle nudge
+  if (!isYes && !isNo) {
+    emit('KC_UPSELL_REASKED', { containerId, idx, turn });
+    return {
+      response:    `Just to confirm — ${currentUpsell?.offerScript ? 'would you like to add that?' : 'is that a yes or no?'}`,
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_REASKED', idx, latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  // ── Write outcome to discoveryNotes.temp.upsellOffers[] ──────────────────
+  const outcome = {
+    itemKey:     currentUpsell?.itemKey    || null,
+    price:       currentUpsell?.price      ?? null,
+    accepted:    isYes,
+    containerId,
+    timestamp:   new Date().toISOString(),
+  };
+  DiscoveryNotesService.load(companyId, callSid)
+    .then(existing => {
+      const offers = existing?.temp?.upsellOffers || [];
+      return DiscoveryNotesService.update(companyId, callSid, {
+        temp: { upsellOffers: [...offers, outcome] },
+      });
+    })
+    .catch(() => {});
+
+  emit('KC_UPSELL_OUTCOME', { containerId, idx, accepted: isYes, itemKey: currentUpsell?.itemKey || null, turn });
+  logger.info('[KC_ENGINE] 💰 Upsell outcome recorded', {
+    companyId, callSid, containerId, idx, accepted: isYes, itemKey: currentUpsell?.itemKey,
+  });
+
+  // ── Deliver acceptance/decline script ────────────────────────────────────
+  // We'll append the next upsell or routing transition to the spoken response.
+  const scriptLine = isYes
+    ? (currentUpsell?.yesScript?.trim() || '')
+    : (currentUpsell?.noScript?.trim() || '');
+
+  // ── Check for next upsell in chain ────────────────────────────────────────
+  const containers = await KCS.getActiveForCompany(companyId).catch(() => []);
+  const container  = containers.find(c => String(c._id || c.title) === containerId);
+  const chain      = container?.upsellChain || [];
+  const nextIdx    = idx + 1;
+  const nextUpsell = chain[nextIdx];
+
+  if (nextUpsell?.offerScript?.trim()) {
+    // Advance to next upsell in chain
+    const _upKey = `kc-upsell:${companyId}:${callSid}`;
+    await redis.setex(
+      _upKey, 4 * 3600,
+      JSON.stringify({ containerId, idx: nextIdx, status: 'PENDING', currentUpsell: nextUpsell })
+    ).catch(() => {});
+
+    emit('KC_UPSELL_FIRED', { containerId, idx: nextIdx, itemKey: nextUpsell.itemKey || null, turn });
+    logger.info('[KC_ENGINE] 💰 Upsell chain advanced', {
+      companyId, callSid, containerId, idx: nextIdx, itemKey: nextUpsell.itemKey,
+    });
+
+    // Stitch script line + next upsell pitch into one spoken response
+    const response = scriptLine
+      ? `${scriptLine} ${nextUpsell.offerScript}`
+      : nextUpsell.offerScript;
+
+    return {
+      response:    response.trim(),
+      matchSource: 'KC_ENGINE',
+      state:       nextState,
+      _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_ASKED', idx: nextIdx, latencyMs: Date.now() - startMs }),
+    };
+  }
+
+  // ── Chain exhausted — route to booking ────────────────────────────────────
+  await redis.del(`kc-upsell:${companyId}:${callSid}`).catch(() => {});
+  logger.info('[KC_ENGINE] 💰 Upsell chain complete — routing to booking', { companyId, callSid, containerId });
+
+  return _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, scriptLine });
+}
+
+/**
+ * _upsellRouteToBooking — shared helper: flip to BOOKING lane after upsell chain ends.
+ */
+function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, scriptLine = '' }) {
+  emit('KC_BOOKING_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_BOOKING_INTENT, source: 'upsell_chain_done' });
+  nextState.lane                                          = 'BOOKING';
+  nextState.sessionMode                                   = 'BOOKING';
+  nextState.agent2                                        = nextState.agent2 || {};
+  nextState.agent2.discovery                              = nextState.agent2.discovery || {};
+  nextState.agent2.discovery.pendingBookingFromKC         = true;
+  nextState.agent2.discovery.lastPath                     = PATH.KC_BOOKING_INTENT;
+
+  return {
+    response:    scriptLine || "Perfect — let me get you scheduled right away!",
+    matchSource: 'KC_ENGINE',
+    state:       nextState,
+    _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, { intent: 'UPSELL_CHAIN_DONE', latencyMs: Date.now() - startMs }),
   };
 }
 

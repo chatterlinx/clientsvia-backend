@@ -575,7 +575,63 @@
     </div>
   </div>
 
-  <!-- ── 4. Response Settings ──────────────────────────────────────────────── -->
+  <!-- ── 4. Pre-Qualify Question ──────────────────────────────────────────── -->
+  <!-- Shown BEFORE Groq answers. Agent asks one question → caller's answer   -->
+  <!-- injects CALLER TYPE context into Groq so it gives the right response.  -->
+  <div class="form-card" id="cardPreQualify">
+    <div class="form-card-header">
+      <span class="form-card-icon">🎯</span>
+      <div>
+        <div class="form-card-title">Pre-Qualify Question</div>
+        <div class="form-card-subtitle">Ask one question BEFORE answering — agent uses the answer to give the right response for that caller type</div>
+      </div>
+      <span class="form-card-badge optional">Optional</span>
+    </div>
+
+    <!-- Enable toggle -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <label class="form-label" style="margin:0;cursor:pointer;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="fPqEnabled" onchange="_togglePreQualify()" style="width:16px;height:16px;cursor:pointer;" />
+        Ask a qualifying question before answering
+      </label>
+    </div>
+
+    <div id="pqBody" style="display:none;">
+      <!-- Question text -->
+      <div style="margin-bottom:12px;">
+        <label class="form-label">Question the agent asks
+          <span class="form-hint">Spoken verbatim — e.g. "Are you a plan member or calling for the first time?"</span>
+        </label>
+        <input type="text" id="fPqText" class="form-input" maxlength="300"
+          oninput="charCount(this,300,'ccPqText'); S.preQualifyQuestion.text = this.value.trim();"
+          placeholder="Are you a plan member, or is this your first time calling?" />
+        <div class="char-count" id="ccPqText"></div>
+      </div>
+
+      <!-- Field key -->
+      <div style="margin-bottom:16px;">
+        <label class="form-label">Discovery Notes key
+          <span class="form-hint">Written to discoveryNotes.temp[key] — keep it short and unique per container. Default: preQualifyAnswer</span>
+        </label>
+        <input type="text" id="fPqFieldKey" class="form-input" maxlength="60"
+          oninput="S.preQualifyQuestion.fieldKey = this.value.trim() || 'preQualifyAnswer';"
+          placeholder="preQualifyAnswer" style="max-width:260px;" />
+      </div>
+
+      <!-- Options -->
+      <div style="margin-bottom:6px;">
+        <label class="form-label" style="margin-bottom:4px;">Answer Options
+          <span class="form-hint">Map what the caller might say to a context phrase Groq gets. Add one option per caller type.</span>
+        </label>
+        <div id="pqOptionsList"></div>
+        <button class="btn btn-ghost" onclick="_addPqOption()" style="margin-top:8px;font-size:.8rem;padding:4px 12px;">
+          + Add Option
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. Response Settings ────────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">⚙️</span>
@@ -648,7 +704,31 @@
     </div>
   </div>
 
-  <!-- ── 5. Suggested Follow-Up ───────────────────────────────────────────── -->
+  <!-- ── 6. Upsell Chain ───────────────────────────────────────────────────── -->
+  <!-- Fires sequentially AFTER Groq answers and returns BOOKING_READY.        -->
+  <!-- Each offer fires on a separate turn. YES → next. Chain done → booking.  -->
+  <div class="form-card" id="cardUpsellChain">
+    <div class="form-card-header">
+      <span class="form-card-icon">💰</span>
+      <div>
+        <div class="form-card-title">Upsell Offers</div>
+        <div class="form-card-subtitle">Add-on offers the agent pitches sequentially after answering — fires only when caller is ready to book</div>
+      </div>
+      <span class="form-card-badge optional">Optional</span>
+    </div>
+
+    <div id="upsellChainList" style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;"></div>
+
+    <div id="upsellEmptyState" style="display:none;color:#9ca3af;font-size:.8rem;margin-bottom:12px;">
+      No upsell offers yet — add one to pitch upgrades before booking proceeds
+    </div>
+
+    <button class="btn btn-ghost" onclick="_addUpsellItem()" style="font-size:.8rem;padding:5px 14px;">
+      + Add Offer
+    </button>
+  </div>
+
+  <!-- ── 7. Suggested Follow-Up ───────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">💬</span>
@@ -840,6 +920,10 @@ const S = {
   classificationStatus: null,   // AUTO_CONFIRMED | MANUAL | PENDING | UNCLASSIFIED
   classificationScore:  null,
   autoClassifiedAt:     null,
+  // Pre-qualify question state
+  preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
+  // Upsell chain state
+  upsellChain: [],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1000,6 +1084,43 @@ function _populateForm(c) {
   }
   // Complexity indicator needs sections in DOM — update now that they are rendered
   _updateComplexityIndicator();
+
+  // Pre-qualify question
+  const pq = c.preQualifyQuestion || {};
+  S.preQualifyQuestion = {
+    text:     pq.text     || '',
+    fieldKey: pq.fieldKey || 'preQualifyAnswer',
+    options:  (pq.options || []).map(o => ({
+      label:           o.label           || '',
+      value:           o.value           || '',
+      keywords:        o.keywords        || [],
+      responseContext: o.responseContext || '',
+    })),
+  };
+  const pqEnabled = !!(pq.text?.trim() || pq.options?.length);
+  const pqToggle  = document.getElementById('fPqEnabled');
+  if (pqToggle) {
+    pqToggle.checked = pqEnabled;
+    document.getElementById('pqBody').style.display = pqEnabled ? 'block' : 'none';
+  }
+  const pqTextEl = document.getElementById('fPqText');
+  if (pqTextEl) {
+    pqTextEl.value = S.preQualifyQuestion.text;
+    charCount(pqTextEl, 300, 'ccPqText');
+  }
+  const pqKeyEl = document.getElementById('fPqFieldKey');
+  if (pqKeyEl) pqKeyEl.value = S.preQualifyQuestion.fieldKey;
+  _renderPqOptions();
+
+  // Upsell chain
+  S.upsellChain = (c.upsellChain || []).map(u => ({
+    offerScript: u.offerScript || '',
+    yesScript:   u.yesScript   || '',
+    noScript:    u.noScript    || '',
+    itemKey:     u.itemKey     || '',
+    price:       u.price != null ? u.price : '',
+  }));
+  _renderUpsellChain();
 
   // UAP classification state — populate after uapArrays loaded (may race; _loadUAPArrays handles re-render)
   S.daType              = c.daType              || null;
@@ -1637,6 +1758,10 @@ async function saveContainer() {
     classificationStatus: selectedDaType
       ? (S.classificationStatus === 'AUTO_CONFIRMED' ? 'AUTO_CONFIRMED' : 'MANUAL')
       : 'UNCLASSIFIED',
+    // Pre-qualify question — include only when toggle is on and question text is set
+    preQualifyQuestion: _getPreQualifyPayload(),
+    // Upsell chain — include only entries with an offerScript
+    upsellChain: _getUpsellChainPayload(),
   };
 
   _setLoading(true);
@@ -1741,6 +1866,162 @@ function _populateSubTypeDropdown(daType, selectedSubTypeKey) {
       `<option value="${_esc(s.key)}" ${selectedSubTypeKey === s.key ? 'selected' : ''}>${_esc(s.label)}</option>`
     ).join('');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRE-QUALIFY QUESTION — UI functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _togglePreQualify() {
+  const on  = document.getElementById('fPqEnabled')?.checked;
+  document.getElementById('pqBody').style.display = on ? 'block' : 'none';
+}
+
+function _renderPqOptions() {
+  const list = document.getElementById('pqOptionsList');
+  if (!list) return;
+  const opts = S.preQualifyQuestion.options || [];
+  if (!opts.length) {
+    list.innerHTML = `<p style="font-size:.78rem;color:#9ca3af;margin:4px 0;">No options yet — add one per caller type (e.g. "Plan Member", "First-Time")</p>`;
+    return;
+  }
+  list.innerHTML = opts.map((opt, i) => `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:6px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:6px;">
+        <div>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Label (for logs)</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.label)}"
+            oninput="S.preQualifyQuestion.options[${i}].label=this.value"
+            placeholder="Plan Member" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Stored value</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.value)}"
+            oninput="S.preQualifyQuestion.options[${i}].value=this.value"
+            placeholder="plan_member" />
+        </div>
+        <button onclick="_removePqOption(${i})" title="Remove"
+          style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1.1rem;padding:2px 6px;align-self:flex-end;">✕</button>
+      </div>
+      <div style="margin-bottom:6px;">
+        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Caller keywords <span style="color:#9ca3af;">(comma-separated — what the caller might say)</span></label>
+        <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords||[]).join(', '))}"
+          oninput="S.preQualifyQuestion.options[${i}].keywords=this.value.split(',').map(s=>s.trim()).filter(Boolean)"
+          placeholder="member, plan, maintenance plan, service agreement" />
+      </div>
+      <div>
+        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Groq context <span style="color:#9ca3af;">(injected into Groq so it answers correctly for this caller type)</span></label>
+        <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.responseContext)}"
+          oninput="S.preQualifyQuestion.options[${i}].responseContext=this.value"
+          placeholder='Caller IS a plan member — use plan-member pricing and member discounts.' />
+      </div>
+    </div>`).join('');
+}
+
+function _addPqOption() {
+  S.preQualifyQuestion.options.push({ label: '', value: '', keywords: [], responseContext: '' });
+  _renderPqOptions();
+}
+
+function _removePqOption(idx) {
+  S.preQualifyQuestion.options.splice(idx, 1);
+  _renderPqOptions();
+}
+
+function _getPreQualifyPayload() {
+  const pqEnabled = document.getElementById('fPqEnabled')?.checked;
+  const text      = (document.getElementById('fPqText')?.value || '').trim();
+  if (!pqEnabled || !text) return { text: '', fieldKey: 'preQualifyAnswer', options: [] };
+  return {
+    text,
+    fieldKey: (document.getElementById('fPqFieldKey')?.value || 'preQualifyAnswer').trim() || 'preQualifyAnswer',
+    options:  (S.preQualifyQuestion.options || []).filter(o => o.label || o.value || o.keywords.length),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UPSELL CHAIN — UI functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _renderUpsellChain() {
+  const list  = document.getElementById('upsellChainList');
+  const empty = document.getElementById('upsellEmptyState');
+  if (!list) return;
+  if (!S.upsellChain.length) {
+    list.innerHTML  = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  list.innerHTML = S.upsellChain.map((u, i) => `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:.78rem;font-weight:600;color:#16a34a;">Offer ${i + 1}${u.itemKey ? ' — ' + _esc(u.itemKey) : ''}</span>
+        <button onclick="_removeUpsellItem(${i})" title="Remove offer"
+          style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1rem;padding:2px 8px;">✕ Remove</button>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Offer Script <span style="color:#9ca3af;">(agent pitches this verbatim — max 600 chars)</span></label>
+        <textarea class="form-input" rows="2" maxlength="600" style="font-size:.8rem;resize:vertical;"
+          oninput="S.upsellChain[${i}].offerScript=this.value"
+          placeholder="While I have you — would you like to add a UV light special for $189 today? It's our best add-on for this service."
+          >${_esc(u.offerScript)}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If caller says YES</label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(u.yesScript)}"
+            oninput="S.upsellChain[${i}].yesScript=this.value" maxlength="400"
+            placeholder="Great choice — I've noted that on your appointment." />
+        </div>
+        <div>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If caller says NO <span style="color:#9ca3af;">(optional)</span></label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(u.noScript)}"
+            oninput="S.upsellChain[${i}].noScript=this.value" maxlength="400"
+            placeholder="No problem at all — let me get you booked." />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;">
+        <div>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Item Key <span style="color:#9ca3af;">(tracking ID written to discoveryNotes)</span></label>
+          <input class="form-input" style="font-size:.8rem;" value="${_esc(u.itemKey)}"
+            oninput="S.upsellChain[${i}].itemKey=this.value.trim(); _renderUpsellChain();"
+            placeholder="uv_light" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Price ($) <span style="color:#9ca3af;">optional</span></label>
+          <input type="number" class="form-input" style="font-size:.8rem;" value="${u.price !== '' ? _esc(String(u.price)) : ''}"
+            oninput="S.upsellChain[${i}].price=this.value===''?'':parseFloat(this.value)||0"
+            placeholder="189" min="0" step="0.01" />
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function _addUpsellItem() {
+  S.upsellChain.push({ offerScript: '', yesScript: '', noScript: '', itemKey: '', price: '' });
+  _renderUpsellChain();
+}
+
+function _removeUpsellItem(idx) {
+  S.upsellChain.splice(idx, 1);
+  _renderUpsellChain();
+}
+
+function _getUpsellChainPayload() {
+  return (S.upsellChain || [])
+    .filter(u => u.offerScript?.trim())
+    .map(u => ({
+      offerScript: u.offerScript.trim(),
+      yesScript:   (u.yesScript || '').trim(),
+      noScript:    (u.noScript  || '').trim(),
+      itemKey:     (u.itemKey   || '').trim(),
+      price:       u.price !== '' && u.price != null ? parseFloat(u.price) || null : null,
+    }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UAP CLASSIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _renderUAPStatus() {
   const statusWrap = document.getElementById('uapClassificationStatus');

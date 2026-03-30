@@ -190,16 +190,63 @@ async function stamp(companyId, callSid, customerId, durationSeconds = 0) {
       }
     }
 
+    // ── Stamp upsell history + (re)compute buyerProfile tag ──────────────────
+    // upsellOffers lives in temp{} — mid-call data, not a confirmed booking field.
+    // These are always stamped regardless of booking outcome.
+    const upsellOffers = temp.upsellOffers || [];
+    if (upsellOffers.length) {
+      const historyEntries = upsellOffers.map(o => ({
+        itemKey:  o.itemKey  || null,
+        accepted: !!o.accepted,
+        price:    o.price    ?? null,
+        date:     o.timestamp ? new Date(o.timestamp) : now,
+        callSid,
+      }));
+      await Customer.updateOne(
+        { _id: customerId, companyId },
+        { $push: { 'callerProfile.upsellHistory': { $each: historyEntries } } }
+      );
+
+      // Compute buyerProfile tag once ≥3 data points exist across all calls
+      const freshCustomer = await Customer.findOne(
+        { _id: customerId, companyId },
+        { 'callerProfile.upsellHistory': 1, 'callerProfile.buyerProfile': 1 }
+      ).lean();
+
+      const allUpsells = freshCustomer?.callerProfile?.upsellHistory || [];
+      if (allUpsells.length >= 3) {
+        const total      = allUpsells.length;
+        const accepted   = allUpsells.filter(u => u.accepted).length;
+        const acceptRate = accepted / total;
+        const tag        = acceptRate >= 0.75 ? 'impulse_buyer'
+                         : acceptRate >= 0.10  ? 'moderate'
+                         :                       'never_buys';
+
+        await Customer.updateOne(
+          { _id: customerId, companyId },
+          { $set: { 'callerProfile.buyerProfile': tag } }
+        );
+        logger.info('[CustomerProfile] 🛒 buyerProfile computed', {
+          companyId, callSid,
+          customerId:  String(customerId),
+          tag,
+          acceptRate:  `${Math.round(acceptRate * 100)}%`,
+          totalOffers: total,
+        });
+      }
+    }
+
     logger.info('[CustomerProfile] ✅ Stamped', {
       companyId,
       callSid,
-      customerId: String(customerId),
-      objective:  callHistoryEntry.objective,
-      outcome:    callHistoryEntry.callOutcome,
+      customerId:     String(customerId),
+      objective:      callHistoryEntry.objective,
+      outcome:        callHistoryEntry.callOutcome,
       isConverted,
       isLostLead,
-      hadName:    !!fullName,
-      hadStaff:   !!staffName,
+      hadName:        !!fullName,
+      hadStaff:       !!staffName,
+      upsellsStamped: upsellOffers.length,
     });
 
     return true;

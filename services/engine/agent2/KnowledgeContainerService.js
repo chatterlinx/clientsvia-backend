@@ -432,7 +432,8 @@ function _buildSystemPrompt({
   acknowledgeHistory,
   callerName,
   priorVisit,
-  behaviorBlock = '',  // Engine Hub Behavior Card block — injected when a BC is configured for this KC category
+  behaviorBlock = '',      // Engine Hub Behavior Card block — injected when a BC is configured for this KC category
+  preQualifyContext = '',  // Injected when caller answered a pre-qualify question for this container
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -470,6 +471,13 @@ function _buildSystemPrompt({
   // caller's specific situation. Additive — does not replace ACTIVE TOPIC.
   const callContextBlock = discoveryContext
     ? `\nCALL CONTEXT: ${discoveryContext}\nUse this context to connect your answer to what the caller is specifically calling about.\n`
+    : '';
+
+  // PRE-QUALIFY CONTEXT block — injected when the caller answered the container's
+  // pre-qualify question. Tells Groq which caller type to address (member vs first-timer,
+  // residential vs commercial, etc.) so the response calibrates to the right tier/price.
+  const preQualBlock = preQualifyContext?.trim()
+    ? `\nCALLER TYPE: ${preQualifyContext.trim()}\nThis context affects which pricing, tier, or service details are most relevant — calibrate your answer accordingly.\n`
     : '';
 
   // ── RESPONSE TONE INSTRUCTION ──────────────────────────────────────────────
@@ -511,7 +519,7 @@ function _buildSystemPrompt({
 
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-${activeTopicBlock}${callContextBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
+${activeTopicBlock}${callContextBlock}${preQualBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
 1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
 2. ${wordCapRule}
@@ -884,9 +892,10 @@ async function answer(opts) {
     company     = {},
     callerName,
     callSid,
-    spfuqContext,       // optional — active topic reminder injected into system prompt for pronoun resolution
-    discoveryContext,   // optional — call-level context from discoveryNotes (callReason, entities)
-    priorVisit  = false, // optional — true when caller is a returning customer
+    spfuqContext,           // optional — active topic reminder injected into system prompt for pronoun resolution
+    discoveryContext,       // optional — call-level context from discoveryNotes (callReason, entities)
+    priorVisit  = false,    // optional — true when caller is a returning customer
+    preQualifyContext = '', // optional — caller's pre-qualify answer context (e.g. "Caller IS a plan member")
   } = opts;
 
   const startMs       = Date.now();
@@ -948,6 +957,7 @@ async function answer(opts) {
     callerName:         callerName                             || null,
     priorVisit:         priorVisit                             || false,
     behaviorBlock:      behaviorBlock                          || '',
+    preQualifyContext:  preQualifyContext                      || '',
   });
 
   // User message — personalise with caller name if known
