@@ -180,12 +180,25 @@
         <button class="remove-phrase" onclick="window.UAPPage.removePhrase('${arrayId}','${_esc(st.key)}','${_esc(p)}')" title="Remove phrase">×</button>
       </span>`).join('');
 
+    // KC link indicator — teal badge links to the KC card; amber badge = orphan
+    let kcIndicator;
+    if (st.kcLink) {
+      const url      = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&containerId=${encodeURIComponent(st.kcLink.containerId)}`;
+      const linkText = st.kcLink.sectionLabel
+        ? `${_esc(st.kcLink.containerTitle)} › ${_esc(st.kcLink.sectionLabel)}`
+        : _esc(st.kcLink.containerTitle);
+      kcIndicator = `<a class="kc-link-badge" href="${url}" title="Open KC card: ${_esc(st.kcLink.containerTitle)}">🔗 ${linkText}</a>`;
+    } else {
+      kcIndicator = `<span class="kc-orphan-badge" title="No KC section is linked to this sub-type">⚠ No KC section</span>`;
+    }
+
     return `
       <div class="uap-subtype">
         <div class="uap-subtype-label">
           ${_esc(st.label)}
           ${st.classificationStatus === 'PENDING' ? '<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">PENDING</span>' : ''}
         </div>
+        ${kcIndicator}
         <div class="phrase-list">${phrases || '<span style="font-size:.688rem;color:var(--text-muted);">No trigger phrases yet</span>'}</div>
         <div class="add-phrase-form">
           <input type="text" class="add-phrase-input" placeholder="+ add phrase"

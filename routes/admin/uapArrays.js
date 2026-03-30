@@ -31,14 +31,15 @@
  * ============================================================================
  */
 
-const express             = require('express');
-const router              = express.Router();
-const mongoose            = require('mongoose');
-const logger              = require('../../utils/logger');
-const { authenticateJWT } = require('../../middleware/auth');
-const UAPArray            = require('../../models/UAPArray');
-const Company             = require('../../models/v2Company');
-const BridgeService       = require('../../services/engine/kc/BridgeService');
+const express                   = require('express');
+const router                    = express.Router();
+const mongoose                  = require('mongoose');
+const logger                    = require('../../utils/logger');
+const { authenticateJWT }       = require('../../middleware/auth');
+const UAPArray                  = require('../../models/UAPArray');
+const Company                   = require('../../models/v2Company');
+const BridgeService             = require('../../services/engine/kc/BridgeService');
+const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -152,14 +153,48 @@ const STANDARD_DA_TYPES = [
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /:companyId/uap/arrays
 // List all UAPArrays for this company.
+// Enriches each sub-type with a `kcLink` field:
+//   { containerId, containerTitle, sectionId, sectionLabel } | null
+// kcLink=null means the sub-type has no KC section — it is an orphan.
 // ═══════════════════════════════════════════════════════════════════════════
 router.get('/:companyId/uap/arrays', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    const arrays = await UAPArray.find({ companyId }).sort({ daType: 1 }).lean();
-    return res.json({ success: true, arrays });
+    // Fetch arrays and active KC containers in parallel
+    const [arrays, kcContainers] = await Promise.all([
+      UAPArray.find({ companyId }).sort({ daType: 1 }).lean(),
+      CompanyKnowledgeContainer.find({ companyId, isActive: { $ne: false } })
+        .select('_id title sections.daSubTypeKey sections._id sections.label')
+        .lean(),
+    ]);
+
+    // Build lookup map: daSubTypeKey → KC link info
+    const kcLinkMap = {};
+    for (const kc of kcContainers) {
+      for (const s of (kc.sections || [])) {
+        if (s.daSubTypeKey) {
+          kcLinkMap[s.daSubTypeKey] = {
+            containerId:    String(kc._id),
+            containerTitle: kc.title || '',
+            sectionId:      s._id ? String(s._id) : null,
+            sectionLabel:   s.label || '',
+          };
+        }
+      }
+    }
+
+    // Enrich sub-types with kcLink (null = orphan)
+    const enriched = arrays.map(arr => ({
+      ...arr,
+      daSubTypes: (arr.daSubTypes || []).map(st => ({
+        ...st,
+        kcLink: kcLinkMap[st.key] || null,
+      })),
+    }));
+
+    return res.json({ success: true, arrays: enriched });
   } catch (err) {
     logger.error('[UAPArrays] GET arrays error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Failed to load arrays' });

@@ -858,6 +858,42 @@ router.get('/:companyId/knowledge/uap-arrays', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/by-subtype-key/:key
+// Lookup which KC container+section owns a given daSubTypeKey.
+// Used by UAP Arrays page to show linked KC card per sub-type.
+// Returns { found, containerId, containerTitle, sectionId, sectionLabel }
+// ⚠️ MUST be before GET /:id — Express will match 'by-subtype-key' as :id otherwise
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/by-subtype-key/:key', async (req, res) => {
+  const { companyId, key } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const container = await CompanyKnowledgeContainer.findOne({
+      companyId,
+      'sections.daSubTypeKey': key,
+    }).select('_id title sections').lean();
+
+    if (!container) {
+      return res.json({ success: true, found: false });
+    }
+
+    const section = (container.sections || []).find(s => s.daSubTypeKey === key);
+    return res.json({
+      success:        true,
+      found:          true,
+      containerId:    String(container._id),
+      containerTitle: container.title || '',
+      sectionId:      section?._id ? String(section._id) : null,
+      sectionLabel:   section?.label || '',
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] by-subtype-key error', { companyId, key, err: err.message });
+    return res.status(500).json({ success: false, error: 'Lookup failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge/:id — Get single container
 // ⚠️ Must be AFTER all literal-segment routes above
 // ─────────────────────────────────────────────────────────────────────────────
@@ -888,6 +924,17 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
   }
 
   try {
+    // ── Option C: capture old daSubTypeKeys before update ──────────────────
+    // When sections change, diff old vs new to find orphaned UAP sub-types
+    let oldSubTypeKeys = [];
+    if (updates.sections !== undefined) {
+      const old = await CompanyKnowledgeContainer.findOne({ _id: id, companyId })
+        .select('sections.daSubTypeKey').lean();
+      if (old) {
+        oldSubTypeKeys = (old.sections || []).map(s => s.daSubTypeKey).filter(Boolean);
+      }
+    }
+
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
       { _id: id, companyId },
       { $set: updates },
@@ -900,11 +947,32 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
       logger.warn('[companyKnowledge] cache invalidation failed on PATCH', { companyId, e: e.message })
     );
 
-    // Invalidate Bridge if daType changed (routing table must be rebuilt)
-    if (updates.daType !== undefined || updates.isActive !== undefined) {
+    // Invalidate Bridge if daType, isActive, or sections changed (routing table must be rebuilt)
+    if (updates.daType !== undefined || updates.isActive !== undefined || updates.sections !== undefined) {
       BridgeService.invalidate(companyId).catch(e =>
         logger.warn('[companyKnowledge] Bridge invalidation failed (non-blocking)', { companyId, e: e.message })
       );
+    }
+
+    // ── Option C: pull orphaned daSubTypeKeys from UAPArray (fire-and-forget) ─
+    if (updates.sections !== undefined && oldSubTypeKeys.length) {
+      const newSubTypeKeys = new Set(
+        (container.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
+      );
+      const orphaned = oldSubTypeKeys.filter(k => !newSubTypeKeys.has(k));
+      if (orphaned.length) {
+        setImmediate(async () => {
+          try {
+            await UAPArray.updateMany(
+              { companyId },
+              { $pull: { daSubTypes: { key: { $in: orphaned } } } }
+            );
+            logger.info('[companyKnowledge] Pulled orphaned daSubTypeKeys on PATCH', { companyId, id, orphaned });
+          } catch (e) {
+            logger.warn('[companyKnowledge] Orphaned daSubType cleanup failed (non-blocking)', { companyId, e: e.message });
+          }
+        });
+      }
     }
 
     // Re-embed if title or sections changed (the fields that affect semantic meaning)
@@ -930,6 +998,13 @@ router.delete('/:companyId/knowledge/:id', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
+    // Capture section daSubTypeKeys BEFORE deactivation for Option C cleanup
+    const preDelete = await CompanyKnowledgeContainer.findOne({ _id: id, companyId })
+      .select('sections.daSubTypeKey').lean();
+    const keysToOrphan = preDelete
+      ? (preDelete.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
+      : [];
+
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
       { _id: id, companyId },
       { $set: { isActive: false } },
@@ -939,6 +1014,23 @@ router.delete('/:companyId/knowledge/:id', async (req, res) => {
     if (!container) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
+
+    // Option C: pull orphaned sub-types from UAPArray (fire-and-forget)
+    if (keysToOrphan.length) {
+      setImmediate(async () => {
+        try {
+          await UAPArray.updateMany(
+            { companyId },
+            { $pull: { daSubTypes: { key: { $in: keysToOrphan } } } }
+          );
+          logger.info('[companyKnowledge] Pulled orphaned daSubTypeKeys on soft-delete', { companyId, id, keysToOrphan });
+        } catch (e) {
+          logger.warn('[companyKnowledge] Orphaned daSubType cleanup on soft-delete failed', { companyId, e: e.message });
+        }
+      });
+    }
+
     logger.info('[companyKnowledge] Soft-deleted container', { companyId, id });
     return res.json({ success: true, message: 'Knowledge container deactivated' });
   } catch (err) {
@@ -955,10 +1047,34 @@ router.delete('/:companyId/knowledge/:id/hard', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
+    // Capture section daSubTypeKeys BEFORE deletion for Option C cleanup
+    const preDelete = await CompanyKnowledgeContainer.findOne({ _id: id, companyId })
+      .select('sections.daSubTypeKey').lean();
+    const keysToOrphan = preDelete
+      ? (preDelete.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
+      : [];
+
     const result = await CompanyKnowledgeContainer.deleteOne({ _id: id, companyId });
     if (!result.deletedCount) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
+
+    // Option C: pull orphaned sub-types from UAPArray (fire-and-forget)
+    if (keysToOrphan.length) {
+      setImmediate(async () => {
+        try {
+          await UAPArray.updateMany(
+            { companyId },
+            { $pull: { daSubTypes: { key: { $in: keysToOrphan } } } }
+          );
+          logger.info('[companyKnowledge] Pulled orphaned daSubTypeKeys on hard-delete', { companyId, id, keysToOrphan });
+        } catch (e) {
+          logger.warn('[companyKnowledge] Orphaned daSubType cleanup on hard-delete failed', { companyId, e: e.message });
+        }
+      });
+    }
+
     logger.info('[companyKnowledge] Hard-deleted container', { companyId, id });
     return res.json({ success: true, message: 'Knowledge container permanently deleted' });
   } catch (err) {
