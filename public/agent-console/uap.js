@@ -183,7 +183,7 @@
     // KC link indicator — teal badge links to the KC card; amber badge = orphan
     let kcIndicator;
     if (st.kcLink) {
-      const url      = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&containerId=${encodeURIComponent(st.kcLink.containerId)}`;
+      const url      = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(st.kcLink.containerId)}`;
       const linkText = st.kcLink.sectionLabel
         ? `${_esc(st.kcLink.containerTitle)} › ${_esc(st.kcLink.sectionLabel)}`
         : _esc(st.kcLink.containerTitle);
