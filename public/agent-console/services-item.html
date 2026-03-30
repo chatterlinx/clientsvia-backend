@@ -1253,10 +1253,33 @@ async function suggestLabel(btn) {
   const textarea   = row.querySelector('textarea');
   const labelInput = row.querySelector('.section-label-input');
   const chip       = row.querySelector('.section-uap-chip');
+  const sid        = parseInt(row.dataset.sid, 10);
+  const sData      = (sid && S.sectionData.has(sid)) ? S.sectionData.get(sid) : null;
 
-  const content = textarea?.value?.trim();
+  // ── Content source: prequal section vs normal content section ─────────────
+  // When pre-qualify is enabled the textarea is irrelevant for routing.
+  // The section's identity is its qualifying question + options — use those.
+  let content          = textarea?.value?.trim() || '';
+  let isPrequalSection = false;
+
+  if (sData?.pq?.enabled && sData.pq.text?.trim()) {
+    const pqLines = [`Pre-qualifying question: "${sData.pq.text.trim()}"`];
+    const opts = sData.pq.options || [];
+    if (opts.length > 0) {
+      pqLines.push('Answer options:');
+      for (const opt of opts) {
+        const ctx = (opt.responseContext || '').trim();
+        if (opt.label || ctx) pqLines.push(`- ${opt.label || opt.value}: "${ctx}"`);
+      }
+    }
+    content          = pqLines.join('\n');
+    isPrequalSection = true;
+  }
+
   if (!content) {
-    _toast('Add some content first, then auto-label it', 'error');
+    _toast(isPrequalSection
+      ? 'Add your pre-qualifying question first, then auto-label'
+      : 'Add some content first, then auto-label it', 'error');
     return;
   }
 
@@ -1270,8 +1293,9 @@ async function suggestLabel(btn) {
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content,
-          sectionLabel: labelInput?.value?.trim() || '',
-          containerId:  S.itemId || null,
+          sectionLabel:    labelInput?.value?.trim() || '',
+          containerId:     S.itemId || null,
+          isPrequalSection,
         }) }
     );
 

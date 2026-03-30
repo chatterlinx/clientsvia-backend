@@ -1102,7 +1102,7 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  const { content, sectionLabel = '', containerId = null } = req.body;
+  const { content, sectionLabel = '', containerId = null, isPrequalSection = false } = req.body;
   if (!content?.trim()) {
     return res.status(400).json({ success: false, error: 'No content provided' });
   }
@@ -1142,7 +1142,8 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
     if (tradeString)         contextLines.push(`Trade/Industry: ${tradeString}`);
     if (containerTitle)      contextLines.push(`Container title: "${containerTitle}"`);
     if (containerCategory)   contextLines.push(`Container category: "${containerCategory}"`);
-    if (sectionLabel?.trim()) contextLines.push(`Current section label hint: "${sectionLabel.trim()}"`);
+    if (sectionLabel?.trim())  contextLines.push(`Current section label hint: "${sectionLabel.trim()}"`);
+    if (isPrequalSection)      contextLines.push(`Section type: PRE-QUALIFYING (asks caller a qualifying question before answering — trigger phrases must match what the caller says to ARRIVE at this fork, not what the answer says)`);
     const contextBlock = contextLines.length > 0
       ? `CONTEXT:\n${contextLines.join('\n')}\n\n`
       : '';
