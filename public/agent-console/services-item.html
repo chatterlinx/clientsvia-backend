@@ -1005,6 +1005,9 @@ async function loadContainer() {
   try {
     const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`);
     if (!data.success) throw new Error(data.error || 'Load failed');
+    // Store the real MongoDB _id separately — S.itemId may be a kcId (e.g. "700c4-25")
+    // All API mutation routes (PATCH, DELETE, etc.) require the MongoDB _id, not kcId.
+    S.mongoId = String(data.container._id);
     _populateForm(data.container);
     _showForm();
   } catch (err) {
@@ -1375,7 +1378,7 @@ async function _createArrayFromChip(createBtn) {
       key:              subTypeKey,
       label:            subTypeLabel || subTypeKey,
       triggerPhrases:   phrases,
-      attachedTo:       S.itemId ? [S.itemId] : [],
+      attachedTo:       (S.mongoId || S.itemId) ? [S.mongoId || S.itemId] : [],
       classificationStatus: 'AUTO_CONFIRMED',
     }] : [];
 
@@ -1483,7 +1486,7 @@ function _renderKeywords() {
     const tag        = document.createElement('span');
     const conflicts  = S.conflictMap[kw.toLowerCase().trim()] || [];
     // Exclude self from conflict list
-    const others     = conflicts.filter(c => c.id !== S.itemId);
+    const others     = conflicts.filter(c => c.id !== (S.mongoId || S.itemId));
     const hasConflict = others.length > 0;
     tag.className    = 'kw-tag' + (hasConflict ? ' conflict' : '');
     const conflictTip = hasConflict
@@ -1899,7 +1902,7 @@ async function saveContainer() {
 
   try {
     const url    = S.isEdit
-      ? `/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`
+      ? `/api/admin/agent2/company/${S.companyId}/knowledge/${S.mongoId || S.itemId}`
       : `/api/admin/agent2/company/${S.companyId}/knowledge`;
     const method = S.isEdit ? 'PATCH' : 'POST';
 
@@ -2250,7 +2253,7 @@ async function autoClassify() {
 
   try {
     const data = await apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}/auto-classify`,
+      `/api/admin/agent2/company/${S.companyId}/knowledge/${S.mongoId || S.itemId}/auto-classify`,
       { method: 'POST' }
     );
     if (!data.success) throw new Error(data.error || 'Classification failed');
@@ -2294,7 +2297,7 @@ async function softDelete() {
   if (!confirm('Deactivate this container? It will be hidden from callers but not deleted.')) return;
   _setLoading(true);
   try {
-    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}`, {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.mongoId || S.itemId}`, {
       method: 'DELETE',
     });
     if (!data.success) throw new Error(data.error || 'Deactivate failed');
@@ -2310,7 +2313,7 @@ async function hardDelete() {
   if (!confirm('PERMANENTLY delete this container? This cannot be undone.')) return;
   _setLoading(true);
   try {
-    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.itemId}/hard`, {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/${S.mongoId || S.itemId}/hard`, {
       method: 'DELETE',
     });
     if (!data.success) throw new Error(data.error || 'Delete failed');
