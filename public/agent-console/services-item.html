@@ -15,7 +15,7 @@
     :root {
       --color-primary:    #0ea5e9;
       --color-primary-dk: #0284c7;
-      --bg-page:          #f0f9ff;
+      --bg-page:          #f1f5f9;
       --bg-card:          #ffffff;
       --bg-header:        #ffffff;
       --text-primary:     #0f172a;
@@ -23,8 +23,8 @@
       --text-xs:          #94a3b8;
       --border:           #e2e8f0;
       --border-focus:     #0ea5e9;
-      --radius-card:      12px;
-      --shadow-card:      0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --radius-card:      14px;
+      --shadow-card:      0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,66 +33,95 @@
     /* ── Sticky header ────────────────────────────────────────────────────── */
     .page-header {
       background: var(--bg-header); border-bottom: 1px solid var(--border);
-      padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+      padding: 0 32px; height: 60px; display: flex; align-items: center; gap: 14px;
       position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 0 var(--border), 0 2px 8px rgba(0,0,0,.04);
     }
     .btn-back {
       display: flex; align-items: center; gap: 6px;
-      padding: 6px 12px; border-radius: 8px;
+      padding: 7px 14px; border-radius: 8px;
       border: 1px solid var(--border); background: white;
       color: var(--text-muted); font-size: 13px; font-weight: 500;
       cursor: pointer; text-decoration: none; transition: background .15s, color .15s;
+      white-space: nowrap;
     }
     .btn-back:hover { background: #f8fafc; color: var(--text-primary); }
-    .header-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-divider { width: 1px; height: 28px; background: var(--border); }
     .header-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .header-subtitle { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
     .header-spacer { flex: 1; }
-    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
 
     /* ── Form page wrapper ───────────────────────────────────────────────── */
-    .form-page { max-width: 760px; margin: 28px auto; padding: 0 24px 80px; display: flex; flex-direction: column; gap: 18px; }
+    .form-page { max-width: 1100px; margin: 0 auto; padding: 0 40px 100px; display: flex; flex-direction: column; gap: 0; }
+
+    /* ── Step dividers ───────────────────────────────────────────────────── */
+    .step-block {
+      display: flex; align-items: center; gap: 14px;
+      padding: 36px 0 14px;
+    }
+    .step-block:first-child { padding-top: 28px; }
+    .step-num {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--color-primary); color: white;
+      font-size: 11px; font-weight: 800; letter-spacing: .06em;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-block-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .step-block-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
     /* ── Form section cards ──────────────────────────────────────────────── */
     .form-card {
       border: 1px solid var(--border); border-radius: var(--radius-card);
       overflow: hidden; background: white; box-shadow: var(--shadow-card);
     }
+    .form-card + .form-card { margin-top: 12px; }
     .form-card-header {
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 18px; background: #fafafa;
+      display: flex; align-items: center; gap: 16px;
+      padding: 18px 24px; background: white;
       border-bottom: 1px solid var(--border);
     }
-    .form-card-icon { font-size: 18px; }
-    .form-card-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .form-card-subtitle { font-size: 12px; color: var(--text-muted); }
+    .form-card-icon {
+      font-size: 20px; width: 46px; height: 46px; flex-shrink: 0;
+      background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 11px;
+      display: inline-flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+    .form-card-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .form-card-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
     .form-card-badge {
-      margin-left: auto; font-size: 10px; font-weight: 700;
-      padding: 2px 8px; border-radius: 20px; border: 1px solid;
+      margin-left: auto; font-size: 10.5px; font-weight: 700;
+      padding: 4px 10px; border-radius: 20px; border: 1px solid; white-space: nowrap;
     }
     .form-card-badge.required { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
     .form-card-badge.optional { background: #f8fafc; border-color: #cbd5e1; color: #94a3b8; }
 
-    .form-card-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+    .form-card-body { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
 
     /* ── Form elements ───────────────────────────────────────────────────── */
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
     .form-group.full { grid-column: 1 / -1; }
     .form-label {
-      font-size: 12px; font-weight: 600; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: .4px;
+      font-size: 11.5px; font-weight: 700; color: #475569;
+      text-transform: uppercase; letter-spacing: .5px;
       display: flex; align-items: center; gap: 6px;
     }
     .form-label .required-star { color: #ef4444; font-size: 14px; }
     .form-input, .form-textarea, .form-select {
-      padding: 9px 12px; border-radius: 8px;
-      border: 1px solid var(--border); font-size: 14px; font-family: inherit;
-      outline: none; transition: border-color .15s; background: white;
+      padding: 10px 14px; border-radius: 9px;
+      border: 1px solid #d1d5db; font-size: 14px; font-family: inherit;
+      outline: none; transition: border-color .15s, box-shadow .15s; background: white;
+      color: var(--text-primary);
     }
-    .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--border-focus); }
-    .form-textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
-    .form-textarea.tall { min-height: 130px; }
-    .form-hint { font-size: 11px; color: var(--text-xs); }
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(14,165,233,.1);
+    }
+    .form-input::placeholder, .form-textarea::placeholder { color: #9ca3af; }
+    .form-textarea { resize: vertical; min-height: 96px; line-height: 1.6; }
+    .form-textarea.tall { min-height: 140px; }
+    .form-hint { font-size: 11.5px; color: var(--text-xs); line-height: 1.5; }
     .char-count { font-size: 11px; color: var(--text-xs); text-align: right; }
     .char-count.warn { color: #f59e0b; }
     .char-count.over { color: #ef4444; }
@@ -142,16 +171,17 @@
     .form-input.error, .form-textarea.error { border-color: #fca5a5; }
 
     /* ── Knowledge Sections ──────────────────────────────────────────────── */
-    .sections-list { display: flex; flex-direction: column; gap: 12px; }
+    .sections-list { display: flex; flex-direction: column; gap: 14px; }
     .section-row {
-      border: 1px solid var(--border); border-radius: 10px;
-      background: #fafafa; overflow: hidden;
-      transition: border-color .15s;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: white; overflow: hidden;
+      transition: border-color .15s, box-shadow .15s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
     }
-    .section-row:focus-within { border-color: var(--color-primary); }
+    .section-row:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(14,165,233,.08); }
     .section-row-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px; background: #f8fafc;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; background: #f8fafc;
       border-bottom: 1px solid var(--border);
     }
     .section-drag-handle {
@@ -187,7 +217,7 @@
       transition: color .15s, background .15s;
     }
     .btn-section-delete:hover { color: #ef4444; background: #fef2f2; }
-    .section-row-body { padding: 12px 14px; }
+    .section-row-body { padding: 16px 18px; }
 
     /* UAP Classification chip — shown on section row after Auto-label */
     .section-uap-chip {
@@ -287,16 +317,16 @@
     .kw-hint { font-size: 11px; color: var(--text-xs); margin-top: 3px; }
 
     /* ── Booking action radios ────────────────────────────────────────────── */
-    .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
     .booking-radio-label {
-      display: flex; align-items: flex-start; gap: 10px;
-      padding: 12px 14px; border-radius: 8px;
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 16px; border-radius: 10px;
       border: 2px solid var(--border); cursor: pointer; transition: all .15s;
     }
-    .booking-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f0f9ff; }
+    .booking-radio-label:has(input:checked) { border-color: var(--color-primary); background: #f0f9ff; box-shadow: 0 0 0 3px rgba(14,165,233,.08); }
     .booking-radio-label input { margin-top: 2px; accent-color: var(--color-primary); flex-shrink: 0; }
-    .booking-radio-text strong { display: block; font-size: 13px; font-weight: 600; }
-    .booking-radio-text small  { font-size: 11px; color: var(--text-muted); }
+    .booking-radio-text strong { display: block; font-size: 13.5px; font-weight: 600; }
+    .booking-radio-text small  { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; display: block; }
 
     /* ── Toggle large ─────────────────────────────────────────────────────── */
     .toggle-lg { display: flex; align-items: center; gap: 10px; }
@@ -316,23 +346,24 @@
 
     /* ── Buttons ─────────────────────────────────────────────────────────── */
     .btn-primary {
-      padding: 9px 22px; border-radius: 8px; border: none;
+      padding: 9px 24px; border-radius: 9px; border: none;
       background: var(--color-primary); color: white;
       font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
+      white-space: nowrap;
     }
     .btn-primary:hover { background: var(--color-primary-dk); }
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
     .btn-secondary {
-      padding: 9px 18px; border-radius: 8px;
+      padding: 9px 18px; border-radius: 9px;
       border: 1px solid var(--border); background: white;
       font-size: 14px; font-weight: 500; cursor: pointer;
-      color: var(--text-muted); transition: all .15s;
+      color: var(--text-muted); transition: all .15s; white-space: nowrap;
     }
     .btn-secondary:hover { border-color: #94a3b8; color: var(--text-primary); }
     .btn-danger {
-      padding: 9px 18px; border-radius: 8px; border: 1px solid #fca5a5;
+      padding: 9px 18px; border-radius: 9px; border: 1px solid #fca5a5;
       background: #fef2f2; color: #dc2626;
-      font-size: 14px; font-weight: 500; cursor: pointer;
+      font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap;
     }
     .btn-danger:hover { background: #fee2e2; }
 
@@ -598,9 +629,10 @@
     Back
   </a>
   <div class="header-divider"></div>
-  <span style="font-size:18px;">🧠</span>
+  <span style="font-size:20px;">🧠</span>
   <div>
     <div class="header-title" id="pageTitle">Add Knowledge Container</div>
+    <div class="header-subtitle" id="pageSubtitle">Teaching your agent how to answer a specific caller question</div>
   </div>
   <div class="header-spacer"></div>
   <div class="header-actions">
@@ -621,10 +653,10 @@
   </div>
 
   <!-- Actual form (hidden while loading) -->
-  <div id="formBody" style="display:none;flex-direction:column;gap:18px;">
+  <div id="formBody" style="display:none;flex-direction:column;gap:0;">
 
   <!-- ── 0. AI Evaluation Panel (hidden until triggered) ───────────────────── -->
-  <div id="evalPanel" class="eval-panel" style="display:none;">
+  <div id="evalPanel" class="eval-panel" style="display:none;margin-top:28px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <strong style="font-size:14px;color:#1e1e2e;">⚡ AI Quality Evaluation</strong>
       <button onclick="closeEvalPanel()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0 4px;" title="Close">×</button>
@@ -632,13 +664,22 @@
     <div id="evalContent" style="color:var(--text-muted);font-size:13px;min-height:40px;"></div>
   </div>
 
-  <!-- ── 1. Container Identity ─────────────────────────────────────────────── -->
+  <!-- ── STEP 01 ───────────────────────────────────────────────────────────── -->
+  <div class="step-block">
+    <div class="step-num">01</div>
+    <div>
+      <div class="step-block-title">What is this about?</div>
+      <div class="step-block-sub">Name and categorise this knowledge card so the agent knows what topic it covers</div>
+    </div>
+  </div>
+
+  <!-- ── 1. Topic & Identity ───────────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">🏷️</span>
       <div>
-        <div class="form-card-title">Container Identity</div>
-        <div class="form-card-subtitle">Title and optional category for admin organisation</div>
+        <div class="form-card-title">Topic &amp; Identity</div>
+        <div class="form-card-subtitle">Give this card a clear title — the agent uses it to understand what question it's answering</div>
       </div>
       <span class="form-card-badge required">Required</span>
     </div>
@@ -684,12 +725,21 @@
   </div>
 
   <!-- ── 2. Knowledge Sections ─────────────────────────────────────────────── -->
+  <!-- ── STEP 02 ───────────────────────────────────────────────────────────── -->
+  <div class="step-block">
+    <div class="step-num">02</div>
+    <div>
+      <div class="step-block-title">What does the agent know?</div>
+      <div class="step-block-sub">Write everything a caller might ask about this topic — the richer this is, the better the agent answers</div>
+    </div>
+  </div>
+
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">📝</span>
       <div>
         <div class="form-card-title">Knowledge Sections</div>
-        <div class="form-card-subtitle">The rich content Groq reads to answer the caller — add as many sections as needed</div>
+        <div class="form-card-subtitle">Each section is a topic the agent can speak to — add pricing tiers, FAQs, member vs non-member, anything a caller asks</div>
       </div>
       <span class="form-card-badge required">At least 1</span>
     </div>
@@ -710,8 +760,8 @@
     <div class="form-card-header">
       <span class="form-card-icon">🔑</span>
       <div>
-        <div class="form-card-title">Keywords</div>
-        <div class="form-card-subtitle">Phrases callers say that route them to this container</div>
+        <div class="form-card-title">Keyword Scoring</div>
+        <div class="form-card-subtitle">Phrases callers say that help the agent find this card when no exact trigger phrase matches — the fallback routing layer</div>
       </div>
       <span class="form-card-badge optional">Recommended</span>
     </div>
@@ -764,12 +814,21 @@
   </div>
 
   <!-- ── 4. Response Settings ────────────────────────────────────────────── -->
+  <!-- ── STEP 03 ───────────────────────────────────────────────────────────── -->
+  <div class="step-block">
+    <div class="step-num">03</div>
+    <div>
+      <div class="step-block-title">How should the agent answer?</div>
+      <div class="step-block-sub">Control answer length, tone style, and what the agent does immediately after responding</div>
+    </div>
+  </div>
+
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">⚙️</span>
       <div>
-        <div class="form-card-title">Response Settings</div>
-        <div class="form-card-subtitle">Per-container word limit and booking action override</div>
+        <div class="form-card-title">Answer Length &amp; Style</div>
+        <div class="form-card-subtitle">Set how long Groq speaks and optionally show it one perfect example to calibrate its tone</div>
       </div>
       <span class="form-card-badge optional">Optional overrides</span>
     </div>
@@ -841,8 +900,8 @@
     <div class="form-card-header">
       <span class="form-card-icon">💬</span>
       <div>
-        <div class="form-card-title">Suggested Follow-Up</div>
-        <div class="form-card-subtitle">Optional closing language Groq adapts after answering — leave blank for Groq's natural close</div>
+        <div class="form-card-title">What Happens Next</div>
+        <div class="form-card-subtitle">How the agent closes after answering — offer to book, suggest a follow-up, or let Groq decide naturally</div>
       </div>
       <span class="form-card-badge optional">Optional</span>
     </div>
@@ -866,8 +925,8 @@
     <div class="form-card-header">
       <span class="form-card-icon">🔁</span>
       <div>
-        <div class="form-card-title">Follow-Up Depth</div>
-        <div class="form-card-subtitle">How many pronoun-only follow-up turns ("what does it include?", "how about that one?") the agent stays anchored to this topic</div>
+        <div class="form-card-title">Conversation Depth</div>
+        <div class="form-card-subtitle">How many follow-up turns ("what does it include?", "how about that one?") the agent stays anchored to this topic before moving on</div>
       </div>
       <span class="form-card-badge optional">Optional</span>
     </div>
@@ -893,8 +952,8 @@
     <div class="form-card-header">
       <span class="form-card-icon">📡</span>
       <div>
-        <div class="form-card-title">Status</div>
-        <div class="form-card-subtitle">Inactive containers are ignored by the agent</div>
+        <div class="form-card-title">Card Status</div>
+        <div class="form-card-subtitle">Inactive cards are invisible to the agent — deactivate to remove from routing without deleting</div>
       </div>
     </div>
     <div class="form-card-body">
@@ -914,12 +973,21 @@
   </div>
 
   <!-- ── 8. UAP Classification ─────────────────────────────────────────────── -->
+  <!-- ── STEP 04 ───────────────────────────────────────────────────────────── -->
+  <div class="step-block">
+    <div class="step-num">04</div>
+    <div>
+      <div class="step-block-title">How do callers find this card?</div>
+      <div class="step-block-sub">Run auto-classify once your content is written — the agent uses this to route at zero latency before any AI thinking happens</div>
+    </div>
+  </div>
+
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">🧠</span>
       <div>
-        <div class="form-card-title">UAP Classification</div>
-        <div class="form-card-subtitle">Links this container to an intent array so the agent can route here at zero latency</div>
+        <div class="form-card-title">Agent Routing</div>
+        <div class="form-card-subtitle">Links this card to a caller intent so the agent reaches it instantly — run Auto-classify after writing your content above</div>
       </div>
       <span class="form-card-badge optional" id="uapStatusBadge" style="display:none;"></span>
     </div>
