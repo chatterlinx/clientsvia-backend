@@ -610,6 +610,67 @@
       margin-left: 8px; vertical-align: middle;
     }
 
+    /* ── Content Coach — What's missing? ────────────────────────────────── */
+    .gap-analyze-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 6px;
+      border: 1px solid #d1d5db; background: white;
+      color: #4b5563; font-size: 11.5px; font-weight: 500;
+      cursor: pointer; transition: all .15s;
+    }
+    .gap-analyze-btn:hover { background: #f0f9ff; border-color: #7dd3fc; color: #0369a1; }
+    .gap-analyze-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .gap-panel {
+      border-top: 1px solid #dcfce7; background: #f0fdf4;
+      border-radius: 0 0 10px 10px; overflow: hidden;
+    }
+    .gap-panel-inner { padding: 14px 18px; }
+    .gap-section-title {
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: 7px;
+    }
+    .gap-covered-title { color: #15803d; }
+    .gap-missing-title  { color: #b45309; }
+    .gap-suggestion-title { color: #1d4ed8; }
+    .gap-covered, .gap-missing { margin-bottom: 10px; }
+    .gap-item {
+      display: flex; align-items: baseline; gap: 6px;
+      font-size: 12.5px; line-height: 1.4; margin-bottom: 4px; color: #374151;
+    }
+    .gap-item-icon { flex-shrink: 0; font-size: 12px; }
+    .gap-suggestion-box {
+      background: white; border: 1.5px solid #bfdbfe; border-radius: 8px;
+      padding: 11px 14px; font-size: 12.5px; line-height: 1.6; color: #1e3a8a;
+      margin-bottom: 10px; white-space: pre-wrap;
+    }
+    .gap-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .gap-btn-add {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 13px; border-radius: 7px;
+      border: 1.5px solid #3b82f6; background: #eff6ff;
+      color: #1d4ed8; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .gap-btn-add:hover { background: #dbeafe; border-color: #1d4ed8; }
+    .gap-btn-dismiss {
+      display: inline-flex; align-items: center;
+      padding: 6px 13px; border-radius: 7px;
+      border: 1px solid #e5e7eb; background: white;
+      color: #6b7280; font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all .15s;
+    }
+    .gap-btn-dismiss:hover { background: #f9fafb; border-color: #9ca3af; }
+    .gap-loading {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 18px; font-size: 12.5px; color: #6b7280;
+    }
+    .gap-spinner {
+      width: 15px; height: 15px; border: 2px solid #e5e7eb;
+      border-top-color: #3b82f6; border-radius: 50%;
+      animation: gap-spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes gap-spin { to { transform: rotate(360deg); } }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .form-row { grid-template-columns: 1fr; }
@@ -1356,10 +1417,12 @@ function addSection(label = '', content = '', sectionMeta = null) {
     <div class="section-row-body">
       <textarea class="form-textarea tall" placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
         oninput="charCount(this, 2000, null)" maxlength="2000">${_esc(content)}</textarea>
-      <div style="display:flex;justify-content:flex-end;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+        <button type="button" class="gap-analyze-btn" onclick="analyzeGaps(${id})" title="AI checks what caller questions this section cannot answer">🔍 What's missing?</button>
         <span class="char-count" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} / 2000 chars</span>
       </div>
     </div>
+    <div id="gap-panel-${id}" class="gap-panel" style="display:none;"></div>
 
     <!-- ── Sales Funnel accordion ─────────────────────────────────────── -->
     <div class="section-funnel-toggle${funnelHasFunnel ? ' has-funnel' : ''}" id="funnel-toggle-${id}" onclick="toggleSectionFunnel(${id})">
@@ -1631,6 +1694,95 @@ function updateSectionNumbers() {
     const num = row.querySelector('.section-number');
     if (num) num.textContent = idx + 1;
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTENT COACH — Gap analysis ("What's missing?")
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function analyzeGaps(sid) {
+  const row = document.querySelector(`[data-sid="${sid}"]`);
+  if (!row) return;
+
+  const textarea     = row.querySelector('.form-textarea.tall');
+  const content      = textarea?.value?.trim() || '';
+  if (!content) { _toast('Add some content to the section first', 'error'); return; }
+
+  const btn = row.querySelector('.gap-analyze-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Analysing…'; }
+
+  const panel = document.getElementById(`gap-panel-${sid}`);
+  panel.style.display = 'block';
+  panel.innerHTML = `<div class="gap-loading"><div class="gap-spinner"></div> Checking what the agent can and cannot answer…</div>`;
+
+  const labelInput     = row.querySelector('.section-label-input');
+  const sectionLabel   = labelInput?.value?.trim() || '';
+  const containerTitle = (document.getElementById('title')?.value || '').trim();
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/analyze-gaps`,
+      {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ containerTitle, sectionLabel, sectionContent: content }),
+      }
+    );
+    if (!data.success) throw new Error(data.error || 'Analysis failed');
+    _renderGapPanel(sid, data);
+  } catch (err) {
+    panel.innerHTML = `<div class="gap-panel-inner"><span style="color:#ef4444;font-size:12.5px;">⚠ ${_esc(err.message)}</span> <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})" style="margin-left:8px;">Dismiss</button></div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 What\'s missing?'; }
+  }
+}
+
+function _renderGapPanel(sid, { covered, gaps, suggestedAddition }) {
+  const panel = document.getElementById(`gap-panel-${sid}`);
+  if (!panel) return;
+
+  const coveredHtml = (covered || []).length
+    ? `<div class="gap-section-title gap-covered-title">✅ Agent can answer</div>
+       <div class="gap-covered">${covered.map(q => `<div class="gap-item"><span class="gap-item-icon">✓</span>${_esc(q)}</div>`).join('')}</div>`
+    : '';
+
+  const gapsHtml = (gaps || []).length
+    ? `<div class="gap-section-title gap-missing-title" style="margin-top:${covered?.length ? 10 : 0}px;">❌ Agent cannot answer</div>
+       <div class="gap-missing">${gaps.map(q => `<div class="gap-item"><span class="gap-item-icon">✗</span>${_esc(q)}</div>`).join('')}</div>`
+    : `<div style="font-size:12.5px;color:#15803d;margin-bottom:10px;">No significant gaps found — this section looks comprehensive ✅</div>`;
+
+  const suggestionHtml = suggestedAddition
+    ? `<div class="gap-section-title gap-suggestion-title" style="margin-top:${(gaps||[]).length ? 10 : 0}px;">💡 Suggested addition</div>
+       <div class="gap-suggestion-box">${_esc(suggestedAddition)}</div>
+       <div class="gap-actions">
+         <button type="button" class="gap-btn-add" onclick="appendGapSuggestion(${sid})">+ Add to section</button>
+         <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})">Dismiss</button>
+       </div>`
+    : `<div class="gap-actions" style="margin-top:4px;">
+         <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})">Dismiss</button>
+       </div>`;
+
+  panel.innerHTML = `<div class="gap-panel-inner">${coveredHtml}${gapsHtml}${suggestionHtml}</div>`;
+}
+
+function appendGapSuggestion(sid) {
+  const row        = document.querySelector(`[data-sid="${sid}"]`);
+  const textarea   = row?.querySelector('.form-textarea.tall');
+  const panel      = document.getElementById(`gap-panel-${sid}`);
+  const box        = panel?.querySelector('.gap-suggestion-box');
+  if (!textarea || !box) return;
+
+  const suggestion = box.textContent.trim();
+  const current    = textarea.value.trim();
+  textarea.value   = current ? current + '\n\n' + suggestion : suggestion;
+  charCount(textarea, 2000, null);   // refresh char count display
+  _toast('Suggestion added to section', 'success');
+  dismissGapPanel(sid);
+}
+
+function dismissGapPanel(sid) {
+  const panel = document.getElementById(`gap-panel-${sid}`);
+  if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
 }
 
 function _getSections() {

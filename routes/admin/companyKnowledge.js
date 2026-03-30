@@ -26,6 +26,7 @@
  *   GET    /:companyId/knowledge/active                 — List active only (runtime)
  *   POST   /:companyId/knowledge                        — Create container
  *   POST   /:companyId/knowledge/generate-keywords      — Groq keyword generation (pre-save)
+ *   POST   /:companyId/knowledge/analyze-gaps           — Content Coach gap analysis (per section)
  *   POST   /:companyId/knowledge/reorder                — Bulk priority update
  * ⚠️ GET    /:companyId/knowledge/:id                   — Get single (AFTER literal routes)
  *   PATCH  /:companyId/knowledge/:id                    — Partial update
@@ -905,6 +906,115 @@ router.get('/:companyId/knowledge/by-subtype-key/:key', async (req, res) => {
   } catch (err) {
     logger.error('[companyKnowledge] by-subtype-key error', { companyId, key, err: err.message });
     return res.status(500).json({ success: false, error: 'Lookup failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/analyze-gaps — Content Coach gap analysis
+//
+// Analyzes a single KC section and returns what the agent CAN answer, what it
+// CANNOT answer (caller questions that would fall through), and a suggested
+// draft addition to fill the most critical gap.
+//
+// Body: { containerTitle, sectionLabel, sectionContent }
+// Returns: { covered: string[], gaps: string[], suggestedAddition: string }
+//
+// ⚠️ MUST be registered BEFORE /:id — Express matches 'analyze-gaps' as :id
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/analyze-gaps', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { containerTitle = '', sectionLabel = '', sectionContent = '' } = req.body || {};
+
+  if (!sectionContent.trim()) {
+    return res.status(400).json({ success: false, error: 'sectionContent is required' });
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
+  }
+
+  try {
+    // Load company context — trade-aware so suggestions are industry-specific
+    const company     = await v2Company.findById(companyId, 'companyName tradeCategories').lean();
+    const companyName = company?.companyName?.trim() || null;
+    const trades      = (company?.tradeCategories || []).filter(Boolean);
+    const tradeString = trades.length ? trades.join(', ') : null;
+
+    // Build prompt context block
+    const contextLines = [];
+    if (companyName)  contextLines.push(`Company: "${companyName}"`);
+    if (tradeString)  contextLines.push(`Trade / Industry: ${tradeString}`);
+    if (containerTitle.trim()) contextLines.push(`Knowledge card topic: "${containerTitle.trim()}"`);
+    if (sectionLabel.trim())   contextLines.push(`Section label: "${sectionLabel.trim()}"`);
+
+    const contextBlock = contextLines.join('\n');
+    const contentBlock = sectionContent.trim().slice(0, 2000);
+
+    const userPrompt = [
+      contextBlock,
+      `\nSection content the agent currently has:\n"""\n${contentBlock}\n"""`,
+    ].join('\n');
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   600,
+      temperature: 0.3,
+      jsonMode:    true,
+      system: `You are a phone-call AI content coach. A business owner has written a knowledge section for their voice agent. Your job is to read what they wrote and identify:
+
+1. What caller questions the agent CAN confidently answer from the content provided.
+2. What caller questions the agent CANNOT answer — gaps that will cause the agent to say "I don't know" or give a vague answer.
+3. A short, concrete draft paragraph the owner can add to fill the SINGLE most important gap.
+
+Rules:
+- Think like a real caller on the phone — what would they ask?
+- Be specific to the company's trade / industry (${tradeString || 'service industry'}).
+- covered[] and gaps[] must be real caller questions in plain English (not category labels).
+- covered[] max 4 items. gaps[] max 4 items.
+- suggestedAddition must be 2-4 sentences, ready to paste into the section, written as factual business content — NOT a template or placeholder.
+- If the content is already comprehensive, return gaps: [] and suggestedAddition: "".
+
+Return ONLY valid JSON — no markdown, no extra text:
+{
+  "covered": ["question the agent can answer", ...],
+  "gaps": ["question the agent cannot answer", ...],
+  "suggestedAddition": "Draft paragraph ready to paste in..."
+}`,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    if (!result.response) {
+      return res.status(500).json({ success: false, error: 'Groq returned no response' });
+    }
+
+    let analysis;
+    try {
+      const raw        = result.response.trim();
+      const jsonMatch  = raw.match(/\{[\s\S]*\}/);
+      analysis         = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+    } catch (pe) {
+      logger.warn('[companyKnowledge] analyze-gaps: parse failed', { companyId, err: pe.message });
+      return res.status(500).json({ success: false, error: 'Could not parse gap analysis response' });
+    }
+
+    // Normalise — ensure expected shape
+    const covered           = Array.isArray(analysis.covered)  ? analysis.covered.slice(0, 4)  : [];
+    const gaps              = Array.isArray(analysis.gaps)     ? analysis.gaps.slice(0, 4)     : [];
+    const suggestedAddition = typeof analysis.suggestedAddition === 'string' ? analysis.suggestedAddition.trim() : '';
+
+    logger.info('[companyKnowledge] analyze-gaps complete', {
+      companyId, covered: covered.length, gaps: gaps.length, hasSuggestion: !!suggestedAddition,
+    });
+
+    return res.json({ success: true, covered, gaps, suggestedAddition });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] analyze-gaps error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Gap analysis failed' });
   }
 });
 
