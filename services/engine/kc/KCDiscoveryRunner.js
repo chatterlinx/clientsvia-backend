@@ -1235,15 +1235,56 @@ async function _handlePrequalResponse({
     }
   }
 
-  // ── No keyword match — re-ask ─────────────────────────────────────────────
+  // ── No keyword match — re-ask once, then escape to KC answer ─────────────
   if (!matchedOption) {
-    logger.info('[KC_ENGINE] Pre-qualify: no keyword match — re-asking', { companyId, callSid, containerId, input: input.slice(0, 40) });
-    emit('KC_PREQUAL_REASKED', { containerId, turn });
+    const reaskCount = _pqState.reaskCount || 0;
+
+    if (reaskCount < 1) {
+      // First failed match — re-ask once, record count in Redis so next miss escapes
+      await redis.setex(
+        `kc-prequal:${companyId}:${callSid}`, 4 * 3600,
+        JSON.stringify({ containerId, sectionId: sectionId || null, status: 'ASKING', reaskCount: reaskCount + 1 })
+      ).catch(() => {});
+      logger.info('[KC_ENGINE] Pre-qualify: no keyword match — re-asking once', { companyId, callSid, containerId, reaskCount: reaskCount + 1, input: input.slice(0, 40) });
+      emit('KC_PREQUAL_REASKED', { containerId, turn, reaskCount: reaskCount + 1 });
+      return {
+        response:    pq.text || "I didn't quite catch that — could you let me know which applies to you?",
+        matchSource: 'KC_ENGINE',
+        state:       nextState,
+        _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, { containerId, intent: 'PREQUAL_REASKED', latencyMs: Date.now() - startMs }),
+      };
+    }
+
+    // Max re-asks exceeded — unlock and answer their question directly via KC
+    await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
+    logger.info('[KC_ENGINE] Pre-qualify: max re-asks exceeded — routing utterance to KC answer', { companyId, callSid, containerId, input: input.slice(0, 40) });
+    emit('KC_PREQUAL_ESCAPED', { containerId, turn });
+
+    let _escapedResult;
+    try {
+      _escapedResult = await KCS.answer({
+        container, targetSection, question: userInput,
+        kbSettings, company, callerName, callSid,
+      });
+    } catch (_e) {
+      logger.error('[KC_ENGINE] Pre-qualify escape: KCS.answer error', { companyId, callSid, containerId, err: _e.message });
+      _escapedResult = null;
+    }
+
+    if (_escapedResult?.response) {
+      return {
+        response:    _escapedResult.response,
+        matchSource: 'KC_ENGINE',
+        state:       nextState,
+        _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, { containerId, intent: 'PREQUAL_ESCAPED', latencyMs: Date.now() - startMs }),
+      };
+    }
+
     return {
-      response:    pq.text || "I didn't quite catch that — could you let me know which applies to you?",
+      response:    "Of course — let me know what else I can help you with.",
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, { containerId, intent: 'PREQUAL_REASKED', latencyMs: Date.now() - startMs }),
+      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_ESCAPE_FALLBACK', latencyMs: Date.now() - startMs }),
     };
   }
 
