@@ -558,6 +558,26 @@
       cursor: pointer; transition: all .15s;
     }
     .pq-add-btn:hover { background: #f3e8ff; border-color: #7c3aed; border-style: solid; }
+    .pq-mode-strip {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 14px; margin: 0 16px 0;
+      border-radius: 8px; font-size: 12px; line-height: 1.5;
+      border: 1px solid; transition: all .2s;
+    }
+    .pq-mode-strip.active {
+      background: #f5f3ff; border-color: #ddd6fe; color: #5b21b6;
+    }
+    .pq-mode-strip.inactive {
+      background: #fffbeb; border-color: #fde68a; color: #92400e;
+    }
+    .pq-mode-strip-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .pq-mode-strip-text b { font-weight: 700; }
+    .section-content-mode-label {
+      display: none; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .04em; padding: 2px 8px; border-radius: 99px;
+      background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe;
+      margin-left: 8px; vertical-align: middle;
+    }
 
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
@@ -1302,6 +1322,15 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <div id="pq-body-${id}" class="pq-body"
           style="display:${(pqEnabled || pqHasContent) ? 'block' : 'none'};opacity:${(pqEnabled || !pqHasContent) ? '1' : '0.5'};pointer-events:${(pqEnabled || !pqHasContent) ? '' : 'none'};"
           title="${(!pqEnabled && pqHasContent) ? 'Pre-qualify is OFF — data preserved. Enable to activate.' : ''}">
+          <div id="pq-mode-strip-${id}" class="pq-mode-strip ${pqEnabled ? 'active' : 'inactive'}" style="margin-top:12px;">
+            <span class="pq-mode-strip-icon">${pqEnabled ? '🎯' : '⚠️'}</span>
+            <span class="pq-mode-strip-text" id="pq-mode-text-${id}">
+              ${pqEnabled
+                ? `<b>Pre-qualify active.</b> Agent asks this question <b>before</b> answering. The section content above stays in context — Groq reads <b>both</b> together, using the matched caller type to shape its answer.`
+                : `<b>Pre-qualify off.</b> Agent reads the <b>section content above only</b> — no screening question is asked.`
+              }
+            </span>
+          </div>
           <div class="pq-section-inner">
             <div class="pq-field-group">
               <div class="pq-field-label">Question the agent asks the caller</div>
@@ -2142,6 +2171,20 @@ function toggleSectionPQ(sid) {
     lbl.textContent = checked ? 'Active' : 'Off';
     lbl.style.color = checked ? '#7c3aed' : '#9ca3af';
   }
+
+  // Update mode strip
+  const strip = document.getElementById(`pq-mode-strip-${sid}`);
+  const stripText = document.getElementById(`pq-mode-text-${sid}`);
+  if (strip) {
+    strip.className = `pq-mode-strip ${checked ? 'active' : 'inactive'}`;
+  }
+  if (stripText) {
+    stripText.innerHTML = checked
+      ? `<b>Pre-qualify active.</b> Agent asks this question <b>before</b> answering. The section content above stays in context — Groq reads <b>both</b> together, using the matched caller type to shape its answer.`
+      : `<b>Pre-qualify off.</b> Agent reads the <b>section content above only</b> — no screening question is asked.`;
+  }
+  const stripIcon = strip?.querySelector('.pq-mode-strip-icon');
+  if (stripIcon) stripIcon.textContent = checked ? '🎯' : '⚠️';
 
   const body = document.getElementById(`pq-body-${sid}`);
   if (body) {
