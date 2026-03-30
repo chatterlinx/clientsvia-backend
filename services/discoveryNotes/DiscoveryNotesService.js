@@ -100,7 +100,16 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
       staffMentioned: null,   // "I want Mike" → name extracted
       preferredDate: null,
       preferredTime: null,
-      confidence:    {}       // { firstName: 0.95, address: 0.9 }
+      confidence:    {},      // { firstName: 0.95, address: 0.9 }
+
+      // ── Offer tracking (locked to confirmed{} at BOOKING_CONFIRM) ───────
+      // pendingContext: questions/items not yet resolved — surfaced at BOOKING_READY
+      //   { type, itemKey, question, fieldKey, options[], offeredAt }
+      // offeredItems: append-only commercial offer log
+      //   { type, itemKey, item, price, outcome:'PENDING'|'ACCEPTED'|'DECLINED'|'NOT_REACHED', offeredAt }
+      // RULE: a caller's "no" is as permanent as a "yes" — both stamped to chart
+      pendingContext: [],
+      offeredItems:  [],
     },
 
     // ── CONFIRMED — locked by UAPB BOOKING_CONFIRM only ────────────────────
@@ -527,6 +536,11 @@ function _mergePatch(current, patch) {
     merged.temp = { ...(current.temp || {}) };
     for (const [k, v] of Object.entries(tempPatch)) {
       if (k === 'confidence') continue; // handled separately below
+      // offeredItems: append-only log — patch array items are appended, never replaced
+      if (k === 'offeredItems' && Array.isArray(v)) {
+        merged.temp.offeredItems = [...(current.temp?.offeredItems || []), ...v];
+        continue;
+      }
       if (v !== undefined && v !== null) merged.temp[k] = v;
     }
     if (tempPatch.confidence) {
@@ -543,7 +557,21 @@ function _mergePatch(current, patch) {
   if (patch.confirmed === 'LOCK_ALL_TEMP') {
     const snapshot = { ...(merged.temp || {}) };
     delete snapshot.confidence;
-    merged.confirmed = snapshot;
+    // Resolve offer outcomes: last entry per itemKey wins (append-only log → last = final state).
+    // PENDING items with no resolution = NOT_REACHED (caller never got to say yes or no).
+    const _offerMap = {};
+    for (const o of (snapshot.offeredItems || [])) {
+      if (o?.itemKey) _offerMap[o.itemKey] = o;
+    }
+    const _resolved = Object.values(_offerMap).map(o =>
+      (o.outcome === 'PENDING') ? { ...o, outcome: 'NOT_REACHED' } : o
+    );
+    merged.confirmed = {
+      ...snapshot,
+      bookedItems:     _resolved.filter(o => o.outcome === 'ACCEPTED'),
+      declinedItems:   _resolved.filter(o => o.outcome === 'DECLINED'),
+      notReachedItems: _resolved.filter(o => o.outcome === 'NOT_REACHED'),
+    };
   } else if (patch.confirmed && typeof patch.confirmed === 'object') {
     // Allow direct confirmed patch for edge cases (e.g. CallerRecognition pre-load)
     merged.confirmed = { ...(current.confirmed || {}), ...patch.confirmed };

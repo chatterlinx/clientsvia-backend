@@ -1301,6 +1301,15 @@ async function _handlePrequalResponse({
   // Delete prequal Redis key — this call has now answered the question
   await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
 
+  // Remove from pendingContext — no longer pending, caller answered it mid-call (fire-and-forget)
+  ;(async () => {
+    try {
+      const _cur = await DiscoveryNotesService.load(companyId, callSid);
+      const _remaining = (_cur?.temp?.pendingContext || []).filter(p => p.itemKey !== _answeredKey);
+      await DiscoveryNotesService.update(companyId, callSid, { temp: { pendingContext: _remaining } });
+    } catch (_) { /* non-fatal */ }
+  })();
+
   emit('KC_PREQUAL_ANSWERED', { containerId, optionValue: matchedOption.value, turn });
   logger.info('[KC_ENGINE] ✅ Pre-qualify answered', {
     companyId, callSid, containerId, optionValue: matchedOption.value, turn,
@@ -1456,6 +1465,25 @@ async function _handleKCMatch({
             companyId, callSid, containerId, sectionId: sectionId || null, containerTitle, turn,
           });
 
+          // Write to pendingContext — this question is now "in flight".
+          // Stays in pending until answered mid-call OR surfaced at BOOKING_READY.
+          // Fire-and-forget — non-fatal if it fails.
+          const _currentPending = (_pqNotes?.temp?.pendingContext || []);
+          DiscoveryNotesService.update(companyId, callSid, {
+            temp: {
+              pendingContext: [..._currentPending, {
+                type:     'PREQUAL',
+                itemKey:  _answeredKey,
+                question: _activePQ.text || '',
+                fieldKey: _activePQ.fieldKey || 'preQualifyAnswer',
+                options:  (_activePQ.options || []).map(o => ({
+                  label: o.label, value: o.value, keywords: o.keywords || [],
+                })),
+                offeredAt: new Date().toISOString(),
+              }],
+            },
+          }).catch(() => {});
+
           return {
             response:    _activePQ.text,
             matchSource: 'KC_ENGINE',
@@ -1555,6 +1583,20 @@ async function _handleKCMatch({
             logger.info('[KC_ENGINE] 💰 GATE 4.5: Upsell chain started', {
               companyId, callSid, containerId, sectionId: sectionId || null, idx: 0, itemKey: first.itemKey || null, turn,
             });
+
+            // Log this offer — PENDING until caller says YES or NO (or call ends → NOT_REACHED)
+            DiscoveryNotesService.update(companyId, callSid, {
+              temp: {
+                offeredItems: [{
+                  type:      'UPSELL',
+                  itemKey:   first.itemKey || `upsell_${containerId}_0`,
+                  item:      first.itemKey || null,
+                  price:     first.price   ?? null,
+                  outcome:   'PENDING',
+                  offeredAt: new Date().toISOString(),
+                }],
+              },
+            }).catch(() => {});
 
             return {
               response:    first.offerScript,
@@ -1768,7 +1810,18 @@ async function _handleUpsellResponse({
     .then(existing => {
       const offers = existing?.temp?.upsellOffers || [];
       return DiscoveryNotesService.update(companyId, callSid, {
-        temp: { upsellOffers: [...offers, outcome] },
+        temp: {
+          upsellOffers: [...offers, outcome],
+          // offeredItems: append resolution entry — last entry per itemKey wins at BOOKING_CONFIRM
+          offeredItems: [{
+            type:       'UPSELL',
+            itemKey:    currentUpsell?.itemKey || `upsell_${containerId}_${idx}`,
+            item:       currentUpsell?.itemKey || null,
+            price:      currentUpsell?.price   ?? null,
+            outcome:    isYes ? 'ACCEPTED' : 'DECLINED',
+            resolvedAt: new Date().toISOString(),
+          }],
+        },
       });
     })
     .catch(() => {});

@@ -85,6 +85,13 @@ const callHistoryEntrySchema = new Schema({
     urgency:         { type: String, default: null },
     objective:       { type: String, default: null },
     isLostLead:      { type: Boolean, default: false },
+    // Offer outcome log — stamped from discoveryNotes.confirmed at call end
+    // Every offer made (upsell, add-on) with its outcome: ACCEPTED | DECLINED | NOT_REACHED
+    // A "no" is as permanent as a "yes" — the full picture lives here for analytics
+    offeredItems:    { type: [Schema.Types.Mixed], default: [] },
+    // Revenue summary: booked (accepted), declined (said no), potential (total offered)
+    // declined revenue = business intelligence: what's being left on the table
+    revenue:         { type: Schema.Types.Mixed, default: null },
 }, { _id: false });
 
 // ── Sub-schema: staffRelationship entry ───────────────────────────────────────

@@ -91,6 +91,16 @@ async function stamp(companyId, callSid, customerId, durationSeconds = 0) {
     // ── Build callHistory entry ───────────────────────────────────────────
     const confirmed      = dnEntry.confirmed      || {};
     const temp           = dnEntry.temp           || {};
+    // ── Offer outcomes (from confirmed{} — computed by LOCK_ALL_TEMP at BOOKING_CONFIRM) ──
+    // Falls back to temp.offeredItems if booking never confirmed (incomplete call).
+    // NOT_REACHED = offer was made but caller never got to say yes or no.
+    const _allOffered    = confirmed.offeredItems  || temp.offeredItems  || [];
+    const _bookedItems   = confirmed.bookedItems   || _allOffered.filter(o => o.outcome === 'ACCEPTED');
+    const _declinedItems = confirmed.declinedItems || _allOffered.filter(o => o.outcome === 'DECLINED');
+    const _revenueBooked   = _bookedItems.reduce((s, o)   => s + (Number(o.price) || 0), 0);
+    const _revenueDeclined = _declinedItems.reduce((s, o) => s + (Number(o.price) || 0), 0);
+    const _revenuePotential = _revenueBooked + _revenueDeclined;
+
     const callHistoryEntry = {
       callSid,
       callDate:        dnEntry.capturedAt || new Date(),
@@ -103,6 +113,10 @@ async function stamp(companyId, callSid, customerId, durationSeconds = 0) {
       urgency:         dnEntry.urgency         || temp.urgency || null,
       objective:       dnEntry.objective       || 'INTAKE',
       isLostLead:      dnEntry.isLostLead      || false,
+      offeredItems:    _allOffered,
+      revenue:         _revenuePotential > 0
+        ? { booked: _revenueBooked, declined: _revenueDeclined, potential: _revenuePotential }
+        : null,
     };
 
     // ── Build callerProfile updates ───────────────────────────────────────
@@ -239,14 +253,17 @@ async function stamp(companyId, callSid, customerId, durationSeconds = 0) {
     logger.info('[CustomerProfile] ✅ Stamped', {
       companyId,
       callSid,
-      customerId:     String(customerId),
-      objective:      callHistoryEntry.objective,
-      outcome:        callHistoryEntry.callOutcome,
+      customerId:       String(customerId),
+      objective:        callHistoryEntry.objective,
+      outcome:          callHistoryEntry.callOutcome,
       isConverted,
       isLostLead,
-      hadName:        !!fullName,
-      hadStaff:       !!staffName,
-      upsellsStamped: upsellOffers.length,
+      hadName:          !!fullName,
+      hadStaff:         !!staffName,
+      upsellsStamped:   upsellOffers.length,
+      offersStamped:    _allOffered.length,
+      revenueBooked:    _revenueBooked   || 0,
+      revenueDeclined:  _revenueDeclined || 0,
     });
 
     return true;
