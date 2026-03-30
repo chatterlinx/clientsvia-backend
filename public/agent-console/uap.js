@@ -181,9 +181,11 @@
       </span>`).join('');
 
     // KC link indicator — teal badge links to the KC card; amber badge = orphan
+    // Use kcId (stable human-readable key) in the URL when available; fall back to MongoDB _id
     let kcIndicator;
     if (st.kcLink) {
-      const url      = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(st.kcLink.containerId)}`;
+      const linkId   = st.kcLink.kcId || st.kcLink.containerId;
+      const url      = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(linkId)}`;
       const linkText = st.kcLink.sectionLabel
         ? `${_esc(st.kcLink.containerTitle)} › ${_esc(st.kcLink.sectionLabel)}`
         : _esc(st.kcLink.containerTitle);

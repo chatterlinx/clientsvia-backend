@@ -166,17 +166,19 @@ router.get('/:companyId/uap/arrays', async (req, res) => {
     const [arrays, kcContainers] = await Promise.all([
       UAPArray.find({ companyId }).sort({ daType: 1 }).lean(),
       CompanyKnowledgeContainer.find({ companyId, isActive: { $ne: false } })
-        .select('_id title sections.daSubTypeKey sections._id sections.label')
+        .select('_id kcId title sections.daSubTypeKey sections._id sections.label')
         .lean(),
     ]);
 
     // Build lookup map: daSubTypeKey → KC link info
+    // kcId is the stable human-readable address — use it in URLs instead of MongoDB _id
     const kcLinkMap = {};
     for (const kc of kcContainers) {
       for (const s of (kc.sections || [])) {
         if (s.daSubTypeKey) {
           kcLinkMap[s.daSubTypeKey] = {
             containerId:    String(kc._id),
+            kcId:           kc.kcId || null,        // stable human-readable key e.g. "700c4-25"
             containerTitle: kc.title || '',
             sectionId:      s._id ? String(s._id) : null,
             sectionLabel:   s.label || '',

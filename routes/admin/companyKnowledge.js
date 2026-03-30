@@ -38,6 +38,7 @@
 
 const express                      = require('express');
 const router                       = express.Router();
+const mongoose                     = require('mongoose');
 const logger                       = require('../../utils/logger');
 const { authenticateJWT }          = require('../../middleware/auth');
 const CompanyKnowledgeContainer    = require('../../models/CompanyKnowledgeContainer');
@@ -895,6 +896,9 @@ router.get('/:companyId/knowledge/by-subtype-key/:key', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge/:id — Get single container
+// Accepts BOTH MongoDB _id (24-char ObjectId) AND kcId (e.g. "700c4-25").
+// If the param is not a valid ObjectId, falls back to kcId lookup.
+// This makes kcId a real stable address — not just a display label.
 // ⚠️ Must be AFTER all literal-segment routes above
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:companyId/knowledge/:id', async (req, res) => {
@@ -902,7 +906,12 @@ router.get('/:companyId/knowledge/:id', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    const container = await CompanyKnowledgeContainer.findOne({ _id: id, companyId }).lean();
+    // Prefer _id lookup for valid ObjectIds; fall back to kcId for human-readable keys
+    const query = mongoose.Types.ObjectId.isValid(id)
+      ? { _id: id, companyId }
+      : { kcId: id, companyId };
+
+    const container = await CompanyKnowledgeContainer.findOne(query).lean();
     if (!container) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
     return res.json({ success: true, container });
   } catch (err) {
