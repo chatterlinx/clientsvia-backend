@@ -1238,12 +1238,19 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
   }
 
   try {
+    // Build container query — accepts both MongoDB _id AND kcId (e.g. "700c4-25")
+    const _containerQuery = containerId
+      ? (mongoose.Types.ObjectId.isValid(containerId)
+          ? { _id: containerId, companyId }
+          : { kcId: containerId, companyId })
+      : null;
+
     // Load in parallel: UAP arrays + company identity + container meta
     const [uapArrays, company, container] = await Promise.all([
       UAPArray.find({ companyId, isActive: true }).lean(),
       v2Company.findById(companyId, 'companyName tradeCategories').lean(),
-      containerId
-        ? CompanyKnowledgeContainer.findOne({ _id: containerId, companyId }, 'title category').lean()
+      _containerQuery
+        ? CompanyKnowledgeContainer.findOne(_containerQuery, '_id title category').lean()
         : Promise.resolve(null),
     ]);
 
@@ -1344,6 +1351,9 @@ Return ONLY valid JSON — no markdown:
     const arrayExists   = !!matchingArray;
     const needsArray    = !!daType && !arrayExists;
 
+    // Resolve the stable MongoDB _id for attachedTo (container may have been looked up by kcId)
+    const attachedToId = container ? String(container._id) : null;
+
     // If array exists → fire-and-forget upsert sub-type + trigger phrases
     if (arrayExists && cleanPhrases.length > 0) {
       setImmediate(async () => {
@@ -1355,7 +1365,7 @@ Return ONLY valid JSON — no markdown:
                 { companyId, daType, 'daSubTypes.key': subTypeKey },
                 {
                   $addToSet: { 'daSubTypes.$.triggerPhrases': { $each: cleanPhrases },
-                               ...(containerId ? { 'daSubTypes.$.attachedTo': String(containerId) } : {}) },
+                               ...(attachedToId ? { 'daSubTypes.$.attachedTo': attachedToId } : {}) },
                 }
               );
             } else {
@@ -1364,7 +1374,7 @@ Return ONLY valid JSON — no markdown:
                 { $push: { daSubTypes: {
                     key: subTypeKey, label: subTypeLabel || subTypeKey,
                     triggerPhrases: cleanPhrases,
-                    attachedTo: containerId ? [String(containerId)] : [],
+                    attachedTo: attachedToId ? [attachedToId] : [],
                     classificationStatus: 'AUTO_CONFIRMED',
                 } } }
               );
