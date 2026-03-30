@@ -660,6 +660,9 @@
       cursor: pointer; transition: all .15s;
     }
     .gap-btn-dismiss:hover { background: #f9fafb; border-color: #9ca3af; }
+    .gap-source-note {
+      font-size: 10.5px; color: #9ca3af; font-style: italic;
+    }
     .gap-loading {
       display: flex; align-items: center; gap: 8px;
       padding: 14px 18px; font-size: 12.5px; color: #6b7280;
@@ -1713,7 +1716,7 @@ async function analyzeGaps(sid) {
 
   const panel = document.getElementById(`gap-panel-${sid}`);
   panel.style.display = 'block';
-  panel.innerHTML = `<div class="gap-loading"><div class="gap-spinner"></div> Checking what the agent can and cannot answer…</div>`;
+  panel.innerHTML = `<div class="gap-loading"><div class="gap-spinner"></div> Finding questions callers will ask that aren't in your content…</div>`;
 
   const labelInput     = row.querySelector('.section-label-input');
   const sectionLabel   = labelInput?.value?.trim() || '';
@@ -1737,47 +1740,25 @@ async function analyzeGaps(sid) {
   }
 }
 
-function _renderGapPanel(sid, { covered, gaps, suggestedAddition }) {
+function _renderGapPanel(sid, { questions, sourceNote }) {
   const panel = document.getElementById(`gap-panel-${sid}`);
   if (!panel) return;
 
-  const coveredHtml = (covered || []).length
-    ? `<div class="gap-section-title gap-covered-title">✅ Agent can answer</div>
-       <div class="gap-covered">${covered.map(q => `<div class="gap-item"><span class="gap-item-icon">✓</span>${_esc(q)}</div>`).join('')}</div>`
-    : '';
+  const qs = questions || [];
 
-  const gapsHtml = (gaps || []).length
-    ? `<div class="gap-section-title gap-missing-title" style="margin-top:${covered?.length ? 10 : 0}px;">❌ Agent cannot answer</div>
-       <div class="gap-missing">${gaps.map(q => `<div class="gap-item"><span class="gap-item-icon">✗</span>${_esc(q)}</div>`).join('')}</div>`
-    : `<div style="font-size:12.5px;color:#15803d;margin-bottom:10px;">No significant gaps found — this section looks comprehensive ✅</div>`;
+  const listHtml = qs.length
+    ? qs.map(q => `<div class="gap-item"><span class="gap-item-icon">📞</span>${_esc(q)}</div>`).join('')
+    : `<div style="font-size:12.5px;color:#15803d;">This section looks comprehensive — no obvious gaps found ✅</div>`;
 
-  const suggestionHtml = suggestedAddition
-    ? `<div class="gap-section-title gap-suggestion-title" style="margin-top:${(gaps||[]).length ? 10 : 0}px;">💡 Suggested addition</div>
-       <div class="gap-suggestion-box">${_esc(suggestedAddition)}</div>
-       <div class="gap-actions">
-         <button type="button" class="gap-btn-add" onclick="appendGapSuggestion(${sid})">+ Add to section</button>
-         <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})">Dismiss</button>
-       </div>`
-    : `<div class="gap-actions" style="margin-top:4px;">
-         <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})">Dismiss</button>
-       </div>`;
-
-  panel.innerHTML = `<div class="gap-panel-inner">${coveredHtml}${gapsHtml}${suggestionHtml}</div>`;
-}
-
-function appendGapSuggestion(sid) {
-  const row        = document.querySelector(`[data-sid="${sid}"]`);
-  const textarea   = row?.querySelector('.form-textarea.tall');
-  const panel      = document.getElementById(`gap-panel-${sid}`);
-  const box        = panel?.querySelector('.gap-suggestion-box');
-  if (!textarea || !box) return;
-
-  const suggestion = box.textContent.trim();
-  const current    = textarea.value.trim();
-  textarea.value   = current ? current + '\n\n' + suggestion : suggestion;
-  charCount(textarea, 2000, null);   // refresh char count display
-  _toast('Suggestion added to section', 'success');
-  dismissGapPanel(sid);
+  panel.innerHTML = `
+    <div class="gap-panel-inner">
+      <div class="gap-section-title gap-missing-title">Callers will also ask — not in your content</div>
+      <div class="gap-missing" style="margin-bottom:12px;">${listHtml}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span class="gap-source-note">${_esc(sourceNote || '')}</span>
+        <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})">Dismiss</button>
+      </div>
+    </div>`;
 }
 
 function dismissGapPanel(sid) {
