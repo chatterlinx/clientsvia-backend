@@ -785,6 +785,7 @@ class KCDiscoveryRunner {
                 score:        Math.round(uapResult.confidence * 100),
                 matchSource:  'UAP_LAYER1',
                 uapResult,
+                daSubTypeKey: uapResult.daSubTypeKey || null,  // enables section-level routing
               };
 
               logger.info('[KC_ENGINE] 🧠 UAP Bridge resolved container', {
@@ -1197,7 +1198,7 @@ async function _handlePrequalResponse({
     };
   }
 
-  const { containerId } = _pqState;
+  const { containerId, sectionId = null } = _pqState;
 
   // Load the container — fall through gracefully if not found
   const containers = await KCS.getActiveForCompany(companyId).catch(() => []);
@@ -1214,9 +1215,15 @@ async function _handlePrequalResponse({
     };
   }
 
-  const pq      = container.preQualifyQuestion || {};
+  // Resolve targetSection — prefer section-level prequal; fall back to container-level (legacy)
+  const targetSection = sectionId
+    ? (container.sections || []).find(s => String(s._id || '') === sectionId) || null
+    : null;
+
+  const pq      = targetSection?.preQualifyQuestion || {};
   const options = pq.options || [];
   const fieldKey = pq.fieldKey || 'preQualifyAnswer';
+  const _answeredKey = sectionId || containerId;
 
   // ── Match caller input against option keywords ────────────────────────────
   let matchedOption = null;
@@ -1246,7 +1253,7 @@ async function _handlePrequalResponse({
   DiscoveryNotesService.update(companyId, callSid, {
     temp: {
       [fieldKey]:          matchedOption.value,
-      preQualifyAnswered:  [..._alreadyAnswered, containerId],
+      preQualifyAnswered:  [..._alreadyAnswered, _answeredKey],  // keyed by sectionId or containerId
     },
   }).catch(() => {});
 
@@ -1266,6 +1273,7 @@ async function _handlePrequalResponse({
   try {
     kcResult = await KCS.answer({
       container,
+      targetSection,      // null = all sections; section obj = Groq reads only this section
       question:          userInput,
       kbSettings,
       company,
@@ -1350,8 +1358,19 @@ async function _handleKCMatch({
   const containerTitle = container.title || 'Knowledge Container';
   const containerId    = String(container._id || containerTitle);
 
+  // ── Resolve targetSection from UAP daSubTypeKey ───────────────────────────
+  // When UAP matched with a specific daSubTypeKey, find the section whose
+  // daSubTypeKey matches — Groq reads ONLY that section's content.
+  // null = all sections sent to Groq (keyword match or general query).
+  const daSubTypeKey  = match.daSubTypeKey || null;
+  const targetSection = daSubTypeKey
+    ? (container.sections || []).find(s => s.daSubTypeKey === daSubTypeKey) || null
+    : null;
+  const sectionId     = targetSection ? String(targetSection._id || '') : null;
+
   logger.info('[KC_ENGINE] Container matched', {
     companyId, callSid, containerTitle, score: match.score, turn,
+    ...(targetSection ? { daSubTypeKey, sectionLabel: targetSection.label } : {}),
   });
 
   emit('KC_CONTAINER_MATCHED', {
@@ -1363,36 +1382,45 @@ async function _handleKCMatch({
   });
 
   // ── GATE 3.5 — PRE-QUALIFY QUESTION ───────────────────────────────────────
-  // Before calling Groq, check if this container has a pre-qualify question
-  // and the caller hasn't answered it yet this call. If so, ask the question
-  // first — caller's next utterance will be their answer, handled by GATE 0.7
-  // → _handlePrequalResponse() on the next turn.
+  // Section-level preQualifyQuestion takes priority. Falls back to container-level
+  // (legacy) when targetSection is null or has no prequal configured.
+  // The caller's next utterance is their answer → GATE 0.7 → _handlePrequalResponse().
   // Skip if redis is unavailable — graceful degrade to answering without prequal.
-  if (redis && container.preQualifyQuestion?.text?.trim()) {
+  const _activePQ = targetSection?.preQualifyQuestion?.text?.trim()
+    ? targetSection.preQualifyQuestion
+    : null;   // section-level only — container-level prequal is now legacy
+
+  if (redis && _activePQ) {
     try {
       const _pqKey      = `kc-prequal:${companyId}:${callSid}`;
       const _pqExisting = await redis.get(_pqKey).catch(() => null);
 
+      // Use sectionId (preferred) or containerId as the answered-check key
+      const _answeredKey = sectionId || containerId;
+
       if (!_pqExisting) {
-        // Not currently waiting — check if already answered for this container this call
+        // Not currently waiting — check if already answered for this section/container this call
         const _pqNotes    = await DiscoveryNotesService.load(companyId, callSid).catch(() => null);
         const _pqAnswered = (_pqNotes?.temp?.preQualifyAnswered || []).map(String);
 
-        if (!_pqAnswered.includes(containerId)) {
+        if (!_pqAnswered.includes(_answeredKey)) {
           // First match this call — set Redis and ask the pre-qualify question
-          await redis.setex(_pqKey, 4 * 3600, JSON.stringify({ containerId, status: 'ASKING' })).catch(() => {});
+          await redis.setex(
+            _pqKey, 4 * 3600,
+            JSON.stringify({ containerId, sectionId: sectionId || null, status: 'ASKING' })
+          ).catch(() => {});
 
-          emit('KC_PREQUAL_ASKED', { containerId, containerTitle, kcId: container.kcId || null, turn });
+          emit('KC_PREQUAL_ASKED', { containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null, turn });
           logger.info('[KC_ENGINE] 🎯 GATE 3.5: Pre-qualify question asked', {
-            companyId, callSid, containerId, containerTitle, turn,
+            companyId, callSid, containerId, sectionId: sectionId || null, containerTitle, turn,
           });
 
           return {
-            response:    container.preQualifyQuestion.text,
+            response:    _activePQ.text,
             matchSource: 'KC_ENGINE',
             state:       nextState,
             _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, {
-              containerId, containerTitle, kcId: container.kcId || null,
+              containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null,
               intent: 'PREQUAL_ASKED', latencyMs: Date.now() - startMs,
             }),
           };
@@ -1408,18 +1436,17 @@ async function _handleKCMatch({
   // ── End GATE 3.5 ──────────────────────────────────────────────────────────
 
   // preQualifyContext — injected into Groq when caller already answered the
-  // pre-qualify question this call (loaded by _handlePrequalResponse and
-  // passed back via Redis; retrieved here for normal turns after the answer).
-  // If no prequal is configured or not yet answered, this is '' (no injection).
+  // pre-qualify question this call (loaded by _handlePrequalResponse).
+  // Reads discoveryNotes.temp[fieldKey] to find the matched responseContext.
   let _preQualifyContext = '';
-  if (redis && container.preQualifyQuestion?.text?.trim()) {
+  if (redis && _activePQ) {
     try {
       const _pqNotes  = await DiscoveryNotesService.load(companyId, callSid).catch(() => null);
-      const _fieldKey = container.preQualifyQuestion.fieldKey || 'preQualifyAnswer';
+      const _fieldKey = _activePQ.fieldKey || 'preQualifyAnswer';
       const _answer   = _pqNotes?.temp?.[_fieldKey];
       if (_answer) {
         // Find the matching option to get responseContext
-        const _opts = container.preQualifyQuestion.options || [];
+        const _opts = _activePQ.options || [];
         const _opt  = _opts.find(o => o.value === _answer);
         _preQualifyContext = _opt?.responseContext || '';
       }
@@ -1430,6 +1457,7 @@ async function _handleKCMatch({
   try {
     kcResult = await KCS.answer({
       container,
+      targetSection,        // null = all sections; section obj = Groq reads only this section
       question: userInput,
       kbSettings,
       company,
@@ -1462,28 +1490,29 @@ async function _handleKCMatch({
     });
 
     // ── GATE 4.5 — UPSELL CHAIN ────────────────────────────────────────────
-    // Before routing to booking, check if this container has upsell offers.
-    // If so, work through the chain first — each offer fires on a separate turn.
-    //   YES → advance to next upsell or booking.
-    //   NO  → skip to next upsell or booking.
-    // GATE 0.7 → _handleUpsellResponse() handles each subsequent YES/NO turn.
-    // Skip silently (fall to booking) if redis unavailable or on any error.
+    // Section-level upsellChain takes priority over container-level (legacy).
+    // Each offer fires on a separate turn; GATE 0.7 → _handleUpsellResponse()
+    // handles each YES/NO. Skip silently if redis unavailable or on any error.
     // ───────────────────────────────────────────────────────────────────────
-    if (redis && container.upsellChain?.length > 0) {
+    const _activeUpsell = targetSection?.upsellChain?.length > 0
+      ? targetSection.upsellChain
+      : [];   // section-level only — container-level upsellChain is now legacy
+
+    if (redis && _activeUpsell.length > 0) {
       try {
         const _upKey      = `kc-upsell:${companyId}:${callSid}`;
         const _upExisting = await redis.get(_upKey).catch(() => null);
         if (!_upExisting) {
-          const first = container.upsellChain[0];
+          const first = _activeUpsell[0];
           if (first?.offerScript?.trim()) {
             await redis.setex(
               _upKey, 4 * 3600,
-              JSON.stringify({ containerId, idx: 0, status: 'PENDING', currentUpsell: first })
+              JSON.stringify({ containerId, sectionId: sectionId || null, idx: 0, status: 'PENDING', currentUpsell: first })
             ).catch(() => {});
 
-            emit('KC_UPSELL_FIRED', { containerId, containerTitle, idx: 0, itemKey: first.itemKey || null, turn });
+            emit('KC_UPSELL_FIRED', { containerId, sectionId: sectionId || null, containerTitle, idx: 0, itemKey: first.itemKey || null, turn });
             logger.info('[KC_ENGINE] 💰 GATE 4.5: Upsell chain started', {
-              companyId, callSid, containerId, idx: 0, itemKey: first.itemKey || null, turn,
+              companyId, callSid, containerId, sectionId: sectionId || null, idx: 0, itemKey: first.itemKey || null, turn,
             });
 
             return {
@@ -1491,7 +1520,7 @@ async function _handleKCMatch({
               matchSource: 'KC_ENGINE',
               state:       nextState,
               _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, {
-                containerId, containerTitle, kcId: container.kcId || null,
+                containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null,
                 intent: 'UPSELL_ASKED', idx: 0, latencyMs: Date.now() - startMs,
               }),
             };
@@ -1671,7 +1700,7 @@ async function _handleUpsellResponse({
     return _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs });
   }
 
-  const { containerId, idx, currentUpsell } = _upState;
+  const { containerId, sectionId = null, idx, currentUpsell } = _upState;
   const isYes = _YES_RE.test(userInput);
   const isNo  = _NO_RE.test(userInput) && !isYes;
 
@@ -1717,7 +1746,13 @@ async function _handleUpsellResponse({
   // ── Check for next upsell in chain ────────────────────────────────────────
   const containers = await KCS.getActiveForCompany(companyId).catch(() => []);
   const container  = containers.find(c => String(c._id || c.title) === containerId);
-  const chain      = container?.upsellChain || [];
+  // Resolve section from stored sectionId; use section's upsellChain (section-level wins)
+  const targetSection = sectionId
+    ? (container?.sections || []).find(s => String(s._id || '') === sectionId) || null
+    : null;
+  const chain      = targetSection?.upsellChain?.length > 0
+    ? targetSection.upsellChain
+    : [];  // section-level only — container.upsellChain is legacy
   const nextIdx    = idx + 1;
   const nextUpsell = chain[nextIdx];
 
@@ -1726,7 +1761,7 @@ async function _handleUpsellResponse({
     const _upKey = `kc-upsell:${companyId}:${callSid}`;
     await redis.setex(
       _upKey, 4 * 3600,
-      JSON.stringify({ containerId, idx: nextIdx, status: 'PENDING', currentUpsell: nextUpsell })
+      JSON.stringify({ containerId, sectionId: sectionId || null, idx: nextIdx, status: 'PENDING', currentUpsell: nextUpsell })
     ).catch(() => {});
 
     emit('KC_UPSELL_FIRED', { containerId, idx: nextIdx, itemKey: nextUpsell.itemKey || null, turn });

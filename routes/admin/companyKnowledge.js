@@ -73,20 +73,18 @@ function _validateCompanyAccess(req, res, companyId) {
 // Allowed fields for container CRUD operations
 const ALLOWED_FIELDS = [
   'title', 'category',
-  'sections',           // [{ label, content, order }]
+  // sections now carry per-section daSubTypeKey, bookingAction, preQualifyQuestion, upsellChain
+  'sections',
   'keywords',
   'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
   'wordLimit',
   'wordLimitEnabled',   // Boolean — when false, omits hard word cap from Groq prompt
   'sampleResponse',     // String — ideal example answer injected as guardrail into Groq prompt
   'followUpDepth',      // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
-  'bookingAction',
+  'bookingAction',      // Container-level default; sections can override per-section
   'closingPrompt',
   'isActive',
   'priority',
-  // Sales funnel — pre-qualify question + sequential upsell chain
-  'preQualifyQuestion', // { text, fieldKey, options[{ label, value, keywords[], responseContext }] }
-  'upsellChain',        // [{ offerScript, yesScript, noScript, itemKey, price }]
   // UAP classification fields — owner can manually set daType, auto-classify sets the rest
   'daType',
   'daSubTypes',
@@ -131,18 +129,67 @@ function _sanitiseBody(body) {
     )];
   }
 
-  // Sanitise sections array — remove empty labels/content, enforce types
+  // Sanitise sections array — remove empty labels/content, preserve per-section fields
   if (Array.isArray(out.sections)) {
     out.sections = out.sections
       .filter(s => typeof s.label === 'string' && s.label.trim() &&
                    typeof s.content === 'string' && s.content.trim())
-      .map((s, idx) => ({
-        label:   s.label.trim().slice(0, 80),
-        content: s.content.trim().slice(0, 2000),
-        order:   typeof s.order === 'number' ? s.order : idx,
-        // Preserve existing _id if provided (for updates)
-        ...(s._id ? { _id: s._id } : {})
-      }));
+      .map((s, idx) => {
+        const section = {
+          label:   s.label.trim().slice(0, 80),
+          content: s.content.trim().slice(0, 2000),
+          order:   typeof s.order === 'number' ? s.order : idx,
+          // Preserve existing _id if provided (for updates)
+          ...(s._id ? { _id: s._id } : {}),
+        };
+
+        // UAP routing key — set by Auto-label, links section to UAPArray sub-type
+        if (typeof s.daSubTypeKey === 'string' && s.daSubTypeKey.trim()) {
+          section.daSubTypeKey = s.daSubTypeKey.trim().slice(0, 80);
+        }
+
+        // Per-section booking action override
+        const BA_VALID = ['offer_to_book', 'advisor_callback', 'none'];
+        if (s.bookingAction && BA_VALID.includes(s.bookingAction)) {
+          section.bookingAction = s.bookingAction;
+        }
+
+        // Per-section pre-qualify question
+        if (s.preQualifyQuestion && typeof s.preQualifyQuestion === 'object') {
+          const pq = s.preQualifyQuestion;
+          if (typeof pq.text === 'string' && pq.text.trim()) {
+            section.preQualifyQuestion = {
+              text:     pq.text.trim().slice(0, 300),
+              fieldKey: (typeof pq.fieldKey === 'string' && pq.fieldKey.trim())
+                ? pq.fieldKey.trim().slice(0, 60)
+                : 'preQualifyAnswer',
+              options: Array.isArray(pq.options)
+                ? pq.options.map(o => ({
+                    label:           typeof o.label === 'string'           ? o.label.trim().slice(0, 100)           : '',
+                    value:           typeof o.value === 'string'           ? o.value.trim().slice(0, 100)           : '',
+                    keywords:        Array.isArray(o.keywords)             ? o.keywords.map(k => `${k}`.trim().toLowerCase()).filter(Boolean) : [],
+                    responseContext: typeof o.responseContext === 'string' ? o.responseContext.trim().slice(0, 400) : '',
+                  }))
+                : [],
+            };
+          }
+        }
+
+        // Per-section upsell chain
+        if (Array.isArray(s.upsellChain) && s.upsellChain.length) {
+          section.upsellChain = s.upsellChain
+            .filter(u => u && typeof u.offerScript === 'string' && u.offerScript.trim())
+            .map(u => ({
+              offerScript: u.offerScript.trim().slice(0, 600),
+              yesScript:   typeof u.yesScript === 'string' ? u.yesScript.trim().slice(0, 400) : '',
+              noScript:    typeof u.noScript  === 'string' ? u.noScript.trim().slice(0, 400)  : '',
+              itemKey:     typeof u.itemKey   === 'string' ? u.itemKey.trim().slice(0, 60)    : '',
+              price:       (typeof u.price === 'number' && !isNaN(u.price)) ? u.price : null,
+            }));
+        }
+
+        return section;
+      });
   }
 
   // Trim string fields

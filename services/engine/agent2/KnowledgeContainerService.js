@@ -378,17 +378,24 @@ async function _getUtteranceEmbedding(text, callSid, turn) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * _buildContainerBlock — Format the container sections into a clean
- * LABEL: content block for injection into the Groq system prompt.
+ * _buildContainerBlock — Format container sections into a LABEL: content block
+ * for injection into the Groq system prompt.
  *
- * @param {Object} container — CompanyKnowledgeContainer document
+ * When targetSection is provided (UAP-routed specific section), only that
+ * section's content is formatted — Groq answers from that section alone.
+ * When targetSection is null, all container sections are included (general query
+ * or keyword-matched container without a specific section sub-type).
+ *
+ * @param {Object}      container      — CompanyKnowledgeContainer document
+ * @param {Object|null} [targetSection] — specific section (from daSubType routing), or null
  * @returns {string}
  */
-function _buildContainerBlock(container) {
-  const sections = [...(container.sections || [])]
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+function _buildContainerBlock(container, targetSection = null) {
+  const source = targetSection
+    ? [targetSection]
+    : [...(container.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  const lines = sections
+  const lines = source
     .filter(s => s.label?.trim() && s.content?.trim())
     .map(s => `${s.label.trim().toUpperCase()}: ${s.content.trim()}`);
 
@@ -887,20 +894,21 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
 async function answer(opts) {
   const {
     container,
+    targetSection   = null, // specific section resolved by UAP daSubType; null = all sections
     question,
     kbSettings  = {},
     company     = {},
     callerName,
     callSid,
-    spfuqContext,           // optional — active topic reminder injected into system prompt for pronoun resolution
-    discoveryContext,       // optional — call-level context from discoveryNotes (callReason, entities)
+    spfuqContext,           // optional — active topic reminder for pronoun resolution
+    discoveryContext,       // optional — call-level context from discoveryNotes
     priorVisit  = false,    // optional — true when caller is a returning customer
-    preQualifyContext = '', // optional — caller's pre-qualify answer context (e.g. "Caller IS a plan member")
+    preQualifyContext = '', // optional — caller's pre-qualify answer context
   } = opts;
 
-  const startMs       = Date.now();
-  const companyId     = String(company._id || company.companyId || '');
-  const companyName   = company.companyName || company.name || 'our company';
+  const startMs        = Date.now();
+  const companyId      = String(company._id || company.companyId || '');
+  const companyName    = company.companyName || company.name || 'our company';
   const containerTitle = container.title || 'Knowledge Container';
 
   // Guard: no question
@@ -921,11 +929,17 @@ async function answer(opts) {
       ? kbSettings.defaultWordLimit
       : 40;
 
-  // Build prompt components — resolve {variables} so Groq sees real values
-  const containerBlock = await _resolveKCVariables(companyId, _buildContainerBlock(container));
+  // Resolve booking action: section override → container default
+  const effectiveBookingAction = (targetSection?.bookingAction) || container.bookingAction || 'offer_to_book';
+
+  // Build prompt components — pass targetSection so Groq reads only the matched section
+  // when UAP routed to a specific section; all sections otherwise (general query).
+  const containerBlock = await _resolveKCVariables(
+    companyId,
+    _buildContainerBlock(container, targetSection)
+  );
 
   // Load Behavior Card for this KC category (Redis → MongoDB, graceful degrade → null)
-  // null = no BC configured for this category; formatForGroq(null) = '' = omit block cleanly
   const bc            = container.category
     ? await BehaviorCardService.forCategory(companyId, container.category)
     : null;
@@ -937,16 +951,16 @@ async function answer(opts) {
     });
   }
 
-  const systemPrompt   = _buildSystemPrompt({
+  const systemPrompt = _buildSystemPrompt({
     companyName,
     containerTitle,
     containerBlock,
     wordLimit,
-    wordLimitEnabled:   container.wordLimitEnabled !== false,   // default true — false = no hard cap
+    wordLimitEnabled:   container.wordLimitEnabled !== false,
     sampleResponse:     container.sampleResponse               || null,
     bookingOfferMode:   kbSettings.bookingOfferMode            || 'groq',
     bookingOfferPhrase: kbSettings.bookingOfferPhrase          || BUILT_IN_BOOKING_OFFER,
-    bookingAction:      container.bookingAction                || 'offer_to_book',
+    bookingAction:      effectiveBookingAction,
     closingPrompt:      container.closingPrompt                || '',
     spfuqContext:       spfuqContext                           || null,
     discoveryContext:   discoveryContext                        || null,

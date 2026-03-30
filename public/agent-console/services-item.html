@@ -391,6 +391,80 @@
       font-size: 11px; color: var(--text-xs);
     }
 
+    /* ── Per-section Sales Funnel accordion ──────────────────────────────── */
+    .section-funnel-toggle {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+      background: #f8fafc; border-top: 1px solid var(--border);
+      cursor: pointer; user-select: none;
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      transition: background .15s;
+    }
+    .section-funnel-toggle:hover { background: #f1f5f9; }
+    .section-funnel-toggle.has-funnel { color: #7c3aed; background: #faf5ff; border-top-color: #e9d5ff; }
+    .section-funnel-toggle.has-funnel:hover { background: #f3e8ff; }
+    .funnel-icon { font-size: 10px; transition: transform .2s; }
+    .funnel-icon.open { transform: rotate(90deg); }
+    .funnel-hint { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--text-xs); }
+    .funnel-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+    .funnel-badge {
+      font-size: 10px; font-weight: 700; padding: 1px 7px;
+      border-radius: 99px; border: 1px solid;
+    }
+    .funnel-badge.pq     { background: #fce7f3; border-color: #f9a8d4; color: #9d174d; }
+    .funnel-badge.upsell { background: #dcfce7; border-color: #86efac; color: #15803d; }
+
+    .section-funnel-body {
+      padding: 14px; background: #fefefe;
+      border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .funnel-sub-section {
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .funnel-sub-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px; background: #fafafa;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .funnel-sub-icon { font-size: 15px; flex-shrink: 0; }
+    .funnel-sub-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .funnel-sub-hint { font-size: 11px; color: var(--text-muted); }
+    .funnel-toggle-label {
+      margin-left: auto; display: flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
+      color: var(--text-muted);
+    }
+    .funnel-toggle-label input { cursor: pointer; accent-color: #7c3aed; }
+    .funnel-sub-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .funnel-field-row { display: flex; flex-direction: column; gap: 4px; }
+    .funnel-pq-option {
+      background: #f8fafc; border: 1px solid var(--border); border-radius: 7px;
+      padding: 10px 12px; margin-bottom: 6px;
+    }
+    .funnel-pq-option-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 6px; }
+    .btn-funnel-add {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px dashed #7dd3fc; background: #f0f9ff;
+      color: var(--color-primary); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-funnel-add:hover { background: #e0f2fe; border-color: var(--color-primary); }
+    .funnel-upsell-item {
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .funnel-upsell-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .funnel-upsell-idx { font-size: 12px; font-weight: 600; color: #15803d; }
+    .btn-funnel-remove {
+      background: none; border: none; cursor: pointer;
+      color: #ef4444; font-size: 13px; padding: 1px 6px;
+    }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .form-row { grid-template-columns: 1fr; }
@@ -575,63 +649,7 @@
     </div>
   </div>
 
-  <!-- ── 4. Pre-Qualify Question ──────────────────────────────────────────── -->
-  <!-- Shown BEFORE Groq answers. Agent asks one question → caller's answer   -->
-  <!-- injects CALLER TYPE context into Groq so it gives the right response.  -->
-  <div class="form-card" id="cardPreQualify">
-    <div class="form-card-header">
-      <span class="form-card-icon">🎯</span>
-      <div>
-        <div class="form-card-title">Pre-Qualify Question</div>
-        <div class="form-card-subtitle">Ask one question BEFORE answering — agent uses the answer to give the right response for that caller type</div>
-      </div>
-      <span class="form-card-badge optional">Optional</span>
-    </div>
-
-    <!-- Enable toggle -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      <label class="form-label" style="margin:0;cursor:pointer;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="fPqEnabled" onchange="_togglePreQualify()" style="width:16px;height:16px;cursor:pointer;" />
-        Ask a qualifying question before answering
-      </label>
-    </div>
-
-    <div id="pqBody" style="display:none;">
-      <!-- Question text -->
-      <div style="margin-bottom:12px;">
-        <label class="form-label">Question the agent asks
-          <span class="form-hint">Spoken verbatim — e.g. "Are you a plan member or calling for the first time?"</span>
-        </label>
-        <input type="text" id="fPqText" class="form-input" maxlength="300"
-          oninput="charCount(this,300,'ccPqText'); S.preQualifyQuestion.text = this.value.trim();"
-          placeholder="Are you a plan member, or is this your first time calling?" />
-        <div class="char-count" id="ccPqText"></div>
-      </div>
-
-      <!-- Field key -->
-      <div style="margin-bottom:16px;">
-        <label class="form-label">Discovery Notes key
-          <span class="form-hint">Written to discoveryNotes.temp[key] — keep it short and unique per container. Default: preQualifyAnswer</span>
-        </label>
-        <input type="text" id="fPqFieldKey" class="form-input" maxlength="60"
-          oninput="S.preQualifyQuestion.fieldKey = this.value.trim() || 'preQualifyAnswer';"
-          placeholder="preQualifyAnswer" style="max-width:260px;" />
-      </div>
-
-      <!-- Options -->
-      <div style="margin-bottom:6px;">
-        <label class="form-label" style="margin-bottom:4px;">Answer Options
-          <span class="form-hint">Map what the caller might say to a context phrase Groq gets. Add one option per caller type.</span>
-        </label>
-        <div id="pqOptionsList"></div>
-        <button class="btn btn-ghost" onclick="_addPqOption()" style="margin-top:8px;font-size:.8rem;padding:4px 12px;">
-          + Add Option
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 5. Response Settings ────────────────────────────────────────────── -->
+  <!-- ── 4. Response Settings ────────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">⚙️</span>
@@ -704,31 +722,7 @@
     </div>
   </div>
 
-  <!-- ── 6. Upsell Chain ───────────────────────────────────────────────────── -->
-  <!-- Fires sequentially AFTER Groq answers and returns BOOKING_READY.        -->
-  <!-- Each offer fires on a separate turn. YES → next. Chain done → booking.  -->
-  <div class="form-card" id="cardUpsellChain">
-    <div class="form-card-header">
-      <span class="form-card-icon">💰</span>
-      <div>
-        <div class="form-card-title">Upsell Offers</div>
-        <div class="form-card-subtitle">Add-on offers the agent pitches sequentially after answering — fires only when caller is ready to book</div>
-      </div>
-      <span class="form-card-badge optional">Optional</span>
-    </div>
-
-    <div id="upsellChainList" style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;"></div>
-
-    <div id="upsellEmptyState" style="display:none;color:#9ca3af;font-size:.8rem;margin-bottom:12px;">
-      No upsell offers yet — add one to pitch upgrades before booking proceeds
-    </div>
-
-    <button class="btn btn-ghost" onclick="_addUpsellItem()" style="font-size:.8rem;padding:5px 14px;">
-      + Add Offer
-    </button>
-  </div>
-
-  <!-- ── 7. Suggested Follow-Up ───────────────────────────────────────────── -->
+  <!-- ── 6. Suggested Follow-Up ───────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">💬</span>
@@ -920,10 +914,9 @@ const S = {
   classificationStatus: null,   // AUTO_CONFIRMED | MANUAL | PENDING | UNCLASSIFIED
   classificationScore:  null,
   autoClassifiedAt:     null,
-  // Pre-qualify question state
-  preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
-  // Upsell chain state
-  upsellChain: [],
+  // Per-section funnel state — keyed by section DOM id (sid)
+  // { daSubTypeKey, pq: {enabled, text, fieldKey, options[]}, upsellChain: [] }
+  sectionData: new Map(),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1075,52 +1068,19 @@ function _populateForm(c) {
   S.negativeKeywords = [...(c.negativeKeywords || [])];
   _renderNegKeywords();
 
-  // Sections
+  // Sections — pass per-section funnel data (pq + upsell) as sectionMeta
   const sorted = [...(c.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
   if (sorted.length) {
-    sorted.forEach(s => addSection(s.label, s.content));
+    sorted.forEach(s => addSection(s.label, s.content, {
+      daSubTypeKey:       s.daSubTypeKey       || null,
+      preQualifyQuestion: s.preQualifyQuestion || null,
+      upsellChain:        s.upsellChain        || [],
+    }));
   } else {
     addSection();
   }
   // Complexity indicator needs sections in DOM — update now that they are rendered
   _updateComplexityIndicator();
-
-  // Pre-qualify question
-  const pq = c.preQualifyQuestion || {};
-  S.preQualifyQuestion = {
-    text:     pq.text     || '',
-    fieldKey: pq.fieldKey || 'preQualifyAnswer',
-    options:  (pq.options || []).map(o => ({
-      label:           o.label           || '',
-      value:           o.value           || '',
-      keywords:        o.keywords        || [],
-      responseContext: o.responseContext || '',
-    })),
-  };
-  const pqEnabled = !!(pq.text?.trim() || pq.options?.length);
-  const pqToggle  = document.getElementById('fPqEnabled');
-  if (pqToggle) {
-    pqToggle.checked = pqEnabled;
-    document.getElementById('pqBody').style.display = pqEnabled ? 'block' : 'none';
-  }
-  const pqTextEl = document.getElementById('fPqText');
-  if (pqTextEl) {
-    pqTextEl.value = S.preQualifyQuestion.text;
-    charCount(pqTextEl, 300, 'ccPqText');
-  }
-  const pqKeyEl = document.getElementById('fPqFieldKey');
-  if (pqKeyEl) pqKeyEl.value = S.preQualifyQuestion.fieldKey;
-  _renderPqOptions();
-
-  // Upsell chain
-  S.upsellChain = (c.upsellChain || []).map(u => ({
-    offerScript: u.offerScript || '',
-    yesScript:   u.yesScript   || '',
-    noScript:    u.noScript    || '',
-    itemKey:     u.itemKey     || '',
-    price:       u.price != null ? u.price : '',
-  }));
-  _renderUpsellChain();
 
   // UAP classification state — populate after uapArrays loaded (may race; _loadUAPArrays handles re-render)
   S.daType              = c.daType              || null;
@@ -1142,11 +1102,48 @@ function _showForm() {
 // SECTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function addSection(label = '', content = '') {
-  const id = ++S.sectionSeq;
-  const list = document.getElementById('sectionsList');
+/**
+ * addSection — adds one section row to the list.
+ * @param {string} label        — section label (empty = new blank)
+ * @param {string} content      — section content
+ * @param {Object} [sectionMeta] — optional existing data
+ *   { daSubTypeKey, preQualifyQuestion: {text,fieldKey,options[]}, upsellChain: [] }
+ */
+function addSection(label = '', content = '', sectionMeta = null) {
+  const id       = ++S.sectionSeq;
+  const list     = document.getElementById('sectionsList');
   const rowCount = list.querySelectorAll('.section-row').length;
   const suggestion = rowCount < LABEL_SUGGESTIONS.length ? LABEL_SUGGESTIONS[rowCount] : '';
+
+  // Initialise per-section funnel state
+  const pq = sectionMeta?.preQualifyQuestion || {};
+  const pqEnabled = !!(pq.text?.trim() || pq.options?.length);
+  S.sectionData.set(id, {
+    daSubTypeKey: sectionMeta?.daSubTypeKey || null,
+    pq: {
+      enabled:  pqEnabled,
+      text:     pq.text     || '',
+      fieldKey: pq.fieldKey || 'preQualifyAnswer',
+      options:  (pq.options || []).map(o => ({
+        label:           o.label           || '',
+        value:           o.value           || '',
+        keywords:        Array.isArray(o.keywords) ? o.keywords : [],
+        responseContext: o.responseContext || '',
+      })),
+    },
+    upsellChain: (sectionMeta?.upsellChain || []).map(u => ({
+      offerScript: u.offerScript || '',
+      yesScript:   u.yesScript   || '',
+      noScript:    u.noScript    || '',
+      itemKey:     u.itemKey     || '',
+      price:       u.price != null ? u.price : '',
+    })),
+  });
+
+  // Funnel toggle label — show badges if funnel data exists
+  const hasPQ     = pqEnabled;
+  const hasUpsell = (sectionMeta?.upsellChain || []).length > 0;
+  const funnelHasFunnel = hasPQ || hasUpsell;
 
   const row = document.createElement('div');
   row.className = 'section-row';
@@ -1160,7 +1157,11 @@ function addSection(label = '', content = '') {
       <input type="text" class="section-label-input" placeholder="${suggestion || 'Section label…'}"
         maxlength="80" value="${_esc(label)}" onchange="updateSectionNumbers()">
       <button type="button" class="btn-suggest-label" onclick="suggestLabel(this)" title="Auto-generate label from content">✨ Auto-label</button>
-      <span class="section-uap-chip" title="UAP daType mapping for this section"></span>
+      <span class="section-uap-chip${sectionMeta?.daSubTypeKey ? ' mapped' : ''}"
+        title="${sectionMeta?.daSubTypeKey ? 'Mapped to ' + _esc(sectionMeta.daSubTypeKey) : 'UAP daType mapping for this section'}"
+        style="display:${sectionMeta?.daSubTypeKey ? 'flex' : 'none'}">
+        ${sectionMeta?.daSubTypeKey ? '✓ ' + _esc(sectionMeta.daSubTypeKey) : ''}
+      </span>
       <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Remove section">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -1171,8 +1172,75 @@ function addSection(label = '', content = '') {
       <div style="display:flex;justify-content:flex-end;">
         <span class="char-count" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} / 2000 chars</span>
       </div>
-    </div>`;
+    </div>
+
+    <!-- ── Sales Funnel accordion ─────────────────────────────────────── -->
+    <div class="section-funnel-toggle${funnelHasFunnel ? ' has-funnel' : ''}" id="funnel-toggle-${id}" onclick="toggleSectionFunnel(${id})">
+      <span class="funnel-icon${funnelHasFunnel ? ' open' : ''}" id="funnel-icon-${id}">▸</span>
+      <span>Sales Funnel</span>
+      <span class="funnel-badges" id="funnel-badges-${id}">
+        ${hasPQ     ? '<span class="funnel-badge pq">Pre-Qualify</span>' : ''}
+        ${hasUpsell ? '<span class="funnel-badge upsell">Upsell ×' + (sectionMeta?.upsellChain?.length || 0) + '</span>' : ''}
+      </span>
+      <span class="funnel-hint">Pre-qualify caller · Upsell after booking intent</span>
+    </div>
+    <div class="section-funnel-body" id="funnel-body-${id}" style="display:${funnelHasFunnel ? 'flex' : 'none'};">
+
+      <!-- 🎯 Pre-Qualify Question ──────────────────────────────────── -->
+      <div class="funnel-sub-section">
+        <div class="funnel-sub-header">
+          <span class="funnel-sub-icon">🎯</span>
+          <span class="funnel-sub-title">Pre-Qualify Question</span>
+          <span class="funnel-sub-hint">Ask before answering — routes Groq to the right response for each caller type</span>
+          <label class="funnel-toggle-label">
+            <input type="checkbox" id="pq-en-${id}" onchange="toggleSectionPQ(${id})" ${pqEnabled ? 'checked' : ''}> Enable
+          </label>
+        </div>
+        <div id="pq-body-${id}" class="funnel-sub-body" style="display:${pqEnabled ? 'flex' : 'none'};">
+          <div class="funnel-field-row">
+            <label class="form-label">Question the agent asks</label>
+            <input type="text" class="form-input" id="pq-text-${id}" maxlength="300"
+              value="${_esc(pq.text || '')}"
+              oninput="S.sectionData.get(${id}).pq.text=this.value"
+              placeholder="Are you a plan member, or calling for the first time?" />
+          </div>
+          <div class="funnel-field-row">
+            <label class="form-label" style="flex-direction:row;gap:6px;">discoveryNotes key
+              <span class="form-hint">written to temp[key] — unique per section</span>
+            </label>
+            <input type="text" class="form-input" id="pq-key-${id}" maxlength="60" style="max-width:240px;"
+              value="${_esc(pq.fieldKey || 'preQualifyAnswer')}"
+              oninput="S.sectionData.get(${id}).pq.fieldKey=this.value.trim()||'preQualifyAnswer'"
+              placeholder="preQualifyAnswer" />
+          </div>
+          <div class="funnel-field-row">
+            <label class="form-label">Answer Options <span class="form-hint">map what caller says → Groq context</span></label>
+            <div id="pq-opts-${id}"></div>
+            <button type="button" class="btn-funnel-add" onclick="addSectionPqOption(${id})" style="margin-top:4px;">+ Add Option</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 💰 Upsell Chain ──────────────────────────────────────────── -->
+      <div class="funnel-sub-section">
+        <div class="funnel-sub-header">
+          <span class="funnel-sub-icon">💰</span>
+          <span class="funnel-sub-title">Upsell Chain</span>
+          <span class="funnel-sub-hint">Sequential offers after BOOKING_READY — each fires on its own turn</span>
+        </div>
+        <div class="funnel-sub-body">
+          <div id="upsell-list-${id}" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <button type="button" class="btn-funnel-add" onclick="addSectionUpsellItem(${id})">+ Add Offer</button>
+        </div>
+      </div>
+
+    </div><!-- end funnel-body -->`;
+
   list.appendChild(row);
+
+  // Render pq options and upsell items if loaded from existing data
+  renderSectionPqOptions(id);
+  renderSectionUpsellItems(id);
 
   // Focus the label input if new empty section
   if (!label) {
@@ -1217,8 +1285,14 @@ async function suggestLabel(btn) {
       labelInput.value = data.suggestion;
     }
 
-    // ── 2. Show UAP chip ──────────────────────────────────────────────────────
+    // ── 2. Show UAP chip and store daSubTypeKey in section state ─────────────
     if (chip && data.daType) {
+      // Store daSubTypeKey so _getSections() can include it in the save payload
+      const sid = parseInt(row.dataset.sid, 10);
+      if (sid && S.sectionData.has(sid)) {
+        S.sectionData.get(sid).daSubTypeKey = data.subTypeKey || data.daType || null;
+      }
+
       if (data.needsArray) {
         // Array doesn't exist — suggest creating it
         chip.className = 'section-uap-chip needs-array';
@@ -1237,7 +1311,7 @@ async function suggestLabel(btn) {
       } else {
         // Array exists — sub-type was upserted in background
         chip.className = 'section-uap-chip mapped';
-        chip.innerHTML = `✓ ${_esc(data.daType)}`;
+        chip.innerHTML = `✓ ${_esc(data.subTypeKey || data.daType)}`;
         chip.title     = `Mapped to ${data.daTypeLabel || data.daType}${data.subTypeKey ? ' → ' + data.subTypeKey : ''} · ${(data.triggerPhrases||[]).length} phrases`;
         chip.style.display = 'flex';
         _toast(`Mapped to ${data.daTypeLabel || data.daType} ✓`, 'success');
@@ -1314,6 +1388,8 @@ function deleteSection(btn) {
     _toast('At least one section is required', 'error');
     return;
   }
+  const sid = parseInt(row.dataset.sid, 10);
+  if (sid) S.sectionData.delete(sid);
   row.remove();
   updateSectionNumbers();
   _updateComplexityIndicator();
@@ -1333,7 +1409,38 @@ function _getSections() {
     const label   = row.querySelector('.section-label-input')?.value?.trim() || '';
     const content = row.querySelector('textarea')?.value?.trim() || '';
     if (label && content) {
-      result.push({ label, content, order: idx });
+      const sid  = parseInt(row.dataset.sid, 10);
+      const data = S.sectionData.get(sid) || {};
+
+      // Build per-section preQualifyQuestion
+      let preQualifyQuestion = null;
+      if (data.pq?.enabled && data.pq.text?.trim()) {
+        preQualifyQuestion = {
+          text:     data.pq.text.trim(),
+          fieldKey: data.pq.fieldKey?.trim() || 'preQualifyAnswer',
+          options:  (data.pq.options || []).filter(o => o.label || o.value || o.keywords?.length),
+        };
+      }
+
+      // Build per-section upsellChain
+      const upsellChain = (data.upsellChain || [])
+        .filter(u => u.offerScript?.trim())
+        .map(u => ({
+          offerScript: u.offerScript.trim(),
+          yesScript:   (u.yesScript || '').trim(),
+          noScript:    (u.noScript  || '').trim(),
+          itemKey:     (u.itemKey   || '').trim(),
+          price:       u.price !== '' && u.price != null ? parseFloat(u.price) || null : null,
+        }));
+
+      result.push({
+        label,
+        content,
+        order: idx,
+        daSubTypeKey:       data.daSubTypeKey  || null,
+        preQualifyQuestion: preQualifyQuestion || null,
+        upsellChain,
+      });
     }
   });
   return result;
@@ -1758,10 +1865,10 @@ async function saveContainer() {
     classificationStatus: selectedDaType
       ? (S.classificationStatus === 'AUTO_CONFIRMED' ? 'AUTO_CONFIRMED' : 'MANUAL')
       : 'UNCLASSIFIED',
-    // Pre-qualify question — include only when toggle is on and question text is set
-    preQualifyQuestion: _getPreQualifyPayload(),
-    // Upsell chain — include only entries with an offerScript
-    upsellChain: _getUpsellChainPayload(),
+    // preQualifyQuestion and upsellChain are now per-section (inside sections[])
+    // NOT at container level — explicitly cleared so legacy data is not re-saved
+    preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
+    upsellChain: [],
   };
 
   _setLoading(true);
@@ -1868,155 +1975,177 @@ function _populateSubTypeDropdown(daType, selectedSubTypeKey) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRE-QUALIFY QUESTION — UI functions
+// PER-SECTION FUNNEL — accordion toggle
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _togglePreQualify() {
-  const on  = document.getElementById('fPqEnabled')?.checked;
-  document.getElementById('pqBody').style.display = on ? 'block' : 'none';
+function toggleSectionFunnel(sid) {
+  const body  = document.getElementById(`funnel-body-${sid}`);
+  const icon  = document.getElementById(`funnel-icon-${sid}`);
+  const toggle = document.getElementById(`funnel-toggle-${sid}`);
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'flex' : 'none';
+  if (icon) icon.classList.toggle('open', open);
 }
 
-function _renderPqOptions() {
-  const list = document.getElementById('pqOptionsList');
-  if (!list) return;
-  const opts = S.preQualifyQuestion.options || [];
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-SECTION PRE-QUALIFY QUESTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+function toggleSectionPQ(sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  const checked = document.getElementById(`pq-en-${sid}`)?.checked;
+  data.pq.enabled = !!checked;
+  const body = document.getElementById(`pq-body-${sid}`);
+  if (body) body.style.display = checked ? 'flex' : 'none';
+  _updateSectionFunnelBadges(sid);
+}
+
+function renderSectionPqOptions(sid) {
+  const list = document.getElementById(`pq-opts-${sid}`);
+  const data = S.sectionData.get(sid);
+  if (!list || !data) return;
+  const opts = data.pq.options || [];
   if (!opts.length) {
     list.innerHTML = `<p style="font-size:.78rem;color:#9ca3af;margin:4px 0;">No options yet — add one per caller type (e.g. "Plan Member", "First-Time")</p>`;
     return;
   }
   list.innerHTML = opts.map((opt, i) => `
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:6px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:6px;">
+    <div class="funnel-pq-option">
+      <div class="funnel-pq-option-grid">
         <div>
           <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Label (for logs)</label>
           <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.label)}"
-            oninput="S.preQualifyQuestion.options[${i}].label=this.value"
+            oninput="S.sectionData.get(${sid}).pq.options[${i}].label=this.value"
             placeholder="Plan Member" />
         </div>
         <div>
           <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Stored value</label>
           <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.value)}"
-            oninput="S.preQualifyQuestion.options[${i}].value=this.value"
+            oninput="S.sectionData.get(${sid}).pq.options[${i}].value=this.value"
             placeholder="plan_member" />
         </div>
-        <button onclick="_removePqOption(${i})" title="Remove"
-          style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1.1rem;padding:2px 6px;align-self:flex-end;">✕</button>
+        <button onclick="removeSectionPqOption(${sid},${i})" title="Remove"
+          class="btn-funnel-remove">✕</button>
       </div>
       <div style="margin-bottom:6px;">
-        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Caller keywords <span style="color:#9ca3af;">(comma-separated — what the caller might say)</span></label>
+        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Caller keywords <span style="color:#9ca3af;">(comma-separated)</span></label>
         <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords||[]).join(', '))}"
-          oninput="S.preQualifyQuestion.options[${i}].keywords=this.value.split(',').map(s=>s.trim()).filter(Boolean)"
-          placeholder="member, plan, maintenance plan, service agreement" />
+          oninput="S.sectionData.get(${sid}).pq.options[${i}].keywords=this.value.split(',').map(s=>s.trim()).filter(Boolean)"
+          placeholder="member, plan, maintenance plan" />
       </div>
       <div>
-        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Groq context <span style="color:#9ca3af;">(injected into Groq so it answers correctly for this caller type)</span></label>
+        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Groq context <span style="color:#9ca3af;">(injected as CALLER TYPE into Groq)</span></label>
         <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.responseContext)}"
-          oninput="S.preQualifyQuestion.options[${i}].responseContext=this.value"
-          placeholder='Caller IS a plan member — use plan-member pricing and member discounts.' />
+          oninput="S.sectionData.get(${sid}).pq.options[${i}].responseContext=this.value"
+          placeholder='Caller IS a plan member — use plan-member pricing.' />
       </div>
     </div>`).join('');
 }
 
-function _addPqOption() {
-  S.preQualifyQuestion.options.push({ label: '', value: '', keywords: [], responseContext: '' });
-  _renderPqOptions();
+function addSectionPqOption(sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.pq.options.push({ label: '', value: '', keywords: [], responseContext: '' });
+  renderSectionPqOptions(sid);
 }
 
-function _removePqOption(idx) {
-  S.preQualifyQuestion.options.splice(idx, 1);
-  _renderPqOptions();
-}
-
-function _getPreQualifyPayload() {
-  const pqEnabled = document.getElementById('fPqEnabled')?.checked;
-  const text      = (document.getElementById('fPqText')?.value || '').trim();
-  if (!pqEnabled || !text) return { text: '', fieldKey: 'preQualifyAnswer', options: [] };
-  return {
-    text,
-    fieldKey: (document.getElementById('fPqFieldKey')?.value || 'preQualifyAnswer').trim() || 'preQualifyAnswer',
-    options:  (S.preQualifyQuestion.options || []).filter(o => o.label || o.value || o.keywords.length),
-  };
+function removeSectionPqOption(sid, idx) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.pq.options.splice(idx, 1);
+  renderSectionPqOptions(sid);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UPSELL CHAIN — UI functions
+// PER-SECTION UPSELL CHAIN
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _renderUpsellChain() {
-  const list  = document.getElementById('upsellChainList');
-  const empty = document.getElementById('upsellEmptyState');
-  if (!list) return;
-  if (!S.upsellChain.length) {
-    list.innerHTML  = '';
-    if (empty) empty.style.display = 'block';
+function renderSectionUpsellItems(sid) {
+  const list = document.getElementById(`upsell-list-${sid}`);
+  const data = S.sectionData.get(sid);
+  if (!list || !data) return;
+  const chain = data.upsellChain || [];
+  if (!chain.length) {
+    list.innerHTML = `<p style="font-size:.78rem;color:#9ca3af;margin:4px 0;">No offers yet</p>`;
     return;
   }
-  if (empty) empty.style.display = 'none';
-  list.innerHTML = S.upsellChain.map((u, i) => `
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <span style="font-size:.78rem;font-weight:600;color:#16a34a;">Offer ${i + 1}${u.itemKey ? ' — ' + _esc(u.itemKey) : ''}</span>
-        <button onclick="_removeUpsellItem(${i})" title="Remove offer"
-          style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1rem;padding:2px 8px;">✕ Remove</button>
+  list.innerHTML = chain.map((u, i) => `
+    <div class="funnel-upsell-item">
+      <div class="funnel-upsell-header">
+        <span class="funnel-upsell-idx">Offer ${i + 1}${u.itemKey ? ' — ' + _esc(u.itemKey) : ''}</span>
+        <button onclick="removeSectionUpsellItem(${sid},${i})" class="btn-funnel-remove">✕ Remove</button>
       </div>
-      <div style="margin-bottom:8px;">
-        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Offer Script <span style="color:#9ca3af;">(agent pitches this verbatim — max 600 chars)</span></label>
+      <div style="margin-bottom:7px;">
+        <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Offer Script <span style="color:#9ca3af;">(max 600 chars)</span></label>
         <textarea class="form-input" rows="2" maxlength="600" style="font-size:.8rem;resize:vertical;"
-          oninput="S.upsellChain[${i}].offerScript=this.value"
-          placeholder="While I have you — would you like to add a UV light special for $189 today? It's our best add-on for this service."
+          oninput="S.sectionData.get(${sid}).upsellChain[${i}].offerScript=this.value"
+          placeholder="While I have you — would you like to add a UV light for $189 today?"
           >${_esc(u.offerScript)}</textarea>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px;">
         <div>
-          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If caller says YES</label>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If YES</label>
           <input class="form-input" style="font-size:.8rem;" value="${_esc(u.yesScript)}"
-            oninput="S.upsellChain[${i}].yesScript=this.value" maxlength="400"
-            placeholder="Great choice — I've noted that on your appointment." />
+            oninput="S.sectionData.get(${sid}).upsellChain[${i}].yesScript=this.value" maxlength="400"
+            placeholder="Great — noted on your appointment." />
         </div>
         <div>
-          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If caller says NO <span style="color:#9ca3af;">(optional)</span></label>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If NO <span style="color:#9ca3af;">(optional)</span></label>
           <input class="form-input" style="font-size:.8rem;" value="${_esc(u.noScript)}"
-            oninput="S.upsellChain[${i}].noScript=this.value" maxlength="400"
-            placeholder="No problem at all — let me get you booked." />
+            oninput="S.sectionData.get(${sid}).upsellChain[${i}].noScript=this.value" maxlength="400"
+            placeholder="No problem — let me get you booked." />
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;">
+      <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;">
         <div>
-          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Item Key <span style="color:#9ca3af;">(tracking ID written to discoveryNotes)</span></label>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Item Key <span style="color:#9ca3af;">(written to discoveryNotes)</span></label>
           <input class="form-input" style="font-size:.8rem;" value="${_esc(u.itemKey)}"
-            oninput="S.upsellChain[${i}].itemKey=this.value.trim(); _renderUpsellChain();"
+            oninput="S.sectionData.get(${sid}).upsellChain[${i}].itemKey=this.value.trim(); renderSectionUpsellItems(${sid});"
             placeholder="uv_light" />
         </div>
         <div>
-          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Price ($) <span style="color:#9ca3af;">optional</span></label>
+          <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Price ($)</label>
           <input type="number" class="form-input" style="font-size:.8rem;" value="${u.price !== '' ? _esc(String(u.price)) : ''}"
-            oninput="S.upsellChain[${i}].price=this.value===''?'':parseFloat(this.value)||0"
+            oninput="S.sectionData.get(${sid}).upsellChain[${i}].price=this.value===''?'':parseFloat(this.value)||0"
             placeholder="189" min="0" step="0.01" />
         </div>
       </div>
     </div>`).join('');
+  _updateSectionFunnelBadges(sid);
 }
 
-function _addUpsellItem() {
-  S.upsellChain.push({ offerScript: '', yesScript: '', noScript: '', itemKey: '', price: '' });
-  _renderUpsellChain();
+function addSectionUpsellItem(sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.upsellChain.push({ offerScript: '', yesScript: '', noScript: '', itemKey: '', price: '' });
+  renderSectionUpsellItems(sid);
+  // Open the funnel accordion if not already open
+  const body = document.getElementById(`funnel-body-${sid}`);
+  if (body && body.style.display === 'none') toggleSectionFunnel(sid);
 }
 
-function _removeUpsellItem(idx) {
-  S.upsellChain.splice(idx, 1);
-  _renderUpsellChain();
+function removeSectionUpsellItem(sid, idx) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.upsellChain.splice(idx, 1);
+  renderSectionUpsellItems(sid);
 }
 
-function _getUpsellChainPayload() {
-  return (S.upsellChain || [])
-    .filter(u => u.offerScript?.trim())
-    .map(u => ({
-      offerScript: u.offerScript.trim(),
-      yesScript:   (u.yesScript || '').trim(),
-      noScript:    (u.noScript  || '').trim(),
-      itemKey:     (u.itemKey   || '').trim(),
-      price:       u.price !== '' && u.price != null ? parseFloat(u.price) || null : null,
-    }));
+/** Update funnel toggle badges to reflect current pq/upsell state for a section */
+function _updateSectionFunnelBadges(sid) {
+  const data   = S.sectionData.get(sid);
+  const toggle = document.getElementById(`funnel-toggle-${sid}`);
+  const badges = document.getElementById(`funnel-badges-${sid}`);
+  if (!data || !toggle || !badges) return;
+  const hasPQ     = data.pq?.enabled && data.pq.text?.trim();
+  const hasUpsell = data.upsellChain?.length > 0;
+  badges.innerHTML = [
+    hasPQ     ? '<span class="funnel-badge pq">Pre-Qualify</span>' : '',
+    hasUpsell ? `<span class="funnel-badge upsell">Upsell ×${data.upsellChain.length}</span>` : '',
+  ].join('');
+  toggle.classList.toggle('has-funnel', !!(hasPQ || hasUpsell));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

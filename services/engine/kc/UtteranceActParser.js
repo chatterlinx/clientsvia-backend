@@ -30,6 +30,7 @@
  * PARSED UTTERANCE SCHEMA:
  *   {
  *     daType:        string | null,  // 'PRICING_QUERY', 'AVAILABILITY_QUERY', etc.
+ *     daSubTypeKey:  string | null,  // 'FINANCING', 'WARRANTY' etc. — maps to section.daSubTypeKey
  *     confidence:    number,         // 0.0–1.0
  *     matchedPhrase: string | null,  // the exact phrase that triggered the match
  *     matchType:     string,         // 'EXACT' | 'PARTIAL' | 'WORD_OVERLAP' | 'NONE'
@@ -195,6 +196,7 @@ async function parse(companyId, utterance) {
 
   const empty = {
     daType:        null,
+    daSubTypeKey:  null,
     confidence:    CONFIG.CONFIDENCE.NONE,
     matchedPhrase: null,
     matchType:     'NONE',
@@ -231,8 +233,10 @@ async function parse(companyId, utterance) {
   }
 
   if (bestExact) {
+    const _entry = phraseIndex[bestExact] || {};
     return {
-      daType:        phraseIndex[bestExact],
+      daType:        _entry.daType        || null,
+      daSubTypeKey:  _entry.daSubTypeKey  || null,
       confidence:    CONFIG.CONFIDENCE.EXACT,
       matchedPhrase: bestExact,
       matchType:     'EXACT',
@@ -266,8 +270,10 @@ async function parse(companyId, utterance) {
   }
 
   if (bestPartial) {
+    const _entry = phraseIndex[bestPartial] || {};
     return {
-      daType:        phraseIndex[bestPartial],
+      daType:        _entry.daType        || null,
+      daSubTypeKey:  _entry.daSubTypeKey  || null,
       confidence:    CONFIG.CONFIDENCE.PARTIAL,
       matchedPhrase: bestPartial,
       matchType:     'PARTIAL',
@@ -298,8 +304,10 @@ async function parse(companyId, utterance) {
       ? CONFIG.CONFIDENCE.WORD_OVERLAP_HIGH
       : CONFIG.CONFIDENCE.WORD_OVERLAP_LOW;
 
+    const _entry = phraseIndex[bestOverlapPhrase] || {};
     return {
-      daType:        phraseIndex[bestOverlapPhrase],
+      daType:        _entry.daType        || null,
+      daSubTypeKey:  _entry.daSubTypeKey  || null,
       confidence,
       matchedPhrase: bestOverlapPhrase,
       matchType:     'WORD_OVERLAP',

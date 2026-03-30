@@ -131,7 +131,8 @@ async function _buildBridge(companyId) {
 
   // Build daType → label map from UAPArrays
   const daTypeLabelMap = {};
-  const daTypePhraseMap = {};   // daType → all trigger phrases across sub-types
+  const daTypePhraseMap = {};   // daType → phrase[]  (for routes.triggerPhrases)
+  const phraseIndex     = {};   // phrase → { daType, daSubTypeKey }  (for UAP Layer 1)
 
   for (const array of uapArrays) {
     daTypeLabelMap[array.daType] = array.label;
@@ -140,7 +141,12 @@ async function _buildBridge(companyId) {
     const allPhrases = [];
     for (const sub of (array.daSubTypes || [])) {
       for (const phrase of (sub.triggerPhrases || [])) {
-        if (phrase) allPhrases.push(phrase.toLowerCase().trim());
+        const p = (phrase || '').toLowerCase().trim();
+        if (p) {
+          allPhrases.push(p);
+          // Track which sub-type each phrase belongs to — enables section routing
+          phraseIndex[p] = { daType: array.daType, daSubTypeKey: sub.key || null };
+        }
       }
     }
     daTypePhraseMap[array.daType] = [...new Set(allPhrases)];
@@ -180,6 +186,7 @@ async function _buildBridge(companyId) {
     companyId,
     routeCount: Object.keys(routes).length,
     routes,
+    phraseIndex,  // phrase → { daType, daSubTypeKey } — for UAP Layer 1 section routing
   };
 }
 
@@ -326,24 +333,20 @@ const BridgeService = {
    * getAllPhrases — Return the full phrase index for all daTypes.
    * Used by UtteranceActParser to build its matching structure once per call.
    *
-   * Returns: { [phrase]: daType }  (lowercased phrases, fastest for runtime lookup)
+   * Returns: { [phrase]: { daType, daSubTypeKey } }
+   * daSubTypeKey maps to a specific section within the KC container (section.daSubTypeKey).
+   * When daSubTypeKey is null, phrase routes to the container but no specific section.
    *
    * @param {string} companyId
-   * @returns {Promise<Object>} — { phrase: daType, ... }
+   * @returns {Promise<Object>} — { phrase: { daType, daSubTypeKey }, ... }
    */
   async getAllPhrases(companyId) {
     if (!companyId) return {};
     try {
       const bridge = await BridgeService.load(companyId);
-      if (!bridge?.routes) return {};
-
-      const index = {};
-      for (const [daType, route] of Object.entries(bridge.routes)) {
-        for (const phrase of (route.triggerPhrases || [])) {
-          index[phrase] = daType;
-        }
-      }
-      return index;
+      // Use the pre-built phraseIndex if available (v1+ bridge).
+      // Stale bridges (no phraseIndex) return {} — next invalidation/rebuild adds it.
+      return bridge?.phraseIndex || {};
     } catch (_e) {
       return {};
     }

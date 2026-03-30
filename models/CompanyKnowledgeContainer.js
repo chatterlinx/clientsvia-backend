@@ -57,6 +57,47 @@ const mongoose = require('mongoose');
 // SECTION SUB-SCHEMA — flexible labelled content blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PRE-QUALIFY OPTION SUB-SCHEMA (reused in sectionSchema)
+// ─────────────────────────────────────────────────────────────────────────────
+const preQualifyOptionSchema = new mongoose.Schema(
+  {
+    label:           { type: String, trim: true, default: '',  comment: 'Human-readable label for logs/UI. e.g. "Plan Member"' },
+    value:           { type: String, trim: true, default: '',  comment: 'Stored in discoveryNotes.temp. e.g. "plan_member"' },
+    keywords:        { type: [String], default: [],            comment: 'Caller phrases that match this option.' },
+    responseContext: { type: String, trim: true, default: '',  comment: 'Injected into Groq prompt as CALLER TYPE.' },
+  },
+  { _id: false, versionKey: false }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UPSELL ITEM SUB-SCHEMA (reused in sectionSchema)
+// ─────────────────────────────────────────────────────────────────────────────
+const upsellItemSchema = new mongoose.Schema(
+  {
+    offerScript: { type: String, trim: true, maxlength: 600, comment: 'Agent pitch — spoken verbatim.' },
+    yesScript:   { type: String, trim: true, maxlength: 400, default: '', comment: 'Agent says when caller accepts.' },
+    noScript:    { type: String, trim: true, maxlength: 400, default: '', comment: 'Agent says when caller declines.' },
+    itemKey:     { type: String, trim: true, default: '',    comment: 'Tracking key written to discoveryNotes.' },
+    price:       { type: Number, default: null,              comment: 'Optional price in dollars for tracking.' },
+  },
+  { _id: true, versionKey: false }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION SUB-SCHEMA — each section is an independently routable knowledge unit
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ROUTING:  daSubTypeKey links this section to a UAP array sub-type.
+//           When UAP resolves daSubType === section.daSubTypeKey, the agent
+//           routes here and reads ONLY this section's content.
+//           Set automatically by the Auto-label button.
+//
+// FLOW:     Agent lands on this section → pre-qualify fires (if text set)
+//           → Groq answers from this section's content → upsell fires (if items)
+//           → booking. If pre/post fields are empty, straight answer.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const sectionSchema = new mongoose.Schema(
   {
     label: {
@@ -64,20 +105,69 @@ const sectionSchema = new mongoose.Schema(
       required:  true,
       trim:      true,
       maxlength: 80,
-      comment:   'Section heading shown in UI and injected into Groq prompt (e.g. "Price", "What\'s Included", "Warranty")'
+      comment:   'Section heading (e.g. "Price", "What\'s Included", "Warranty")'
     },
     content: {
       type:      String,
       required:  true,
       trim:      true,
       maxlength: 2000,
-      comment:   'The actual knowledge content — admin can be as detailed as needed. Groq synthesises within word limit.'
+      comment:   'Knowledge content — Groq reads this and synthesises within word limit.'
     },
     order: {
       type:    Number,
       default: 0,
       comment: 'Display and injection order — lower = earlier'
-    }
+    },
+
+    // ── UAP routing key ────────────────────────────────────────────────────
+    // Set by Auto-label button. Links this section to UAPArray.daSubTypes[].key.
+    // null = section not yet classified; not reachable via UAP zero-latency routing.
+    daSubTypeKey: {
+      type:    String,
+      default: null,
+      trim:    true,
+      comment: 'UAP daSubType key that routes here (e.g. "_pricing", "_included"). Set by Auto-label.'
+    },
+
+    // ── Per-section booking action ─────────────────────────────────────────
+    // Overrides container-level bookingAction for this specific section.
+    // null = inherit container default.
+    bookingAction: {
+      type:    String,
+      enum:    ['offer_to_book', 'advisor_callback', 'none', null],
+      default: null,
+      comment: 'Per-section booking action override. null = use container default.'
+    },
+
+    // ── Pre-qualify question (optional) ───────────────────────────────────
+    // Agent asks this BEFORE answering this section's content.
+    // Caller's answer is matched to options[].keywords → responseContext injected into Groq.
+    // State tracked per-call via Redis: kc-prequal:{companyId}:{callSid}
+    // Engine: KCDiscoveryRunner GATE 3.5 / _handlePrequalResponse
+    preQualifyQuestion: {
+      text: {
+        type:      String,
+        default:   '',
+        trim:      true,
+        maxlength: 300,
+        comment:   'Question spoken by agent before answering. e.g. "Are you a plan member?"'
+      },
+      fieldKey: {
+        type:    String,
+        default: 'preQualifyAnswer',
+        trim:    true,
+        comment: 'Key written to discoveryNotes.temp. Keep unique across sections.'
+      },
+      options: { type: [preQualifyOptionSchema], default: [] },
+    },
+
+    // ── Upsell chain (optional) ────────────────────────────────────────────
+    // Sequential add-on offers pitched AFTER Groq returns BOOKING_READY.
+    // Each offer fires on its own turn. YES → next. Chain exhausted → booking.
+    // State tracked per-call via Redis: kc-upsell:{companyId}:{callSid}
+    // Engine: KCDiscoveryRunner GATE 4.5 / _handleUpsellResponse
+    upsellChain: { type: [upsellItemSchema], default: [] },
   },
   { _id: true, versionKey: false }
 );
@@ -214,89 +304,6 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       max:     6,
       comment: 'Max SPFUQ follow-up turns (pronoun resolution depth). null = system default (4). Options: 2 Short, 4 Standard, 6 Deep.'
     },
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PRE-QUALIFY QUESTION — ask one question BEFORE Groq answers
-    // ─────────────────────────────────────────────────────────────────────────
-    // When set, the agent asks this question the FIRST TIME this container is
-    // matched for a given call. The caller's answer is injected into Groq's
-    // system prompt as CALLER TYPE: so Groq calibrates its response correctly.
-    //
-    // Example question: "Are you a plan member or calling for the first time?"
-    // Options map caller keywords → a responseContext string that tells Groq
-    // which pricing tier, service tier, or caller type to address.
-    //
-    // State tracked per-call via Redis key: kc-prequal:{companyId}:{callSid}
-    // Answer written to discoveryNotes.temp[fieldKey].
-    // Engine: KCDiscoveryRunner GATE 3.5 / _handlePrequalResponse
-    // ─────────────────────────────────────────────────────────────────────────
-    preQualifyQuestion: {
-      text: {
-        type:      String,
-        default:   '',
-        trim:      true,
-        maxlength: 300,
-        comment:   'Question the agent asks before Groq answers. e.g. "Are you a plan member or first-time caller?"'
-      },
-      fieldKey: {
-        type:    String,
-        default: 'preQualifyAnswer',
-        trim:    true,
-        comment: 'Key written to discoveryNotes.temp. e.g. "preQualifyAnswer". Use unique keys across containers.'
-      },
-      options: [{
-        label:           { type: String, trim: true,     comment: 'Human-readable label for logs/UI. e.g. "Plan Member"' },
-        value:           { type: String, trim: true,     comment: 'Stored in discoveryNotes.temp. e.g. "plan_member"' },
-        keywords:        { type: [String], default: [],  comment: 'Caller phrases that match this option. e.g. ["member", "plan", "maintenance plan"]' },
-        responseContext: { type: String, trim: true,     comment: 'Injected into Groq prompt. e.g. "Caller IS a plan member — use plan-member pricing."' }
-      }]
-    },
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // UPSELL CHAIN — sequential add-on offers fired after BOOKING_READY
-    // ─────────────────────────────────────────────────────────────────────────
-    // When upsellChain[] has items and Groq returns BOOKING_READY, the engine
-    // works through this list one offer per call turn.
-    //   YES → move to next offer in chain. Chain exhausted → booking proceeds.
-    //   NO  → skip to next offer or proceed to booking.
-    //
-    // Outcomes written to discoveryNotes.temp.upsellOffers[].
-    // callerProfile.upsellHistory[] stamped by CustomerProfileService at call end.
-    // buyerProfile tag (impulse_buyer / moderate / never_buys) computed from history.
-    //
-    // State tracked per-call via Redis key: kc-upsell:{companyId}:{callSid}
-    // Engine: KCDiscoveryRunner GATE 4.5 / _handleUpsellResponse
-    // ─────────────────────────────────────────────────────────────────────────
-    upsellChain: [{
-      offerScript: {
-        type:      String,
-        trim:      true,
-        maxlength: 600,
-        comment:   'Agent pitch — spoken verbatim. e.g. "While I have you — would you like to add a UV light special for $189 today?"'
-      },
-      yesScript: {
-        type:      String,
-        trim:      true,
-        maxlength: 400,
-        comment:   'Agent says when caller accepts. e.g. "Great choice — I\'ve noted that on your appointment."'
-      },
-      noScript: {
-        type:      String,
-        trim:      true,
-        maxlength: 400,
-        comment:   'Agent says when caller declines. Leave blank to skip to next offer silently.'
-      },
-      itemKey: {
-        type:    String,
-        trim:    true,
-        comment: 'Tracking key written to discoveryNotes. e.g. "uv_light", "duct_cleaning"'
-      },
-      price: {
-        type:    Number,
-        default: null,
-        comment: 'Optional price in dollars for discoveryNotes tracking. e.g. 189'
-      }
-    }],
 
     // ─────────────────────────────────────────────────────────────────────────
     // SEMANTIC EMBEDDING — for keyword health / conflict detection
