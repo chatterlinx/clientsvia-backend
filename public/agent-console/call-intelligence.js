@@ -657,9 +657,25 @@ function renderTurnBlock(t, companyId) {
            </span>
          </div>`
       : '';
+    // Pricing interceptor row — fired BEFORE KC, response came from Pricing Items config
+    const pricingUrl = `/agent-console/pricing.html?companyId=${encodeURIComponent(companyId)}`;
+    const pricingRow = t.sourceKey === 'PRICING_INTERCEPTOR'
+      ? `<div class="pipe-row">
+           <span class="pr-stage">Pricing Source</span>
+           <span class="pr-icon">→</span>
+           <span class="pr-detail">
+             <a href="${esc(pricingUrl)}" target="_blank"
+                style="font-size:11px;background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:4px;border:1px solid #fcd34d;text-decoration:none;font-weight:600;">
+               ✎ Edit Pricing Items
+             </a>
+             <span style="margin-left:8px;font-size:11px;color:var(--tx-secondary);">Tier 1 intercept — response built from your Pricing Items config, not KC</span>
+           </span>
+         </div>`
+      : '';
     const pipeRows = `
       <div class="pipe-row"><span class="pr-stage">Provenance type</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
       <div class="pipe-row"><span class="pr-stage">Path / handler</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
+      ${pricingRow}
       ${kcCardRow}
       ${t.kind ? `<div class="pipe-row"><span class="pr-stage">Kind</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.kind)}</span></div>` : ''}
       ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
