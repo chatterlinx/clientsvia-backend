@@ -2810,6 +2810,31 @@ router.post('/handle-speech', async (req, res) => {
     confidence = parseFloat(req.body.Confidence || '0');
     const companyId = company._id.toString();
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🧪 AGENT LAB HOOK 1 — Match inbound call to active test session
+    // Caller registers their phone in Redis before dialing; here we link callSid.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (redisClient && callSid && req.body.From) {
+      try {
+        const _labNormPhone = (req.body.From + '').replace(/\D/g, '');
+        const _labSessionId = await redisClient.get(`agentlab:phone:${companyId}:${_labNormPhone}`);
+        if (_labSessionId) {
+          // Link callSid → sessionId so Hook 2 can emit turns
+          await redisClient.set(`agentlab:callsid:${callSid}`, _labSessionId, 'EX', 14400);
+          // Update session status to ACTIVE and record callSid
+          const _labRaw = await redisClient.get(`agentlab:session:${companyId}:${_labSessionId}`);
+          if (_labRaw) {
+            const _labSession = JSON.parse(_labRaw);
+            _labSession.status  = 'ACTIVE';
+            _labSession.callSid = callSid;
+            await redisClient.set(`agentlab:session:${companyId}:${_labSessionId}`, JSON.stringify(_labSession), 'EX', 14400);
+          }
+        }
+      } catch (_labErr) {
+        // Non-fatal — lab hook failure must never affect live call
+      }
+    }
+
     // Load low confidence settings from LLMSettings (with legacy fallback)
     const lcSettings = await LLM0ControlsLoader.loadLowConfidenceSettings(companyId);
     
@@ -5803,6 +5828,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Strip the hardcoded "Ok."/"Okay." ackWord that Agent2DiscoveryRunner prepends by default.
       // OpenerEngine already skips Agent2 paths so nothing replaces it — bare response sounds more natural.
       if (responseText) responseText = responseText.replace(/^(Ok|Okay)\.\s+/i, '').trim();
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 🧪 AGENT LAB HOOK 2 — Emit per-turn data to Redis for live X-ray
+      // Only fires when this callSid is tagged as an active test session.
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (redisClient && callSid) {
+        try {
+          const _labSessionId = await redisClient.get(`agentlab:callsid:${callSid}`);
+          if (_labSessionId) {
+            const _labTurn = JSON.stringify({
+              turnNumber:  turnNumber || null,
+              speechText:  effectiveSpeechText || speechText || '',
+              responseText: (responseText || '').slice(0, 400),
+              matchSource: runtimeResult?.matchSource || null,
+              lane:        runtimeResult?.lane || persistedState?.lane || null,
+              kcTitle:     runtimeResult?.triggerCard?.label || runtimeResult?.kcTitle || null,
+              kcId:        runtimeResult?.triggerCard?.id   || runtimeResult?.kcId   || null,
+              noKcMatch:   (runtimeResult?.matchSource === 'KC_GRACEFUL_ACK' || runtimeResult?.matchSource === 'KC_LLM_FALLBACK'),
+              ts:          new Date().toISOString(),
+            });
+            await redisClient.rpush(`agentlab:turns:${_labSessionId}`, _labTurn);
+            await redisClient.expire(`agentlab:turns:${_labSessionId}`, 14400);
+          }
+        } catch (_labErr) {
+          // Non-fatal — lab hook failure must never affect live call
+        }
+      }
 
       // ═══════════════════════════════════════════════════════════════════════════
       // 📊 UPDATE CALL SUMMARY TURN COUNT

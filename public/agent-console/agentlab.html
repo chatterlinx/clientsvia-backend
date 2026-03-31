@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Lab</title>
+<script src="/agent-console/lib/auth.js"></script>
+<style>
+/* ══════════════════════════════════════════════════════════════════════════════
+   AGENT LAB — Premium Dark Theme
+   ══════════════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg:          #000000;
+  --bg-surface:  #0a0a0a;
+  --bg-card:     #111111;
+  --bg-card2:    #18181b;
+  --border:      #27272a;
+  --border-glow: #7c3aed44;
+  --text:        #fafafa;
+  --text-muted:  #71717a;
+  --text-dim:    #3f3f46;
+  --purple:      #7c3aed;
+  --purple-light:#a78bfa;
+  --purple-glow: rgba(124,58,237,.15);
+  --green:       #22c55e;
+  --green-dim:   rgba(34,197,94,.12);
+  --amber:       #f59e0b;
+  --amber-dim:   rgba(245,158,11,.12);
+  --red:         #ef4444;
+  --red-dim:     rgba(239,68,68,.12);
+  --blue:        #3b82f6;
+  --blue-dim:    rgba(59,130,246,.12);
+  --cyan:        #06b6d4;
+  --radius:      12px;
+  --radius-sm:   8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbars ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.header {
+  position: sticky; top: 0; z-index: 200;
+  display: flex; align-items: center; gap: 16px;
+  height: 60px; padding: 0 28px;
+  background: rgba(0,0,0,.9); backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.header-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 700; letter-spacing: -.3px; color: var(--text);
+}
+.header-logo .lab-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--purple-glow); border: 1px solid var(--border-glow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+}
+.header-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 4px;
+  background: var(--purple-glow); border: 1px solid var(--border-glow); color: var(--purple-light);
+}
+.header-company { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+.btn-back {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-muted); text-decoration: none;
+  padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: transparent;
+  cursor: pointer; transition: all .15s;
+}
+.btn-back:hover { color: var(--text); border-color: #52525b; background: var(--bg-card); }
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr 340px;
+  grid-template-rows: auto 1fr;
+  min-height: calc(100vh - 60px);
+  gap: 0;
+}
+
+/* ── Panel base ─────────────────────────────────────────────────────────────── */
+.panel {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.panel:last-child { border-right: none; }
+.panel-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.panel-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* ── Center panel ───────────────────────────────────────────────────────────── */
+.panel-center { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+/* ═══ DIFFICULTY DIAL ══════════════════════════════════════════════════════════ */
+.dial-section {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 24px;
+}
+.dial-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+.dial-track {
+  display: flex; gap: 4px; margin-bottom: 10px;
+}
+.dial-pip {
+  flex: 1; height: 32px; border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; letter-spacing: .5px;
+  color: var(--text-dim);
+  transition: all .15s;
+  position: relative;
+  overflow: hidden;
+}
+.dial-pip::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, transparent 60%, rgba(255,255,255,.03));
+}
+.dial-pip:hover { border-color: #52525b; color: var(--text-muted); }
+.dial-pip.active {
+  border-color: transparent; color: var(--text);
+  font-weight: 800;
+}
+.dial-pip[data-level="1"].active  { background: linear-gradient(135deg,#166534,#15803d); border-color: #16a34a44; }
+.dial-pip[data-level="2"].active  { background: linear-gradient(135deg,#1e40af,#1d4ed8); border-color: #3b82f644; }
+.dial-pip[data-level="3"].active  { background: linear-gradient(135deg,#6d28d9,#7c3aed); border-color: #7c3aed44; }
+.dial-pip[data-level="4"].active  { background: linear-gradient(135deg,#92400e,#b45309); border-color: #f59e0b44; }
+.dial-pip[data-level="5"].active  { background: linear-gradient(135deg,#7f1d1d,#991b1b); border-color: #ef444444; }
+.dial-pip[data-level="6"].active  { background: linear-gradient(135deg,#1c1c1c,#2d0a0a); border-color: #ef444466; box-shadow: 0 0 12px rgba(239,68,68,.2); }
+
+.dial-desc {
+  font-size: 11px; color: var(--text-muted); line-height: 1.5;
+  min-height: 18px;
+}
+.dial-desc b { color: var(--text); }
+
+/* ═══ SCENARIO CARDS ═══════════════════════════════════════════════════════════ */
+.scenario-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.btn-gen {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 700;
+  background: linear-gradient(135deg, var(--purple), #6d28d9);
+  border: 1px solid var(--border-glow); color: #fff;
+  cursor: pointer; transition: all .2s;
+  box-shadow: 0 0 20px rgba(124,58,237,.25);
+}
+.btn-gen:hover { transform: translateY(-1px); box-shadow: 0 0 28px rgba(124,58,237,.4); }
+.btn-gen:active { transform: translateY(0); }
+.btn-gen:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.gen-count {
+  font-size: 11px; color: var(--text-muted);
+  margin-left: auto;
+}
+
+.scenarios-list {
+  flex: 1; overflow-y: auto;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.scenario-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; padding: 60px 20px;
+  color: var(--text-dim); text-align: center;
+}
+.scenario-empty .empty-icon { font-size: 42px; margin-bottom: 14px; opacity: .4; }
+.scenario-empty p { font-size: 13px; line-height: 1.6; }
+
+.scenario-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  cursor: pointer; transition: all .15s;
+  position: relative; overflow: hidden;
+}
+.scenario-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--border); border-radius: 3px 0 0 3px;
+  transition: background .15s;
+}
+.scenario-card:hover { border-color: #3f3f46; background: var(--bg-card2); }
+.scenario-card.active::before { background: var(--purple); }
+.scenario-card.active { border-color: var(--border-glow); background: var(--bg-card2); }
+
+.sc-top {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  margin-bottom: 8px;
+}
+.sc-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.sc-diff-badge {
+  flex-shrink: 0;
+  font-size: 9px; font-weight: 800; letter-spacing: .5px; padding: 3px 7px;
+  border-radius: 4px; text-transform: uppercase;
+}
+.diff-1 { background: #14532d; color: #86efac; border: 1px solid #16a34a33; }
+.diff-2 { background: #1e3a8a; color: #93c5fd; border: 1px solid #3b82f633; }
+.diff-3 { background: #4c1d95; color: #c4b5fd; border: 1px solid #7c3aed33; }
+.diff-4 { background: #451a03; color: #fcd34d; border: 1px solid #f59e0b33; }
+.diff-5 { background: #450a0a; color: #fca5a5; border: 1px solid #ef444433; }
+.diff-6 { background: #1c0000; color: #ff6b6b; border: 1px solid #ef444466; }
+
+.sc-persona { font-size: 11px; color: var(--purple-light); margin-bottom: 5px; }
+.sc-situation { font-size: 11px; color: var(--text-muted); line-height: 1.45; }
+.sc-opening {
+  margin-top: 10px; padding: 9px 12px; border-radius: 8px;
+  background: rgba(124,58,237,.08); border: 1px solid var(--border-glow);
+  font-size: 12px; font-style: italic; color: #d4d4d8; line-height: 1.5;
+}
+.sc-opening::before { content: '"'; color: var(--purple-light); font-size: 16px; font-style: normal; margin-right: 2px; }
+.sc-opening::after  { content: '"'; color: var(--purple-light); font-size: 16px; font-style: normal; margin-left: 2px; }
+.sc-meta {
+  display: flex; gap: 10px; margin-top: 9px; flex-wrap: wrap;
+}
+.sc-meta-chip {
+  font-size: 10px; color: var(--text-muted); background: var(--bg-card2);
+  border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px;
+}
+.sc-meta-chip.kc { color: var(--cyan); border-color: rgba(6,182,212,.2); background: rgba(6,182,212,.06); }
+
+/* ═══ CENTER — CALL SETUP ══════════════════════════════════════════════════════ */
+.call-setup {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 28px;
+}
+.call-setup-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 16px;
+}
+
+.phone-display {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 14px;
+  position: relative;
+}
+.phone-display-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 6px;
+}
+.phone-number-big {
+  font-size: 26px; font-weight: 700; letter-spacing: .5px;
+  color: var(--text); font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.phone-glow {
+  position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--green-dim); border: 1px solid rgba(34,197,94,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.phone-hint {
+  font-size: 11px; color: var(--text-muted); margin-top: 5px;
+}
+
+.caller-row {
+  display: flex; gap: 10px; align-items: flex-end; margin-bottom: 14px;
+}
+.field-group { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.field-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.field-input {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  font-size: 13px; color: var(--text); outline: none;
+  transition: border-color .15s;
+}
+.field-input::placeholder { color: var(--text-dim); }
+.field-input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,58,237,.12); }
+
+.channel-tabs {
+  display: flex; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 3px; gap: 3px; margin-bottom: 14px;
+}
+.channel-tab {
+  flex: 1; padding: 8px 12px; border-radius: 6px;
+  font-size: 12px; font-weight: 600; text-align: center;
+  cursor: pointer; transition: all .15s; color: var(--text-muted);
+  border: none; background: transparent;
+}
+.channel-tab.active {
+  background: var(--bg-card2); color: var(--text); border: 1px solid var(--border);
+}
+.channel-tab:hover:not(.active) { color: var(--text); }
+
+.btn-start-session {
+  width: 100%; padding: 12px 20px;
+  border-radius: var(--radius-sm); border: none;
+  font-size: 14px; font-weight: 700; letter-spacing: .2px;
+  cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-start-session.idle {
+  background: linear-gradient(135deg, var(--purple), #5b21b6);
+  color: #fff; box-shadow: 0 0 24px rgba(124,58,237,.3);
+}
+.btn-start-session.idle:hover { box-shadow: 0 0 36px rgba(124,58,237,.5); transform: translateY(-1px); }
+.btn-start-session.active-state {
+  background: var(--red-dim); border: 1px solid rgba(239,68,68,.3); color: #fca5a5;
+}
+.btn-start-session:disabled { opacity: .4; cursor: not-allowed; transform: none !important; }
+
+/* Status bar */
+.status-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 28px;
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--text-muted);
+  min-height: 40px;
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.status-dot.idle    { background: var(--text-dim); }
+.status-dot.waiting { background: var(--amber); animation: blink 1s infinite; }
+.status-dot.active  { background: var(--green); animation: pulse-green 1.5s infinite; }
+.status-dot.ended   { background: var(--text-dim); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+
+/* ═══ CENTER — LIVE FEED ═══════════════════════════════════════════════════════ */
+.live-feed {
+  flex: 1; overflow-y: auto;
+  padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.feed-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; padding: 60px 20px;
+  color: var(--text-dim); text-align: center;
+}
+.feed-empty .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: .25; }
+.feed-empty h3 { font-size: 15px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+.feed-empty p { font-size: 12px; line-height: 1.7; max-width: 260px; }
+
+.turn-card {
+  border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border);
+  animation: slideIn .2s ease-out;
+}
+@keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+.turn-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-card2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+}
+.turn-num { color: var(--text-dim); font-weight: 700; }
+
+.turn-caller {
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.turn-caller-label {
+  font-size: 9px; font-weight: 700; letter-spacing: .7px; color: var(--purple-light);
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.turn-caller-text { font-size: 13px; color: var(--text); line-height: 1.45; }
+
+.turn-agent {
+  padding: 10px 12px;
+  background: var(--bg-card);
+}
+.turn-agent-label {
+  font-size: 9px; font-weight: 700; letter-spacing: .7px; color: var(--green);
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.turn-agent-text { font-size: 13px; color: var(--text); line-height: 1.45; }
+
+.turn-routing {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-card2);
+  border-top: 1px solid var(--border);
+}
+.r-chip {
+  font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 4px;
+}
+.r-chip.kc { background: rgba(6,182,212,.1); border: 1px solid rgba(6,182,212,.25); color: var(--cyan); }
+.r-chip.lane { background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.25); color: var(--purple-light); }
+.r-chip.source { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); }
+.r-chip.miss { background: var(--red-dim); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+
+/* ═══ RIGHT PANEL — ANALYSIS ══════════════════════════════════════════════════ */
+.analysis-section { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.metric-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.metric-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.metric-label { font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--text-muted); }
+.metric-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; color: var(--text); }
+.metric-sub { font-size: 11px; color: var(--text-muted); }
+.metric-icon { font-size: 22px; opacity: .6; }
+
+.score-ring {
+  display: flex; align-items: center; justify-content: center;
+  width: 54px; height: 54px; border-radius: 50%;
+  font-size: 20px; font-weight: 900; border: 3px solid;
+  flex-shrink: 0;
+}
+.score-a { color: var(--green); border-color: rgba(34,197,94,.4); }
+.score-b { color: var(--blue); border-color: rgba(59,130,246,.4); }
+.score-c { color: var(--amber); border-color: rgba(245,158,11,.4); }
+.score-d { color: #f97316; border-color: rgba(249,115,22,.4); }
+.score-f { color: var(--red); border-color: rgba(239,68,68,.4); }
+
+.analysis-text {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.analysis-text-header { font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+.analysis-text-body { font-size: 12px; color: var(--text-muted); line-height: 1.65; white-space: pre-wrap; }
+
+.btn-end-session {
+  width: 100%; padding: 11px 16px;
+  border-radius: var(--radius-sm); border: 1px solid rgba(239,68,68,.3);
+  background: var(--red-dim); color: #fca5a5;
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s;
+}
+.btn-end-session:hover { background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.5); }
+.btn-end-session:disabled { opacity: .3; cursor: not-allowed; }
+
+.btn-view-intel {
+  width: 100%; padding: 11px 16px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-muted);
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  text-decoration: none;
+}
+.btn-view-intel:hover { border-color: #52525b; color: var(--text); background: var(--bg-card2); }
+
+.btn-new-session {
+  width: 100%; padding: 11px 16px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-glow);
+  background: var(--purple-glow); color: var(--purple-light);
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s;
+}
+.btn-new-session:hover { background: rgba(124,58,237,.2); }
+
+.todo-chip-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.todo-chip {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: var(--radius-sm);
+  background: var(--amber-dim); border: 1px solid rgba(245,158,11,.3); color: var(--amber);
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────────── */
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.2);
+  border-top-color: #fff; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ───────────────────────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.toast {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 10px;
+  font-size: 12px; font-weight: 600;
+  background: #18181b; border: 1px solid var(--border); color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  animation: toastIn .2s ease-out;
+}
+@keyframes toastIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+.toast.success { border-color: rgba(34,197,94,.4); }
+.toast.error   { border-color: rgba(239,68,68,.4); color: #fca5a5; }
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 280px 1fr 280px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-logo">
+    <div class="lab-icon">🧪</div>
+    Agent Lab
+    <span class="header-badge">Beta</span>
+  </div>
+  <span id="headerCompany" class="header-company">—</span>
+  <a href="javascript:void(0)" class="btn-back" onclick="goBack()">← Back to KBs</a>
+</header>
+
+<!-- ── Main Layout ─────────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- ═══ LEFT PANEL: Difficulty + Scenarios ═══════════════════════════════════ -->
+  <div class="panel" id="panelLeft">
+
+    <!-- Difficulty Dial -->
+    <div class="dial-section">
+      <div class="dial-label">
+        <span>Difficulty</span>
+      </div>
+      <div class="dial-track" id="dialTrack">
+        <div class="dial-pip active" data-level="1" onclick="setDifficulty(1)">1</div>
+        <div class="dial-pip"        data-level="2" onclick="setDifficulty(2)">2</div>
+        <div class="dial-pip"        data-level="3" onclick="setDifficulty(3)">3</div>
+        <div class="dial-pip"        data-level="4" onclick="setDifficulty(4)">4</div>
+        <div class="dial-pip"        data-level="5" onclick="setDifficulty(5)">5</div>
+        <div class="dial-pip"        data-level="6" onclick="setDifficulty(6)">6</div>
+      </div>
+      <div class="dial-desc" id="dialDesc">
+        <b>VERIFY</b> — Direct questions straight from loaded KCs
+      </div>
+    </div>
+
+    <!-- Scenario Toolbar -->
+    <div class="scenario-toolbar">
+      <div class="panel-title">Scenarios</div>
+      <button class="btn-gen" id="btnGenerate" onclick="generateScenarios()">
+        <span id="genIcon">✦</span>
+        <span id="genLabel">Generate</span>
+      </button>
+      <span class="gen-count" id="genCount"></span>
+    </div>
+
+    <!-- Scenario Cards -->
+    <div class="scenarios-list" id="scenariosList">
+      <div class="scenario-empty" id="scenarioEmpty">
+        <div class="empty-icon">🎬</div>
+        <p>Set your difficulty level, then generate AI-crafted test scenarios for your trade.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CENTER PANEL: Call Setup + Live Feed ═════════════════════════════════ -->
+  <div class="panel-center" id="panelCenter">
+
+    <!-- Call Setup -->
+    <div class="call-setup" id="callSetup">
+      <div class="call-setup-title">Call Setup</div>
+
+      <!-- Company phone display -->
+      <div class="phone-display" id="phoneDisplay">
+        <div class="phone-display-label">Dial this number from your cell</div>
+        <div class="phone-number-big" id="companyPhoneDisplay">—</div>
+        <div class="phone-hint">Your company's Twilio number — the agent answers here</div>
+        <div class="phone-glow">📞</div>
+      </div>
+
+      <!-- Caller phone + channel -->
+      <div class="caller-row">
+        <div class="field-group">
+          <label class="field-label">Your cell phone</label>
+          <input type="tel" id="callerPhone" class="field-input"
+            placeholder="+1 555 000 0000"
+            title="Enter the cell number you'll call from so the lab can identify your call">
+        </div>
+      </div>
+
+      <div class="channel-tabs" id="channelTabs">
+        <button class="channel-tab active" data-channel="voice" onclick="setChannel('voice')">📞 Voice Call</button>
+        <button class="channel-tab"        data-channel="sms"   onclick="setChannel('sms')">💬 SMS Text</button>
+      </div>
+
+      <button class="btn-start-session idle" id="btnStartSession" onclick="startSession()">
+        ▶ Start Test Session
+      </button>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar" id="statusBar">
+      <div class="status-dot idle" id="statusDot"></div>
+      <span id="statusText">Ready — configure a scenario and start a session</span>
+    </div>
+
+    <!-- Live Feed -->
+    <div class="live-feed" id="liveFeed">
+      <div class="feed-empty" id="feedEmpty">
+        <div class="empty-icon">📡</div>
+        <h3>Live X-Ray</h3>
+        <p>Start a session, then call your Twilio number. Each turn appears here in real-time with full KC routing details.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT PANEL: Analysis ════════════════════════════════════════════════ -->
+  <div class="panel" id="panelRight">
+    <div class="panel-header">
+      <div class="panel-title">Analysis</div>
+    </div>
+    <div class="panel-body">
+      <div class="analysis-section" id="analysisSection">
+
+        <!-- Metrics -->
+        <div class="metric-card">
+          <div class="metric-top">
+            <div class="metric-label">Turns</div>
+            <div class="metric-icon">🔁</div>
+          </div>
+          <div class="metric-value" id="metricTurns">—</div>
+          <div class="metric-sub" id="metricTurnsSub">No session active</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-top">
+            <div class="metric-label">KC Hit Rate</div>
+            <div class="metric-icon">🎯</div>
+          </div>
+          <div class="metric-value" id="metricHitRate">—</div>
+          <div class="metric-sub" id="metricHitRateSub">Turns matched to a knowledge card</div>
+        </div>
+
+        <!-- Score ring (visible after session ends) -->
+        <div class="metric-card" id="scoreCard" style="display:none">
+          <div class="metric-top">
+            <div>
+              <div class="metric-label">Performance</div>
+              <div class="metric-value" id="metricGrade" style="font-size:15px;margin-top:4px">—</div>
+            </div>
+            <div class="score-ring score-a" id="scoreRing">—</div>
+          </div>
+        </div>
+
+        <!-- Todos created -->
+        <div class="metric-card" id="todosCard" style="display:none">
+          <div class="metric-top">
+            <div class="metric-label">KC Todos Created</div>
+            <div class="metric-icon">📋</div>
+          </div>
+          <div class="metric-value" id="metricTodos">0</div>
+          <div class="metric-sub">Test gaps → KC Intelligence queue</div>
+          <div class="todo-chip-row" id="todoChips" style="margin-top:10px;display:none"></div>
+        </div>
+
+        <!-- Analysis text -->
+        <div class="analysis-text" id="analysisTextCard" style="display:none">
+          <div class="analysis-text-header">
+            <span>✦</span>
+            <span>AI Review</span>
+          </div>
+          <div class="analysis-text-body" id="analysisTextBody">—</div>
+        </div>
+
+        <!-- Action buttons -->
+        <button class="btn-end-session" id="btnEndSession" onclick="endSession()" disabled>
+          ■ End Session &amp; Analyze
+        </button>
+
+        <a href="javascript:void(0)" class="btn-view-intel" id="btnViewIntel" onclick="viewIntelligence()" style="display:none">
+          🩺 View KC Intelligence
+        </a>
+
+        <button class="btn-new-session" id="btnNewSession" onclick="newSession()" style="display:none">
+          ✦ New Session
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════════
+const S = {
+  companyId:      null,
+  companyName:    null,
+  companyPhone:   null,
+  difficulty:     1,
+  channel:        'voice',
+  scenarios:      [],
+  activeScenario: null,
+  session:        null,
+  pollTimer:      null,
+  pollIndex:      0,
+  turns:          [],
+  ended:          false,
+};
+
+const DIFF_META = {
+  1: { label: 'VERIFY',        desc: '<b>VERIFY</b> — Direct questions straight from loaded KCs'               },
+  2: { label: 'REAL LANGUAGE', desc: '<b>REAL LANGUAGE</b> — Casual phrasing, regional accents, imprecise asks' },
+  3: { label: 'COMPLEX',       desc: '<b>COMPLEX</b> — Multi-part questions, comparisons, edge cases'           },
+  4: { label: 'TOUGH',         desc: '<b>TOUGH</b> — Skeptical callers, price pressure, competitor mentions'    },
+  5: { label: 'BLIND',         desc: '<b>BLIND</b> — Adjacent topics — the agent must know what it doesn\'t know' },
+  6: { label: 'REALITY',       desc: '<b>REALITY</b> — Real-call chaos: angry callers, confusion, off-topic asks' },
+};
+
+const API = companyId => `/api/admin/agent2/company/${companyId}/agentlab`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  S.companyId  = params.get('companyId');
+  if (!S.companyId) { _toast('No companyId in URL', 'error'); return; }
+
+  await _loadCompany();
+  _updateDialDesc();
+});
+
+async function _loadCompany() {
+  try {
+    const token = window.AgentConsoleAuth?.getToken?.() || localStorage.getItem('authToken') || '';
+    const res   = await fetch(`/api/admin/company/${S.companyId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('fetch failed');
+    const data  = await res.json();
+    const co    = data.company || data.data || data;
+    S.companyName  = co.companyName || 'Company';
+    S.companyPhone = co.twilioConfig?.phoneNumber || null;
+
+    document.getElementById('headerCompany').textContent = S.companyName;
+    document.getElementById('companyPhoneDisplay').textContent = S.companyPhone
+      ? _formatPhone(S.companyPhone)
+      : 'No Twilio number configured';
+  } catch (err) {
+    // Try alternate endpoint
+    try {
+      const token = window.AgentConsoleAuth?.getToken?.() || localStorage.getItem('authToken') || '';
+      const res   = await fetch(`/api/company/${S.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data  = await res.json();
+      const co    = data.company || data.data || data;
+      S.companyName  = co?.companyName || 'Company';
+      S.companyPhone = co?.twilioConfig?.phoneNumber || null;
+      document.getElementById('headerCompany').textContent = S.companyName;
+      document.getElementById('companyPhoneDisplay').textContent = S.companyPhone
+        ? _formatPhone(S.companyPhone)
+        : 'No Twilio number configured';
+    } catch {
+      document.getElementById('companyPhoneDisplay').textContent = 'Could not load company';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIFFICULTY DIAL
+// ═══════════════════════════════════════════════════════════════════════════════
+function setDifficulty(level) {
+  S.difficulty = level;
+  document.querySelectorAll('.dial-pip').forEach(p => {
+    p.classList.toggle('active', +p.dataset.level === level);
+  });
+  _updateDialDesc();
+}
+
+function _updateDialDesc() {
+  document.getElementById('dialDesc').innerHTML = DIFF_META[S.difficulty]?.desc || '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHANNEL TABS
+// ═══════════════════════════════════════════════════════════════════════════════
+function setChannel(ch) {
+  S.channel = ch;
+  document.querySelectorAll('.channel-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.channel === ch);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCENARIO GENERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+async function generateScenarios() {
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  document.getElementById('genIcon').innerHTML = '<div class="spinner"></div>';
+  document.getElementById('genLabel').textContent = 'Generating…';
+  document.getElementById('scenarioEmpty').style.display = 'none';
+
+  try {
+    const token = _getToken();
+    const res   = await fetch(`${API(S.companyId)}/scenarios`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ difficulty: S.difficulty, count: 3 }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Generation failed');
+
+    S.scenarios      = data.scenarios || [];
+    S.activeScenario = null;
+    document.getElementById('genCount').textContent = `${S.scenarios.length} ready`;
+    _renderScenarios();
+    _toast(`${S.scenarios.length} ${data.difficultyLabel} scenarios generated`, 'success');
+  } catch (err) {
+    _toast(err.message, 'error');
+    document.getElementById('scenarioEmpty').style.display = 'flex';
+  } finally {
+    btn.disabled = false;
+    document.getElementById('genIcon').textContent = '✦';
+    document.getElementById('genLabel').textContent = 'Generate';
+  }
+}
+
+function _renderScenarios() {
+  const list  = document.getElementById('scenariosList');
+  const empty = document.getElementById('scenarioEmpty');
+  empty.style.display = S.scenarios.length ? 'none' : 'flex';
+
+  // Remove old cards
+  list.querySelectorAll('.scenario-card').forEach(c => c.remove());
+
+  S.scenarios.forEach((sc, i) => {
+    const card = document.createElement('div');
+    card.className = 'scenario-card' + (S.activeScenario === i ? ' active' : '');
+    card.onclick = () => selectScenario(i);
+
+    const diff = sc.difficulty || S.difficulty;
+    card.innerHTML = `
+      <div class="sc-top">
+        <div class="sc-title">${_esc(sc.title || `Scenario ${i+1}`)}</div>
+        <div class="sc-diff-badge diff-${diff}">${DIFF_META[diff]?.label || diff}</div>
+      </div>
+      <div class="sc-persona">🎭 ${_esc(sc.persona || 'Caller')}</div>
+      <div class="sc-situation">${_esc(sc.situation || '')}</div>
+      <div class="sc-opening">${_esc(sc.opening || '')}</div>
+      <div class="sc-meta">
+        ${sc.expected_kc ? `<div class="sc-meta-chip kc">🎯 ${_esc(sc.expected_kc)}</div>` : '<div class="sc-meta-chip">No KC target</div>'}
+        ${(sc.follow_ups || []).length ? `<div class="sc-meta-chip">+${sc.follow_ups.length} follow-up${sc.follow_ups.length>1?'s':''}</div>` : ''}
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function selectScenario(i) {
+  S.activeScenario = i;
+  document.querySelectorAll('.scenario-card').forEach((c, idx) => {
+    c.classList.toggle('active', idx === i);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SESSION MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+async function startSession() {
+  const callerPhone = document.getElementById('callerPhone').value.trim();
+  if (!callerPhone) {
+    _toast('Enter your cell phone number first', 'error'); return;
+  }
+  if (!S.companyPhone && S.channel === 'voice') {
+    _toast('Company has no Twilio number configured', 'error'); return;
+  }
+
+  const btn = document.getElementById('btnStartSession');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Starting…';
+
+  try {
+    const sc = S.activeScenario !== null ? S.scenarios[S.activeScenario] : null;
+    const token = _getToken();
+    const res = await fetch(`${API(S.companyId)}/session/start`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callerPhone,
+        channel:       S.channel,
+        difficulty:    S.difficulty,
+        scenarioId:    sc?.id   || null,
+        scenarioTitle: sc?.title || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to start session');
+
+    S.session   = data;
+    S.pollIndex = 0;
+    S.turns     = [];
+    S.ended     = false;
+
+    // Update UI
+    _setStatus('waiting', `Waiting for ${S.channel === 'voice' ? 'your call' : 'your text'} — ${S.channel === 'voice' ? 'Dial' : 'Text'} ${_formatPhone(S.companyPhone || '')}`);
+    btn.className = 'btn-start-session active-state';
+    btn.disabled  = false;
+    btn.innerHTML = '■ Session Active';
+    btn.onclick   = null;
+
+    document.getElementById('callSetup').style.opacity = '.6';
+    document.getElementById('callSetup').style.pointerEvents = 'none';
+    document.getElementById('btnEndSession').disabled = false;
+
+    // Clear feed
+    document.getElementById('feedEmpty').style.display = 'flex';
+    document.getElementById('feedEmpty').querySelector('h3').textContent = `Waiting for ${S.channel === 'voice' ? 'call' : 'SMS'}…`;
+    document.getElementById('feedEmpty').querySelector('p').textContent =
+      S.channel === 'voice'
+        ? `Call ${_formatPhone(S.companyPhone || '')} from ${callerPhone} — turns appear here automatically.`
+        : `Text ${_formatPhone(S.companyPhone || '')} from ${callerPhone} — each message appears here.`;
+
+    // Start polling
+    _startPolling();
+
+    _toast(`Session started — ${S.channel === 'voice' ? 'call' : 'text'} ${_formatPhone(S.companyPhone || '')}`, 'success');
+  } catch (err) {
+    _toast(err.message, 'error');
+    btn.disabled  = false;
+    btn.className = 'btn-start-session idle';
+    btn.innerHTML = '▶ Start Test Session';
+    btn.onclick   = startSession;
+  }
+}
+
+async function endSession() {
+  if (!S.session?.sessionId) return;
+  const btn = document.getElementById('btnEndSession');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+
+  _stopPolling();
+
+  try {
+    const token = _getToken();
+    const res   = await fetch(`${API(S.companyId)}/session/${S.session.sessionId}/end`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to end session');
+
+    S.ended = true;
+    _setStatus('ended', `Session ended — ${data.turnCount} turn${data.turnCount !== 1 ? 's' : ''}`);
+
+    // Update metrics
+    const hits    = S.turns.filter(t => t.kcTitle && !t.noKcMatch).length;
+    const hitRate = S.turns.length > 0 ? Math.round((hits / S.turns.length) * 100) : 0;
+    document.getElementById('metricTurns').textContent    = data.turnCount || S.turns.length;
+    document.getElementById('metricTurnsSub').textContent = `${data.failedCount || 0} missed`;
+    document.getElementById('metricHitRate').textContent  = `${hitRate}%`;
+
+    // Score ring
+    let grade = 'A';
+    if (hitRate < 90) grade = 'B';
+    if (hitRate < 75) grade = 'C';
+    if (hitRate < 60) grade = 'D';
+    if (hitRate < 40) grade = 'F';
+    const scoreCard = document.getElementById('scoreCard');
+    scoreCard.style.display = 'block';
+    document.getElementById('metricGrade').textContent = `${hitRate}% hit rate`;
+    const ring = document.getElementById('scoreRing');
+    ring.textContent = grade;
+    ring.className   = `score-ring score-${grade.toLowerCase()}`;
+
+    // Todos
+    if ((data.todosCreated || 0) > 0) {
+      document.getElementById('todosCard').style.display  = 'block';
+      document.getElementById('metricTodos').textContent  = data.todosCreated;
+      document.getElementById('todoChips').style.display  = 'flex';
+      document.getElementById('todoChips').innerHTML = `<div class="todo-chip">⚠ ${data.todosCreated} gap${data.todosCreated!==1?'s':''} added to KC Intelligence</div>`;
+    }
+
+    // Analysis text
+    if (data.analysis) {
+      document.getElementById('analysisTextCard').style.display = 'block';
+      document.getElementById('analysisTextBody').textContent   = data.analysis;
+    }
+
+    // Show action buttons
+    document.getElementById('btnViewIntel').style.display  = 'flex';
+    document.getElementById('btnNewSession').style.display = 'block';
+    btn.textContent = '■ Session Ended';
+
+    _toast(`Analysis complete — ${hitRate}% hit rate`, 'success');
+  } catch (err) {
+    _toast(err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '■ End Session & Analyze';
+  }
+}
+
+function newSession() {
+  _stopPolling();
+  S.session   = null;
+  S.turns     = [];
+  S.pollIndex = 0;
+  S.ended     = false;
+
+  // Reset UI
+  const btn = document.getElementById('btnStartSession');
+  btn.disabled  = false;
+  btn.className = 'btn-start-session idle';
+  btn.innerHTML = '▶ Start Test Session';
+  btn.onclick   = startSession;
+
+  document.getElementById('callSetup').style.opacity       = '1';
+  document.getElementById('callSetup').style.pointerEvents = 'auto';
+  document.getElementById('btnEndSession').disabled        = true;
+  document.getElementById('btnEndSession').textContent     = '■ End Session & Analyze';
+  document.getElementById('btnViewIntel').style.display    = 'none';
+  document.getElementById('btnNewSession').style.display   = 'none';
+  document.getElementById('scoreCard').style.display       = 'none';
+  document.getElementById('todosCard').style.display       = 'none';
+  document.getElementById('analysisTextCard').style.display = 'none';
+  document.getElementById('metricTurns').textContent       = '—';
+  document.getElementById('metricTurnsSub').textContent    = 'No session active';
+  document.getElementById('metricHitRate').textContent     = '—';
+
+  // Clear feed
+  const feed = document.getElementById('liveFeed');
+  feed.querySelectorAll('.turn-card').forEach(c => c.remove());
+  document.getElementById('feedEmpty').style.display = 'flex';
+  document.getElementById('feedEmpty').querySelector('h3').textContent = 'Live X-Ray';
+  document.getElementById('feedEmpty').querySelector('p').textContent  = 'Start a session, then call your Twilio number.';
+
+  _setStatus('idle', 'Ready — configure a scenario and start a session');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POLLING
+// ═══════════════════════════════════════════════════════════════════════════════
+function _startPolling() {
+  _stopPolling();
+  S.pollTimer = setInterval(_poll, 2000);
+}
+
+function _stopPolling() {
+  if (S.pollTimer) { clearInterval(S.pollTimer); S.pollTimer = null; }
+}
+
+async function _poll() {
+  if (!S.session?.sessionId || S.ended) { _stopPolling(); return; }
+
+  try {
+    const token = _getToken();
+    const res   = await fetch(`${API(S.companyId)}/session/${S.session.sessionId}/poll?since=${S.pollIndex}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!data.success) return;
+
+    const newTurns = data.turns || [];
+    if (newTurns.length > 0) {
+      // Switch status to ACTIVE
+      if (data.session?.status === 'ACTIVE' || newTurns.length > 0) {
+        _setStatus('active', `Live — ${S.channel === 'voice' ? 'call' : 'SMS'} in progress`);
+      }
+
+      // Hide empty state
+      document.getElementById('feedEmpty').style.display = 'none';
+
+      newTurns.forEach(turn => {
+        S.turns.push(turn);
+        _renderTurn(turn, S.turns.length);
+      });
+      S.pollIndex = data.nextIndex;
+
+      // Update live turn count
+      document.getElementById('metricTurns').textContent    = S.turns.length;
+      document.getElementById('metricTurnsSub').textContent = 'Session in progress…';
+      const hits    = S.turns.filter(t => t.kcTitle && !t.noKcMatch).length;
+      const hitRate = S.turns.length > 0 ? Math.round((hits / S.turns.length) * 100) : 0;
+      document.getElementById('metricHitRate').textContent = `${hitRate}%`;
+    }
+  } catch {
+    // Ignore poll errors
+  }
+}
+
+function _renderTurn(turn, num) {
+  const feed = document.getElementById('liveFeed');
+  const card = document.createElement('div');
+  card.className = 'turn-card';
+
+  const isMiss = turn.noKcMatch || !turn.kcTitle;
+  const routingChips = [
+    turn.kcTitle  ? `<div class="r-chip kc">🎯 ${_esc(turn.kcTitle)}</div>` : '',
+    turn.lane     ? `<div class="r-chip lane">${_esc(turn.lane)}</div>` : '',
+    turn.matchSource ? `<div class="r-chip source">${_esc(turn.matchSource)}</div>` : '',
+    isMiss ? `<div class="r-chip miss">⚠ No KC match</div>` : '',
+  ].filter(Boolean).join('');
+
+  card.innerHTML = `
+    <div class="turn-header">
+      <span class="turn-num">#${turn.turnNumber || num}</span>
+      <span style="color:var(--text-dim)">·</span>
+      <span>${_formatTime(turn.ts)}</span>
+    </div>
+    <div class="turn-caller">
+      <div class="turn-caller-label">Caller</div>
+      <div class="turn-caller-text">${_esc(turn.speechText || turn.smsText || '—')}</div>
+    </div>
+    <div class="turn-agent">
+      <div class="turn-agent-label">Agent</div>
+      <div class="turn-agent-text">${_esc((turn.responseText || '').slice(0, 300) || '—')}</div>
+    </div>
+    ${routingChips ? `<div class="turn-routing">${routingChips}</div>` : ''}`;
+
+  feed.appendChild(card);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+function _setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = `status-dot ${state}`;
+  document.getElementById('statusText').textContent = text;
+}
+
+function goBack() {
+  window.location.href = `/agent-console/services.html?companyId=${S.companyId}`;
+}
+
+function viewIntelligence() {
+  window.location.href = `/agent-console/kc-intelligence.html?companyId=${S.companyId}`;
+}
+
+function _getToken() {
+  return window.AgentConsoleAuth?.getToken?.() || localStorage.getItem('authToken') || '';
+}
+
+function _formatPhone(phone) {
+  const d = (phone + '').replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') {
+    return `+1 (${d.slice(1,4)}) ${d.slice(4,7)}-${d.slice(7)}`;
+  }
+  if (d.length === 10) {
+    return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+  }
+  return phone;
+}
+
+function _formatTime(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); } catch { return ''; }
+}
+
+function _esc(s) {
+  return (s + '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _toast(msg, type = 'info') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+  t.innerHTML = `<span>${icon}</span> ${_esc(msg)}`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+</script>
+</body>
+</html>

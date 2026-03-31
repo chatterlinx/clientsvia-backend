@@ -407,6 +407,16 @@
     .popt-new.changed { color: #0284c7; }
     .popt-new.same    { color: var(--text-muted); font-weight: 400; }
     .popt-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    /* ── Agent Lab button ────────────────────────────────────────────────── */
+    .btn-agent-lab {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      background: #0a0a0a; border: 1px solid #3f3f46; color: #e4e4e7;
+      cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s;
+    }
+    .btn-agent-lab:hover { background: #18181b; border-color: #7c3aed; color: #a78bfa; }
+
     /* ── KC Intelligence button ──────────────────────────────────────────── */
     .btn-intelligence {
       display: flex; align-items: center; gap: 6px;
@@ -933,6 +943,9 @@
   <div class="toolbar-spacer"></div>
   <button class="btn-intelligence" id="btnIntelligence" onclick="openIntelligence()" title="KC health scan — gap mining, conflict map, action queue">
     🩺 KC Intelligence
+  </button>
+  <button class="btn-agent-lab" id="btnAgentLab" onclick="openAgentLab()" title="Live call testing — dial in from your cell, watch KC routing X-ray in real-time">
+    🧪 Agent Lab
   </button>
   <button class="btn-kw-health" id="btnKwHealth" onclick="showKeywordHealth()" title="Detect competing keywords and semantic conflicts between KC cards">
     ⚠️ Keyword Health
@@ -1588,6 +1601,10 @@ let _poptProposals = [];
 
 function openIntelligence() {
   window.location.href = `/agent-console/kc-intelligence.html?companyId=${S.companyId}`;
+}
+
+function openAgentLab() {
+  window.location.href = `/agent-console/agentlab.html?companyId=${S.companyId}`;
 }
 
 async function optimizePriorities() {
