@@ -1228,11 +1228,12 @@ const KC_ITEM_RUNTIME_VARS = new Set(['name']);
 
 /** Load saved variable values from API, then scan sections (edit mode). */
 async function _loadItemVars() {
+  _scanItemVars(); // immediate scan — sections already in DOM, shows card right away (values fill in below)
   try {
     const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
     S.companyVariables = new Map(Object.entries(data.companyVariables || {}));
-  } catch (_e) { /* graceful degrade — variable values stay empty */ }
-  _scanItemVars(); // scan now that values are loaded (covers edit mode)
+    _scanItemVars(); // re-render now that saved values are loaded
+  } catch (_e) { /* graceful degrade — card stays visible, values stay empty */ }
 }
 
 /** Debounced trigger — attached to section textarea oninput. */
