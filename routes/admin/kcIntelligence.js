@@ -59,9 +59,10 @@ function _slugify(str) {
 function _scoreKC(kc) {
   let score       = 100;
   const issues    = [];
+  const sections  = kc.sections || [];
 
-  // Content depth
-  const wordCount = (kc.sections || []).reduce((sum, s) => sum + _wordCount(s.content), 0);
+  // ── Content depth ──────────────────────────────────────────────────────────
+  const wordCount = sections.reduce((sum, s) => sum + _wordCount(s.content), 0);
   if (wordCount < 30) {
     score -= 35;
     issues.push({ type: 'THIN_CONTENT', message: `Only ${wordCount} words — too thin for Groq to answer caller questions` });
@@ -70,7 +71,7 @@ function _scoreKC(kc) {
     issues.push({ type: 'SPARSE_CONTENT', message: `${wordCount} words — consider expanding for richer agent answers` });
   }
 
-  // Keyword coverage
+  // ── Keyword coverage ───────────────────────────────────────────────────────
   const kwCount = (kc.keywords || []).length;
   if (kwCount < 3) {
     score -= 25;
@@ -80,7 +81,7 @@ function _scoreKC(kc) {
     issues.push({ type: 'SPARSE_KEYWORDS', message: `${kwCount} keywords — add phrase variations to improve routing accuracy` });
   }
 
-  // Content age
+  // ── Content age ────────────────────────────────────────────────────────────
   const daysSinceUpdated = kc.updatedAt
     ? Math.floor((Date.now() - new Date(kc.updatedAt)) / 86_400_000)
     : null;
@@ -92,9 +93,56 @@ function _scoreKC(kc) {
     issues.push({ type: 'AGING_CONTENT', message: `Last updated ${daysSinceUpdated} days ago — worth a quick review` });
   }
 
+  // ── UAP classification ─────────────────────────────────────────────────────
+  const classificationStatus = kc.classificationStatus || 'UNCLASSIFIED';
+  const uapLinked = !!(kc.daType && classificationStatus !== 'UNCLASSIFIED');
+  if (!uapLinked) {
+    issues.push({ type: 'UNCLASSIFIED_KC', message: 'No UAP array type set — routing falls back to keyword scoring only; intent-based routing not active' });
+  } else if (classificationStatus === 'PENDING') {
+    issues.push({ type: 'UAP_PENDING', message: `UAP classification is pending review — confirm it in the UAP console to activate intent routing` });
+  }
+
+  // ── Section sub-type completeness ─────────────────────────────────────────
+  const sectionCount         = sections.length;
+  const classifiedSections   = sections.filter(s => s.daSubTypeKey?.trim()).length;
+  if (uapLinked && sectionCount > 0 && classifiedSections < sectionCount) {
+    const missing = sectionCount - classifiedSections;
+    issues.push({
+      type:    'UNCLASSIFIED_SECTIONS',
+      message: `${classifiedSections}/${sectionCount} sections have a UAP sub-type key — ${missing} section${missing !== 1 ? 's' : ''} can't be routed precisely`,
+    });
+  }
+
+  // ── Pre-qualify completeness ───────────────────────────────────────────────
+  let prequal = { sections: 0, incomplete: 0 };
+  for (const s of sections) {
+    const pq = s.preQualifyQuestion;
+    if (pq?.enabled && pq.text?.trim()) {
+      prequal.sections++;
+      const incompleteOpts = (pq.options || []).filter(o => !o.label?.trim() || !o.value?.trim()).length;
+      prequal.incomplete += incompleteOpts;
+    }
+  }
+  if (prequal.incomplete > 0) {
+    issues.push({
+      type:    'PREQUAL_INCOMPLETE',
+      message: `${prequal.incomplete} pre-qualify option${prequal.incomplete !== 1 ? 's' : ''} missing label or value — caller will see incomplete choices`,
+    });
+  }
+
+  // ── Upsell chain count ─────────────────────────────────────────────────────
+  const upsellChainCount = sections.reduce(
+    (sum, s) => sum + (s.upsellChain || []).filter(u => u.offerScript?.trim()).length, 0
+  );
+
   const clamped = Math.max(0, Math.min(100, score));
   const grade   = clamped >= 85 ? 'A' : clamped >= 70 ? 'B' : clamped >= 55 ? 'C' : clamped >= 40 ? 'D' : 'F';
-  return { score: clamped, grade, wordCount, keywordCount: kwCount, daysSinceUpdated, issues };
+  return {
+    score: clamped, grade, wordCount, keywordCount: kwCount, daysSinceUpdated, issues,
+    // ── New routing/completeness fields ──
+    sectionCount, classifiedSections, uapLinked, classificationStatus,
+    prequal, upsellChainCount,
+  };
 }
 
 // ── Overall health score from parts ─────────────────────────────────────────
@@ -216,6 +264,55 @@ function _generateTodos(missingGaps, failingGaps, conflictPairs, kcHealthResults
         samplePhrases:[],
       });
     }
+
+    // UNCLASSIFIED KC — no UAP daType set
+    const unclassifiedIssue = kcH.issues.find(i => i.type === 'UNCLASSIFIED_KC');
+    if (unclassifiedIssue) {
+      todos.push({
+        stableId:     `UNCLASSIFIED_KC:${kcH.kcId}`,
+        type:         'UNCLASSIFIED_KC',
+        priority:     'P3',
+        title:        `Classify "${kcH.kcTitle}" in UAP array`,
+        description:  unclassifiedIssue.message,
+        kcIds:        [kcH.kcId],
+        callerCount:  0,
+        impactNote:   'Intent routing not active — KC reached by keyword fallback only',
+        samplePhrases:[],
+      });
+    }
+
+    // INCOMPLETE SECTION SUBTYPES — sections missing daSubTypeKey
+    const subtypeIssue = kcH.issues.find(i => i.type === 'UNCLASSIFIED_SECTIONS');
+    if (subtypeIssue) {
+      const missing = (kcH.sectionCount || 0) - (kcH.classifiedSections || 0);
+      todos.push({
+        stableId:     `INCOMPLETE_SUBTYPES:${kcH.kcId}`,
+        type:         'INCOMPLETE_SUBTYPES',
+        priority:     'P2',
+        title:        `Set UAP sub-type on ${missing} section${missing !== 1 ? 's' : ''} in "${kcH.kcTitle}"`,
+        description:  subtypeIssue.message,
+        kcIds:        [kcH.kcId],
+        callerCount:  0,
+        impactNote:   'Agent can\'t route to the right section — all sections treated equally',
+        samplePhrases:[],
+      });
+    }
+
+    // INCOMPLETE PREQUAL OPTIONS
+    const prequaIssue = kcH.issues.find(i => i.type === 'PREQUAL_INCOMPLETE');
+    if (prequaIssue) {
+      todos.push({
+        stableId:     `PREQUAL_INCOMPLETE:${kcH.kcId}`,
+        type:         'PREQUAL_INCOMPLETE',
+        priority:     'P2',
+        title:        `Complete pre-qualify options in "${kcH.kcTitle}"`,
+        description:  prequaIssue.message,
+        kcIds:        [kcH.kcId],
+        callerCount:  0,
+        impactNote:   'Callers will see incomplete choices — pre-qualify gate may malfunction',
+        samplePhrases:[],
+      });
+    }
   }
 
   // Sort: P1 → P2 → P3, then callerCount descending within priority
@@ -305,8 +402,9 @@ router.post('/:companyId/knowledge/intelligence/scan', async (req, res) => {
 
     // ── 2. Per-KC health scoring ────────────────────────────────────────────
     const kcHealth = allKCs.map(kc => ({
-      kcId:   String(kc._id),
+      kcId:    String(kc._id),
       kcTitle: kc.title || 'Untitled',
+      daType:  kc.daType || null,        // stored so frontend can show the UAP type name
       ..._scoreKC(kc),
     }));
 

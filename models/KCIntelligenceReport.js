@@ -33,7 +33,7 @@ const { Schema }    = mongoose;
 // ── Todo item ─────────────────────────────────────────────────────────────────
 const todoSchema = new Schema({
   stableId:     { type: String, required: true },   // deterministic cross-scan key
-  type:         { type: String, enum: ['MISSING_KC','FAILING_KC','KEYWORD_CONFLICT','THIN_CONTENT','FEW_KEYWORDS','STALE_CONTENT'], required: true },
+  type:         { type: String, enum: ['MISSING_KC','FAILING_KC','KEYWORD_CONFLICT','THIN_CONTENT','FEW_KEYWORDS','STALE_CONTENT','UNCLASSIFIED_KC','INCOMPLETE_SUBTYPES','PREQUAL_INCOMPLETE'], required: true },
   priority:     { type: String, enum: ['P1','P2','P3'], required: true },
   title:        { type: String, required: true },
   description:  { type: String },
@@ -60,6 +60,17 @@ const kcHealthEntrySchema = new Schema({
     type:    { type: String },
     message: { type: String },
   }],
+  // ── Routing & completeness fields (added March 2026) ─────────────────────
+  daType:               { type: String, default: null },   // UAP daType key for display
+  sectionCount:         { type: Number, default: 0 },   // total sections in KC
+  classifiedSections:   { type: Number, default: 0 },   // sections with daSubTypeKey set
+  uapLinked:            { type: Boolean, default: false }, // daType set and not UNCLASSIFIED
+  classificationStatus: { type: String, default: 'UNCLASSIFIED' }, // KC-level UAP status
+  prequal: {
+    sections:   { type: Number, default: 0 },   // sections with prequal enabled
+    incomplete: { type: Number, default: 0 },   // options missing label/value
+  },
+  upsellChainCount:     { type: Number, default: 0 },   // total upsell chain items
 }, { _id: false });
 
 // ── Gap cluster (missing or failing) ──────────────────────────────────────────
