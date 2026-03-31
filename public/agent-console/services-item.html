@@ -3069,6 +3069,12 @@ function renderSectionPqOptions(sid) {
         <input class="pq-input" value="${_esc((opt.keywords || []).join(', '))}"
           oninput="S.sectionData.get(${sid}).pq.options[${i}].keywords=this.value.split(',').map(s=>s.trim()).filter(Boolean)"
           placeholder="member, plan, maintenance plan" />
+        <div style="margin-top:6px;padding:7px 10px;background:#f0f7ff;border:1px solid #c8dff7;border-radius:6px;font-size:11.5px;color:#3a6ea8;line-height:1.45;">
+          <strong>💡 Global Conversation Signals are already active.</strong>
+          Every "yes" variation (yeah, yep, absolutely, for sure…) and every "no" variation (nah, not interested, maybe later…) is matched automatically via
+          <a href="/agent-console/globalshare.html?companyId=${window._companyId||''}" target="_blank" style="color:#2563eb;text-decoration:underline;">GlobalShare → Conversation Signals</a>.
+          Only add keywords here if this option needs <em>additional</em> words specific to it (e.g. <code>member, plan</code> for a membership option).
+        </div>
       </div>
       <div class="pq-option-field">
         <div class="pq-field-label">

@@ -378,7 +378,13 @@
         </div>
         <div style="margin-bottom:8px;">
           <label class="form-label" style="font-size:.7rem;">Match keywords (comma separated — what caller says to pick this option)</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords || []).join(', '))}" oninput="window.DNPage.updateDqOption(${i},'keywords',this.value)" placeholder="yes, I have the plan, plan member, gold member, I am" />
+          <input class="form-input" style="font-size:.8rem;" value="${_esc((opt.keywords || []).join(', '))}" oninput="window.DNPage.updateDqOption(${i},'keywords',this.value)" placeholder="I have the plan, plan member, gold member" />
+          <div style="margin-top:5px;padding:6px 10px;background:#f0f7ff;border:1px solid #c8dff7;border-radius:6px;font-size:11px;color:#3a6ea8;line-height:1.45;">
+            💡 <strong>Global Conversation Signals handle yes/no automatically.</strong>
+            All "yes" and "no" variations (yeah, yep, nah, not interested…) are already matched via
+            <a href="globalshare.html?companyId=${window._companyId||''}" target="_blank" style="color:#2563eb;">GlobalShare → Conversation Signals</a>.
+            Only add keywords here for <em>option-specific</em> phrases the caller might say (e.g. <em>plan member, I have the plan</em>).
+          </div>
         </div>
         <div style="margin-bottom:8px;">
           <label class="form-label" style="font-size:.7rem;">
