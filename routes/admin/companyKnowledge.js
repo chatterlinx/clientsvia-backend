@@ -403,48 +403,62 @@ async function _runKeywordGeneration(companyId, title, sections, res) {
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   300,
+      maxTokens:   700,  // bumped — now returns 3 arrays: keywords + exclusions + sample questions
       temperature: 0.4,
-      system: `You are a keyword generation expert for a phone AI agent.
-Given a knowledge container for a service company, generate 12-18 short keyword phrases that a caller might say when asking about this topic over the phone.
-Think about all natural ways a caller would ask: pricing, what's included, availability, specials, warranties, etc.
-Return ONLY a valid JSON array of strings. No extra text. Example: ["how much is a service call","what does it include","is there a fee"]`,
+      jsonMode:    true,
+      system: `You are a keyword expert for an AI phone receptionist at a service company.
+
+Given a knowledge card topic and content, generate THREE things:
+
+1. TRIGGER KEYWORDS (12-18 phrases): What callers say when asking about THIS specific topic over the phone. Multi-word phrases score higher — prefer them. Cover natural variations: pricing, scheduling, what's included, availability, refunds, emergency, same-day, etc.
+
+2. EXCLUSION KEYWORDS (3-6 phrases): Adjacent topics that sound related but this card should NOT handle. These prevent false positives where a similar-sounding question fires the wrong card. Think: what other services or topics might share some words with this one but mean something completely different?
+
+3. SAMPLE QUESTIONS (3 examples): Exact phrases a real caller would say that SHOULD trigger this card. Written in natural phone-call language, not formal. These validate that the keywords are correct.
+
+Return ONLY valid JSON — no markdown, no extra text:
+{
+  "keywords": ["phrase 1", "phrase 2", ...],
+  "negativeKeywords": ["exclusion 1", "exclusion 2", ...],
+  "sampleQuestions": ["How much is the service call?", "Is there a diagnostic fee?", "..."]
+}`,
       messages: [{ role: 'user', content: promptContent }],
-      jsonMode: false,   // raw JSON array, not object mode
     });
 
     if (!result.response) {
       return res.status(500).json({ success: false, error: 'Groq returned no response' });
     }
 
-    // Parse — expect a JSON array; handle any leading/trailing prose
-    let keywords = [];
+    // Parse JSON object
+    let parsed = {};
     try {
-      const raw        = result.response.trim();
-      const arrayMatch = raw.match(/\[[\s\S]*\]/);
-      keywords = JSON.parse(arrayMatch ? arrayMatch[0] : raw);
+      const raw       = result.response.trim();
+      const objMatch  = raw.match(/\{[\s\S]*\}/);
+      parsed          = JSON.parse(objMatch ? objMatch[0] : raw);
     } catch (_e) {
-      // Fallback: split on newlines and strip punctuation
-      keywords = result.response
-        .split(/[\n,]+/)
-        .map(k => k.replace(/^[\s"'\-*•\d.]+|[\s"',]+$/g, '').trim())
-        .filter(k => k.length > 2 && k.length < 80);
+      logger.warn('[companyKnowledge] generate-keywords: parse failed, raw:', result.response.slice(0, 300));
+      return res.status(500).json({ success: false, error: 'Failed to parse keyword response' });
     }
 
-    if (!Array.isArray(keywords)) {
-      return res.status(500).json({ success: false, error: 'Failed to parse Groq keyword response' });
-    }
-
-    // Clean and deduplicate; cap at 20
-    const cleaned = [...new Set(
-      keywords
+    // Helper: clean a string array field
+    const _cleanArr = (arr, cap) => [...new Set(
+      (Array.isArray(arr) ? arr : [])
         .filter(k => typeof k === 'string')
         .map(k => k.toLowerCase().trim())
         .filter(k => k.length > 2 && k.length < 80)
-    )].slice(0, 20);
+    )].slice(0, cap);
 
-    logger.info('[companyKnowledge] Generated keywords', { companyId, count: cleaned.length });
-    return res.json({ success: true, keywords: cleaned });
+    const keywords         = _cleanArr(parsed.keywords,         20);
+    const negativeKeywords = _cleanArr(parsed.negativeKeywords,  8);
+    // sampleQuestions kept as-is (not lowercased — they're display strings)
+    const sampleQuestions  = (Array.isArray(parsed.sampleQuestions) ? parsed.sampleQuestions : [])
+      .filter(q => typeof q === 'string' && q.trim())
+      .slice(0, 3);
+
+    logger.info('[companyKnowledge] Generated keywords', {
+      companyId, keywords: keywords.length, negativeKeywords: negativeKeywords.length,
+    });
+    return res.json({ success: true, keywords, negativeKeywords, sampleQuestions });
 
   } catch (err) {
     logger.error('[companyKnowledge] generate-keywords error', { companyId, err: err.message });

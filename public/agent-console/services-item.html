@@ -315,6 +315,20 @@
     .btn-generate-kw:hover { background: #e0f2fe; border-color: var(--color-primary); }
     .btn-generate-kw:disabled { opacity: .6; cursor: not-allowed; }
     .kw-hint { font-size: 11px; color: var(--text-xs); margin-top: 3px; }
+    /* ── Keyword generation preview card ─────────────────────────────────── */
+    .kw-preview-panel {
+      margin-top: 10px; background: #eef2ff; border: 1px solid #c7d2fe;
+      border-radius: 8px; padding: 12px 16px;
+    }
+    .kw-preview-title {
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: #4338ca; margin-bottom: 8px;
+    }
+    .kw-preview-q {
+      display: flex; align-items: baseline; gap: 6px;
+      font-size: 12.5px; color: #374151; margin-bottom: 4px;
+    }
+    .kw-preview-q-icon { flex-shrink: 0; font-size: 11px; }
 
     /* ── Booking action radios ────────────────────────────────────────────── */
     .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -848,6 +862,7 @@
             onkeydown="kwKeydown(event)">
         </div>
         <div class="kw-hint">Press <strong>Enter</strong> or <strong>,</strong> to add a phrase. Click × to remove. Multi-word phrases score higher than single words.</div>
+        <div id="kwPreview" class="kw-preview-panel" style="display:none;"></div>
       </div>
 
       <!-- Negative keywords -->
@@ -2239,13 +2254,42 @@ async function generateKeywords() {
     });
     if (!data.success) throw new Error(data.error || 'Generation failed');
 
-    // Merge new keywords with existing (dedup)
+    // Merge trigger keywords (dedup)
     let added = 0;
     (data.keywords || []).forEach(kw => {
       if (!S.keywords.includes(kw)) { S.keywords.push(kw); added++; }
     });
     _renderKeywords();
-    _toast(`Added ${added} new keyword${added !== 1 ? 's' : ''}`, 'success');
+
+    // Merge negative keywords (dedup)
+    let negAdded = 0;
+    (data.negativeKeywords || []).forEach(kw => {
+      if (!S.negativeKeywords.includes(kw)) { S.negativeKeywords.push(kw); negAdded++; }
+    });
+    if (negAdded > 0) _renderNegKeywords();
+
+    // Show "will fire on" sample questions preview
+    const previewPanel = document.getElementById('kwPreview');
+    if (previewPanel) {
+      const qs = (data.sampleQuestions || []).slice(0, 3);
+      if (qs.length) {
+        previewPanel.style.display = 'block';
+        previewPanel.innerHTML = `
+          <div class="kw-preview-title">🎯 Will fire on calls like these</div>
+          ${qs.map(q => `<div class="kw-preview-q"><span class="kw-preview-q-icon">📞</span>${_esc(q)}</div>`).join('')}
+          <div style="margin-top:8px;text-align:right;">
+            <button type="button" onclick="document.getElementById('kwPreview').style.display='none'"
+              style="font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0;">Dismiss</button>
+          </div>`;
+      } else {
+        previewPanel.style.display = 'none';
+      }
+    }
+
+    // Toast — summarise what was added
+    const parts = [`${added} keyword${added !== 1 ? 's' : ''}`];
+    if (negAdded > 0) parts.push(`${negAdded} exclusion${negAdded !== 1 ? 's' : ''}`);
+    _toast(`Added ${parts.join(' + ')}`, 'success');
   } catch (err) {
     _toast(err.message || 'Keyword generation failed', 'error');
   } finally {
