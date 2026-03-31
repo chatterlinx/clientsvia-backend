@@ -757,7 +757,7 @@
       <span style="background:#fef3c7;color:#92400e;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;">AUTO-DETECTED</span>
     </div>
     <p style="margin:4px 0 0;color:#6b7280;font-size:0.875rem;">
-      Variables found in your KC sections. <span style="color:#dc2626;font-weight:600;">Red variables require values!</span>
+      Variables used across your triggers and KC sections. <span style="color:#dc2626;font-weight:600;">Red variables require values!</span>
     </p>
   </div>
   <div style="padding:0;">
@@ -1305,15 +1305,20 @@ function renderKCVariables() {
   const empty = document.getElementById('kcVariablesEmpty');
   if (!card || !tbody) return;
 
-  // AUTO-DETECTED: only show when KC content actually contains {placeholders}
-  if (S.detectedVars.size === 0) {
+  // Show when ANY variables exist (saved globally OR detected in KC content)
+  const allVars = new Set([
+    ...Array.from(S.detectedVars),
+    ...Array.from(S.companyVariables.keys()),
+  ]);
+
+  if (allVars.size === 0) {
     card.style.display = 'none';
     return;
   }
   card.style.display = 'block';
   empty.style.display = 'none';
 
-  const sorted = Array.from(S.detectedVars).sort();
+  const sorted = Array.from(allVars).sort();
   tbody.innerHTML = sorted.map(varName => {
     const isRuntime = KC_RUNTIME_VARIABLES.has(varName);
     const value     = S.companyVariables.get(varName) || '';
