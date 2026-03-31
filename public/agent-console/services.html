@@ -407,6 +407,16 @@
     .popt-new.changed { color: #0284c7; }
     .popt-new.same    { color: var(--text-muted); font-weight: 400; }
     .popt-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    /* ── KC Intelligence button ──────────────────────────────────────────── */
+    .btn-intelligence {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    .btn-intelligence:hover { background: #e0f2fe; border-color: #7dd3fc; }
+
     /* ── Keyword health button ───────────────────────────────────────────── */
     .btn-kw-health {
       display: flex; align-items: center; gap: 6px;
@@ -921,6 +931,9 @@
     <input type="text" class="search-input" id="searchInput" placeholder="Search containers…" oninput="applySearch(this.value)">
   </div>
   <div class="toolbar-spacer"></div>
+  <button class="btn-intelligence" id="btnIntelligence" onclick="openIntelligence()" title="KC health scan — gap mining, conflict map, action queue">
+    🩺 KC Intelligence
+  </button>
   <button class="btn-kw-health" id="btnKwHealth" onclick="showKeywordHealth()" title="Detect competing keywords and semantic conflicts between KC cards">
     ⚠️ Keyword Health
   </button>
@@ -1572,6 +1585,10 @@ async function toggleActive(id, isActive) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _poptProposals = [];
+
+function openIntelligence() {
+  window.location.href = `/agent-console/kc-intelligence.html?companyId=${S.companyId}`;
+}
 
 async function optimizePriorities() {
   const btn = document.getElementById('btnOptimize');

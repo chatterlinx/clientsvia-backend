@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KC Intelligence</title>
+<script src="/agent-console/js/AgentConsoleAuth.js"></script>
+<style>
+  :root {
+    --color-primary:  #0ea5e9;
+    --bg-page:        #f1f5f9;
+    --bg-card:        #ffffff;
+    --text-main:      #111827;
+    --text-muted:     #6b7280;
+    --border:         #e5e7eb;
+    --radius:         14px;
+    --shadow:         0 1px 4px rgba(0,0,0,.07);
+    --red:            #dc2626;
+    --amber:          #d97706;
+    --blue:           #2563eb;
+    --green:          #16a34a;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background: var(--bg-page); color: var(--text-main); min-height: 100vh; }
+
+  /* ── Header ──────────────────────────────────────────────────────────────── */
+  .page-header {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 12px;
+    height: 60px; padding: 0 32px; background: #fff;
+    border-bottom: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .btn-back {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 500; color: var(--text-muted);
+    text-decoration: none; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: #fff; transition: all .15s;
+  }
+  .btn-back:hover { background: #f9fafb; color: var(--text-main); }
+  .header-divider { width: 1px; height: 28px; background: var(--border); }
+  .header-title   { font-size: 16px; font-weight: 700; color: var(--text-main); }
+  .header-sub     { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .header-spacer  { flex: 1; }
+  .btn-scan {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 18px; border-radius: 9px;
+    background: var(--color-primary); color: #fff;
+    font-size: 13px; font-weight: 600; border: none;
+    cursor: pointer; transition: background .15s; white-space: nowrap;
+  }
+  .btn-scan:hover    { background: #0284c7; }
+  .btn-scan:disabled { opacity: .55; cursor: not-allowed; }
+  .scan-spinner {
+    width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35);
+    border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  .page-body { max-width: 1100px; margin: 0 auto; padding: 36px 40px 80px; }
+
+  /* ── Empty / loading states ─────────────────────────────────────────────── */
+  .state-empty {
+    text-align: center; padding: 80px 40px;
+    color: var(--text-muted); font-size: 14px; line-height: 1.7;
+  }
+  .state-empty .icon { font-size: 48px; display: block; margin-bottom: 16px; }
+  .state-empty h2    { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+
+  /* ── Health score band ──────────────────────────────────────────────────── */
+  .health-band {
+    display: grid; grid-template-columns: auto 1fr; gap: 28px;
+    background: var(--bg-card); border-radius: var(--radius);
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+    padding: 28px 32px; margin-bottom: 28px; align-items: center;
+  }
+  .health-score-circle {
+    width: 100px; height: 100px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 34px; font-weight: 800; border: 6px solid;
+  }
+  .health-score-circle .grade { font-size: 13px; font-weight: 700; margin-top: -2px; }
+  .health-score-circle.A { border-color: var(--green); color: var(--green); }
+  .health-score-circle.B { border-color: #65a30d; color: #65a30d; }
+  .health-score-circle.C { border-color: var(--amber); color: var(--amber); }
+  .health-score-circle.D { border-color: #ea580c; color: #ea580c; }
+  .health-score-circle.F { border-color: var(--red); color: var(--red); }
+  .health-meta h2   { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .health-meta p    { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+  .health-sub-grid  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .health-sub-card  {
+    background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .health-sub-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 4px; }
+  .health-sub-val   { font-size: 22px; font-weight: 800; color: var(--text-main); }
+  .health-sub-bar   { height: 4px; border-radius: 2px; background: #e5e7eb; margin-top: 6px; overflow: hidden; }
+  .health-sub-fill  { height: 100%; border-radius: 2px; background: var(--color-primary); transition: width .4s; }
+  .scan-meta        { font-size: 11.5px; color: var(--text-muted); margin-top: 12px; }
+
+  /* ── Section headers ────────────────────────────────────────────────────── */
+  .section-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px; margin-top: 32px;
+  }
+  .section-header h3   { font-size: 15px; font-weight: 700; }
+  .section-header .cnt { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: #f1f5f9; color: var(--text-muted); }
+
+  /* ── Todo list ──────────────────────────────────────────────────────────── */
+  .todo-list { display: flex; flex-direction: column; gap: 10px; }
+  .todo-card {
+    background: var(--bg-card); border-radius: 12px;
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+    padding: 16px 20px; display: flex; gap: 16px; align-items: flex-start;
+    transition: box-shadow .15s;
+  }
+  .todo-card:hover       { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+  .todo-card.resolved    { opacity: .5; }
+  .todo-card.dismissed   { opacity: .4; }
+  .todo-priority {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; margin-top: 1px;
+  }
+  .todo-priority.P1 { background: #fee2e2; color: var(--red); }
+  .todo-priority.P2 { background: #fef3c7; color: var(--amber); }
+  .todo-priority.P3 { background: #eff6ff; color: var(--blue); }
+  .todo-body       { flex: 1; min-width: 0; }
+  .todo-title      { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; color: var(--text-main); }
+  .todo-desc       { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 6px; }
+  .todo-phrases    { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .todo-phrase     {
+    font-size: 11.5px; padding: 2px 8px; border-radius: 6px;
+    background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1; font-style: italic;
+  }
+  .todo-footer     { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .todo-impact     { font-size: 11px; color: var(--text-muted); }
+  .todo-type-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .type-MISSING_KC    { background: #fee2e2; color: var(--red); }
+  .type-FAILING_KC    { background: #fef3c7; color: #b45309; }
+  .type-KEYWORD_CONFLICT { background: #faf5ff; color: #7c3aed; }
+  .type-THIN_CONTENT  { background: #f0f9ff; color: #0369a1; }
+  .type-FEW_KEYWORDS  { background: #f0fdf4; color: #15803d; }
+  .type-STALE_CONTENT { background: #fff7ed; color: #c2410c; }
+  .todo-actions        { margin-left: auto; display: flex; gap: 8px; }
+  .btn-todo-action {
+    font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 7px;
+    border: 1px solid var(--border); background: #fff; color: var(--text-main);
+    cursor: pointer; transition: all .15s; white-space: nowrap; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-todo-action:hover        { background: #f9fafb; border-color: #9ca3af; }
+  .btn-todo-action.primary      { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .btn-todo-action.primary:hover{ background: #0284c7; }
+  .btn-dismiss {
+    font-size: 11.5px; color: var(--text-muted); background: none; border: none;
+    cursor: pointer; padding: 4px; transition: color .15s;
+  }
+  .btn-dismiss:hover { color: var(--red); }
+  .status-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase;
+  }
+  .status-resolved  { background: #f0fdf4; color: var(--green); }
+  .status-dismissed { background: #f9fafb; color: #9ca3af; }
+
+  /* ── Tabs ───────────────────────────────────────────────────────────────── */
+  .tab-bar {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--border);
+    margin-bottom: 20px; margin-top: 32px;
+  }
+  .tab {
+    padding: 10px 16px; font-size: 13px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; border-radius: 8px 8px 0 0; border: none; background: none;
+    transition: color .15s; position: relative; bottom: -2px;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+  .tab-panel  { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Data table ─────────────────────────────────────────────────────────── */
+  .intel-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .intel-table th {
+    text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--text-muted); padding: 8px 12px;
+    border-bottom: 2px solid var(--border); background: #f8fafc;
+  }
+  .intel-table td {
+    padding: 12px 12px; border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  .intel-table tr:hover td { background: #f9fafb; }
+  .intel-table tr:last-child td { border-bottom: none; }
+  .score-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-weight: 700; font-size: 13px;
+  }
+  .score-pill.A { color: var(--green); }
+  .score-pill.B { color: #65a30d; }
+  .score-pill.C { color: var(--amber); }
+  .score-pill.D { color: #ea580c; }
+  .score-pill.F { color: var(--red); }
+  .issue-chip {
+    display: inline-block; font-size: 10.5px; padding: 1px 7px;
+    border-radius: 5px; margin: 1px 2px; border: 1px solid;
+  }
+  .chip-thin    { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+  .chip-kw      { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+  .chip-stale   { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+  .chip-ok      { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; font-weight: 600; }
+
+  /* ── Conflict pair ──────────────────────────────────────────────────────── */
+  .conflict-row { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 8px; }
+  .conflict-pair-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .severity-high   { color: var(--red); }
+  .severity-medium { color: var(--amber); }
+  .conflict-kws    { font-size: 12px; color: var(--text-muted); }
+  .kw-chip         { display: inline-block; background: #faf5ff; border: 1px solid #ddd6fe; color: #7c3aed; font-size: 11px; padding: 1px 7px; border-radius: 5px; margin: 1px 2px; }
+  .empty-panel     { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13.5px; }
+
+  @media (max-width: 640px) {
+    .page-body        { padding: 20px 16px 60px; }
+    .health-band      { grid-template-columns: 1fr; }
+    .health-sub-grid  { grid-template-columns: 1fr 1fr; }
+    .todo-actions     { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <a id="btnBack" href="#" class="btn-back">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Knowledge Base
+  </a>
+  <div class="header-divider"></div>
+  <span style="font-size:20px;">🩺</span>
+  <div>
+    <div class="header-title">KC Intelligence</div>
+    <div class="header-sub">Knowledge base health — gaps, conflicts, and action queue</div>
+  </div>
+  <div class="header-spacer"></div>
+  <button class="btn-scan" id="btnScan" onclick="runScan()">
+    🔍 Run Scan
+  </button>
+</header>
+
+<!-- ── Body ────────────────────────────────────────────────────────────────── -->
+<div class="page-body">
+  <div id="pageLoading" style="text-align:center;padding:80px 0;color:#6b7280;font-size:14px;">Loading…</div>
+  <div id="pageContent" style="display:none;"></div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const S = { companyId: null, report: null };
+
+const params    = new URLSearchParams(location.search);
+S.companyId     = params.get('companyId');
+
+async function apiFetch(path, opts = {}) {
+  return AgentConsoleAuth.apiFetch(path, opts);
+}
+
+function _esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+(async () => {
+  if (!S.companyId) {
+    document.getElementById('pageLoading').innerHTML = '<span style="color:#dc2626;">Missing companyId</span>';
+    return;
+  }
+  document.getElementById('btnBack').href = `/agent-console/services.html?companyId=${S.companyId}`;
+
+  try {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/intelligence`);
+    S.report = data.report || null;
+  } catch (e) {
+    S.report = null;
+  }
+
+  document.getElementById('pageLoading').style.display = 'none';
+  document.getElementById('pageContent').style.display = 'block';
+  _render();
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCAN
+// ─────────────────────────────────────────────────────────────────────────────
+async function runScan() {
+  const btn = document.getElementById('btnScan');
+  btn.disabled   = true;
+  btn.innerHTML  = `<div class="scan-spinner"></div> Scanning…`;
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/intelligence/scan`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callDaysBack: 30 }) }
+    );
+    if (!data.success) throw new Error(data.error || 'Scan failed');
+    S.report = data.report;
+    _render();
+  } catch (err) {
+    alert('Scan failed: ' + err.message);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '🔍 Run Scan';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISMISS TODO
+// ─────────────────────────────────────────────────────────────────────────────
+async function dismissTodo(stableId) {
+  try {
+    await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/intelligence/todos/${encodeURIComponent(stableId)}/dismiss`,
+      { method: 'POST' }
+    );
+    // Optimistic update
+    const t = (S.report?.todos || []).find(t => t.stableId === stableId);
+    if (t) { t.status = 'dismissed'; t.dismissedAt = new Date().toISOString(); }
+    _renderTodos();
+  } catch (err) {
+    alert('Dismiss failed: ' + err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function _render() {
+  const el = document.getElementById('pageContent');
+
+  if (!S.report) {
+    el.innerHTML = `
+      <div class="state-empty">
+        <span class="icon">🩺</span>
+        <h2>No scan yet</h2>
+        <p>Run your first scan to see a health report, gap analysis, and a prioritised action queue for your knowledge base.</p>
+        <br>
+        <button class="btn-scan" style="margin:0 auto;display:inline-flex;" onclick="runScan()">🔍 Run First Scan</button>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div id="healthBand"></div>
+    <div id="todoSection"></div>
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchTab('gaps', this)">📭 Call Gaps</button>
+      <button class="tab" onclick="switchTab('conflicts', this)">⚠️ Conflicts</button>
+      <button class="tab" onclick="switchTab('kc-health', this)">📊 KC Health</button>
+    </div>
+    <div id="tab-gaps"      class="tab-panel active"></div>
+    <div id="tab-conflicts" class="tab-panel"></div>
+    <div id="tab-kc-health" class="tab-panel"></div>`;
+
+  _renderHealthBand();
+  _renderTodos();
+  _renderGaps();
+  _renderConflicts();
+  _renderKCHealth();
+}
+
+function _gradeFromScore(score) {
+  return score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F';
+}
+
+function _healthLabel(score) {
+  return score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 55 ? 'Fair' : score >= 40 ? 'Needs Work' : 'Critical';
+}
+
+function _renderHealthBand() {
+  const r       = S.report;
+  const hs      = r.healthScore || {};
+  const overall = hs.overall || 0;
+  const grade   = _gradeFromScore(overall);
+  const scanned = r.scannedAt ? new Date(r.scannedAt).toLocaleString() : '—';
+  const openTodos = (r.todos || []).filter(t => t.status === 'open').length;
+
+  document.getElementById('healthBand').innerHTML = `
+    <div class="health-band">
+      <div class="health-score-circle ${grade}">
+        <span>${overall}</span>
+        <span class="grade">${grade}</span>
+      </div>
+      <div class="health-meta">
+        <h2>${_healthLabel(overall)} — ${r.totalKCs || 0} active KCs</h2>
+        <p>${openTodos} action${openTodos !== 1 ? 's' : ''} in your queue · ${r.callsAnalyzed || 0} gap-signal call${(r.callsAnalyzed || 0) !== 1 ? 's' : ''} analysed</p>
+        <div class="health-sub-grid">
+          ${_subCard('Coverage',        hs.coverage       || 0)}
+          ${_subCard('Keyword Health',  hs.keywordHealth  || 0)}
+          ${_subCard('Content Quality', hs.contentQuality || 0)}
+        </div>
+        <div class="scan-meta">Last scan: ${scanned} · Calls window: last ${r.callDaysBack || 30} days</div>
+      </div>
+    </div>`;
+}
+
+function _subCard(label, val) {
+  const grade = _gradeFromScore(val);
+  return `
+    <div class="health-sub-card">
+      <div class="health-sub-label">${label}</div>
+      <div class="health-sub-val score-pill ${grade}">${val}</div>
+      <div class="health-sub-bar"><div class="health-sub-fill" style="width:${val}%;"></div></div>
+    </div>`;
+}
+
+// ── Todo section ─────────────────────────────────────────────────────────────
+function _renderTodos() {
+  const el = document.getElementById('todoSection');
+  if (!el) return;
+
+  const todos = (S.report?.todos || []);
+  const open  = todos.filter(t => t.status === 'open');
+  const done  = todos.filter(t => t.status === 'resolved' || t.status === 'dismissed');
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h3>Action Queue</h3>
+      <span class="cnt">${open.length} open</span>
+      ${done.length ? `<span class="cnt" style="color:var(--text-muted);">${done.length} closed</span>` : ''}
+    </div>
+    <div class="todo-list" id="todoList"></div>`;
+
+  const list = document.getElementById('todoList');
+
+  if (!todos.length) {
+    list.innerHTML = `<div class="empty-panel">✅ No action items — knowledge base looks good! Run a scan after adding new KCs to keep the queue fresh.</div>`;
+    return;
+  }
+
+  const sorted = [...todos].sort((a, b) => {
+    const ord = { open: 0, dismissed: 1, resolved: 2 };
+    const po  = { P1: 0, P2: 1, P3: 2 };
+    if (ord[a.status] !== ord[b.status]) return ord[a.status] - ord[b.status];
+    if (po[a.priority] !== po[b.priority]) return po[a.priority] - po[b.priority];
+    return (b.callerCount || 0) - (a.callerCount || 0);
+  });
+
+  list.innerHTML = sorted.map(t => _todoCard(t)).join('');
+}
+
+function _todoCard(t) {
+  const typeLabels  = { MISSING_KC: 'Missing KC', FAILING_KC: 'Failing KC', KEYWORD_CONFLICT: 'Conflict', THIN_CONTENT: 'Thin Content', FEW_KEYWORDS: 'Keywords', STALE_CONTENT: 'Stale' };
+  const actionUrl   = (t.kcIds && t.kcIds[0]) ? `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${t.kcIds[0]}` : `/agent-console/services.html?companyId=${S.companyId}`;
+  const actionLabel = t.type === 'MISSING_KC' ? '+ Create KC' : t.kcIds?.length > 1 ? 'Review KCs' : 'Edit KC';
+
+  const phrases = (t.samplePhrases || []).map(p => `<span class="todo-phrase">"${_esc(p)}"</span>`).join('');
+
+  const statusHtml = t.status === 'resolved'
+    ? `<span class="status-badge status-resolved">✓ Resolved</span>`
+    : t.status === 'dismissed'
+    ? `<span class="status-badge status-dismissed">Dismissed</span>`
+    : '';
+
+  const dismissBtn = t.status === 'open'
+    ? `<button class="btn-dismiss" onclick="dismissTodo('${_esc(t.stableId)}')" title="Dismiss — won't reopen on next scan">✕</button>`
+    : '';
+
+  return `
+    <div class="todo-card ${t.status !== 'open' ? t.status : ''}">
+      <div class="todo-priority ${t.priority}">${t.priority}</div>
+      <div class="todo-body">
+        <div class="todo-title">${_esc(t.title)}</div>
+        <div class="todo-desc">${_esc(t.description)}</div>
+        ${phrases ? `<div class="todo-phrases">${phrases}</div>` : ''}
+        <div class="todo-footer">
+          <span class="todo-type-badge type-${t.type}">${typeLabels[t.type] || t.type}</span>
+          ${t.impactNote ? `<span class="todo-impact">· ${_esc(t.impactNote)}</span>` : ''}
+          ${statusHtml}
+        </div>
+      </div>
+      <div class="todo-actions">
+        ${t.status === 'open' ? `<a class="btn-todo-action primary" href="${actionUrl}">${t.type === 'MISSING_KC' ? '+ Create KC' : '→ Fix it'}</a>` : ''}
+        ${dismissBtn}
+      </div>
+    </div>`;
+}
+
+// ── Call gaps tab ─────────────────────────────────────────────────────────────
+function _renderGaps() {
+  const el      = document.getElementById('tab-gaps');
+  const missing = S.report?.gapReport?.missing || [];
+  const failing = S.report?.gapReport?.failing || [];
+
+  if (!missing.length && !failing.length) {
+    el.innerHTML = `<div class="empty-panel">No gap signals in the last ${S.report?.callDaysBack || 30} days — or no call history yet.<br>Gap data improves as real calls accumulate.</div>`;
+    return;
+  }
+
+  let html = '';
+
+  if (missing.length) {
+    html += `<div class="section-header" style="margin-top:0;"><h3>Missing KCs</h3><span class="cnt">${missing.length} topic${missing.length !== 1 ? 's' : ''}</span></div>`;
+    html += `<table class="intel-table" style="margin-bottom:24px;">
+      <thead><tr><th>Topic</th><th>Calls</th><th>Sample caller phrases</th></tr></thead><tbody>`;
+    for (const g of missing) {
+      const phrases = (g.samplePhrases || []).map(p => `<span class="kw-chip">"${_esc(p)}"</span>`).join('');
+      html += `<tr>
+        <td><strong>${_esc(g.topic)}</strong></td>
+        <td><strong style="color:var(--red);">${g.callerCount}</strong></td>
+        <td>${phrases || '<span style="color:var(--text-muted);font-size:12px;">—</span>'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  if (failing.length) {
+    html += `<div class="section-header" style="margin-top:${missing.length ? 8 : 0}px;"><h3>Failing KCs</h3><span class="cnt">${failing.length} KC${failing.length !== 1 ? 's' : ''}</span><span style="font-size:12px;color:var(--text-muted);margin-left:4px;">— KC exists but callers still transferred</span></div>`;
+    html += `<table class="intel-table"><thead><tr><th>KC Card</th><th>Calls</th><th>Sample caller phrases</th><th></th></tr></thead><tbody>`;
+    for (const g of failing) {
+      const phrases = (g.samplePhrases || []).map(p => `<span class="kw-chip">"${_esc(p)}"</span>`).join('');
+      const editUrl = g.kcId ? `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${g.kcId}` : '#';
+      html += `<tr>
+        <td><strong>${_esc(g.kcTitle || g.topic)}</strong></td>
+        <td><strong style="color:var(--amber);">${g.callerCount}</strong></td>
+        <td>${phrases || '—'}</td>
+        <td><a class="btn-todo-action" href="${editUrl}" style="font-size:11.5px;">Edit KC</a></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ── Conflicts tab ─────────────────────────────────────────────────────────────
+function _renderConflicts() {
+  const el    = document.getElementById('tab-conflicts');
+  const pairs = S.report?.conflictPairs || [];
+
+  if (!pairs.length) {
+    el.innerHTML = `<div class="empty-panel">✅ No keyword conflicts detected — each KC has unique routing keywords.</div>`;
+    return;
+  }
+
+  let html = '';
+  for (const p of pairs) {
+    const kws    = (p.sharedKeywords || []).slice(0, 8).map(k => `<span class="kw-chip">${_esc(k)}</span>`).join('');
+    const sevCls = `severity-${p.severity || 'medium'}`;
+    html += `
+      <div class="conflict-row">
+        <div class="conflict-pair-label">
+          <span class="${sevCls}">⚠</span>
+          <strong>${_esc(p.kcATitle)}</strong>
+          <span style="color:var(--text-muted);">vs</span>
+          <strong>${_esc(p.kcBTitle)}</strong>
+          <span style="font-size:11px;padding:1px 7px;border-radius:5px;background:#f1f5f9;color:var(--text-muted);margin-left:4px;text-transform:capitalize;">${p.severity || 'medium'}</span>
+        </div>
+        <div class="conflict-kws">Shared keywords: ${kws || '—'}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          ${p.kcAId ? `<a class="btn-todo-action" href="/agent-console/services-item.html?companyId=${S.companyId}&itemId=${p.kcAId}" style="font-size:11.5px;">Edit ${_esc(p.kcATitle)}</a>` : ''}
+          ${p.kcBId ? `<a class="btn-todo-action" href="/agent-console/services-item.html?companyId=${S.companyId}&itemId=${p.kcBId}" style="font-size:11.5px;">Edit ${_esc(p.kcBTitle)}</a>` : ''}
+        </div>
+      </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ── KC Health tab ─────────────────────────────────────────────────────────────
+function _renderKCHealth() {
+  const el  = document.getElementById('tab-kc-health');
+  const kcs = (S.report?.kcHealth || []).sort((a, b) => a.score - b.score);
+
+  if (!kcs.length) {
+    el.innerHTML = `<div class="empty-panel">No KC health data — run a scan first.</div>`;
+    return;
+  }
+
+  const chipFor = issue => {
+    if (issue.type === 'THIN_CONTENT' || issue.type === 'SPARSE_CONTENT') return `<span class="issue-chip chip-thin">Thin</span>`;
+    if (issue.type === 'FEW_KEYWORDS' || issue.type === 'SPARSE_KEYWORDS') return `<span class="issue-chip chip-kw">Keywords</span>`;
+    if (issue.type === 'STALE_CONTENT' || issue.type === 'AGING_CONTENT')  return `<span class="issue-chip chip-stale">Stale</span>`;
+    return '';
+  };
+
+  let rows = kcs.map(kc => {
+    const issues   = (kc.issues || []).map(chipFor).filter(Boolean).join('') || `<span class="issue-chip chip-ok">✓ Good</span>`;
+    const editUrl  = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${kc.kcId}`;
+    return `<tr>
+      <td><a href="${editUrl}" style="font-weight:600;color:var(--text-main);text-decoration:none;">${_esc(kc.kcTitle)}</a></td>
+      <td><span class="score-pill ${kc.grade}">${kc.score} ${kc.grade}</span></td>
+      <td style="color:var(--text-muted);">${kc.wordCount ?? '—'} words</td>
+      <td style="color:var(--text-muted);">${kc.keywordCount ?? '—'} kw</td>
+      <td style="color:var(--text-muted);">${kc.daysSinceUpdated != null ? kc.daysSinceUpdated + 'd ago' : '—'}</td>
+      <td>${issues}</td>
+      <td><a class="btn-todo-action" href="${editUrl}" style="font-size:11.5px;">Edit</a></td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table class="intel-table">
+      <thead><tr><th>KC Card</th><th>Score</th><th>Content</th><th>Keywords</th><th>Updated</th><th>Issues</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`tab-${name}`)?.classList.add('active');
+}
+</script>
+</body>
+</html>
