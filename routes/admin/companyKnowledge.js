@@ -94,6 +94,7 @@ const ALLOWED_FIELDS = [
   'sections',
   'keywords',
   'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
+  'sampleQuestions',    // Example caller utterances generated alongside keywords — display + analytics
   'wordLimit',
   'wordLimitEnabled',   // Boolean — when false, omits hard word cap from Groq prompt
   'useFixedResponse',   // Boolean — when true, bypasses Groq; agent reads Section 1 verbatim with pre-cached audio

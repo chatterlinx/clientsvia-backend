@@ -1378,6 +1378,7 @@ const S = {
   isEdit:           false,
   keywords:         [],         // positive trigger keywords
   negativeKeywords: [],         // exclusion keywords (any match → container skipped)
+  sampleQuestions:  [],         // example caller utterances generated with keywords — persisted to DB
   sectionSeq:       0,          // monotonic ID for section DOM nodes
   conflictMap:      {},         // { keyword: [{id, title}] } — from keyword-health endpoint
   evalResult:       null,       // last evaluation result from /evaluate
@@ -1669,6 +1670,20 @@ function _populateForm(c) {
   // Negative keywords
   S.negativeKeywords = [...(c.negativeKeywords || [])];
   _renderNegKeywords();
+
+  // Sample questions (persisted from last Auto-Generate run)
+  S.sampleQuestions = [...(c.sampleQuestions || [])];
+  const previewPanel = document.getElementById('kwPreview');
+  if (previewPanel && S.sampleQuestions.length) {
+    previewPanel.style.display = 'block';
+    previewPanel.innerHTML = `
+      <div class="kw-preview-title">🎯 Will fire on calls like these</div>
+      ${S.sampleQuestions.map(q => `<div class="kw-preview-q"><span class="kw-preview-q-icon">📞</span>${_esc(q)}</div>`).join('')}
+      <div style="margin-top:8px;text-align:right;">
+        <button type="button" onclick="document.getElementById('kwPreview').style.display='none'"
+          style="font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0;">Dismiss</button>
+      </div>`;
+  }
 
   // Sections — pass per-section funnel data (pq + upsell) as sectionMeta
   const sorted = [...(c.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -2705,15 +2720,17 @@ async function generateKeywords() {
     });
     if (negAdded > 0) _renderNegKeywords();
 
+    // Store sample questions in state (persisted on Save Container)
+    S.sampleQuestions = (data.sampleQuestions || []).slice(0, 3);
+
     // Show "will fire on" sample questions preview
     const previewPanel = document.getElementById('kwPreview');
     if (previewPanel) {
-      const qs = (data.sampleQuestions || []).slice(0, 3);
-      if (qs.length) {
+      if (S.sampleQuestions.length) {
         previewPanel.style.display = 'block';
         previewPanel.innerHTML = `
           <div class="kw-preview-title">🎯 Will fire on calls like these</div>
-          ${qs.map(q => `<div class="kw-preview-q"><span class="kw-preview-q-icon">📞</span>${_esc(q)}</div>`).join('')}
+          ${S.sampleQuestions.map(q => `<div class="kw-preview-q"><span class="kw-preview-q-icon">📞</span>${_esc(q)}</div>`).join('')}
           <div style="margin-top:8px;text-align:right;">
             <button type="button" onclick="document.getElementById('kwPreview').style.display='none'"
               style="font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0;">Dismiss</button>
@@ -2773,6 +2790,7 @@ async function saveContainer() {
     sections,
     keywords:         S.keywords,
     negativeKeywords: S.negativeKeywords,
+    sampleQuestions:  S.sampleQuestions,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
     sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
@@ -2834,6 +2852,7 @@ function downloadJSON() {
     sections,
     keywords:         S.keywords,
     negativeKeywords: S.negativeKeywords,
+    sampleQuestions:  S.sampleQuestions,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
     sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,

@@ -276,6 +276,12 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'Exclusion phrases — if ANY of these appear in the caller\'s utterance, this container is immediately excluded from scoring for that turn. Use to prevent containers with broad positive keywords from firing on unrelated topics. E.g. "System Replacement" container adds negativeKeywords: ["maintenance", "tune-up"] to stop matching maintenance price questions.'
     },
 
+    sampleQuestions: {
+      type:    [String],
+      default: [],
+      comment: 'Example caller utterances generated alongside trigger keywords (Auto-Generate from Content). Persisted so they survive page reloads and can be used for future QA/analytics.'
+    },
+
     // ─────────────────────────────────────────────────────────────────────────
     // RESPONSE SETTINGS — per-container overrides
     // ─────────────────────────────────────────────────────────────────────────
