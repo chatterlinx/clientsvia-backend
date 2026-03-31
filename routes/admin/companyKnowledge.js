@@ -959,9 +959,11 @@ router.post('/:companyId/knowledge/analyze-gaps', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   const { containerTitle = '', sectionLabel = '', sectionContent = '' } = req.body || {};
+  const blankMode = !sectionContent.trim();  // true = writer's block mode — no content yet
 
-  if (!sectionContent.trim()) {
-    return res.status(400).json({ success: false, error: 'sectionContent is required' });
+  // Require at least a title or section label so Groq has something to work with
+  if (blankMode && !containerTitle.trim() && !sectionLabel.trim()) {
+    return res.status(400).json({ success: false, error: 'Add a section label or KC title first so we know what topic to generate questions for' });
   }
 
   const apiKey = process.env.GROQ_API_KEY;
@@ -1019,19 +1021,33 @@ router.post('/:companyId/knowledge/analyze-gaps', async (req, res) => {
       ? `\nReal questions this company's callers have asked about this topic:\n${callReasons.map(r => `- "${r}"`).join('\n')}`
       : '';
 
-    const userPrompt = [
-      contextLines.join('\n'),
-      `\nContent the agent currently has:\n"""\n${sectionContent.trim().slice(0, 2000)}\n"""`,
-      historyBlock,
-    ].filter(Boolean).join('\n');
+    const userPrompt = blankMode
+      ? [
+          contextLines.join('\n'),
+          historyBlock,
+        ].filter(Boolean).join('\n')
+      : [
+          contextLines.join('\n'),
+          `\nContent the agent currently has:\n"""\n${sectionContent.trim().slice(0, 2000)}\n"""`,
+          historyBlock,
+        ].filter(Boolean).join('\n');
 
-    const result = await GroqStreamAdapter.streamFull({
-      apiKey,
-      model:       'llama-3.3-70b-versatile',
-      maxTokens:   400,
-      temperature: 0.3,
-      jsonMode:    true,
-      system: `You are a phone-call receptionist expert for ${tradeString || 'service'} companies.
+    const systemPrompt = blankMode
+      ? `You are a phone-call receptionist expert for ${tradeString || 'service'} companies.
+
+A business owner is writing content for their AI receptionist but hasn't started yet. Your job: list the questions a real caller would ask about this topic — these become the owner's writing guide.
+
+Rules:
+- Think like a caller on the phone, not a search engine user.
+- Use the company's real call history (if provided) as strong evidence of what callers actually ask.
+- Add industry knowledge for questions not yet seen in real calls.
+- Write each question exactly as a caller would say it — natural, conversational, short.
+- Max 6 questions. Cover the most important ones first.
+- No duplicates.
+
+Return ONLY valid JSON — no markdown, no extra text:
+{ "questions": ["question 1", "question 2", ...] }`
+      : `You are a phone-call receptionist expert for ${tradeString || 'service'} companies.
 
 A business owner has written content for their AI receptionist. Your job: list the questions a real caller would ask about this topic that are NOT answered by the content above.
 
@@ -1044,7 +1060,15 @@ Rules:
 - If the content already answers everything a caller would reasonably ask, return an empty array.
 
 Return ONLY valid JSON — no markdown, no extra text:
-{ "questions": ["question 1", "question 2", ...] }`,
+{ "questions": ["question 1", "question 2", ...] }`;
+
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   400,
+      temperature: 0.3,
+      jsonMode:    true,
+      system:      systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     });
 
@@ -1075,7 +1099,7 @@ Return ONLY valid JSON — no markdown, no extra text:
       companyId, questions: questions.length, callsAnalyzed,
     });
 
-    return res.json({ success: true, questions, callsAnalyzed, sourceNote });
+    return res.json({ success: true, questions, callsAnalyzed, sourceNote, blankMode });
 
   } catch (err) {
     logger.error('[companyKnowledge] analyze-gaps error', { companyId, err: err.message });
