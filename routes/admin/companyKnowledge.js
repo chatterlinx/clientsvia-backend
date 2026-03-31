@@ -1173,6 +1173,11 @@ router.post('/:companyId/knowledge/generate-sample', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
+  }
+
   const { title = '', category = '', sectionText = '' } = req.body || {};
   if (!sectionText.trim()) {
     return res.status(400).json({ success: false, error: 'sectionText is required' });
@@ -1183,7 +1188,7 @@ router.post('/:companyId/knowledge/generate-sample', async (req, res) => {
     const trade   = company?.trade || (company?.tradeCategories || [])[0] || 'home services';
     const name    = company?.companyName || 'the company';
 
-    const systemPrompt = `You are a script writer for ${name}, a ${trade} company.
+    const system = `You are a script writer for ${name}, a ${trade} company.
 Write ONE ideal spoken-phone-call answer (25–35 words) for a caller asking about the topic below.
 Rules:
 - Sound like a real, warm human on the phone — not a webpage or chatbot
@@ -1198,14 +1203,16 @@ Content:
 ${sectionText.trim().slice(0, 1200)}`;
 
     const result = await GroqStreamAdapter.streamFull({
-      systemPrompt,
-      userMessage: userMsg,
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      system,
+      messages:    [{ role: 'user', content: userMsg }],
       maxTokens:   120,
-      jsonMode:    false,
+      temperature: 0.6,
     });
 
     const sample = (result.response || '').trim().replace(/^["']|["']$/g, '');
-    if (!sample) throw new Error('Empty response from Groq');
+    if (!sample) throw new Error(result.failureReason || 'Empty response from Groq');
 
     logger.info('[companyKnowledge] generate-sample complete', { companyId, words: sample.split(/\s+/).length });
     return res.json({ success: true, sample });
