@@ -408,19 +408,19 @@ async function _runKeywordGeneration(companyId, title, sections, res) {
       jsonMode:    true,
       system: `You are a keyword expert for an AI phone receptionist at a service company.
 
-Given a knowledge card topic and content, generate THREE things:
+Given a knowledge card topic and content, return a JSON object with EXACTLY these three fields:
 
-1. TRIGGER KEYWORDS (12-18 phrases): What callers say when asking about THIS specific topic over the phone. Multi-word phrases score higher — prefer them. Cover natural variations: pricing, scheduling, what's included, availability, refunds, emergency, same-day, etc.
+"keywords" — array of 12-18 short phrases that a caller might say when asking about this topic over the phone. Multi-word phrases score higher than single words, so prefer them. Cover natural variations: pricing, scheduling, what's included, availability, refunds, emergency, same-day, etc.
 
-2. EXCLUSION KEYWORDS (3-6 phrases): Adjacent topics that sound related but this card should NOT handle. These prevent false positives where a similar-sounding question fires the wrong card. Think: what other services or topics might share some words with this one but mean something completely different?
+"negativeKeywords" — array of 3-6 adjacent topics this card should NOT handle. These prevent false positives where a similar-sounding question fires the wrong card. Think: what other services or topics share some of the same words but mean something completely different?
 
-3. SAMPLE QUESTIONS (3 examples): Exact phrases a real caller would say that SHOULD trigger this card. Written in natural phone-call language, not formal. These validate that the keywords are correct.
+"sampleQuestions" — array of exactly 3 real caller phrases that SHOULD trigger this card. Natural phone-call language, not formal. These validate that the keywords are correct.
 
-Return ONLY valid JSON — no markdown, no extra text:
+Return ONLY this JSON object — no markdown, no extra text, no other field names:
 {
   "keywords": ["phrase 1", "phrase 2", ...],
   "negativeKeywords": ["exclusion 1", "exclusion 2", ...],
-  "sampleQuestions": ["How much is the service call?", "Is there a diagnostic fee?", "..."]
+  "sampleQuestions": ["question 1", "question 2", "question 3"]
 }`,
       messages: [{ role: 'user', content: promptContent }],
     });
@@ -448,12 +448,24 @@ Return ONLY valid JSON — no markdown, no extra text:
         .filter(k => k.length > 2 && k.length < 80)
     )].slice(0, cap);
 
-    const keywords         = _cleanArr(parsed.keywords,         20);
-    const negativeKeywords = _cleanArr(parsed.negativeKeywords,  8);
+    // Field-name fallbacks — Groq occasionally uses trigger_keywords, exclusionKeywords, etc.
+    const kwRaw  = parsed.keywords         || parsed.triggerKeywords  || parsed.trigger_keywords  || parsed.phrases       || [];
+    const negRaw = parsed.negativeKeywords || parsed.exclusionKeywords || parsed.exclusion_keywords || parsed.negKeywords  || [];
+    const sqRaw  = parsed.sampleQuestions  || parsed.sampleCalls      || parsed.sample_questions  || parsed.examples      || [];
+
+    const keywords         = _cleanArr(kwRaw,  20);
+    const negativeKeywords = _cleanArr(negRaw,  8);
     // sampleQuestions kept as-is (not lowercased — they're display strings)
-    const sampleQuestions  = (Array.isArray(parsed.sampleQuestions) ? parsed.sampleQuestions : [])
+    const sampleQuestions  = (Array.isArray(sqRaw) ? sqRaw : [])
       .filter(q => typeof q === 'string' && q.trim())
       .slice(0, 3);
+
+    // Warn if Groq returned something unexpected — shows actual keys for diagnosis
+    if (keywords.length === 0) {
+      logger.warn('[companyKnowledge] generate-keywords: keywords empty after parse', {
+        companyId, parsedKeys: Object.keys(parsed), raw: result.response.slice(0, 400),
+      });
+    }
 
     logger.info('[companyKnowledge] Generated keywords', {
       companyId, keywords: keywords.length, negativeKeywords: negativeKeywords.length,
