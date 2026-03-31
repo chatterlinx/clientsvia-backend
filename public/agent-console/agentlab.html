@@ -753,38 +753,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function _loadCompany() {
   try {
-    const token = window.AgentConsoleAuth?.getToken?.() || localStorage.getItem('authToken') || '';
-    const res   = await fetch(`/api/admin/company/${S.companyId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error('fetch failed');
-    const data  = await res.json();
-    const co    = data.company || data.data || data;
-    S.companyName  = co.companyName || 'Company';
-    S.companyPhone = co.twilioConfig?.phoneNumber || null;
-
+    const data = await AgentConsoleAuth.apiFetch(`${API(S.companyId)}/company-info`);
+    S.companyName  = data.companyName  || 'Company';
+    S.companyPhone = data.companyPhone || null;
     document.getElementById('headerCompany').textContent = S.companyName;
     document.getElementById('companyPhoneDisplay').textContent = S.companyPhone
       ? _formatPhone(S.companyPhone)
       : 'No Twilio number configured';
   } catch (err) {
-    // Try alternate endpoint
-    try {
-      const token = window.AgentConsoleAuth?.getToken?.() || localStorage.getItem('authToken') || '';
-      const res   = await fetch(`/api/company/${S.companyId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data  = await res.json();
-      const co    = data.company || data.data || data;
-      S.companyName  = co?.companyName || 'Company';
-      S.companyPhone = co?.twilioConfig?.phoneNumber || null;
-      document.getElementById('headerCompany').textContent = S.companyName;
-      document.getElementById('companyPhoneDisplay').textContent = S.companyPhone
-        ? _formatPhone(S.companyPhone)
-        : 'No Twilio number configured';
-    } catch {
-      document.getElementById('companyPhoneDisplay').textContent = 'Could not load company';
-    }
+    document.getElementById('companyPhoneDisplay').textContent = 'Could not load company';
+    console.warn('[AgentLab] _loadCompany failed', err);
   }
 }
 
@@ -824,14 +802,11 @@ async function generateScenarios() {
   document.getElementById('scenarioEmpty').style.display = 'none';
 
   try {
-    const token = _getToken();
-    const res   = await fetch(`${API(S.companyId)}/scenarios`, {
+    const data = await AgentConsoleAuth.apiFetch(`${API(S.companyId)}/scenarios`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ difficulty: S.difficulty, count: 3 }),
+      body: { difficulty: S.difficulty, count: 3 },
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Generation failed');
+    if (!data.success) throw new Error(data.error || 'Generation failed');
 
     S.scenarios      = data.scenarios || [];
     S.activeScenario = null;
@@ -903,20 +878,17 @@ async function startSession() {
 
   try {
     const sc = S.activeScenario !== null ? S.scenarios[S.activeScenario] : null;
-    const token = _getToken();
-    const res = await fetch(`${API(S.companyId)}/session/start`, {
+    const data = await AgentConsoleAuth.apiFetch(`${API(S.companyId)}/session/start`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         callerPhone,
         channel:       S.channel,
         difficulty:    S.difficulty,
         scenarioId:    sc?.id   || null,
         scenarioTitle: sc?.title || null,
-      }),
+      },
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to start session');
+    if (!data.success) throw new Error(data.error || 'Failed to start session');
 
     S.session   = data;
     S.pollIndex = 0;
@@ -964,13 +936,11 @@ async function endSession() {
   _stopPolling();
 
   try {
-    const token = _getToken();
-    const res   = await fetch(`${API(S.companyId)}/session/${S.session.sessionId}/end`, {
+    const data = await AgentConsoleAuth.apiFetch(`${API(S.companyId)}/session/${S.session.sessionId}/end`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: {},
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to end session');
+    if (!data.success) throw new Error(data.error || 'Failed to end session');
 
     S.ended = true;
     _setStatus('ended', `Session ended — ${data.turnCount} turn${data.turnCount !== 1 ? 's' : ''}`);
@@ -1075,11 +1045,9 @@ async function _poll() {
   if (!S.session?.sessionId || S.ended) { _stopPolling(); return; }
 
   try {
-    const token = _getToken();
-    const res   = await fetch(`${API(S.companyId)}/session/${S.session.sessionId}/poll?since=${S.pollIndex}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const data = await res.json();
+    const data = await AgentConsoleAuth.apiFetch(
+      `${API(S.companyId)}/session/${S.session.sessionId}/poll?since=${S.pollIndex}`
+    );
     if (!data.success) return;
 
     const newTurns = data.turns || [];

@@ -41,6 +41,40 @@ router.use(authenticateJWT);
 const SESSION_TTL = 4 * 60 * 60; // 4 hours in seconds
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ROUTE: GET /:companyId/agentlab/company-info
+// Lightweight company info for the lab UI (name + Twilio phone)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/:companyId/agentlab/company-info', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateAccess(req, res, companyId)) return;
+  try {
+    const company = await v2Company.findById(companyId)
+      .select('companyName twilioConfig.phoneNumber twilioConfig.phoneNumbers tradeCategories')
+      .lean();
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+
+    // Resolve primary active phone — prefer phoneNumbers array, fall back to phoneNumber
+    let companyPhone = company.twilioConfig?.phoneNumber || null;
+    if (company.twilioConfig?.phoneNumbers?.length) {
+      const primary = company.twilioConfig.phoneNumbers.find(p => p.isPrimary && p.status === 'active')
+        || company.twilioConfig.phoneNumbers.find(p => p.status === 'active');
+      if (primary?.phoneNumber) companyPhone = primary.phoneNumber;
+    }
+
+    return res.json({
+      success: true,
+      companyName:    company.companyName || 'Company',
+      companyPhone,
+      tradeCategories: company.tradeCategories || [],
+    });
+  } catch (err) {
+    logger.error('[AgentLab] /company-info error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
