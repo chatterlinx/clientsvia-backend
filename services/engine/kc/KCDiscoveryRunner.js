@@ -1774,8 +1774,14 @@ async function _handleUpsellResponse({
   pendingUpsell,   // raw JSON string from Redis
   emit, nextState, startMs, turn, company,
 }) {
-  const _YES_RE = /\b(yes|yeah|yep|sure|absolutely|go ahead|please|proceed|add it|let's do it|sounds good|do it|i'll take it|throw it in)\b/i;
-  const _NO_RE  = /\b(no|nope|not today|maybe later|not right now|nevermind|skip it|no thanks|pass|don't|i'm good)\b/i;
+  // ── Affirmative / Negative intent regexes ──────────────────────────────
+  // Word-boundary match is correct: Whisper normalises speech so "uh-huh"
+  // arrives as "uh-huh", "yap" as "yap", etc. A broad synonym list beats
+  // fuzzy matching because fuzzy risks false positives ("no actually yes").
+  // isYes takes priority — "yes, but no thanks" → YES wins.
+  // ────────────────────────────────────────────────────────────────────────
+  const _YES_RE = /\b(yes|yeah|yep|yap|yup|yah|uh-huh|uh huh|mhm|mm-hmm|mmhm|sure|absolutely|of course|definitely|for sure|why not|go ahead|go for it|please|proceed|add it|let's do it|let's go|sounds good|sounds great|do it|i'll take it|throw it in|count me in|make it happen|deal|perfect|alright|ok|okay|right|roger|affirmative)\b/i;
+  const _NO_RE  = /\b(no|nah|nope|no way|not today|not right now|not for me|not interested|maybe later|another time|nevermind|never mind|skip it|skip|no thanks|no thank you|pass|don't|i'm good|i'm fine|i'm ok|i'm alright|we're good|hold off|forget it|negative)\b/i;
 
   let _upState;
   try {
