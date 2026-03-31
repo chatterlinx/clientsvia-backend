@@ -206,6 +206,7 @@ router.post('/:companyId/agentlab/scenarios', async (req, res) => {
     const companyName  = company.companyName || 'the company';
 
     let systemPrompt;
+    let scenarioCount = count; // may be overridden in foundation mode
 
     if (foundation) {
       // ── FOUNDATION MODE: questions come verbatim FROM KC content ─────────────
@@ -219,8 +220,11 @@ router.post('/:companyId/agentlab/scenarios', async (req, res) => {
         return res.status(400).json({ success: false, error: 'No ready KCs to generate foundation tests from — add content and keywords first' });
       }
 
-      // Build rich KC blocks with content excerpts
-      const kcBlocks = targetKcs.slice(0, count).map((k, i) =>
+      // Cap at 5 to stay within token budget — prevents overload when many KCs are ready
+      scenarioCount = Math.min(targetKcs.length, 5);
+
+      // Build rich KC blocks with content excerpts (excerpts already sanitized in _kcReadiness)
+      const kcBlocks = targetKcs.slice(0, scenarioCount).map((k, i) =>
         `KC ${i + 1}: "${k.title}"\nKeywords: ${k.keywords.join(', ')}\nContent: ${k.contentExcerpt}`
       ).join('\n\n---\n\n');
 
@@ -300,10 +304,10 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
     const groqResult = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      messages:    [{ role: 'user', content: `Generate ${foundation ? 'foundation verification' : count} scenarios. Return JSON only.` }],
+      messages:    [{ role: 'user', content: `Generate ${scenarioCount} scenarios. Return JSON only.` }],
       system:      systemPrompt,
-      maxTokens:   2000,
-      temperature: foundation ? 0.3 : 0.85, // lower temp for foundation = more literal/reliable
+      maxTokens:   foundation ? 3000 : 2000, // foundation needs more room — KC blocks are long
+      temperature: foundation ? 0.3 : 0.85,  // lower temp for foundation = more literal/reliable
     });
 
     const rawText = groqResult?.response || '';
@@ -318,7 +322,7 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
       scenarios     = JSON.parse(match ? match[0] : cleaned);
       if (!Array.isArray(scenarios)) throw new Error('not array');
     } catch (parseErr) {
-      logger.warn('[AgentLab] Scenario parse failed', { companyId, parseErr: parseErr.message, rawText: rawText.slice(0, 200) });
+      logger.warn('[AgentLab] Scenario parse failed', { companyId, foundation, parseErr: parseErr.message, rawText: rawText.slice(0, 800) });
       return res.status(502).json({ success: false, error: 'Scenario generation failed — retry' });
     }
 
