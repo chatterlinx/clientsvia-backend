@@ -916,6 +916,39 @@ async function answer(opts) {
     return { response: null, intent: INTENT.ERROR, confidence: 0, latencyMs: 0, containerTitle };
   }
 
+  // ── FIXED RESPONSE SHORTCUT ────────────────────────────────────────────────
+  // useFixedResponse:true → skip Groq entirely.
+  // Agent reads the effective section's content verbatim. Audio is pre-cached by
+  // the companyKnowledge route at save time (kind:'KC_RESPONSE').
+  // bookingAction is resolved by the engine upstream — not needed here.
+  // Falls through to Groq gracefully if no content is found.
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (container.useFixedResponse) {
+    const effectiveSections = targetSection
+      ? [targetSection]
+      : [...(container.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const fixedText = effectiveSections.find(s => s.content?.trim())?.content?.trim() || null;
+
+    if (fixedText) {
+      logger.debug('[KnowledgeContainer] Fixed response shortcut — Groq bypassed', {
+        companyId, callSid, containerTitle, chars: fixedText.length,
+      });
+      return {
+        response:              fixedText,
+        intent:                INTENT.ANSWERED,
+        confidence:            1.0,
+        latencyMs:             Date.now() - startMs,
+        containerTitle,
+      };
+    }
+    // No content found in any section — fall through to Groq gracefully
+    logger.warn('[KnowledgeContainer] useFixedResponse:true but no section content found — falling through to Groq', {
+      companyId, callSid, containerTitle,
+    });
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     logger.warn('[KnowledgeContainer] GROQ_API_KEY not set — skipping', { companyId, callSid });

@@ -52,6 +52,7 @@ const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthS
 const UAPArray                     = require('../../models/UAPArray');
 const BridgeService                = require('../../services/engine/kc/BridgeService');
 const Customer                     = require('../../models/Customer');
+const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -94,6 +95,7 @@ const ALLOWED_FIELDS = [
   'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
   'wordLimit',
   'wordLimitEnabled',   // Boolean — when false, omits hard word cap from Groq prompt
+  'useFixedResponse',   // Boolean — when true, bypasses Groq; agent reads Section 1 verbatim with pre-cached audio
   'sampleResponse',     // String — ideal example answer injected as guardrail into Groq prompt
   'followUpDepth',      // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
   'bookingAction',      // Container-level default; sections can override per-section
@@ -354,6 +356,11 @@ router.post('/:companyId/knowledge', async (req, res) => {
     setImmediate(() =>
       KCKeywordHealthService.generateAndStoreEmbedding(container._id).catch(() => {})
     );
+
+    // Pre-generate instant audio when Fixed Response Mode is enabled on creation
+    if (container.useFixedResponse) {
+      _preGenAudioFixed(companyId, container, 'created');
+    }
 
     logger.info('[companyKnowledge] Created container', { companyId, id: container._id, kcId, title: container.title });
     return res.status(201).json({ success: true, container });
@@ -1315,6 +1322,18 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
       );
     }
 
+    // Pre-generate instant audio for Fixed Response Mode:
+    //   Case A — useFixedResponse just turned ON  → always pre-gen
+    //   Case B — already ON and sections changed   → re-gen (new content)
+    const fixedJustEnabled   = updates.useFixedResponse === true;
+    const fixedAlreadyOnEdit = updates.useFixedResponse !== false
+      && updates.sections !== undefined
+      && container.useFixedResponse === true;
+
+    if (fixedJustEnabled || fixedAlreadyOnEdit) {
+      _preGenAudioFixed(companyId, container, fixedJustEnabled ? 'enabled' : 'sections_updated');
+    }
+
     logger.info('[companyKnowledge] Updated container', { companyId, id, fields: Object.keys(updates) });
     return res.json({ success: true, container });
   } catch (err) {
@@ -1983,5 +2002,67 @@ Return ONLY valid JSON. No markdown.
     return res.status(500).json({ success: false, error: 'Auto-classification failed' });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INSTANT AUDIO PRE-GENERATION — Fixed Response Mode
+// ─────────────────────────────────────────────────────────────────────────────
+// Called fire-and-forget when a container is saved with useFixedResponse:true.
+// Pre-generates an ElevenLabs MP3 for Section 1 content so the runtime can serve
+// a cached <Play> at call time instead of paying Groq + ElevenLabs latency.
+//
+// PATTERN: mirrors _preGenAudio() in companyPricing.js — async IIFE, non-blocking,
+// all failures logged as warn (never surfaced to caller).
+//
+// GUARDS:
+//   - Skips silently if no Section 1 content
+//   - Skips silently if content exceeds 420 chars (InstantAudioService limit)
+//   - Skips silently if no voice configured for the company
+// ─────────────────────────────────────────────────────────────────────────────
+function _preGenAudioFixed(companyId, container, reason) {
+  const sections = container?.sections || [];
+  const sorted   = [...sections].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const section1 = sorted.find(s => s.content?.trim());
+  const text     = section1?.content?.trim() || '';
+
+  // Guard: nothing to pre-generate
+  if (!text) return;
+
+  // Guard: InstantAudioService hard limit for non-TRIGGER kinds
+  if (text.length > 420) {
+    logger.info('[companyKnowledge] Fixed response audio skipped — Section 1 content exceeds 420 chars', {
+      companyId, title: container.title, chars: text.length, reason,
+    });
+    return;
+  }
+
+  (async () => {
+    try {
+      const company = await v2Company.findById(companyId).lean();
+      const vs      = company?.aiAgentSettings?.voiceSettings;
+
+      // Guard: voice must be configured — skip silently if not
+      if (!vs?.voiceId) return;
+
+      await InstantAudioService.generate({
+        companyId,
+        kind:          'KC_RESPONSE',
+        text,
+        company,
+        voiceSettings: vs,
+      });
+
+      logger.info('[companyKnowledge] Fixed response audio pre-generated', {
+        companyId,
+        title:  container.title,
+        chars:  text.length,
+        reason,
+      });
+    } catch (err) {
+      logger.warn('[companyKnowledge] Fixed response audio pre-generation failed (non-fatal)', {
+        companyId, title: container.title, error: err.message, reason,
+      });
+    }
+  })();
+}
 
 module.exports = router;

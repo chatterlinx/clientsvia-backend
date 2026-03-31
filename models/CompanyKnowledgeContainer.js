@@ -268,6 +268,19 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'When false, the word cap is omitted from the Groq prompt — no hard ceiling, style multiplier still applies.'
     },
 
+    // ── FIXED RESPONSE MODE ────────────────────────────────────────────────
+    // When true, Groq is bypassed entirely. The agent reads the first section's
+    // content verbatim. The companyKnowledge route pre-generates audio on save
+    // (kind: 'KC_RESPONSE') so the runtime plays a cached MP3 — same zero-latency
+    // path as Pricing Interceptor. Word limit, sample response, and closing prompt
+    // are ignored in fixed mode. bookingAction still applies after the response.
+    // ──────────────────────────────────────────────────────────────────────────
+    useFixedResponse: {
+      type:    Boolean,
+      default: false,
+      comment: 'When true, bypasses Groq. Agent reads Section 1 content verbatim. Enables instant audio pre-caching — same latency as Pricing Interceptor. Word limit and sample response are ignored.'
+    },
+
     sampleResponse: {
       type:      String,
       default:   null,

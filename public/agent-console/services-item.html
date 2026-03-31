@@ -333,6 +333,68 @@
     }
     .kw-preview-q-icon { flex-shrink: 0; font-size: 11px; }
 
+    /* ── Fixed Response Mode toggle ─────────────────────────────────────────
+       Amber-tinted banner at the top of the Answer Settings card.
+       When enabled, Groq-only controls are dimmed (pointer-events: none).
+    ─────────────────────────────────────────────────────────────────────── */
+    .fixed-mode-toggle {
+      padding: 14px 16px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .fixed-mode-row {
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    .fixed-mode-info { flex: 1; }
+    .fixed-mode-badge {
+      display: inline-block;
+      background: #f59e0b; color: #fff;
+      font-size: .70rem; font-weight: 700;
+      padding: 2px 9px; border-radius: 4px;
+      letter-spacing: .04em; margin-bottom: 5px;
+    }
+    .fixed-mode-desc {
+      display: block; font-size: .82rem;
+      color: #78716c; line-height: 1.5;
+    }
+    /* Toggle pill (amber accent) */
+    .toggle-switch {
+      position: relative; display: inline-block;
+      width: 44px; height: 24px; flex-shrink: 0; margin-top: 2px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: #d1d5db; border-radius: 24px;
+      cursor: pointer; transition: background .2s;
+    }
+    .toggle-track::before {
+      content: ''; position: absolute;
+      height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background: #fff; border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform .2s;
+    }
+    .toggle-switch input:checked + .toggle-track { background: #f59e0b; }
+    .toggle-switch input:checked + .toggle-track::before { transform: translateX(20px); }
+    /* Active hint strip */
+    .fixed-mode-active-hint {
+      margin-top: 10px; padding: 8px 12px;
+      background: #fef3c7; border-radius: 6px;
+      font-size: .80rem; color: #92400e; line-height: 1.5;
+    }
+    /* Dim Groq-only controls when fixed mode is ON */
+    .groq-only-section {
+      transition: opacity .2s;
+    }
+    .groq-only-section.is-dimmed {
+      opacity: .35;
+      pointer-events: none;
+      user-select: none;
+    }
+
     /* ── Booking action radios ────────────────────────────────────────────── */
     .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
     .booking-radio-label {
@@ -942,43 +1004,73 @@
       <span class="form-card-badge optional">Optional overrides</span>
     </div>
     <div class="form-card-body">
-      <div class="form-row">
-        <div class="form-group">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label class="form-label" for="fWordLimit" style="margin:0;">Caller Response Budget</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer;">
-              <input type="checkbox" id="fWordLimitEnabled" onchange="_toggleWordLimitEnabled()" checked>
-              <span>Enforce cap</span>
-            </label>
+
+      <!-- ── Fixed Response Mode toggle ──────────────────────────────────── -->
+      <!-- When ON: Groq is bypassed. Agent reads Section 1 verbatim.         -->
+      <!-- Audio is pre-cached at save time for zero-latency playback.         -->
+      <!-- ─────────────────────────────────────────────────────────────────── -->
+      <div class="fixed-mode-toggle">
+        <div class="fixed-mode-row">
+          <div class="fixed-mode-info">
+            <span class="fixed-mode-badge">⚡ Fixed Response</span>
+            <span class="fixed-mode-desc">
+              Agent reads <strong>Section 1</strong> word-for-word — Groq bypassed, audio pre-cached at save time.
+              Same speed as Pricing Interceptor. Best for simple price quotes where the exact wording matters.
+            </span>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <input type="number" id="fWordLimit" class="form-input" min="5" max="300" placeholder="(use global default)"
-              style="width:130px;" oninput="_updateWordLimitHint()">
-            <span style="font-size:13px;color:var(--text-muted);">words Groq speaks</span>
-          </div>
-          <div class="form-hint">Simple answers: 25–40 words. Complex topics (pricing tiers, multi-step troubleshooting): 60–100. Uncheck "Enforce cap" to let Groq judge length — the style setting still applies.</div>
-          <div id="wordLimitHint" class="form-hint" style="margin-top:4px;font-style:italic;"></div>
-          <div id="complexityIndicator" style="margin-top:8px;display:none;"></div>
+          <label class="toggle-switch" title="Toggle Fixed Response Mode">
+            <input type="checkbox" id="fUseFixedResponse" onchange="_onFixedResponseChange()">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div id="fixedModeActiveHint" class="fixed-mode-active-hint" style="display:none">
+          ⚡ <strong>Fixed mode active</strong> — Groq is bypassed. Configure your exact answer text in
+          <strong>Section 1</strong> above. The word limit and sample response settings below are not used.
         </div>
       </div>
 
-      <!-- Sample ideal response -->
-      <div class="form-group full" style="margin-top:4px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
-          <label class="form-label" for="fSampleResponse" style="margin:0;">
-            Ideal Response Example
-            <span class="form-label-badge" style="background:#e0f2fe;color:#0369a1;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Guardrail</span>
-          </label>
-          <button type="button" id="btnGenSample" onclick="generateSampleResponse()"
-            style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;">
-            ✨ Generate Example
-          </button>
+      <!-- ── Groq-only controls (dimmed when Fixed Response Mode is ON) ─── -->
+      <div class="groq-only-section" id="groqOnlySection">
+
+        <div class="form-row">
+          <div class="form-group">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label class="form-label" for="fWordLimit" style="margin:0;">Caller Response Budget</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer;">
+                <input type="checkbox" id="fWordLimitEnabled" onchange="_toggleWordLimitEnabled()" checked>
+                <span>Enforce cap</span>
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="number" id="fWordLimit" class="form-input" min="5" max="300" placeholder="(use global default)"
+                style="width:130px;" oninput="_updateWordLimitHint()">
+              <span style="font-size:13px;color:var(--text-muted);">words Groq speaks</span>
+            </div>
+            <div class="form-hint">Simple answers: 25–40 words. Complex topics (pricing tiers, multi-step troubleshooting): 60–100. Uncheck "Enforce cap" to let Groq judge length — the style setting still applies.</div>
+            <div id="wordLimitHint" class="form-hint" style="margin-top:4px;font-style:italic;"></div>
+            <div id="complexityIndicator" style="margin-top:8px;display:none;"></div>
+          </div>
         </div>
-        <textarea id="fSampleResponse" class="form-input" rows="3" maxlength="600"
-          placeholder="Paste one perfect answer for this topic. Groq uses it to calibrate length and tone — it will never copy it word for word, just match the style.&#10;&#10;Example: &quot;Our annual maintenance plan is $149 and covers two tune-ups a year, plus priority scheduling. Would you like to get that set up today?&quot;"
-          style="resize:vertical;font-size:.82rem;line-height:1.5;"></textarea>
-        <div class="form-hint">Optional but powerful. A 30-word example teaches Groq more about your preferred answer style than any instruction. Leave blank to rely on the word cap alone.</div>
-      </div>
+
+        <!-- Sample ideal response -->
+        <div class="form-group full" style="margin-top:4px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+            <label class="form-label" for="fSampleResponse" style="margin:0;">
+              Ideal Response Example
+              <span class="form-label-badge" style="background:#e0f2fe;color:#0369a1;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Guardrail</span>
+            </label>
+            <button type="button" id="btnGenSample" onclick="generateSampleResponse()"
+              style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;">
+              ✨ Generate Example
+            </button>
+          </div>
+          <textarea id="fSampleResponse" class="form-input" rows="3" maxlength="600"
+            placeholder="Paste one perfect answer for this topic. Groq uses it to calibrate length and tone — it will never copy it word for word, just match the style.&#10;&#10;Example: &quot;Our annual maintenance plan is $149 and covers two tune-ups a year, plus priority scheduling. Would you like to get that set up today?&quot;"
+            style="resize:vertical;font-size:.82rem;line-height:1.5;"></textarea>
+          <div class="form-hint">Optional but powerful. A 30-word example teaches Groq more about your preferred answer style than any instruction. Leave blank to rely on the word cap alone.</div>
+        </div>
+
+      </div><!-- /.groq-only-section -->
 
       <!-- Booking action -->
       <div class="form-group full">
@@ -1443,6 +1535,13 @@ function _populateForm(c) {
   document.getElementById('fActive').checked = c.isActive !== false;
   charCount(document.getElementById('fTitle'), 120, 'ccTitle');
   charCount(document.getElementById('fCategory'), 80, 'ccCategory');
+
+  // Fixed Response Mode — load state and sync UI immediately
+  const fixedEl = document.getElementById('fUseFixedResponse');
+  if (fixedEl) {
+    fixedEl.checked = !!c.useFixedResponse;
+    _onFixedResponseChange();
+  }
 
   if (typeof c.wordLimit === 'number' && c.wordLimit >= 5) {
     document.getElementById('fWordLimit').value = c.wordLimit;
@@ -2221,6 +2320,7 @@ async function runEvaluation() {
     negativeKeywords:  S.negativeKeywords,
     wordLimit:         (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled:  document.getElementById('fWordLimitEnabled')?.checked !== false,
+    useFixedResponse:  document.getElementById('fUseFixedResponse')?.checked === true,
     sampleResponse:    (document.getElementById('fSampleResponse')?.value || '').trim() || null,
     bookingAction:     document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
     closingPrompt:     (document.getElementById('fClosingPrompt')?.value || '').trim(),
@@ -3128,6 +3228,19 @@ function charCount(el, max, countId) {
 
 function _wordCount(str) {
   return str.trim() ? str.trim().split(/\s+/).length : 0;
+}
+
+// ── Fixed Response Mode toggle ────────────────────────────────────────────
+// Dims/enables the Groq-only controls and shows/hides the active hint strip.
+// Called on checkbox change and on page load via _populateForm().
+// ─────────────────────────────────────────────────────────────────────────────
+function _onFixedResponseChange() {
+  const on         = document.getElementById('fUseFixedResponse')?.checked === true;
+  const hint       = document.getElementById('fixedModeActiveHint');
+  const groqSection = document.getElementById('groqOnlySection');
+
+  if (hint)        hint.style.display = on ? '' : 'none';
+  if (groqSection) groqSection.classList.toggle('is-dimmed', on);
 }
 
 function _toggleWordLimitEnabled() {

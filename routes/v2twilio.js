@@ -6051,6 +6051,47 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.warn('[V2 RESPOND] Instant audio trigger cache check failed', { error: e.message });
       }
 
+      // ── INSTANT AUDIO: Pre-cached KC fixed response (disk, zero-latency path) ──
+      // Fires for every KC_ENGINE response. Only KC cards with useFixedResponse:true
+      // will have a pre-cached KC_RESPONSE file on disk — all others return exists:false
+      // and fall through silently to ElevenLabs. Cost: ~0.1ms synchronous file stat.
+      try {
+        const isKcEngineResponse = runtimeResult?.matchSource === 'KC_ENGINE' && responseText;
+        if (!audioUrl && isKcEngineResponse) {
+          const InstantAudioService = require('../services/instantAudio/InstantAudioService');
+          const kcStatus = InstantAudioService.getStatus({
+            companyId:    companyID,
+            kind:         'KC_RESPONSE',
+            text:         responseText,
+            voiceSettings,
+          });
+
+          if (kcStatus.exists) {
+            audioUrl               = `${getSecureBaseUrl(req)}${kcStatus.url}`;
+            localVoiceProviderUsed = 'instant_audio_kc';
+            vd_audioUrlPresent     = true;
+            vd_preflightPassed     = true;
+            _fastPathResolve?.();  // Smart bridge: skip delay — audio is ready now
+
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId:    callSid,
+                companyId: companyID,
+                type:      'INSTANT_AUDIO_KC_HIT',
+                turn:      turnNumber,
+                data: {
+                  fileName:    kcStatus.fileName,
+                  url:         kcStatus.url,
+                  matchSource: 'KC_ENGINE',
+                }
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('[V2 RESPOND] Instant audio KC cache check failed', { error: e.message });
+      }
+
       try {
         const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
         const agent2AudioUrl = runtimeResult?.audioUrl;
