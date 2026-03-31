@@ -1954,7 +1954,7 @@ function calcHealthScore(summary, convTurns, discoveryNotes) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function buildHeader(callSid, companyId, summary, healthScore, hasIntelligence) {
+function buildHeader(callSid, companyId, summary, healthScore, hasIntelligence, convTurns) {
   return {
     callSid,
     companyId,
@@ -1964,7 +1964,7 @@ function buildHeader(callSid, companyId, summary, healthScore, hasIntelligence) 
     startedAt: summary?.startedAt || null,
     durationSeconds: summary?.durationSeconds || 0,
     durationFormatted: fmtDuration(summary?.durationSeconds),
-    turnCount: summary?.turnCount || 0,
+    turnCount: summary?.turnCount || convTurns?.length || 0,  // fallback to transcript if CallSummary not incremented (e.g. crash)
     outcome: summary?.outcome || 'unknown',
     outcomeDetail: summary?.outcomeDetail || null,
     routingTier: summary?.routingTier || null,
@@ -2692,7 +2692,7 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
   const healthScore = calcHealthScore(summary, convTurns, discoveryNotes);
 
   return {
-    header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence),
+    header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence, convTurns),
     engineHub: ehSummary,      // Engine Hub mode for this company — shown in sticky header
     story: buildStory(summary, discoveryNotes, convTurns, intelligence),
     vitals: buildVitals(summary, convTurns, discoveryNotes),

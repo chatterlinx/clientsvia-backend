@@ -6831,11 +6831,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           timeout: 7,
           speechTimeout: '1.5',
         });
-        _rcvGather.say('I apologize for the interruption. Please go ahead and tell me how I can help.');
+        const _rcvText = 'I apologize for the interruption. Please go ahead and tell me how I can help.';
+        _rcvGather.say(_rcvText);
+        // Persist agent turn so the crash phrase appears in call intelligence transcript
+        if (callSid) {
+          const CallTranscriptV2 = require('../models/CallTranscriptV2');
+          CallTranscriptV2.appendTurns(companyID, callSid, [{
+            speaker:    'agent',
+            kind:       'CONVERSATION_AGENT',
+            text:       _rcvText,
+            turnNumber,
+            ts:         new Date(),
+            sourceKey:  'COMPUTE_CRASH',
+            trace: { provenance: { type: 'HARDCODED', reason: 'compute_crash', voiceProviderUsed: 'twilio_say' }, error: computeErr.message }
+          }]).catch(() => {});
+        }
         return {
           twimlString: _rcvTwiml.toString(),
           voiceProviderUsed: 'twilio_say',
-          responseText: null,
+          responseText: _rcvText,   // set so report can display it
           matchSource: 'INTERNAL_ERROR',
           timings: { totalMs: Date.now() - T0 }
         };
