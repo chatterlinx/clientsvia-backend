@@ -638,6 +638,11 @@
       font-size: 12.5px; line-height: 1.4; margin-bottom: 4px; color: #374151;
     }
     .gap-item-icon { flex-shrink: 0; font-size: 12px; }
+    .gap-item.clickable { cursor: pointer; border-radius: 5px; padding: 3px 6px; margin-left: -6px; transition: background .12s; }
+    .gap-item.clickable:hover { background: #dcfce7; color: #166534; }
+    .gap-item.clickable.inserted { background: #bbf7d0; transition: background .5s; }
+    .gap-item-hint { font-size: 10px; color: #9ca3af; margin-left: 6px; font-style: italic; white-space: nowrap; transition: color .12s; }
+    .gap-item.clickable:hover .gap-item-hint { color: #16a34a; }
     .gap-suggestion-box {
       background: white; border: 1.5px solid #bfdbfe; border-radius: 8px;
       padding: 11px 14px; font-size: 12.5px; line-height: 1.6; color: #1e3a8a;
@@ -1726,13 +1731,21 @@ async function analyzeGaps(sid) {
   const sectionLabel   = labelInput?.value?.trim() || '';
   const containerTitle = (document.getElementById('fTitle')?.value || '').trim();
 
+  // Collect all sections so Groq knows what's already covered elsewhere in this KC
+  const allSectionsContent = Array.from(
+    document.querySelectorAll('#sectionsList .section-row')
+  ).map(r => ({
+    label:   r.querySelector('.section-label-input')?.value?.trim() || '',
+    content: r.querySelector('.form-textarea.tall')?.value?.trim() || '',
+  })).filter(s => s.label || s.content);
+
   try {
     const data = await apiFetch(
       `/api/admin/agent2/company/${S.companyId}/knowledge/analyze-gaps`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ containerTitle, sectionLabel, sectionContent: content }),
+        body:    JSON.stringify({ containerTitle, sectionLabel, sectionContent: content, allSectionsContent }),
       }
     );
     if (!data.success) throw new Error(data.error || 'Analysis failed');
@@ -1748,24 +1761,72 @@ function _renderGapPanel(sid, { questions, sourceNote, blankMode }) {
   const panel = document.getElementById(`gap-panel-${sid}`);
   if (!panel) return;
 
-  const qs = questions || [];
+  // Normalise — backend now returns [{q, sample}]; handle legacy string arrays too
+  const qs = (questions || []).map(item =>
+    typeof item === 'string' ? { q: item, sample: '' } : item
+  ).filter(item => item && item.q);
+
   const panelTitle = blankMode
     ? 'Write your content to answer these caller questions'
-    : 'Callers will also ask — not in your content';
+    : 'Callers will also ask — not yet in your content';
+
+  const hintNote = qs.some(item => item.sample)
+    ? '<div style="font-size:10.5px;color:#6b7280;margin-bottom:8px;font-style:italic;">Click any question to paste a sample answer into your content — then edit it to match your business.</div>'
+    : '';
 
   const listHtml = qs.length
-    ? qs.map(q => `<div class="gap-item"><span class="gap-item-icon">📞</span>${_esc(q)}</div>`).join('')
+    ? qs.map(item => {
+        const hasSample = !!item.sample;
+        const hint = hasSample ? '<span class="gap-item-hint">↵ click to fill in</span>' : '';
+        const attrs = hasSample
+          ? `class="gap-item clickable" data-sample="${_esc(item.sample)}" onclick="insertSampleAnswer(${sid}, this)" tabindex="0" role="button"`
+          : `class="gap-item"`;
+        return `<div ${attrs}><span class="gap-item-icon">📞</span>${_esc(item.q)}${hint}</div>`;
+      }).join('')
     : `<div style="font-size:12.5px;color:#15803d;">This section looks comprehensive — no obvious gaps found ✅</div>`;
 
   panel.innerHTML = `
     <div class="gap-panel-inner">
       <div class="gap-section-title gap-missing-title">${panelTitle}</div>
+      ${hintNote}
       <div class="gap-missing" style="margin-bottom:12px;">${listHtml}</div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <span class="gap-source-note">${_esc(sourceNote || '')}</span>
         <button type="button" class="gap-btn-dismiss" onclick="dismissGapPanel(${sid})">Dismiss</button>
       </div>
     </div>`;
+}
+
+function insertSampleAnswer(sid, el) {
+  const sample = el?.dataset?.sample || '';
+  if (!sample) return;
+
+  const row = document.querySelector(`[data-sid="${sid}"]`);
+  if (!row) return;
+  const textarea = row.querySelector('.form-textarea.tall');
+  if (!textarea) return;
+
+  // Append after existing content (new paragraph) — don't blow away what they've written
+  const existing = textarea.value.trim();
+  textarea.value = existing ? `${existing}\n\n${sample}` : sample;
+
+  // Refresh char/word counter
+  charCount(textarea, 2000, null);
+
+  // Scroll textarea into view + focus
+  textarea.focus();
+  textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Visual confirmation on the question item
+  if (el) {
+    el.classList.add('inserted');
+    el.querySelector('.gap-item-hint') && (el.querySelector('.gap-item-hint').textContent = '✓ added');
+    setTimeout(() => {
+      el.classList.remove('inserted');
+      const hint = el.querySelector('.gap-item-hint');
+      if (hint) hint.textContent = '↵ click to fill in';
+    }, 2000);
+  }
 }
 
 function dismissGapPanel(sid) {

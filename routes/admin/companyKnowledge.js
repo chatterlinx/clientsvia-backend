@@ -958,7 +958,12 @@ router.post('/:companyId/knowledge/analyze-gaps', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  const { containerTitle = '', sectionLabel = '', sectionContent = '' } = req.body || {};
+  const {
+    containerTitle    = '',
+    sectionLabel      = '',
+    sectionContent    = '',
+    allSectionsContent = [],   // [{label, content}] for every section in this KC
+  } = req.body || {};
   const blankMode = !sectionContent.trim();  // true = writer's block mode — no content yet
 
   // Require at least a title or section label so Groq has something to work with
@@ -1015,7 +1020,14 @@ router.post('/:companyId/knowledge/analyze-gaps', async (req, res) => {
     if (companyName)           contextLines.push(`Company: "${companyName}"`);
     if (tradeString)           contextLines.push(`Trade / Industry: ${tradeString}`);
     if (containerTitle.trim()) contextLines.push(`Knowledge card topic: "${containerTitle.trim()}"`);
-    if (sectionLabel.trim())   contextLines.push(`Section label: "${sectionLabel.trim()}"`);
+    if (sectionLabel.trim())   contextLines.push(`Section being written: "${sectionLabel.trim()}"`);
+
+    // Build "already covered" block from sibling sections so Groq doesn't suggest duplicates
+    const otherSections = (Array.isArray(allSectionsContent) ? allSectionsContent : [])
+      .filter(s => s && (s.label || '').trim() !== (sectionLabel || '').trim() && (s.content || '').trim());
+    const coveredBlock = otherSections.length
+      ? `\nAlready covered in other sections of this knowledge card:\n${otherSections.map(s => `- ${s.label || 'Section'}: ${(s.content || '').trim().slice(0, 300)}`).join('\n')}`
+      : '';
 
     const historyBlock = callReasons.length
       ? `\nReal questions this company's callers have asked about this topic:\n${callReasons.map(r => `- "${r}"`).join('\n')}`
@@ -1024,48 +1036,56 @@ router.post('/:companyId/knowledge/analyze-gaps', async (req, res) => {
     const userPrompt = blankMode
       ? [
           contextLines.join('\n'),
+          coveredBlock,
           historyBlock,
         ].filter(Boolean).join('\n')
       : [
           contextLines.join('\n'),
-          `\nContent the agent currently has:\n"""\n${sectionContent.trim().slice(0, 2000)}\n"""`,
+          `\nContent written so far for this section:\n"""\n${sectionContent.trim().slice(0, 2000)}\n"""`,
+          coveredBlock,
           historyBlock,
         ].filter(Boolean).join('\n');
+
+    const jsonSchema = `{ "questions": [{"q": "question as the caller would say it", "sample": "2-3 sentence sample answer in natural phone agent voice — use [brackets] for company-specific values the owner needs to fill in"}] }`;
 
     const systemPrompt = blankMode
       ? `You are a phone-call receptionist expert for ${tradeString || 'service'} companies.
 
-A business owner is writing content for their AI receptionist but hasn't started yet. Your job: list the questions a real caller would ask about this topic — these become the owner's writing guide.
+A business owner is writing content for their AI receptionist but hasn't started this section yet. Your job: list the questions a real caller would ask about this topic — these become the owner's writing guide. For each question, also write a short sample answer to help the owner know WHAT to write (they'll customise it).
 
 Rules:
 - Think like a caller on the phone, not a search engine user.
 - Use the company's real call history (if provided) as strong evidence of what callers actually ask.
+- Do NOT suggest questions already covered in other sections of this knowledge card.
 - Add industry knowledge for questions not yet seen in real calls.
 - Write each question exactly as a caller would say it — natural, conversational, short.
+- Sample answers: 2-3 sentences, natural phone-agent tone, use [brackets] for values the owner must fill in (e.g. [price], [time window], [area]).
 - Max 6 questions. Cover the most important ones first.
 - No duplicates.
 
 Return ONLY valid JSON — no markdown, no extra text:
-{ "questions": ["question 1", "question 2", ...] }`
+${jsonSchema}`
       : `You are a phone-call receptionist expert for ${tradeString || 'service'} companies.
 
-A business owner has written content for their AI receptionist. Your job: list the questions a real caller would ask about this topic that are NOT answered by the content above.
+A business owner has written content for one section of their AI receptionist knowledge card. Your job: list the questions a real caller would ask about this topic that are NOT yet answered — either in the current section content or in other sections already written. For each gap, write a short sample answer to help the owner know what to add.
 
 Rules:
 - Think like a caller on the phone, not a search engine user.
+- Only flag gaps not covered anywhere in the knowledge card (current section + other sections shown).
 - Use the company's real call history (if provided) as strong evidence of actual gaps.
 - Add industry knowledge for gaps not yet seen in real calls.
 - Write each question exactly as a caller would say it — natural, conversational.
+- Sample answers: 2-3 sentences, natural phone-agent tone, use [brackets] for values the owner must fill in.
 - Max 6 questions. No duplicates.
-- If the content already answers everything a caller would reasonably ask, return an empty array.
+- If everything a caller would reasonably ask is already covered, return an empty array.
 
 Return ONLY valid JSON — no markdown, no extra text:
-{ "questions": ["question 1", "question 2", ...] }`;
+${jsonSchema}`;
 
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   400,
+      maxTokens:   900,  // bumped — now returns {q, sample} pairs, ~150 tokens each × 6
       temperature: 0.3,
       jsonMode:    true,
       system:      systemPrompt,
@@ -1086,8 +1106,16 @@ Return ONLY valid JSON — no markdown, no extra text:
       return res.status(500).json({ success: false, error: 'Could not parse response' });
     }
 
+    // Normalise to [{q, sample}] — handle both new schema and legacy string arrays
     const questions = Array.isArray(parsed.questions)
-      ? parsed.questions.filter(q => typeof q === 'string' && q.trim()).slice(0, 6)
+      ? parsed.questions
+          .map(item => {
+            if (typeof item === 'string') return { q: item.trim(), sample: '' };
+            if (item && typeof item.q === 'string') return { q: item.q.trim(), sample: (item.sample || '').trim() };
+            return null;
+          })
+          .filter(item => item && item.q)
+          .slice(0, 6)
       : [];
 
     // Human-readable source note shown below the question list in the UI
