@@ -749,34 +749,50 @@
   <div id="statCatChips"></div>
 </div>
 
-<!-- ── Company Variables card (auto-detected from KC section content) ─────── -->
-<div id="kcVariablesCard" style="display:none; margin: 0 0 16px 0; background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06); overflow:hidden;">
-  <div style="padding:16px 20px 10px;">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <h2 style="margin:0;font-size:1rem;font-weight:700;color:#111827;">Company Variables</h2>
-      <span style="background:#fef3c7;color:#92400e;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;">AUTO-DETECTED</span>
+<!-- ── Company Variables card ──────────────────────────────────────────────── -->
+<div id="kcVariablesCard" style="margin: 0 0 16px 0; background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06); overflow:hidden;">
+  <div style="padding:16px 20px 12px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h2 style="margin:0;font-size:1rem;font-weight:700;color:#111827;">📌 Company Variables</h2>
+      </div>
+      <p style="margin:4px 0 0;color:#6b7280;font-size:0.8rem;">
+        Define reusable values here — then write <code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:0.8rem;">{variablename}</code> anywhere in KC section content.
+        Agent replaces it automatically. Perfect for pricing, phone numbers, hours.
+      </p>
     </div>
-    <p style="margin:4px 0 0;color:#6b7280;font-size:0.875rem;">
-      Variables found in your KC sections. <span style="color:#dc2626;font-weight:600;">Red variables require values!</span>
-    </p>
+    <!-- Add Variable inline form -->
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+      <input id="newVarName" type="text" placeholder="name (e.g. servicefee)"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:160px;outline:none;"
+        onkeydown="if(event.key==='Enter')addKCVariable()">
+      <input id="newVarValue" type="text" placeholder="value (e.g. $89)"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:120px;outline:none;"
+        onkeydown="if(event.key==='Enter')addKCVariable()">
+      <button onclick="addKCVariable()"
+        style="background:#0ea5e9;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+        + Add
+      </button>
+    </div>
   </div>
   <div style="padding:0;">
     <table style="width:100%;border-collapse:collapse;">
       <thead>
         <tr style="background:#f3f4f6;border-bottom:2px solid #d1d5db;">
-          <th style="padding:10px 16px;text-align:left;font-size:0.75rem;font-weight:700;color:#111827;text-transform:uppercase;">Variable</th>
-          <th style="padding:10px 16px;text-align:left;font-size:0.75rem;font-weight:700;color:#111827;text-transform:uppercase;">Value</th>
-          <th style="padding:10px 16px;text-align:left;font-size:0.75rem;font-weight:700;color:#111827;text-transform:uppercase;width:100px;">Status</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Variable</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Value</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;width:90px;">Used in KC</th>
+          <th style="padding:10px 16px;width:40px;"></th>
         </tr>
       </thead>
       <tbody id="kcVariablesTableBody">
         <!-- Populated by renderKCVariables() -->
       </tbody>
     </table>
-    <div id="kcVariablesEmpty" style="padding:40px;text-align:center;color:#9ca3af;display:none;">
-      <div style="font-size:2rem;margin-bottom:12px;">📝</div>
-      <div style="font-weight:500;margin-bottom:4px;">No variables detected</div>
-      <div style="font-size:0.875rem;">Use {variableName} in your KC section content to create dynamic placeholders</div>
+    <div id="kcVariablesEmpty" style="padding:32px;text-align:center;color:#9ca3af;display:none;">
+      <div style="font-size:1.8rem;margin-bottom:10px;">📌</div>
+      <div style="font-weight:600;margin-bottom:4px;color:#6b7280;">No variables yet</div>
+      <div style="font-size:0.8rem;">Add a variable above, then use <code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;">{variablename}</code> in any KC section to insert its value automatically.</div>
     </div>
   </div>
 </div>
@@ -1305,53 +1321,69 @@ function renderKCVariables() {
   const empty = document.getElementById('kcVariablesEmpty');
   if (!card || !tbody) return;
 
-  if (S.detectedVars.size === 0) {
-    card.style.display = 'none';
+  // Card is ALWAYS visible — proactive management, not just reactive detection
+  // Union: vars currently in KC content + vars already saved in DB (even if content was removed)
+  const allVars = new Set([
+    ...Array.from(S.detectedVars),
+    ...Array.from(S.companyVariables.keys()),
+  ]);
+
+  if (allVars.size === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
     return;
   }
 
-  card.style.display = 'block';
   empty.style.display = 'none';
 
-  const sorted = Array.from(S.detectedVars).sort();
+  const sorted = Array.from(allVars).sort();
   tbody.innerHTML = sorted.map(varName => {
     const isRuntime = KC_RUNTIME_VARIABLES.has(varName);
     const value     = S.companyVariables.get(varName) || '';
     const hasValue  = value.trim().length > 0;
+    const inContent = S.detectedVars.has(varName);
 
     if (isRuntime) {
       return `<tr style="border-bottom:1px solid #e5e7eb;background:#f0fdf4;">
-        <td style="padding:12px 16px;">
-          <code style="background:#dcfce7;padding:4px 8px;border-radius:4px;color:#166534;font-weight:600;font-size:0.875rem;">{${_esc(varName)}}</code>
+        <td style="padding:10px 16px;">
+          <code style="background:#dcfce7;padding:3px 7px;border-radius:4px;color:#166534;font-weight:600;font-size:0.8rem;">{${_esc(varName)}}</code>
         </td>
-        <td style="padding:12px 16px;">
+        <td style="padding:10px 16px;">
           <input type="text" class="form-input kc-var-input" data-variable="${_esc(varName)}"
             value="${_esc(value)}" placeholder="Leave empty for auto, or type override..."
-            style="margin:0;border-color:#86efac;background:#f0fdf4;"/>
-          <div style="font-size:11px;color:#15803d;margin-top:4px;">${_esc(KC_RUNTIME_INFO[varName] || 'Resolved at call time')}</div>
+            style="margin:0;border-color:#86efac;background:#f0fdf4;font-size:13px;"/>
+          <div style="font-size:11px;color:#15803d;margin-top:3px;">${_esc(KC_RUNTIME_INFO[varName] || 'Resolved at call time')}</div>
         </td>
-        <td style="padding:12px 16px;">
-          <span style="color:#166534;font-weight:600;font-size:0.875rem;">${hasValue ? '✅ Override' : '⚡ Auto'}</span>
+        <td style="padding:10px 16px;font-size:0.8rem;">
+          ${inContent ? '<span style="color:#0369a1;font-weight:600;">✓ In use</span>' : '<span style="color:#9ca3af;">—</span>'}
         </td>
+        <td style="padding:10px 16px;"></td>
       </tr>`;
     }
 
-    const statusColour = hasValue ? '#16a34a' : '#dc2626';
-    const statusText   = hasValue ? '✅ Set'   : '🔴 Required';
-    const codeColour   = hasValue ? '#111827'  : '#dc2626';
-    const borderStyle  = hasValue ? '' : 'border-color:#dc2626;background:#fef2f2;';
-    return `<tr style="border-bottom:1px solid #e5e7eb;">
-      <td style="padding:12px 16px;">
-        <code style="background:#f3f4f6;padding:4px 8px;border-radius:4px;color:${codeColour};font-weight:600;font-size:0.875rem;">{${_esc(varName)}}</code>
+    const codeColour  = hasValue ? '#111827' : '#dc2626';
+    const borderStyle = hasValue ? '' : 'border-color:#fca5a5;background:#fef2f2;';
+    const inUseLabel  = inContent
+      ? '<span style="color:#0369a1;font-weight:600;">✓ In use</span>'
+      : '<span style="color:#9ca3af;font-size:0.75rem;">not in KC</span>';
+    // Only allow delete if not currently referenced in KC content
+    const delBtn = !inContent
+      ? `<button onclick="removeKCVariable('${_esc(varName)}')" title="Remove variable"
+           style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:14px;padding:2px 4px;border-radius:4px;"
+           onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">✕</button>`
+      : '';
+    return `<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:10px 16px;">
+        <code style="background:#f3f4f6;padding:3px 7px;border-radius:4px;color:${codeColour};font-weight:600;font-size:0.8rem;">{${_esc(varName)}}</code>
+        ${!hasValue ? '<span style="color:#dc2626;font-size:10px;font-weight:700;margin-left:4px;">needs value</span>' : ''}
       </td>
-      <td style="padding:12px 16px;">
+      <td style="padding:10px 16px;">
         <input type="text" class="form-input kc-var-input" data-variable="${_esc(varName)}"
-          value="${_esc(value)}" placeholder="Enter value..."
-          style="margin:0;${borderStyle}"/>
+          value="${_esc(value)}" placeholder="Enter value (e.g. $89)…"
+          style="margin:0;${borderStyle}font-size:13px;"/>
       </td>
-      <td style="padding:12px 16px;">
-        <span style="color:${statusColour};font-weight:600;font-size:0.875rem;">${statusText}</span>
-      </td>
+      <td style="padding:10px 16px;font-size:0.8rem;">${inUseLabel}</td>
+      <td style="padding:10px 16px;text-align:center;">${delBtn}</td>
     </tr>`;
   }).join('');
 
@@ -1359,6 +1391,38 @@ function renderKCVariables() {
   tbody.onchange = null;
   tbody.addEventListener('change', _kcVarChange);
   tbody.addEventListener('blur',   _kcVarBlur, true);
+}
+
+function addKCVariable() {
+  const nameInput = document.getElementById('newVarName');
+  const valInput  = document.getElementById('newVarValue');
+  const rawName   = (nameInput?.value || '').trim();
+  const val       = (valInput?.value  || '').trim();
+  const name      = rawName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+  if (!name) { _toast('Enter a variable name (letters, numbers, underscore only)', 'error'); return; }
+  if (S.companyVariables.has(name)) { _toast(`{${name}} already exists — edit the value in the table`, 'info'); return; }
+  nameInput.value = '';
+  valInput.value  = '';
+  nameInput.focus();
+  S.companyVariables.set(name, val);
+  renderKCVariables();
+  saveKCVariable(name, val);
+}
+
+async function removeKCVariable(varName) {
+  if (S.detectedVars.has(varName)) {
+    _toast(`{${varName}} is still used in KC content — remove it from section text first`, 'error');
+    return;
+  }
+  S.companyVariables.delete(varName);
+  renderKCVariables();
+  try {
+    await apiFetch(`/api/admin/agent2/company/${S.companyId}/variables`,
+      { method: 'PUT', body: { variables: Object.fromEntries(S.companyVariables) } });
+    _toast(`{${varName}} removed`, 'success');
+  } catch (err) {
+    _toast('Remove failed', 'error');
+  }
 }
 
 function _kcVarChange(e) {
