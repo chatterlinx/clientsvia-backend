@@ -842,6 +842,27 @@
     </div>
   </div>
 
+  <!-- ── 2b. Detected Variables ──────────────────────────────────────────── -->
+  <div id="itemVarsCard" style="display:none; margin:0 0 20px 0; background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06); overflow:hidden;">
+    <div style="padding:14px 20px 10px; display:flex; align-items:center; gap:10px;">
+      <h2 style="margin:0;font-size:1rem;font-weight:700;color:#111827;">📌 Variables Detected</h2>
+      <span style="background:#fef3c7;color:#92400e;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;">AUTO-DETECTED</span>
+    </div>
+    <p style="margin:0;padding:0 20px 10px;color:#6b7280;font-size:0.8rem;">
+      Fill in values below — Agent replaces <code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:0.75rem;">{placeholder}</code> in responses automatically. <span style="color:#dc2626;font-weight:600;">Red variables require values!</span>
+    </p>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+          <th style="padding:8px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Variable</th>
+          <th style="padding:8px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Value</th>
+          <th style="padding:8px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;width:100px;">Status</th>
+        </tr>
+      </thead>
+      <tbody id="itemVarsTbody"></tbody>
+    </table>
+  </div>
+
   <!-- ── 3. Keywords ───────────────────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
@@ -1187,6 +1208,9 @@ const S = {
   // Per-section funnel state — keyed by section DOM id (sid)
   // { daSubTypeKey, pq: {enabled, text, fieldKey, options[]}, upsellChain: [] }
   sectionData: new Map(),
+  // Variable substitution — {placeholder} detection + value store
+  companyVariables: new Map(), // varName → value (loaded from API)
+  detectedVars:     new Set(), // varNames found in section textarea content
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1196,6 +1220,109 @@ const LABEL_SUGGESTIONS = [
   'Price', "What's Included", 'Warranty', 'Duration', 'Availability',
   'How It Works', 'Who Needs This', 'Requirements', 'Notes', 'FAQs'
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ITEM VARIABLES — real-time {placeholder} detection in KC section textareas
+// ─────────────────────────────────────────────────────────────────────────────
+const KC_ITEM_RUNTIME_VARS = new Set(['name']);
+
+/** Load saved variable values from API, then scan sections (edit mode). */
+async function _loadItemVars() {
+  try {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
+    S.companyVariables = new Map(Object.entries(data.companyVariables || {}));
+  } catch (_e) { /* graceful degrade — variable values stay empty */ }
+  _scanItemVars(); // scan now that values are loaded (covers edit mode)
+}
+
+/** Debounced trigger — attached to section textarea oninput. */
+let _itemVarScanTimer = null;
+function _queueVarScan() {
+  clearTimeout(_itemVarScanTimer);
+  _itemVarScanTimer = setTimeout(_scanItemVars, 350);
+}
+
+/** Scan all section textareas for {placeholder} patterns and re-render. */
+function _scanItemVars() {
+  S.detectedVars.clear();
+  document.querySelectorAll('#sectionsList .section-row-body textarea').forEach(ta => {
+    const re = /\{(\w+)\}/g; let m;
+    while ((m = re.exec(ta.value)) !== null) S.detectedVars.add(m[1]);
+  });
+  _renderItemVars();
+}
+
+/** Render the Variables card — show/hide and build table rows. */
+function _renderItemVars() {
+  const card  = document.getElementById('itemVarsCard');
+  const tbody = document.getElementById('itemVarsTbody');
+  if (!card || !tbody) return;
+
+  if (S.detectedVars.size === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  tbody.innerHTML = Array.from(S.detectedVars).sort().map(v => {
+    const isRuntime = KC_ITEM_RUNTIME_VARS.has(v);
+    const val       = S.companyVariables.get(v) || '';
+    const hasVal    = val.trim().length > 0;
+
+    if (isRuntime) {
+      return `<tr style="border-bottom:1px solid #e5e7eb;background:#f0fdf4;">
+        <td style="padding:9px 16px;"><code style="background:#dcfce7;padding:2px 6px;border-radius:4px;color:#166534;font-weight:600;font-size:0.8rem;">{${_esc(v)}}</code></td>
+        <td style="padding:9px 16px;">
+          <input type="text" class="form-input item-var-input" data-variable="${_esc(v)}"
+            value="${_esc(val)}" placeholder="Leave empty for auto (caller name)"
+            style="margin:0;border-color:#86efac;background:#f0fdf4;font-size:13px;"/>
+          <div style="font-size:11px;color:#15803d;margin-top:2px;">Auto-filled from caller name at runtime. Override optional.</div>
+        </td>
+        <td style="padding:9px 16px;font-size:0.8rem;color:#15803d;font-weight:600;">${val ? '⚡ Override' : '⚡ Auto'}</td>
+      </tr>`;
+    }
+
+    const bdStyle = hasVal ? '' : 'border-color:#fca5a5;background:#fef2f2;';
+    return `<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:9px 16px;">
+        <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;color:${hasVal ? '#111827' : '#dc2626'};font-weight:600;font-size:0.8rem;">{${_esc(v)}}</code>
+        ${!hasVal ? '<span style="color:#dc2626;font-size:10px;font-weight:700;margin-left:4px;">needs value</span>' : ''}
+      </td>
+      <td style="padding:9px 16px;">
+        <input type="text" class="form-input item-var-input" data-variable="${_esc(v)}"
+          value="${_esc(val)}" placeholder="Enter value (e.g. $89)…"
+          style="margin:0;${bdStyle}font-size:13px;"/>
+      </td>
+      <td style="padding:9px 16px;font-size:0.8rem;">
+        ${hasVal ? '<span style="color:#059669;font-weight:600;">✅ Set</span>' : '<span style="color:#dc2626;font-weight:600;">🔴 Required</span>'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Re-attach event delegation (re-render wipes handlers)
+  tbody.addEventListener('change', _itemVarChange);
+  tbody.addEventListener('blur',   _itemVarBlur, true);
+}
+
+function _itemVarChange(e) {
+  if (e.target.classList.contains('item-var-input'))
+    _saveItemVar(e.target.dataset.variable, e.target.value.trim());
+}
+function _itemVarBlur(e) {
+  if (e.target.classList.contains('item-var-input'))
+    _saveItemVar(e.target.dataset.variable, e.target.value.trim());
+}
+
+async function _saveItemVar(varName, value) {
+  S.companyVariables.set(varName, value);
+  _renderItemVars(); // re-render so status chip updates
+  try {
+    const result = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/variables`,
+      { method: 'PUT', body: { variables: Object.fromEntries(S.companyVariables) } }
+    );
+    _toast(`{${varName}} saved`, 'success');
+    if (result.audioInvalidated && result.invalidatedRuleIds?.length > 0)
+      _toast(`${result.invalidatedRuleIds.length} trigger audio(s) need regeneration`, 'info');
+  } catch (_e) { _toast('Could not save variable', 'error'); }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOTSTRAP
@@ -1240,6 +1367,9 @@ const LABEL_SUGGESTIONS = [
 
   // Populate UAP daType dropdown + manage link
   _loadUAPArrays();
+
+  // Load variable values + scan section content for {placeholders}
+  _loadItemVars();
 })();
 
 async function _loadCategoryOptions() {
@@ -1443,7 +1573,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
     </div>
     <div class="section-row-body">
       <textarea class="form-textarea tall" placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
-        oninput="charCount(this, 2000, null)" maxlength="2000">${_esc(content)}</textarea>
+        oninput="charCount(this, 2000, null); _queueVarScan()" maxlength="2000">${_esc(content)}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
         <button type="button" class="gap-analyze-btn" onclick="analyzeGaps(${id})" title="AI checks what caller questions this section cannot answer">🔍 What's missing?</button>
         <span class="char-count" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} / 2000 chars</span>
