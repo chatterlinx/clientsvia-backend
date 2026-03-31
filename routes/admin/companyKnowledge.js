@@ -1179,9 +1179,9 @@ router.post('/:companyId/knowledge/generate-sample', async (req, res) => {
   }
 
   try {
-    const company = await require('../../models/v2Company').findById(companyId).lean();
-    const trade   = company?.companyInfo?.trade || company?.companyInfo?.industry || 'home services';
-    const name    = company?.companyInfo?.companyName || 'the company';
+    const company = await v2Company.findById(companyId).lean();
+    const trade   = company?.trade || (company?.tradeCategories || [])[0] || 'home services';
+    const name    = company?.companyName || 'the company';
 
     const systemPrompt = `You are a script writer for ${name}, a ${trade} company.
 Write ONE ideal spoken-phone-call answer (25–35 words) for a caller asking about the topic below.
