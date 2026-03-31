@@ -318,7 +318,57 @@
             </div>
           </div>
 
-          <!-- CONVERSATION SIGNALS (full-width) -->
+          <!-- LAST NAMES -->
+          <div class="resource-card">
+            <div class="resource-header">
+              <div class="resource-icon surnames">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <path d="M16 16L8 24H24L16 16Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+                  <path d="M8 8H24V16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="16" cy="8" r="2.5" stroke="currentColor" stroke-width="2.5"/>
+                </svg>
+              </div>
+              <div class="resource-info">
+                <h2 class="resource-title">Last Names Dictionary</h2>
+                <p class="resource-subtitle">~180,000 validated surnames (US Census + international)</p>
+              </div>
+            </div>
+
+            <div class="resource-stats">
+              <div class="stat-box">
+                <div class="stat-value" id="last-names-count">0</div>
+                <div class="stat-label">Total Surnames</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" id="last-names-status">—</div>
+                <div class="stat-label">Status</div>
+              </div>
+            </div>
+
+            <div class="resource-description">
+              <strong>Purpose:</strong> Validates caller last names during booking flow.
+              Helps distinguish family names from company names or misspellings.
+              <strong>Coverage:</strong> 83% of US population + international variants.
+            </div>
+
+            <div class="resource-actions">
+              <button class="btn btn-primary" id="btn-manage-last-names">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Manage Surnames
+              </button>
+              <button class="btn btn-secondary" id="btn-search-last-names">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Search
+              </button>
+            </div>
+          </div>
+
+          <!-- CONVERSATION SIGNALS (full-width — always sits below the two dictionary cards) -->
           <div class="signals-card">
             <div class="signals-card-header">
               <div class="resource-icon signals">
@@ -360,56 +410,6 @@
                 <button class="signals-test-btn" onclick="testSignalPhrase()">Test</button>
               </div>
               <div class="signals-test-results" id="signals-test-results"></div>
-            </div>
-          </div>
-
-          <!-- LAST NAMES -->
-          <div class="resource-card">
-            <div class="resource-header">
-              <div class="resource-icon surnames">
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M16 16L8 24H24L16 16Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
-                  <path d="M8 8H24V16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="16" cy="8" r="2.5" stroke="currentColor" stroke-width="2.5"/>
-                </svg>
-              </div>
-              <div class="resource-info">
-                <h2 class="resource-title">Last Names Dictionary</h2>
-                <p class="resource-subtitle">~180,000 validated surnames (US Census + international)</p>
-              </div>
-            </div>
-            
-            <div class="resource-stats">
-              <div class="stat-box">
-                <div class="stat-value" id="last-names-count">0</div>
-                <div class="stat-label">Total Surnames</div>
-              </div>
-              <div class="stat-box">
-                <div class="stat-value" id="last-names-status">—</div>
-                <div class="stat-label">Status</div>
-              </div>
-            </div>
-            
-            <div class="resource-description">
-              <strong>Purpose:</strong> Validates caller last names during booking flow.
-              Helps distinguish family names from company names or misspellings.
-              <strong>Coverage:</strong> 83% of US population + international variants.
-            </div>
-            
-            <div class="resource-actions">
-              <button class="btn btn-primary" id="btn-manage-last-names">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                Manage Surnames
-              </button>
-              <button class="btn btn-secondary" id="btn-search-last-names">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                Search
-              </button>
             </div>
           </div>
         </div>
