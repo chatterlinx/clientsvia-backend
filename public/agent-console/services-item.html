@@ -1592,17 +1592,19 @@ async function suggestLabel(btn) {
 
       if (data.needsArray) {
         // Array doesn't exist — suggest creating it
+        const humanLabel = data.suggestedArrayLabel || data.daTypeLabel || data.daType;
         chip.className = 'section-uap-chip needs-array';
         chip.innerHTML = `
-          💡 No <strong>${_esc(data.daType)}</strong> array yet —
+          💡 Classified as <strong>${_esc(humanLabel)}</strong> — not active yet&nbsp;
           <button class="chip-create-btn"
             data-datype="${_esc(data.daType)}"
-            data-label="${_esc(data.suggestedArrayLabel || data.daTypeLabel || data.daType)}"
+            data-label="${_esc(humanLabel)}"
             data-subtype-key="${_esc(data.subTypeKey || '')}"
             data-subtype-label="${_esc(data.subTypeLabel || '')}"
             data-phrases="${_esc(JSON.stringify(data.triggerPhrases || []))}"
-            onclick="_createArrayFromChip(this)">
-            + Create "${_esc(data.suggestedArrayLabel || data.daTypeLabel || data.daType)}"
+            onclick="_createArrayFromChip(this)"
+            title="Creates the routing array so callers saying booking-related phrases are directed here">
+            ✦ Activate routing
           </button>`;
         chip.style.display = 'flex';
       } else {
