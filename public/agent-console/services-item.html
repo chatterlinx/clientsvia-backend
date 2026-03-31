@@ -1211,6 +1211,7 @@ const S = {
   classificationStatus: null,   // AUTO_CONFIRMED | MANUAL | PENDING | UNCLASSIFIED
   classificationScore:  null,
   autoClassifiedAt:     null,
+  triggerPhrases:       [],     // persisted phrases from last auto-classify
   // Per-section funnel state — keyed by section DOM id (sid)
   // { daSubTypeKey, pq: {enabled, text, fieldKey, options[]}, upsellChain: [] }
   sectionData: new Map(),
@@ -1504,6 +1505,7 @@ function _populateForm(c) {
   S.classificationStatus = c.classificationStatus || 'UNCLASSIFIED';
   S.classificationScore  = c.classificationScore  || null;
   S.autoClassifiedAt     = c.autoClassifiedAt     || null;
+  S.triggerPhrases       = c.triggerPhrases       || [];
   _renderUAPStatus();
 }
 
@@ -2995,6 +2997,20 @@ function _renderUAPStatus() {
     classifiedAt.textContent = `Classified ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
   }
 
+  // Trigger phrase chips — show on load from persisted data or after auto-classify
+  const phrasesWrap = document.getElementById('uapTriggerPhrasesWrap');
+  const phrasesDiv  = document.getElementById('uapTriggerPhrases');
+  if (phrasesWrap && phrasesDiv) {
+    if (S.triggerPhrases && S.triggerPhrases.length > 0) {
+      phrasesDiv.innerHTML = S.triggerPhrases.map(p =>
+        `<span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;border:1px solid #bfdbfe;">${_esc(p)}</span>`
+      ).join('');
+      phrasesWrap.style.display = '';
+    } else {
+      phrasesWrap.style.display = 'none';
+    }
+  }
+
   // Set dropdowns to current state
   const daTypeSel = document.getElementById('fDaType');
   if (daTypeSel && S.daType) {
@@ -3022,25 +3038,17 @@ async function autoClassify() {
     if (!data.success) throw new Error(data.error || 'Classification failed');
 
     // Update local state
-    S.daType              = data.daType;
-    S.daSubType           = data.subTypeKey || null;
+    S.daType               = data.daType;
+    S.daSubType            = data.subTypeKey || null;
     S.classificationStatus = 'AUTO_CONFIRMED';
     S.classificationScore  = data.classificationScore;
     S.autoClassifiedAt     = new Date().toISOString();
+    S.triggerPhrases       = data.triggerPhrases || [];
 
     // Reload UAP arrays (trigger phrases were added — sub-types may have changed)
     await _loadUAPArrays();
 
-    // Show trigger phrases
-    const phrasesWrap = document.getElementById('uapTriggerPhrasesWrap');
-    const phrasesDiv  = document.getElementById('uapTriggerPhrases');
-    if (phrasesWrap && phrasesDiv && data.triggerPhrases?.length) {
-      phrasesDiv.innerHTML = data.triggerPhrases.map(p =>
-        `<span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;border:1px solid #bfdbfe;">${_esc(p)}</span>`
-      ).join('');
-      phrasesWrap.style.display = '';
-    }
-
+    // _renderUAPStatus now handles phrase chips from S.triggerPhrases
     _renderUAPStatus();
     if (status) { status.textContent = `✓ ${data.message || 'Classification complete'}`; }
     _toast(`Classified as ${data.daTypeLabel || data.daType} ✓`, 'success');

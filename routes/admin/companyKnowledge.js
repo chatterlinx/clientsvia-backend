@@ -1870,6 +1870,7 @@ Return ONLY valid JSON. No markdown.
         classificationStatus: 'AUTO_CONFIRMED',
         classificationScore:  typeof confidence === 'number' ? Math.round(confidence * 100) / 100 : null,
         autoClassifiedAt:     new Date(),
+        triggerPhrases:       cleanedPhrases,   // persisted so reload shows them
       },
     };
     if (subTypeKey) {
