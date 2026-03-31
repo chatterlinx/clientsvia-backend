@@ -879,46 +879,6 @@
         <div class="form-hint">When enabled, Groq personalizes responses using caller info from discoveryNotes.</div>
       </div>
 
-      <!-- Fallback Response -->
-      <div class="form-group full">
-        <label class="form-label" for="kbFallbackResponse">Fallback Response</label>
-        <textarea id="kbFallbackResponse" class="form-input" rows="2" maxlength="300"
-          placeholder="e.g. I'll make sure someone on our team follows up with you on that."></textarea>
-        <div class="form-hint">
-          Spoken when neither Knowledge Containers nor the AI can answer the caller's question.
-          Leave blank to use the system default.
-        </div>
-      </div>
-
-      <!-- Caller Screening -->
-      <div class="form-group full">
-        <div class="form-label">Caller Screening</div>
-        <div class="toggle-lg" style="padding-top:4px;">
-          <input type="checkbox" id="kbScreeningEnabled">
-          <label for="kbScreeningEnabled">Enable caller type screening</label>
-        </div>
-        <div class="form-hint" style="margin-bottom:10px;">
-          Groq classifies every caller at intake. Non-customer callers (sales, delivery, wrong number)
-          hear the message below and the call ends gracefully.
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
-          <div>
-            <label class="form-label" for="kbVendorResponse" style="font-size:12px;font-weight:600;margin-bottom:3px;">Vendor / Sales Response</label>
-            <input type="text" id="kbVendorResponse" class="form-input" maxlength="200"
-              placeholder="e.g. Thanks for reaching out — please email us at info@company.com.">
-          </div>
-          <div>
-            <label class="form-label" for="kbDeliveryResponse" style="font-size:12px;font-weight:600;margin-bottom:3px;">Delivery Response</label>
-            <input type="text" id="kbDeliveryResponse" class="form-input" maxlength="200"
-              placeholder="e.g. For deliveries please go to our back entrance and ring the bell.">
-          </div>
-          <div>
-            <label class="form-label" for="kbWrongNumberResponse" style="font-size:12px;font-weight:600;margin-bottom:3px;">Wrong Number Response</label>
-            <input type="text" id="kbWrongNumberResponse" class="form-input" maxlength="200"
-              placeholder="e.g. I'm sorry, I think you may have the wrong number. Have a great day!">
-          </div>
-        </div>
-      </div>
 
       <div class="settings-save-row">
         <div id="settingsSaveStatus" style="font-size:13px;color:var(--text-muted);align-self:center;"></div>
@@ -1163,15 +1123,6 @@ function _renderSettings() {
   document.getElementById('kbGreetByName').checked           = s.greetByName !== false;
   document.getElementById('kbAcknowledgeHistory').checked    = s.acknowledgeHistory !== false;
 
-  // Fallback Response
-  document.getElementById('kbFallbackResponse').value = s.fallbackResponse || '';
-
-  // Caller Screening
-  const scr = s.callerScreening || {};
-  document.getElementById('kbScreeningEnabled').checked      = !!scr.enabled;
-  document.getElementById('kbVendorResponse').value          = scr.vendorResponse || '';
-  document.getElementById('kbDeliveryResponse').value        = scr.deliveryResponse || '';
-  document.getElementById('kbWrongNumberResponse').value     = scr.wrongNumberResponse || '';
 }
 
 function selectOfferMode(mode, silent) {
@@ -1201,13 +1152,6 @@ async function saveSettings() {
     responseStyle:      document.getElementById('kbResponseStyle').value || 'concise',
     greetByName:        document.getElementById('kbGreetByName').checked,
     acknowledgeHistory: document.getElementById('kbAcknowledgeHistory').checked,
-    fallbackResponse:   (document.getElementById('kbFallbackResponse').value || '').trim(),
-    callerScreening: {
-      enabled:             document.getElementById('kbScreeningEnabled').checked,
-      vendorResponse:      (document.getElementById('kbVendorResponse').value || '').trim(),
-      deliveryResponse:    (document.getElementById('kbDeliveryResponse').value || '').trim(),
-      wrongNumberResponse: (document.getElementById('kbWrongNumberResponse').value || '').trim(),
-    },
   };
 
   try {
