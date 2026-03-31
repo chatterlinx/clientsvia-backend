@@ -159,6 +159,75 @@ body {
 }
 .dial-desc b { color: var(--text); }
 
+/* ═══ FOUNDATION CHECK BANNER ════════════════════════════════════════════════ */
+.foundation-bar {
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex; align-items: center; gap: 10px;
+}
+.btn-foundation {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 700;
+  background: linear-gradient(135deg, #064e3b, #065f46);
+  border: 1px solid rgba(34,197,94,.3); color: #6ee7b7;
+  cursor: pointer; transition: all .2s;
+  white-space: nowrap; flex-shrink: 0;
+  box-shadow: 0 0 16px rgba(34,197,94,.12);
+}
+.btn-foundation:hover { box-shadow: 0 0 24px rgba(34,197,94,.25); transform: translateY(-1px); }
+.btn-foundation:active { transform: none; }
+.btn-foundation:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.readiness-summary {
+  flex: 1; font-size: 11px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.readiness-dot {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+}
+.rd-ready   { background: rgba(34,197,94,.12);  border: 1px solid rgba(34,197,94,.25);  color: #86efac; }
+.rd-partial { background: rgba(245,158,11,.1);  border: 1px solid rgba(245,158,11,.25); color: #fcd34d; }
+.rd-none    { background: rgba(239,68,68,.1);   border: 1px solid rgba(239,68,68,.25);  color: #fca5a5; }
+
+/* ── Readiness panel (inside scenarios list) ──────────────────────────────── */
+.readiness-panel {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 4px;
+}
+.readiness-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--bg-card2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text-muted);
+  cursor: pointer;
+}
+.readiness-kc-list { padding: 8px 8px; display: flex; flex-direction: column; gap: 4px; }
+.readiness-kc-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px;
+  font-size: 11px;
+}
+.readiness-kc-row:hover { background: var(--bg-card2); }
+.kc-status-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.kcs-ready   { background: var(--green); }
+.kcs-partial { background: var(--amber); }
+.kcs-none    { background: var(--red); }
+.kc-title-text { flex: 1; color: var(--text); }
+.kc-issues { font-size: 10px; color: var(--text-muted); }
+.kc-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+.kc-badge-ready   { background: rgba(34,197,94,.12); color: #86efac; }
+.kc-badge-partial { background: rgba(245,158,11,.1); color: #fcd34d; }
+.kc-badge-none    { background: rgba(239,68,68,.1);  color: #fca5a5; }
+
+/* ── Foundation scenario card accent ──────────────────────────────────────── */
+.scenario-card.foundation-card::before { background: var(--green); }
+.scenario-card.foundation-card { border-color: rgba(34,197,94,.2); }
+.diff-foundation { background: #064e3b; color: #6ee7b7; border: 1px solid rgba(34,197,94,.3); }
+
 /* ═══ SCENARIO CARDS ═══════════════════════════════════════════════════════════ */
 .scenario-toolbar {
   display: flex; align-items: center; gap: 10px;
@@ -558,6 +627,17 @@ body {
       </div>
     </div>
 
+    <!-- Foundation Check Bar -->
+    <div class="foundation-bar">
+      <button class="btn-foundation" id="btnFoundation" onclick="runFoundationCheck()" title="Scan KC readiness and generate one test per ready KC — start here before cranking the dial">
+        <span id="foundIcon">🔍</span>
+        <span id="foundLabel">Foundation Check</span>
+      </button>
+      <div class="readiness-summary" id="readinessSummary">
+        <span style="color:var(--text-dim)">Check what's ready to fire before testing</span>
+      </div>
+    </div>
+
     <!-- Scenario Toolbar -->
     <div class="scenario-toolbar">
       <div class="panel-title">Scenarios</div>
@@ -572,7 +652,7 @@ body {
     <div class="scenarios-list" id="scenariosList">
       <div class="scenario-empty" id="scenarioEmpty">
         <div class="empty-icon">🎬</div>
-        <p>Set your difficulty level, then generate AI-crafted test scenarios for your trade.</p>
+        <p>Run <b>Foundation Check</b> to verify base routing — or set a difficulty and generate scenarios.</p>
       </div>
     </div>
   </div>
@@ -792,6 +872,119 @@ function setChannel(ch) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FOUNDATION CHECK — scan KC readiness + generate from ready KCs only
+// ═══════════════════════════════════════════════════════════════════════════════
+async function runFoundationCheck() {
+  const btn = document.getElementById('btnFoundation');
+  btn.disabled = true;
+  document.getElementById('foundIcon').innerHTML = '<div class="spinner" style="border-top-color:#6ee7b7"></div>';
+  document.getElementById('foundLabel').textContent = 'Scanning KCs…';
+
+  try {
+    // Step 1: fetch readiness
+    const readiness = await AgentConsoleAuth.apiFetch(`${API(S.companyId)}/readiness`);
+    if (!readiness.success) throw new Error(readiness.error || 'Readiness scan failed');
+
+    S.readiness = readiness;
+
+    // Update summary bar
+    const sumEl = document.getElementById('readinessSummary');
+    sumEl.innerHTML = [
+      readiness.readyCount   ? `<span class="readiness-dot rd-ready">✓ ${readiness.readyCount} ready</span>` : '',
+      readiness.partial?.length ? `<span class="readiness-dot rd-partial">~ ${readiness.partial.length} partial</span>` : '',
+      readiness.notReady?.length ? `<span class="readiness-dot rd-none">✕ ${readiness.notReady.length} not ready</span>` : '',
+    ].filter(Boolean).join('') || '<span style="color:var(--text-dim)">No KCs found</span>';
+
+    // Show readiness panel in scenario list
+    _renderReadinessPanel(readiness);
+
+    if (!readiness.foundationSafe) {
+      _toast('No ready KCs — add content and keywords to at least one KC first', 'error');
+      return;
+    }
+
+    // Step 2: generate foundation scenarios from ready KCs
+    document.getElementById('foundLabel').textContent = 'Generating tests…';
+    const data = await AgentConsoleAuth.apiFetch(`${API(S.companyId)}/scenarios`, {
+      method: 'POST',
+      body: {
+        foundation: true,
+        count: readiness.readyCount,
+        readyKcIds: (readiness.ready || []).map(k => k.id),
+      },
+    });
+    if (!data.success) throw new Error(data.error || 'Foundation generation failed');
+
+    // Force difficulty dial to 1
+    setDifficulty(1);
+
+    S.scenarios      = data.scenarios || [];
+    S.activeScenario = null;
+    document.getElementById('genCount').textContent = `${S.scenarios.length} foundation tests`;
+    _renderScenarios(true /* foundationMode */);
+    _toast(`${S.scenarios.length} foundation scenarios ready — call in and run them in order`, 'success');
+
+  } catch (err) {
+    _toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('foundIcon').textContent = '🔍';
+    document.getElementById('foundLabel').textContent = 'Foundation Check';
+  }
+}
+
+function _renderReadinessPanel(readiness) {
+  // Remove existing panel
+  const existing = document.getElementById('readinessPanel');
+  if (existing) existing.remove();
+
+  const all = [
+    ...(readiness.ready   || []).map(k => ({ ...k, status: 'READY'    })),
+    ...(readiness.partial || []).map(k => ({ ...k, status: 'PARTIAL'  })),
+    ...(readiness.notReady|| []).map(k => ({ ...k, status: 'NOT_READY'})),
+  ];
+  if (!all.length) return;
+
+  const panel = document.createElement('div');
+  panel.id = 'readinessPanel';
+  panel.className = 'readiness-panel';
+
+  const header = document.createElement('div');
+  header.className = 'readiness-panel-header';
+  header.innerHTML = `<span>KC Readiness — ${readiness.readyCount}/${readiness.total} ready to fire</span><span id="readinessToggle">▲</span>`;
+  header.onclick = () => {
+    const list = panel.querySelector('.readiness-kc-list');
+    const tog  = document.getElementById('readinessToggle');
+    const show = list.style.display !== 'none';
+    list.style.display = show ? 'none' : 'flex';
+    tog.textContent = show ? '▼' : '▲';
+  };
+
+  const list = document.createElement('div');
+  list.className = 'readiness-kc-list';
+
+  all.forEach(kc => {
+    const dotClass = kc.status === 'READY' ? 'kcs-ready' : kc.status === 'PARTIAL' ? 'kcs-partial' : 'kcs-none';
+    const badgeClass = kc.status === 'READY' ? 'kc-badge-ready' : kc.status === 'PARTIAL' ? 'kc-badge-partial' : 'kc-badge-none';
+    const badgeLabel = kc.status === 'READY' ? 'READY' : kc.status === 'PARTIAL' ? 'PARTIAL' : 'NOT READY';
+    const row = document.createElement('div');
+    row.className = 'readiness-kc-row';
+    row.innerHTML = `
+      <div class="kc-status-dot ${dotClass}"></div>
+      <div class="kc-title-text">${_esc(kc.title)}</div>
+      ${kc.issues?.length ? `<div class="kc-issues">${_esc(kc.issues.join(', '))}</div>` : ''}
+      <span class="kc-badge ${badgeClass}">${badgeLabel}</span>`;
+    list.appendChild(row);
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(list);
+
+  const scenariosList = document.getElementById('scenariosList');
+  scenariosList.insertBefore(panel, scenariosList.firstChild);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SCENARIO GENERATION
 // ═══════════════════════════════════════════════════════════════════════════════
 async function generateScenarios() {
@@ -823,30 +1016,39 @@ async function generateScenarios() {
   }
 }
 
-function _renderScenarios() {
+function _renderScenarios(foundationMode = false) {
   const list  = document.getElementById('scenariosList');
   const empty = document.getElementById('scenarioEmpty');
   empty.style.display = S.scenarios.length ? 'none' : 'flex';
 
-  // Remove old cards
+  // Remove old cards (keep readiness panel if present)
   list.querySelectorAll('.scenario-card').forEach(c => c.remove());
 
   S.scenarios.forEach((sc, i) => {
+    const isFoundation = foundationMode || sc.foundation === true;
     const card = document.createElement('div');
-    card.className = 'scenario-card' + (S.activeScenario === i ? ' active' : '');
+    card.className = [
+      'scenario-card',
+      isFoundation ? 'foundation-card' : '',
+      S.activeScenario === i ? 'active' : '',
+    ].filter(Boolean).join(' ');
     card.onclick = () => selectScenario(i);
 
-    const diff = sc.difficulty || S.difficulty;
+    const diff = sc.difficulty || (isFoundation ? 1 : S.difficulty);
+    const badgeClass  = isFoundation ? 'diff-foundation' : `diff-${diff}`;
+    const badgeLabel  = isFoundation ? '✓ FOUNDATION' : (DIFF_META[diff]?.label || diff);
+
     card.innerHTML = `
       <div class="sc-top">
         <div class="sc-title">${_esc(sc.title || `Scenario ${i+1}`)}</div>
-        <div class="sc-diff-badge diff-${diff}">${DIFF_META[diff]?.label || diff}</div>
+        <div class="sc-diff-badge ${badgeClass}">${badgeLabel}</div>
       </div>
       <div class="sc-persona">🎭 ${_esc(sc.persona || 'Caller')}</div>
       <div class="sc-situation">${_esc(sc.situation || '')}</div>
       <div class="sc-opening">${_esc(sc.opening || '')}</div>
       <div class="sc-meta">
         ${sc.expected_kc ? `<div class="sc-meta-chip kc">🎯 ${_esc(sc.expected_kc)}</div>` : '<div class="sc-meta-chip">No KC target</div>'}
+        ${isFoundation ? '<div class="sc-meta-chip" style="color:var(--green);border-color:rgba(34,197,94,.2)">Must match KC — no fallback</div>' : ''}
         ${(sc.follow_ups || []).length ? `<div class="sc-meta-chip">+${sc.follow_ups.length} follow-up${sc.follow_ups.length>1?'s':''}</div>` : ''}
       </div>`;
     list.appendChild(card);

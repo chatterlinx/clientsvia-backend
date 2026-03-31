@@ -95,6 +95,45 @@ async function _getRedis() {
   try { return await getSharedRedisClient(); } catch { return null; }
 }
 
+// ── KC readiness scoring (deterministic, no Groq) ────────────────────────────
+function _kcReadiness(kc) {
+  const sections  = kc.sections || [];
+  const wordCount = sections.reduce((s, sec) => s + (sec.content || '').trim().split(/\s+/).filter(Boolean).length, 0);
+  const kwCount   = (kc.keywords || []).length;
+  const hasUAP    = !!(kc.daType);
+  const hasAction = !!(kc.bookingAction) || sections.some(s => s.bookingAction);
+
+  const issues = [];
+  if (wordCount < 30)  issues.push(`thin content (${wordCount} words)`);
+  if (kwCount < 2)     issues.push(`few keywords (${kwCount})`);
+  if (!hasUAP && !hasAction) issues.push('no UAP link or booking action');
+
+  // Build a brief content excerpt for Groq (foundation mode)
+  const contentExcerpt = sections
+    .map(s => s.content || '')
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+
+  const status = issues.length === 0 ? 'READY'
+    : issues.length <= 1             ? 'PARTIAL'
+    : 'NOT_READY';
+
+  return {
+    id:             kc._id?.toString(),
+    title:          kc.title || '(untitled)',
+    status,
+    issues,
+    wordCount,
+    kwCount,
+    hasUAP,
+    hasAction,
+    contentExcerpt,
+    keywords:       (kc.keywords || []).slice(0, 6),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DIFFICULTY DEFINITIONS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +148,41 @@ const DIFFICULTY_CONFIG = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ROUTE: GET /:companyId/agentlab/readiness
+// Deterministic KC readiness scan — no Groq, instant.
+// Returns ready/partial/not-ready KCs so the owner knows what's safe to test.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/:companyId/agentlab/readiness', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateAccess(req, res, companyId)) return;
+
+  try {
+    const kcs = await CompanyKnowledgeContainer.find({ companyId, isActive: { $ne: false } })
+      .select('title category sections keywords bookingAction daType')
+      .lean();
+
+    const scored = kcs.map(_kcReadiness);
+    const ready    = scored.filter(k => k.status === 'READY');
+    const partial  = scored.filter(k => k.status === 'PARTIAL');
+    const notReady = scored.filter(k => k.status === 'NOT_READY');
+
+    return res.json({
+      success: true,
+      total:      scored.length,
+      readyCount: ready.length,
+      ready,
+      partial,
+      notReady,
+      foundationSafe: ready.length > 0, // true = foundation check can proceed
+    });
+  } catch (err) {
+    logger.error('[AgentLab] /readiness error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ROUTE: POST /:companyId/agentlab/scenarios
 // Generate AI scenario scripts for a given difficulty + company
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,28 +191,78 @@ router.post('/:companyId/agentlab/scenarios', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateAccess(req, res, companyId)) return;
 
-  const { difficulty = 1, count = 3 } = req.body;
+  const { difficulty = 1, count = 3, foundation = false, readyKcIds = [] } = req.body;
 
   try {
     const company = await v2Company.findById(companyId).lean();
     if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
 
     const kcs = await CompanyKnowledgeContainer.find({ companyId, isActive: { $ne: false } })
-      .select('title category sections keywords bookingAction')
+      .select('title category sections keywords bookingAction daType')
       .lean();
 
-    const diffConfig   = DIFFICULTY_CONFIG[difficulty] || DIFFICULTY_CONFIG[1];
+    const diffConfig   = DIFFICULTY_CONFIG[foundation ? 1 : difficulty] || DIFFICULTY_CONFIG[1];
     const tradeContext = (company.tradeCategories || []).join(', ') || 'general service business';
     const companyName  = company.companyName || 'the company';
 
-    // Build KC summary for Groq — titles + first section label + keyword sample
-    const kcSummary = kcs.slice(0, 20).map(kc => {
-      const labels   = (kc.sections || []).map(s => s.label).filter(Boolean).join(', ');
-      const kwSample = (kc.keywords || []).slice(0, 5).join(', ');
-      return `• ${kc.title}${labels ? ` (subtopics: ${labels})` : ''}${kwSample ? ` [keywords: ${kwSample}]` : ''}`;
-    }).join('\n');
+    let systemPrompt;
 
-    const systemPrompt = `You are a master call scenario writer for a ${tradeContext} company called "${companyName}".
+    if (foundation) {
+      // ── FOUNDATION MODE: questions come verbatim FROM KC content ─────────────
+      // Only use ready KCs (or all if no filter passed)
+      const scored = kcs.map(_kcReadiness);
+      const targetKcs = readyKcIds.length
+        ? scored.filter(k => readyKcIds.includes(k.id) && k.status !== 'NOT_READY')
+        : scored.filter(k => k.status === 'READY');
+
+      if (targetKcs.length === 0) {
+        return res.status(400).json({ success: false, error: 'No ready KCs to generate foundation tests from — add content and keywords first' });
+      }
+
+      // Build rich KC blocks with content excerpts
+      const kcBlocks = targetKcs.slice(0, count).map((k, i) =>
+        `KC ${i + 1}: "${k.title}"\nKeywords: ${k.keywords.join(', ')}\nContent: ${k.contentExcerpt}`
+      ).join('\n\n---\n\n');
+
+      systemPrompt = `You are generating FOUNDATION verification questions for an AI phone agent at a ${tradeContext} company called "${companyName}".
+
+PURPOSE: Each question must be something the agent SHOULD be able to answer using only the KC content provided. These are the easiest possible tests — if the agent fails these, the foundation is broken.
+
+RULES:
+- Each question MUST be directly answerable from the KC content shown
+- Use a natural caller voice (not robotic, not formal)
+- The caller's opening must include at least one of the KC's keywords naturally
+- Do NOT invent information not in the KC content
+- Keep it simple — no trick questions, no edge cases — just "does the basic routing work?"
+
+KNOWLEDGE CARDS TO TEST:
+${kcBlocks}
+
+OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
+[
+  {
+    "id": "f1",
+    "title": "Foundation: [KC title]",
+    "persona": "Caller type",
+    "situation": "Simple: caller needs info about [topic]",
+    "opening": "exact first thing caller says — must include a KC keyword naturally",
+    "follow_ups": ["natural follow-up if agent answers correctly"],
+    "expected_kc": "[exact KC title from above]",
+    "success_criteria": "Agent answers using the KC content — no fallback, no transfer",
+    "difficulty": 1,
+    "foundation": true,
+    "kcId": "[KC id from above]"
+  }
+]`;
+    } else {
+      // ── STANDARD MODE: difficulty-based creative scenarios ────────────────────
+      const kcSummary = kcs.slice(0, 20).map(kc => {
+        const labels   = (kc.sections || []).map(s => s.label).filter(Boolean).join(', ');
+        const kwSample = (kc.keywords || []).slice(0, 5).join(', ');
+        return `• ${kc.title}${labels ? ` (subtopics: ${labels})` : ''}${kwSample ? ` [keywords: ${kwSample}]` : ''}`;
+      }).join('\n');
+
+      systemPrompt = `You are a master call scenario writer for a ${tradeContext} company called "${companyName}".
 
 Your job: write ${count} realistic caller test scenarios at difficulty level ${difficulty} — ${diffConfig.label}.
 Difficulty description: ${diffConfig.description}
@@ -168,17 +292,18 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
     "difficulty": ${difficulty}
   }
 ]`;
+    }
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) return res.status(503).json({ success: false, error: 'GROQ_API_KEY not configured' });
 
     const groqResult = await GroqStreamAdapter.streamFull({
       apiKey,
-      model:    'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: `Generate ${count} scenarios. Return JSON only.` }],
-      system:   systemPrompt,
-      maxTokens: 2000,
-      temperature: 0.85,
+      model:       'llama-3.3-70b-versatile',
+      messages:    [{ role: 'user', content: `Generate ${foundation ? 'foundation verification' : count} scenarios. Return JSON only.` }],
+      system:      systemPrompt,
+      maxTokens:   2000,
+      temperature: foundation ? 0.3 : 0.85, // lower temp for foundation = more literal/reliable
     });
 
     const rawText = groqResult?.response || '';
@@ -199,9 +324,12 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
 
     return res.json({
       success: true,
-      difficulty,
-      difficultyLabel: diffConfig.label,
-      difficultyDescription: diffConfig.description,
+      foundation:          !!foundation,
+      difficulty:          foundation ? 1 : difficulty,
+      difficultyLabel:     foundation ? 'FOUNDATION' : diffConfig.label,
+      difficultyDescription: foundation
+        ? 'Direct questions from your loaded KCs — confirms the base routing is working'
+        : diffConfig.description,
       scenarios,
       kcCount: kcs.length,
       generatedAt: new Date().toISOString(),
