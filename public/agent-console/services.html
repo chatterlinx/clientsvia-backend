@@ -1320,20 +1320,16 @@ function renderKCVariables() {
   const empty = document.getElementById('kcVariablesEmpty');
   if (!card || !tbody) return;
 
-  // Show when ANY variables exist (saved globally OR detected in KC content)
-  const allVars = new Set([
-    ...Array.from(S.detectedVars),
-    ...Array.from(S.companyVariables.keys()),
-  ]);
-
-  if (allVars.size === 0) {
+  // ONLY show variables actually found in KC content — not saved vars from other pages.
+  // Rule: if it's not in KC, it doesn't exist here. Removed from KC = gone from this list.
+  if (S.detectedVars.size === 0) {
     card.style.display = 'none';
     return;
   }
   card.style.display = 'block';
   empty.style.display = 'none';
 
-  const sorted = Array.from(allVars).sort();
+  const sorted = Array.from(S.detectedVars).sort();
   tbody.innerHTML = sorted.map(varName => {
     const isRuntime = KC_RUNTIME_VARIABLES.has(varName);
     const value     = S.companyVariables.get(varName) || '';
