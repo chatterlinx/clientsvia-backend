@@ -2108,7 +2108,7 @@ Return ONLY valid JSON. No markdown.
 // InstantAudioService.generate() call per unique text in a single async IIFE.
 // Hash-based filenames mean re-generating the same text is a no-op on disk.
 //
-// PATTERN: mirrors _preGenAudio() in companyPricing.js — async IIFE, non-blocking,
+// PATTERN: async IIFE, non-blocking,
 // all failures logged as warn (never surfaced to caller).
 //
 // GUARDS per text:

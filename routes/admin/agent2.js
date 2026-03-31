@@ -237,7 +237,7 @@ function defaultAgent2Config() {
         // ── ASKING PRICING ────────────────────────────────────────────────────
         // Intercepts cost/pricing questions mid-consent-flow — BEFORE YES swallows them.
         // "how much is a service call?" while agent is waiting for YES/NO
-        // → answer with live PricingInterceptor data, then re-ask or proceed to booking.
+        // → KC answers the pricing question, then re-asks or proceeds to booking.
         // Phrases are UI-editable per company in triggers.html consent cards.
         askingPricing: {
           phrases: [

@@ -18,8 +18,8 @@
  *
  * INTEGRATION POINTS (wired in Agent2DiscoveryRunner.js):
  *   A) ASKING_SPECIALS bucket  — before PromotionsInterceptor
- *   B) ASKING_PRICING bucket   — before PricingInterceptor
- *   C) callLLMAgentForNoMatch  — after PricingConversationService, before Claude T2
+ *   B) ASKING_PRICING bucket   — single answer hub for all pricing questions
+ *   C) callLLMAgentForNoMatch  — before Claude T2 (KC is the first stop)
  *
  * MULTI-TENANT SAFETY:
  *   All cache keys and MongoDB queries are scoped to companyId.
@@ -689,7 +689,7 @@ async function invalidateCache(companyId) {
 /**
  * findContainer — Keyword-score all containers and return the best match.
  *
- * Scoring (identical algorithm to PricingInterceptor.matchItem):
+ * Scoring algorithm:
  *   - Multi-word phrase match scores length × 2 (rewards specificity)
  *   - Single-word match scores by word length
  *   - Best score across all containers wins

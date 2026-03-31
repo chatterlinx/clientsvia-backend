@@ -1864,7 +1864,6 @@ function fmtDuration(seconds) {
 const _SOURCE_TYPE_MAP = {
   'AGENT2_DISCOVERY':     'LLM_GENERATED',  // Turn 1 LLM intake + contextual greeting
   'KC_ENGINE':            'UI_OWNED',        // KC Answer Engine (authored KC cards)
-  'PRICING_INTERCEPTOR':  'UI_OWNED',        // Admin-configured pricing intercept rule
   'BOOKING_LOGIC_ENGINE': 'HARDCODED',       // Booking flow collection prompts (scripted)
   'greetings':            'UI_OWNED',        // Admin-authored greeting text
   'GREETING':             'UI_OWNED',
@@ -1884,7 +1883,6 @@ function provenanceLabel(type, sourceKey) {
   // Fallback labels by sourceKey for display in the report
   if (sourceKey === 'AGENT2_DISCOVERY')     return 'LLM Generated';
   if (sourceKey === 'KC_ENGINE')            return 'KC Answer Engine';
-  if (sourceKey === 'PRICING_INTERCEPTOR')  return 'Pricing Rule';
   if (sourceKey === 'BOOKING_LOGIC_ENGINE') return 'Booking Script';
   if (sourceKey === 'greetings')            return 'Greeting';
   return 'Unknown';
@@ -1900,10 +1898,6 @@ function detectTurnFlags(turn, kcCard, provenancePath, sourceKey) {
   }
   if (kcCard?.bookingAction === 'offer_to_book' && !path.includes('BOOKING')) {
     flags.push({ code: 'MISSED_BOOKING_CTA', label: 'Missed Booking CTA', severity: 'warn' });
-  }
-  // KC answered but booking CTA was not delivered — PRICING_INTERCEPTOR took over
-  if (src === 'PRICING_INTERCEPTOR') {
-    flags.push({ code: 'PRICING_INTERCEPTOR_FIRED', label: 'Pricing Rule Intercepted', severity: 'info' });
   }
   // KC_GRACEFUL_ACK means no KC card AND no LLM — knowledge gap
   if (path === 'KC_GRACEFUL_ACK') {
@@ -2342,10 +2336,9 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
     //
     // The transcript frequently stores provenance.type = 'HARDCODED' as a
     // catch-all default, even for KC_ENGINE turns that answered from an authored
-    // KC card, and for PRICING_INTERCEPTOR (admin-configured rule).
-    // _SOURCE_TYPE_MAP corrects this per sourceKey; we override the stored value
-    // when the sourceKey is a known UI_OWNED source and the stored type is the
-    // generic HARDCODED default.
+    // KC card. _SOURCE_TYPE_MAP corrects this per sourceKey; we override the stored
+    // value when the sourceKey is a known UI_OWNED source and the stored type is
+    // the generic HARDCODED default.
     const mappedType = _SOURCE_TYPE_MAP[t.sourceKey] || null;
     let provType;
 
@@ -2597,21 +2590,6 @@ function buildAutoIssues(summary, convTurns, discoveryNotes) {
     });
   }
 
-  // PRICING_INTERCEPTOR fired — may have blocked the booking flow continuation
-  const pricingTurns = convTurns.filter(t =>
-    t.sourceKey === 'PRICING_INTERCEPTOR' && t.speaker === 'agent'
-  );
-  if (pricingTurns.length > 0) {
-    issues.push({
-      id: `auto-${seq++}`,
-      severity: 'info',
-      category: 'routing',
-      title: `Pricing rule intercepted Turn ${pricingTurns.map(t => t.turnNumber).join(', ')}`,
-      description: `The PRICING_INTERCEPTOR rule fired on ${pricingTurns.length} turn(s) and delivered the service call fee instead of the KC or booking engine. Verify this is the intended routing — if the caller had already agreed to book, this may delay scheduling.`,
-      affectedTurns: pricingTurns.map(t => t.turnNumber),
-      action: null
-    });
-  }
 
   // Name captured in Turn 1 but never used (agent echoed it, discoveryNotes missing)
   const agentUsedName = convTurns.some(t =>

@@ -14,9 +14,8 @@
  *
  *     - BookingDetector  → score 0.0–1.0 for booking intent
  *     - TransferDetector → score 0.0–1.0 for transfer/agent intent
- *     - PricingInterceptor → score 0.0–1.0 for pricing intent
+ *     - KCContainerMatcher → score 0.0–1.0 for KC topic match (pricing, FAQs, policies)
  *     - PromotionsInterceptor → score 0.0–1.0 for promo intent
- *     - KCContainerMatcher → score 0.0–1.0 for KC topic match
  *     - CompanyInterceptors → score 0.0–1.0 (custom rules)
  *
  *   ArbitrationEngine reads THIS document at call time to decide:
@@ -177,7 +176,7 @@ const companyArbitrationPolicySchema = new mongoose.Schema(
         default: BUILT_IN_DEFAULTS.weights.pricing,
         min:     0,
         max:     1,
-        comment: 'Weight applied to PricingInterceptor raw score'
+        comment: 'Weight applied to KC pricing match score'
       },
       promo: {
         type:    Number,

@@ -355,16 +355,6 @@
       });
     }
 
-    // Service Pricing Console link
-    const linkPricingConsole = document.getElementById('link-pricing-console');
-    if (linkPricingConsole) {
-      linkPricingConsole.addEventListener('click', (e) => {
-        e.preventDefault();
-        navigateWithUnsavedGuard(() => {
-          window.location.href = `/agent-console/pricing.html?companyId=${encodeURIComponent(state.companyId)}`;
-        });
-      });
-    }
 
     // ⚖️ Intent Arbitration Console link
     const linkInterceptorsConsole = document.getElementById('link-interceptors-console');

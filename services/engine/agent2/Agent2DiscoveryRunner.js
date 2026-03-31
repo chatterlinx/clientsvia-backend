@@ -99,8 +99,6 @@ const Agent2EchoGuard = require('./Agent2EchoGuard');
 // Handles mid-call digression + return via DiscoveryNotesService.digressionStack.
 // ════════════════════════════════════════════════════════════════════════════
 const PromotionsInterceptor  = require('./PromotionsInterceptor');
-const PricingInterceptor          = require('./PricingInterceptor');          // 💰 Service pricing fact intercept
-const PricingConversationService  = require('./PricingConversationService');   // 🤖 Groq pricing Q&A with catalog guardrails
 const KnowledgeContainerService   = require('./KnowledgeContainerService');    // 🧠 Unified knowledge Q&A — fires first in all intercept paths
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -536,54 +534,11 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     }
     // ── Falls through to T2 (Claude LLM Agent) ───────────────────────────────
 
-    // ── Pricing Conversation Intercept — fires before Claude T2 ──────────────
-    // When the caller asks a pricing question and T1.5 (trigger fast lane) missed,
-    // try PricingConversationService with the full catalog as hard guardrails.
-    // This prevents Claude from hallucinating prices it doesn't know.
-    // Falls through silently on miss/error — Claude T2 proceeds as normal.
-    if (!sttEmpty && PricingInterceptor.detect(input)) {
-      const _aiCfg = company?.pricingAiSettings || {};
-      if (_aiCfg.enabled !== false && process.env.GROQ_API_KEY) {
-        try {
-          const _pricingItems = await PricingInterceptor.getActivePricingItems(String(company._id));
-          if (_pricingItems.length) {
-            const _pricingResult = await PricingConversationService.converse({
-              companyId:     String(company._id),
-              question:      input,
-              pricingItems:  _pricingItems,
-              aiSettings:    _aiCfg,
-              voiceSettings: company?.pricingVoiceSettings || {},
-              companyName:   company?.companyName || '',
-              callerName,
-              callSid,
-            });
-            if (_pricingResult.intent !== PricingConversationService.INTENT.ERROR && _pricingResult.response) {
-              emit('A2_PRICING_CONVERSE_HIT', {
-                source:    'T2_INTERCEPT',
-                intent:    _pricingResult.intent,
-                latencyMs: _pricingResult.latencyMs,
-                callSid,
-                turn,
-              });
-              return {
-                response:         _pricingResult.response,
-                tokensUsed:       { input: 0, output: 0 },
-                latencyMs:        _pricingResult.latencyMs,
-                wasPartial:       false,
-                _pricingConverse: true,
-              };
-            }
-          }
-        } catch (_pErr) {
-          logger.warn('[LLM_AGENT] Pricing intercept error — falling through to Claude', { callSid, err: _pErr?.message });
-        }
-      }
-    }
-    // ── Knowledge Container Intercept — fires after Pricing, before Claude T2 ──
-    // Handles any informational question (pricing, specials, inclusions, warranty,
-    // policies, FAQs) not caught by T1.5 or PricingConversationService.
-    // All active containers are scored; best keyword match wins.
-    // Graceful degrade: any error falls through to Claude T2. Call never breaks.
+    // ── Knowledge Container Intercept — fires before Claude T2 ──────────────
+    // KC is the single hub for all informational Q&A — pricing, specials,
+    // inclusions, warranties, policies, FAQs. All active containers are scored;
+    // best keyword match wins. Graceful degrade: any error falls through to
+    // Claude T2. Call never breaks.
     if (!sttEmpty && input?.trim() && KnowledgeContainerService.detect(input)) {
       const _kbCfg = company?.knowledgeBaseSettings || {};
       if (_kbCfg.enabled !== false && process.env.GROQ_API_KEY) {
@@ -3103,15 +3058,14 @@ class Agent2DiscoveryRunner {
 
         // ── ASKING PRICING ──────────────────────────────────────────────────────
         // Fires when caller asks about cost/fee/pricing mid-consent-flow.
-        // Knowledge Container intercept fires FIRST — covers pricing, specials,
-        // inclusions, etc. Falls through to PricingInterceptor on miss.
+        // KC is the single answer hub — covers pricing, specials, inclusions, etc.
         //
-        // PRICING_THEN_BOOK  — isYesFUQ=true  → answer + consent given → booking
-        // PRICING_THEN_REASK — isYesFUQ=false → answer + re-ask the FUQ
+        // KC_PRICING_THEN_BOOK  — isYesFUQ=true  → answer + consent given → booking
+        // KC_PRICING_THEN_REASK — isYesFUQ=false → answer + re-ask the FUQ
         //
-        // Graceful degrade: any error → re-ask pfuq (safe fallback)
+        // Falls through to LLM Agent on miss. Graceful degrade: any error → re-ask pfuq.
         if (bucket === 'ASKING_PRICING') {
-          // ── Knowledge Container intercept — fires BEFORE PricingInterceptor ──
+          // ── Knowledge Container intercept ────────────────────────────────────
           const _kcCfgPricing = company?.knowledgeBaseSettings || {};
           if (_kcCfgPricing.enabled !== false && process.env.GROQ_API_KEY) {
             try {
@@ -3861,131 +3815,6 @@ class Agent2DiscoveryRunner {
         // Never break a call for a promo failure — fall through to normal pipeline
         logger.warn('[A2] PromotionsInterceptor error — falling through to normal pipeline', {
           callSid, error: promoErr.message
-        });
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 💰 PRICING — CHECKPOINT C: SERVICE PRICING FACT DETECTION
-    // ══════════════════════════════════════════════════════════════════════════
-    // Fires when detect() matches a pricing signal in the caller's input.
-    // Runs AFTER promotions so "any specials on your service call?" hits promos
-    // first — pricing answers pure cost/inclusion questions.
-    //
-    // Three response routes based on item config + layer matched:
-    //
-    //   RESPOND layer 1   → primary price answer (e.g. "Our service call is $89")
-    //   RESPOND layer 2   → follow-up answer     (e.g. "Yes, credited on repairs >$200")
-    //   RESPOND layer 3   → deep detail          (e.g. "The visit includes a full inspection…")
-    //   ADVISOR_CALLBACK  → agent collects name+phone for specialist call-back
-    //                       (transition to BOOKING lane, bookingType = ADVISOR_CALLBACK)
-    //
-    // BOOKING origin: returnPrompt appended so caller resumes booking flow.
-    // Graceful degrade: any error falls through to normal pipeline — call never breaks.
-    // ══════════════════════════════════════════════════════════════════════════
-    if (input && PricingInterceptor.detect(input)) {
-      try {
-        // Where we are in the call — determines returnPrompt and post-answer routing
-        const digressionOrigin = (
-          nextState?.lane === 'BOOKING' || nextState?.sessionMode === 'BOOKING'
-        ) ? 'BOOKING' : 'DISCOVERY';
-
-        // Redis-cached (15-min TTL) — fast on every turn after first load
-        const activeItems = await PricingInterceptor.getActivePricingItems(companyId);
-
-        if (activeItems.length) {
-          // If mid-booking, capture the pending booking question so we can append it
-          // to the pricing response and caller resumes the booking flow naturally.
-          const returnPrompt = digressionOrigin === 'BOOKING'
-            ? (nextState?.agent2?.booking?.pendingQuestion || null)
-            : null;
-
-          const result = PricingInterceptor.buildResponse(activeItems, input, digressionOrigin, returnPrompt);
-
-          if (result) {
-            const { responseText, item, layer, requiresAdvisor } = result;
-
-            // Save digression so DiscoveryNotesService tracks the interruption
-            await DiscoveryNotesService.pushDigression(companyId, callSid, {
-              digressionType:   'PRICING_QUERY',
-              digressionOrigin,
-              itemLabel:        item.label,
-              itemCategory:     item.category,
-              layer,
-              requiresAdvisor,
-              savedStep:        null,
-              savedContext:     {},
-              returnPrompt:     returnPrompt || null
-            }).catch(e => logger.warn('[A2] pushDigression failed for PRICING_QUERY', { callSid, e: e.message }));
-
-            // ── ADVISOR_CALLBACK: transition to booking lane so BookingLogicEngine
-            //    collects caller name + phone for a specialist call-back.
-            if (requiresAdvisor) {
-              nextState.lane        = 'BOOKING';
-              nextState.sessionMode = 'BOOKING';
-              nextState.booking     = nextState.booking || {};
-              nextState.booking.bookingType    = 'ADVISOR_CALLBACK';
-              nextState.booking.advisorContext = {
-                itemLabel:    item.label,
-                itemCategory: item.category,
-                triggeredAt:  new Date().toISOString()
-              };
-            }
-
-            // ── COMPOUND BOOKING INTENT: pricing question + booking signal in same utterance
-            // e.g. "yeah I'd like to schedule that... how much is the service call?"
-            // Answer the price question this turn, then auto-transition to booking.
-            // Guards: not already routing to advisor (has its own BOOKING path);
-            //         not already in BOOKING origin (returnPrompt handles that case).
-            if (!requiresAdvisor && digressionOrigin === 'DISCOVERY') {
-              const { isBookingIntent } = require('../kc/KCBookingIntentDetector');
-              if (isBookingIntent(input)) {
-                nextState.lane        = 'BOOKING';
-                nextState.sessionMode = 'BOOKING';
-                logger.info('[A2] Compound booking intent — transitioning to BOOKING after pricing answer', {
-                  companyId, callSid, itemLabel: item.label,
-                });
-              }
-            }
-
-            emit('A2_PRICING_INTERCEPTED', {
-              digressionOrigin,
-              itemLabel:       item.label,
-              category:        item.category,
-              layer,
-              requiresAdvisor,
-              itemsAvailable:  activeItems.length,
-              inputPreview:    clip(input, 60),
-              responsePreview: clip(responseText, 80)
-            });
-            emit('A2_PATH_SELECTED', {
-              path:   'PRICING_INTERCEPTOR',
-              reason: `Pricing question matched — item="${item.label}" layer=${layer} origin=${digressionOrigin}${requiresAdvisor ? ' ADVISOR_CALLBACK' : ''}`
-            });
-            emit('A2_RESPONSE_READY', {
-              path:            'PRICING_INTERCEPTOR',
-              responsePreview: clip(responseText, 120),
-              requiresAdvisor
-            });
-
-            nextState.agent2                         = nextState.agent2 || {};
-            nextState.agent2.discovery               = nextState.agent2.discovery || {};
-            nextState.agent2.discovery.lastPath      = 'PRICING_INTERCEPTOR';
-
-            return {
-              response:    responseText,
-              matchSource: 'PRICING_INTERCEPTOR',
-              state:       nextState,
-              _123rp:      build123rpMeta('PRICING_INTERCEPTOR')
-            };
-          }
-          // No match in active items — fall through silently to normal pipeline
-        }
-        // No items configured — fall through silently
-      } catch (pricingErr) {
-        // Never break a call for a pricing failure — fall through to normal pipeline
-        logger.warn('[A2] PricingInterceptor error — falling through to normal pipeline', {
-          callSid, error: pricingErr.message
         });
       }
     }

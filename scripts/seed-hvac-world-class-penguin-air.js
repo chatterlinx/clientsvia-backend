@@ -1158,152 +1158,6 @@ const ARBITRATION_POLICY = {
   disambiguateFloor:       0.35,   // Below this floor → graceful ack, not disambiguation
   maxDisambiguateAttempts: 2       // How many clarifying attempts before graceful ack
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 6. PRICING ITEMS
-// 3-layer service pricing facts with booking CTAs.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const PRICING_ITEMS = [
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'AC Diagnostic Service Call',
-    category:       'Diagnostics',
-    isActive:       true,
-    priority:       10,
-    keywords:       ['service call', 'diagnostic fee', 'how much to come out', 'come out fee', 'ac diagnostic', 'call out fee'],
-    response:       'Our AC diagnostic service call is $89, and that fee is applied toward any repair we do. We arrive in a 2-hour window and call 30 minutes ahead.',
-    includesDetail: 'Includes full visual inspection, electrical testing, refrigerant pressure check, thermostat test, and written diagnosis report.',
-    layer2Keywords: ['what does it include', 'what do you check', 'what does that cover'],
-    layer2Response: 'The diagnostic covers a full inspection of your compressor, capacitors, contactors, refrigerant pressure, airflow, thermostat, and all electrical connections.',
-    layer3Keywords: ['still want to know more', 'anything else'],
-    layer3Response: 'We also check your filter, drain line, and indoor coil condition. You\'ll receive a written report with our findings and recommended next steps.',
-    action:         'RESPOND_THEN_BOOK',
-    actionPrompt:   'Want me to get a technician scheduled for a diagnosis?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'Heating Diagnostic Service Call',
-    category:       'Diagnostics',
-    isActive:       true,
-    priority:       11,
-    keywords:       ['furnace diagnostic', 'heating service call', 'furnace service fee', 'heater diagnostic', 'heat diagnostic'],
-    response:       'Our heating diagnostic is $89, applied toward any repair. We prioritize heating calls in winter and can often be there same day or next day.',
-    includesDetail: 'Includes combustion analysis, heat exchanger inspection, ignitor and flame sensor test, gas pressure check, blower performance, and safety limit testing.',
-    layer2Keywords: ['what does heating diagnostic include', 'what do you test on furnace'],
-    layer2Response: 'We test the heat exchanger for cracks, check the burner and ignitor, test all safety limits, measure gas pressure, and inspect the flue for safe venting.',
-    layer3Keywords: [],
-    layer3Response: '',
-    action:         'RESPOND_THEN_BOOK',
-    actionPrompt:   'Want me to get a heating diagnostic scheduled?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'Spring AC Tune-Up',
-    category:       'Maintenance',
-    isActive:       true,
-    priority:       20,
-    keywords:       ['tune up price', 'tune up cost', 'ac tune up', 'spring tune up', 'maintenance visit cost', 'how much is a tune up'],
-    response:       'Our spring AC tune-up is $89 and includes a 21-point inspection, coil cleaning, electrical testing, refrigerant check, and lubrication. Comfort Club members get tune-ups included at no extra charge.',
-    includesDetail: 'Full 21-point inspection: condenser coil cleaning, evaporator coil inspection, refrigerant pressure check, electrical connection tightening, capacitor test, thermostat calibration, filter check, drain line flush, and lubrication.',
-    layer2Keywords: ['what does tune up include', 'whats included in tune up'],
-    layer2Response: 'The tune-up covers everything from cleaning the condenser coils to checking your refrigerant charge, tightening electrical connections, and flushing the drain line.',
-    layer3Keywords: [],
-    layer3Response: '',
-    action:         'RESPOND_THEN_BOOK',
-    actionPrompt:   'Would you like to get a tune-up scheduled?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'Fall Heating Tune-Up',
-    category:       'Maintenance',
-    isActive:       true,
-    priority:       21,
-    keywords:       ['heating tune up', 'furnace tune up', 'fall tune up', 'furnace checkup', 'furnace maintenance cost', 'fall service'],
-    response:       'Our fall heating tune-up is $89 and prepares your system for winter. Includes combustion efficiency test, heat exchanger inspection, burner cleaning, and all safety checks.',
-    includesDetail: 'Burner cleaning, heat exchanger inspection, combustion efficiency test, flue inspection, blower motor check, ignitor test, safety limit test, thermostat calibration, and filter inspection.',
-    layer2Keywords: ['what does heating tune up include', 'whats in the fall service'],
-    layer2Response: 'The fall tune-up includes a full combustion analysis, safety limit testing, burner cleaning, flue inspection, and blower performance check — everything to make sure your system runs safely all winter.',
-    layer3Keywords: [],
-    layer3Response: '',
-    action:         'RESPOND_THEN_BOOK',
-    actionPrompt:   'Want to get ahead of winter and schedule your heating tune-up?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'Emergency After-Hours Service Call',
-    category:       'Emergency',
-    isActive:       true,
-    priority:       5,
-    keywords:       ['emergency fee', 'after hours fee', 'weekend service fee', 'how much after hours', 'emergency service cost'],
-    response:       'After-hours and weekend emergency diagnostic fee is $149, applied toward any repair. Same-day emergency dispatch during business hours is $119. Available 7 days a week including holidays.',
-    includesDetail: 'Includes priority emergency dispatch, full system diagnosis, upfront repair quote before work begins, and all after-hours technician costs.',
-    layer2Keywords: ['why is emergency more expensive', 'why after hours costs more'],
-    layer2Response: 'The emergency rate covers our on-call technician\'s dedicated availability outside normal business hours — it ensures someone is always ready to respond when you need it most.',
-    layer3Keywords: [],
-    layer3Response: '',
-    action:         'RESPOND_THEN_BOOK',
-    actionPrompt:   'Want me to dispatch a technician right now?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'New Central AC System — Installed',
-    category:       'Installations',
-    isActive:       true,
-    priority:       30,
-    keywords:       ['new ac cost', 'new ac price', 'central air cost', 'ac replacement cost', 'new unit price', 'install new ac'],
-    response:       'New central AC systems installed typically range from $4,500 to $9,500 depending on system size, brand, and efficiency. We offer free in-home assessments and 0% financing for up to 18 months.',
-    includesDetail: 'Price includes equipment, all installation labor, new refrigerant lines if needed, thermostat, permit where required, factory start-up checklist, and 10-year parts warranty registration.',
-    layer2Keywords: ['what does installation include', 'whats included in new ac'],
-    layer2Response: 'The installation includes removal of old equipment, all labor, refrigerant lines, line set insulation, electrical connections, thermostat, permit management, and factory start-up.',
-    layer3Keywords: ['what brands do you carry', 'what brand of ac'],
-    layer3Response: 'We install Carrier, Trane, Lennox, Goodman, and Rheem. Our comfort consultant will recommend the best fit for your home and budget during the free assessment.',
-    action:         'ADVISOR_CALLBACK',
-    actionPrompt:   'For accurate pricing, I can schedule a free in-home assessment with no obligation. Want me to set that up?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'New Furnace — Installed',
-    category:       'Installations',
-    isActive:       true,
-    priority:       31,
-    keywords:       ['new furnace cost', 'furnace replacement price', 'how much for new furnace', 'furnace install cost', 'new heater price'],
-    response:       'New furnace installations range from $3,500 to $7,500 installed depending on size and efficiency. High-efficiency models may qualify for federal tax credits of up to $2,000.',
-    includesDetail: 'Price includes furnace, all installation labor, flue venting, gas line connection, thermostat, permit where required, and 10-year parts warranty registration.',
-    layer2Keywords: ['what does furnace installation include', 'furnace install includes what'],
-    layer2Response: 'Furnace installation includes removal of old equipment, gas line connection, flue venting, thermostat, electrical hook-up, permit management, and a full combustion test at start-up.',
-    layer3Keywords: ['what efficiency furnaces do you install'],
-    layer3Response: 'We install 80%, 96%, and 98% efficiency furnaces. The 96% and 98% models qualify for federal energy tax credits. We\'ll recommend the right match during the free assessment.',
-    action:         'ADVISOR_CALLBACK',
-    actionPrompt:   'Can I schedule a free in-home estimate for you?'
-  },
-
-  {
-    companyId:      COMPANY_ID,
-    label:          'Comfort Club Membership Plan',
-    category:       'Maintenance',
-    isActive:       true,
-    priority:       22,
-    keywords:       ['maintenance plan cost', 'comfort club price', 'how much is the plan', 'monthly plan cost', 'service plan pricing'],
-    response:       'The Comfort Club is $19.95 per month billed annually, or $199 paid up front. Includes two full tune-ups per year, priority scheduling, 15% off all repairs, and waived diagnostic fees.',
-    includesDetail: 'Two seasonal tune-ups (spring AC + fall heating), priority emergency dispatch, 15% off all labor and parts, waived diagnostic fees, no overtime charges, transferable to new homeowners.',
-    layer2Keywords: ['what does comfort club include', 'what do i get with comfort club'],
-    layer2Response: 'Members get two full tune-ups per year, priority dispatch ahead of non-members, 15% off all repairs, and we waive the diagnostic fee every time you need service.',
-    layer3Keywords: ['can i cancel', 'is there a contract'],
-    layer3Response: 'No long-term contract at all — you can cancel any time. The plan renews automatically each year and we\'ll send you a reminder before it does.',
-    action:         'RESPOND_THEN_BOOK',
-    actionPrompt:   'Want me to get you enrolled in the Comfort Club today?'
-  }
-
-];
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. PROMOTIONS
 // Active specials the promo interceptor presents when callers ask about deals.
@@ -1399,7 +1253,7 @@ async function main() {
   console.log(`  Dispatch  : ${DISPATCH_PHONE}`);
   console.log(`  Database  : ${DB_NAME}\n`);
 
-  const counts = { settings: 0, kc: 0, bc: 0, interceptor: 0, policy: 0, pricing: 0, promo: 0 };
+  const counts = { settings: 0, kc: 0, bc: 0, interceptor: 0, policy: 0, promo: 0 };
 
   // ── 0. Company settings ──────────────────────────────────────────────────
   banner('0. COMPANY SETTINGS');
@@ -1483,20 +1337,7 @@ async function main() {
   counts.policy++;
   ok('POLICY', `bookingBeatsAll=${ARBITRATION_POLICY.bookingBeatsAll} | laneTimeout=${ARBITRATION_POLICY.laneTimeoutMs/60000}min | ${ARBITRATION_POLICY.escapeKeywords.length} escape keywords`);
 
-  // ── 6. Pricing Items ──────────────────────────────────────────────────────
-  banner('6. PRICING ITEMS');
-
-  for (const item of PRICING_ITEMS) {
-    await db.collection('companyPricingItems').updateOne(
-      { companyId: COMPANY_ID, label: item.label },
-      { $set: { ...item, updatedAt: NOW }, $setOnInsert: { createdAt: NOW } },
-      { upsert: true }
-    );
-    counts.pricing++;
-    ok('PRICE', `"${item.label}" [${item.category}] → ${item.action}`);
-  }
-
-  // ── 7. Promotions ─────────────────────────────────────────────────────────
+  // ── 6. Promotions ─────────────────────────────────────────────────────────
   banner('7. PROMOTIONS');
 
   for (const promo of PROMOTIONS) {
@@ -1519,7 +1360,6 @@ async function main() {
     🃏  ${counts.bc}  Behavior Cards        (7 category-linked + 5 standalone flows)
     🔀  ${counts.interceptor}   Interceptors          (emergency, booking, transfer, plan, billing)
     ⚖️   ${counts.policy}   Arbitration Policy    (bookingBeatsAll, 10-min lane lock, HVAC-optimized)
-    💰  ${counts.pricing}   Pricing Items         (3-layer responses with booking CTAs)
     🎟️   ${counts.promo}   Promotions            (spring special, new customer, Comfort Club, thermostat)
     ⚙️   ${counts.settings}   Company Settings      (arbitrationEnabled=true, kcSeq≥12)
 

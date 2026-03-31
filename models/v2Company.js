@@ -4498,7 +4498,7 @@ const companySchema = new mongoose.Schema({
                     // Two sub-routes resolved at runtime:
                     //   PRICING_THEN_BOOK   — YES also detected → answer pricing → proceed to booking
                     //   PRICING_THEN_REASK  — no YES detected   → answer pricing → re-ask PFUQ
-                    // Response is built by PricingInterceptor from live MongoDB data — no LLM.
+                    // Response is built by KC from the matching container — Groq-bounded, no hallucination.
                     // UI: /agent-console/triggers.html (Follow-up Consent Cards → ASKING PRICING card)
                     // API: PATCH /api/agent-console/:companyId/agent2/config
                     askingPricing: {
@@ -5874,86 +5874,6 @@ const companySchema = new mongoose.Schema({
     metadata: {
         type: mongoose.Schema.Types.Mixed,
         default: {}
-    },
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SERVICE PRICING — Global Voice Settings
-    // Per-company fallback phrases used by PricingInterceptor at call runtime.
-    // These are global defaults — per-item actionPrompt always wins first.
-    // UI:  /agent-console/pricing.html  (Agent Voice Settings card)
-    // API: PATCH /api/admin/agent2/company/:companyId/pricing/voice-settings
-    // ─────────────────────────────────────────────────────────────────────────
-    pricingVoiceSettings: {
-        advisorCallbackFallback: {
-            type:      String,
-            default:   '',
-            trim:      true,
-            maxlength: 500,
-            comment:   'Fallback spoken phrase for ADVISOR_CALLBACK / SCHEDULE_ESTIMATE / TRANSFER items that have no per-item actionPrompt'
-        },
-        bookingOfferSuffix: {
-            type:      String,
-            default:   '',
-            trim:      true,
-            maxlength: 300,
-            comment:   'Appended to L1 response for RESPOND_THEN_BOOK action (e.g. "Would you like to schedule that today?")'
-        },
-        notFoundResponse: {
-            type:      String,
-            default:   '',
-            trim:      true,
-            maxlength: 500,
-            comment:   'Spoken when no pricing item matches caller query. Leave blank → LLM handles it (safe degrade)'
-        }
-    },
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SERVICE PRICING — AI Conversation Settings
-    // Per-company Groq AI settings for the pricing conversation layer.
-    // Groq intercepts pricing questions when keyword matching returns no match,
-    // preventing hallucination by bounding responses to the configured catalog.
-    // UI:  /agent-console/pricing.html  (AI Conversation Settings card)
-    // API: GET/PATCH /api/admin/agent2/company/:companyId/pricing/ai-settings
-    // ─────────────────────────────────────────────────────────────────────────
-    pricingAiSettings: {
-        enabled: {
-            type:    Boolean,
-            default: true,
-            comment: 'When true, Groq handles pricing questions with catalog guardrails. When false, falls through to T2 LLM (hallucination risk)'
-        },
-        model: {
-            type:    String,
-            default: 'llama-3.3-70b-versatile',
-            trim:    true,
-            comment: 'Groq model ID — llama-3.3-70b-versatile recommended for pricing accuracy'
-        },
-        maxConversationTurns: {
-            type:    Number,
-            default: 4,
-            min:     1,
-            max:     10,
-            comment: 'Max consecutive pricing Q&A turns before falling through to LLM'
-        },
-        noPricingDataPhrase: {
-            type:      String,
-            default:   '',
-            trim:      true,
-            maxlength: 300,
-            comment:   'Spoken when no catalog item matches the pricing question. Leave blank → built-in fallback'
-        },
-        tradeContext: {
-            type:      String,
-            default:   '',
-            trim:      true,
-            maxlength: 200,
-            comment:   'Short trade description for Groq system prompt (e.g. "HVAC contractor, residential and commercial")'
-        },
-        conversationStyle: {
-            type:    String,
-            enum:    ['concise', 'detailed', 'friendly'],
-            default: 'concise',
-            comment: 'Controls Groq response style: concise (under 20 words) | detailed (with explanation) | friendly (warm tone)'
-        }
     },
 
     // ─────────────────────────────────────────────────────────────────────────
