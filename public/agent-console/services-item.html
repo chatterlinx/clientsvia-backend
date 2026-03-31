@@ -479,6 +479,7 @@
     .kc-audio-hint.ok    { color: #16a34a; }
     .kc-audio-hint.stale { color: #d97706; }
     .kc-audio-hint.err   { color: #dc2626; }
+    .kc-audio-hint.vars  { color: #7c3aed; }
 
     /* ── Booking action radios ────────────────────────────────────────────── */
     .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -3455,6 +3456,18 @@ async function _kcGenAudio(sid, key, textElId) {
     return;
   }
 
+  // Variables like {reg_diagnostic_fee} are replaced at call time — audio must be
+  // pre-recorded with fixed text only. ElevenLabs would literally say the variable
+  // name. Block generation and explain clearly.
+  const varMatch = text.match(/\{[^}]+\}/);
+  if (varMatch) {
+    if (hintEl) {
+      hintEl.textContent = `🚫 Contains ${varMatch[0]} — variables are substituted at call time and cannot be pre-recorded`;
+      hintEl.className   = 'kc-audio-hint vars';
+    }
+    return;
+  }
+
   genBtn.disabled    = true;
   genBtn.textContent = '⏳ Generating…';
   if (hintEl)  { hintEl.textContent = ''; hintEl.className = 'kc-audio-hint'; }
@@ -3534,14 +3547,32 @@ function _restoreKcAudioState(sid, key, url, generatedText) {
   if (hintEl)  { hintEl.textContent  = '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
 }
 
-// Mark audio stale when its source text is edited after generation.
+// Mark audio stale (or block with variable warning) when source text changes.
 // Called from each text field's oninput.
 function _kcMarkStale(sid, key, currentText) {
   const mapKey = `${sid}--${key}`;
-  const state  = _kcAudio.get(mapKey);
-  if (!state?.url) return; // No audio generated yet — nothing to mark stale
   const hintEl = document.getElementById(`kc-hint-${mapKey}`);
   const genBtn = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
+
+  // Variable check runs regardless of whether audio has been generated —
+  // user needs to know immediately that this field is not recordable.
+  const varMatch = (currentText || '').match(/\{[^}]+\}/);
+  if (varMatch) {
+    if (hintEl) {
+      hintEl.textContent = `🚫 Contains ${varMatch[0]} — variables are substituted at call time and cannot be pre-recorded`;
+      hintEl.className   = 'kc-audio-hint vars';
+    }
+    return;
+  }
+
+  // Clear variable warning if user removed the variable
+  if (hintEl?.classList.contains('vars')) {
+    hintEl.textContent = '';
+    hintEl.className   = 'kc-audio-hint';
+  }
+
+  const state = _kcAudio.get(mapKey);
+  if (!state?.url) return; // No audio generated yet — nothing else to mark stale
   if ((currentText?.trim() ?? '') !== state.generatedText) {
     if (hintEl) { hintEl.textContent = '⚠️ Text changed — regenerate audio'; hintEl.className = 'kc-audio-hint stale'; }
     if (genBtn) genBtn.textContent = '🔄 Regenerate';
