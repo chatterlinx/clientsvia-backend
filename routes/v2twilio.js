@@ -5833,9 +5833,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // 🧪 AGENT LAB HOOK 2 — Emit per-turn data to Redis for live X-ray
       // Only fires when this callSid is tagged as an active test session.
       // ═══════════════════════════════════════════════════════════════════════════
-      if (redisClient && callSid) {
+      if (redis && callSid) {
         try {
-          const _labSessionId = await redisClient.get(`agentlab:callsid:${callSid}`);
+          const _labSessionId = await redis.get(`agentlab:callsid:${callSid}`);
           if (_labSessionId) {
             const _labTurn = JSON.stringify({
               turnNumber:  turnNumber || null,
@@ -5848,8 +5848,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               noKcMatch:   (runtimeResult?.matchSource === 'KC_GRACEFUL_ACK' || runtimeResult?.matchSource === 'KC_LLM_FALLBACK'),
               ts:          new Date().toISOString(),
             });
-            await redisClient.rpush(`agentlab:turns:${_labSessionId}`, _labTurn);
-            await redisClient.expire(`agentlab:turns:${_labSessionId}`, 14400);
+            await redis.rpush(`agentlab:turns:${_labSessionId}`, _labTurn);
+            await redis.expire(`agentlab:turns:${_labSessionId}`, 14400);
           }
         } catch (_labErr) {
           // Non-fatal — lab hook failure must never affect live call
