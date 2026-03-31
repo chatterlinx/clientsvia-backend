@@ -169,7 +169,11 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
   }
 ]`;
 
-    const raw = await GroqStreamAdapter.streamFull({
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return res.status(503).json({ success: false, error: 'GROQ_API_KEY not configured' });
+
+    const groqResult = await GroqStreamAdapter.streamFull({
+      apiKey,
       model:    'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: `Generate ${count} scenarios. Return JSON only.` }],
       system:   systemPrompt,
@@ -177,15 +181,19 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
       temperature: 0.85,
     });
 
+    const rawText = groqResult?.response || '';
+    logger.debug('[AgentLab] Groq scenario raw', { companyId, chars: rawText.length, failureReason: groqResult?.failureReason });
+
     // Parse JSON — strip markdown fences if Groq wraps it
     let scenarios = [];
     try {
-      const cleaned = (raw || '').replace(/```json\n?|```\n?/g, '').trim();
+      if (!rawText) throw new Error(groqResult?.failureReason || 'Empty Groq response');
+      const cleaned = rawText.replace(/```json\n?|```\n?/g, '').trim();
       const match   = cleaned.match(/\[[\s\S]*\]/);
       scenarios     = JSON.parse(match ? match[0] : cleaned);
       if (!Array.isArray(scenarios)) throw new Error('not array');
     } catch (parseErr) {
-      logger.warn('[AgentLab] Scenario parse failed', { companyId, parseErr: parseErr.message });
+      logger.warn('[AgentLab] Scenario parse failed', { companyId, parseErr: parseErr.message, rawText: rawText.slice(0, 200) });
       return res.status(502).json({ success: false, error: 'Scenario generation failed — retry' });
     }
 
@@ -430,7 +438,9 @@ router.post('/:companyId/agentlab/session/:sessionId/end', async (req, res) => {
           `Turn ${i + 1}: CALLER: "${(t.speechText || t.smsText || t.utterance || '').slice(0, 120)}" → MATCHED: ${t.kcTitle || t.matchSource || 'none'} (lane: ${t.lane || '?'})`
         ).join('\n');
 
-        const groqResult = await GroqStreamAdapter.streamFull({
+        const _analysisApiKey = process.env.GROQ_API_KEY;
+        const groqResult = _analysisApiKey ? await GroqStreamAdapter.streamFull({
+          apiKey:    _analysisApiKey,
           model:     'llama-3.3-70b-versatile',
           messages:  [{ role: 'user', content: `Analyze this test session and give a short report.` }],
           system:    `You are an AI receptionist QA analyst. The following is a transcript of a test call session for "${session.companyName}" (${session.difficultyLabel || `Level ${session.difficulty}`} difficulty).
@@ -447,8 +457,8 @@ Write a concise performance report with:
 Be specific. Use the actual questions and KC names. Keep it under 200 words. No markdown.`,
           maxTokens: 400,
           temperature: 0.3,
-        });
-        analysis = groqResult || null;
+        }) : null;
+        analysis = groqResult?.response || null;
       } catch (analysisErr) {
         logger.warn('[AgentLab] Groq analysis failed', { companyId, sessionId, err: analysisErr.message });
       }
