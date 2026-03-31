@@ -27,6 +27,7 @@
  *   POST   /:companyId/knowledge                        — Create container
  *   POST   /:companyId/knowledge/generate-keywords      — Groq keyword generation (pre-save)
  *   POST   /:companyId/knowledge/analyze-gaps           — Content Coach gap analysis (per section)
+ *   POST   /:companyId/knowledge/generate-sample        — ✨ Groq-generated ideal response example
  *   POST   /:companyId/knowledge/reorder                — Bulk priority update
  * ⚠️ GET    /:companyId/knowledge/:id                   — Get single (AFTER literal routes)
  *   PATCH  /:companyId/knowledge/:id                    — Partial update
@@ -1156,6 +1157,62 @@ ${jsonSchema}`;
   } catch (err) {
     logger.error('[companyKnowledge] analyze-gaps error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Gap analysis failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/generate-sample — ✨ Generate Ideal Response Example
+//
+// Groq reads the KC section content and writes a ~30-word spoken-word sample
+// answer in the company's trade/service context. Owner reviews before saving.
+// Body: { title, category, sectionText }
+// Returns: { success, sample }
+// ⚠️ MUST be registered BEFORE /:id
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/generate-sample', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { title = '', category = '', sectionText = '' } = req.body || {};
+  if (!sectionText.trim()) {
+    return res.status(400).json({ success: false, error: 'sectionText is required' });
+  }
+
+  try {
+    const company = await require('../../models/v2Company').findById(companyId).lean();
+    const trade   = company?.companyInfo?.trade || company?.companyInfo?.industry || 'home services';
+    const name    = company?.companyInfo?.companyName || 'the company';
+
+    const systemPrompt = `You are a script writer for ${name}, a ${trade} company.
+Write ONE ideal spoken-phone-call answer (25–35 words) for a caller asking about the topic below.
+Rules:
+- Sound like a real, warm human on the phone — not a webpage or chatbot
+- Include one specific detail from the content (price, feature, timeframe, etc.)
+- End with a natural offer to schedule or help further if appropriate
+- Return ONLY the answer text — no quotes, no labels, no explanation`;
+
+    const userMsg = `Topic: ${title || category || 'general service question'}
+${category ? `Category: ${category}` : ''}
+
+Content:
+${sectionText.trim().slice(0, 1200)}`;
+
+    const result = await GroqStreamAdapter.streamFull({
+      systemPrompt,
+      userMessage: userMsg,
+      maxTokens:   120,
+      jsonMode:    false,
+    });
+
+    const sample = (result.response || '').trim().replace(/^["']|["']$/g, '');
+    if (!sample) throw new Error('Empty response from Groq');
+
+    logger.info('[companyKnowledge] generate-sample complete', { companyId, words: sample.split(/\s+/).length });
+    return res.json({ success: true, sample });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] generate-sample error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Sample generation failed' });
   }
 });
 

@@ -964,10 +964,16 @@
 
       <!-- Sample ideal response -->
       <div class="form-group full" style="margin-top:4px;">
-        <label class="form-label" for="fSampleResponse">
-          Ideal Response Example
-          <span class="form-label-badge" style="background:#e0f2fe;color:#0369a1;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Guardrail</span>
-        </label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+          <label class="form-label" for="fSampleResponse" style="margin:0;">
+            Ideal Response Example
+            <span class="form-label-badge" style="background:#e0f2fe;color:#0369a1;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Guardrail</span>
+          </label>
+          <button type="button" id="btnGenSample" onclick="generateSampleResponse()"
+            style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;">
+            ✨ Generate Example
+          </button>
+        </div>
         <textarea id="fSampleResponse" class="form-input" rows="3" maxlength="600"
           placeholder="Paste one perfect answer for this topic. Groq uses it to calibrate length and tone — it will never copy it word for word, just match the style.&#10;&#10;Example: &quot;Our annual maintenance plan is $149 and covers two tune-ups a year, plus priority scheduling. Would you like to get that set up today?&quot;"
           style="resize:vertical;font-size:.82rem;line-height:1.5;"></textarea>
@@ -981,22 +987,22 @@
           <label class="booking-radio-label">
             <input type="radio" name="bookingAction" value="offer_to_book" checked>
             <div class="booking-radio-text">
-              <strong>🧠 Smart Close</strong>
-              <small>Groq reads caller intent — offers to book when ready, stays conversational when not (default)</small>
+              <strong>📅 Offer to Book</strong>
+              <small>Agent reads the conversation and offers to schedule when the caller sounds ready. Best for most topics. (default)</small>
             </div>
           </label>
           <label class="booking-radio-label">
             <input type="radio" name="bookingAction" value="advisor_callback">
             <div class="booking-radio-text">
-              <strong>📞 Advisor Callback</strong>
-              <small>Collect caller name + phone for advisor follow-up</small>
+              <strong>📋 Collect Contact Info</strong>
+              <small>Ask for name + phone so an advisor can follow up. Good for complex topics like financing or large installs.</small>
             </div>
           </label>
           <label class="booking-radio-label">
             <input type="radio" name="bookingAction" value="none">
             <div class="booking-radio-text">
-              <strong>🚫 Answer Only</strong>
-              <small>No booking offer — answer and wait for caller</small>
+              <strong>💬 Answer Only</strong>
+              <small>Answer the question and let the caller lead. No booking push. Good for info-only topics.</small>
             </div>
           </label>
         </div>
@@ -2371,6 +2377,48 @@ function _applyWordLimit(n) {
   document.getElementById('fWordLimit').value = n;
   _updateWordLimitHint();
   _toast(`Word limit set to ${n} words`, 'success');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERATE SAMPLE RESPONSE — ✨ button next to Ideal Response Example
+// ─────────────────────────────────────────────────────────────────────────────
+async function generateSampleResponse() {
+  const btn = document.getElementById('btnGenSample');
+  const ta  = document.getElementById('fSampleResponse');
+  if (!btn || !ta) return;
+
+  // Collect section content for context
+  const sections = _getSections();
+  const sectionText = sections.map(s =>
+    (s.label ? `[${s.label}] ` : '') + (s.content || '')
+  ).filter(Boolean).join('\n\n');
+
+  if (!sectionText.trim()) {
+    _toast('Add some section content first so Groq knows what to generate an example for', 'info');
+    return;
+  }
+
+  const title    = document.getElementById('fTitle')?.value?.trim() || '';
+  const category = document.getElementById('fCategory')?.value?.trim() || '';
+
+  btn.disabled  = true;
+  btn.textContent = '⏳ Generating…';
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/generate-sample`,
+      { method: 'POST', body: { title, category, sectionText } }
+    );
+    if (!data.success || !data.sample) throw new Error(data.error || 'No sample returned');
+    ta.value = data.sample;
+    charCount(ta, 600, null);
+    _toast('Sample generated — review and edit before saving', 'success');
+  } catch (err) {
+    _toast('Could not generate sample: ' + err.message, 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '✨ Generate Example';
+  }
 }
 
 async function generateKeywords() {
