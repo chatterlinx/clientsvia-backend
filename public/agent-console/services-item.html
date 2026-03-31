@@ -132,6 +132,9 @@
     .btn-evaluate:disabled { opacity:.55; cursor:wait; }
     .btn-evaluate.has-issues { border-color:#f59e0b; color:#b45309; background:#fffbeb; }
     .btn-evaluate.all-pass   { border-color:#16a34a; color:#15803d; background:#f0fdf4; }
+    /* ── Download JSON button ────────────────────────────────────────────── */
+    .btn-download-json { background:white; border:1px solid #d1d5db; color:#6b7280; border-radius:8px; padding:8px 12px; font-size:12px; font-weight:500; cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .btn-download-json:hover { background:#f9fafb; border-color:#9ca3af; color:#374151; }
 
     /* ── Evaluation panel ────────────────────────────────────────────────── */
     .eval-panel { background:white; border-radius:12px; border:1.5px solid #e0e7ff; box-shadow:0 2px 16px rgba(99,102,241,.08); padding:20px; }
@@ -720,6 +723,7 @@
   <div class="header-spacer"></div>
   <div class="header-actions">
     <button id="btnEvaluate" class="btn-evaluate" onclick="runEvaluation()" title="AI quality check — catch mistakes before they hurt live calls" style="display:none;">⚡ Evaluate</button>
+    <button class="btn-download-json" onclick="downloadJSON()" title="Download full KC state as JSON for inspection">⬇ JSON</button>
     <button class="btn-secondary" id="btnCancel" onclick="goBack()">Cancel</button>
     <button id="btnDeleteHeader" class="btn-danger" style="display:none;" onclick="softDelete()">Deactivate</button>
     <button class="btn-primary" id="btnSave" onclick="saveContainer()">Save Container</button>
@@ -2376,6 +2380,73 @@ async function saveContainer() {
     _toast(err.message || 'Failed to save', 'error');
     _setLoading(false);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOWNLOAD JSON — full KC state snapshot for inspection
+// ─────────────────────────────────────────────────────────────────────────────
+function downloadJSON() {
+  const title    = document.getElementById('fTitle').value?.trim() || 'untitled';
+  const sections = _getSections();
+
+  const wordLimitVal      = parseInt(document.getElementById('fWordLimit').value, 10);
+  const followUpDepthRaw  = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
+  const selectedDaType    = document.getElementById('fDaType')?.value?.trim()    || null;
+  const selectedDaSubType = document.getElementById('fDaSubType')?.value?.trim() || null;
+
+  // Same payload shape as saveContainer — no validation, just snapshot current state
+  const payload = {
+    title,
+    category:         document.getElementById('fCategory').value?.trim() || '',
+    sections,
+    keywords:         S.keywords,
+    negativeKeywords: S.negativeKeywords,
+    wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
+    sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
+    bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
+    followUpDepth:    (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
+    isActive:         document.getElementById('fActive').checked,
+    priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
+    daType:           selectedDaType    || null,
+    daSubTypes:       selectedDaSubType ? [selectedDaSubType] : [],
+    classificationStatus: selectedDaType
+      ? (S.classificationStatus === 'AUTO_CONFIRMED' ? 'AUTO_CONFIRMED' : 'MANUAL')
+      : 'UNCLASSIFIED',
+  };
+
+  // Inspection extras — beyond the save payload, useful for debugging routing issues
+  const snapshot = {
+    _meta: {
+      downloadedAt: new Date().toISOString(),
+      companyId:    S.companyId,
+      mongoId:      S.mongoId || null,
+      isEdit:       S.isEdit  || false,
+      pageUrl:      window.location.href,
+    },
+    _keywordConflicts: Object.entries(S.conflictMap || {})
+      .filter(([kw]) => S.keywords.includes(kw))
+      .reduce((acc, [kw, containers]) => {
+        acc[kw] = containers.map(c => ({ id: c.id, title: c.title }));
+        return acc;
+      }, {}),
+    _sectionDataMap: Object.fromEntries(
+      [...(S.sectionData || new Map()).entries()].map(([sid, data]) => [sid, data])
+    ),
+    _payload: payload,
+  };
+
+  const json     = JSON.stringify(snapshot, null, 2);
+  const blob     = new Blob([json], { type: 'application/json' });
+  const url      = URL.createObjectURL(blob);
+  const a        = document.createElement('a');
+  const safeName = title.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40);
+  a.href         = url;
+  a.download     = `kc-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  _toast('JSON downloaded ✓', 'success');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
