@@ -642,9 +642,25 @@ function renderTurnBlock(t, companyId) {
   let pipelineHtml = '';
   if (isAgent) {
     const pathLabel = t.provenancePath || '—';
+    // KC card link — shown inline in pipeline trace for instant click-through
+    const kcEditUrl  = t.kcCard ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(t.kcCard._id)}` : null;
+    const kcIdLabel  = t.kcCard ? (t.kcCard.kcId || t.kcCard._id) : null;
+    const kcCardRow  = kcEditUrl
+      ? `<div class="pipe-row">
+           <span class="pr-stage">KC Card</span>
+           <span class="pr-icon">→</span>
+           <span class="pr-detail">
+             <a href="${esc(kcEditUrl)}" target="_blank"
+                style="font-family:monospace;font-size:11px;background:#eff6ff;color:#1d4ed8;padding:1px 7px;border-radius:4px;border:1px solid #bfdbfe;text-decoration:none;font-weight:600;"
+                title="Open KC card: ${esc(t.kcCard.title || kcIdLabel)}">${esc(kcIdLabel)}</a>
+             ${t.kcCard.title ? `<span style="margin-left:6px;color:var(--tx-secondary);font-size:11px;">${esc(t.kcCard.title)}</span>` : ''}
+           </span>
+         </div>`
+      : '';
     const pipeRows = `
       <div class="pipe-row"><span class="pr-stage">Provenance type</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
       <div class="pipe-row"><span class="pr-stage">Path / handler</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
+      ${kcCardRow}
       ${t.kind ? `<div class="pipe-row"><span class="pr-stage">Kind</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.kind)}</span></div>` : ''}
       ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
       ${t.score  ? `<div class="pipe-row"><span class="pr-stage">KC match score</span><span class="pr-icon">→</span><span class="pr-detail">${t.score.toFixed(2)}</span></div>` : ''}
