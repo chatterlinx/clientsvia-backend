@@ -28,6 +28,7 @@
  *   POST   /:companyId/knowledge/generate-keywords      — Groq keyword generation (pre-save)
  *   POST   /:companyId/knowledge/analyze-gaps           — Content Coach gap analysis (per section)
  *   POST   /:companyId/knowledge/generate-sample        — ✨ Groq-generated ideal response example
+ *   POST   /:companyId/knowledge/preview-fixed-audio    — 🎙️ Generate + return URL for ⚡ Fixed section audio
  *   POST   /:companyId/knowledge/reorder                — Bulk priority update
  * ⚠️ GET    /:companyId/knowledge/:id                   — Get single (AFTER literal routes)
  *   PATCH  /:companyId/knowledge/:id                    — Partial update
@@ -1167,6 +1168,91 @@ ${jsonSchema}`;
   } catch (err) {
     logger.error('[companyKnowledge] analyze-gaps error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Gap analysis failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/preview-fixed-audio — Generate + return audio URL
+// ─────────────────────────────────────────────────────────────────────────────
+// Used by the ⚡ Fixed strip's 🎙️ Preview button in services-item.html.
+// Checks if audio for the given text is already cached on disk. If not,
+// synthesises it now (ElevenLabs → disk). Returns the /audio-safe URL so
+// the browser can play the file immediately for owner review.
+//
+// Body: { text: string }  (section content — max 420 chars)
+// Returns: { success, url, generated, chars }
+//   generated: true  = freshly synthesised now
+//   generated: false = already existed in cache (instant)
+//
+// ⚠️ MUST be registered BEFORE :id
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const { text } = req.body || {};
+    if (!text?.trim()) {
+      return res.status(400).json({ success: false, error: 'text is required' });
+    }
+
+    const trimmed = text.trim();
+    if (trimmed.length > 420) {
+      return res.status(400).json({
+        success: false,
+        error: `Content too long for pre-caching (${trimmed.length} chars — max 420). Shorten the section to enable instant audio.`,
+      });
+    }
+
+    // Load company voice settings
+    const company = await v2Company.findById(companyId).lean();
+    const vs      = company?.aiAgentSettings?.voiceSettings;
+    if (!vs?.voiceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'No voice configured — set your ElevenLabs voice in Agent Settings first.',
+      });
+    }
+
+    // ── Check disk cache first — may already exist from last save ─────────
+    const existing = InstantAudioService.getStatus({
+      companyId,
+      kind:          'KC_RESPONSE',
+      text:          trimmed,
+      voiceSettings: vs,
+    });
+
+    if (existing.exists) {
+      logger.info('[companyKnowledge] preview-fixed-audio — cache hit', { companyId, chars: trimmed.length });
+      return res.json({ success: true, url: existing.url, generated: false, chars: trimmed.length });
+    }
+
+    // ── Not cached — synthesise now (synchronous for immediate playback) ──
+    await InstantAudioService.generate({
+      companyId,
+      kind:          'KC_RESPONSE',
+      text:          trimmed,
+      company,
+      voiceSettings: vs,
+    });
+
+    const fresh = InstantAudioService.getStatus({
+      companyId,
+      kind:          'KC_RESPONSE',
+      text:          trimmed,
+      voiceSettings: vs,
+    });
+
+    if (!fresh.exists) {
+      return res.status(500).json({ success: false, error: 'Generation succeeded but file not found — try again.' });
+    }
+
+    logger.info('[companyKnowledge] preview-fixed-audio — generated', { companyId, chars: trimmed.length });
+    return res.json({ success: true, url: fresh.url, generated: true, chars: trimmed.length });
+
+  } catch (err) {
+    logger.error('[companyKnowledge] preview-fixed-audio error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: err.message || 'Audio generation failed' });
   }
 });
 

@@ -449,6 +449,26 @@
     }
     .section-fixed-switch input:checked + .section-fixed-knob { background: #f59e0b; }
     .section-fixed-switch input:checked + .section-fixed-knob::before { transform: translateX(16px); }
+    /* 🎙️ Preview audio button — appears when Fixed strip is active */
+    .section-fixed-preview-btn {
+      display: none; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 6px;
+      font-size: .72rem; font-weight: 600;
+      border: 1px solid #d97706; color: #d97706;
+      background: transparent; cursor: pointer;
+      transition: background .15s, color .15s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .section-fixed-preview-btn:hover:not(:disabled) { background: #fef3c7; }
+    .section-fixed-preview-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .section-fixed-strip.is-active .section-fixed-preview-btn { display: flex; }
+    /* Audio status text — shown after preview attempt */
+    .section-fixed-audio-status {
+      font-size: .70rem; white-space: nowrap;
+      display: none; flex-shrink: 0;
+    }
+    .section-fixed-audio-status.ok  { color: #16a34a; display: inline; }
+    .section-fixed-audio-status.err { color: #dc2626; display: inline; }
 
     /* ── Booking action radios ────────────────────────────────────────────── */
     .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -1761,6 +1781,12 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <span class="section-fixed-badge">⚡ Fixed</span>
         <span class="section-fixed-desc">Bypass Groq · read verbatim · audio pre-cached (fires when UAP routes here)</span>
       </label>
+      <!-- 🎙️ Preview button: generate + play audio to verify it sounds right -->
+      <button type="button" class="section-fixed-preview-btn" id="sec-preview-btn-${id}"
+        onclick="_previewSectionAudio(${id})" title="Generate audio now and play it to verify">
+        🎙️ Preview Audio
+      </button>
+      <span class="section-fixed-audio-status" id="sec-audio-status-${id}"></span>
       <label class="section-fixed-switch" title="Toggle per-section Fixed Response Mode">
         <input type="checkbox" id="sec-fixed-${id}"
           onchange="_onSectionFixedChange(${id})"
@@ -3328,6 +3354,76 @@ function _onSectionFixedChange(sid) {
   if (data) data.useFixedResponse = checked;
   const bar = document.getElementById(`sec-fixed-bar-${sid}`);
   if (bar) bar.classList.toggle('is-active', checked);
+  // Reset audio status when toggling
+  const statusEl = document.getElementById(`sec-audio-status-${sid}`);
+  if (statusEl) { statusEl.textContent = ''; statusEl.className = 'section-fixed-audio-status'; }
+}
+
+// ── Per-section ⚡ Fixed audio preview (Generate + Play) ──────────────────────
+// Called by the 🎙️ button on the section fixed strip.
+// Sends section content to /preview-fixed-audio → server checks disk cache
+// (or generates now if missing) → returns /audio-safe URL → browser plays it.
+// Shows ✅ Cached or ❌ error inline on the strip.
+// ─────────────────────────────────────────────────────────────────────────────
+async function _previewSectionAudio(sid) {
+  const row    = document.querySelector(`[data-sid="${sid}"]`);
+  const btn    = document.getElementById(`sec-preview-btn-${sid}`);
+  const status = document.getElementById(`sec-audio-status-${sid}`);
+  if (!row || !btn) return;
+
+  // Get current content from this section's textarea
+  const text = row.querySelector('textarea')?.value?.trim() || '';
+  if (!text) {
+    if (status) { status.textContent = '⚠️ No content'; status.className = 'section-fixed-audio-status err'; }
+    return;
+  }
+
+  // Loading state
+  const origLabel   = btn.innerHTML;
+  btn.disabled      = true;
+  btn.innerHTML     = '⏳ Generating…';
+  if (status) { status.textContent = ''; status.className = 'section-fixed-audio-status'; }
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/preview-fixed-audio`,
+      { method: 'POST', body: { text } }
+    );
+
+    if (!data.success) {
+      throw new Error(data.error || 'Preview failed');
+    }
+
+    // Play the returned audio URL (add cache-buster to avoid stale browser cache)
+    const url = `${data.url}?_cb=${Date.now()}`;
+    const audio = new Audio(url);
+
+    btn.innerHTML = '⏹ Stop';
+    btn.disabled  = false;
+    if (status) {
+      status.textContent = data.generated ? '✅ Generated + cached' : '✅ Cached';
+      status.className   = 'section-fixed-audio-status ok';
+    }
+
+    audio.onended = () => { btn.innerHTML = '🎙️ Preview Audio'; };
+    audio.onerror = () => { btn.innerHTML = '🎙️ Preview Audio'; };
+    audio.play().catch(() => { btn.innerHTML = origLabel; });
+
+    // Stop current audio if play button clicked again
+    btn.onclick = () => {
+      audio.pause();
+      btn.innerHTML = '🎙️ Preview Audio';
+      btn.onclick   = () => _previewSectionAudio(sid);
+    };
+
+  } catch (err) {
+    btn.innerHTML = origLabel;
+    btn.disabled  = false;
+    if (status) {
+      status.textContent = `❌ ${err.message || 'Generation failed'}`;
+      status.className   = 'section-fixed-audio-status err';
+    }
+  }
 }
 
 function _toggleWordLimitEnabled() {
