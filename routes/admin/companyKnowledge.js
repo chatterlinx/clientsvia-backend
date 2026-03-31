@@ -457,14 +457,16 @@ Return ONLY a valid JSON array of strings. No extra text. Example: ["how much is
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * _runEvaluation — Single Groq call that scores a KC container across 5
+ * _runEvaluation — Single Groq call that scores a KC container across 6
  * dimensions and returns actionable fixes.
  *
  * Dimensions: CONTENT_QUALITY | LABEL_ALIGNMENT | KEYWORD_QUALITY |
- *             COMPLETENESS | CLOSING_CONFIG
+ *             COMPLETENESS | RESPONSE_SETTINGS | FUNNEL_CONFIG
  *
  * @param {string} companyId
- * @param {Object} payload   — { title, category, sections, keywords, wordLimit, bookingAction, closingPrompt }
+ * @param {Object} payload   — { title, category, sections, keywords, negativeKeywords,
+ *                               wordLimit, wordLimitEnabled, sampleResponse,
+ *                               bookingAction, closingPrompt }
  * @param {Object} res       — Express response object
  */
 async function _runEvaluation(companyId, payload, res) {
@@ -473,24 +475,51 @@ async function _runEvaluation(companyId, payload, res) {
     return res.status(503).json({ success: false, error: 'Groq API key not configured' });
   }
 
-  const { title = '', category = '', sections = [], keywords = [],
-          wordLimit = null, bookingAction = 'offer_to_book', closingPrompt = '' } = payload;
+  const {
+    title = '', category = '', sections = [], keywords = [], negativeKeywords = [],
+    wordLimit = null, wordLimitEnabled = true, sampleResponse = '',
+    bookingAction = 'offer_to_book', closingPrompt = '',
+  } = payload;
 
-  // Build section block for prompt
+  // ── Build rich section block — includes prequal + upsell per section ────────
   const sectionBlock = (sections || [])
     .filter(s => s.label?.trim() && s.content?.trim())
-    .map(s => `${s.label.trim().toUpperCase()}: ${s.content.trim().slice(0, 600)}`)
+    .map(s => {
+      const lines = [`[SECTION: ${s.label.trim().toUpperCase()}]`];
+      lines.push(`Content: ${s.content.trim().slice(0, 500)}`);
+      if (s.daSubTypeKey) lines.push(`Sub-type key: ${s.daSubTypeKey}`);
+      const pq = s.preQualifyQuestion;
+      if (pq?.enabled && pq.text?.trim()) {
+        const opts = (pq.options || []).map(o => o.label || o.value).filter(Boolean).join(', ');
+        lines.push(`Pre-qualify question: "${pq.text.trim()}"${opts ? ` — options: [${opts}]` : ''}`);
+      } else if (pq?.text?.trim()) {
+        lines.push(`Pre-qualify question (disabled): "${pq.text.trim()}"`);
+      }
+      const upsells = (s.upsellChain || []).filter(u => u.offerScript?.trim());
+      if (upsells.length) {
+        upsells.forEach((u, i) => {
+          const price = u.price ? ` ($${u.price})` : '';
+          lines.push(`Upsell ${i + 1}${price}: "${u.offerScript.trim()}"${u.yesScript ? ` → Yes: "${u.yesScript.trim()}"` : ''}${u.noScript ? ` / No: "${u.noScript.trim()}"` : ''}`);
+        });
+      }
+      return lines.join('\n');
+    })
     .join('\n\n') || '(no sections)';
 
   const kwList    = (keywords || []).slice(0, 20).join(', ') || '(none)';
-  const wlDisplay = wordLimit ? `${wordLimit} words` : 'not set (falls back to 40)';
+  const negKwList = (negativeKeywords || []).slice(0, 10).join(', ') || '(none)';
+  const wlDisplay = !wordLimitEnabled
+    ? 'DISABLED — agent may use as many words as needed'
+    : wordLimit ? `${wordLimit} words` : 'not set (falls back to global default ~40)';
 
   const userContent = `CONTAINER:
 Title: "${title}"
 Category: "${category || 'none'}"
 Keywords: [${kwList}]
+Negative keywords (exclude-triggers): [${negKwList}]
 Word Limit: ${wlDisplay} | Booking Action: ${bookingAction}
 Closing Prompt: "${closingPrompt || '(none)'}"
+Sample Response (ideal example): "${sampleResponse?.trim() || '(none)'}"
 
 SECTIONS:
 ${sectionBlock}`;
@@ -499,24 +528,26 @@ ${sectionBlock}`;
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   1200,
+      maxTokens:   1500,
       temperature: 0.15,
       jsonMode:    true,   // forces strict JSON output — system prompt contains "json" ✓
-      system: `You are a quality auditor for a phone-call AI knowledge base. The voice agent (Groq) must answer callers ONLY from this container — no improvisation allowed. Your job is to catch mistakes that would cause the agent to fail on live calls.
+      system: `You are a quality auditor for a phone-call AI knowledge base. The voice agent must answer callers ONLY from this container — no improvisation allowed. Your job is to catch every mistake that would cause the agent to fail on live calls.
 
-Evaluate across exactly 5 dimensions. Return ONLY valid JSON — no markdown, no extra text.
+Evaluate across exactly 6 dimensions. Return ONLY valid JSON — no markdown, no extra text.
 
 SCORING RUBRIC:
 
-1. CONTENT_QUALITY (0-100): Is the content specific and complete enough for Groq to answer the 3 most likely caller questions about this topic? Penalize: vague or generic text, missing key facts (prices, availability, what's included, duration), content too short to be actionable, sections that just say "call us for details".
+1. CONTENT_QUALITY (0-100): Is the content specific and complete enough to answer the 3 most likely caller questions about this topic? Penalize: vague or generic text, missing key facts (prices, availability, what's included, duration), content too short to be actionable, sections that just say "call us for details".
 
-2. LABEL_ALIGNMENT (0-100): Do the section labels accurately describe their content so Groq can locate the right information? Penalize: generic labels ("Section 1", "Notes", "Info"), labels that don't match the actual content, missing labels.
+2. LABEL_ALIGNMENT (0-100): Do the section labels accurately describe their content so the agent can locate the right information quickly? Penalize: generic labels ("Section 1", "Notes", "Info"), labels that don't match the actual content, missing labels.
 
-3. KEYWORD_QUALITY (0-100): Are keywords phrased the way real callers speak on the phone (conversational, not database terms)? Are they specific enough to this topic that they won't accidentally trigger other cards? Are obvious caller phrases missing? CRITICAL FLAG: Penalize heavily (–30 points each) any keyword that is a generic pronoun, filler word, or common verb that matches almost any utterance: words like "it", "that", "this", "they", "those", "what", "how", "there", "here", "yes", "no", "okay", "tell", "know", "get", "need", "want", "help", "more", "about", "the", "a" — these would silently break topic anchoring by causing the wrong container to activate mid-conversation. Also penalize single-character keywords. Flag each dangerous keyword by name in the "finding" and list them in "fixes".
+3. KEYWORD_QUALITY (0-100): Are keywords phrased the way real callers speak on the phone? Are they specific enough to this topic that they won't accidentally trigger other cards? CRITICAL FLAG: Penalize heavily (–30 pts each) any generic pronoun, filler word, or common verb: "it", "that", "this", "they", "what", "how", "yes", "no", "tell", "get", "need", "want", "help", "about", "the", "a" — these break topic anchoring. Also check negative keywords are not so broad they suppress legitimate matches. Flag every dangerous keyword by name in the finding.
 
-4. COMPLETENESS (0-100): Given the title and topic, what sections would a world-class phone KB entry include that are currently MISSING? Consider: pricing, what's included, duration/timing, availability/scheduling, warranty/guarantees, requirements/eligibility, common caller objections, FAQs. Penalize for missing sections that callers will definitely ask about.
+4. COMPLETENESS (0-100): What sections would a world-class phone KB entry include that are MISSING? Consider: pricing, what's included, duration/timing, availability/scheduling, warranty/guarantees, eligibility requirements, common caller objections, FAQs. Penalize for missing sections callers will definitely ask about.
 
-5. CLOSING_CONFIG (0-100): Is the word limit appropriate for the content complexity (e.g. simple service = 30-50 words, complex multi-option service = 60-100 words)? Is the booking action sensible for this topic type? If a closing prompt is set, is it natural and caller-friendly?
+5. RESPONSE_SETTINGS (0-100): Evaluate all response configuration: (a) Word limit — is it appropriate for this content's complexity? Simple answers = 30–50 words; multi-option or complex topics = 60–100 words; disabling word limit is only justified for very complex topics where truncation would hurt the caller. (b) Sample Response — if provided, does it demonstrate the right length, tone and information density? Is it specific enough to teach the agent? (c) Booking action — does it match this topic type (informational topics should not force booking; service requests should). (d) Closing prompt — if set, is it natural and caller-friendly?
+
+6. FUNNEL_CONFIG (0-100): Evaluate the per-section pre-qualify and upsell configuration. (a) Pre-qualify questions — if set, are they clear, are the options exhaustive, would a real caller understand them without confusion? If a section has significant cost variance or eligibility criteria and has NO pre-qualify question, penalize. (b) Upsell chain — are offer scripts natural and non-pushy? Are yes/no response scripts appropriate? Are there high-revenue sections that have no upsell configured where one would be appropriate? If no funnel is configured anywhere, score 60 as neutral (no penalty for not using funnels, but no reward either).
 
 Status rules: score >= 75 = PASS, 50-74 = WARN, below 50 = FAIL.
 Grade: 90+ = A, 80-89 = B+, 70-79 = B, 60-69 = C+, 50-59 = C, below 50 = D or F.
@@ -583,7 +614,7 @@ router.post('/:companyId/knowledge/generate-keywords', async (req, res) => {
 // ⚠️ MUST be registered BEFORE /:id
 //
 // Accepts full container payload (works pre-save). Returns a structured
-// evaluation with 5 dimension scores, fixes, suggested keywords, and missing sections.
+// evaluation with 6 dimension scores, fixes, suggested keywords, and missing sections.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge/evaluate', async (req, res) => {
   const { companyId } = req.params;

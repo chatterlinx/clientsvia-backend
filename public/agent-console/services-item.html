@@ -1985,11 +1985,13 @@ async function runEvaluation() {
     title,
     category,
     sections,
-    keywords:         S.keywords,
-    negativeKeywords: S.negativeKeywords,
-    wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
-    bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
-    closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
+    keywords:          S.keywords,
+    negativeKeywords:  S.negativeKeywords,
+    wordLimit:         (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
+    wordLimitEnabled:  document.getElementById('fWordLimitEnabled')?.checked !== false,
+    sampleResponse:    (document.getElementById('fSampleResponse')?.value || '').trim() || null,
+    bookingAction:     document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    closingPrompt:     (document.getElementById('fClosingPrompt')?.value || '').trim(),
   };
 
   try {
@@ -2019,11 +2021,14 @@ function closeEvalPanel() {
 
 function _renderEvalPanel(ev) {
   const DIM_META = {
-    CONTENT_QUALITY: { icon: '📝', label: 'Content Quality' },
-    LABEL_ALIGNMENT: { icon: '🏷', label: 'Label Alignment' },
-    KEYWORD_QUALITY: { icon: '🔑', label: 'Keywords' },
-    COMPLETENESS:    { icon: '📋', label: 'Completeness' },
-    CLOSING_CONFIG:  { icon: '⚙️', label: 'Closing Config' },
+    CONTENT_QUALITY:   { icon: '📝', label: 'Content Quality' },
+    LABEL_ALIGNMENT:   { icon: '🏷', label: 'Label Alignment' },
+    KEYWORD_QUALITY:   { icon: '🔑', label: 'Keywords' },
+    COMPLETENESS:      { icon: '📋', label: 'Completeness' },
+    RESPONSE_SETTINGS: { icon: '⚙️', label: 'Response Settings' },
+    FUNNEL_CONFIG:     { icon: '🎯', label: 'Funnel Config' },
+    // legacy alias — in case old evaluations stored CLOSING_CONFIG
+    CLOSING_CONFIG:    { icon: '⚙️', label: 'Response Settings' },
   };
 
   function scoreClass(grade) {
