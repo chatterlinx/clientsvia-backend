@@ -917,34 +917,60 @@ async function answer(opts) {
   }
 
   // ── FIXED RESPONSE SHORTCUT ────────────────────────────────────────────────
-  // useFixedResponse:true → skip Groq entirely.
-  // Agent reads the effective section's content verbatim. Audio is pre-cached by
-  // the companyKnowledge route at save time (kind:'KC_RESPONSE').
-  // bookingAction is resolved by the engine upstream — not needed here.
+  // Two scopes of fixed response — checked in priority order:
+  //
+  //   1. Per-section (targetSection.useFixedResponse)
+  //      Fires when UAP routed to a specific section AND that section has
+  //      useFixedResponse:true. Returns the section's own content verbatim.
+  //      Takes precedence over container-level so per-section can override.
+  //
+  //   2. Container-level (container.useFixedResponse)
+  //      Fires for any KC match on this container (UAP or keyword).
+  //      Returns the first section with content verbatim (Section 1 behaviour).
+  //
+  // In both cases: Groq is skipped entirely. Audio is pre-cached by the
+  // companyKnowledge route on save (kind: 'KC_RESPONSE'). bookingAction is
+  // resolved by the engine upstream — not needed here.
   // Falls through to Groq gracefully if no content is found.
   // ─────────────────────────────────────────────────────────────────────────────
-  if (container.useFixedResponse) {
-    const effectiveSections = targetSection
-      ? [targetSection]
-      : [...(container.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+  if (targetSection?.useFixedResponse || container.useFixedResponse) {
+    let fixedText = null;
+    let fixedScope = '';
 
-    const fixedText = effectiveSections.find(s => s.content?.trim())?.content?.trim() || null;
+    if (targetSection?.useFixedResponse && targetSection.content?.trim()) {
+      // ── Per-section fixed: use this section's content exactly ─────────────
+      fixedText  = targetSection.content.trim();
+      fixedScope = 'section';
+    } else if (container.useFixedResponse) {
+      // ── Container-level fixed: use first section with content ─────────────
+      const effectiveSections = targetSection
+        ? [targetSection]
+        : [...(container.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+      fixedText  = effectiveSections.find(s => s.content?.trim())?.content?.trim() || null;
+      fixedScope = 'container';
+    }
 
     if (fixedText) {
       logger.debug('[KnowledgeContainer] Fixed response shortcut — Groq bypassed', {
-        companyId, callSid, containerTitle, chars: fixedText.length,
+        companyId, callSid, containerTitle,
+        scope: fixedScope,
+        sectionLabel: fixedScope === 'section' ? (targetSection?.label || '') : undefined,
+        chars: fixedText.length,
       });
       return {
-        response:              fixedText,
-        intent:                INTENT.ANSWERED,
-        confidence:            1.0,
-        latencyMs:             Date.now() - startMs,
+        response:   fixedText,
+        intent:     INTENT.ANSWERED,
+        confidence: 1.0,
+        latencyMs:  Date.now() - startMs,
         containerTitle,
       };
     }
-    // No content found in any section — fall through to Groq gracefully
-    logger.warn('[KnowledgeContainer] useFixedResponse:true but no section content found — falling through to Groq', {
+
+    // No content found — fall through to Groq gracefully
+    logger.warn('[KnowledgeContainer] Fixed response mode active but no content found — falling through to Groq', {
       companyId, callSid, containerTitle,
+      containerFixed: container.useFixedResponse,
+      sectionFixed:   !!targetSection?.useFixedResponse,
     });
   }
   // ─────────────────────────────────────────────────────────────────────────────

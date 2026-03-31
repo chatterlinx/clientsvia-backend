@@ -140,6 +140,18 @@ const sectionSchema = new mongoose.Schema(
       comment: 'Per-section booking action override. null = use container default.'
     },
 
+    // ── Per-section Fixed Response Mode ───────────────────────────────────
+    // When true, Groq is bypassed for this specific section.
+    // Only fires when UAP routes a call to this section via daSubTypeKey.
+    // Audio is pre-cached on save (kind: 'KC_RESPONSE').
+    // Falls through to Groq gracefully if content is missing.
+    // Independent of container.useFixedResponse — each section decides for itself.
+    useFixedResponse: {
+      type:    Boolean,
+      default: false,
+      comment: 'Per-section: bypass Groq when UAP routes here — reads content verbatim with pre-cached audio.'
+    },
+
     // ── Pre-qualify question (optional) ───────────────────────────────────
     // Agent asks this BEFORE answering this section's content.
     // Caller's answer is matched to options[].keywords → responseContext injected into Groq.

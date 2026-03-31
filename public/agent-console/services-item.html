@@ -395,6 +395,61 @@
       user-select: none;
     }
 
+    /* ── Per-section ⚡ Fixed Response strip ──────────────────────────────── */
+    /* Thin bar between section body and Sales Funnel accordion.               */
+    /* Default: neutral stone. Active: amber — matches container-level badge.  */
+    .section-fixed-strip {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 18px;
+      background: #fafaf9;
+      border-top: 1px solid var(--border);
+      transition: background .18s, border-color .18s;
+    }
+    .section-fixed-strip.is-active {
+      background: #fffbeb;
+      border-top-color: #fde68a;
+    }
+    .section-fixed-label-wrap {
+      display: flex; align-items: center; gap: 8px;
+      flex: 1; cursor: pointer; user-select: none;
+    }
+    .section-fixed-badge {
+      font-size: .68rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px;
+      letter-spacing: .02em;
+      background: #e7e5e4; color: #78716c;
+      transition: background .18s, color .18s;
+    }
+    .section-fixed-strip.is-active .section-fixed-badge {
+      background: #f59e0b; color: #fff;
+    }
+    .section-fixed-desc {
+      font-size: .74rem; color: #a8a29e;
+      transition: color .18s;
+    }
+    .section-fixed-strip.is-active .section-fixed-desc {
+      color: #92400e;
+    }
+    /* Mini toggle — same pill shape as container-level, slightly smaller */
+    .section-fixed-switch {
+      position: relative; display: inline-block;
+      width: 34px; height: 18px; flex-shrink: 0;
+    }
+    .section-fixed-switch input { opacity: 0; width: 0; height: 0; }
+    .section-fixed-knob {
+      position: absolute; inset: 0;
+      background: #d1d5db; border-radius: 18px;
+      cursor: pointer; transition: background .18s;
+    }
+    .section-fixed-knob::before {
+      content: ''; position: absolute;
+      height: 12px; width: 12px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%;
+      transition: transform .18s;
+    }
+    .section-fixed-switch input:checked + .section-fixed-knob { background: #f59e0b; }
+    .section-fixed-switch input:checked + .section-fixed-knob::before { transform: translateX(16px); }
+
     /* ── Booking action radios ────────────────────────────────────────────── */
     .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
     .booking-radio-label {
@@ -1589,6 +1644,7 @@ function _populateForm(c) {
   if (sorted.length) {
     sorted.forEach(s => addSection(s.label, s.content, {
       daSubTypeKey:       s.daSubTypeKey       || null,
+      useFixedResponse:   !!s.useFixedResponse,
       preQualifyQuestion: s.preQualifyQuestion || null,
       upsellChain:        s.upsellChain        || [],
     }));
@@ -1636,9 +1692,12 @@ function addSection(label = '', content = '', sectionMeta = null) {
   const pq = sectionMeta?.preQualifyQuestion || {};
   const pqHasContent = !!(pq.text?.trim() || pq.options?.length);
   // enabled: read explicit field from DB (default true when content exists and field not set)
-  const pqEnabled = pqHasContent && pq.enabled !== false;
+  const pqEnabled        = pqHasContent && pq.enabled !== false;
+  const useFixedResponse = !!sectionMeta?.useFixedResponse;
+
   S.sectionData.set(id, {
-    daSubTypeKey: sectionMeta?.daSubTypeKey || null,
+    daSubTypeKey:     sectionMeta?.daSubTypeKey || null,
+    useFixedResponse,
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
@@ -1694,6 +1753,21 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </div>
     </div>
     <div id="gap-panel-${id}" class="gap-panel" style="display:none;"></div>
+
+    <!-- ⚡ Per-section Fixed Response Mode strip ─────────────────────── -->
+    <!-- OFF: neutral stone bar. ON: amber — Groq skipped, audio pre-cached. -->
+    <div class="section-fixed-strip${useFixedResponse ? ' is-active' : ''}" id="sec-fixed-bar-${id}">
+      <label class="section-fixed-label-wrap" for="sec-fixed-${id}">
+        <span class="section-fixed-badge">⚡ Fixed</span>
+        <span class="section-fixed-desc">Bypass Groq · read verbatim · audio pre-cached (fires when UAP routes here)</span>
+      </label>
+      <label class="section-fixed-switch" title="Toggle per-section Fixed Response Mode">
+        <input type="checkbox" id="sec-fixed-${id}"
+          onchange="_onSectionFixedChange(${id})"
+          ${useFixedResponse ? 'checked' : ''}>
+        <span class="section-fixed-knob"></span>
+      </label>
+    </div>
 
     <!-- ── Sales Funnel accordion ─────────────────────────────────────── -->
     <div class="section-funnel-toggle${funnelHasFunnel ? ' has-funnel' : ''}" id="funnel-toggle-${id}" onclick="toggleSectionFunnel(${id})">
@@ -2135,9 +2209,10 @@ function _getSections() {
       result.push({
         label,
         content,
-        order: idx,
-        daSubTypeKey:       data.daSubTypeKey  || null,
-        preQualifyQuestion: preQualifyQuestion || null,
+        order:              idx,
+        daSubTypeKey:       data.daSubTypeKey      || null,
+        useFixedResponse:   !!data.useFixedResponse,
+        preQualifyQuestion: preQualifyQuestion     || null,
         upsellChain,
       });
     }
@@ -3230,17 +3305,29 @@ function _wordCount(str) {
   return str.trim() ? str.trim().split(/\s+/).length : 0;
 }
 
-// ── Fixed Response Mode toggle ────────────────────────────────────────────
+// ── Container-level Fixed Response Mode toggle ───────────────────────────────
 // Dims/enables the Groq-only controls and shows/hides the active hint strip.
 // Called on checkbox change and on page load via _populateForm().
 // ─────────────────────────────────────────────────────────────────────────────
 function _onFixedResponseChange() {
-  const on         = document.getElementById('fUseFixedResponse')?.checked === true;
-  const hint       = document.getElementById('fixedModeActiveHint');
+  const on          = document.getElementById('fUseFixedResponse')?.checked === true;
+  const hint        = document.getElementById('fixedModeActiveHint');
   const groqSection = document.getElementById('groqOnlySection');
 
   if (hint)        hint.style.display = on ? '' : 'none';
   if (groqSection) groqSection.classList.toggle('is-dimmed', on);
+}
+
+// ── Per-section Fixed Response Mode toggle ───────────────────────────────────
+// Called by onchange on each section's ⚡ Fixed checkbox.
+// Updates sectionData Map and toggles the is-active class on the strip bar.
+// ─────────────────────────────────────────────────────────────────────────────
+function _onSectionFixedChange(sid) {
+  const checked = document.getElementById(`sec-fixed-${sid}`)?.checked === true;
+  const data    = S.sectionData.get(sid);
+  if (data) data.useFixedResponse = checked;
+  const bar = document.getElementById(`sec-fixed-bar-${sid}`);
+  if (bar) bar.classList.toggle('is-active', checked);
 }
 
 function _toggleWordLimitEnabled() {

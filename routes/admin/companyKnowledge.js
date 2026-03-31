@@ -357,8 +357,11 @@ router.post('/:companyId/knowledge', async (req, res) => {
       KCKeywordHealthService.generateAndStoreEmbedding(container._id).catch(() => {})
     );
 
-    // Pre-generate instant audio when Fixed Response Mode is enabled on creation
-    if (container.useFixedResponse) {
+    // Pre-generate instant audio when any Fixed Response Mode is active on creation
+    // Covers: container.useFixedResponse (Section 1) AND per-section useFixedResponse
+    const anyFixedOnCreate = container.useFixedResponse
+      || (container.sections || []).some(s => s.useFixedResponse);
+    if (anyFixedOnCreate) {
       _preGenAudioFixed(companyId, container, 'created');
     }
 
@@ -1322,15 +1325,19 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
       );
     }
 
-    // Pre-generate instant audio for Fixed Response Mode:
-    //   Case A — useFixedResponse just turned ON  → always pre-gen
-    //   Case B — already ON and sections changed   → re-gen (new content)
-    const fixedJustEnabled   = updates.useFixedResponse === true;
-    const fixedAlreadyOnEdit = updates.useFixedResponse !== false
+    // Pre-generate instant audio for Fixed Response Mode — four trigger cases:
+    //   Case A — container.useFixedResponse just turned ON
+    //   Case B — container.useFixedResponse already ON, sections content changed
+    //   Case C — sections updated and any section now has useFixedResponse:true
+    //            (catches: per-section fixed just enabled, OR content changed on a fixed section)
+    const fixedJustEnabled    = updates.useFixedResponse === true;
+    const fixedAlreadyOnEdit  = updates.useFixedResponse !== false
       && updates.sections !== undefined
       && container.useFixedResponse === true;
+    const sectionFixedTouched = updates.sections !== undefined
+      && (container.sections || []).some(s => s.useFixedResponse);
 
-    if (fixedJustEnabled || fixedAlreadyOnEdit) {
+    if (fixedJustEnabled || fixedAlreadyOnEdit || sectionFixedTouched) {
       _preGenAudioFixed(companyId, container, fixedJustEnabled ? 'enabled' : 'sections_updated');
     }
 
@@ -2004,36 +2011,45 @@ Return ONLY valid JSON. No markdown.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INSTANT AUDIO PRE-GENERATION — Fixed Response Mode
+// INSTANT AUDIO PRE-GENERATION — Fixed Response Mode (container + per-section)
 // ─────────────────────────────────────────────────────────────────────────────
-// Called fire-and-forget when a container is saved with useFixedResponse:true.
-// Pre-generates an ElevenLabs MP3 for Section 1 content so the runtime can serve
-// a cached <Play> at call time instead of paying Groq + ElevenLabs latency.
+// Called fire-and-forget when a container is saved with any fixed response
+// mode active — either container.useFixedResponse:true (reads Section 1) or
+// any section.useFixedResponse:true (reads that section's content verbatim).
+//
+// Collects all unique texts that need pre-caching, then fires one
+// InstantAudioService.generate() call per unique text in a single async IIFE.
+// Hash-based filenames mean re-generating the same text is a no-op on disk.
 //
 // PATTERN: mirrors _preGenAudio() in companyPricing.js — async IIFE, non-blocking,
 // all failures logged as warn (never surfaced to caller).
 //
-// GUARDS:
-//   - Skips silently if no Section 1 content
-//   - Skips silently if content exceeds 420 chars (InstantAudioService limit)
-//   - Skips silently if no voice configured for the company
+// GUARDS per text:
+//   - Skips if content exceeds 420 chars (InstantAudioService limit)
+//   - Skips if no voice configured for the company
 // ─────────────────────────────────────────────────────────────────────────────
 function _preGenAudioFixed(companyId, container, reason) {
   const sections = container?.sections || [];
   const sorted   = [...sections].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const section1 = sorted.find(s => s.content?.trim());
-  const text     = section1?.content?.trim() || '';
 
-  // Guard: nothing to pre-generate
-  if (!text) return;
+  // ── Collect unique texts to pre-generate ──────────────────────────────────
+  // textsToGen is a Set — deduplication prevents double-generating the same MP3.
+  const textsToGen = new Set();
 
-  // Guard: InstantAudioService hard limit for non-TRIGGER kinds
-  if (text.length > 420) {
-    logger.info('[companyKnowledge] Fixed response audio skipped — Section 1 content exceeds 420 chars', {
-      companyId, title: container.title, chars: text.length, reason,
-    });
-    return;
+  // 1. Container-level useFixedResponse → pre-gen Section 1 content
+  if (container.useFixedResponse) {
+    const section1 = sorted.find(s => s.content?.trim());
+    if (section1?.content?.trim()) textsToGen.add(section1.content.trim());
   }
+
+  // 2. Per-section useFixedResponse → pre-gen each qualifying section's content
+  sorted.forEach(s => {
+    if (s.useFixedResponse && s.content?.trim()) {
+      textsToGen.add(s.content.trim());
+    }
+  });
+
+  if (!textsToGen.size) return;
 
   (async () => {
     try {
@@ -2043,20 +2059,27 @@ function _preGenAudioFixed(companyId, container, reason) {
       // Guard: voice must be configured — skip silently if not
       if (!vs?.voiceId) return;
 
-      await InstantAudioService.generate({
-        companyId,
-        kind:          'KC_RESPONSE',
-        text,
-        company,
-        voiceSettings: vs,
-      });
+      for (const text of textsToGen) {
+        // Guard: InstantAudioService hard limit for non-TRIGGER kinds
+        if (text.length > 420) {
+          logger.info('[companyKnowledge] Fixed response audio skipped — content exceeds 420 chars', {
+            companyId, title: container.title, chars: text.length, reason,
+          });
+          continue;
+        }
 
-      logger.info('[companyKnowledge] Fixed response audio pre-generated', {
-        companyId,
-        title:  container.title,
-        chars:  text.length,
-        reason,
-      });
+        await InstantAudioService.generate({
+          companyId,
+          kind:          'KC_RESPONSE',
+          text,
+          company,
+          voiceSettings: vs,
+        });
+
+        logger.info('[companyKnowledge] Fixed response audio pre-generated', {
+          companyId, title: container.title, chars: text.length, reason,
+        });
+      }
     } catch (err) {
       logger.warn('[companyKnowledge] Fixed response audio pre-generation failed (non-fatal)', {
         companyId, title: container.title, error: err.message, reason,
