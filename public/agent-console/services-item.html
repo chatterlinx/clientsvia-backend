@@ -1228,6 +1228,12 @@ const KC_ITEM_RUNTIME_VARS = new Set(['name']);
 
 /** Load saved variable values from API, then scan sections (edit mode). */
 async function _loadItemVars() {
+  // Event delegation on sectionsList — catches ALL textareas including funnel (prequal/upsell)
+  // rendered dynamically when accordion opens, without needing oninput on each element
+  document.getElementById('sectionsList')?.addEventListener('input', e => {
+    if (e.target.tagName === 'TEXTAREA') _queueVarScan();
+  });
+
   _scanItemVars(); // immediate scan — sections already in DOM, shows card right away (values fill in below)
   try {
     const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
@@ -1243,10 +1249,10 @@ function _queueVarScan() {
   _itemVarScanTimer = setTimeout(_scanItemVars, 350);
 }
 
-/** Scan all section textareas for {placeholder} patterns and re-render. */
+/** Scan ALL textareas in #sectionsList — covers content, prequal questions, upsell scripts. */
 function _scanItemVars() {
   S.detectedVars.clear();
-  document.querySelectorAll('#sectionsList .section-row-body textarea').forEach(ta => {
+  document.querySelectorAll('#sectionsList textarea').forEach(ta => {
     const re = /\{(\w+)\}/g; let m;
     while ((m = re.exec(ta.value)) !== null) S.detectedVars.add(m[1]);
   });

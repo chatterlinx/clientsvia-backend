@@ -1292,8 +1292,23 @@ function extractAndRenderKCVariables() {
     for (const sec of (c.sections || [])) {
       _extractVarsFromText(sec.content).forEach(v => S.detectedVars.add(v));
       _extractVarsFromText(sec.label).forEach(v => S.detectedVars.add(v));
+      // Pre-qualify question text + option response contexts
+      const pq = sec.preQualifyQuestion;
+      if (pq) {
+        _extractVarsFromText(pq.text).forEach(v => S.detectedVars.add(v));
+        (pq.options || []).forEach(opt => {
+          _extractVarsFromText(opt.responseContext).forEach(v => S.detectedVars.add(v));
+          _extractVarsFromText(opt.label).forEach(v => S.detectedVars.add(v));
+        });
+      }
+      // Upsell chain scripts
+      (sec.upsellChain || []).forEach(u => {
+        _extractVarsFromText(u.offerScript).forEach(v => S.detectedVars.add(v));
+        _extractVarsFromText(u.yesScript).forEach(v => S.detectedVars.add(v));
+        _extractVarsFromText(u.noScript).forEach(v => S.detectedVars.add(v));
+      });
     }
-    // Also scan closing prompt / booking phrase
+    // Closing prompt / booking phrase
     _extractVarsFromText(c.closingPrompt).forEach(v => S.detectedVars.add(v));
   }
   renderKCVariables();
