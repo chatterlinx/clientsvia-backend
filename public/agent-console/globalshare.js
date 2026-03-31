@@ -1,13 +1,56 @@
 (function() {
   'use strict';
-  
+
   console.log('[GlobalShare] ✓ Script loaded');
 
   const state = {
     firstNames: [],
     lastNames: [],
-    hasChanges: false
+    hasChanges: false,
+    // Conversation Signals — keyed by group name
+    signals: {
+      affirmatives:    [],
+      negatives:       [],
+      bookingPhrases:  [],
+      exitPhrases:     [],
+      transferPhrases: []
+    },
+    signalsChanged: {} // track which groups have unsaved changes
   };
+
+  // ── Signal group metadata — controls how each group is presented in the UI ─
+  const SIGNAL_GROUPS = [
+    {
+      key:   'affirmatives',
+      icon:  '✅',
+      title: 'YES — Affirmatives',
+      desc:  'Used when: the AI is waiting for a YES to confirm a booking summary, accept an upsell, or verify a detail. Words like "yep", "uh-huh", "sounds great".'
+    },
+    {
+      key:   'negatives',
+      icon:  '❌',
+      title: 'NO — Negatives',
+      desc:  'Used when: the AI is waiting for a NO to decline an upsell or skip a step. Words like "nah", "not interested", "maybe later".'
+    },
+    {
+      key:   'bookingPhrases',
+      icon:  '📅',
+      title: 'Booking Intent',
+      desc:  'Used when: the AI decides the caller is ready to schedule. Phrases like "book it", "schedule a visit", "when can you come". Single-word affirmatives above are also checked here.'
+    },
+    {
+      key:   'exitPhrases',
+      icon:  '👋',
+      title: 'Exit Intent',
+      desc:  'Used when: the AI detects the caller wants to end the topic or hang up. Phrases like "never mind", "I\'ll call back", "goodbye".'
+    },
+    {
+      key:   'transferPhrases',
+      icon:  '📞',
+      title: 'Transfer Intent',
+      desc:  'Used when: the AI detects the caller wants to speak to a human. Phrases like "transfer me", "get me a manager", "speak to someone".'
+    }
+  ];
 
   let DOM = {};
 
@@ -38,6 +81,12 @@
       btnManageLastNames: document.getElementById('btn-manage-last-names'),
       btnSearchLastNames: document.getElementById('btn-search-last-names'),
       
+      // Conversation Signals
+      signalsGrid:      document.getElementById('signals-grid'),
+      signalsTestInput: document.getElementById('signals-test-input'),
+      signalsTestResults: document.getElementById('signals-test-results'),
+      statSignals:      document.getElementById('stat-signals'),
+
       // Modals
       modalFirstNames: document.getElementById('modal-first-names'),
       modalLastNames: document.getElementById('modal-last-names'),
@@ -74,6 +123,7 @@
       initDOM();
       bindEvents();
       loadStats();
+      loadSignals();
       console.log('[GlobalShare] Initialization complete');
     } catch (err) {
       console.error('[GlobalShare] Initialization error:', err);
@@ -121,6 +171,13 @@
     if (DOM.btnBulkAddLast) DOM.btnBulkAddLast.addEventListener('click', () => bulkAddNames('last'));
     if (DOM.btnRefreshLastPreview) DOM.btnRefreshLastPreview.addEventListener('click', () => loadNamesPreview('last'));
     
+    // Signals test — Enter key
+    if (DOM.signalsTestInput) {
+      DOM.signalsTestInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') testSignalPhrase();
+      });
+    }
+
     // Modal backdrop close
     if (DOM.modalFirstNames) {
       DOM.modalFirstNames.addEventListener('click', (e) => {
@@ -345,6 +402,177 @@
       previewDiv.innerHTML = '<p style="text-align: center; color: #dc2626; font-size: 13px;">Failed to load names</p>';
     }
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CONVERSATION SIGNALS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function loadSignals() {
+    try {
+      console.log('[GlobalShare] Loading signals...');
+      const data = await AgentConsoleAuth.apiFetch('/api/admin/globalshare/signals');
+      if (data) {
+        for (const group of SIGNAL_GROUPS) {
+          if (Array.isArray(data[group.key])) {
+            state.signals[group.key] = [...data[group.key]];
+          }
+        }
+        _renderSignalsGrid();
+        _updateSignalsStat();
+      }
+    } catch (err) {
+      console.error('[GlobalShare] Failed to load signals:', err);
+    }
+  }
+
+  function _renderSignalsGrid() {
+    if (!DOM.signalsGrid) return;
+    DOM.signalsGrid.innerHTML = SIGNAL_GROUPS.map(g => _renderSignalGroup(g)).join('');
+  }
+
+  function _renderSignalGroup(g) {
+    const phrases = state.signals[g.key] || [];
+    const changed = state.signalsChanged[g.key] ? ' (unsaved)' : '';
+    const tags = phrases.map((p, i) => `
+      <span class="signal-tag">
+        ${escapeHtml(p)}
+        <span class="signal-tag-remove" onclick="_removeSignalTag('${g.key}', ${i})" title="Remove">×</span>
+      </span>
+    `).join('');
+
+    return `
+      <div class="signal-group" id="signal-group-${g.key}">
+        <div class="signal-group-header">
+          <span class="signal-group-icon">${g.icon}</span>
+          <span class="signal-group-title">${g.title}</span>
+          <span class="signal-group-count" id="signal-count-${g.key}">${phrases.length} phrases${changed}</span>
+        </div>
+        <div class="signal-group-body">
+          <p class="signal-group-desc">${escapeHtml(g.desc)}</p>
+          <div class="signal-tags" id="signal-tags-${g.key}">
+            ${tags || '<span style="color:#94a3b8;font-size:12px;">No phrases yet — add some below</span>'}
+          </div>
+          <div class="signal-add-row">
+            <input type="text" class="signal-add-input" id="signal-input-${g.key}"
+              placeholder='Type a word or phrase, then click Add'
+              onkeypress="if(event.key==='Enter') _addSignalTag('${g.key}')">
+            <button class="signal-add-btn" onclick="_addSignalTag('${g.key}')">+ Add</button>
+          </div>
+          <button class="signal-save-btn" id="signal-save-${g.key}"
+            onclick="_saveSignalGroup('${g.key}')"
+            ${state.signalsChanged[g.key] ? '' : 'disabled'}>
+            💾 Save Changes
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function _addSignalTag(groupKey) {
+    const input = document.getElementById(`signal-input-${groupKey}`);
+    if (!input) return;
+    const val = input.value.trim().toLowerCase();
+    if (!val) return;
+    if (state.signals[groupKey].includes(val)) {
+      input.value = '';
+      return; // already exists
+    }
+    state.signals[groupKey].push(val);
+    state.signalsChanged[groupKey] = true;
+    input.value = '';
+    _refreshSignalGroup(groupKey);
+    _updateSignalsStat();
+  }
+
+  function _removeSignalTag(groupKey, index) {
+    state.signals[groupKey].splice(index, 1);
+    state.signalsChanged[groupKey] = true;
+    _refreshSignalGroup(groupKey);
+    _updateSignalsStat();
+  }
+
+  function _refreshSignalGroup(groupKey) {
+    const g = SIGNAL_GROUPS.find(x => x.key === groupKey);
+    if (!g) return;
+    const el = document.getElementById(`signal-group-${groupKey}`);
+    if (!el) return;
+    el.outerHTML = _renderSignalGroup(g);
+  }
+
+  async function _saveSignalGroup(groupKey) {
+    const btn = document.getElementById(`signal-save-${groupKey}`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    try {
+      await AgentConsoleAuth.apiFetch(
+        `/api/admin/globalshare/signals/${groupKey}`,
+        { method: 'PATCH', body: { phrases: state.signals[groupKey] } }
+      );
+      state.signalsChanged[groupKey] = false;
+      _refreshSignalGroup(groupKey);
+      console.log(`[GlobalShare] Signals saved: ${groupKey}`);
+    } catch (err) {
+      console.error('[GlobalShare] Failed to save signals:', err);
+      alert('Failed to save: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
+    }
+  }
+
+  function _updateSignalsStat() {
+    if (!DOM.statSignals) return;
+    const total = Object.values(state.signals).reduce((sum, arr) => sum + arr.length, 0);
+    DOM.statSignals.textContent = total.toLocaleString();
+  }
+
+  // Exposed globally for onclick handlers
+  window._addSignalTag    = _addSignalTag;
+  window._removeSignalTag = _removeSignalTag;
+  window._saveSignalGroup = _saveSignalGroup;
+
+  async function testSignalPhrase() {
+    const input = DOM.signalsTestInput;
+    const results = DOM.signalsTestResults;
+    if (!input || !results) return;
+    const phrase = input.value.trim();
+    if (!phrase) { results.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Enter a phrase above to test</p>'; return; }
+
+    results.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Testing...</p>';
+    try {
+      const data = await AgentConsoleAuth.apiFetch(
+        '/api/admin/globalshare/signals/test',
+        { method: 'POST', body: { phrase } }
+      );
+      const groupLabels = {
+        affirmatives:   '✅ YES (Affirmatives)',
+        negatives:      '❌ NO (Negatives)',
+        bookingPhrases: '📅 Booking Intent',
+        exitPhrases:    '👋 Exit Intent',
+        transferPhrases:'📞 Transfer Intent'
+      };
+      const rows = Object.entries(data.matches).map(([group, hit]) => {
+        const matched = data.matchedPhrases?.[group]?.join(', ') || '';
+        return `
+          <div class="signals-test-result-row ${hit ? 'hit' : 'miss'}">
+            <div class="signals-test-dot ${hit ? 'hit' : 'miss'}"></div>
+            <span style="flex:1">${groupLabels[group] || group}</span>
+            ${hit && matched ? `<span style="font-size:11px;color:#15803d;font-style:italic;">matched: "${escapeHtml(matched)}"</span>` : ''}
+            ${hit && !matched ? `<span style="font-size:11px;color:#15803d;">✓ match</span>` : ''}
+            ${!hit ? `<span style="font-size:11px;color:#94a3b8;">no match</span>` : ''}
+          </div>
+        `;
+      }).join('');
+      const anyHit = Object.values(data.matches).some(Boolean);
+      results.innerHTML = `
+        <p style="font-size:11px;color:#64748b;margin:0 0 8px 0;">Testing: <em>"${escapeHtml(data.normalized)}"</em></p>
+        ${rows}
+        ${!anyHit ? '<p style="font-size:12px;color:#94a3b8;margin-top:8px;">No signal groups matched this phrase.</p>' : ''}
+      `;
+    } catch (err) {
+      results.innerHTML = `<p style="color:#dc2626;font-size:13px;">Test failed: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  // Expose for HTML onclick
+  window.testSignalPhrase = testSignalPhrase;
 
   // ══════════════════════════════════════════════════════════════════════════
   // UTILITIES

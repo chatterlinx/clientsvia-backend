@@ -410,4 +410,123 @@ router.post('/last-names/bulk-add', async (req, res) => {
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// CONVERSATION SIGNALS ROUTES
+// ════════════════════════════════════════════════════════════════════════════
+
+const VALID_SIGNAL_GROUPS = ['affirmatives','negatives','bookingPhrases','exitPhrases','transferPhrases'];
+
+/**
+ * GET /api/admin/globalshare/signals
+ * Returns all 5 signal groups with their current phrase lists.
+ * If a group has never been saved to the DB, returns the built-in defaults.
+ */
+router.get('/signals', async (req, res) => {
+    try {
+        logger.info('[GlobalShare API] Getting conversation signals');
+        const settings = await AdminSettings.getSettings();
+        const s = settings?.globalHub?.signals || {};
+        const defaults = {
+            affirmatives:   GlobalHubService.DEFAULT_AFFIRMATIVES,
+            negatives:      GlobalHubService.DEFAULT_NEGATIVES,
+            bookingPhrases: GlobalHubService.DEFAULT_BOOKING_PHRASES,
+            exitPhrases:    GlobalHubService.DEFAULT_EXIT_PHRASES,
+            transferPhrases: GlobalHubService.DEFAULT_TRANSFER_PHRASES
+        };
+
+        const result = {};
+        for (const group of VALID_SIGNAL_GROUPS) {
+            result[group] = s[group]?.length > 0 ? s[group] : [...defaults[group]];
+        }
+        result.lastUpdatedAt = s.lastUpdatedAt || null;
+        result.lastUpdatedBy = s.lastUpdatedBy || null;
+
+        res.json(result);
+    } catch (error) {
+        logger.error('[GlobalShare API] Get signals error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * PATCH /api/admin/globalshare/signals/:group
+ * Save one signal group. Body: { phrases: string[] }
+ * Immediately updates the module cache and Redis — live on next call.
+ */
+router.patch('/signals/:group', async (req, res) => {
+    try {
+        const { group } = req.params;
+        if (!VALID_SIGNAL_GROUPS.includes(group)) {
+            return res.status(400).json({ error: `Unknown signal group: ${group}. Valid groups: ${VALID_SIGNAL_GROUPS.join(', ')}` });
+        }
+
+        const { phrases } = req.body;
+        if (!Array.isArray(phrases)) {
+            return res.status(400).json({ error: 'phrases must be an array of strings' });
+        }
+
+        // Normalize: trim + deduplicate + filter empty
+        const clean = [...new Set(phrases.map(p => (p || '').trim().toLowerCase()).filter(Boolean))];
+
+        logger.info('[GlobalShare API] Saving signals', { group, count: clean.length });
+        await GlobalHubService.saveSignals(group, clean, req.user?.email || 'api');
+
+        res.json({ success: true, group, count: clean.length, phrases: clean });
+    } catch (error) {
+        logger.error('[GlobalShare API] Save signals error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/globalshare/signals/test
+ * Test a phrase against all signal groups.
+ * Body: { phrase: string }
+ * Returns which groups would match, helping admins verify their lists.
+ */
+router.post('/signals/test', async (req, res) => {
+    try {
+        const { phrase } = req.body;
+        if (!phrase || !phrase.trim()) {
+            return res.status(400).json({ error: 'phrase is required' });
+        }
+
+        const input = phrase.trim().toLowerCase().replace(/[^a-z'\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        const _hasPhrase = (list, p) => {
+            if (p.includes(' ')) return input.includes(p);
+            return input.split(/\s+/).includes(p);
+        };
+
+        const yesRe = GlobalHubService.getYesRegex();
+        const noRe  = GlobalHubService.getNoRegex();
+
+        const results = {
+            phrase,
+            normalized: input,
+            matches: {
+                affirmatives:   yesRe ? yesRe.test(input) : false,
+                negatives:      noRe  ? noRe.test(input)  : false,
+                bookingPhrases: GlobalHubService.getSignals('bookingPhrases').some(p => p.includes(' ') ? input.includes(p) : input.split(/\s+/).includes(p)),
+                exitPhrases:    GlobalHubService.getSignals('exitPhrases').some(p => p.includes(' ') ? input.includes(p) : input.split(/\s+/).includes(p)),
+                transferPhrases: GlobalHubService.getSignals('transferPhrases').some(p => p.includes(' ') ? input.includes(p) : input.split(/\s+/).includes(p))
+            }
+        };
+
+        // Which specific phrases matched?
+        results.matchedPhrases = {};
+        for (const group of ['bookingPhrases','exitPhrases','transferPhrases']) {
+            const list = GlobalHubService.getSignals(group);
+            results.matchedPhrases[group] = list.filter(p =>
+                p.includes(' ') ? input.includes(p) : input.split(/\s+/).includes(p)
+            );
+        }
+
+        res.json(results);
+    } catch (error) {
+        logger.error('[GlobalShare API] Test signals error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

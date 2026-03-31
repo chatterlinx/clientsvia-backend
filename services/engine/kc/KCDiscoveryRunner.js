@@ -1775,13 +1775,14 @@ async function _handleUpsellResponse({
   emit, nextState, startMs, turn, company,
 }) {
   // ── Affirmative / Negative intent regexes ──────────────────────────────
-  // Word-boundary match is correct: Whisper normalises speech so "uh-huh"
-  // arrives as "uh-huh", "yap" as "yap", etc. A broad synonym list beats
-  // fuzzy matching because fuzzy risks false positives ("no actually yes").
+  // Pulled from GlobalHubService so admins can manage the list in the UI
+  // (GlobalShare → Conversation Signals). Falls back to built-in defaults
+  // if GlobalShare has not been loaded yet.
   // isYes takes priority — "yes, but no thanks" → YES wins.
   // ────────────────────────────────────────────────────────────────────────
-  const _YES_RE = /\b(yes|yeah|yep|yap|yup|yah|uh-huh|uh huh|mhm|mm-hmm|mmhm|sure|absolutely|of course|definitely|for sure|why not|go ahead|go for it|please|proceed|add it|let's do it|let's go|sounds good|sounds great|do it|i'll take it|throw it in|count me in|make it happen|deal|perfect|alright|ok|okay|right|roger|affirmative)\b/i;
-  const _NO_RE  = /\b(no|nah|nope|no way|not today|not right now|not for me|not interested|maybe later|another time|nevermind|never mind|skip it|skip|no thanks|no thank you|pass|don't|i'm good|i'm fine|i'm ok|i'm alright|we're good|hold off|forget it|negative)\b/i;
+  const GlobalHubService = require('../../GlobalHubService');
+  const _YES_RE = GlobalHubService.getYesRegex();
+  const _NO_RE  = GlobalHubService.getNoRegex();
 
   let _upState;
   try {

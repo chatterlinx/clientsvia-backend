@@ -963,6 +963,64 @@ const adminSettingsSchema = new mongoose.Schema({
                 default: null,
                 description: 'Who last updated last names list'
             }
+        },
+
+        // ────────────────────────────────────────────────────────────────────
+        // Conversation Signals
+        // ────────────────────────────────────────────────────────────────────
+        // Five phrase groups the engine uses to understand caller intent.
+        // Editable here so nothing is hardcoded. Falls back to built-in
+        // defaults if these arrays are empty.
+        // ────────────────────────────────────────────────────────────────────
+        signals: {
+            // Words/phrases that mean YES — used to confirm upsells, bookings, etc.
+            affirmatives: {
+                type: [String],
+                default: [],
+                description: 'YES words — caller agreeing, accepting, or confirming (e.g. "yes", "yep", "sure", "sounds good")'
+            },
+            affirmativesUpdatedAt:  { type: Date,   default: null },
+            affirmativesUpdatedBy:  { type: String, default: null },
+
+            // Words/phrases that mean NO — used to detect declines
+            negatives: {
+                type: [String],
+                default: [],
+                description: 'NO words — caller declining, skipping, or cancelling (e.g. "no", "nah", "not interested")'
+            },
+            negativesUpdatedAt:  { type: Date,   default: null },
+            negativesUpdatedBy:  { type: String, default: null },
+
+            // Phrases that signal the caller is ready to book / schedule
+            bookingPhrases: {
+                type: [String],
+                default: [],
+                description: 'Booking intent phrases — caller ready to schedule (e.g. "book it", "schedule a visit", "let\'s do it")'
+            },
+            bookingPhrasesUpdatedAt:  { type: Date,   default: null },
+            bookingPhrasesUpdatedBy:  { type: String, default: null },
+
+            // Phrases that signal the caller wants to end or change topic
+            exitPhrases: {
+                type: [String],
+                default: [],
+                description: 'Exit intent phrases — caller stepping back or ending call (e.g. "never mind", "goodbye", "I\'ll call back")'
+            },
+            exitPhrasesUpdatedAt:  { type: Date,   default: null },
+            exitPhrasesUpdatedBy:  { type: String, default: null },
+
+            // Phrases that signal the caller wants to speak to a human
+            transferPhrases: {
+                type: [String],
+                default: [],
+                description: 'Transfer intent phrases — caller requesting a human (e.g. "transfer me", "speak to someone", "get me a manager")'
+            },
+            transferPhrasesUpdatedAt:  { type: Date,   default: null },
+            transferPhrasesUpdatedBy:  { type: String, default: null },
+
+            // Global timestamp for the last update to ANY signal group
+            lastUpdatedAt:  { type: Date,   default: null },
+            lastUpdatedBy:  { type: String, default: null }
         }
     },
     

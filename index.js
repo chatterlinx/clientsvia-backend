@@ -1032,7 +1032,7 @@ async function startServer() {
         }
         console.log('════════════════════════════════════════════════════════════════════');
         
-        // 🌐 GLOBAL HUB: Load shared dictionaries into Redis for fast cross-tenant lookups
+        // 🌐 GLOBAL HUB: Load shared dictionaries + conversation signals into Redis
         console.log('[Server] Step 3.6/7: Initializing Global Hub Service...');
         try {
             const GlobalHubService = require('./services/GlobalHubService');
@@ -1041,6 +1041,15 @@ async function startServer() {
                 console.log(`[Server] ✅ Step 3.6 COMPLETE: Global Hub initialized (${hubResult.firstNames?.toLocaleString() || 0} first names, ${hubResult.lastNames?.toLocaleString() || 0} last names loaded${hubResult.autoSeeded ? ' [AUTO-SEEDED]' : ''})`);
             } else {
                 console.warn('[Server] ⚠️ Global Hub initialization returned no data (seed via admin UI)');
+            }
+
+            // Load conversation signals (YES/NO/booking/exit/transfer phrase lists)
+            // Must run AFTER initialize() so MongoDB is connected.
+            const sigResult = await GlobalHubService.loadSignals();
+            if (sigResult.success) {
+                console.log('[Server] ✅ Step 3.6b COMPLETE: Conversation signals loaded into KC engine');
+            } else {
+                console.warn('[Server] ⚠️ Conversation signals load failed — built-in defaults active:', sigResult.error);
             }
         } catch (hubError) {
             console.error('[Server] ❌ Global Hub initialization failed:', hubError.message);

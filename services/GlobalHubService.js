@@ -52,10 +52,17 @@ const REDIS_KEYS = {
     FIRST_NAMES: 'globalHub:firstNames',           // SET (lowercase for lookups)
     FIRST_NAMES_ORIGINAL: 'globalHub:firstNames:original', // SET (original casing)
     FIRST_NAMES_META: 'globalHub:firstNames:meta', // HASH (metadata)
-    
+
     LAST_NAMES: 'globalHub:lastNames',             // SET (lowercase for lookups)
     LAST_NAMES_ORIGINAL: 'globalHub:lastNames:original',   // SET (original casing)
-    LAST_NAMES_META: 'globalHub:lastNames:meta'    // HASH (metadata)
+    LAST_NAMES_META: 'globalHub:lastNames:meta',   // HASH (metadata)
+
+    // Conversation Signals — stored as JSON strings (simple, no SET needed)
+    SIGNALS_AFFIRMATIVES:   'globalHub:signals:affirmatives',
+    SIGNALS_NEGATIVES:      'globalHub:signals:negatives',
+    SIGNALS_BOOKING:        'globalHub:signals:booking',
+    SIGNALS_EXIT:           'globalHub:signals:exit',
+    SIGNALS_TRANSFER:       'globalHub:signals:transfer'
 };
 
 // In-memory fallback when Redis unavailable
@@ -65,6 +72,311 @@ let memoryFallback = {
     lastNames: new Set(),
     lastNamesOriginal: []
 };
+
+// ============================================================================
+// CONVERSATION SIGNALS — Module-level cache
+// ============================================================================
+//
+// These are the phrase lists that the KC engine uses to understand caller
+// intent at runtime. They are loaded from MongoDB at startup and cached here
+// so every call gets O(1) access with zero async overhead.
+//
+// GROUPS:
+//   affirmatives  — YES words/phrases  (upsell / confirmation)
+//   negatives     — NO words/phrases   (decline)
+//   bookingPhrases — booking intent    (ready to schedule)
+//   exitPhrases    — exit intent       (end call / topic hop)
+//   transferPhrases — transfer intent  (wants a human)
+//
+// FALLBACK: If MongoDB has no signals saved, the hardcoded defaults below
+//           are used. This means the engine always works — even on first boot.
+// ============================================================================
+
+// Hardcoded defaults — identical to the lists in KCBookingIntentDetector.js
+// and KCTransferIntentDetector.js and KCDiscoveryRunner.js.
+// These are only used when no signals exist in the database.
+const DEFAULT_AFFIRMATIVES = [
+    'yes','yeah','yep','yap','yup','yah','uh-huh','uh huh','mhm','mm-hmm','mmhm',
+    'sure','absolutely','of course','definitely','for sure','why not',
+    'go ahead','go for it','please','proceed',
+    'add it','let\'s do it','let\'s go','sounds good','sounds great',
+    'do it','i\'ll take it','throw it in','count me in','make it happen',
+    'deal','perfect','alright','ok','okay','right','roger','affirmative'
+];
+
+const DEFAULT_NEGATIVES = [
+    'no','nah','nope','no way','not today','not right now','not for me',
+    'not interested','maybe later','another time','nevermind','never mind',
+    'skip it','skip','no thanks','no thank you','pass','don\'t',
+    'i\'m good','i\'m fine','i\'m ok','i\'m alright','we\'re good',
+    'hold off','forget it','negative'
+];
+
+const DEFAULT_BOOKING_PHRASES = [
+    'yes','yeah','yep','yup','sure','ok','okay','alright','absolutely','definitely',
+    'of course','for sure','ok go ahead','ok sounds good','okay go ahead',
+    'okay sounds good','alright go ahead','alright sounds good','sounds great',
+    'that works','works for me','yes please','please do',
+    'book it','book a visit','book a service','book a service call',
+    'book the appointment','book an appointment','schedule','schedule it',
+    'schedule a visit','schedule a service','schedule a service call',
+    'schedule an appointment','make an appointment','set up a visit',
+    'set it up','set an appointment','let\'s do it','let\'s go ahead',
+    'go ahead','sounds good','i\'m ready','ready to book','ready to schedule',
+    'when can you come','when can someone come','when are you available',
+    'when can you come out','send someone out','have someone come out',
+    'need someone to come','please schedule','please book','i want to book',
+    'i\'d like to book','i want to schedule','i\'d like to schedule',
+    'sign me up','put me down','get me on the schedule','i\'ll take it','we\'ll take it'
+];
+
+const DEFAULT_EXIT_PHRASES = [
+    'no','nope','no thanks','no thank you','not interested','not right now',
+    'maybe later','not today','never mind','nevermind','forget it','forget about it',
+    'that\'s fine','that\'s ok','that\'s okay','on second thought',
+    'actually never mind','don\'t worry about it',
+    'goodbye','bye','bye bye','goodbye for now','have a good day',
+    'talk to you later','i\'ll call back','i\'ll call you back','i\'ll think about it'
+];
+
+const DEFAULT_TRANSFER_PHRASES = [
+    'transfer me','transfer to','transfer me to','transfer me to a',
+    'connect me to','connect me with','put me through','put me through to',
+    'patch me through','patch me to','forward me to','route me to',
+    'speak to someone','speak with someone','talk to someone','talk with someone',
+    'speak to a person','speak with a person','talk to a person','talk with a person',
+    'speak to an agent','talk to an agent','speak with an agent',
+    'speak to a human','talk to a human','speak to a live','talk to a live',
+    'speak to a real','talk to a real','live agent','live person',
+    'live representative','live rep','real person','human agent','actual person',
+    'speak to a representative','talk to a representative',
+    'speak to your representative','speak to staff','speak to an associate',
+    'speak to a team member','speak to the team','speak to someone on your team',
+    'speak to one of your','get a representative','reach a representative',
+    'speak to a manager','talk to a manager','speak to the manager','get a manager',
+    'manager please','speak to a supervisor','talk to a supervisor',
+    'need a manager','need a supervisor','get me a manager',
+    'let me speak to a manager','i want a manager','i want to speak to a manager',
+    'i need to speak to a manager','need your manager','speak to your manager',
+    'need to speak to someone','need to talk to someone','must speak to someone',
+    'have to speak to someone','can i speak to','can i talk to',
+    'may i speak to','may i talk to','id like to speak to',
+    'i\'d like to speak to','i\'d like to talk to','id like to talk to',
+    'i want to speak to','i want to talk to','i need to speak to','i need to talk to',
+    'could i speak to','could i talk to',
+    'is there someone i can speak to','is there someone i can talk to',
+    'is there anyone i can speak to',
+    'operator please','get me an operator','speak to the operator','talk to the operator',
+    'zero','i want to speak to a real person','just let me talk to someone',
+    'stop the recording','i need a real person','stop the automated','this is an emergency'
+];
+
+// Runtime cache — populated by loadSignals() at startup
+// Each entry is either the DB value (if saved) or the DEFAULT above.
+let _signals = {
+    affirmatives:   [...DEFAULT_AFFIRMATIVES],
+    negatives:      [...DEFAULT_NEGATIVES],
+    bookingPhrases: [...DEFAULT_BOOKING_PHRASES],
+    exitPhrases:    [...DEFAULT_EXIT_PHRASES],
+    transferPhrases: [...DEFAULT_TRANSFER_PHRASES]
+};
+
+// Pre-compiled regex for YES and NO (word-boundary, case-insensitive)
+// Re-compiled whenever affirmatives/negatives change.
+let _yesRegex = _buildWordRegex(DEFAULT_AFFIRMATIVES);
+let _noRegex  = _buildWordRegex(DEFAULT_NEGATIVES);
+
+/**
+ * Build a word-boundary regex from a list of phrases.
+ * Multi-word phrases use substring matching; single words use \b boundaries.
+ * Fallback: returns null if list is empty (callers should guard).
+ */
+function _buildWordRegex(phrases) {
+    if (!phrases || phrases.length === 0) return null;
+    // For a word-boundary regex we include all phrases.
+    // Multi-word: fine as-is inside alternation.
+    // Escape special regex chars, join with |.
+    const escaped = phrases.map(p =>
+        p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    );
+    try {
+        return new RegExp('\\b(' + escaped.join('|') + ')\\b', 'i');
+    } catch (e) {
+        logger.warn('[GLOBAL HUB] Failed to compile signals regex — using null', { error: e.message });
+        return null;
+    }
+}
+
+/**
+ * Get the pre-compiled YES regex.
+ * Falls back to DEFAULT_AFFIRMATIVES regex if cache is null.
+ * @returns {RegExp}
+ */
+function getYesRegex() {
+    return _yesRegex || _buildWordRegex(DEFAULT_AFFIRMATIVES);
+}
+
+/**
+ * Get the pre-compiled NO regex.
+ * Falls back to DEFAULT_NEGATIVES regex if cache is null.
+ * @returns {RegExp}
+ */
+function getNoRegex() {
+    return _noRegex || _buildWordRegex(DEFAULT_NEGATIVES);
+}
+
+/**
+ * Get a signal group's current phrase list.
+ * @param {'affirmatives'|'negatives'|'bookingPhrases'|'exitPhrases'|'transferPhrases'} group
+ * @returns {string[]}
+ */
+function getSignals(group) {
+    return _signals[group] || [];
+}
+
+/**
+ * Load all signal groups from MongoDB into the module cache.
+ * Called at startup AFTER initialize(). Also initialises detector modules
+ * (KCBookingIntentDetector, KCTransferIntentDetector) with the loaded phrases.
+ *
+ * Graceful: if DB has no signals, defaults are preserved.
+ */
+async function loadSignals() {
+    try {
+        logger.info('🗣️  [GLOBAL HUB] Loading conversation signals...');
+        const AdminSettings = require('../models/AdminSettings');
+        const settings = await AdminSettings.getSettings();
+        const s = settings?.globalHub?.signals || {};
+
+        // For each group: use DB value if non-empty, else keep default
+        if (s.affirmatives?.length   > 0) _signals.affirmatives   = [...s.affirmatives];
+        if (s.negatives?.length      > 0) _signals.negatives       = [...s.negatives];
+        if (s.bookingPhrases?.length > 0) _signals.bookingPhrases  = [...s.bookingPhrases];
+        if (s.exitPhrases?.length    > 0) _signals.exitPhrases     = [...s.exitPhrases];
+        if (s.transferPhrases?.length > 0) _signals.transferPhrases = [...s.transferPhrases];
+
+        // Rebuild compiled regexes
+        _yesRegex = _buildWordRegex(_signals.affirmatives);
+        _noRegex  = _buildWordRegex(_signals.negatives);
+
+        // Sync to Redis for cross-process access (optional, fire-and-forget)
+        _syncSignalsToRedis().catch(e =>
+            logger.warn('[GLOBAL HUB] Signals Redis sync failed (non-fatal)', { error: e.message })
+        );
+
+        // Push live values into detector modules
+        try {
+            const KCBooking = require('./engine/kc/KCBookingIntentDetector');
+            if (typeof KCBooking.initialize === 'function') {
+                KCBooking.initialize({
+                    bookingPhrases: _signals.bookingPhrases,
+                    exitPhrases:    _signals.exitPhrases
+                });
+            }
+        } catch (e) {
+            logger.warn('[GLOBAL HUB] Could not initialize KCBookingIntentDetector', { error: e.message });
+        }
+
+        try {
+            const KCTransfer = require('./engine/kc/KCTransferIntentDetector');
+            if (typeof KCTransfer.initialize === 'function') {
+                KCTransfer.initialize({ transferPhrases: _signals.transferPhrases });
+            }
+        } catch (e) {
+            logger.warn('[GLOBAL HUB] Could not initialize KCTransferIntentDetector', { error: e.message });
+        }
+
+        const totals = Object.entries(_signals).map(([k, v]) => `${k}:${v.length}`).join(', ');
+        logger.info(`✅ [GLOBAL HUB] Signals loaded — ${totals}`);
+        return { success: true };
+
+    } catch (error) {
+        logger.error('❌ [GLOBAL HUB] loadSignals failed — defaults retained:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Save one signal group to MongoDB and refresh the module cache.
+ * @param {'affirmatives'|'negatives'|'bookingPhrases'|'exitPhrases'|'transferPhrases'} group
+ * @param {string[]} phrases
+ * @param {string} [updatedBy]
+ */
+async function saveSignals(group, phrases, updatedBy = 'api') {
+    const VALID_GROUPS = ['affirmatives','negatives','bookingPhrases','exitPhrases','transferPhrases'];
+    if (!VALID_GROUPS.includes(group)) throw new Error(`Unknown signal group: ${group}`);
+    if (!Array.isArray(phrases)) throw new Error('phrases must be an array');
+
+    const AdminSettings = require('../models/AdminSettings');
+    const now = new Date();
+
+    // Map group → DB field names
+    const groupToDbKey = {
+        affirmatives:   'affirmatives',
+        negatives:      'negatives',
+        bookingPhrases: 'bookingPhrases',
+        exitPhrases:    'exitPhrases',
+        transferPhrases: 'transferPhrases'
+    };
+    const dbKey = `globalHub.signals.${groupToDbKey[group]}`;
+    const atKey = `globalHub.signals.${groupToDbKey[group]}UpdatedAt`;
+    const byKey = `globalHub.signals.${groupToDbKey[group]}UpdatedBy`;
+
+    await AdminSettings.findOneAndUpdate(
+        {},
+        { $set: {
+            [dbKey]: phrases,
+            [atKey]: now,
+            [byKey]: updatedBy,
+            'globalHub.signals.lastUpdatedAt': now,
+            'globalHub.signals.lastUpdatedBy': updatedBy
+        }},
+        { upsert: true }
+    );
+
+    // Update module cache
+    _signals[group] = [...phrases];
+    if (group === 'affirmatives') _yesRegex = _buildWordRegex(_signals.affirmatives);
+    if (group === 'negatives')    _noRegex  = _buildWordRegex(_signals.negatives);
+
+    // Sync to Redis
+    await _syncSignalsToRedis();
+
+    // Re-push to detector modules
+    try {
+        const KCBooking = require('./engine/kc/KCBookingIntentDetector');
+        if (typeof KCBooking.initialize === 'function') {
+            KCBooking.initialize({
+                bookingPhrases: _signals.bookingPhrases,
+                exitPhrases:    _signals.exitPhrases
+            });
+        }
+    } catch (e) { /* non-fatal */ }
+
+    try {
+        const KCTransfer = require('./engine/kc/KCTransferIntentDetector');
+        if (typeof KCTransfer.initialize === 'function') {
+            KCTransfer.initialize({ transferPhrases: _signals.transferPhrases });
+        }
+    } catch (e) { /* non-fatal */ }
+
+    logger.info(`✅ [GLOBAL HUB] Signals saved — group:${group}, count:${phrases.length}`);
+}
+
+/**
+ * Persist all signal groups to Redis as JSON strings.
+ * @private
+ */
+async function _syncSignalsToRedis() {
+    if (!redisClient || !redisClient.isReady) return;
+    const pipeline = redisClient.multi();
+    pipeline.set(REDIS_KEYS.SIGNALS_AFFIRMATIVES,  JSON.stringify(_signals.affirmatives));
+    pipeline.set(REDIS_KEYS.SIGNALS_NEGATIVES,     JSON.stringify(_signals.negatives));
+    pipeline.set(REDIS_KEYS.SIGNALS_BOOKING,       JSON.stringify(_signals.bookingPhrases));
+    pipeline.set(REDIS_KEYS.SIGNALS_EXIT,          JSON.stringify(_signals.exitPhrases));
+    pipeline.set(REDIS_KEYS.SIGNALS_TRANSFER,      JSON.stringify(_signals.transferPhrases));
+    await pipeline.exec();
+}
 
 // Prefix indexes for fuzzy matching (built during initialize)
 // Structure: { 'a': ['Aaron','Adam',...], 'b': ['Brian','Bryan',...], ... }
@@ -860,6 +1172,20 @@ module.exports = {
 
     // Initialization (called on server startup)
     initialize,
+
+    // Conversation Signals — phrase lists for intent detection
+    loadSignals,
+    saveSignals,
+    getSignals,
+    getYesRegex,
+    getNoRegex,
+
+    // Exposed defaults (for seed scripts and tests)
+    DEFAULT_AFFIRMATIVES,
+    DEFAULT_NEGATIVES,
+    DEFAULT_BOOKING_PHRASES,
+    DEFAULT_EXIT_PHRASES,
+    DEFAULT_TRANSFER_PHRASES,
 
     // Health check
     healthCheck,

@@ -342,12 +342,32 @@ function getTransferHint(input) {
 }
 
 // ============================================================================
+// RUNTIME OVERRIDE — called by GlobalHubService.loadSignals() at startup
+// ============================================================================
+
+/**
+ * Replace the active transfer phrase list with values from GlobalShare.
+ * Called once at server startup after signals are loaded from MongoDB.
+ * If GlobalShare has no saved phrases, this is never called — hardcoded
+ * defaults above remain active.
+ *
+ * @param {{ transferPhrases?: string[] }} overrides
+ */
+function initialize({ transferPhrases } = {}) {
+  if (Array.isArray(transferPhrases) && transferPhrases.length > 0) {
+    TRANSFER_PHRASES.length = 0;
+    TRANSFER_PHRASES.push(...transferPhrases);
+  }
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
 module.exports = {
   isTransferIntent,
   getTransferHint,
+  initialize,
   // Exported for tests and seed scripts
   TRANSFER_PHRASES,
   NOT_TRANSFER_PHRASES,

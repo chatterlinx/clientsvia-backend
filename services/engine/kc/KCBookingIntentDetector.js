@@ -222,12 +222,36 @@ function isExitIntent(input) {
 }
 
 // ============================================================================
+// RUNTIME OVERRIDE — called by GlobalHubService.loadSignals() at startup
+// ============================================================================
+
+/**
+ * Replace the active phrase lists with values from GlobalShare.
+ * Called once at server startup after signals are loaded from MongoDB.
+ * If GlobalShare has no saved phrases, this is never called — hardcoded
+ * defaults above remain active.
+ *
+ * @param {{ bookingPhrases?: string[], exitPhrases?: string[] }} overrides
+ */
+function initialize({ bookingPhrases, exitPhrases } = {}) {
+  if (Array.isArray(bookingPhrases) && bookingPhrases.length > 0) {
+    BOOKING_PHRASES.length = 0;
+    BOOKING_PHRASES.push(...bookingPhrases);
+  }
+  if (Array.isArray(exitPhrases) && exitPhrases.length > 0) {
+    EXIT_PHRASES.length = 0;
+    EXIT_PHRASES.push(...exitPhrases);
+  }
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
 module.exports = {
   isBookingIntent,
   isExitIntent,
+  initialize,
   // Exported for tests
   BOOKING_PHRASES,
   EXIT_PHRASES,
