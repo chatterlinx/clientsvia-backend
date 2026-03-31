@@ -75,11 +75,14 @@ const preQualifyOptionSchema = new mongoose.Schema(
 // ─────────────────────────────────────────────────────────────────────────────
 const upsellItemSchema = new mongoose.Schema(
   {
-    offerScript: { type: String, trim: true, maxlength: 600, comment: 'Agent pitch — spoken verbatim.' },
-    yesScript:   { type: String, trim: true, maxlength: 400, default: '', comment: 'Agent says when caller accepts.' },
-    noScript:    { type: String, trim: true, maxlength: 400, default: '', comment: 'Agent says when caller declines.' },
-    itemKey:     { type: String, trim: true, default: '',    comment: 'Tracking key written to discoveryNotes.' },
-    price:       { type: Number, default: null,              comment: 'Optional price in dollars for tracking.' },
+    offerScript:   { type: String, trim: true, maxlength: 600, comment: 'Agent pitch — spoken verbatim.' },
+    yesScript:     { type: String, trim: true, maxlength: 400, default: '', comment: 'Agent says when caller accepts.' },
+    noScript:      { type: String, trim: true, maxlength: 400, default: '', comment: 'Agent says when caller declines.' },
+    itemKey:       { type: String, trim: true, default: '',    comment: 'Tracking key written to discoveryNotes.' },
+    price:         { type: Number, default: null,              comment: 'Optional price in dollars for tracking.' },
+    offerAudioUrl: { type: String, default: null,              comment: 'Pre-cached audio URL for the offer script (from Generate Audio).' },
+    yesAudioUrl:   { type: String, default: null,              comment: 'Pre-cached audio URL for the yes response script.' },
+    noAudioUrl:    { type: String, default: null,              comment: 'Pre-cached audio URL for the no response script.' },
   },
   { _id: true, versionKey: false }
 );
@@ -151,6 +154,11 @@ const sectionSchema = new mongoose.Schema(
       default: false,
       comment: 'Per-section: bypass Groq when UAP routes here — reads content verbatim with pre-cached audio.'
     },
+    audioUrl: {
+      type:    String,
+      default: null,
+      comment: 'Pre-cached audio URL for section content (shown/generated when useFixedResponse is true).'
+    },
 
     // ── Pre-qualify question (optional) ───────────────────────────────────
     // Agent asks this BEFORE answering this section's content.
@@ -169,6 +177,11 @@ const sectionSchema = new mongoose.Schema(
         trim:      true,
         maxlength: 300,
         comment:   'Question spoken by agent before answering. e.g. "Are you a plan member?"'
+      },
+      audioUrl: {
+        type:    String,
+        default: null,
+        comment: 'Pre-cached audio URL for the pre-qualify question (from Generate Audio).'
       },
       fieldKey: {
         type:    String,

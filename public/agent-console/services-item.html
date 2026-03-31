@@ -1728,10 +1728,12 @@ function addSection(label = '', content = '', sectionMeta = null) {
   S.sectionData.set(id, {
     daSubTypeKey:     sectionMeta?.daSubTypeKey || null,
     useFixedResponse,
+    contentAudioUrl:  sectionMeta?.audioUrl || null,
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
       fieldKey: pq.fieldKey || 'preQualifyAnswer',
+      audioUrl: pq.audioUrl || null,
       options:  (pq.options || []).map(o => ({
         label:           o.label           || '',
         value:           o.value           || '',
@@ -1740,11 +1742,14 @@ function addSection(label = '', content = '', sectionMeta = null) {
       })),
     },
     upsellChain: (sectionMeta?.upsellChain || []).map(u => ({
-      offerScript: u.offerScript || '',
-      yesScript:   u.yesScript   || '',
-      noScript:    u.noScript    || '',
-      itemKey:     u.itemKey     || '',
-      price:       u.price != null ? u.price : '',
+      offerScript:   u.offerScript   || '',
+      yesScript:     u.yesScript     || '',
+      noScript:      u.noScript      || '',
+      itemKey:       u.itemKey       || '',
+      price:         u.price != null ? u.price : '',
+      offerAudioUrl: u.offerAudioUrl || null,
+      yesAudioUrl:   u.yesAudioUrl   || null,
+      noAudioUrl:    u.noAudioUrl    || null,
     })),
   });
 
@@ -1903,6 +1908,19 @@ function addSection(label = '', content = '', sectionMeta = null) {
   // Render pq options and upsell items if loaded from existing data
   renderSectionPqOptions(id);
   renderSectionUpsellItems(id);
+
+  // Restore audio UI state from saved URLs (survive page refresh)
+  if (sectionMeta?.audioUrl && useFixedResponse) {
+    _restoreKcAudioState(id, 'content', sectionMeta.audioUrl, content);
+  }
+  if (sectionMeta?.preQualifyQuestion?.audioUrl) {
+    _restoreKcAudioState(id, 'pq', sectionMeta.preQualifyQuestion.audioUrl, pq.text);
+  }
+  (sectionMeta?.upsellChain || []).forEach((u, i) => {
+    if (u.offerAudioUrl) _restoreKcAudioState(id, `upsell-${i}-offer`, u.offerAudioUrl, u.offerScript);
+    if (u.yesAudioUrl)   _restoreKcAudioState(id, `upsell-${i}-yes`,   u.yesAudioUrl,   u.yesScript);
+    if (u.noAudioUrl)    _restoreKcAudioState(id, `upsell-${i}-no`,    u.noAudioUrl,    u.noScript);
+  });
 
   // Focus the label input if new empty section
   if (!label) {
@@ -2237,6 +2255,7 @@ function _getSections() {
         preQualifyQuestion = {
           enabled:  data.pq.enabled !== false,
           text:     data.pq.text.trim(),
+          audioUrl: data.pq.audioUrl || null,
           fieldKey: data.pq.fieldKey?.trim() || 'preQualifyAnswer',
           options:  (data.pq.options || []).filter(o => o.label || o.value || o.keywords?.length),
         };
@@ -2246,11 +2265,14 @@ function _getSections() {
       const upsellChain = (data.upsellChain || [])
         .filter(u => u.offerScript?.trim())
         .map(u => ({
-          offerScript: u.offerScript.trim(),
-          yesScript:   (u.yesScript || '').trim(),
-          noScript:    (u.noScript  || '').trim(),
-          itemKey:     (u.itemKey   || '').trim(),
-          price:       u.price !== '' && u.price != null ? parseFloat(u.price) || null : null,
+          offerScript:   u.offerScript.trim(),
+          yesScript:     (u.yesScript || '').trim(),
+          noScript:      (u.noScript  || '').trim(),
+          itemKey:       (u.itemKey   || '').trim(),
+          price:         u.price !== '' && u.price != null ? parseFloat(u.price) || null : null,
+          offerAudioUrl: u.offerAudioUrl || null,
+          yesAudioUrl:   u.yesAudioUrl   || null,
+          noAudioUrl:    u.noAudioUrl    || null,
         }));
 
       result.push({
@@ -2259,6 +2281,7 @@ function _getSections() {
         order:              idx,
         daSubTypeKey:       data.daSubTypeKey      || null,
         useFixedResponse:   !!data.useFixedResponse,
+        audioUrl:           data.contentAudioUrl   || null,
         preQualifyQuestion: preQualifyQuestion     || null,
         upsellChain,
       });
@@ -3149,6 +3172,12 @@ function renderSectionUpsellItems(sid) {
       </div>
     </div>`).join('');
   _updateSectionFunnelBadges(sid);
+  // Re-apply saved audio state for any items that already have a cached URL
+  (data.upsellChain || []).forEach((u, i) => {
+    if (u.offerAudioUrl) _restoreKcAudioState(sid, `upsell-${i}-offer`, u.offerAudioUrl, u.offerScript);
+    if (u.yesAudioUrl)   _restoreKcAudioState(sid, `upsell-${i}-yes`,   u.yesAudioUrl,   u.yesScript);
+    if (u.noAudioUrl)    _restoreKcAudioState(sid, `upsell-${i}-no`,    u.noAudioUrl,    u.noScript);
+  });
 }
 
 function addSectionUpsellItem(sid) {
@@ -3439,6 +3468,22 @@ async function _kcGenAudio(sid, key, textElId) {
 
     _kcAudio.set(mapKey, { url: data.url, generatedText: text, audio: null });
 
+    // Persist URL to sectionData so next save (or refresh restore) picks it up
+    const sData = S.sectionData.get(sid);
+    if (sData) {
+      if (key === 'content') {
+        sData.contentAudioUrl = data.url;
+      } else if (key === 'pq') {
+        if (sData.pq) sData.pq.audioUrl = data.url;
+      } else {
+        const m = key.match(/^upsell-(\d+)-(offer|yes|no)$/);
+        if (m && sData.upsellChain?.[+m[1]]) {
+          const fieldMap = { offer: 'offerAudioUrl', yes: 'yesAudioUrl', no: 'noAudioUrl' };
+          sData.upsellChain[+m[1]][fieldMap[m[2]]] = data.url;
+        }
+      }
+    }
+
     genBtn.textContent = '🔄 Regenerate';
     genBtn.disabled    = false;
     if (playBtn) playBtn.style.display = '';
@@ -3473,6 +3518,20 @@ function _kcPlayAudio(sid, key) {
   audio.onended = () => { playBtn.textContent = '▶ Play'; };
   audio.onerror = () => { playBtn.textContent = '▶ Play'; };
   audio.play().catch(() => { playBtn.textContent = '▶ Play'; });
+}
+
+// Restore audio UI state from a saved URL (called on page load / re-render).
+// Sets the _kcAudio Map entry and shows Play button + Regenerate label + ✅ hint.
+function _restoreKcAudioState(sid, key, url, generatedText) {
+  if (!url) return;
+  const mapKey = `${sid}--${key}`;
+  _kcAudio.set(mapKey, { url, generatedText: generatedText?.trim() || '', audio: null });
+  const playBtn = document.getElementById(`kc-play-${mapKey}`);
+  const genBtn  = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
+  const hintEl  = document.getElementById(`kc-hint-${mapKey}`);
+  if (playBtn) playBtn.style.display = '';
+  if (genBtn)  genBtn.textContent    = '🔄 Regenerate';
+  if (hintEl)  { hintEl.textContent  = '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
 }
 
 // Mark audio stale when its source text is edited after generation.
