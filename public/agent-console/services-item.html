@@ -449,26 +449,36 @@
     }
     .section-fixed-switch input:checked + .section-fixed-knob { background: #f59e0b; }
     .section-fixed-switch input:checked + .section-fixed-knob::before { transform: translateX(16px); }
-    /* 🎙️ Preview audio button — appears when Fixed strip is active */
-    .section-fixed-preview-btn {
-      display: none; align-items: center; gap: 5px;
+    /* ── Per-field audio controls: Generate · Play · stale hint ─────────────── */
+    /* Each verbatim text field (section content, pq question, upsell scripts)  */
+    /* gets an audio row below it — mirrors the triggers.html pattern.           */
+    .kc-audio-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 6px; flex-wrap: wrap;
+    }
+    .kc-audio-gen-btn {
+      display: inline-flex; align-items: center; gap: 5px;
       padding: 4px 10px; border-radius: 6px;
       font-size: .72rem; font-weight: 600;
-      border: 1px solid #d97706; color: #d97706;
+      border: 1px solid #0ea5e9; color: #0ea5e9;
       background: transparent; cursor: pointer;
-      transition: background .15s, color .15s;
-      white-space: nowrap; flex-shrink: 0;
+      transition: background .15s; white-space: nowrap;
     }
-    .section-fixed-preview-btn:hover:not(:disabled) { background: #fef3c7; }
-    .section-fixed-preview-btn:disabled { opacity: .5; cursor: not-allowed; }
-    .section-fixed-strip.is-active .section-fixed-preview-btn { display: flex; }
-    /* Audio status text — shown after preview attempt */
-    .section-fixed-audio-status {
-      font-size: .70rem; white-space: nowrap;
-      display: none; flex-shrink: 0;
+    .kc-audio-gen-btn:hover:not(:disabled) { background: #f0f9ff; }
+    .kc-audio-gen-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .kc-audio-play-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 6px;
+      font-size: .72rem; font-weight: 600;
+      border: 1px solid #16a34a; color: #16a34a;
+      background: transparent; cursor: pointer;
+      transition: background .15s; white-space: nowrap;
     }
-    .section-fixed-audio-status.ok  { color: #16a34a; display: inline; }
-    .section-fixed-audio-status.err { color: #dc2626; display: inline; }
+    .kc-audio-play-btn:hover { background: #f0fdf4; }
+    .kc-audio-hint { font-size: .70rem; }
+    .kc-audio-hint.ok    { color: #16a34a; }
+    .kc-audio-hint.stale { color: #d97706; }
+    .kc-audio-hint.err   { color: #dc2626; }
 
     /* ── Booking action radios ────────────────────────────────────────────── */
     .booking-radios { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -1765,11 +1775,21 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </button>
     </div>
     <div class="section-row-body">
-      <textarea class="form-textarea tall" placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
-        oninput="charCount(this, 2000, null); _queueVarScan()" maxlength="2000">${_esc(content)}</textarea>
+      <textarea class="form-textarea tall" id="sec-content-${id}"
+        placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
+        oninput="charCount(this, 2000, null); _queueVarScan(); _kcMarkStale(${id},'content',this.value)"
+        maxlength="2000">${_esc(content)}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
         <button type="button" class="gap-analyze-btn" onclick="analyzeGaps(${id})" title="AI checks what caller questions this section cannot answer">🔍 What's missing?</button>
         <span class="char-count" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} / 2000 chars</span>
+      </div>
+      <!-- Audio row — shown only when ⚡ Fixed mode is ON for this section -->
+      <div class="kc-audio-row" id="kc-ar-${id}--content" style="display:${useFixedResponse ? 'flex' : 'none'}">
+        <button type="button" class="kc-audio-gen-btn"
+          onclick="_kcGenAudio(${id},'content','sec-content-${id}')">🎙️ Generate Audio</button>
+        <button type="button" class="kc-audio-play-btn" id="kc-play-${id}--content"
+          style="display:none" onclick="_kcPlayAudio(${id},'content')">▶ Play</button>
+        <span class="kc-audio-hint" id="kc-hint-${id}--content"></span>
       </div>
     </div>
     <div id="gap-panel-${id}" class="gap-panel" style="display:none;"></div>
@@ -1781,12 +1801,6 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <span class="section-fixed-badge">⚡ Fixed</span>
         <span class="section-fixed-desc">Bypass Groq · read verbatim · audio pre-cached (fires when UAP routes here)</span>
       </label>
-      <!-- 🎙️ Preview button: generate + play audio to verify it sounds right -->
-      <button type="button" class="section-fixed-preview-btn" id="sec-preview-btn-${id}"
-        onclick="_previewSectionAudio(${id})" title="Generate audio now and play it to verify">
-        🎙️ Preview Audio
-      </button>
-      <span class="section-fixed-audio-status" id="sec-audio-status-${id}"></span>
       <label class="section-fixed-switch" title="Toggle per-section Fixed Response Mode">
         <input type="checkbox" id="sec-fixed-${id}"
           onchange="_onSectionFixedChange(${id})"
@@ -1837,8 +1851,15 @@ function addSection(label = '', content = '', sectionMeta = null) {
             <div class="pq-field-group">
               <div class="pq-field-label">Question the agent asks the caller</div>
               <textarea class="pq-textarea" id="pq-text-${id}" maxlength="300" rows="2"
-                oninput="S.sectionData.get(${id}).pq.text=this.value"
+                oninput="S.sectionData.get(${id}).pq.text=this.value; _kcMarkStale(${id},'pq',this.value)"
                 placeholder="Are you a plan member, or calling for the first time?">${_esc(pq.text || '')}</textarea>
+              <div class="kc-audio-row" id="kc-ar-${id}--pq">
+                <button type="button" class="kc-audio-gen-btn"
+                  onclick="_kcGenAudio(${id},'pq','pq-text-${id}')">🎙️ Generate Audio</button>
+                <button type="button" class="kc-audio-play-btn" id="kc-play-${id}--pq"
+                  style="display:none" onclick="_kcPlayAudio(${id},'pq')">▶ Play</button>
+                <span class="kc-audio-hint" id="kc-hint-${id}--pq"></span>
+              </div>
             </div>
             <div class="pq-field-group">
               <div class="pq-field-label">
@@ -3072,23 +3093,44 @@ function renderSectionUpsellItems(sid) {
       </div>
       <div style="margin-bottom:7px;">
         <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">Offer Script <span style="color:#9ca3af;">(max 600 chars)</span></label>
-        <textarea class="form-input" rows="2" maxlength="600" style="font-size:.8rem;resize:vertical;"
-          oninput="S.sectionData.get(${sid}).upsellChain[${i}].offerScript=this.value"
+        <textarea class="form-input" id="kc-txt-${sid}--upsell-${i}-offer" rows="2" maxlength="600" style="font-size:.8rem;resize:vertical;"
+          oninput="S.sectionData.get(${sid}).upsellChain[${i}].offerScript=this.value; _kcMarkStale(${sid},'upsell-${i}-offer',this.value)"
           placeholder="While I have you — would you like to add a UV light for $189 today?"
           >${_esc(u.offerScript)}</textarea>
+        <div class="kc-audio-row" id="kc-ar-${sid}--upsell-${i}-offer">
+          <button type="button" class="kc-audio-gen-btn"
+            onclick="_kcGenAudio(${sid},'upsell-${i}-offer','kc-txt-${sid}--upsell-${i}-offer')">🎙️ Generate Audio</button>
+          <button type="button" class="kc-audio-play-btn" id="kc-play-${sid}--upsell-${i}-offer"
+            style="display:none" onclick="_kcPlayAudio(${sid},'upsell-${i}-offer')">▶ Play</button>
+          <span class="kc-audio-hint" id="kc-hint-${sid}--upsell-${i}-offer"></span>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px;">
         <div>
           <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If YES</label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(u.yesScript)}"
-            oninput="S.sectionData.get(${sid}).upsellChain[${i}].yesScript=this.value" maxlength="400"
+          <input class="form-input" id="kc-txt-${sid}--upsell-${i}-yes" style="font-size:.8rem;" value="${_esc(u.yesScript)}"
+            oninput="S.sectionData.get(${sid}).upsellChain[${i}].yesScript=this.value; _kcMarkStale(${sid},'upsell-${i}-yes',this.value)" maxlength="400"
             placeholder="Great — noted on your appointment." />
+          <div class="kc-audio-row" id="kc-ar-${sid}--upsell-${i}-yes">
+            <button type="button" class="kc-audio-gen-btn"
+              onclick="_kcGenAudio(${sid},'upsell-${i}-yes','kc-txt-${sid}--upsell-${i}-yes')">🎙️ Generate Audio</button>
+            <button type="button" class="kc-audio-play-btn" id="kc-play-${sid}--upsell-${i}-yes"
+              style="display:none" onclick="_kcPlayAudio(${sid},'upsell-${i}-yes')">▶ Play</button>
+            <span class="kc-audio-hint" id="kc-hint-${sid}--upsell-${i}-yes"></span>
+          </div>
         </div>
         <div>
           <label class="form-label" style="font-size:.7rem;margin-bottom:2px;">If NO <span style="color:#9ca3af;">(optional)</span></label>
-          <input class="form-input" style="font-size:.8rem;" value="${_esc(u.noScript)}"
-            oninput="S.sectionData.get(${sid}).upsellChain[${i}].noScript=this.value" maxlength="400"
+          <input class="form-input" id="kc-txt-${sid}--upsell-${i}-no" style="font-size:.8rem;" value="${_esc(u.noScript)}"
+            oninput="S.sectionData.get(${sid}).upsellChain[${i}].noScript=this.value; _kcMarkStale(${sid},'upsell-${i}-no',this.value)" maxlength="400"
             placeholder="No problem — let me get you booked." />
+          <div class="kc-audio-row" id="kc-ar-${sid}--upsell-${i}-no">
+            <button type="button" class="kc-audio-gen-btn"
+              onclick="_kcGenAudio(${sid},'upsell-${i}-no','kc-txt-${sid}--upsell-${i}-no')">🎙️ Generate Audio</button>
+            <button type="button" class="kc-audio-play-btn" id="kc-play-${sid}--upsell-${i}-no"
+              style="display:none" onclick="_kcPlayAudio(${sid},'upsell-${i}-no')">▶ Play</button>
+            <span class="kc-audio-hint" id="kc-hint-${sid}--upsell-${i}-no"></span>
+          </div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;">
@@ -3354,75 +3396,96 @@ function _onSectionFixedChange(sid) {
   if (data) data.useFixedResponse = checked;
   const bar = document.getElementById(`sec-fixed-bar-${sid}`);
   if (bar) bar.classList.toggle('is-active', checked);
-  // Reset audio status when toggling
-  const statusEl = document.getElementById(`sec-audio-status-${sid}`);
-  if (statusEl) { statusEl.textContent = ''; statusEl.className = 'section-fixed-audio-status'; }
+  // Show/hide the content audio row based on Fixed mode state
+  const contentAudio = document.getElementById(`kc-ar-${sid}--content`);
+  if (contentAudio) contentAudio.style.display = checked ? 'flex' : 'none';
 }
 
-// ── Per-section ⚡ Fixed audio preview (Generate + Play) ──────────────────────
-// Called by the 🎙️ button on the section fixed strip.
-// Sends section content to /preview-fixed-audio → server checks disk cache
-// (or generates now if missing) → returns /audio-safe URL → browser plays it.
-// Shows ✅ Cached or ❌ error inline on the strip.
+// ── Per-field Audio Controls ──────────────────────────────────────────────────
+// Mirrors the triggers.html pattern: Generate · Play · stale detection.
+// Each verbatim text field (section content, pq question, upsell scripts)
+// gets its own audio row below it.
+//
+// State key: `${sid}--${key}`  e.g. 42--content, 42--pq, 42--upsell-0-offer
 // ─────────────────────────────────────────────────────────────────────────────
-async function _previewSectionAudio(sid) {
-  const row    = document.querySelector(`[data-sid="${sid}"]`);
-  const btn    = document.getElementById(`sec-preview-btn-${sid}`);
-  const status = document.getElementById(`sec-audio-status-${sid}`);
-  if (!row || !btn) return;
+const _kcAudio = new Map(); // key → { url, generatedText, audio }
 
-  // Get current content from this section's textarea
-  const text = row.querySelector('textarea')?.value?.trim() || '';
+// Generate (or regenerate) audio for a specific field.
+// textElId — DOM id of the textarea/input to read text from.
+async function _kcGenAudio(sid, key, textElId) {
+  const textEl  = document.getElementById(textElId);
+  const text    = textEl?.value?.trim() || '';
+  const mapKey  = `${sid}--${key}`;
+  const hintEl  = document.getElementById(`kc-hint-${mapKey}`);
+  const playBtn = document.getElementById(`kc-play-${mapKey}`);
+  const genBtn  = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
+  if (!genBtn) return;
+
   if (!text) {
-    if (status) { status.textContent = '⚠️ No content'; status.className = 'section-fixed-audio-status err'; }
+    if (hintEl) { hintEl.textContent = '⚠️ No text to generate'; hintEl.className = 'kc-audio-hint stale'; }
     return;
   }
 
-  // Loading state
-  const origLabel   = btn.innerHTML;
-  btn.disabled      = true;
-  btn.innerHTML     = '⏳ Generating…';
-  if (status) { status.textContent = ''; status.className = 'section-fixed-audio-status'; }
+  genBtn.disabled    = true;
+  genBtn.textContent = '⏳ Generating…';
+  if (hintEl)  { hintEl.textContent = ''; hintEl.className = 'kc-audio-hint'; }
 
   try {
     const data = await apiFetch(
       `/api/admin/agent2/company/${S.companyId}/knowledge/preview-fixed-audio`,
       { method: 'POST', body: { text } }
     );
+    if (!data.success) throw new Error(data.error || 'Generation failed');
 
-    if (!data.success) {
-      throw new Error(data.error || 'Preview failed');
-    }
+    _kcAudio.set(mapKey, { url: data.url, generatedText: text, audio: null });
 
-    // Play the returned audio URL (add cache-buster to avoid stale browser cache)
-    const url = `${data.url}?_cb=${Date.now()}`;
-    const audio = new Audio(url);
-
-    btn.innerHTML = '⏹ Stop';
-    btn.disabled  = false;
-    if (status) {
-      status.textContent = data.generated ? '✅ Generated + cached' : '✅ Cached';
-      status.className   = 'section-fixed-audio-status ok';
-    }
-
-    audio.onended = () => { btn.innerHTML = '🎙️ Preview Audio'; };
-    audio.onerror = () => { btn.innerHTML = '🎙️ Preview Audio'; };
-    audio.play().catch(() => { btn.innerHTML = origLabel; });
-
-    // Stop current audio if play button clicked again
-    btn.onclick = () => {
-      audio.pause();
-      btn.innerHTML = '🎙️ Preview Audio';
-      btn.onclick   = () => _previewSectionAudio(sid);
-    };
+    genBtn.textContent = '🔄 Regenerate';
+    genBtn.disabled    = false;
+    if (playBtn) playBtn.style.display = '';
+    if (hintEl)  { hintEl.textContent = data.generated ? '✅ Generated' : '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
 
   } catch (err) {
-    btn.innerHTML = origLabel;
-    btn.disabled  = false;
-    if (status) {
-      status.textContent = `❌ ${err.message || 'Generation failed'}`;
-      status.className   = 'section-fixed-audio-status err';
-    }
+    genBtn.textContent = '🎙️ Generate Audio';
+    genBtn.disabled    = false;
+    if (hintEl) { hintEl.textContent = `❌ ${err.message || 'Generation failed'}`; hintEl.className = 'kc-audio-hint err'; }
+  }
+}
+
+// Play or stop audio for a specific field.
+function _kcPlayAudio(sid, key) {
+  const mapKey  = `${sid}--${key}`;
+  const state   = _kcAudio.get(mapKey);
+  const playBtn = document.getElementById(`kc-play-${mapKey}`);
+  if (!state?.url || !playBtn) return;
+
+  // Stop if already playing
+  if (state.audio && !state.audio.paused) {
+    state.audio.pause();
+    state.audio.currentTime = 0;
+    playBtn.textContent = '▶ Play';
+    return;
+  }
+
+  const audio = new Audio(`${state.url}?_cb=${Date.now()}`);
+  state.audio = audio;
+  playBtn.textContent = '⏹ Stop';
+
+  audio.onended = () => { playBtn.textContent = '▶ Play'; };
+  audio.onerror = () => { playBtn.textContent = '▶ Play'; };
+  audio.play().catch(() => { playBtn.textContent = '▶ Play'; });
+}
+
+// Mark audio stale when its source text is edited after generation.
+// Called from each text field's oninput.
+function _kcMarkStale(sid, key, currentText) {
+  const mapKey = `${sid}--${key}`;
+  const state  = _kcAudio.get(mapKey);
+  if (!state?.url) return; // No audio generated yet — nothing to mark stale
+  const hintEl = document.getElementById(`kc-hint-${mapKey}`);
+  const genBtn = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
+  if ((currentText?.trim() ?? '') !== state.generatedText) {
+    if (hintEl) { hintEl.textContent = '⚠️ Text changed — regenerate audio'; hintEl.className = 'kc-audio-hint stale'; }
+    if (genBtn) genBtn.textContent = '🔄 Regenerate';
   }
 }
 
