@@ -45,7 +45,7 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const logger = require('../../utils/logger');
-const { FALLBACK_REASON_CODE } = require('../../config/ResponseProtocol');
+const { LLM_FAILURE_REASON } = require('../../config/LLMDiagnostics');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION DEFAULTS
@@ -228,8 +228,8 @@ async function streamWithHeartbeat(opts) {
 
   // ── Validate required params ──────────────────────────────────────────────
   if (!apiKey) {
-    emit('A2_LLM_STREAM_FAILED', { reason: FALLBACK_REASON_CODE.T2_NO_API_KEY, turn });
-    return { response: null, tokensUsed: null, latencyMs: 0, wasPartial: false, failureReason: FALLBACK_REASON_CODE.T2_NO_API_KEY };
+    emit('A2_LLM_STREAM_FAILED', { reason: LLM_FAILURE_REASON.NO_API_KEY, turn });
+    return { response: null, tokensUsed: null, latencyMs: 0, wasPartial: false, failureReason: LLM_FAILURE_REASON.NO_API_KEY };
   }
 
   // ── Initialize heartbeat writer ───────────────────────────────────────────
@@ -314,7 +314,7 @@ async function streamWithHeartbeat(opts) {
     if (!responseText || responseText.trim().length === 0) {
       heartbeat.setFailed();
       await heartbeat.stop();
-      failureReason = FALLBACK_REASON_CODE.T2_EMPTY_RESPONSE;
+      failureReason = LLM_FAILURE_REASON.EMPTY_RESPONSE;
       emit('A2_LLM_STREAM_FAILED', {
         reason: failureReason, turn, latencyMs,
         tokenCount: heartbeat.tokenCount,
@@ -391,7 +391,7 @@ async function streamWithHeartbeat(opts) {
       // ── CEILING HIT: Not enough to deliver ──────────────────────────────
       heartbeat.setFailed();
       await heartbeat.stop();
-      failureReason = FALLBACK_REASON_CODE.T2_MAX_LATENCY;
+      failureReason = LLM_FAILURE_REASON.MAX_LATENCY;
 
       emit('A2_LLM_STREAM_FAILED', {
         reason: failureReason, turn, latencyMs,
@@ -409,11 +409,11 @@ async function streamWithHeartbeat(opts) {
     // Determine specific failure reason
     if (err.status) {
       // HTTP error from Anthropic API
-      failureReason = FALLBACK_REASON_CODE.T2_PROVIDER_ERROR;
+      failureReason = LLM_FAILURE_REASON.PROVIDER_ERROR;
     } else if (err.message?.includes('guardrail') || err.message?.includes('blocked')) {
-      failureReason = FALLBACK_REASON_CODE.T2_GUARDRAIL_ABORT;
+      failureReason = LLM_FAILURE_REASON.GUARDRAIL_ABORT;
     } else {
-      failureReason = FALLBACK_REASON_CODE.T2_PROVIDER_ERROR;
+      failureReason = LLM_FAILURE_REASON.PROVIDER_ERROR;
     }
 
     heartbeat.setFailed();
@@ -492,10 +492,10 @@ async function streamWithRetry(opts) {
   // ── Check if backup is available and applicable ───────────────────────────
   // Only retry on API errors, NOT on timeouts (ceiling hit = model was working, just slow)
   const retryableReasons = [
-    FALLBACK_REASON_CODE.T2_PROVIDER_ERROR,
-    FALLBACK_REASON_CODE.T2_STREAM_SILENT,
-    FALLBACK_REASON_CODE.T2_EMPTY_RESPONSE,
-    FALLBACK_REASON_CODE.T2_GUARDRAIL_ABORT,
+    LLM_FAILURE_REASON.PROVIDER_ERROR,
+    LLM_FAILURE_REASON.STREAM_SILENT,
+    LLM_FAILURE_REASON.EMPTY_RESPONSE,
+    LLM_FAILURE_REASON.GUARDRAIL_ABORT,
   ];
 
   const shouldRetry = backupModel?.enabled
@@ -540,7 +540,7 @@ async function streamWithRetry(opts) {
 
   // ── Both failed ───────────────────────────────────────────────────────────
   emit('A2_LLM_STREAM_FAILED', {
-    reason: FALLBACK_REASON_CODE.T2_BACKUP_FAILED,
+    reason: LLM_FAILURE_REASON.BACKUP_FAILED,
     turn: primaryOpts.turn,
     primaryReason: primaryResult.failureReason,
     backupReason: backupResult?.failureReason || 'unknown',
@@ -551,7 +551,7 @@ async function streamWithRetry(opts) {
     tokensUsed: { input: 0, output: 0 },
     latencyMs: (primaryResult?.latencyMs || 0) + (backupResult?.latencyMs || 0),
     wasPartial: false,
-    failureReason: FALLBACK_REASON_CODE.T2_BACKUP_FAILED,
+    failureReason: LLM_FAILURE_REASON.BACKUP_FAILED,
     usedBackup: true,
   };
 }

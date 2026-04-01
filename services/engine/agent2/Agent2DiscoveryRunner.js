@@ -113,8 +113,8 @@ const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesServi
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt, composeIntakeExtractionPrompt, composeIntakeResponsePrompt } = require('../../../config/llmAgentDefaults');
 const GroqStreamAdapter = require('../../streaming/adapters/GroqStreamAdapter');
-const { FALLBACK_REASON_CODE } = require('../../../config/ResponseProtocol');
-const { buildT3Context, validateT3Context } = require('./TierStateContract');
+const { LLM_FAILURE_REASON } = require('../../../config/LLMDiagnostics');
+const { buildNoMatchContext, validateNoMatchContext } = require('./NoMatchContext');
 const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
 const { streamWithSentences } = require('../../streaming/SentenceStreamingService');
 const { ConversationMemory } = require('../ConversationMemory');
@@ -585,7 +585,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
     const maxTurnsPerSession = config.activation?.maxTurnsPerSession ?? 10;
     if (llmTurnsThisCall >= maxTurnsPerSession) {
       logger.info('[LLM_AGENT] maxTurnsPerSession reached — skipping no-match agent', { llmTurnsThisCall, maxTurnsPerSession });
-      emit('A2_LLM_STREAM_FAILED', { reason: FALLBACK_REASON_CODE.T2_MAX_TURNS, turn, llmTurnsThisCall });
+      emit('A2_LLM_STREAM_FAILED', { reason: LLM_FAILURE_REASON.MAX_TURNS, turn, llmTurnsThisCall });
       emit('T2_NO_MATCH_RESULT', { llmAttempted: false, llmSucceeded: false, llmFailureReason: 'max_turns_reached', fallbackInvoked: true, turn });
       return null;
     }
@@ -791,7 +791,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
         fallbackInvoked: true,
         turn,
       });
-      // Return failure info so caller can set accurate t2FailureReason
+      // Return failure info so caller can set accurate llmFailureReason
       return { response: null, failureReason: result?.failureReason || null };
     }
 
@@ -1241,7 +1241,7 @@ async function callLLMAgentForIntake({ company, input, channel, turn, emit, call
     // ── Provider failover: if primary fails with a hard API error, retry on the other key ──
     // This protects calls when one provider has an expired key, hits a rate limit, or
     // is temporarily unavailable — without needing a full config change on the company.
-    if (!result?.response && result?.failureReason === 'T2_PROVIDER_ERROR') {
+    if (!result?.response && result?.failureReason === LLM_FAILURE_REASON.PROVIDER_ERROR) {
       const fallbackProvider = finalProvider === 'groq' ? 'anthropic' : 'groq';
       const fallbackKey      = fallbackProvider === 'groq' ? groqKey : claudeKey;
       // Only fallback if Groq → Anthropic (Claude handles both directions well)
@@ -1824,13 +1824,13 @@ class Agent2DiscoveryRunner {
     const prevTier = prevLastPath?.startsWith('FALLBACK_') ? 3 : null;
     const isRecoveryTurn = prevTier === 3;
     const t3RecoveryCtx = isRecoveryTurn
-      ? (state?.agent2?.discovery?.t3RecoveryContext || null)
+      ? (state?.agent2?.discovery?.noMatchRecoveryContext || null)
       : null;
 
     if (isRecoveryTurn) {
       emit('A2_RECOVERY_TURN', {
         prevPath: prevLastPath,
-        consecutiveT3Count: t3RecoveryCtx?.consecutiveT3Count || 0,
+        consecutiveNoMatchCount: t3RecoveryCtx?.consecutiveNoMatchCount || 0,
         prevIntent: t3RecoveryCtx?.intent ? clip(t3RecoveryCtx.intent, 60) : null,
         prevCallerName: t3RecoveryCtx?.callerName || null,
         turn,
@@ -1893,9 +1893,9 @@ class Agent2DiscoveryRunner {
     // 123RP Package 4C: Reset recovery counters at start of every turn.
     // T3 section re-sets these if it fires. If T1/T2 succeeds (early return),
     // the counters stay at 0 — consecutive streak is broken.
-    nextState.agent2.discovery.consecutiveT3Count = 0;
-    nextState.agent2.discovery.t3RecoveryContext = null;
-    nextState.agent2.discovery.t3Context = null;
+    nextState.agent2.discovery.consecutiveNoMatchCount = 0;
+    nextState.agent2.discovery.noMatchRecoveryContext = null;
+    nextState.agent2.discovery.noMatchContext = null;
     
     // ══════════════════════════════════════════════════════════════════════════
     // V5: LLM ASSIST STATE INITIALIZATION & COOLDOWN MANAGEMENT
@@ -2334,8 +2334,8 @@ class Agent2DiscoveryRunner {
           nextState.agent2.discovery.lastSttEmptyRecoveryTurn = turn;
 
           // Reset T3 recovery counters — LLM handled the recovery
-          nextState.agent2.discovery.consecutiveT3Count = 0;
-          nextState.agent2.discovery.t3RecoveryContext = null;
+          nextState.agent2.discovery.consecutiveNoMatchCount = 0;
+          nextState.agent2.discovery.noMatchRecoveryContext = null;
 
           const sttResponse = sttLlmResult.response;
 
@@ -6598,21 +6598,21 @@ class Agent2DiscoveryRunner {
     const llmEnabled = deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, llmCfgRaw)?.enabled === true;
     // Use specific failure reason from streaming service if available,
     // otherwise fall back to generic reason based on enabled state
-    const t2FailureReason = llmAgentResult?.failureReason
-      || (llmEnabled ? FALLBACK_REASON_CODE.T2_PROVIDER_ERROR : FALLBACK_REASON_CODE.T2_DISABLED);
+    const llmFailureReason = llmAgentResult?.failureReason
+      || (llmEnabled ? LLM_FAILURE_REASON.PROVIDER_ERROR : LLM_FAILURE_REASON.LLM_DISABLED);
 
-    const t3Context = buildT3Context(state, scrabResult, callerName, t2FailureReason);
-    nextState.agent2.discovery.t3Context = t3Context;
+    const noMatchContext = buildNoMatchContext(state, scrabResult, callerName, llmFailureReason);
+    nextState.agent2.discovery.noMatchContext = noMatchContext;
 
-    const t3Validation = validateT3Context(t3Context);
-    if (!t3Validation.valid) {
-      emit('T3_STATE_CONTRACT_WARNING', {
-        warnings: t3Validation.warnings,
-        t2FailureReason,
-        intent: t3Context.intent ? clip(t3Context.intent, 60) : null,
-        callerName: t3Context.callerName || null,
-        hasInput: !!t3Context.normalizedInput,
-        tokenCount: t3Context.expandedTokens?.length || 0,
+    const noMatchValidation = validateNoMatchContext(noMatchContext);
+    if (!noMatchValidation.valid) {
+      emit('AGENT2_NO_MATCH_CONTEXT_WARNING', {
+        warnings: noMatchValidation.warnings,
+        llmFailureReason,
+        intent: noMatchContext.intent ? clip(noMatchContext.intent, 60) : null,
+        callerName: noMatchContext.callerName || null,
+        hasInput: !!noMatchContext.normalizedInput,
+        tokenCount: noMatchContext.expandedTokens?.length || 0,
         turn
       });
     }
@@ -6620,40 +6620,39 @@ class Agent2DiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
     // 123RP TIER 3: FALLBACK (safety net when Tier 1 + Tier 2 cannot respond)
     // ══════════════════════════════════════════════════════════════════════════
-    // These paths execute if we haven't returned yet (no trigger, no LLM success)
 
-    // ── T3 Recovery Tracking (Package 3C) ───────────────────────────────────
+    // ── No-match consecutive tracking (Package 3C) ───────────────────────────────────
     // Track consecutive T3 fires. If 3+ in a row, escalation is needed.
-    const prevConsecutiveT3 = nextState.agent2?.discovery?.consecutiveT3Count || 0;
-    const consecutiveT3Count = prevConsecutiveT3 + 1;
-    nextState.agent2.discovery.consecutiveT3Count = consecutiveT3Count;
-    nextState.agent2.discovery.t3RecoveryContext = {
+    const prevConsecutiveT3 = nextState.agent2?.discovery?.consecutiveNoMatchCount || 0;
+    const consecutiveNoMatchCount = prevConsecutiveT3 + 1;
+    nextState.agent2.discovery.consecutiveNoMatchCount = consecutiveNoMatchCount;
+    nextState.agent2.discovery.noMatchRecoveryContext = {
       firedAt: turn,
-      intent: t3Context?.intent || capturedReason || null,
-      callerName: t3Context?.callerName || callerName || null,
-      t2FailureReason: t3Context?.t2FailureReason || t2FailureReason || null,
-      consecutiveT3Count,
+      intent: noMatchContext?.intent || capturedReason || null,
+      callerName: noMatchContext?.callerName || callerName || null,
+      llmFailureReason: noMatchContext?.llmFailureReason || llmFailureReason || null,
+      consecutiveNoMatchCount,
     };
 
-    if (consecutiveT3Count >= 3) {
-      emit('T3_CONSECUTIVE_LIMIT', {
-        count: consecutiveT3Count,
+    if (consecutiveNoMatchCount >= 3) {
+      emit('AGENT2_NO_MATCH_CONSECUTIVE_LIMIT', {
+        count: consecutiveNoMatchCount,
         turn,
-        intent: t3Context?.intent ? clip(t3Context.intent, 60) : null,
-        t2FailureReason: t3Context?.t2FailureReason || null,
+        intent: noMatchContext?.intent ? clip(noMatchContext.intent, 60) : null,
+        llmFailureReason: noMatchContext?.llmFailureReason || null,
       });
     }
 
-    // ── T3 Reason Code Emission (Package 6B) ────────────────────────────────
+    // ── No-match outcome emission (Package 6B) ────────────────────────────────
     const t3OutcomeReason = capturedReason
-      ? FALLBACK_REASON_CODE.T3_REASON_CAPTURED
-      : FALLBACK_REASON_CODE.T3_NO_REASON;
+      ? LLM_FAILURE_REASON.FALLBACK_REASON_CAPTURED
+      : LLM_FAILURE_REASON.FALLBACK_NO_REASON;
     emit('A2_FALLBACK_REASON', {
-      t2FailureReason: t3Context?.t2FailureReason || t2FailureReason || null,
+      llmFailureReason: noMatchContext?.llmFailureReason || llmFailureReason || null,
       t3OutcomeReason,
-      consecutiveT3Count,
-      intent: t3Context?.intent ? clip(t3Context.intent, 60) : null,
-      callerName: t3Context?.callerName || null,
+      consecutiveNoMatchCount,
+      intent: noMatchContext?.intent ? clip(noMatchContext.intent, 60) : null,
+      callerName: noMatchContext?.callerName || null,
       turn,
     });
 
