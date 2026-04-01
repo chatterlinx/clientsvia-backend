@@ -1145,6 +1145,62 @@ async function healthCheck() {
 }
 
 // ============================================================================
+// LAP KEYWORD GROUPS  (ListenerActParser — global system groups)
+// ============================================================================
+// Redis key: globalHub:lapGroups  (JSON string, no TTL, event-synced)
+// Fallback:  AdminSettings.globalHub.lapGroups
+//
+// These are the SYSTEM keyword lists shared by all companies.
+// Per-company customKeywords are merged at runtime in LAPService.
+// ============================================================================
+
+const LAP_REDIS_KEY = 'globalHub:lapGroups';
+
+/**
+ * getLapGroups — load system LAP keyword groups.
+ * Fast path: Redis JSON.parse.
+ * Fallback: MongoDB AdminSettings (Redis unavailable or key missing).
+ * @returns {Promise<Array>} array of group objects
+ */
+async function getLapGroups() {
+  try {
+    const redis = await getSharedRedisClient().catch(() => null);
+    if (redis) {
+      const raw = await redis.get(LAP_REDIS_KEY).catch(() => null);
+      if (raw) {
+        try { return JSON.parse(raw); } catch (_e) { /* fall through */ }
+      }
+    }
+  } catch (_e) { /* fall through to MongoDB */ }
+
+  // MongoDB fallback
+  try {
+    const AdminSettings = require('../models/AdminSettings');
+    const settings = await AdminSettings.getSettings();
+    return settings?.globalHub?.lapGroups || [];
+  } catch (err) {
+    logger.warn('[GlobalHub] getLapGroups: MongoDB fallback failed', { error: err.message });
+    return [];
+  }
+}
+
+/**
+ * syncLapGroupsToRedis — persist LAP groups to Redis after admin save.
+ * No TTL — event-driven invalidation only.
+ * @param {Array} groups
+ */
+async function syncLapGroupsToRedis(groups) {
+  try {
+    const redis = await getSharedRedisClient().catch(() => null);
+    if (!redis) return;
+    await redis.set(LAP_REDIS_KEY, JSON.stringify(groups || []));
+    logger.info('[GlobalHub] syncLapGroupsToRedis: synced', { count: groups?.length });
+  } catch (err) {
+    logger.warn('[GlobalHub] syncLapGroupsToRedis: failed', { error: err.message });
+  }
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -1189,6 +1245,10 @@ module.exports = {
 
     // Health check
     healthCheck,
+
+    // LAP keyword groups (ListenerActParser — system-level groups)
+    getLapGroups,
+    syncLapGroupsToRedis,
 
     // Constants (for external reference)
     REDIS_KEYS

@@ -430,6 +430,183 @@
     .toast.success { background: var(--color-success); }
     .toast.error   { background: var(--color-danger); }
     @keyframes toastIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── LAP Tab ──────────────────────────────────────────────── */
+    .lap-master-row {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 16px 20px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card); margin-bottom: 24px;
+    }
+    .lap-master-label { font-size: .875rem; font-weight: 600; color: var(--text-primary); flex: 1; }
+    .lap-cooldown-wrap { display: flex; align-items: center; gap: 8px; }
+    .lap-cooldown-input {
+      width: 80px; padding: 4px 8px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); font-size: .813rem; text-align: center;
+      outline: none; transition: border-color var(--transition);
+    }
+    .lap-cooldown-input:focus { border-color: var(--color-primary); }
+    .lap-save-master-btn {
+      padding: 6px 14px; font-size: .75rem; font-weight: 600;
+      background: var(--color-primary); color: #fff;
+      border: none; border-radius: var(--radius-xs); cursor: pointer;
+    }
+    .lap-save-master-btn:hover { background: var(--color-primary-dk); }
+
+    .lap-groups-section { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+    .lap-group-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .lap-group-card.disabled-card { opacity: .65; }
+    .lap-gc-header {
+      padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .lap-gc-name { font-size: .875rem; font-weight: 700; color: var(--text-primary); flex: 1; }
+    .lap-gc-badge {
+      font-size: .625rem; font-weight: 700; padding: 2px 7px;
+      border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: .5px;
+    }
+    .lap-gc-badge.respond { background: #dbeafe; color: #1d4ed8; }
+    .lap-gc-badge.hold    { background: var(--color-warning-lt); color: #92400e; }
+    .lap-gc-badge.repeat_last { background: #dcfce7; color: #166534; }
+    .lap-gc-badge.respond_custom { background: var(--color-purple-lt); color: #6d28d9; }
+    .lap-gc-body { padding: 16px; }
+
+    .lap-kw-section { margin-bottom: 14px; }
+    .lap-kw-label {
+      font-size: .688rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--text-xs); margin-bottom: 6px;
+    }
+    .lap-kw-pills { display: flex; flex-wrap: wrap; gap: 5px; min-height: 24px; }
+    .lap-kw-pill {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px; border-radius: var(--radius-pill);
+      font-size: .688rem; font-weight: 500;
+    }
+    .lap-kw-pill.system { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .lap-kw-pill.custom { background: var(--color-warning-lt); color: #92400e; border: 1px solid #fde68a; }
+    .lap-kw-pill-rm {
+      cursor: pointer; font-size: .625rem; opacity: .6;
+      border: none; background: none; padding: 0; color: inherit; line-height: 1;
+    }
+    .lap-kw-pill-rm:hover { opacity: 1; }
+    .lap-kw-add-form { display: flex; gap: 6px; margin-top: 6px; }
+    .lap-kw-add-input {
+      flex: 1; padding: 4px 8px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); font-size: .75rem; outline: none;
+      transition: border-color var(--transition);
+    }
+    .lap-kw-add-input:focus { border-color: var(--color-warning); }
+    .lap-kw-add-btn {
+      padding: 4px 10px; background: var(--color-warning); color: #fff;
+      border: none; border-radius: var(--radius-xs); cursor: pointer; font-size: .75rem; font-weight: 600;
+    }
+    .lap-kw-add-btn:hover { background: #d97706; }
+
+    .lap-cq-label {
+      font-size: .688rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--text-xs); margin-bottom: 6px;
+    }
+    .lap-cq-textarea {
+      width: 100%; padding: 8px 10px; font-size: .813rem;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      resize: vertical; min-height: 52px; outline: none;
+      font-family: inherit; color: var(--text-secondary);
+      transition: border-color var(--transition);
+    }
+    .lap-cq-textarea:focus { border-color: var(--color-primary); }
+
+    .lap-hold-accordion { margin-top: 12px; }
+    .lap-hold-accordion-toggle {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      font-size: .75rem; font-weight: 600; color: var(--text-muted);
+      background: none; border: none; padding: 4px 0; width: 100%;
+    }
+    .lap-hold-accordion-toggle:hover { color: var(--color-warning); }
+    .lap-hold-accordion-body {
+      display: none; padding: 12px; margin-top: 8px;
+      background: #fffbeb; border: 1px solid #fde68a;
+      border-radius: var(--radius-xs);
+    }
+    .lap-hold-accordion-body.open { display: block; }
+    .lap-hold-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .lap-hold-row label { font-size: .75rem; color: var(--text-secondary); min-width: 130px; }
+    .lap-hold-input {
+      width: 70px; padding: 4px 6px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); font-size: .813rem; text-align: center; outline: none;
+    }
+    .lap-hold-input:focus { border-color: var(--color-warning); }
+    .lap-hold-prompt-input {
+      flex: 1; padding: 4px 8px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); font-size: .75rem; outline: none;
+    }
+    .lap-hold-prompt-input:focus { border-color: var(--color-warning); }
+
+    .lap-gc-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+    .lap-gc-save-btn {
+      padding: 5px 12px; font-size: .75rem; font-weight: 600;
+      background: var(--color-success); color: #fff; border: none;
+      border-radius: var(--radius-xs); cursor: pointer;
+    }
+    .lap-gc-save-btn:hover { background: var(--color-success-dk); }
+    .lap-gc-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .lap-gc-del-btn {
+      padding: 5px 12px; font-size: .75rem; font-weight: 600;
+      background: none; color: var(--color-danger); border: 1px solid var(--color-danger);
+      border-radius: var(--radius-xs); cursor: pointer; margin-left: auto;
+    }
+    .lap-gc-del-btn:hover { background: var(--color-danger-lt); }
+
+    .lap-add-group-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 14px; border: 2px dashed var(--border); border-radius: var(--radius-card);
+      background: none; cursor: pointer; font-size: .813rem; font-weight: 600;
+      color: var(--text-muted); transition: all var(--transition);
+      grid-column: 1 / -1;
+    }
+    .lap-add-group-btn:hover { border-color: var(--color-warning); color: var(--color-warning); background: #fffbeb; }
+
+    /* LAP Custom Group Modal */
+    .lap-modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    .lap-modal-backdrop.open { display: flex; }
+    .lap-modal {
+      background: #fff; border-radius: var(--radius-card);
+      padding: 28px; width: min(520px, 92vw); max-height: 90vh;
+      overflow-y: auto; box-shadow: var(--shadow-raised);
+    }
+    .lap-modal-title { font-size: 1.125rem; font-weight: 700; color: var(--text-primary); margin-bottom: 20px; }
+    .lap-modal-field { margin-bottom: 16px; }
+    .lap-modal-label {
+      display: block; font-size: .75rem; font-weight: 600;
+      color: var(--text-secondary); margin-bottom: 6px;
+    }
+    .lap-modal-input, .lap-modal-select, .lap-modal-textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); font-size: .813rem; outline: none;
+      font-family: inherit; color: var(--text-primary);
+      transition: border-color var(--transition);
+    }
+    .lap-modal-input:focus, .lap-modal-select:focus, .lap-modal-textarea:focus { border-color: var(--color-warning); }
+    .lap-modal-textarea { min-height: 56px; resize: vertical; }
+    .lap-modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+    .lap-modal-cancel {
+      padding: 8px 16px; font-size: .813rem; background: none;
+      border: 1px solid var(--border); border-radius: var(--radius-xs); cursor: pointer;
+    }
+    .lap-modal-save {
+      padding: 8px 20px; font-size: .813rem; font-weight: 600;
+      background: var(--color-warning); color: #fff;
+      border: none; border-radius: var(--radius-xs); cursor: pointer;
+    }
+    .lap-modal-save:hover { background: #d97706; }
+    .lap-modal-hold-section { display: none; margin-top: 12px; padding: 12px; background: #fffbeb; border-radius: var(--radius-xs); border: 1px solid #fde68a; }
+    .lap-modal-hold-section.visible { display: block; }
   </style>
 </head>
 <body>
@@ -461,6 +638,9 @@
   </button>
   <button class="tab-btn" data-tab="calibration">
     📊 Calibration
+  </button>
+  <button class="tab-btn" data-tab="lap">
+    🎧 LAP
   </button>
 </nav>
 
@@ -682,6 +862,106 @@
   </div>
 
 </section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 5 — LAP  (ListenerActParser)
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-lap">
+
+  <div class="uap-hero" style="background:linear-gradient(135deg,#451a03 0%,#92400e 60%,#f59e0b 100%);">
+    <div class="uap-hero-title">ListenerActParser — Always Listening</div>
+    <div class="uap-hero-sub">
+      Detects attention signals while the agent is speaking.
+      Fires before any routing logic — every turn, every state, including booking.
+      No LLM calls. Pure keyword matching, zero latency.
+    </div>
+    <div class="uap-hero-meta">
+      <span class="uap-hero-chip">Pre-pipeline gate</span>
+      <span class="uap-hero-chip">Every call turn</span>
+      <span class="uap-hero-chip">Zero LLM cost</span>
+      <span class="uap-hero-chip">Instant response</span>
+    </div>
+  </div>
+
+  <!-- Master Toggle + Cooldown -->
+  <div class="lap-master-row">
+    <span class="lap-master-label">🎧 LAP Enabled</span>
+    <label class="toggle" title="Enable or disable the ListenerActParser for all calls">
+      <input type="checkbox" id="lapEnabled" checked>
+      <span class="toggle-slider"></span>
+    </label>
+    <div class="lap-cooldown-wrap">
+      <span style="font-size:.813rem;color:var(--text-muted);">Cooldown:</span>
+      <input type="number" id="lapCooldownMs" class="lap-cooldown-input" value="3000" min="0" step="500">
+      <span style="font-size:.813rem;color:var(--text-muted);">ms</span>
+    </div>
+    <button class="lap-save-master-btn" onclick="lapSaveMaster()">Save</button>
+  </div>
+
+  <!-- Group Cards (populated by JS) -->
+  <div class="lap-groups-section" id="lapGroupsGrid">
+    <p style="color:var(--text-xs);font-size:.813rem;grid-column:1/-1;">Loading LAP groups…</p>
+  </div>
+
+</section>
+
+<!-- LAP: Add Custom Group Modal -->
+<div class="lap-modal-backdrop" id="lapAddGroupModal">
+  <div class="lap-modal">
+    <div class="lap-modal-title">➕ Add Custom Group</div>
+
+    <div class="lap-modal-field">
+      <label class="lap-modal-label" for="lapNewName">Group Name</label>
+      <input type="text" id="lapNewName" class="lap-modal-input" placeholder='e.g. "Rescheduling Request"'>
+    </div>
+
+    <div class="lap-modal-field">
+      <label class="lap-modal-label" for="lapNewAction">Action</label>
+      <select id="lapNewAction" class="lap-modal-select" onchange="lapToggleModalHoldSection()">
+        <option value="respond">RESPOND — Play closed question, continue pipeline</option>
+        <option value="hold">HOLD — Pause call, listen for resume word</option>
+        <option value="repeat_last">REPEAT LAST — Re-read last agent sentence</option>
+      </select>
+    </div>
+
+    <div class="lap-modal-field">
+      <label class="lap-modal-label">Keywords (one per line or comma-separated)</label>
+      <textarea id="lapNewKeywords" class="lap-modal-textarea" placeholder="reschedule, move my appointment, change the time, different day"></textarea>
+    </div>
+
+    <div class="lap-modal-field">
+      <label class="lap-modal-label" for="lapNewClosedQ">Closed Question <span style="color:var(--text-xs);font-weight:400;">(what the agent will say)</span></label>
+      <textarea id="lapNewClosedQ" class="lap-modal-textarea" placeholder='e.g. "Of course — would you like to reschedule for a different day or time?"'></textarea>
+    </div>
+
+    <div class="lap-modal-hold-section" id="lapModalHoldSection">
+      <div style="font-size:.75rem;font-weight:700;color:#92400e;margin-bottom:10px;">⏸ Hold Settings</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label class="lap-modal-label">Max Hold (seconds)</label>
+          <input type="number" id="lapNewMaxHold" class="lap-modal-input" value="30" min="5" max="120">
+        </div>
+        <div>
+          <label class="lap-modal-label">Dead Air Check (seconds)</label>
+          <input type="number" id="lapNewDeadAir" class="lap-modal-input" value="8" min="3" max="30">
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="lap-modal-label">Check-In Prompt</label>
+        <input type="text" id="lapNewDeadAirPrompt" class="lap-modal-input" placeholder='e.g. "Take your time — let me know when you are ready."'>
+      </div>
+      <div>
+        <label class="lap-modal-label">Resume Keywords (comma-separated)</label>
+        <input type="text" id="lapNewResumeWords" class="lap-modal-input" placeholder="ready, ok, continue, go ahead, yes, let's go">
+      </div>
+    </div>
+
+    <div class="lap-modal-footer">
+      <button class="lap-modal-cancel" onclick="lapCloseAddModal()">Cancel</button>
+      <button class="lap-modal-save" onclick="lapSaveNewGroup()">Add Group</button>
+    </div>
+  </div>
+</div>
 
 <!-- ─── Toast Container ──────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>

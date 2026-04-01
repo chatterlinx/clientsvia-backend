@@ -3601,6 +3601,127 @@ router.post('/transfer-whisper/:companyId/:callSid', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 🎧 LAP HOLD LOOP — ListenerActParser hold-state poller
+// ═══════════════════════════════════════════════════════════════════════════
+// Called by Twilio Gather during an active LAP hold.
+// Each invocation checks hold state and either:
+//   a) Detects a resume keyword → clears hold, returns to normal pipeline
+//   b) Force-resumes after MAX_HOLD_CHECKINS dead-air cycles
+//   c) Detects speech (any non-resume word) → treat as resume signal
+//   d) Timeout / dead air → increment check-in, play prompt, loop back
+//
+// Wire: LAP gate (v2-agent-respond) sets hold state → this route loops →
+//       resume → v2-agent-respond continues booking normally.
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
+  const { companyId }   = req.params;
+  const callSid         = decodeURIComponent(req.params.callSid);
+  const speechResult    = (req.body.SpeechResult || '').trim();
+  const twiml           = new twilio.twiml.VoiceResponse();
+  const LAPService      = require('../services/engine/lap/LAPService');
+  const resumeToUrl     = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyId}`;
+  const holdLoopUrl     = `${getSecureBaseUrl(req)}/api/twilio/lap-hold-loop/${companyId}/${encodeURIComponent(callSid)}`;
+
+  try {
+    // ── 1. Load hold state ─────────────────────────────────────────────────
+    const holdState = await LAPService.getHoldState(companyId, callSid);
+
+    if (!holdState) {
+      // No hold state — safety fallback: redirect straight to normal pipeline
+      logger.warn('[LAP HOLD] No hold state found — resuming normally', {
+        companyId, callSid: callSid?.slice(-8)
+      });
+      const fallbackGather = twiml.gather({
+        input:              'speech',
+        action:             resumeToUrl,
+        method:             'POST',
+        actionOnEmptyResult: true,
+        timeout:            7,
+        speechTimeout:      '1.5',
+        speechModel:        'phone_call',
+      });
+      fallbackGather.pause({ length: 1 });
+      return res.type('text/xml').send(twiml.toString());
+    }
+
+    const hc            = holdState.holdConfig || {};
+    const checkInCount  = holdState.checkInCount || 0;
+    const resumeWords   = (hc.resumeKeywords || []).map(w => w.toLowerCase().trim());
+    const maxCheckins   = LAPService.MAX_HOLD_CHECKINS || 3;
+
+    // ── 2. Detect resume condition ─────────────────────────────────────────
+    const speechLower   = speechResult.toLowerCase();
+    const hasResumeWord = resumeWords.some(w => speechLower.includes(w));
+    const hasSpeech     = speechResult.length > 0;
+    const forceResume   = checkInCount >= maxCheckins;
+
+    if (hasResumeWord || hasSpeech || forceResume) {
+      // ── RESUME: clear hold state, hand back to normal pipeline ─────────
+      await LAPService.clearHoldState(companyId, callSid);
+
+      const reason = forceResume ? 'max_checkins' : hasResumeWord ? 'resume_word' : 'speech_detected';
+      logger.info('[LAP HOLD] ✅ Resuming call', {
+        companyId, callSid: callSid?.slice(-8), reason, checkInCount
+      });
+
+      twiml.say(escapeTwiML("Great — I'm ready when you are."));
+      const resumeGather = twiml.gather({
+        input:              'speech',
+        action:             resumeToUrl,
+        method:             'POST',
+        actionOnEmptyResult: true,
+        timeout:            7,
+        speechTimeout:      '1.5',
+        speechModel:        'phone_call',
+      });
+      resumeGather.pause({ length: 1 });
+      return res.type('text/xml').send(twiml.toString());
+    }
+
+    // ── 3. Dead air / timeout — play check-in prompt, loop back ───────────
+    const newCount = await LAPService.incrementHoldCheckIn(companyId, callSid);
+    const prompt   = (hc.deadAirPrompt || '').trim()
+                     || 'Take your time — let me know when you are ready to continue.';
+
+    logger.info('[LAP HOLD] Dead air check-in', {
+      companyId, callSid: callSid?.slice(-8), checkInCount: newCount
+    });
+
+    twiml.say(escapeTwiML(prompt));
+    const loopGather = twiml.gather({
+      input:              'speech',
+      action:             holdLoopUrl,
+      method:             'POST',
+      actionOnEmptyResult: true,
+      timeout:            hc.deadAirCheckSeconds || 8,
+      speechTimeout:      '1.5',
+      speechModel:        'phone_call',
+    });
+    loopGather.pause({ length: 1 });
+
+  } catch (err) {
+    // Graceful degrade on any error — resume the call
+    logger.warn('[LAP HOLD] Error — force resuming', {
+      companyId, callSid: callSid?.slice(-8), error: err.message
+    });
+    await LAPService.clearHoldState(companyId, callSid).catch(() => {});
+    twiml.say(escapeTwiML("Sorry about that — let's continue."));
+    const errGather = twiml.gather({
+      input:              'speech',
+      action:             resumeToUrl,
+      method:             'POST',
+      actionOnEmptyResult: true,
+      timeout:            7,
+      speechTimeout:      '1.5',
+      speechModel:        'phone_call',
+    });
+    errGather.pause({ length: 1 });
+  }
+
+  res.type('text/xml').send(twiml.toString());
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // V129: BRIDGE CONTINUATION ENDPOINT (TWO-PHASE TWIML)
 // ═══════════════════════════════════════════════════════════════════════════
 // Used only when /v2-agent-respond returns bridge TwiML early.
@@ -4940,6 +5061,109 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           cacheCleared: hasCached  // V124: proves cache was cleared to prevent cross-turn reuse
         }
       }).catch(() => {});
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🎧 LAP GATE — ListenerActParser
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Fires on EVERY turn, EVERY objective state, before ConversationEngine,
+    // KC, and BookingLogicEngine. Detects attention signals (connection distress,
+    // hold requests, repeat requests) and returns recovery TwiML immediately.
+    //
+    // System keywords:  globalHub.lapGroups  (admin-managed, all companies)
+    // Custom keywords:  company.lapConfig.groups[n].customKeywords
+    // Effective match:  system ∪ custom  (~0ms Redis lookup)
+    //
+    // If no match → falls through to normal pipeline, zero overhead.
+    // Any error     → graceful degrade, call continues normally.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (speechResult && company?.lapConfig?.enabled !== false) {
+      try {
+        const LAPService = require('../services/engine/lap/LAPService');
+        const lapMatch   = await LAPService.match(companyID, speechResult);
+
+        if (lapMatch?.matched) {
+          const lapTwiml    = new twilio.twiml.VoiceResponse();
+          const lapActionUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`;
+
+          // ── action: hold — play hold message, enter hold loop ───────────────
+          if (lapMatch.action === 'hold' && lapMatch.holdConfig) {
+            const hc = lapMatch.holdConfig;
+            const holdLoopUrl = `${getSecureBaseUrl(req)}/api/twilio/lap-hold-loop/${companyID}/${encodeURIComponent(callSid)}`;
+
+            // Persist hold state so the loop route knows where to return
+            await LAPService.setHoldState(companyID, callSid, {
+              actionUrl:   lapActionUrl,
+              holdConfig:  hc,
+            });
+
+            if (lapMatch.closedQuestion) lapTwiml.say(escapeTwiML(lapMatch.closedQuestion));
+            const holdGather = lapTwiml.gather({
+              input:              'speech',
+              action:             holdLoopUrl,
+              method:             'POST',
+              actionOnEmptyResult: true,
+              timeout:            hc.deadAirCheckSeconds || 8,
+              speechTimeout:      '1.5',
+              speechModel:        'phone_call',
+            });
+            holdGather.pause({ length: 1 });  // brief silence while waiting
+
+          // ── action: repeat_last — re-read last agent sentence ───────────────
+          } else if (lapMatch.action === 'repeat_last') {
+            let lastText = null;
+            try {
+              const CallSummary = require('../models/CallSummary');
+              const cs = await CallSummary.findOne({ twilioSid: callSid })
+                .select('liveProgress.lastResponse')
+                .lean();
+              lastText = cs?.liveProgress?.lastResponse?.trim() || null;
+            } catch (_e) { /* non-fatal */ }
+
+            if (lastText) {
+              lapTwiml.say(escapeTwiML(lastText));
+            } else {
+              lapTwiml.say("Let me repeat that. I didn't catch a previous response — how can I help you?");
+            }
+            const repeatGather = lapTwiml.gather({
+              input:              'speech',
+              action:             lapActionUrl,
+              method:             'POST',
+              actionOnEmptyResult: true,
+              timeout:            7,
+              speechTimeout:      '1.5',
+              speechModel:        'phone_call',
+            });
+            repeatGather.pause({ length: 1 });
+
+          // ── action: respond — play closed question, return to pipeline ───────
+          } else {
+            if (lapMatch.closedQuestion) lapTwiml.say(escapeTwiML(lapMatch.closedQuestion));
+            const respondGather = lapTwiml.gather({
+              input:              'speech',
+              action:             lapActionUrl,
+              method:             'POST',
+              actionOnEmptyResult: true,
+              timeout:            7,
+              speechTimeout:      '1.5',
+              speechModel:        'phone_call',
+            });
+            respondGather.pause({ length: 1 });
+          }
+
+          logger.info('[LAP GATE] ✅ Intercepted — returning recovery TwiML', {
+            companyId: companyID, callSid, action: lapMatch.action, group: lapMatch.name
+          });
+          twimlString = lapTwiml.toString();
+          res.type('text/xml');
+          return res.send(twimlString);
+        }
+      } catch (lapErr) {
+        // Any LAP error → graceful degrade, call continues normally
+        logger.warn('[LAP GATE] Error — graceful degrade', {
+          companyId: companyID, error: lapErr.message
+        });
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

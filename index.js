@@ -146,6 +146,7 @@ async function loadAllRoutes() {
         // 🤖 COMPANY CONFIGURATION ROUTES - AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
         routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
         routes.triageCardsRoutes = await loadRouteWithTimeout('./routes/company/triageCards', 'triageCardsRoutes'); // 🎯 Triage Cards Management (atomic source of truth)
+        routes.lapConfigRoutes   = await loadRouteWithTimeout('./routes/company/lapConfig',    'lapConfigRoutes');   // 🎧 LAP per-company config (responses, custom keywords, hold timers)
         // ☢️ NUKED Feb 2026: dynamicFlowsRoutes - V110 architecture replaces Dynamic Flows
         // routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes');
         // ☢️ NUKED Feb 2026: systemSnapshotRoutes - Flow Tree visualization removed
@@ -264,6 +265,7 @@ async function loadAllRoutes() {
         routes.greetingsRoutes = await loadRouteWithTimeout('./routes/admin/greetings', 'greetingsRoutes'); // 🎙️ Greetings (Call Start + Greeting Interceptor)
         routes.globalHubRoutes = await loadRouteWithTimeout('./routes/admin/globalHub', 'globalHubRoutes'); // 🌐 Global Hub (cross-tenant shared resources)
         routes.globalShareRoutes = await loadRouteWithTimeout('./routes/admin/globalshare', 'globalShareRoutes'); // 🌐 GlobalShare (secure name dictionaries gateway)
+        routes.lapGroupsRoutes   = await loadRouteWithTimeout('./routes/admin/lapGroups',   'lapGroupsRoutes');   // 🎧 LAP global keyword groups (admin-managed system keywords)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
         routes.v111HealthRoutes = await loadRouteWithTimeout('./routes/admin/v111Health', 'v111HealthRoutes'); // 🩺 V111 Health Check API
@@ -638,6 +640,7 @@ function registerRoutes(routes) {
     // 🗑️ DELETED: All AI Agent Logic route registrations (tab removed)
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
     app.use('/api/company/:companyId/triage-cards', routes.triageCardsRoutes); // V2: Triage Cards Management (atomic source of truth)
+    app.use('/api/company/:companyId/lap-config',   routes.lapConfigRoutes);   // 🎧 LAP per-company config (responses, custom keywords, hold timers)
     // ☢️ NUKED Feb 2026: /api/company/:companyId/dynamic-flows - V110 architecture replaces Dynamic Flows
     // app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes);
     // ☢️ NUKED Feb 2026: /api/company/:companyId/system-snapshot - Flow Tree visualization removed
@@ -712,7 +715,8 @@ function registerRoutes(routes) {
 
     app.use('/api/admin/agent2', routes.greetingsRoutes); // 🎙️ Greetings (Call Start + Greeting Interceptor)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
-    app.use('/api/admin/globalshare', routes.globalShareRoutes); // 🌐 GlobalShare (secure name dictionaries gateway)
+    app.use('/api/admin/globalshare', routes.globalShareRoutes);  // 🌐 GlobalShare (secure name dictionaries gateway)
+    app.use('/api/admin/globalshare/lap-groups', routes.lapGroupsRoutes); // 🎧 LAP global keyword groups
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
     app.use('/api/admin/v111', routes.v111HealthRoutes); // 🩺 V111 Health Check API

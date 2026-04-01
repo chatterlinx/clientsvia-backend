@@ -1021,7 +1021,33 @@ const adminSettingsSchema = new mongoose.Schema({
             // Global timestamp for the last update to ANY signal group
             lastUpdatedAt:  { type: Date,   default: null },
             lastUpdatedBy:  { type: String, default: null }
-        }
+        },
+
+        // ────────────────────────────────────────────────────────────────────
+        // LAP Keyword Groups (ListenerActParser)
+        // ────────────────────────────────────────────────────────────────────
+        // System-level keyword groups inherited by ALL companies.
+        // Companies add their own keywords on top — system keywords are never
+        // modified by company-level saves.
+        //
+        // Three built-in groups (seeded via scripts/seed-lap-groups.js):
+        //   connection_distress — "hello", "are you there" → responds
+        //   hold_request        — "wait", "hold on"       → hold loop
+        //   repeat_request      — "what", "come again"   → repeat last
+        //
+        // Schema per group:
+        //   { id, name, systemKeywords[], defaultClosedQuestion,
+        //     action: 'respond'|'hold'|'repeat_last',
+        //     defaultHoldConfig: { maxHoldSeconds, deadAirCheckSeconds,
+        //                          deadAirPrompt, resumeKeywords[] } }
+        // ────────────────────────────────────────────────────────────────────
+        lapGroups: {
+            type:        Schema.Types.Mixed,
+            default:     [],
+            description: 'LAP system keyword groups — global, inherited by all companies'
+        },
+        lapGroupsUpdatedAt: { type: Date,   default: null },
+        lapGroupsUpdatedBy: { type: String, default: null }
     },
     
     // Metadata

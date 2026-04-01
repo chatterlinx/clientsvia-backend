@@ -124,6 +124,7 @@
       bindEvents();
       loadStats();
       loadSignals();
+      loadLapGroups();
       console.log('[GlobalShare] Initialization complete');
     } catch (err) {
       console.error('[GlobalShare] Initialization error:', err);
@@ -573,6 +574,141 @@
 
   // Expose for HTML onclick
   window.testSignalPhrase = testSignalPhrase;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LAP KEYWORD GROUPS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // In-memory: { groupId → keywords[] }
+  const _lapState = {};
+
+  const LAP_ACTION_LABELS = {
+    respond:     'RESPOND',
+    hold:        'HOLD',
+    repeat_last: 'REPEAT',
+  };
+
+  async function loadLapGroups() {
+    const grid = document.getElementById('lap-groups-grid');
+    if (!grid) return;
+    try {
+      const data = await AgentConsoleAuth.apiFetch('/api/admin/globalshare/lap-groups');
+      const groups = data?.groups || [];
+      groups.forEach(g => { _lapState[g.id] = [...(g.systemKeywords || [])]; });
+      _renderLapGrid(groups);
+    } catch (err) {
+      console.error('[GlobalShare] Failed to load LAP groups:', err);
+      if (grid) grid.innerHTML = '<p style="color:#dc2626;font-size:13px;">Failed to load LAP groups.</p>';
+    }
+  }
+
+  function _renderLapGrid(groups) {
+    const grid = document.getElementById('lap-groups-grid');
+    if (!grid) return;
+    if (!groups.length) {
+      grid.innerHTML = '<p style="color:#94a3b8;font-size:13px;">No LAP groups found. Run the seed script to initialise the 3 default groups.</p>';
+      return;
+    }
+    grid.innerHTML = groups.map(g => _renderLapGroup(g)).join('');
+  }
+
+  function _renderLapGroup(g) {
+    const keywords = _lapState[g.id] || [];
+    const actionClass = g.action || 'respond';
+    const actionLabel = LAP_ACTION_LABELS[g.action] || g.action.toUpperCase();
+
+    const tags = keywords.map((kw, i) => `
+      <span class="lap-tag">
+        ${escapeHtml(kw)}
+        <span class="lap-tag-remove" onclick="_removeLapKeyword('${g.id}', ${i})" title="Remove">×</span>
+      </span>
+    `).join('');
+
+    return `
+      <div class="lap-group" id="lap-group-${g.id}">
+        <div class="lap-group-header">
+          <span class="lap-group-title">${escapeHtml(g.name)}</span>
+          <span class="lap-action-badge ${actionClass}">${actionLabel}</span>
+          <span class="lap-group-count" id="lap-count-${g.id}">${keywords.length} keywords</span>
+        </div>
+        <div class="lap-group-body">
+          <div class="lap-keywords-label">System Keywords (global — all companies inherit)</div>
+          <div class="lap-tags" id="lap-tags-${g.id}">
+            ${tags || '<span style="color:#94a3b8;font-size:12px;">No keywords yet</span>'}
+          </div>
+          <div class="lap-add-row">
+            <input type="text" class="lap-add-input" id="lap-input-${g.id}"
+              placeholder='Add a keyword or phrase…'
+              onkeypress="if(event.key==='Enter') _addLapKeyword('${g.id}')">
+            <button class="lap-add-btn" onclick="_addLapKeyword('${g.id}')">+ Add</button>
+          </div>
+          <button class="lap-save-btn" id="lap-save-${g.id}"
+            onclick="_saveLapGroup('${g.id}')">
+            💾 Save Keywords
+          </button>
+          <p class="lap-inherited-note">Companies extend these with their own words in UAP → LAP tab. System keywords here apply to everyone.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function _addLapKeyword(groupId) {
+    const input = document.getElementById(`lap-input-${groupId}`);
+    if (!input) return;
+    const val = input.value.trim().toLowerCase();
+    if (!val) return;
+    if (!_lapState[groupId]) _lapState[groupId] = [];
+    if (_lapState[groupId].includes(val)) { input.value = ''; return; }
+    _lapState[groupId].push(val);
+    input.value = '';
+    _refreshLapGroup(groupId);
+  }
+
+  function _removeLapKeyword(groupId, index) {
+    if (!_lapState[groupId]) return;
+    _lapState[groupId].splice(index, 1);
+    _refreshLapGroup(groupId);
+  }
+
+  function _refreshLapGroup(groupId) {
+    const el = document.getElementById(`lap-group-${groupId}`);
+    if (!el) return;
+    const keywords = _lapState[groupId] || [];
+    // Re-render tags + count only (avoid full replace to keep input focus)
+    const tagsEl  = document.getElementById(`lap-tags-${groupId}`);
+    const countEl = document.getElementById(`lap-count-${groupId}`);
+    if (tagsEl) {
+      tagsEl.innerHTML = keywords.map((kw, i) => `
+        <span class="lap-tag">
+          ${escapeHtml(kw)}
+          <span class="lap-tag-remove" onclick="_removeLapKeyword('${groupId}', ${i})" title="Remove">×</span>
+        </span>
+      `).join('') || '<span style="color:#94a3b8;font-size:12px;">No keywords yet</span>';
+    }
+    if (countEl) countEl.textContent = `${keywords.length} keywords`;
+  }
+
+  async function _saveLapGroup(groupId) {
+    const btn = document.getElementById(`lap-save-${groupId}`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      await AgentConsoleAuth.apiFetch(
+        `/api/admin/globalshare/lap-groups/${groupId}/keywords`,
+        { method: 'PATCH', body: { keywords: _lapState[groupId] || [] } }
+      );
+      console.log(`[GlobalShare] LAP group saved: ${groupId}`);
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Saved'; setTimeout(() => { if (btn) btn.textContent = '💾 Save Keywords'; }, 2000); }
+    } catch (err) {
+      console.error('[GlobalShare] Failed to save LAP group:', err);
+      alert('Save failed: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save Keywords'; }
+    }
+  }
+
+  // Expose for HTML onclick handlers
+  window._addLapKeyword    = _addLapKeyword;
+  window._removeLapKeyword = _removeLapKeyword;
+  window._saveLapGroup     = _saveLapGroup;
 
   // ══════════════════════════════════════════════════════════════════════════
   // UTILITIES
