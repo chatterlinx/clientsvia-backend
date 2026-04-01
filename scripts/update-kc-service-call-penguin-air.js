@@ -20,10 +20,10 @@
  *   node scripts/update-kc-service-call-penguin-air.js
  */
 
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient } = require('mongodb');
 
-const COMPANY_ID   = '68e3f77a9d623b8058c700c4';   // Penguin Air
-const CONTAINER_ID = '69ca7c7ae8bb1e062b2dbc54';   // "Service Call"
+const COMPANY_ID     = '68e3f77a9d623b8058c700c4';   // Penguin Air
+const CONTAINER_TITLE = 'Service Call';                // match by title — no hardcoded _id
 
 async function run() {
   const uri    = process.env.MONGODB_URI;
@@ -36,9 +36,17 @@ async function run() {
   const db   = client.db('clientsvia');
   const col  = db.collection('companyKnowledgeContainers');
 
-  // ── 1. Load the current container ──────────────────────────────────────────
-  const current = await col.findOne({ _id: new ObjectId(CONTAINER_ID) });
-  if (!current) throw new Error(`Container ${CONTAINER_ID} not found`);
+  // ── 1. Load the current container (find by companyId + title) ──────────────
+  const current = await col.findOne({
+    companyId: COMPANY_ID,
+    title:     { $regex: new RegExp(`^${CONTAINER_TITLE}$`, 'i') },
+  });
+  if (!current) {
+    // Show all containers to help diagnose
+    const all = await col.find({ companyId: COMPANY_ID }).project({ _id: 1, title: 1 }).toArray();
+    console.log('Available containers:', JSON.stringify(all, null, 2));
+    throw new Error(`Container "${CONTAINER_TITLE}" not found for companyId ${COMPANY_ID}`);
+  }
   console.log(`📦  Found container: "${current.title}" (${current.sections?.length || 0} sections)`);
 
   // ── 2. Build updated keywords ────────────────────────────────────────────────
@@ -151,7 +159,7 @@ async function run() {
 
   // ── 6. Apply the update ─────────────────────────────────────────────────────
   const result = await col.updateOne(
-    { _id: new ObjectId(CONTAINER_ID) },
+    { _id: current._id },
     {
       $set: {
         keywords:       mergedKeywords,
@@ -171,7 +179,7 @@ async function run() {
   }
 
   // ── 7. Verify ───────────────────────────────────────────────────────────────
-  const updated = await col.findOne({ _id: new ObjectId(CONTAINER_ID) });
+  const updated = await col.findOne({ _id: current._id });
   console.log('\n📋  Post-update summary:');
   console.log(`   title:          ${updated.title}`);
   console.log(`   keywords count: ${updated.keywords?.length || 0}`);
