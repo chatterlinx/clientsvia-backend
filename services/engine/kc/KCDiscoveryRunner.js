@@ -108,6 +108,42 @@ function _clip(str, maxLen = 80) {
 }
 
 /**
+ * _buildContextBrief — Build the warm-transfer agent whisper brief.
+ *
+ * Spoken to the RECEIVING agent before the caller is connected (Twilio whisper).
+ * Uses the destination's summaryTemplate if set; falls back to a compact default.
+ *
+ * Template variables: {callerName}, {callReason}, {urgency}
+ *
+ * @param {Object|null} dnotes  — discoveryNotes (may be null on first turn)
+ * @param {Object}      dest    — TransferDestination lean object
+ * @param {string}      urgency — 'high' | 'normal' from KCTransferIntentDetector
+ * @returns {string}
+ */
+function _buildContextBrief(dnotes, dest, urgency) {
+  const t           = dnotes?.temp || {};
+  const callerName  = [t.firstName, t.lastName].filter(Boolean).join(' ') || null;
+  const callReason  = t.callReason || dnotes?.callReason || null;
+  const urgencyStr  = urgency || t.urgency || 'normal';
+  const template    = dest?.transferContext?.summaryTemplate || '';
+
+  if (template) {
+    return template
+      .replace(/\{callerName\}/g, callerName || 'the caller')
+      .replace(/\{callReason\}/g,  callReason  || 'unspecified reason')
+      .replace(/\{urgency\}/g,     urgencyStr)
+      .trim();
+  }
+
+  // Default compact brief
+  const parts = ['Incoming transfer'];
+  if (callerName)          parts.push(`from ${callerName}`);
+  if (callReason)          parts.push(`— ${callReason}`);
+  if (urgencyStr === 'high') parts.push('(urgent)');
+  return parts.join(' ') + '.';
+}
+
+/**
  * Build a safe _123rp metadata object for the Call Review Console.
  *
  * IMPORTANT: `tier` must be NUMERIC (1, 1.5, 2, 3) to match ResponseProtocol
@@ -283,10 +319,11 @@ class KCDiscoveryRunner {
         const TransferPolicy      = require('../../../models/TransferPolicy');
         const TransferDestination = require('../../../models/TransferDestination');
 
-        // ── Load policy + active destinations (Redis-cached, ~1ms) ──────────
-        const [policy, destinations] = await Promise.all([
+        // ── Load policy + active destinations + discoveryNotes (all Redis-cached) ──
+        const [policy, destinations, dnotes] = await Promise.all([
           TransferPolicy.getForCompany(companyId).catch(() => null),
           TransferDestination.findActiveForCompany(companyId).catch(() => []),
+          DiscoveryNotesService.load(companyId, callSid).catch(() => null),
         ]);
 
         // ── LEVEL 1: Emergency override — block all transfers ────────────────
@@ -384,6 +421,8 @@ class KCDiscoveryRunner {
             urgency:       hint.urgency || 'normal',
             department:    hint.department || bestDest.departmentTag || null,
             personName:    hint.personName || null,
+            // Warm-transfer agent whisper brief — built from discoveryNotes + summaryTemplate
+            contextBrief:  _buildContextBrief(dnotes, bestDest, hint.urgency),
             // Overflow config — v2twilio uses this if the dial fails
             overflowAction:  bestDest.overflow?.action || policy?.defaultOverflowAction || 'voicemail',
             overflowMessage: bestDest.overflow?.message || policy?.defaultOverflowMessage || null,
@@ -393,11 +432,17 @@ class KCDiscoveryRunner {
           nextState.agent2.discovery    = nextState.agent2.discovery || {};
           nextState.agent2.discovery.lastPath = PATH.KC_TRANSFER_INTENT;
 
-          // ── discoveryNotes: mark objective as TRANSFER ────────────────────
+          // ── discoveryNotes: mark TRANSFER + lock in staffMentioned ───────────
           _writeDiscoveryNotes(companyId, callSid, {
             objective:  'TRANSFER',
             turnNumber: turn ?? 0,
             ...(callerName ? { entities: { firstName: callerName } } : {}),
+            temp: {
+              // Named-person transfers: "I want Mike" → staffMentioned persists for
+              // callHistory, relationship tracking, and CallerRecognition next call.
+              staffMentioned: hint.personName
+                || (bestDest.type === 'agent' ? bestDest.name : null),
+            },
           }).catch(() => {});
 
           // Clear any active SPFUQ — transfer intent ends the topic anchor

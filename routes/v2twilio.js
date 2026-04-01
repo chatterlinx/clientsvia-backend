@@ -3567,6 +3567,40 @@ router.post('/voice/:companyID', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TRANSFER WHISPER ENDPOINT
+// ═══════════════════════════════════════════════════════════════════════════
+// Called by Twilio's <Number url="..."> whisper attribute on warm transfers.
+// Twilio dials the destination, and BEFORE connecting the caller it calls
+// this URL and plays the response as a whisper to the RECEIVING agent only.
+//
+// The context brief is written to Redis by GATE 0.5 (KCDiscoveryRunner)
+// at the moment of transfer intent detection, keyed by callSid.
+//
+// Redis key: transfer-brief:{companyId}:{callSid}  TTL: 5 min
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/transfer-whisper/:companyId/:callSid', async (req, res) => {
+  const { companyId, callSid } = req.params;
+  const VoiceResponse = require('twilio').twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  try {
+    const redis = await getSharedRedisClient().catch(() => null);
+    const brief = redis
+      ? await redis.get(`transfer-brief:${companyId}:${decodeURIComponent(callSid)}`)
+      : null;
+
+    twiml.say(brief || 'Incoming transferred call.');
+    logger.info('[V2TWILIO] Transfer whisper served', {
+      companyId, callSid: callSid?.slice(-8), hasCustomBrief: !!brief,
+    });
+  } catch (_e) {
+    twiml.say('Incoming transferred call.');
+  }
+
+  res.type('text/xml').send(twiml.toString());
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // V129: BRIDGE CONTINUATION ENDPOINT (TWO-PHASE TWIML)
 // ═══════════════════════════════════════════════════════════════════════════
 // Used only when /v2-agent-respond returns bridge TwiML early.
@@ -6363,6 +6397,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             destName: transferMeta.name,
             mode: transferMode,
             hasPhone: true,
+            hasContextBrief: !!transferMeta.contextBrief,
           });
 
           // Build caller ID: use the company's Twilio number (From on the inbound
@@ -6377,7 +6412,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             ...(dialCallerId ? { callerId: dialCallerId } : {}),
           };
           const dialVerb = twiml.dial(dialOpts);
-          dialVerb.number(transferPhone);
+
+          // ── Warm transfer: whisper context brief to receiving agent ──────────
+          // For warm transfers with a contextBrief, store the brief in Redis and
+          // attach a whisper URL to <Number>. Twilio calls the URL and plays the
+          // response to the RECEIVING agent before connecting the caller.
+          // Cold transfers skip this — agent is bridged directly with no brief.
+          if (transferMode === 'warm' && transferMeta.contextBrief) {
+            getSharedRedisClient()
+              .then(r => r?.set(
+                `transfer-brief:${companyID}:${callSid}`,
+                transferMeta.contextBrief,
+                'EX', 300
+              ))
+              .catch(() => {});
+
+            const whisperUrl = `${getSecureBaseUrl(req)}/api/twilio/transfer-whisper/${companyID}/${encodeURIComponent(callSid)}`;
+            dialVerb.number({ url: whisperUrl }, transferPhone);
+          } else {
+            dialVerb.number(transferPhone);
+          }
 
           if (CallLogger && callSid) {
             CallLogger.logEvent({
