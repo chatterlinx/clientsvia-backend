@@ -597,7 +597,17 @@ class CallRuntime {
         try {
             state = StateStore.load(callState);
 
-            
+            // ── discoveryNotes init gate (turn 0 / turn 1 only) ───────────────────────
+            // Ensures the Redis key exists before DiscoveryWire or KCDiscoveryRunner
+            // run. init() is idempotent:
+            //   • pre-warmed key → preserves CallerRecognition data, pushes MongoDB stub
+            //   • already-init'd key → no-op (returns existing, late stub push if needed)
+            //   • missing key → creates empty record
+            // Fire-and-forget — a Redis miss here is non-fatal; KC has its own fallback.
+            if (turn <= 1 && DiscoveryNotesService && callSid && companyId) {
+                DiscoveryNotesService.init(companyId, callSid, null).catch(() => {});
+            }
+
             // ═══════════════════════════════════════════════════════════════════════════
             // S1: RUNTIME OWNERSHIP
             // ═══════════════════════════════════════════════════════════════════════════

@@ -186,27 +186,51 @@ async function init(companyId, callSid, customerId = null) {
     // CallerRecognitionService.preWarm() may have already written notes to Redis
     // (fires at the inbound voice webhook before turn 1). If so, preserve them.
     // Only update customerId if it wasn't known at pre-warm time.
+    //
+    // init() is IDEMPOTENT — safe to call on any turn:
+    //   • _preWarmed=true  → preserve + push stub using notes' own customerId
+    //   • already init'd   → return without overwriting (late stub push if needed)
+    //   • missing key      → create empty notes
     const existing = await redis.get(key);
     if (existing) {
       try {
         const existingNotes = JSON.parse(existing);
+
+        // ── Pre-warmed path ─────────────────────────────────────────────────
         if (existingNotes?._preWarmed === true) {
-          if (customerId && !existingNotes.customerId) {
-            existingNotes.customerId = String(customerId);
+          // Use argument customerId OR the one CallerRecognition already embedded
+          const effectiveCid = customerId || existingNotes.customerId || null;
+          if (effectiveCid && !existingNotes.customerId) {
+            existingNotes.customerId = String(effectiveCid);
             await redis.set(key, JSON.stringify(existingNotes), { EX: CONFIG.REDIS_TTL_SECONDS });
           } else {
             await redis.expire(key, CONFIG.REDIS_TTL_SECONDS); // refresh TTL at call start
           }
-          if (customerId && !existingNotes._mongoStubPushed) {
+          // Push MongoDB stub using notes' own customerId (covers the case where
+          // init() is called with null but CallerRecognition embedded the id)
+          if (effectiveCid && !existingNotes._mongoStubPushed) {
             existingNotes._mongoStubPushed = true;
             _initMongoStubFireAndForget(existingNotes);
           }
           logger.info('[DISCOVERY NOTES] ✅ Pre-warmed notes preserved (CallerRecognition)', {
             callSid, companyId: String(companyId),
-            customerId: customerId || existingNotes.customerId
+            customerId: effectiveCid
           });
           return existingNotes;
         }
+
+        // ── Already initialised (not pre-warmed) — idempotent return ────────
+        // Do NOT overwrite. Late stub push if we now have a customerId.
+        const effectiveCid = customerId || existingNotes.customerId || null;
+        if (effectiveCid && !existingNotes._mongoStubPushed) {
+          existingNotes._mongoStubPushed = true;
+          if (!existingNotes.customerId) existingNotes.customerId = String(effectiveCid);
+          await redis.set(key, JSON.stringify(existingNotes), { EX: CONFIG.REDIS_TTL_SECONDS });
+          _initMongoStubFireAndForget(existingNotes);
+          logger.info('[DISCOVERY NOTES] ✅ Late MongoDB stub push', { callSid });
+        }
+        return existingNotes;
+
       } catch (_e) { /* bad JSON → fall through to fresh init */ }
     }
 
