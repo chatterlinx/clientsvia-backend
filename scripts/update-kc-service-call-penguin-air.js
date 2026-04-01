@@ -34,7 +34,7 @@ async function run() {
   console.log('✅  Connected to MongoDB');
 
   const db   = client.db('clientsvia');
-  const col  = db.collection('companyknowledgecontainers');
+  const col  = db.collection('companyKnowledgeContainers');
 
   // ── 1. Load the current container ──────────────────────────────────────────
   const current = await col.findOne({ _id: new ObjectId(CONTAINER_ID) });
