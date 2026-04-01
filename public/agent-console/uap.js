@@ -803,4 +803,92 @@
   window.lapToggleModalHoldSection = lapToggleModalHoldSection;
   window.lapSaveNewGroup       = lapSaveNewGroup;
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // ⏱ TIMINGS TAB — Speech Detection Settings
+  // ════════════════════════════════════════════════════════════════════════════
+  // Loads: GET /api/agent-console/:companyId/agent2/config  → pipeline.speechDetection
+  // Saves: PATCH /api/agent-console/:companyId/agent2/config { speechDetection: {...} }
+  // ════════════════════════════════════════════════════════════════════════════
+
+  async function _loadTimings() {
+    if (!companyId) return;
+    try {
+      const res = await fetch(`/api/agent-console/${companyId}/agent2/config`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const sd   = data?.pipeline?.speechDetection || {};
+
+      const speechTimeout = sd.speechTimeout ?? 3;
+      const initialTimeout = sd.initialTimeout ?? 7;
+      const bargeIn        = sd.bargeIn ?? false;
+      const speechModel    = sd.speechModel || 'phone_call';
+
+      const stEl  = document.getElementById('tdSpeechTimeout');
+      const stVal = document.getElementById('tdSpeechTimeoutVal');
+      const itEl  = document.getElementById('tdInitialTimeout');
+      const itVal = document.getElementById('tdInitialTimeoutVal');
+      const biEl  = document.getElementById('tdBargeIn');
+      const biLbl = document.getElementById('tdBargeInLabel');
+      const smEl  = document.getElementById('tdSpeechModel');
+
+      if (stEl)  { stEl.value  = speechTimeout;  }
+      if (stVal) { stVal.textContent = speechTimeout + 's'; }
+      if (itEl)  { itEl.value  = initialTimeout;  }
+      if (itVal) { itVal.textContent = initialTimeout + 's'; }
+      if (biEl)  { biEl.checked = bargeIn; }
+      if (biLbl) { biLbl.textContent = bargeIn ? 'On' : 'Off'; }
+      if (smEl)  { smEl.value = speechModel; }
+
+    } catch (err) {
+      console.warn('[Timings] load failed', err);
+    }
+  }
+
+  async function timingsSave() {
+    if (!companyId) return;
+    const stEl = document.getElementById('tdSpeechTimeout');
+    const itEl = document.getElementById('tdInitialTimeout');
+    const biEl = document.getElementById('tdBargeIn');
+    const smEl = document.getElementById('tdSpeechModel');
+    const biLbl = document.getElementById('tdBargeInLabel');
+
+    const speechDetection = {
+      speechTimeout:  parseFloat(stEl?.value ?? 3),
+      initialTimeout: parseInt(itEl?.value ?? 7, 10),
+      bargeIn:        biEl?.checked ?? false,
+      speechModel:    smEl?.value || 'phone_call',
+    };
+
+    // Update barge-in label immediately
+    if (biLbl) biLbl.textContent = speechDetection.bargeIn ? 'On' : 'Off';
+
+    try {
+      const res = await fetch(`/api/agent-console/${companyId}/agent2/config`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body:    JSON.stringify({ speechDetection }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      _showToast('✅ Timings saved', 'success');
+    } catch (err) {
+      console.error('[Timings] save failed', err);
+      _showToast('❌ Failed to save timings', 'error');
+    }
+  }
+
+  // Load timings when tab becomes active (lazy load)
+  const _timingsOrigInitTabs = typeof window._timingsTabHooked !== 'undefined';
+  if (!_timingsOrigInitTabs) {
+    window._timingsTabHooked = true;
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab-btn[data-tab="timings"]');
+      if (btn) _loadTimings();
+    });
+  }
+
+  // Expose for inline onclick
+  window.timingsSave = timingsSave;
+
 })();

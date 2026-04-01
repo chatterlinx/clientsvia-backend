@@ -607,6 +607,59 @@
     .lap-modal-save:hover { background: #d97706; }
     .lap-modal-hold-section { display: none; margin-top: 12px; padding: 12px; background: #fffbeb; border-radius: var(--radius-xs); border: 1px solid #fde68a; }
     .lap-modal-hold-section.visible { display: block; }
+
+    /* ── Timings Tab ─────────────────────────────────────────────────────── */
+    .timings-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .timings-card-header {
+      display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px;
+    }
+    .timings-card-icon {
+      flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+    }
+    .timings-card-title { font-size: .938rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+    .timings-card-sub   { font-size: .813rem; color: var(--text-xs); line-height: 1.5; }
+    .timings-row        { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+    .timings-label      { font-size: .813rem; color: var(--text-secondary); white-space: nowrap; }
+    .timings-slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end; }
+    .timings-slider {
+      flex: 1; max-width: 260px; height: 4px; accent-color: #0ea5e9; cursor: pointer;
+    }
+    .timings-slider-val {
+      min-width: 36px; text-align: right; font-size: .875rem; font-weight: 600;
+      color: #0ea5e9; font-variant-numeric: tabular-nums;
+    }
+    .timings-toggle-wrap  { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .timings-toggle-track {
+      position: relative; width: 40px; height: 22px;
+      background: var(--border); border-radius: 11px; transition: background .2s;
+    }
+    #tdBargeIn:checked ~ .timings-toggle-track { background: #0ea5e9; }
+    .timings-toggle-thumb {
+      position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+      background: #fff; border-radius: 50%; transition: transform .2s;
+    }
+    #tdBargeIn:checked ~ .timings-toggle-track .timings-toggle-thumb { transform: translateX(18px); }
+    #tdBargeIn { display: none; }
+    .timings-toggle-label { font-size: .813rem; color: var(--text-xs); }
+    .timings-select {
+      font-size: .813rem; color: var(--text-primary); background: var(--card-bg);
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      padding: 6px 10px; min-width: 260px; cursor: pointer;
+    }
+    .timings-save-btn {
+      padding: 10px 28px; font-size: .875rem; font-weight: 700;
+      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer;
+    }
+    .timings-save-btn:hover { opacity: .9; }
   </style>
 </head>
 <body>
@@ -641,6 +694,9 @@
   </button>
   <button class="tab-btn" data-tab="lap">
     🎧 LAP
+  </button>
+  <button class="tab-btn" data-tab="timings">
+    ⏱ Timings
   </button>
 </nav>
 
@@ -962,6 +1018,116 @@
     </div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 6 — TIMINGS (Speech Detection Settings)
+════════════════════════════════════════════════════════════════ -->
+<section class="tab-content" id="tab-timings">
+
+  <div class="uap-hero" style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#0ea5e9 100%);">
+    <div class="uap-hero-title">Call Timings — Silence &amp; Speech Detection</div>
+    <div class="uap-hero-sub">
+      Controls how long the agent waits for silence before it responds.
+      Increase the silence timeout if the agent fires before callers finish their sentence.
+      Changes take effect on the next call.
+    </div>
+    <div class="uap-hero-meta">
+      <span class="uap-hero-chip">Per-company</span>
+      <span class="uap-hero-chip">No redeploy needed</span>
+      <span class="uap-hero-chip">Instant effect</span>
+    </div>
+  </div>
+
+  <div id="timingsBody" style="max-width:680px;margin:32px auto 0;padding:0 16px 80px;">
+
+    <!-- ── Silence Timeout ─────────────────────────────────────────────── -->
+    <div class="timings-card">
+      <div class="timings-card-header">
+        <div class="timings-card-icon" style="background:linear-gradient(135deg,#0ea5e9,#6366f1);">⏱</div>
+        <div>
+          <div class="timings-card-title">Silence Timeout</div>
+          <div class="timings-card-sub">
+            Seconds of silence after the caller stops speaking before the agent fires.
+            <strong>Default 3 s.</strong> Increase to 4–5 s if callers are getting cut off mid-sentence.
+          </div>
+        </div>
+      </div>
+      <div class="timings-row">
+        <label class="timings-label" for="tdSpeechTimeout">Wait after silence (seconds)</label>
+        <div class="timings-slider-wrap">
+          <input type="range" id="tdSpeechTimeout" class="timings-slider"
+            min="1" max="10" step="0.5" value="3"
+            oninput="document.getElementById('tdSpeechTimeoutVal').textContent=this.value+'s'">
+          <span class="timings-slider-val" id="tdSpeechTimeoutVal">3s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Initial Timeout ────────────────────────────────────────────── -->
+    <div class="timings-card">
+      <div class="timings-card-header">
+        <div class="timings-card-icon" style="background:linear-gradient(135deg,#f59e0b,#ef4444);">🎙</div>
+        <div>
+          <div class="timings-card-title">Initial Timeout</div>
+          <div class="timings-card-sub">
+            How long the agent waits for the <em>first word</em> after the greeting before timing out.
+            <strong>Default 7 s.</strong>
+          </div>
+        </div>
+      </div>
+      <div class="timings-row">
+        <label class="timings-label" for="tdInitialTimeout">Wait for first word (seconds)</label>
+        <div class="timings-slider-wrap">
+          <input type="range" id="tdInitialTimeout" class="timings-slider"
+            min="3" max="15" step="1" value="7"
+            oninput="document.getElementById('tdInitialTimeoutVal').textContent=this.value+'s'">
+          <span class="timings-slider-val" id="tdInitialTimeoutVal">7s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Barge-In + Speech Model ────────────────────────────────────── -->
+    <div class="timings-card">
+      <div class="timings-card-header">
+        <div class="timings-card-icon" style="background:linear-gradient(135deg,#10b981,#059669);">⚙️</div>
+        <div>
+          <div class="timings-card-title">Advanced Options</div>
+          <div class="timings-card-sub">Barge-in and speech recognition model.</div>
+        </div>
+      </div>
+
+      <div class="timings-row">
+        <label class="timings-label">Allow barge-in</label>
+        <label class="timings-toggle-wrap">
+          <input type="checkbox" id="tdBargeIn" onchange="timingsSave()">
+          <span class="timings-toggle-track">
+            <span class="timings-toggle-thumb"></span>
+          </span>
+          <span class="timings-toggle-label" id="tdBargeInLabel">Off</span>
+        </label>
+      </div>
+
+      <div class="timings-row" style="margin-top:14px;">
+        <label class="timings-label" for="tdSpeechModel">Speech recognition model</label>
+        <select id="tdSpeechModel" class="timings-select" onchange="timingsSave()">
+          <option value="phone_call">phone_call (recommended for phone audio)</option>
+          <option value="default">default</option>
+          <option value="enhanced">enhanced</option>
+          <option value="medical_dictation">medical_dictation</option>
+          <option value="medical_conversation">medical_conversation</option>
+          <option value="video">video</option>
+          <option value="numbers_and_commands">numbers_and_commands</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── Save Button ────────────────────────────────────────────────── -->
+    <div style="text-align:right;margin-top:8px;">
+      <button class="timings-save-btn" onclick="timingsSave()">💾 Save Timings</button>
+    </div>
+
+  </div>
+</section>
 
 <!-- ─── Toast Container ──────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>

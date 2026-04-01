@@ -5074,6 +5074,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // Custom keywords:  company.lapConfig.groups[n].customKeywords
     // Effective match:  system ∪ custom  (~0ms Redis lookup)
     //
+    // Voice: ElevenLabs (same voice settings as main pipeline). Falls back to
+    //        Twilio TTS if ElevenLabs is unavailable.
+    // Logging: Both caller + agent turns written to CallTranscriptV2 so LAP
+    //          intercepts appear in call intelligence.
+    //
     // If no match → falls through to normal pipeline, zero overhead.
     // Any error     → graceful degrade, call continues normally.
     // ═══════════════════════════════════════════════════════════════════════════
@@ -5083,8 +5088,42 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         const lapMatch   = await LAPService.match(companyID, speechResult);
 
         if (lapMatch?.matched) {
-          const lapTwiml    = new twilio.twiml.VoiceResponse();
+          const lapTwiml     = new twilio.twiml.VoiceResponse();
           const lapActionUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`;
+          let   lapResponseText = null;
+
+          // ── ElevenLabs TTS helper — synthesize text, write to disk, <Play> ──
+          // Falls back to Twilio say() if voice not configured or TTS fails.
+          const lapSayOrPlay = async (text) => {
+            if (!text) return;
+            const cleanText = cleanTextForTTS(stripMarkdown(text));
+            const _vs = company.aiAgentSettings?.voiceSettings || {};
+            if (_vs.voiceId) {
+              try {
+                const lapBuf = await synthesizeSpeech({
+                  text:                       cleanText,
+                  voiceId:                    _vs.voiceId,
+                  stability:                  _vs.stability,
+                  similarity_boost:           _vs.similarityBoost,
+                  style:                      _vs.styleExaggeration,
+                  use_speaker_boost:          _vs.speakerBoost,
+                  model_id:                   _vs.aiModel,
+                  output_format:              _vs.outputFormat,
+                  optimize_streaming_latency: _vs.streamingLatency,
+                  company,
+                });
+                const lapFname = `lap_${Date.now()}_${Math.floor(Math.random() * 9999)}.mp3`;
+                const lapFpath = path.join(__dirname, '../public/audio', lapFname);
+                await fs.promises.writeFile(lapFpath, lapBuf);
+                scheduleTempAudioDelete(lapFpath);
+                lapTwiml.play(`${getSecureBaseUrl(req)}/audio/${lapFname}`);
+                return;
+              } catch (ttsErr) {
+                logger.warn('[LAP GATE] ElevenLabs TTS failed, falling back to Twilio say', { error: ttsErr.message });
+              }
+            }
+            lapTwiml.say(escapeTwiML(cleanText));
+          };
 
           // ── action: hold — play hold message, enter hold loop ───────────────
           if (lapMatch.action === 'hold' && lapMatch.holdConfig) {
@@ -5093,19 +5132,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
             // Persist hold state so the loop route knows where to return
             await LAPService.setHoldState(companyID, callSid, {
-              actionUrl:   lapActionUrl,
-              holdConfig:  hc,
+              actionUrl:  lapActionUrl,
+              holdConfig: hc,
             });
 
-            if (lapMatch.closedQuestion) lapTwiml.say(escapeTwiML(lapMatch.closedQuestion));
+            lapResponseText = lapMatch.closedQuestion || null;
+            await lapSayOrPlay(lapMatch.closedQuestion);
             const holdGather = lapTwiml.gather({
-              input:              'speech',
-              action:             holdLoopUrl,
-              method:             'POST',
+              input:               'speech',
+              action:              holdLoopUrl,
+              method:              'POST',
               actionOnEmptyResult: true,
-              timeout:            hc.deadAirCheckSeconds || 8,
-              speechTimeout:      '1.5',
-              speechModel:        'phone_call',
+              timeout:             hc.deadAirCheckSeconds || 8,
+              speechTimeout:       '1.5',
+              speechModel:         'phone_call',
             });
             holdGather.pause({ length: 1 });  // brief silence while waiting
 
@@ -5120,39 +5160,74 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               lastText = cs?.liveProgress?.lastResponse?.trim() || null;
             } catch (_e) { /* non-fatal */ }
 
-            if (lastText) {
-              lapTwiml.say(escapeTwiML(lastText));
-            } else {
-              lapTwiml.say("Let me repeat that. I didn't catch a previous response — how can I help you?");
-            }
+            lapResponseText = lastText || "Let me repeat that. I didn't catch a previous response — how can I help you?";
+            await lapSayOrPlay(lapResponseText);
             const repeatGather = lapTwiml.gather({
-              input:              'speech',
-              action:             lapActionUrl,
-              method:             'POST',
+              input:               'speech',
+              action:              lapActionUrl,
+              method:              'POST',
               actionOnEmptyResult: true,
-              timeout:            7,
-              speechTimeout:      '1.5',
-              speechModel:        'phone_call',
+              timeout:             7,
+              speechTimeout:       '1.5',
+              speechModel:         'phone_call',
             });
             repeatGather.pause({ length: 1 });
 
           // ── action: respond — play closed question, return to pipeline ───────
           } else {
-            if (lapMatch.closedQuestion) lapTwiml.say(escapeTwiML(lapMatch.closedQuestion));
+            lapResponseText = lapMatch.closedQuestion || null;
+            await lapSayOrPlay(lapMatch.closedQuestion);
             const respondGather = lapTwiml.gather({
-              input:              'speech',
-              action:             lapActionUrl,
-              method:             'POST',
+              input:               'speech',
+              action:              lapActionUrl,
+              method:              'POST',
               actionOnEmptyResult: true,
-              timeout:            7,
-              speechTimeout:      '1.5',
-              speechModel:        'phone_call',
+              timeout:             7,
+              speechTimeout:       '1.5',
+              speechModel:         'phone_call',
             });
             respondGather.pause({ length: 1 });
           }
 
+          // ── Log both turns to call intelligence (CallTranscriptV2) ──────────
+          // Without this, LAP intercepts are invisible in the turn log.
+          try {
+            const CallTranscriptV2 = require('../models/CallTranscriptV2');
+            const lapTurnNum = (turnCountFromBody || 0) + 1;
+            await CallTranscriptV2.appendTurns(companyID, callSid, [
+              {
+                speaker:         'caller',
+                kind:            'CONVERSATION_CALLER',
+                text:            speechResult,
+                turnNumber:      lapTurnNum,
+                ts:              new Date(),
+                sourceKey:       'stt',
+                provenanceType:  'UNKNOWN',
+                provenanceLabel: 'Unknown',
+                provenancePath:  'stt',
+              },
+              {
+                speaker:         'agent',
+                kind:            'CONVERSATION_AGENT',
+                text:            lapResponseText || lapMatch.name,
+                turnNumber:      lapTurnNum,
+                ts:              new Date(),
+                sourceKey:       'LAP_INTERCEPT',
+                provenanceType:  'SYSTEM',
+                provenanceLabel: 'LAP Intercept',
+                provenancePath:  `LAP_INTERCEPT/${lapMatch.groupId || lapMatch.name}`,
+                flags: [
+                  { type: 'LAP_ACTION',  value: lapMatch.action },
+                  { type: 'LAP_GROUP',   value: lapMatch.name },
+                  { type: 'LAP_KEYWORD', value: lapMatch.keyword || '' },
+                ],
+              },
+            ]);
+          } catch (_lapLogErr) { /* non-fatal — call must not crash on log failure */ }
+
           logger.info('[LAP GATE] ✅ Intercepted — returning recovery TwiML', {
-            companyId: companyID, callSid, action: lapMatch.action, group: lapMatch.name
+            companyId: companyID, callSid, action: lapMatch.action, group: lapMatch.name,
+            voiceMode: (company.aiAgentSettings?.voiceSettings?.voiceId) ? 'elevenlabs' : 'twilio_say',
           });
           twimlString = lapTwiml.toString();
           res.type('text/xml');
@@ -6922,7 +6997,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 lane: runtimeResult?.lane || persistedState?.sessionMode || null,
                 awHash: req.session?.awHash || null,
                 effectiveConfigVersion: req.session?.effectiveConfigVersion || null,
-                traceRunId: req.session?.traceRunId || null
+                traceRunId: req.session?.traceRunId || null,
+                // ⬇️ KC containerId lives here — callIntelligence.js reads trace._123rp.containerId
+                // to resolve kcCard. Without this the KC card is always null in the turn log.
+                _123rp: runtimeResult?._123rp || null,
               }
             }
           ];
