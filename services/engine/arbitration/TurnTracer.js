@@ -192,8 +192,21 @@ function record(traceData) {
     }
 
     // ── Write to MongoDB (cold) ────────────────────────────────────────────
+    // Normalize decision.winner: ArbitrationEngine returns it as an Object
+    // { type, score, signal } but the CallTurnTrace schema expects a String.
+    // Flatten to the type string before creating the Mongoose document.
+    let mongoData = traceData;
+    if (traceData?.decision && typeof traceData.decision.winner === 'object' && traceData.decision.winner !== null) {
+      mongoData = {
+        ...traceData,
+        decision: {
+          ...traceData.decision,
+          winner: traceData.decision.winner.type || null,
+        },
+      };
+    }
     try {
-      await CallTurnTrace.create(traceData);
+      await CallTurnTrace.create(mongoData);
     } catch (mongoErr) {
       // Duplicate key on { callId, turn } means this turn was already saved
       // (e.g. retry after timeout). Log at debug, not warn — not unexpected.

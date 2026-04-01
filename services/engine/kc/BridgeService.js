@@ -96,12 +96,13 @@ function _redisKey(companyId) {
 }
 
 /**
- * _getRedis — Get the shared Redis client.
+ * _getRedis — Get the shared Redis client (async).
  * Returns null if Redis is not available (graceful degrade).
+ * IMPORTANT: getSharedRedisClient() is async — must be awaited.
  */
-function _getRedis() {
+async function _getRedis() {
   try {
-    return getSharedRedisClient();
+    return await getSharedRedisClient();
   } catch (_e) {
     return null;
   }
@@ -229,7 +230,7 @@ const BridgeService = {
   async load(companyId) {
     if (!companyId) return null;
 
-    const redis = _getRedis();
+    const redis = await _getRedis();
     const key   = _redisKey(companyId);
 
     // ── Try Redis first ────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ const BridgeService = {
     const bridge = await _buildBridge(companyId);
 
     // Cache in Redis (no TTL — event-invalidated)
-    const redis = _getRedis();
+    const redis = await _getRedis();
     if (redis) {
       try {
         await redis.set(_redisKey(companyId), JSON.stringify(bridge));
@@ -300,7 +301,7 @@ const BridgeService = {
   async invalidate(companyId) {
     if (!companyId) return;
 
-    const redis = _getRedis();
+    const redis = await _getRedis();
     if (!redis) return;
 
     try {
