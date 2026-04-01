@@ -144,31 +144,16 @@ function _buildContextBrief(dnotes, dest, urgency) {
 }
 
 /**
- * Build a safe _123rp metadata object for the Call Review Console.
+ * Build a KC trace metadata object for call intelligence.
+ * Carries KC-specific context (containerId, intent, latencyMs, etc.)
+ * that the Call Intelligence UI uses to display the KC engine block.
  *
- * IMPORTANT: `tier` must be NUMERIC (1, 1.5, 2, 3) to match ResponseProtocol
- * format. The call-intelligence.js frontend switches on numeric values.
- * `lastPath` is the canonical field name; `path` kept for backward compat.
+ * UAP replaced 123rp as the routing protocol — tier/tierLabel/source
+ * are no longer included. matchSource on the return object identifies
+ * the engine; kcTrace carries the KC-specific per-turn context.
  */
-function _build123rp(path, extra = {}) {
-  // KC paths that use Groq = Tier 1.5 (Groq fast lane)
-  // LLM fallback (Claude) = Tier 2
-  // Graceful ACK = Tier 3
-  const tier = path === PATH.KC_LLM_FALLBACK ? 2
-    : path === PATH.KC_GRACEFUL_ACK ? 3
-    : 1.5;
-  const tierLabel = tier === 1.5 ? 'GROQ_FAST_LANE'
-    : tier === 2 ? 'LLM_AGENT'
-    : 'FALLBACK';
-
-  return {
-    tier,
-    tierLabel,
-    source:   'KC_ENGINE',
-    path,
-    lastPath: path,         // canonical name — call-intelligence.js reads this
-    ...extra,
-  };
+function _buildKcTrace(path, extra = {}) {
+  return { path, ...extra };
 }
 
 /** Deep-clone state safely to avoid mutating the live state object. */
@@ -249,7 +234,7 @@ class KCDiscoveryRunner {
    * @param {Object}   [opts.redis]       — Shared Redis client (optional)
    * @param {Function} [opts.onSentence]  — Streaming sentence callback
    *
-   * @returns {Promise<{ response: string, matchSource: string, state: Object, _123rp: Object }>}
+   * @returns {Promise<{ response: string, matchSource: string, state: Object, kcTrace: Object }>}
    */
   static async run({
     company,
@@ -345,7 +330,7 @@ class KCDiscoveryRunner {
             response:    emergencyMsg,
             matchSource: 'KC_ENGINE',
             state:       nextState,
-            _123rp:      _build123rp(PATH.KC_TRANSFER_OVERFLOW, {
+            kcTrace:     _buildKcTrace(PATH.KC_TRANSFER_OVERFLOW, {
               latencyMs: Date.now() - startMs,
               transferOverflowReason: 'emergency_override',
             }),
@@ -463,7 +448,7 @@ class KCDiscoveryRunner {
             response:    announcement || null,
             matchSource: 'KC_ENGINE',
             state:       nextState,
-            _123rp:      _build123rp(PATH.KC_TRANSFER_INTENT, {
+            kcTrace:     _buildKcTrace(PATH.KC_TRANSFER_INTENT, {
               latencyMs:    Date.now() - startMs,
               transferDest: bestDest.name,
               transferMode,
@@ -599,7 +584,7 @@ class KCDiscoveryRunner {
         response:    bookingResponse,
         matchSource: 'KC_ENGINE',
         state:       nextState,
-        _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, { latencyMs: Date.now() - startMs }),
+        kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, { latencyMs: Date.now() - startMs }),
       };
     }
 
@@ -1194,7 +1179,7 @@ async function _handleSPFUQContinue({
     response:    kcResult.response,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(finalPath, {
+    kcTrace:     _buildKcTrace(finalPath, {
       containerId:    String(anchorMatch._id || anchorMatch.title || ''),
       containerTitle: anchorMatch.title,
       kcId:           anchorMatch.kcId || null,
@@ -1239,7 +1224,7 @@ async function _handlePrequalResponse({
       response:    "I'm sorry, let me start over. What can I help you with today?",
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_PARSE_ERROR', latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_PARSE_ERROR', latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1256,7 +1241,7 @@ async function _handlePrequalResponse({
       response:    "I'm sorry, let me start over. What can I help you with today?",
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_CONTAINER_MISSING', latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_CONTAINER_MISSING', latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1296,7 +1281,7 @@ async function _handlePrequalResponse({
         response:    pq.text || "I didn't quite catch that — could you let me know which applies to you?",
         matchSource: 'KC_ENGINE',
         state:       nextState,
-        _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, { containerId, intent: 'PREQUAL_REASKED', latencyMs: Date.now() - startMs }),
+        kcTrace:     _buildKcTrace(PATH.KC_PREQUAL_PENDING, { containerId, intent: 'PREQUAL_REASKED', latencyMs: Date.now() - startMs }),
       };
     }
 
@@ -1321,7 +1306,7 @@ async function _handlePrequalResponse({
         response:    _escapedResult.response,
         matchSource: 'KC_ENGINE',
         state:       nextState,
-        _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, { containerId, intent: 'PREQUAL_ESCAPED', latencyMs: Date.now() - startMs }),
+        kcTrace:     _buildKcTrace(PATH.KC_DIRECT_ANSWER, { containerId, intent: 'PREQUAL_ESCAPED', latencyMs: Date.now() - startMs }),
       };
     }
 
@@ -1329,7 +1314,7 @@ async function _handlePrequalResponse({
       response:    "Of course — let me know what else I can help you with.",
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_ESCAPE_FALLBACK', latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_ESCAPE_FALLBACK', latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1386,7 +1371,7 @@ async function _handlePrequalResponse({
       response:    "I'm sorry, I wasn't able to get that answer. Let me connect you with someone who can help.",
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_GROQ_ERROR', latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_GROQ_ERROR', latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1404,7 +1389,7 @@ async function _handlePrequalResponse({
       response:    kcResult.response,
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, { containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, { containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1428,7 +1413,7 @@ async function _handlePrequalResponse({
     response:    kcResult.response,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(PATH.KC_DIRECT_ANSWER, {
+    kcTrace:     _buildKcTrace(PATH.KC_DIRECT_ANSWER, {
       containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs,
     }),
   };
@@ -1535,7 +1520,7 @@ async function _handleKCMatch({
             response:    _activePQ.text,
             matchSource: 'KC_ENGINE',
             state:       nextState,
-            _123rp:      _build123rp(PATH.KC_PREQUAL_PENDING, {
+            kcTrace:     _buildKcTrace(PATH.KC_PREQUAL_PENDING, {
               containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null,
               intent: 'PREQUAL_ASKED', latencyMs: Date.now() - startMs,
             }),
@@ -1649,7 +1634,7 @@ async function _handleKCMatch({
               response:    first.offerScript,
               matchSource: 'KC_ENGINE',
               state:       nextState,
-              _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, {
+              kcTrace:     _buildKcTrace(PATH.KC_UPSELL_PENDING, {
                 containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null,
                 intent: 'UPSELL_ASKED', idx: 0, latencyMs: Date.now() - startMs,
               }),
@@ -1690,7 +1675,7 @@ async function _handleKCMatch({
       response:    kcResult.response,
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, {
+      kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, {
         containerId, containerTitle, kcId: container.kcId || null,
         intent: kcResult.intent, latencyMs: Date.now() - startMs,
       }),
@@ -1790,7 +1775,7 @@ async function _handleKCMatch({
     response:    kcResult.response,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(finalPath, {
+    kcTrace:     _buildKcTrace(finalPath, {
       containerId, containerTitle, kcId: container.kcId || null,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
@@ -1848,7 +1833,7 @@ async function _handleUpsellResponse({
       response:    `Just to confirm — ${currentUpsell?.offerScript ? 'would you like to add that?' : 'is that a yes or no?'}`,
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_REASKED', idx, latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_REASKED', idx, latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1926,7 +1911,7 @@ async function _handleUpsellResponse({
       response:    response.trim(),
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_ASKED', idx: nextIdx, latencyMs: Date.now() - startMs }),
+      kcTrace:     _buildKcTrace(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_ASKED', idx: nextIdx, latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1953,7 +1938,7 @@ function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, star
     response:    scriptLine || "Perfect — let me get you scheduled right away!",
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(PATH.KC_BOOKING_INTENT, { intent: 'UPSELL_CHAIN_DONE', latencyMs: Date.now() - startMs }),
+    kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, { intent: 'UPSELL_CHAIN_DONE', latencyMs: Date.now() - startMs }),
   };
 }
 
@@ -2062,7 +2047,7 @@ async function _handleLLMFallback({
       response:    llmResult.response,
       matchSource: 'KC_ENGINE',
       state:       nextState,
-      _123rp:      _build123rp(PATH.KC_LLM_FALLBACK, {
+      kcTrace:     _buildKcTrace(PATH.KC_LLM_FALLBACK, {
         latencyMs:   Date.now() - startMs,
         tokensUsed:  llmResult.tokensUsed,
       }),
@@ -2087,7 +2072,7 @@ async function _handleLLMFallback({
     response:    ackResponse,
     matchSource: 'KC_ENGINE',
     state:       nextState,
-    _123rp:      _build123rp(PATH.KC_GRACEFUL_ACK, { latencyMs: Date.now() - startMs }),
+    kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { latencyMs: Date.now() - startMs }),
   };
 }
 

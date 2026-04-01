@@ -113,7 +113,7 @@ const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesServi
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt, composeIntakeExtractionPrompt, composeIntakeResponsePrompt } = require('../../../config/llmAgentDefaults');
 const GroqStreamAdapter = require('../../streaming/adapters/GroqStreamAdapter');
-const { RESPONSE_TIER, FALLBACK_REASON_CODE, build123rpMeta } = require('../../../config/ResponseProtocol');
+const { FALLBACK_REASON_CODE } = require('../../../config/ResponseProtocol');
 const { buildT3Context, validateT3Context } = require('./TierStateContract');
 const { streamWithHeartbeat, streamWithRetry, resultKey } = require('../../streaming/ClaudeStreamingService');
 const { streamWithSentences } = require('../../streaming/SentenceStreamingService');
@@ -1993,8 +1993,8 @@ class Agent2DiscoveryRunner {
           });
           if (kcFastResult?.response) {
             emit('TURN1_KC_FAST_PATH_HIT', {
-              containerTitle: kcFastResult._123rp?.containerTitle || null,
-              latencyMs: kcFastResult._123rp?.latencyMs || null,
+              containerTitle: kcFastResult.kcTrace?.containerTitle || null,
+              latencyMs: kcFastResult.kcTrace?.latencyMs || null,
             });
             return kcFastResult;
           }
@@ -2059,12 +2059,6 @@ class Agent2DiscoveryRunner {
             response:    _screenMsg,
             matchSource: 'INTAKE_SCREENING',
             state:       nextState,
-            _123rp: {
-              tier:      RESPONSE_TIER.TIER_2,
-              path:      'CALLER_SCREENING',
-              source:    'INTAKE_SCREENING',
-              latencyMs: intakeResult.latencyMs,
-            },
           };
         }
         // ── END CALLER SCREENING GATE ─────────────────────────────────────────
@@ -2170,7 +2164,6 @@ class Agent2DiscoveryRunner {
             employeeMentioned: ext.employeeMentioned || null,
             priorVisit: ext.priorVisit,
             extractionSummary: Object.keys(ext).filter(k => ext[k] != null),
-            latencyMs: intakeResult.latencyMs,
             wasPartial: intakeResult.wasPartial,
           };
           nextState.agent2.discovery.llmTurnsThisCall = 1;
@@ -2222,17 +2215,13 @@ class Agent2DiscoveryRunner {
             extractionSummary: Object.keys(ext).filter(k => ext[k] != null),
             confidence: conf,
             wasPartial: intakeResult.wasPartial || false,
-            latencyMs: intakeResult.latencyMs,
           });
 
           // ── Emit path/response events and return ──────────────────────────
           emit('A2_PATH_SELECTED', {
             path: 'LLM_INTAKE_TURN_1',
             reason: 'Turn-1 LLM Intake extracted entities and generated acknowledgment',
-            _123rpTier: RESPONSE_TIER.TIER_2,
-            _123rpLabel: 'LLM_AGENT',
             model: 'claude',
-            latencyMs: intakeResult.latencyMs,
             tokensInput: intakeResult.tokensUsed?.input,
             tokensOutput: intakeResult.tokensUsed?.output,
             nextLane: intakeResult.nextLane,
@@ -2254,14 +2243,12 @@ class Agent2DiscoveryRunner {
             usedCallerName: !!(callerName && response.toLowerCase().includes(callerName.toLowerCase())),
             isLLMAgent: true,
             isIntake: true,
-            latencyMs: intakeResult.latencyMs,
           });
 
           return {
             response,
             matchSource: 'AGENT2_DISCOVERY',
             state: nextState,
-            _123rp: build123rpMeta('LLM_INTAKE_TURN_1')
           };
 
         } catch (intakeWriteErr) {
@@ -2355,8 +2342,6 @@ class Agent2DiscoveryRunner {
           emit('A2_PATH_SELECTED', {
             path: 'STT_EMPTY_LLM_RECOVERY',
             reason: 'Empty STT Protocol — LLM re-engagement',
-            _123rpTier: RESPONSE_TIER.TIER_2,
-            _123rpLabel: 'LLM_AGENT',
             model: 'claude',
             latencyMs: sttLlmResult.latencyMs,
             usedCallerName: !!(callerName && sttResponse.toLowerCase().includes(callerName.toLowerCase())),
@@ -2384,7 +2369,7 @@ class Agent2DiscoveryRunner {
             response: sttResponse,
             matchSource: 'AGENT2_DISCOVERY',
             state: nextState,
-            _123rp: build123rpMeta('STT_EMPTY_LLM_RECOVERY'),
+            diagEvent: 'STT_EMPTY_LLM_RECOVERY',
           };
         }
 
@@ -2864,7 +2849,6 @@ class Agent2DiscoveryRunner {
             fallbackAction
           });
 
-          return { response: missingResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
         }
       }
 
@@ -2926,14 +2910,12 @@ class Agent2DiscoveryRunner {
                       };
                       nextState.agent2.discovery.lastPath = 'KC_SPECIALS_THEN_BOOK';
                       emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_BOOK', responsePreview: clip(_kcResSpecials.response, 120) });
-                      return { response: _kcResSpecials.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_BOOK') };
                     } else {
                       // Caller asked — answer cleanly, PFUQ gate stays open silently
                       nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
                       nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
                       nextState.agent2.discovery.lastPath                = 'KC_SPECIALS_THEN_REASK';
                       emit('A2_RESPONSE_READY', { path: 'KC_SPECIALS_THEN_REASK', responsePreview: clip(_kcResSpecials.response, 120) });
-                      return { response: _kcResSpecials.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_SPECIALS_THEN_REASK') };
                     }
                   }
                 }
@@ -2991,7 +2973,6 @@ class Agent2DiscoveryRunner {
                 response:    responseText,
                 matchSource: 'AGENT2_DISCOVERY',
                 state:       nextState,
-                _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_THEN_BOOK')
               };
 
             } else {
@@ -3022,7 +3003,6 @@ class Agent2DiscoveryRunner {
                 response:    responseText,
                 matchSource: 'AGENT2_DISCOVERY',
                 state:       nextState,
-                _123rp:      build123rpMeta('ASKING_SPECIALS_PROMO_THEN_REASK')
               };
             }
 
@@ -3046,13 +3026,11 @@ class Agent2DiscoveryRunner {
             if (_llmSpecialsErr?.response) {
               nextState.agent2.discovery.lastPath = 'ASKING_SPECIALS_ERROR_LLM';
               emit('A2_RESPONSE_READY', { path: 'ASKING_SPECIALS_ERROR_LLM', responsePreview: clip(_llmSpecialsErr.response, 120) });
-              return { response: _llmSpecialsErr.response, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('ASKING_SPECIALS_ERROR_LLM') };
             }
 
             // LLM also failed — silent ack, PFUQ gate stays open
             nextState.agent2.discovery.lastPath = 'ASKING_SPECIALS_PROMO_ERROR_REASK';
             emit('A2_RESPONSE_READY', { path: 'ASKING_SPECIALS_PROMO_ERROR_REASK', responsePreview: clip(fuqAck, 60), isFallback: true });
-            return { response: fuqAck || 'Sure.', matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('ASKING_SPECIALS_PROMO_ERROR_REASK') };
           }
         }
 
@@ -3105,14 +3083,12 @@ class Agent2DiscoveryRunner {
                       };
                       nextState.agent2.discovery.lastPath = 'KC_PRICING_THEN_BOOK';
                       emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_BOOK', responsePreview: clip(_kcResPricing.response, 120) });
-                      return { response: _kcResPricing.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_BOOK') };
                     } else {
                       // Answer cleanly — PFUQ gate stays open silently, caller responds when ready
                       nextState.agent2.discovery.pendingFollowUpQuestion = pfuq;
                       nextState.agent2.discovery.pendingFollowUpSource   = pfuqSource;
                       nextState.agent2.discovery.lastPath                = 'KC_PRICING_THEN_REASK';
                       emit('A2_RESPONSE_READY', { path: 'KC_PRICING_THEN_REASK', responsePreview: clip(_kcResPricing.response, 120) });
-                      return { response: _kcResPricing.response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('KC_PRICING_THEN_REASK') };
                     }
                   }
                 }
@@ -3135,13 +3111,11 @@ class Agent2DiscoveryRunner {
           if (_llmPricingFallback?.response) {
             nextState.agent2.discovery.lastPath = 'ASKING_PRICING_LLM';
             emit('A2_RESPONSE_READY', { path: 'ASKING_PRICING_LLM', responsePreview: clip(_llmPricingFallback.response, 120) });
-            return { response: _llmPricingFallback.response, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('ASKING_PRICING_LLM') };
           }
 
           // LLM also failed — silent ack, PFUQ gate stays open
           nextState.agent2.discovery.lastPath = 'ASKING_PRICING_KC_REASK';
           emit('A2_RESPONSE_READY', { path: 'ASKING_PRICING_KC_REASK', responsePreview: clip(fuqAck, 60), isFallback: true });
-          return { response: fuqAck || 'Sure.', matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('ASKING_PRICING_KC_REASK') };
         }
 
         // ── YES (Tier 1 or Tier 2 if residual content) ──
@@ -3257,7 +3231,6 @@ class Agent2DiscoveryRunner {
 
             const yesResponse = `${fuqAck} ${yesText}`.trim();
             emit('A2_RESPONSE_READY', { path: nextState.agent2.discovery.lastPath, responsePreview: clip(yesResponse, 120), direction: yesDirection });
-            return { response: yesResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta(nextState.agent2.discovery.lastPath) };
           }
         }
 
@@ -3291,7 +3264,6 @@ class Agent2DiscoveryRunner {
             });
             const noLlmResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
             emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_LLM_AGENT', responsePreview: clip(noLlmResponse, 120), source: 'llmAgent' });
-            return { response: noLlmResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta('FOLLOWUP_LLM_AGENT') };
           }
           // Tier 3: canned response if LLM Agent disabled/failed
           clearPendingFollowUp(nextState);
@@ -3306,7 +3278,6 @@ class Agent2DiscoveryRunner {
           nextState.agent2.discovery.lastPath = 'FOLLOWUP_NO';
           const noResponse = `${fuqAck} ${noText}`.trim();
           emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_NO', responsePreview: clip(noResponse, 120) });
-          return { response: noResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('FOLLOWUP_NO') };
         }
 
         // ── REPROMPT (Tier 2 → 3): ambiguous short response ──
@@ -3347,7 +3318,6 @@ class Agent2DiscoveryRunner {
             const resolvedPath = nextState.agent2.discovery.lastPath;
             const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
             emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta(resolvedPath) };
           }
           // Tier 3: canned re-ask if LLM Agent disabled/failed
           // State already preserved (no clearPendingFollowUp call) — T3 re-asks the question
@@ -3356,7 +3326,6 @@ class Agent2DiscoveryRunner {
           const repromptResponse = `${fuqAck} ${repromptText}`.trim();
 
           emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_REPROMPT', responsePreview: clip(repromptResponse, 120) });
-          return { response: repromptResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('FOLLOWUP_REPROMPT') };
         }
 
         // ── HESITANT (Tier 2 → 3): caller expressing doubt/conflict ──
@@ -3397,7 +3366,6 @@ class Agent2DiscoveryRunner {
             const resolvedPath = nextState.agent2.discovery.lastPath;
             const agentResponse = `${fuqAck} ${llmAgentResult.response}`.trim();
             emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-            return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta(resolvedPath) };
           }
           // Tier 3: canned clarification if LLM Agent disabled/failed
           // State already preserved (no clearPendingFollowUp call) — T3 re-asks with clarification
@@ -3406,7 +3374,6 @@ class Agent2DiscoveryRunner {
           const hesitantResponse = `${fuqAck} ${hesitantText}`.trim();
 
           emit('A2_RESPONSE_READY', { path: 'FOLLOWUP_HESITANT', responsePreview: clip(hesitantResponse, 120) });
-          return { response: hesitantResponse, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('FOLLOWUP_HESITANT') };
         }
 
         // ── COMPLEX / YES+residual (Tier 2 → fallthrough): substantive response ──
@@ -3454,7 +3421,6 @@ class Agent2DiscoveryRunner {
           const agentResponse = `${complexAck} ${llmAgentResult.response}`.trim();
           const resolvedPath = nextState.agent2.discovery.lastPath;
           emit('A2_RESPONSE_READY', { path: resolvedPath, responsePreview: clip(agentResponse, 120), source: 'llmAgent' });
-          return { response: agentResponse, matchSource: 'LLM_AGENT', state: nextState, _123rp: build123rpMeta(resolvedPath) };
         }
 
         // Tier 3: LLM Agent unavailable — fall through to ScrabEngine + trigger matching
@@ -3528,7 +3494,6 @@ class Agent2DiscoveryRunner {
                   response:    result.responseText,
                   matchSource: 'PROMOTIONS_INTERCEPTOR',
                   state:       nextState,
-                  _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
                 };
 
               } else {
@@ -3550,7 +3515,6 @@ class Agent2DiscoveryRunner {
                   response:    askCode,
                   matchSource: 'PROMOTIONS_INTERCEPTOR',
                   state:       nextState,
-                  _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
                 };
               }
 
@@ -3585,7 +3549,6 @@ class Agent2DiscoveryRunner {
                 response:    responseText,
                 matchSource: 'PROMOTIONS_INTERCEPTOR',
                 state:       nextState,
-                _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
               };
             }
           }
@@ -3615,7 +3578,6 @@ class Agent2DiscoveryRunner {
                 response:    result.responseText,
                 matchSource: 'PROMOTIONS_INTERCEPTOR',
                 state:       nextState,
-                _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
               };
 
             } else {
@@ -3633,7 +3595,6 @@ class Agent2DiscoveryRunner {
                 response:    retry,
                 matchSource: 'PROMOTIONS_INTERCEPTOR',
                 state:       nextState,
-                _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
               };
             }
           }
@@ -3704,7 +3665,6 @@ class Agent2DiscoveryRunner {
             response:    clarifyQ,
             matchSource: 'PROMOTIONS_INTERCEPTOR',
             state:       nextState,
-            _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
           };
         }
 
@@ -3732,7 +3692,6 @@ class Agent2DiscoveryRunner {
               response:    result.responseText,
               matchSource: 'PROMOTIONS_INTERCEPTOR',
               state:       nextState,
-              _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
             };
 
           } else {
@@ -3760,7 +3719,6 @@ class Agent2DiscoveryRunner {
               response:    askCode,
               matchSource: 'PROMOTIONS_INTERCEPTOR',
               state:       nextState,
-              _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
             };
           }
         }
@@ -3807,7 +3765,6 @@ class Agent2DiscoveryRunner {
             response:    responseText,
             matchSource: 'PROMOTIONS_INTERCEPTOR',
             state:       nextState,
-            _123rp:      build123rpMeta('PROMOTIONS_INTERCEPTOR')
           };
         }
 
@@ -3966,7 +3923,6 @@ class Agent2DiscoveryRunner {
               response:    meta.responseText,
               matchSource: 'SMART_INTERCEPTOR',
               state:       nextState,
-              _123rp:      build123rpMeta('SMART_INTERCEPTOR')
             };
           }
           // responseText absent → fall through to KC
@@ -3992,7 +3948,6 @@ class Agent2DiscoveryRunner {
               response:    null,
               matchSource: 'SMART_INTERCEPTOR',
               state:       nextState,
-              _123rp:      build123rpMeta('SMART_INTERCEPTOR_TRANSFER')
             };
           }
           // transferTarget absent → fall through
@@ -4816,7 +4771,6 @@ class Agent2DiscoveryRunner {
           wasBlocked: yesValidation.blocked
         });
         
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('PENDING_YES') };
       }
 
       if (isNo) {
@@ -4880,7 +4834,6 @@ class Agent2DiscoveryRunner {
           wasBlocked: noValidation.blocked
         });
         
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('PENDING_NO') };
       }
 
       if (needsReprompt) {
@@ -4951,7 +4904,6 @@ class Agent2DiscoveryRunner {
           wasBlocked: repromptValidation.blocked
         });
         
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('PENDING_REPROMPT') };
       }
 
       // ══════════════════════════════════════════════════════════════════════
@@ -5044,7 +4996,6 @@ class Agent2DiscoveryRunner {
         source: 'style.robotChallenge'
       });
 
-      return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, audioUrl: audioUrl || null, _123rp: build123rpMeta('ROBOT_CHALLENGE') };
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -5122,7 +5073,7 @@ class Agent2DiscoveryRunner {
           response: handoffResponse,
           matchSource: 'AGENT2_DISCOVERY',
           state: nextState,
-          _123rp: build123rpMeta('LLM_HANDOFF_CONFIRMED')
+          diagEvent: 'LLM_HANDOFF_CONFIRMED',
         };
       } else if (isNo) {
         // Caller declined — clear pending, offer alternative
@@ -5156,7 +5107,6 @@ class Agent2DiscoveryRunner {
           response: declineResponse,
           matchSource: 'AGENT2_DISCOVERY',
           state: nextState,
-          _123rp: build123rpMeta('LLM_HANDOFF_DECLINED')
         };
       }
       // If neither YES nor NO, clear pending and fall through to normal processing
@@ -5206,7 +5156,6 @@ class Agent2DiscoveryRunner {
           matchSource: 'AGENT2_DISCOVERY',
           state: nextState,
           patienceMode: true,
-          _123rp: build123rpMeta('PATIENCE_MODE')
         };
       }
     }
@@ -5840,8 +5789,6 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: 'TRIGGER_CARD_LLM',
           reason: `Matched LLM card: ${card.label || card.id}`,
-          _123rpTier: RESPONSE_TIER.TIER_1,
-          _123rpLabel: 'DETERMINISTIC',
           matchType: triggerResult.matchType,
           matchedOn: triggerResult.matchedOn,
           cardId: card.id,
@@ -5912,7 +5859,6 @@ class Agent2DiscoveryRunner {
           _triggerPoolCount: triggerCards?.length ?? null,
           _exitReason: null,
           _fallbackUsed: null,
-          _123rp: build123rpMeta('TRIGGER_CARD_LLM'),
           uiPath: `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}].llmFactPack`
         };
       }
@@ -5959,8 +5905,6 @@ class Agent2DiscoveryRunner {
       emit('A2_PATH_SELECTED', {
         path: 'TRIGGER_CARD',
         reason: `Matched card: ${card.label || card.id}`,
-        _123rpTier: RESPONSE_TIER.TIER_1,
-        _123rpLabel: 'DETERMINISTIC',
         matchType: triggerResult.matchType,
         matchedOn: triggerResult.matchedOn,
         cardId: card.id,
@@ -6092,7 +6036,6 @@ class Agent2DiscoveryRunner {
         _triggerPoolCount: triggerCards?.length ?? null,
         _exitReason: null,
         _fallbackUsed: null,
-        _123rp: build123rpMeta('TRIGGER_CARD_ANSWER'),
         uiPath: `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}]`
       };
     }
@@ -6186,7 +6129,6 @@ class Agent2DiscoveryRunner {
               response,
               matchSource: 'AGENT2_DISCOVERY',
               state: nextState,
-              _123rp: build123rpMeta('CLARIFIER_ASKED'),
             };
           }
         }
@@ -6371,8 +6313,6 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: 'GREETING_ONLY',
           reason: 'Greeting detected, no trigger matched, using greeting response',
-          _123rpTier: RESPONSE_TIER.TIER_1,
-          _123rpLabel: 'DETERMINISTIC',
           greetingRuleId: nextState.agent2.discovery.lastGreetingRuleId
         });
         
@@ -6406,7 +6346,6 @@ class Agent2DiscoveryRunner {
             matchSource: 'AGENT2_DISCOVERY',
             state: nextState,
             audioUrl: greetingAudioUrl,
-            _123rp: build123rpMeta('GREETING_ONLY'),
           };
         }
 
@@ -6414,7 +6353,6 @@ class Agent2DiscoveryRunner {
           response: greetingResponse,
           matchSource: 'AGENT2_DISCOVERY',
           state: nextState,
-          _123rp: build123rpMeta('GREETING_ONLY'),
         };
       }
       
@@ -6519,12 +6457,10 @@ class Agent2DiscoveryRunner {
         // turn counter differ.
         const isGroqFastLane = !!llmAgentResult._groqFastLane;
         const resolvedPath   = isGroqFastLane ? 'NO_MATCH_GROQ_FAST_LANE' : 'LLM_AGENT_NO_MATCH';
-        const resolvedTier   = isGroqFastLane ? RESPONSE_TIER.TIER_1_5    : RESPONSE_TIER.TIER_2;
-        const resolvedLabel  = isGroqFastLane ? 'GROQ_FAST_LANE'          : 'LLM_AGENT';
         const resolvedSource = isGroqFastLane ? 'agent2.groqFastLane'     : 'agent2.llmAgent.noMatch';
         const resolvedNote   = isGroqFastLane
-          ? '123RP Tier 1.5: Groq fast lane — knowledge lookup response'
-          : '123RP Tier 2: LLM Agent (Claude) — AI intelligence response';
+          ? 'Groq fast lane — knowledge lookup response'
+          : 'LLM Agent (Claude) — AI intelligence response';
 
         nextState.agent2.discovery.lastPath = resolvedPath;
 
@@ -6581,8 +6517,6 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: resolvedPath,
           reason: pathReason,
-          _123rpTier: resolvedTier,
-          _123rpLabel: resolvedLabel,
           model: isGroqFastLane ? 'groq' : (llmAgentResult.tokensUsed ? 'claude' : null),
           latencyMs: llmAgentResult.latencyMs,
           tokensInput: llmAgentResult.tokensUsed?.input,
@@ -6648,7 +6582,6 @@ class Agent2DiscoveryRunner {
         }
         // ══════════════════════════════════════════════════════════════════
 
-        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, _123rp: build123rpMeta('LLM_AGENT_NO_MATCH') };
       }
 
       // 123RP: Tier 2 didn't run (disabled) or failed — fall through to Tier 3 (Fallback)
@@ -6843,8 +6776,6 @@ class Agent2DiscoveryRunner {
       emit('A2_PATH_SELECTED', {
         path: 'FALLBACK_WITH_REASON',
         reason: pathReason,
-        _123rpTier: RESPONSE_TIER.TIER_3,
-        _123rpLabel: 'FALLBACK',
         capturedReasonPreview: clip(capturedReason, 60),
         capturedReasonRaw: clip(capturedReasonRaw, 60),
         sanitizedReason: capturedReason !== capturedReasonRaw,
@@ -6946,8 +6877,6 @@ class Agent2DiscoveryRunner {
       emit('A2_PATH_SELECTED', {
         path: 'FALLBACK_NO_REASON',
         reason: pathReason,
-        _123rpTier: RESPONSE_TIER.TIER_3,
-        _123rpLabel: 'FALLBACK',
         skippedGenericQuestion: skipGenericQuestion
       });
       // V125: SPEECH_SOURCE_SELECTED
@@ -7034,22 +6963,18 @@ class Agent2DiscoveryRunner {
       }
     }
 
-    // 123RP: Determine response tier and fallback status for TURN_TRACE_SUMMARY
+    // Determine fallback classification for TURN_TRACE_SUMMARY.
+    // UAP replaced 123rp — no tier concept. Fallback = path starts with FALLBACK_ or KC_GRACEFUL_ACK.
     const lastPath = nextState.agent2?.discovery?.lastPath || 'UNKNOWN';
-    const _123rp = build123rpMeta(lastPath);
-
-    // _fallbackUsed: Only set for TRUE Tier 3 fallbacks (backward compat).
-    // LLM Agent is Tier 2 intelligence — NOT a fallback.
     let fallbackUsed = null;
-    if (_123rp.tier === RESPONSE_TIER.TIER_3) {
-      if (lastPath.includes('CAPTURED_REASON')) fallbackUsed = 'CAPTURED_REASON_ACK';
-      else if (lastPath.includes('NO_MATCH')) fallbackUsed = 'GENERIC_FALLBACK';
+    if (lastPath.startsWith('FALLBACK_') || lastPath === 'KC_GRACEFUL_ACK') {
+      fallbackUsed = lastPath.includes('CAPTURED_REASON') ? 'CAPTURED_REASON_ACK' : 'GENERIC_FALLBACK';
     } else if (lastPath.includes('GREETING')) {
       fallbackUsed = 'GREETING';
     } else if (lastPath.includes('SCENARIO')) {
       fallbackUsed = 'SCENARIO_ENGINE';
     }
-    
+
     return {
       response,
       matchSource: 'AGENT2_DISCOVERY',
@@ -7058,7 +6983,6 @@ class Agent2DiscoveryRunner {
       _triggerPoolCount: typeof triggerCards !== 'undefined' ? triggerCards?.length : null,
       _exitReason: lastPath,
       _fallbackUsed: fallbackUsed,
-      _123rp,
     };
   }
 

@@ -441,7 +441,6 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           nextPrompt: reAnchor,
           bookingCtx: ctx,
           completed:  false,
-          _123rp:     { tier: 0, path: 'BK_BPFUQ_RESUME' }
         };
       }
 
@@ -455,7 +454,6 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           nextPrompt: RETURN_TO_BOOKING_Q,
           bookingCtx: ctx,
           completed:  false,
-          _123rp:     { tier: 0, path: 'BK_BPFUQ_REASK' }
         };
       }
     }
@@ -582,7 +580,6 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
             nextPrompt: combined,
             bookingCtx: ctx,
             completed:  false,
-            _123rp:     { tier: 1.5, path: 'BK_KC_DIGRESSION', containerTitle: match.container.title }
           };
         }
       }
@@ -606,7 +603,6 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     nextPrompt: _getStepReAnchor(prevSnap.step, config),
     bookingCtx: ctx,
     completed:  false,
-    _123rp:     { tier: 1.5, path: 'BK_BPFUQ_NO_MATCH' }
   };
 }
 
@@ -899,7 +895,6 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
         nextPrompt: declineMsg,
         bookingCtx: { ...ctx, completed: true },
         completed:  true,
-        _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_DECLINED' }
       };
     }
 
@@ -909,7 +904,6 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
       nextPrompt: reAskConfirm,
       bookingCtx: ctx,
       completed:  false,
-      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_CONFIRM_REASK' }
     };
   }
 
@@ -921,7 +915,6 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
       nextPrompt: dq?.reAskText || dq?.text || 'Could you clarify which option applies to you?',
       bookingCtx: ctx,
       completed:  false,
-      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_REASK_EMPTY' }
     };
   }
 
@@ -959,7 +952,6 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
       nextPrompt: dq?.reAskText || `I want to make sure I route you correctly — ${optList}?`,
       bookingCtx: ctx,
       completed:  false,
-      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_REASK_NOMATCH' }
     };
   }
 
@@ -1014,7 +1006,6 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
       nextPrompt: matched.responseScript.trim(),
       bookingCtx: ctx,
       completed:  false,
-      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_SCRIPT' }
     };
   }
 
@@ -1061,7 +1052,6 @@ async function processInit(ctx, config, companyId, isTest, events) {
       nextPrompt: `${bridge}${dq.text}`,
       bookingCtx: ctx,
       completed:  false,
-      _123rp:     { tier: 0, path: 'BK_DISCRIMINATOR_ASK' }
     };
   }
 

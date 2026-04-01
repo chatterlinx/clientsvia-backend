@@ -129,7 +129,7 @@ function buildResponseContext(trace = []) {
     matchedTriggerLabel: triggerEval?.payload?.cardLabel || null,
     matchedTriggerId: rawCardId,
     matchedTriggerRuleId: ruleId,
-    routingTier: traceSummary?.payload?._123rp || null
+    kcTrace: traceSummary?.payload?.kcTrace || traceSummary?.payload?._123rp || null
   };
 
   // Attach LLM Intake extraction summary if present
@@ -522,34 +522,35 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
     }
 
-    // 123RP — Extract routing tier from TURN_TRACE_SUMMARY
+    // KC Trace — Extract KC engine context from TURN_TRACE_SUMMARY.
+    // New transcripts: payload.kcTrace   (UAP-era)
+    // Old transcripts: payload._123rp    (backward compat — legacy 123rp era)
     const turnTraceSummary = traceByKind.get(`${turnNum}:TURN_TRACE_SUMMARY`);
-    if (turnTraceSummary?.payload?._123rp) {
-      turnData.routingTier = turnTraceSummary.payload._123rp;
+    const kcTrace = turnTraceSummary?.payload?.kcTrace || turnTraceSummary?.payload?._123rp || null;
+    if (kcTrace) {
+      turnData.routingTier = kcTrace; // keep for backward compat with UI components that read routingTier
     }
 
-    // ── KC ENGINE — build dedicated kcEngine block when routing tier is KC ──
-    // TURN_TRACE_SUMMARY._123rp is the richest source: containerId, containerTitle,
-    // kcId, intent, latencyMs, spfuqActive are all stored there.
-    // KC_CONTAINER_MATCHED has the raw matchScore.
-    // KC_GROQ_ANSWERED duplicates intent/latency — used as fallback.
-    if (turnData.routingTier?.source === 'KC_ENGINE') {
+    // ── KC ENGINE — build dedicated kcEngine block when KC trace is present ──
+    // kcTrace.containerId, containerTitle, kcId, intent, latencyMs, spfuqActive
+    // come from KCDiscoveryRunner._buildKcTrace() (or legacy _build123rp).
+    // KC_CONTAINER_MATCHED / KC_GROQ_ANSWERED events are used as fallback sources.
+    if (kcTrace) {
       const kcContainerMatched = traceByKind.get(`${turnNum}:KC_CONTAINER_MATCHED`);
       const kcGroqAnswered = traceByKind.get(`${turnNum}:KC_GROQ_ANSWERED`);
       const kcSpfuqLoaded = traceByKind.get(`${turnNum}:KC_SPFUQ_LOADED`);
-      const rt = turnData.routingTier;
       turnData.kcEngine = {
-        containerId:    rt.containerId || kcSpfuqLoaded?.payload?.containerId || null,
-        containerTitle: rt.containerTitle || kcContainerMatched?.payload?.containerTitle || null,
-        kcId:           rt.kcId || null,
+        containerId:    kcTrace.containerId || kcSpfuqLoaded?.payload?.containerId || null,
+        containerTitle: kcTrace.containerTitle || kcContainerMatched?.payload?.containerTitle || null,
+        kcId:           kcTrace.kcId || null,
         matchScore:     kcContainerMatched?.payload?.score ?? null,
-        groqIntent:     rt.intent || kcGroqAnswered?.payload?.intent || null,
-        groqLatencyMs:  rt.latencyMs || kcGroqAnswered?.payload?.latencyMs || null,
+        groqIntent:     kcTrace.intent || kcGroqAnswered?.payload?.intent || null,
+        groqLatencyMs:  kcTrace.latencyMs || kcGroqAnswered?.payload?.latencyMs || null,
         groqResponse:   turnData.agentResponse?.text || null,
-        path:           rt.path || null,
-        spfuqActive:    rt.spfuqActive ?? false,
-        llmFallback:    rt.path === 'KC_LLM_FALLBACK',
-        gracefulAck:    rt.path === 'KC_GRACEFUL_ACK',
+        path:           kcTrace.path || null,
+        spfuqActive:    kcTrace.spfuqActive ?? false,
+        llmFallback:    kcTrace.path === 'KC_LLM_FALLBACK',
+        gracefulAck:    kcTrace.path === 'KC_GRACEFUL_ACK',
       };
     }
 
@@ -2325,11 +2326,12 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
 
   for (const t of convo) {
     displayIndex++;
-    const trace = t.trace || {};
-    const prov  = trace.provenance || {};
-    const r123rp = trace._123rp || {};
+    const trace  = t.trace || {};
+    const prov   = trace.provenance || {};
+    // kcTrace: new UAP-era field. _123rp: legacy backward compat for existing transcripts.
+    const kcTrace = trace.kcTrace || trace._123rp || {};
 
-    const provPath = r123rp.lastPath || r123rp.path || prov.uiPath || t.sourceKey || null;
+    const provPath = kcTrace.path || kcTrace.lastPath || prov.uiPath || t.sourceKey || null;
     const srcKey   = t.sourceKey || null;
 
     // Derive provenance type.
@@ -2361,7 +2363,7 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
 
     // KC card lookup from containerId or uiAnchor
     let kcCard = null;
-    const containerId = r123rp.containerId || prov.containerId;
+    const containerId = kcTrace.containerId || prov.containerId;
     if (containerId && kcMap.has(containerId.toString())) {
       kcCard = kcMap.get(containerId.toString());
     }
@@ -2741,7 +2743,7 @@ router.get('/:callSid/full-report', async (req, res) => {
     const kcLookupIds = new Set();
     for (const turn of rawTurns) {
       const trace = turn.trace || {};
-      const cid = trace._123rp?.containerId || trace.provenance?.containerId;
+      const cid = trace.kcTrace?.containerId || trace._123rp?.containerId || trace.provenance?.containerId;
       if (cid && mongoose.Types.ObjectId.isValid(cid)) kcLookupIds.add(cid.toString());
     }
 

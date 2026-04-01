@@ -6197,13 +6197,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       if (callSid && companyID) {
         const CallSummary = require('../models/CallSummary');
-        const tier = runtimeResult?._123rp?.tier;
         CallSummary.findOneAndUpdate(
           { companyId: companyID, twilioSid: callSid },
-          {
-            $set: { turnCount: turnNumber },
-            ...(tier ? { $max: { routingTier: tier } } : {})
-          },
+          { $set: { turnCount: turnNumber } },
           { upsert: false }
         ).catch(err => {
           logger.warn('[V2TWILIO] Failed to update CallSummary turnCount (non-blocking)', {
@@ -6221,7 +6217,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // a clear "STT Empty — LLM Recovery" indicator. This supplements the
       // STT_EMPTY diagnostic already written at line ~4851.
       // ═══════════════════════════════════════════════════════════════════════════
-      if (runtimeResult?._123rp?.lastPath === 'STT_EMPTY_LLM_RECOVERY') {
+      if (runtimeResult?.diagEvent === 'STT_EMPTY_LLM_RECOVERY') {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
           await CallTranscriptV2.appendTurns(companyID, callSid, [{
@@ -6254,7 +6250,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // When PATH 1.5 confirms booking intent, log a system transcript turn so
       // the Call Review Console shows the transition from discovery to booking.
       // ═══════════════════════════════════════════════════════════════════════════
-      if (runtimeResult?._123rp?.lastPath === 'LLM_HANDOFF_CONFIRMED') {
+      if (runtimeResult?.diagEvent === 'LLM_HANDOFF_CONFIRMED') {
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
           await CallTranscriptV2.appendTurns(companyID, callSid, [{
@@ -6878,8 +6874,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           ? 'triggers'
           : null;
         const isUiOwned = provData?.isFromUiConfig === true || !!inferredUiPath;
-        const llmPath = runtimeResult?._123rp?.lastPath || '';
-        const isLlmGenerated = llmPath.includes('LLM');
+        const isLlmGenerated = runtimeResult?.matchSource === 'LLM_AGENT';
         const provType = isUiOwned ? 'UI_OWNED' : isLlmGenerated ? 'LLM_GENERATED' : 'HARDCODED';
         const uiPath = provData?.uiPath || provData?.configPath || inferredUiPath || null;
 
@@ -6998,9 +6993,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 awHash: req.session?.awHash || null,
                 effectiveConfigVersion: req.session?.effectiveConfigVersion || null,
                 traceRunId: req.session?.traceRunId || null,
-                // ⬇️ KC containerId lives here — callIntelligence.js reads trace._123rp.containerId
+                // ⬇️ KC containerId lives here — callIntelligence.js reads trace.kcTrace.containerId
                 // to resolve kcCard. Without this the KC card is always null in the turn log.
-                _123rp: runtimeResult?._123rp || null,
+                kcTrace: runtimeResult?.kcTrace || null,
               }
             }
           ];
@@ -7183,8 +7178,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               uiPath = 'LLMSettings.callHandling.recoveryMessages';
             }
             
-            const llmPath = runtimeResult?._123rp?.lastPath || '';
-            const isLlmGenerated = llmPath.includes('LLM');
+            const isLlmGenerated = runtimeResult?.matchSource === 'LLM_AGENT';
             const provType = isUiOwned ? 'UI_OWNED' : isLlmGenerated ? 'LLM_GENERATED' : 'HARDCODED';
 
             return {

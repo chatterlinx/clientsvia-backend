@@ -865,8 +865,8 @@ class CallRuntime {
                 // WHAT FALLBACK WAS USED (if any)
                 fallbackUsed: ownerResult._fallbackUsed || null,
 
-                // 123RP — Response Protocol tier classification
-                _123rp: ownerResult._123rp || null,
+                // KC trace — per-turn KC engine context (containerId, intent, latencyMs, etc.)
+                kcTrace: ownerResult.kcTrace || null,
 
                 // RESPONSE PROVENANCE - THE KEY QUESTION
                 responseSource: {
@@ -892,13 +892,13 @@ class CallRuntime {
                 // SECTION TRAIL (for crash diagnosis)
                 sectionTrail: tracer?.getTrailString() || null,
                 
-                // VERDICT - One-liner for quick scanning (prefixed with tier tag)
+                // VERDICT - One-liner for quick scanning
                 verdict: (() => {
-                    const t = ownerResult._123rp ? `[T${ownerResult._123rp.tier}]` : '';
-                    if (triggerCard) return `${t}TRIGGER:${triggerCard.label || triggerCard.id}`;
-                    if (ownerResult.matchSource === 'AGENT2_DISCOVERY') return `${t}AGENT2:${ownerResult._123rp?.tierLabel || 'UNKNOWN'}`;
-                    if (lane === 'BOOKING') return `${t}BOOKING_ENGINE`;
-                    return `${t}FALLBACK:${ownerResult.matchSource}`;
+                    if (triggerCard) return `TRIGGER:${triggerCard.label || triggerCard.id}`;
+                    if (ownerResult.matchSource === 'KC_ENGINE') return `KC_ENGINE:${ownerResult.kcTrace?.path || 'UNKNOWN'}`;
+                    if (ownerResult.matchSource === 'AGENT2_DISCOVERY') return `AGENT2:${ownerResult._exitReason || 'UNKNOWN'}`;
+                    if (lane === 'BOOKING') return 'BOOKING_ENGINE';
+                    return `FALLBACK:${ownerResult.matchSource || 'UNKNOWN'}`;
                 })()
             });
 
@@ -922,7 +922,8 @@ class CallRuntime {
                 matchSource: ownerResult.matchSource,
                 audioUrl: ownerResult.audioUrl || null,
                 triggerCard: ownerResult.triggerCard || null,
-                _123rp: ownerResult._123rp || null,
+                kcTrace: ownerResult.kcTrace || null,
+                diagEvent: ownerResult.diagEvent || null,
                 turnEventBuffer
             };
             
