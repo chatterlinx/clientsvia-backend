@@ -752,6 +752,8 @@ class CallRuntime {
             
             const skipOpener =
                 (ownerResult?.matchSource === 'AGENT2_DISCOVERY') ||
+                // Booking-intent redirect needs no empathy opener — agent is already pivoting to booking
+                (ownerResult?.kcTrace?.path === 'KC_BOOKING_INTENT') ||
                 (lane === 'DISCOVERY' && /^got it\b/i.test(ownerResult?.response || ''));
             
             if (openerResult.opener && !skipOpener) {

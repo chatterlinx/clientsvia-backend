@@ -1888,16 +1888,26 @@ const _HARDCODED_KC_PATHS = new Set([
   'KC_BOOKING_INTENT',  // "Great! Let me get that scheduled for you."
 ]);
 
-function provenanceLabel(type, sourceKey) {
-  if (type === 'UI_OWNED')     return 'KC / Trigger';
-  if (type === 'LLM_GENERATED') return 'LLM Generated';
-  if (type === 'HARDCODED')    return 'Hardcoded';
-  // Fallback labels by sourceKey for display in the report
-  if (sourceKey === 'GREETING')             return 'Greeting';         // DiscoveryWire greeting path
-  if (sourceKey === 'AGENT2_DISCOVERY')     return 'LLM Generated';    // legacy only
-  if (sourceKey === 'KC_ENGINE')            return 'KC Answer Engine';
-  if (sourceKey === 'BOOKING_LOGIC_ENGINE') return 'Booking Script';
+function provenanceLabel(type, sourceKey, provPath) {
+  // 1. Path-specific overrides (most precise — canned KC scripts)
+  if (provPath === 'KC_BOOKING_INTENT') return 'Booking Intent Script';
+  if (provPath === 'KC_GRACEFUL_ACK')   return 'Fallback Acknowledgment';
+
+  // 2. Source-key overrides — more descriptive than generic type labels.
+  //    MUST come before type checks because BOOKING_LOGIC_ENGINE maps to
+  //    'HARDCODED' in _SOURCE_TYPE_MAP, which would catch it first otherwise.
+  if (sourceKey === 'BOOKING_LOGIC_ENGINE') return 'Booking Flow Script';
+  if (sourceKey === 'GREETING')             return 'Greeting';
   if (sourceKey === 'greetings')            return 'Greeting';
+
+  // 3. Type-based labels
+  if (type === 'UI_OWNED')      return 'KC / Trigger';
+  if (type === 'LLM_GENERATED') return 'LLM Generated';
+  if (type === 'HARDCODED')     return 'Hardcoded';
+
+  // 4. Final fallbacks by sourceKey
+  if (sourceKey === 'AGENT2_DISCOVERY') return 'LLM Generated';    // legacy only
+  if (sourceKey === 'KC_ENGINE')        return 'KC Answer Engine';
   return 'Unknown';
 }
 
@@ -2407,7 +2417,7 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       kind: t.kind || null,
       sourceKey: srcKey,
       provenanceType: provType,
-      provenanceLabel: provenanceLabel(provType, srcKey),
+      provenanceLabel: provenanceLabel(provType, srcKey, provPath),
       provenancePath: provPath,
       latencyMs: kcTrace.latencyMs || null,
       kcCard: kcCard ? {
