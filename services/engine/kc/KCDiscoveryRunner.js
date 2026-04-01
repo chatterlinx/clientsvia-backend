@@ -1251,6 +1251,11 @@ async function _handlePrequalResponse({
     ? (container.sections || []).find(s => String(s._id || '') === sectionId) || null
     : null;
 
+  // Load discoveryNotes once — provides callReason/urgency/priorVisit context to KCS
+  // for both the escape path and the main answer path below.
+  const _dnCtx = await DiscoveryNotesService.load(companyId, callSid).catch(() => null);
+  const discoveryContext = _buildDiscoveryContext(_dnCtx);
+
   const pq      = targetSection?.preQualifyQuestion || {};
   const options = pq.options || [];
   const fieldKey = pq.fieldKey || 'preQualifyAnswer';
@@ -1296,6 +1301,7 @@ async function _handlePrequalResponse({
       _escapedResult = await KCS.answer({
         container, targetSection, question: userInput,
         kbSettings, company, callerName, callSid, turn,
+        discoveryContext,
       });
     } catch (_e) {
       logger.error('[KC_ENGINE] Pre-qualify escape: KCS.answer error', { companyId, callSid, containerId, err: _e.message });
@@ -1362,6 +1368,7 @@ async function _handlePrequalResponse({
       callSid,
       turn,
       preQualifyContext,  // injects CALLER TYPE block into Groq system prompt
+      discoveryContext,   // injects CALL CONTEXT block — caller's reason, urgency, prior-visit
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] Pre-qualify: Groq error after match', { companyId, callSid, containerId, err: _e.message });
