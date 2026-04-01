@@ -35,6 +35,7 @@ const GlobalHubService     = require('../../GlobalHubService');
 const KCS                  = require('../agent2/KnowledgeContainerService');
 const BPFUQService         = require('../kc/BPFUQService');
 const DiscoveryNotesService = require('../../discoveryNotes/DiscoveryNotesService');
+const UAP                  = require('../kc/UtteranceActParser');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -443,9 +444,21 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     }
   }
 
-  // ── STEP 1: Run the normal step handler ───────────────────────────────────
-  const prevSnap   = _snapshotCtx(ctx);
-  const stepResult = await _runStepHandler(ctx, userInput, config, companyId, isTest, events);
+  // ── STEP 1: Run the normal step handler + UAP parse in parallel ─────────
+  // UAP fires on every booking turn at zero added latency (Promise.all).
+  // It is the authoritative KC-question detector: if the caller is asking
+  // about a service topic (pricing, warranty, scheduling, etc.) UAP will
+  // return a daType with confidence ≥ 0.70 — far more reliable than the
+  // heuristic alone (the heuristic misses questions without "?" and short
+  // queries like "how much?" that the STT transcribes without punctuation).
+  const prevSnap = _snapshotCtx(ctx);
+  const [stepResult, parsedAct] = await Promise.all([
+    _runStepHandler(ctx, userInput, config, companyId, isTest, events),
+    (userInput?.trim()
+      ? UAP.parse(companyId, userInput).catch(() => null)
+      : Promise.resolve(null)
+    )
+  ]);
 
   // Check if the step made progress (new data captured or step changed)
   const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
@@ -463,9 +476,12 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     return stepResult;
   }
 
-  // If input is short / ambiguous → trust the step re-ask over 123RP
-  // (covers: "hmm", "oh", "sorry", "Tuesday", "10am", "John Smith")
-  if (!_isLikelyOffTopic(userInput, prevSnap.step)) {
+  // UAP authority: confidence ≥ 0.70 means the Bridge found a phrase match —
+  // caller is asking about a KC service topic, not providing booking data.
+  // Combined with the heuristic (long sentence OR explicit ?) to cover phrases
+  // UAP hasn't been trained on yet (new KC containers, uncommon phrasings).
+  const uapDetectsKCQuestion = !!(parsedAct?.daType && parsedAct.confidence >= 0.70);
+  if (!_isLikelyOffTopic(userInput, prevSnap.step) && !uapDetectsKCQuestion) {
     return stepResult;
   }
 
@@ -505,10 +521,14 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // The agent always knows exactly where booking was paused and returns there.
   // ─────────────────────────────────────────────────────────────────────────
   events.push({
-    type:      'BK_BPFUQ_START',
-    step:      prevSnap.step,
-    input:     userInput.substring(0, 100),
-    timestamp: Date.now()
+    type:           'BK_BPFUQ_START',
+    step:           prevSnap.step,
+    input:          userInput.substring(0, 100),
+    uapDaType:      parsedAct?.daType       || null,
+    uapMatchType:   parsedAct?.matchType    || 'NONE',
+    uapConfidence:  parsedAct?.confidence   || 0,
+    uapTriggered:   uapDetectsKCQuestion,
+    timestamp:      Date.now()
   });
 
   try {
@@ -683,6 +703,32 @@ function _isClearQuestion(userInput) {
   ];
 
   return CLEAR_SIGNALS.some(signal => lc.includes(signal));
+}
+
+/**
+ * _writeTempField — Fire-and-forget write of one or more fields to discoveryNotes.temp.
+ *
+ * Called after each booking field is confirmed so that discoveryNotes.temp is
+ * always current. When BOOKING_CONFIRM fires, LOCK_ALL_TEMP copies the full
+ * temp to confirmed{} in one atomic event — making every field available
+ * for the permanent caller chart.
+ *
+ * NEVER awaited — failures are logged and discarded (call continues).
+ *
+ * @param {Object} ctx        - Current booking context (must have callSid)
+ * @param {string} companyId  - Tenant scoping
+ * @param {Object} tempPatch  - Key/value pairs to merge into discoveryNotes.temp
+ */
+function _writeTempField(ctx, companyId, tempPatch) {
+  if (!ctx?.callSid || !companyId || !tempPatch) return;
+  const nonNull = Object.fromEntries(
+    Object.entries(tempPatch).filter(([, v]) => v !== undefined && v !== null && v !== '')
+  );
+  if (!Object.keys(nonNull).length) return;
+  DiscoveryNotesService.update(companyId, ctx.callSid, { temp: nonNull })
+    .catch(e => logger.warn(`[${ENGINE_ID}] DN temp write failed`, {
+      companyId, callSid: ctx.callSid, fields: Object.keys(nonNull), err: e.message
+    }));
 }
 
 /**
@@ -1186,6 +1232,16 @@ async function processConfirmRecognition(ctx, userInput, config, companyId, isTe
 
     events.push({ type: 'BL0_RECOGNITION_CONFIRMED', timestamp: Date.now() });
 
+    // Write CRM-confirmed identity to discoveryNotes.temp (fire-and-forget).
+    // Caller confirmed their chart data — stamp it so the call record is accurate
+    // even if the call ends before BOOKING_CONFIRM (e.g. caller hangs up after re-scheduling).
+    _writeTempField(ctx, companyId, {
+      firstName: ctx.collectedFields.firstName || null,
+      lastName:  ctx.collectedFields.lastName  || null,
+      phone:     ctx.collectedFields.phone     || null,
+      address:   ctx.collectedFields.address   || null,
+    });
+
     const onYes = config.callerRecognition?.onConfirmedYes || 'SKIP_TO_CUSTOM';
 
     // COLLECT_ALL — ignore recognition data, collect fresh
@@ -1469,6 +1525,13 @@ async function processConfirmName(ctx, userInput, config, companyId, isTest, eve
  * required field using the same logic as processInit.
  */
 async function continueAfterNameConfirmed(ctx, config, companyId, isTest, events) {
+  // Write confirmed name to discoveryNotes.temp (fire-and-forget).
+  // LOCK_ALL_TEMP at BOOKING_CONFIRM will promote this to confirmed{}.
+  _writeTempField(ctx, companyId, {
+    firstName: ctx.collectedFields.firstName || null,
+    lastName:  ctx.collectedFields.lastName  || null,
+  });
+
   ctx.step = STEPS.COLLECT_PHONE;  // will be overridden below if phone already set
 
   if (!ctx.collectedFields.phone) {
@@ -1697,6 +1760,12 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
 
 /** Shared transition logic after name is fully collected. */
 async function advanceAfterName(ctx, config, companyId, isTest, events) {
+  // Write confirmed name to discoveryNotes.temp (fire-and-forget).
+  _writeTempField(ctx, companyId, {
+    firstName: ctx.collectedFields.firstName || null,
+    lastName:  ctx.collectedFields.lastName  || null,
+  });
+
   if (!ctx.collectedFields.phone) {
     ctx.step = STEPS.COLLECT_PHONE;
     return {
@@ -2212,6 +2281,9 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
 
 /** Shared transition logic after phone is collected. */
 async function advanceAfterPhone(ctx, config, companyId, isTest, events) {
+  // Write confirmed phone to discoveryNotes.temp (fire-and-forget).
+  _writeTempField(ctx, companyId, { phone: ctx.collectedFields.phone || null });
+
   // Phone readback — only when the caller explicitly gave us a new number
   // (not when they confirmed their caller ID — that's already verbally acknowledged).
   const _readbackPhone = ctx._phoneJustCollected || null;
@@ -2523,6 +2595,9 @@ async function finalizeAddress(ctx, config, companyId, isTest, events) {
 
   events.push({ type: 'BL1_ADDRESS_COLLECTED', address: ctx.collectedFields.address, timestamp: Date.now() });
 
+  // Write confirmed address to discoveryNotes.temp (fire-and-forget).
+  _writeTempField(ctx, companyId, { address: ctx.collectedFields.address || null });
+
   const customFields = config.customFields || [];
   if (customFields.length > 0) {
     const firstField = customFields[0];
@@ -2638,6 +2713,11 @@ async function processCollectCustom(ctx, userInput, config, companyId, events) {
       collectedCustomFields: { ...(ctx.collectedCustomFields || {}), [field.key]: extracted },
       customFieldIndex: fieldIndex + 1
     };
+
+    // Write confirmed custom field to discoveryNotes.temp (fire-and-forget).
+    // field.key is owner-defined (e.g. 'membershipNumber', 'pickupAddress') —
+    // stored directly in temp so BOOKING_CONFIRM promotes it to confirmed{}.
+    _writeTempField(newCtx, companyId, { [field.key]: extracted });
 
     // Advance to next custom field or beyond
     if (fieldIndex + 1 < allFields.length) {
