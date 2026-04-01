@@ -3913,6 +3913,20 @@ const companySchema = new mongoose.Schema({
         },
 
         // -------------------------------------------------------------------
+        // TURN 1 ENGINE — First-turn triage and personalized welcome
+        // -------------------------------------------------------------------
+        // Owns turn 1 entirely. Turn 2+ uses normal KC/UAP flow.
+        // 4 lanes: SIMPLE_GREETING | RETURNING_CALLER | CALLER_WITH_INTENT | DIDNT_UNDERSTAND
+        // Admin UI: /agent-console/turn1.html
+        // Engine:   services/engine/turn1/Turn1Engine.js
+        turn1: {
+            enabled:                { type: Boolean, default: true },
+            didntUnderstandText:    { type: String,  default: "I'm sorry, I missed that — could you say that again?" },
+            returningCallerEnabled: { type: Boolean, default: true },
+            historyDepthDays:       { type: Number,  default: 180 },  // how far back to surface context signals
+        },
+
+        // -------------------------------------------------------------------
         // AGENT 2.0 (ISOLATED, UI-CONTROLLED)
         // -------------------------------------------------------------------
         // A clean, modular namespace for the next-generation agent.

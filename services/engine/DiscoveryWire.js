@@ -5,10 +5,11 @@
  * DISCOVERY WIRE
  * ============================================================================
  *
- * Thin routing layer for all non-BOOKING turns. Wiring only — no ownership.
+ * Thin routing layer. Wiring only — no ownership.
  *
- * Greeting-only input  → Agent2GreetingInterceptor owns, returns immediately
- * Everything else      → KCDiscoveryRunner owns (UAP → KC → booking detection)
+ * Turn 1               → Turn1Engine (greet + ack + delegate action to KC)
+ * Turn 2+, greeting    → Agent2GreetingInterceptor (pure greeting only)
+ * Turn 2+, intent      → KCDiscoveryRunner (UAP → KC → booking detection)
  *
  * CallerName source:
  *   discoveryNotes.temp.firstName (pre-warmed by CallerRecognition before turn 1)
@@ -21,6 +22,7 @@
  */
 
 const { Agent2GreetingInterceptor } = require('./agent2/Agent2GreetingInterceptor');
+const { Turn1Engine }           = require('./turn1/Turn1Engine');
 const KCDiscoveryRunner         = require('./kc/KCDiscoveryRunner');
 const DiscoveryNotesService     = require('../discoveryNotes/DiscoveryNotesService');
 const logger                    = require('../../utils/logger');
@@ -54,6 +56,20 @@ class DiscoveryWire {
     onSentence   = null,
   }) {
     const emit = emitEvent || (() => {});
+
+    // ── Turn 1 — fully owned by Turn1Engine ───────────────────────────────
+    // Turn1Engine handles all 4 first-turn scenarios:
+    //   SIMPLE_GREETING | RETURNING_CALLER | CALLER_WITH_INTENT | DIDNT_UNDERSTAND
+    // It reads the pre-warmed discoveryNotes, runs UAP, composes the
+    // greeting + acknowledgment, then delegates the action to KCDiscoveryRunner.
+    // Turn 2+ uses the existing greeting check → KC flow below.
+    if (turn === 1) {
+      emit('DISCOVERY_WIRE_PATH', { path: 'TURN1_ENGINE', turn });
+      return Turn1Engine.run({
+        company, companyId, callSid, userInput,
+        state, emitEvent, turn, bridgeToken, redis, onSentence,
+      });
+    }
 
     // ── 1. Resolve callerName ──────────────────────────────────────────────
     // CallerRecognition pre-warms discoveryNotes.temp.firstName before turn 1.

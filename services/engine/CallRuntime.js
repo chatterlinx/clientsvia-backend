@@ -752,6 +752,8 @@ class CallRuntime {
             
             const skipOpener =
                 (ownerResult?.matchSource === 'AGENT2_DISCOVERY') ||
+                // Turn1Engine composes its own greeting + ack — never prepend OpenerEngine on top
+                (ownerResult?.matchSource === 'TURN1_ENGINE') ||
                 // Booking-intent redirect needs no empathy opener — agent is already pivoting to booking
                 (ownerResult?.kcTrace?.path === 'KC_BOOKING_INTENT') ||
                 (lane === 'DISCOVERY' && /^got it\b/i.test(ownerResult?.response || ''));

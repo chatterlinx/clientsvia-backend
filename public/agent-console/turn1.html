@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Turn 1 Engine — ClientsVia</title>
+
+  <!-- ============================================================
+       TURN 1 ENGINE CONSOLE
+       ClientsVia Agent Console
+
+       WHAT THIS PAGE IS:
+         Configuration for Turn1Engine — the first-turn triage
+         handler that owns the opening of every call.
+
+         Turn 1 is the only chance to make a first impression.
+         Turn1Engine uses CallerRecognition data pre-loaded before
+         the caller speaks to personalize the greeting instantly.
+
+       FOUR LANES:
+         1. Simple Greeting      — "hi / hello / hey" → "Hi, how can I help?"
+         2. Returning Caller     — Known caller + chart signal → personalized
+         3. Caller With Intent   — Substantive utterance → greet + ack + KC
+         4. Didn't Understand    — Too short / no match → re-ask
+
+       API: GET/PATCH /api/admin/turn1/company/:companyId/config
+  ============================================================ -->
+
+  <style>
+    /* ── Design tokens ──────────────────────────────────────── */
+    :root {
+      --color-primary:      #0ea5e9;
+      --color-primary-dk:   #0284c7;
+      --color-primary-lt:   #e0f2fe;
+      --color-success:      #10b981;
+      --color-success-lt:   #d1fae5;
+      --color-success-dk:   #059669;
+      --color-warning:      #f59e0b;
+      --color-warning-lt:   #fef3c7;
+      --color-danger:       #ef4444;
+      --color-danger-lt:    #fee2e2;
+      --color-purple:       #8b5cf6;
+      --color-purple-lt:    #ede9fe;
+      --color-indigo:       #6366f1;
+      --color-indigo-lt:    #eef2ff;
+      --color-teal:         #14b8a6;
+      --color-teal-lt:      #ccfbf1;
+      --color-orange:       #f97316;
+      --color-orange-lt:    #ffedd5;
+
+      --bg-page:            #f0f9ff;
+      --bg-card:            #ffffff;
+      --bg-header:          #ffffff;
+
+      --text-primary:       #0f172a;
+      --text-secondary:     #334155;
+      --text-muted:         #64748b;
+      --text-xs:            #94a3b8;
+
+      --border:             #e2e8f0;
+      --border-focus:       #0ea5e9;
+      --border-strong:      #cbd5e1;
+
+      --radius-card:        12px;
+      --radius-sm:          8px;
+      --radius-xs:          6px;
+      --radius-pill:        999px;
+
+      --shadow-card:        0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-raised:      0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+
+      --font-mono:          'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      --transition:         150ms ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Page Header ─────────────────────────────────────────── */
+    .page-header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+      height: 56px;
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: var(--radius-xs); cursor: pointer;
+      color: var(--text-muted); font-size: .813rem; font-weight: 500;
+      text-decoration: none; transition: all var(--transition); white-space: nowrap;
+    }
+    .btn-back:hover { background: var(--bg-page); color: var(--text-secondary); border-color: var(--border-strong); }
+
+    .header-divider { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+    .header-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .header-icon svg { color: #fff; }
+
+    .header-title-group { flex: 1; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+    .header-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+    .header-company { font-size: .813rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .header-badge {
+      font-size: .688rem; font-weight: 600; padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-primary-lt); color: var(--color-primary-dk);
+      border: 1px solid #bae6fd; white-space: nowrap;
+    }
+    .header-badge.active {
+      background: var(--color-success-lt); color: var(--color-success-dk);
+      border-color: #a7f3d0;
+    }
+    .header-badge.inactive {
+      background: var(--color-danger-lt); color: var(--color-danger);
+      border-color: #fca5a5;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .btn-save {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 16px;
+      background: var(--color-primary); color: #fff;
+      border: none; border-radius: var(--radius-xs); cursor: pointer;
+      font-size: .813rem; font-weight: 600;
+      transition: background var(--transition);
+    }
+    .btn-save:hover { background: var(--color-primary-dk); }
+    .btn-save:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Main layout ─────────────────────────────────────────── */
+    .main-content {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ── Hero banner ─────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+      border-radius: var(--radius-card);
+      padding: 28px 32px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: '';
+      position: absolute; right: -40px; top: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,.05);
+      border-radius: 50%;
+    }
+    .hero-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; position: relative; z-index: 1; }
+    .hero-sub { font-size: .875rem; opacity: .85; max-width: 540px; line-height: 1.65; position: relative; z-index: 1; }
+    .hero-chips { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+    .hero-chip {
+      font-size: .75rem; font-weight: 600; padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
+    }
+
+    /* ── Card ────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card-icon {
+      width: 32px; height: 32px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-title { font-size: .875rem; font-weight: 700; color: var(--text-primary); flex: 1; }
+    .card-desc  { font-size: .813rem; color: var(--text-muted); margin-top: 2px; }
+    .card-body  { padding: 20px; }
+
+    /* ── Toggle row ──────────────────────────────────────────── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; padding: 16px 20px;
+    }
+    .toggle-row + .toggle-row { border-top: 1px solid var(--border); }
+    .toggle-info { flex: 1; }
+    .toggle-label { font-size: .875rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+    .toggle-hint  { font-size: .813rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* Switch */
+    .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch-slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #cbd5e1; border-radius: var(--radius-pill);
+      transition: background var(--transition);
+    }
+    .switch-slider::before {
+      content: '';
+      position: absolute; left: 3px; bottom: 3px;
+      width: 18px; height: 18px;
+      background: #fff; border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform var(--transition);
+    }
+    .switch input:checked + .switch-slider { background: var(--color-success); }
+    .switch input:checked + .switch-slider::before { transform: translateX(18px); }
+    .switch input:disabled + .switch-slider { opacity: .5; cursor: not-allowed; }
+
+    /* ── Form row ────────────────────────────────────────────── */
+    .form-row { margin-bottom: 18px; }
+    .form-row:last-child { margin-bottom: 0; }
+    .form-label {
+      display: block; font-size: .813rem; font-weight: 600;
+      color: var(--text-secondary); margin-bottom: 6px;
+    }
+    .form-hint { font-size: .75rem; color: var(--text-muted); margin-top: 5px; line-height: 1.5; }
+
+    textarea.form-control, select.form-control, input.form-control {
+      width: 100%; padding: 9px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      font-family: inherit; font-size: .875rem; color: var(--text-primary);
+      background: var(--bg-card); outline: none;
+      transition: border-color var(--transition);
+      line-height: 1.5;
+    }
+    textarea.form-control { resize: vertical; min-height: 72px; }
+    textarea.form-control:focus,
+    select.form-control:focus,
+    input.form-control:focus { border-color: var(--border-focus); }
+
+    select.form-control {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      cursor: pointer;
+    }
+
+    /* ── Lane preview ────────────────────────────────────────── */
+    .lane-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 640px) { .lane-grid { grid-template-columns: 1fr; } }
+
+    .lane-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .lane-header {
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .lane-num {
+      width: 22px; height: 22px; border-radius: 50%;
+      font-size: .688rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .lane-name { font-size: .813rem; font-weight: 700; color: var(--text-primary); flex: 1; }
+    .lane-body { padding: 12px 14px; }
+    .lane-trigger {
+      font-size: .75rem; color: var(--text-muted);
+      margin-bottom: 8px; line-height: 1.5;
+    }
+    .lane-trigger strong { color: var(--text-secondary); font-weight: 600; }
+    .lane-response {
+      font-size: .813rem; color: var(--text-primary);
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      padding: 10px 12px;
+      line-height: 1.55;
+      font-style: italic;
+    }
+    .lane-response.lane-disabled {
+      opacity: .45;
+    }
+    .lane-disabled-badge {
+      font-size: .75rem; font-weight: 600;
+      color: var(--color-warning); background: var(--color-warning-lt);
+      border: 1px solid #fde68a; border-radius: var(--radius-pill);
+      padding: 2px 8px; margin-left: auto;
+    }
+
+    /* Lane color coding */
+    .lane-1 .lane-header { background: #f0fdf4; }
+    .lane-1 .lane-num    { background: var(--color-success-lt); color: var(--color-success-dk); }
+    .lane-2 .lane-header { background: #eff6ff; }
+    .lane-2 .lane-num    { background: var(--color-primary-lt); color: var(--color-primary-dk); }
+    .lane-3 .lane-header { background: #faf5ff; }
+    .lane-3 .lane-num    { background: var(--color-purple-lt); color: var(--color-purple); }
+    .lane-4 .lane-header { background: #fff7ed; }
+    .lane-4 .lane-num    { background: var(--color-orange-lt); color: var(--color-orange); }
+
+    /* ── Toast ───────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      padding: 12px 20px; border-radius: var(--radius-sm);
+      font-size: .875rem; font-weight: 600; color: #fff;
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: var(--shadow-raised);
+      opacity: 0; transform: translateY(8px);
+      transition: opacity .2s ease, transform .2s ease;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: var(--color-success-dk); }
+    .toast.error   { background: var(--color-danger); }
+
+    /* ── Loading skeleton ────────────────────────────────────── */
+    .skeleton {
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+      height: 16px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ── Status dot ──────────────────────────────────────────── */
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .status-dot.active   { background: var(--color-success); box-shadow: 0 0 0 2px var(--color-success-lt); }
+    .status-dot.inactive { background: #94a3b8; box-shadow: 0 0 0 2px #f1f5f9; }
+
+    /* ── Info note ───────────────────────────────────────────── */
+    .info-note {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 12px 14px;
+      background: var(--color-indigo-lt);
+      border: 1px solid #c7d2fe;
+      border-radius: var(--radius-sm);
+      font-size: .813rem; color: var(--color-indigo);
+      line-height: 1.55;
+    }
+    .info-note svg { flex-shrink: 0; margin-top: 1px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <a class="btn-back" href="/agent-console/index.html">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M10 13L5 8l5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Back
+  </a>
+
+  <div class="header-divider"></div>
+
+  <div class="header-icon">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M10 6v4l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M6 3.5L10 2l4 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <div class="header-title-group">
+    <span class="header-title">Turn 1 Engine</span>
+    <span class="header-company" id="header-company">—</span>
+    <span class="header-badge" id="header-badge">
+      <span class="status-dot" id="status-dot"></span>&nbsp;&nbsp;Loading…
+    </span>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn-save" id="btn-save" disabled>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <path d="M13 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h8l3 3v9a1 1 0 0 1-1 1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M10 2v4H5V2" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M4 10h8M4 12h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Save Settings
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════════ -->
+<div class="main-content">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-title">Turn 1 Engine — First Impression Intelligence</div>
+    <div class="hero-sub">
+      The caller's chart is already loaded before they speak.
+      Turn1Engine uses that data to personalize turn 1 — greeting returning callers by name,
+      surfacing open leads, and acknowledging frustration before KC delivers the answer.
+    </div>
+    <div class="hero-chips">
+      <span class="hero-chip">Turn 1 Only</span>
+      <span class="hero-chip">4 Triage Lanes</span>
+      <span class="hero-chip">CallerRecognition Pre-Warm</span>
+      <span class="hero-chip">Zero Extra Latency</span>
+    </div>
+  </div>
+
+  <!-- ── Card 1: Master Toggle ─────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:#eff6ff;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <rect x="2" y="5" width="16" height="10" rx="5" stroke="#0ea5e9" stroke-width="1.5"/>
+          <circle cx="14" cy="10" r="3.5" fill="#0ea5e9"/>
+        </svg>
+      </div>
+      <div>
+        <div class="card-title">Turn 1 Engine</div>
+        <div class="card-desc">Enable or disable the first-turn triage handler for this company</div>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Enable Turn 1 Engine</div>
+        <div class="toggle-hint">
+          When enabled, all turn 1 calls are routed through Turn1Engine — greet, acknowledge, then
+          delegate the action to KC. When disabled, turn 1 falls directly into KCDiscoveryRunner
+          (same as turn 2+ behavior).
+        </div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-enabled" />
+        <span class="switch-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Card 2: Returning Caller Mode ──────────────────────── -->
+  <div class="card" id="card-returning">
+    <div class="card-header">
+      <div class="card-icon" style="background:#eff6ff;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="6" r="3" stroke="#0ea5e9" stroke-width="1.5"/>
+          <path d="M4 18c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="#0ea5e9" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M15.5 11.5l2 2-2 2" stroke="#0ea5e9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17.5 13.5H15" stroke="#0ea5e9" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="card-title">Returning Caller Mode</div>
+        <div class="card-desc">Personalized greeting for known callers with chart history</div>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Enable Returning Caller Recognition</div>
+        <div class="toggle-hint">
+          When a known caller says a simple greeting, Turn1Engine surfaces a context-aware
+          opener based on their chart — last visit, open leads, repeat issues.
+        </div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-returning" />
+        <span class="switch-slider"></span>
+      </label>
+    </div>
+
+    <div style="padding: 16px 20px; border-top: 1px solid var(--border);" id="returning-depth-row">
+      <div class="form-row" style="margin-bottom:0;">
+        <label class="form-label" for="sel-depth">History Depth Window</label>
+        <select class="form-control" id="sel-depth" style="max-width:280px;">
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="180" selected>180 days (recommended)</option>
+          <option value="365">1 year</option>
+        </select>
+        <div class="form-hint">
+          Only calls within this window are referenced in the returning-caller greeting.
+          Older calls are still in the chart — they just won't be mentioned.
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 14px 20px; border-top: 1px solid var(--border);">
+      <div class="info-note">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:1px">
+          <circle cx="10" cy="10" r="8" stroke="#6366f1" stroke-width="1.5"/>
+          <path d="M10 9v5" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="10" cy="6.5" r=".85" fill="#6366f1"/>
+        </svg>
+        <span>
+          Context priority: <strong>(1)</strong> Open lost lead &mdash;
+          <strong>(2)</strong> Recent service call &mdash;
+          <strong>(3)</strong> Repeat issue detected &mdash;
+          <strong>(4)</strong> Prior call reason &mdash;
+          <strong>(5)</strong> Known caller, no signal
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Card 3: Didn't Understand Text ─────────────────────── -->
+  <div class="card" id="card-didnt">
+    <div class="card-header">
+      <div class="card-icon" style="background:#fff7ed;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <path d="M10 2C5.58 2 2 5.58 2 10s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8Z" stroke="#f97316" stroke-width="1.5"/>
+          <path d="M10 7v4" stroke="#f97316" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="10" cy="13.5" r=".85" fill="#f97316"/>
+        </svg>
+      </div>
+      <div>
+        <div class="card-title">Didn't Understand Response</div>
+        <div class="card-desc">What the agent says when it can't parse the caller's first utterance</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <label class="form-label" for="ta-didnt">Re-ask text (Lane 4 — Didn't Understand)</label>
+        <textarea class="form-control" id="ta-didnt" rows="3"
+          placeholder="I'm sorry, I missed that — could you say that again?"></textarea>
+        <div class="form-hint">
+          Triggered when the caller says ≤2 words with no recognisable intent and no greeting.
+          Leave blank to use the default text shown above.
+        </div>
+      </div>
+      <button class="btn-back" id="btn-reset-didnt" style="margin-top:4px; font-size:.75rem;">
+        Reset to default
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Card 4: Lane Preview ───────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:#faf5ff;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <path d="M2 10s3-7 8-7 8 7 8 7-3 7-8 7-8-7-8-7Z" stroke="#8b5cf6" stroke-width="1.5"/>
+          <circle cx="10" cy="10" r="2.5" stroke="#8b5cf6" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="card-title">Lane Preview</div>
+        <div class="card-desc">What each triage lane produces with the current configuration</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="lane-grid" id="lane-grid">
+
+        <!-- Lane 1 — Simple Greeting -->
+        <div class="lane-card lane-1">
+          <div class="lane-header">
+            <span class="lane-num">1</span>
+            <span class="lane-name">Simple Greeting</span>
+          </div>
+          <div class="lane-body">
+            <div class="lane-trigger"><strong>Trigger:</strong> "hi", "hello", "hey" — no intent detected</div>
+            <div class="lane-response" id="preview-lane1">"Hi, how can I help you today?"</div>
+          </div>
+        </div>
+
+        <!-- Lane 2 — Returning Caller -->
+        <div class="lane-card lane-2">
+          <div class="lane-header">
+            <span class="lane-num">2</span>
+            <span class="lane-name">Returning Caller</span>
+            <span class="lane-disabled-badge" id="lane2-disabled" style="display:none;">Disabled</span>
+          </div>
+          <div class="lane-body">
+            <div class="lane-trigger"><strong>Trigger:</strong> Known caller + simple greeting + chart has context signal</div>
+            <div class="lane-response" id="preview-lane2">"Hi Sarah! I see you were looking to schedule something recently — would you like to pick that up?"</div>
+          </div>
+        </div>
+
+        <!-- Lane 3 — Caller With Intent -->
+        <div class="lane-card lane-3">
+          <div class="lane-header">
+            <span class="lane-num">3</span>
+            <span class="lane-name">Caller With Intent</span>
+          </div>
+          <div class="lane-body">
+            <div class="lane-trigger"><strong>Trigger:</strong> Substantive utterance detected (UAP matches or word count &gt; 3)</div>
+            <div class="lane-response" id="preview-lane3">"Hi! I'm sorry to hear that — [KC knowledge answer]"</div>
+          </div>
+        </div>
+
+        <!-- Lane 4 — Didn't Understand -->
+        <div class="lane-card lane-4">
+          <div class="lane-header">
+            <span class="lane-num">4</span>
+            <span class="lane-name">Didn't Understand</span>
+          </div>
+          <div class="lane-body">
+            <div class="lane-trigger"><strong>Trigger:</strong> ≤2 words, no greeting, no UAP match</div>
+            <div class="lane-response" id="preview-lane4">"I'm sorry, I missed that — could you say that again?"</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+const qs  = s => document.querySelector(s);
+const qsp = (k, fallback = '') => new URLSearchParams(window.location.search).get(k) || fallback;
+
+const DEFAULT_DIDNT = "I'm sorry, I missed that — could you say that again?";
+
+function showToast(msg, type = 'success') {
+  const el = qs('#toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(el._tid);
+  el._tid = setTimeout(() => { el.className = 'toast'; }, 3000);
+}
+
+/* ── State ───────────────────────────────────────────────────── */
+let companyId  = qsp('companyId');
+let companyName = qsp('companyName', 'Unknown Company');
+let dirty = false;
+
+function markDirty() {
+  dirty = true;
+  qs('#btn-save').disabled = false;
+}
+
+/* ── Company header ──────────────────────────────────────────── */
+function setHeader(name, id) {
+  qs('#header-company').textContent = `${name} · ${id}`;
+}
+
+function setBadge(enabled) {
+  const badge = qs('#header-badge');
+  const dot   = qs('#status-dot');
+  if (enabled) {
+    badge.className = 'header-badge active';
+    badge.innerHTML = '<span class="status-dot active"></span>&nbsp;&nbsp;Active';
+  } else {
+    badge.className = 'header-badge inactive';
+    badge.innerHTML = '<span class="status-dot inactive"></span>&nbsp;&nbsp;Disabled';
+  }
+}
+
+/* ── Load config from API ────────────────────────────────────── */
+async function loadConfig() {
+  if (!companyId) {
+    showToast('No companyId in URL — append ?companyId=... to use this page.', 'error');
+    return;
+  }
+
+  setHeader(decodeURIComponent(companyName), companyId);
+
+  try {
+    const res  = await fetch(`/api/admin/turn1/company/${companyId}/config`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+
+    applyConfig(data.config || {});
+    qs('#btn-save').disabled = false;
+    dirty = false;
+  } catch (err) {
+    console.error('[turn1.html] load error', err);
+    showToast(`Load failed: ${err.message}`, 'error');
+  }
+}
+
+function applyConfig(cfg) {
+  const enabled   = cfg.enabled !== false;          // default true
+  const returning = cfg.returningCallerEnabled !== false; // default true
+  const depth     = cfg.historyDepthDays || 180;
+  const didnt     = cfg.didntUnderstandText || '';
+
+  qs('#toggle-enabled').checked   = enabled;
+  qs('#toggle-returning').checked = returning;
+  qs('#sel-depth').value = String(depth);
+  qs('#ta-didnt').value  = didnt;
+
+  setBadge(enabled);
+  syncLane2Badge(returning);
+  updateLane4Preview(didnt);
+}
+
+/* ── Save ────────────────────────────────────────────────────── */
+async function save() {
+  if (!companyId) return;
+  qs('#btn-save').disabled = true;
+
+  const payload = {
+    enabled:                qs('#toggle-enabled').checked,
+    returningCallerEnabled: qs('#toggle-returning').checked,
+    historyDepthDays:       parseInt(qs('#sel-depth').value, 10),
+    didntUnderstandText:    qs('#ta-didnt').value.trim(),
+  };
+
+  try {
+    const res  = await fetch(`/api/admin/turn1/company/${companyId}/config`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+
+    dirty = false;
+    setBadge(payload.enabled);
+    showToast('Settings saved', 'success');
+  } catch (err) {
+    console.error('[turn1.html] save error', err);
+    showToast(`Save failed: ${err.message}`, 'error');
+    qs('#btn-save').disabled = false;
+  }
+}
+
+/* ── Lane preview sync ───────────────────────────────────────── */
+function syncLane2Badge(returningEnabled) {
+  qs('#lane2-disabled').style.display = returningEnabled ? 'none' : 'inline-flex';
+  qs('#preview-lane2').classList.toggle('lane-disabled', !returningEnabled);
+}
+
+function updateLane4Preview(text) {
+  qs('#preview-lane4').textContent =
+    `"${text.trim() || DEFAULT_DIDNT}"`;
+}
+
+/* ── Event wiring ────────────────────────────────────────────── */
+qs('#toggle-enabled').addEventListener('change', e => {
+  setBadge(e.target.checked);
+  markDirty();
+});
+
+qs('#toggle-returning').addEventListener('change', e => {
+  syncLane2Badge(e.target.checked);
+  markDirty();
+});
+
+qs('#sel-depth').addEventListener('change', () => markDirty());
+
+qs('#ta-didnt').addEventListener('input', e => {
+  updateLane4Preview(e.target.value);
+  markDirty();
+});
+
+qs('#btn-reset-didnt').addEventListener('click', () => {
+  qs('#ta-didnt').value = '';
+  updateLane4Preview('');
+  markDirty();
+});
+
+qs('#btn-save').addEventListener('click', save);
+
+/* ── Keyboard shortcut: Cmd/Ctrl + S ─────────────────────────── */
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    if (dirty) save();
+  }
+});
+
+/* ── Init ────────────────────────────────────────────────────── */
+loadConfig();
+</script>
+
+</body>
+</html>

@@ -172,13 +172,27 @@ async function preWarm(companyId, callSid, callerPhone) {
 
     // ── 6. Build callerProfile block ──────────────────────────────────────
     const visitCount = (customer.discoveryNotes || []).length;
+
+    // Repeat-issue detection — scan last 5 callHistory entries (already in memory)
+    // If the same callReason appears 2+ times the caller has had recurring trouble.
+    // Turn1Engine reads this to elevate empathy on turn 1 before the caller speaks.
+    const recentReasons = (customer.callHistory || [])
+      .slice(-5)
+      .map(h => (h.callReason || '').trim().toLowerCase())
+      .filter(Boolean);
+    const _reasonCounts = {};
+    for (const r of recentReasons) _reasonCounts[r] = (_reasonCounts[r] || 0) + 1;
+    const _repeatEntry = Object.entries(_reasonCounts).find(([, count]) => count >= 2);
+
     const callerProfile = {
-      isKnown:          true,
-      customerId:       String(customer._id),
+      isKnown:              true,
+      customerId:           String(customer._id),
       visitCount,
-      lastCallDate:     lastConfirmedNotes?.capturedAt || null,
-      lastCallReason:   lastConfirmedNotes?.callReason || null,
-      lastConfirmed:    lastConfirmed,
+      lastCallDate:         lastConfirmedNotes?.capturedAt || null,
+      lastCallReason:       lastConfirmedNotes?.callReason || null,
+      lastConfirmed:        lastConfirmed,
+      repeatIssueDetected:  !!_repeatEntry,
+      repeatIssueReason:    _repeatEntry?.[0] || null,
       // staffRelationships populated in Step 13 callerProfile enrichment
       staffRelationships: customer.callerProfile?.staffRelationships || [],
     };

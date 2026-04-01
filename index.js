@@ -302,6 +302,9 @@ async function loadAllRoutes() {
         routes.discoveryNotesSettingsRoutes = await loadRouteWithTimeout('./routes/admin/discoveryNotesSettings', 'discoveryNotesSettingsRoutes'); // 📋 Discovery Notes Settings (bookingFieldConfig, snapshots)
         routes.uapArraysRoutes              = await loadRouteWithTimeout('./routes/admin/uapArrays',              'uapArraysRoutes');              // 🧩 UAP Arrays + Booking Fields (daType vocabulary, CRUD, pending)
 
+        // 🎙️ Turn1Engine — First-turn triage and personalized welcome
+        routes.turn1ConfigRoutes = await loadRouteWithTimeout('./routes/admin/turn1Config', 'turn1ConfigRoutes'); // 🎙️ Turn1Engine config (enabled, didntUnderstandText, returningCaller, historyDepth)
+
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -712,6 +715,7 @@ function registerRoutes(routes) {
     // ⚙️ Engine Hub — Governed Voice Operating System (V1 March 2026)
     app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)
     app.use('/api/admin/behavior-cards', routes.behaviorCardsRoutes); // 🃏 Behavior Cards (governs HOW the agent operates per KC category + flow scenarios)
+    app.use('/api/admin/turn1',          routes.turn1ConfigRoutes);   // 🎙️ Turn1Engine config (first-turn triage + personalized welcome)
 
     app.use('/api/admin/agent2', routes.greetingsRoutes); // 🎙️ Greetings (Call Start + Greeting Interceptor)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
