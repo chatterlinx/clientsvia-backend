@@ -1042,7 +1042,7 @@ const adminSettingsSchema = new mongoose.Schema({
         //                          deadAirPrompt, resumeKeywords[] } }
         // ────────────────────────────────────────────────────────────────────
         lapGroups: {
-            type:        Schema.Types.Mixed,
+            type:        mongoose.Schema.Types.Mixed,
             default:     [],
             description: 'LAP system keyword groups — global, inherited by all companies'
         },
