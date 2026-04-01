@@ -30,8 +30,9 @@ function _getUAP() {
 const _GREETING_RE = /^(hi+|hey+|hello+|howdy|yo+|good\s+(morning|afternoon|evening))\W*$/i;
 
 // ── Problem-signal keywords for acknowledgment composition ───────────────────
-const _PROBLEM_RE  = /\b(trouble|issue|problem|broken|not\s+work|fail|wrong|error|leak|flood|no\s+(heat|ac|cool|hot\s+water)|still|again)\b/i;
-const _BOOKING_RE  = /\b(schedul|book|appoint|come\s+out|send\s+someone|service\s+call|set\s+up)\b/i;
+const _PRIOR_VISIT_RE = /\b(was\s+here|came\s+out|already\s+(came|been\s+out|sent\s+someone|repaired|fixed)|still\s+not\s+(working|cooling|fixed|running|heating|cold|warm|blowing)|didn[''']?t\s+fix|hasn[''']?t\s+(been\s+)?fixed|back\s+again|last\s+time\s+(you|the\s+tech|your|he|she|they)\s+came)\b/i;
+const _PROBLEM_RE     = /\b(trouble|issue|problem|broken|not\s+work|fail|wrong|error|leak|flood|no\s+(heat|ac|cool|hot\s+water)|still|again)\b/i;
+const _BOOKING_RE     = /\b(schedul|book|appoint|come\s+out|send\s+someone|service\s+call|set\s+up)\b/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -222,6 +223,11 @@ class Turn1Engine {
     // Repeat-issue caller — elevated empathy regardless of what they say
     if (cp.repeatIssueDetected) {
       return `${greet} I'm sorry you're still dealing with this —`;
+    }
+
+    // Prior-visit signal — caller mentions a tech already came out / still not fixed
+    if (_PRIOR_VISIT_RE.test(input)) {
+      return `${greet} I'm sorry it's still not resolved —`;
     }
 
     // Problem / frustration expressed
