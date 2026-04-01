@@ -92,8 +92,6 @@ function buildResponseContext(trace = []) {
   const responseReady = findLastTrace(trace, 'A2_RESPONSE_READY');
   const speechSelected = findLastTrace(trace, 'SPEECH_SOURCE_SELECTED');
   const pathSelected = findLastTrace(trace, 'A2_PATH_SELECTED');
-  const micProof = findLastTrace(trace, 'A2_MIC_OWNER_PROOF');
-  const micConfirmed = findLastTrace(trace, 'A2_MIC_OWNER_CONFIRMED');
   const triggerEval = findLastTrace(trace, 'A2_TRIGGER_EVAL');
   const callerName = findLastTrace(trace, 'CALLER_NAME_EXTRACTED');
   const traceSummary = findLastTrace(trace, 'TURN_TRACE_SUMMARY');
@@ -102,7 +100,6 @@ function buildResponseContext(trace = []) {
 
   const responseSource = responseReady?.payload?.source || speechSelected?.payload?.sourceId || null;
   const responsePath = responseReady?.payload?.path || pathSelected?.payload?.path || null;
-  const responseOwner = micProof?.payload?.finalResponder || micConfirmed?.payload?.owner || null;
   const usedCallerName = responseReady?.payload?.usedCallerName;
   const callerNameExtracted = callerName?.payload?.firstName || null;
   const callerNameConfidence = callerName?.payload?.confidence ?? null;
@@ -119,7 +116,6 @@ function buildResponseContext(trace = []) {
     responseType,
     responseSource,
     responsePath,
-    responseOwner,
     matchSource,
     responsePreview,
     usedCallerName,
@@ -555,12 +551,20 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     }
 
     // ── TURN VERDICT + OWNER from TURN_TRACE_SUMMARY ─────────────────────────
-    // verdict is a one-liner like "[T1]KC_DIRECT_ANSWER" or "[T2]LLM_AGENT:COMPLEX"
+    // verdict: 'GREETING' | 'KC_ENGINE:KC_DIRECT_ANSWER' | 'KC_ENGINE:KC_LLM_FALLBACK' | 'BOOKING_ENGINE'
     if (turnTraceSummary?.payload) {
       const tsp = turnTraceSummary.payload;
       if (tsp.verdict)       turnData.turnVerdict   = tsp.verdict;
       if (tsp.ownerSelected) turnData.ownerSelected = tsp.ownerSelected;
       if (tsp.sectionTrail)  turnData.sectionTrail  = tsp.sectionTrail;
+    }
+
+    // ── DISCOVERY WIRE PATH (DISCOVERY_WIRE_PATH) ─────────────────────────────
+    // 'GREETING' → Agent2GreetingInterceptor handled this turn
+    // 'KC_ENGINE' → KCDiscoveryRunner handled this turn (UAP → KC pipeline)
+    const discoveryWireTrace = traceByKind.get(`${turnNum}:DISCOVERY_WIRE_PATH`);
+    if (discoveryWireTrace?.payload) {
+      turnData.discoveryWirePath = discoveryWireTrace.payload.path || null;
     }
 
     // ── LLM AGENT CALL details (A2_LLM_AGENT_CALLED) ─────────────────────────
@@ -987,13 +991,18 @@ function buildAutoSummary(callContext) {
   }
 
   // ── Routing distribution ───────────────────────────────────────────────────
-  const realTurns  = flow.filter(t => !t.traceOnly);
-  const t1Turns    = realTurns.filter(t => t.routingTier?.tier === 'T1' || t.routingTier?.tier === 1);
-  const t2Turns    = realTurns.filter(t => t.routingTier?.tier === 2);
-  const tierParts  = [];
-  if (t1Turns.length) tierParts.push(`${t1Turns.length} T1 (KC / trigger)`);
-  if (t2Turns.length) tierParts.push(`${t2Turns.length} T2 (LLM agent)`);
-  if (tierParts.length) lines.push(`Routing: ${tierParts.join(', ')}.`);
+  // Uses DiscoveryWire / KCDiscoveryRunner path data (UAP-era architecture).
+  const realTurns      = flow.filter(t => !t.traceOnly);
+  const greetingTurns  = realTurns.filter(t => t.turnVerdict === 'GREETING' || t.sourceKey === 'GREETING');
+  const kcDirectTurns  = realTurns.filter(t => t.kcEngine?.path === 'KC_DIRECT_ANSWER' || (t.kcEngine?.path && !t.kcEngine.llmFallback && !t.kcEngine.gracefulAck));
+  const kcLlmTurns     = realTurns.filter(t => t.kcEngine?.llmFallback);
+  const kcAckTurns     = realTurns.filter(t => t.kcEngine?.gracefulAck);
+  const routeParts     = [];
+  if (greetingTurns.length) routeParts.push(`${greetingTurns.length} greeting`);
+  if (kcDirectTurns.length) routeParts.push(`${kcDirectTurns.length} KC answered`);
+  if (kcLlmTurns.length)    routeParts.push(`${kcLlmTurns.length} LLM fallback`);
+  if (kcAckTurns.length)    routeParts.push(`${kcAckTurns.length} graceful ACK`);
+  if (routeParts.length) lines.push(`Routing: ${routeParts.join(', ')}.`);
 
   // ── Ghost / empty turns ────────────────────────────────────────────────────
   const ghostCount = txScript.filter(t => t.kind === 'GHOST_TURN_SKIPPED').length;
@@ -1863,12 +1872,14 @@ function fmtDuration(seconds) {
 // KC_ENGINE is UI_OWNED by default; GRACEFUL_ACK/BOOKING_INTENT overrides
 // to HARDCODED below in buildConversationTurns (those are canned scripts).
 const _SOURCE_TYPE_MAP = {
-  'AGENT2_DISCOVERY':     'LLM_GENERATED',  // Turn 1 LLM intake + contextual greeting
+  // ── Current (DiscoveryWire / KCDiscoveryRunner era) ──────────────────────
+  'GREETING':             'UI_OWNED',        // Agent2GreetingInterceptor — admin-authored greeting
   'KC_ENGINE':            'UI_OWNED',        // KC Answer Engine (authored KC cards)
   'BOOKING_LOGIC_ENGINE': 'HARDCODED',       // Booking flow collection prompts (scripted)
-  'greetings':            'UI_OWNED',        // Admin-authored greeting text
-  'GREETING':             'UI_OWNED',
+  'greetings':            'UI_OWNED',        // Admin-authored greeting text (config key)
   'TRIGGER_AUDIO':        'UI_OWNED',        // Instant audio trigger responses
+  // ── Legacy — Agent2DiscoveryRunner era (backward compat for old transcripts) ──
+  'AGENT2_DISCOVERY':     'LLM_GENERATED',
 };
 
 // Canned KC paths that produce hardcoded text (not KC card content)
@@ -1882,7 +1893,8 @@ function provenanceLabel(type, sourceKey) {
   if (type === 'LLM_GENERATED') return 'LLM Generated';
   if (type === 'HARDCODED')    return 'Hardcoded';
   // Fallback labels by sourceKey for display in the report
-  if (sourceKey === 'AGENT2_DISCOVERY')     return 'LLM Generated';
+  if (sourceKey === 'GREETING')             return 'Greeting';         // DiscoveryWire greeting path
+  if (sourceKey === 'AGENT2_DISCOVERY')     return 'LLM Generated';    // legacy only
   if (sourceKey === 'KC_ENGINE')            return 'KC Answer Engine';
   if (sourceKey === 'BOOKING_LOGIC_ENGINE') return 'Booking Script';
   if (sourceKey === 'greetings')            return 'Greeting';
