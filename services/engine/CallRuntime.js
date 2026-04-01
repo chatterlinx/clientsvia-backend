@@ -793,6 +793,7 @@ class CallRuntime {
             const isUiOwned = !!(
                 triggerCard?.id ||
                 ownerResult.matchSource === 'GREETING' ||
+                ownerResult.matchSource === 'TURN1_ENGINE' ||     // Turn1 greetings are rule/config-composed
                 ownerResult.matchSource === 'BOOKING_LOGIC_ENGINE' ||
                 ownerResult.uiPath ||
                 ownerResult.errorFallbackUiPath
@@ -848,6 +849,12 @@ class CallRuntime {
                 verdict: (() => {
                     if (triggerCard) return `TRIGGER:${triggerCard.label || triggerCard.id}`;
                     if (ownerResult.matchSource === 'GREETING') return 'GREETING';
+                    if (ownerResult.matchSource === 'TURN1_ENGINE') {
+                        // Include the lane so TURN_TRACE_SUMMARY is self-describing
+                        // _exitReason = 'TURN1_SIMPLE_GREETING' → lane suffix = 'SIMPLE_GREETING'
+                        const laneSuffix = (ownerResult._exitReason || '').replace('TURN1_', '') || 'ENGINE';
+                        return `TURN1:${laneSuffix}`;
+                    }
                     if (ownerResult.matchSource === 'KC_ENGINE') return `KC_ENGINE:${ownerResult.kcTrace?.path || 'UNKNOWN'}`;
                     if (lane === 'BOOKING') return 'BOOKING_ENGINE';
                     return ownerResult.matchSource || 'DISCOVERY_WIRE';

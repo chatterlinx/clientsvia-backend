@@ -560,11 +560,36 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     }
 
     // ── DISCOVERY WIRE PATH (DISCOVERY_WIRE_PATH) ─────────────────────────────
-    // 'GREETING' → Agent2GreetingInterceptor handled this turn
-    // 'KC_ENGINE' → KCDiscoveryRunner handled this turn (UAP → KC pipeline)
+    // 'TURN1_ENGINE' → Turn1Engine owned this turn (turn === 1 only)
+    // 'GREETING'     → Agent2GreetingInterceptor handled this turn
+    // 'KC_ENGINE'    → KCDiscoveryRunner handled this turn (UAP → KC pipeline)
     const discoveryWireTrace = traceByKind.get(`${turnNum}:DISCOVERY_WIRE_PATH`);
     if (discoveryWireTrace?.payload) {
       turnData.discoveryWirePath = discoveryWireTrace.payload.path || null;
+    }
+
+    // ── TURN1ENGINE TRIAGE DETAILS ────────────────────────────────────────────
+    // TURN1_TRIAGE  → lane, callerName, isKnown, uapDaType, uapSubType, uapConfidence
+    // TURN1_PATH    → path (lane name), prefix (for CALLER_WITH_INTENT only)
+    // TURN1_DISABLED → admin disabled Turn1Engine; fell straight to KC
+    const turn1TriageTrace   = traceByKind.get(`${turnNum}:TURN1_TRIAGE`);
+    const turn1PathTrace     = traceByKind.get(`${turnNum}:TURN1_PATH`);
+    const turn1DisabledTrace = traceByKind.get(`${turnNum}:TURN1_DISABLED`);
+    if (turn1TriageTrace?.payload || turn1PathTrace?.payload) {
+      const tp = turn1TriageTrace?.payload || {};
+      const pp = turn1PathTrace?.payload   || {};
+      turnData.turn1Engine = {
+        lane:          tp.lane          || pp.path  || null,  // e.g. 'SIMPLE_GREETING'
+        callerName:    tp.callerName    || null,
+        isKnown:       tp.isKnown       ?? null,
+        uapDaType:     tp.uapDaType     || null,
+        uapSubType:    tp.uapSubType    || null,
+        uapConfidence: tp.uapConfidence ?? null,
+        prefix:        pp.prefix        || null,  // "Hi John! I'm sorry to hear that —"
+      };
+    }
+    if (turn1DisabledTrace?.payload) {
+      turnData.turn1Disabled = true;  // admin disabled Turn1Engine this company
     }
 
     // ── LLM AGENT CALL details (A2_LLM_AGENT_CALLED) ─────────────────────────
@@ -638,6 +663,20 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     turnData.turnOutcome = (() => {
       if (turnData.ghostTurnInfo?.type === 'PFUQ_GHOST') return 'GHOST_SKIPPED';
       if (turnData.ghostTurnInfo?.type === 'STT_EMPTY')  return 'STT_EMPTY';
+
+      // ── TURN1ENGINE lane outcomes ─────────────────────────────────────────
+      // Checked before booking/KC — Turn1Engine always owns turn 1 when enabled.
+      // discoveryWirePath='TURN1_ENGINE' OR ownerSelected='TURN1_ENGINE' either confirms.
+      if (turnData.discoveryWirePath === 'TURN1_ENGINE' ||
+          turnData.ownerSelected     === 'TURN1_ENGINE') {
+        if (turnData.turn1Disabled) return 'TURN1_DISABLED';
+        const lane = turnData.turn1Engine?.lane;
+        if (lane === 'SIMPLE_GREETING')    return 'TURN1_SIMPLE_GREETING';
+        if (lane === 'RETURNING_CALLER')   return 'TURN1_RETURNING_CALLER';
+        if (lane === 'CALLER_WITH_INTENT') return 'TURN1_CALLER_WITH_INTENT';
+        if (lane === 'DIDNT_UNDERSTAND')   return 'TURN1_DIDNT_UNDERSTAND';
+        return 'TURN1_ENGINE';   // Turn1 fired but lane not yet captured
+      }
 
       // ── BOOKING ENGINE lane outcomes (most specific — checked first) ──
       // Digressions use BPFUQ (KC only) — no trigger or LLM paths.
@@ -1873,6 +1912,7 @@ function fmtDuration(seconds) {
 // to HARDCODED below in buildConversationTurns (those are canned scripts).
 const _SOURCE_TYPE_MAP = {
   // ── Current (DiscoveryWire / KCDiscoveryRunner era) ──────────────────────
+  'TURN1_ENGINE':         'ENGINE_COMPOSED', // Turn1Engine — rule-composed first-turn greeting/ack
   'GREETING':             'UI_OWNED',        // Agent2GreetingInterceptor — admin-authored greeting
   'KC_ENGINE':            'UI_OWNED',        // KC Answer Engine (authored KC cards)
   'BOOKING_LOGIC_ENGINE': 'HARDCODED',       // Booking flow collection prompts (scripted)
@@ -1889,6 +1929,16 @@ const _HARDCODED_KC_PATHS = new Set([
 ]);
 
 function provenanceLabel(type, sourceKey, provPath) {
+  // 0. Turn1Engine — lane-specific labels (provPath carries the _exitReason)
+  //    sourceKey === 'TURN1_ENGINE' for all 4 lanes.
+  if (sourceKey === 'TURN1_ENGINE') {
+    if (provPath === 'TURN1_SIMPLE_GREETING')    return 'Turn 1 — Simple Greeting';
+    if (provPath === 'TURN1_RETURNING_CALLER')   return 'Turn 1 — Returning Caller';
+    if (provPath === 'TURN1_CALLER_WITH_INTENT') return 'Turn 1 — Intent + KC';
+    if (provPath === 'TURN1_DIDNT_UNDERSTAND')   return 'Turn 1 — Didn\'t Understand';
+    return 'Turn 1 Engine';
+  }
+
   // 1. Path-specific overrides (most precise — canned KC scripts)
   if (provPath === 'KC_BOOKING_INTENT') return 'Booking Intent Script';
   if (provPath === 'KC_GRACEFUL_ACK')   return 'Fallback Acknowledgment';
@@ -1901,9 +1951,10 @@ function provenanceLabel(type, sourceKey, provPath) {
   if (sourceKey === 'greetings')            return 'Greeting';
 
   // 3. Type-based labels
-  if (type === 'UI_OWNED')      return 'KC / Trigger';
-  if (type === 'LLM_GENERATED') return 'LLM Generated';
-  if (type === 'HARDCODED')     return 'Hardcoded';
+  if (type === 'UI_OWNED')        return 'KC / Trigger';
+  if (type === 'ENGINE_COMPOSED') return 'Engine Composed';
+  if (type === 'LLM_GENERATED')   return 'LLM Generated';
+  if (type === 'HARDCODED')       return 'Hardcoded';
 
   // 4. Final fallbacks by sourceKey
   if (sourceKey === 'AGENT2_DISCOVERY') return 'LLM Generated';    // legacy only
