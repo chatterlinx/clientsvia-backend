@@ -20,7 +20,7 @@
  * ============================================================================
  */
 
-const Agent2GreetingInterceptor = require('./agent2/Agent2GreetingInterceptor');
+const { Agent2GreetingInterceptor } = require('./agent2/Agent2GreetingInterceptor');
 const KCDiscoveryRunner         = require('./kc/KCDiscoveryRunner');
 const DiscoveryNotesService     = require('../discoveryNotes/DiscoveryNotesService');
 const logger                    = require('../../utils/logger');
