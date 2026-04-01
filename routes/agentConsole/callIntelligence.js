@@ -2409,7 +2409,7 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       provenanceType: provType,
       provenanceLabel: provenanceLabel(provType, srcKey),
       provenancePath: provPath,
-      latencyMs: r123rp.latencyMs || null,
+      latencyMs: kcTrace.latencyMs || null,
       kcCard: kcCard ? {
         _id: kcCard._id.toString(),
         kcId: kcCard.kcId || null,
@@ -2418,8 +2418,8 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
         closingPrompt: kcCard.closingPrompt || null,
         category: kcCard.category || null
       } : null,
-      score:  typeof r123rp.score === 'number' ? r123rp.score : null,
-      intent: r123rp.intent || null,
+      score:  typeof kcTrace.score === 'number' ? kcTrace.score : null,
+      intent: kcTrace.intent || null,
       qaEntry,
       flags
     });
