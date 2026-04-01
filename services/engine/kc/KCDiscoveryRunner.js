@@ -1071,6 +1071,7 @@ async function _handleSPFUQContinue({
       company,
       callerName,
       callSid,
+      turn,
       spfuqContext,
       discoveryContext,
       priorVisit,   // passed from run() — was notes?.priorVisit (out-of-scope bug fixed)
@@ -1294,7 +1295,7 @@ async function _handlePrequalResponse({
     try {
       _escapedResult = await KCS.answer({
         container, targetSection, question: userInput,
-        kbSettings, company, callerName, callSid,
+        kbSettings, company, callerName, callSid, turn,
       });
     } catch (_e) {
       logger.error('[KC_ENGINE] Pre-qualify escape: KCS.answer error', { companyId, callSid, containerId, err: _e.message });
@@ -1359,6 +1360,7 @@ async function _handlePrequalResponse({
       company,
       callerName,
       callSid,
+      turn,
       preQualifyContext,  // injects CALLER TYPE block into Groq system prompt
     });
   } catch (_e) {
@@ -1564,6 +1566,7 @@ async function _handleKCMatch({
       company,
       callerName,
       callSid,
+      turn,
       discoveryContext,
       priorVisit,           // passed from run() — was notes?.priorVisit (out-of-scope bug fixed)
       preQualifyContext: _preQualifyContext,  // injected into Groq CALLER TYPE block

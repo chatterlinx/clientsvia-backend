@@ -439,8 +439,9 @@ function _buildSystemPrompt({
   acknowledgeHistory,
   callerName,
   priorVisit,
-  behaviorBlock = '',      // Engine Hub Behavior Card block — injected when a BC is configured for this KC category
-  preQualifyContext = '',  // Injected when caller answered a pre-qualify question for this container
+  behaviorBlock = '',           // Engine Hub Behavior Card block — injected when a BC is configured for this KC category
+  preQualifyContext = '',       // Injected when caller answered a pre-qualify question for this container
+  suppressOpeningGreeting = false, // true on turn 1 — Turn1Engine already greeted the caller
 }) {
   // Booking instruction block
   let bookingInstruction = '';
@@ -524,11 +525,16 @@ function _buildSystemPrompt({
   // Behavior Card block — present only when a BC is configured for this KC category
   const behaviorBlockStr = behaviorBlock ? `\n${behaviorBlock}` : '';
 
+  // On turn 1, Turn1Engine already greeted the caller — tell Groq not to open with a greeting.
+  const noGreetingRule = suppressOpeningGreeting
+    ? '0. Do NOT begin your response with any greeting, salutation, or thanks (Hi, Hello, Hey, Thanks for calling, Thanks for reaching out, Good morning, etc.) — the caller has already been greeted. Start directly with the answer.\n'
+    : '';
+
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
 ${activeTopicBlock}${callContextBlock}${preQualBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
-1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
+${noGreetingRule}1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
 2. ${wordCapRule}
 3. Be natural and conversational — sound human, never robotic or scripted. Tone: ${toneDescriptor}.
 4. If the caller signals readiness to book or schedule, set intent to "BOOKING_READY".
@@ -900,6 +906,7 @@ async function answer(opts) {
     company     = {},
     callerName,
     callSid,
+    turn            = null, // current turn number — used to suppress greeting on turn 1
     spfuqContext,           // optional — active topic reminder for pronoun resolution
     discoveryContext,       // optional — call-level context from discoveryNotes
     priorVisit  = false,    // optional — true when caller is a returning customer
@@ -1015,22 +1022,24 @@ async function answer(opts) {
     containerTitle,
     containerBlock,
     wordLimit,
-    wordLimitEnabled:   container.wordLimitEnabled !== false,
-    sampleResponse:     container.sampleResponse               || null,
-    bookingOfferMode:   kbSettings.bookingOfferMode            || 'groq',
-    bookingOfferPhrase: kbSettings.bookingOfferPhrase          || BUILT_IN_BOOKING_OFFER,
-    bookingAction:      effectiveBookingAction,
-    closingPrompt:      container.closingPrompt                || '',
-    spfuqContext:       spfuqContext                           || null,
-    discoveryContext:   discoveryContext                        || null,
-    responseTone:       kbSettings.responseTone                || 'friendly',
-    responseStyle:      kbSettings.responseStyle               || 'concise',
-    greetByName:        kbSettings.greetByName !== false,
-    acknowledgeHistory: kbSettings.acknowledgeHistory !== false,
-    callerName:         callerName                             || null,
-    priorVisit:         priorVisit                             || false,
-    behaviorBlock:      behaviorBlock                          || '',
-    preQualifyContext:  preQualifyContext                      || '',
+    wordLimitEnabled:         container.wordLimitEnabled !== false,
+    sampleResponse:           container.sampleResponse               || null,
+    bookingOfferMode:         kbSettings.bookingOfferMode            || 'groq',
+    bookingOfferPhrase:       kbSettings.bookingOfferPhrase          || BUILT_IN_BOOKING_OFFER,
+    bookingAction:            effectiveBookingAction,
+    closingPrompt:            container.closingPrompt                || '',
+    spfuqContext:             spfuqContext                           || null,
+    discoveryContext:         discoveryContext                        || null,
+    responseTone:             kbSettings.responseTone                || 'friendly',
+    responseStyle:            kbSettings.responseStyle               || 'concise',
+    greetByName:              kbSettings.greetByName !== false,
+    acknowledgeHistory:       kbSettings.acknowledgeHistory !== false,
+    callerName:               callerName                             || null,
+    priorVisit:               priorVisit                             || false,
+    behaviorBlock:            behaviorBlock                          || '',
+    preQualifyContext:        preQualifyContext                      || '',
+    // Turn 1: Turn1Engine already greeted the caller — suppress Groq's opening greeting
+    suppressOpeningGreeting:  turn === 1,
   });
 
   // User message — personalise with caller name if known
