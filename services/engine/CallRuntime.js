@@ -34,7 +34,7 @@ const { StateStore, extractPlainSlots, writeSlotValue } = require('./StateStore'
 const ScenarioEngine = require('../ScenarioEngine');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 const { selectOpener, prependOpener } = require('./OpenerEngine');
-const { Agent2DiscoveryRunner } = require('./agent2/Agent2DiscoveryRunner');
+const { DiscoveryWire } = require('./DiscoveryWire');
 const { sanitizeForSpeech } = require('../../utils/sanitizeForSpeech');
 const BookingLogicEngine = require('./booking/BookingLogicEngine');
 
@@ -597,8 +597,6 @@ class CallRuntime {
         try {
             state = StateStore.load(callState);
 
-            const agent2Check = isAgent2Enabled(company, bufferEvent);
-            const agent2Enabled = agent2Check.enabled;
             
             // ═══════════════════════════════════════════════════════════════════════════
             // S1: RUNTIME OWNERSHIP
@@ -664,88 +662,31 @@ class CallRuntime {
                 
             } else {
                 // ───────────────────────────────────────────────────────────────────────────
-                // DISCOVERY MODE: Agent 2.0 is the ONLY speaker (permanent default)
+                // DISCOVERY MODE: DiscoveryWire routes to greeting or KCDiscoveryRunner
                 // ───────────────────────────────────────────────────────────────────────────
                 currentSection = 'S4_DISCOVERY_FLOW';
                 tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
-                
-                if (agent2Enabled) {
-                    currentSection = 'A2_DISCOVERY';
-                    
-                    bufferEvent('A2_LEGACY_BLOCKED', {
-                        blocked: true,
-                        blockedOwners: ['ALL_LEGACY_DELETED'],
-                        reason: 'Agent 2.0 is permanent default - no legacy fallback exists',
-                        enforced: agent2Check.enforced,
-                        enforcementReason: agent2Check.reason,
-                        turn,
-                        uiBuild: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
-                    });
-                    
-                    ownerResult = await Agent2DiscoveryRunner.run({
-                        company,
-                        companyId,
-                        callSid,
-                        userInput,
-                        state,
-                        emitEvent: bufferEvent,
-                        turn,
-                        bridgeToken: context.bridgeToken || null,
-                        redis: context.redis || null,
-                        onSentence: context.onSentence || null,
-                    });
 
-                    // Apply Name Greeting as universal first-response decorator.
-                    // Runs once per call, after all response paths, with double-name guard.
-                    if (ownerResult) {
-                        ownerResult = Agent2DiscoveryRunner.applyFirstTurnGreeting(ownerResult, company);
-                    }
-                    
-                    bufferEvent('A2_MIC_OWNER_PROOF', {
-                        agent2Enabled: true,
-                        agent2Ran: true,
-                        agent2Responded: !!ownerResult?.response,
-                        finalResponder: ownerResult?.matchSource || 'AGENT2_DISCOVERY',
-                        agent2Enforced: agent2Check.enforced,
-                        enforcementReason: agent2Check.reason,
-                        permanentDefault: true,
-                        legacyDeleted: true,
-                        turn,
-                        inputPreview: (userInput || '').substring(0, 60),
-                        responsePreview: (ownerResult?.response || '').substring(0, 80),
-                        configHash: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
-                    });
-                    
-                    bufferEvent('A2_MIC_OWNER_CONFIRMED', {
-                        owner: 'AGENT2_DISCOVERY',
-                        permanentDefault: true,
-                        enforced: agent2Check.enforced,
-                        turn
-                    });
-                } else {
-                    // Break-glass path - Agent 2.0 disabled
-                    // Return a graceful error since legacy discovery no longer exists
-                    bufferEvent('BREAK_GLASS_NO_LEGACY', {
-                        reason: 'Agent 2.0 disabled via break-glass but legacy discovery DELETED',
-                        breakGlassActive: true,
-                        enforcementReason: agent2Check.reason,
-                        turn
-                    });
-                    
-                    logger.error('[CALL_RUNTIME] BREAK_GLASS_NO_FALLBACK - Legacy discovery DELETED', {
-                        callSid,
-                        companyId,
-                        reason: 'BREAK_GLASS_ALLOWLIST_BUT_LEGACY_DELETED'
-                    });
-                    
-                    // Resolve break-glass fallback from UI config
-                    const breakGlassResponse = resolveErrorFallback(company, 'generalError', bufferEvent);
-                    ownerResult = {
-                        response: breakGlassResponse,
-                        matchSource: 'BREAK_GLASS_NO_FALLBACK',
-                        state
-                    };
-                }
+                ownerResult = await DiscoveryWire.run({
+                    company,
+                    companyId,
+                    callSid,
+                    userInput,
+                    state,
+                    emitEvent:   bufferEvent,
+                    turn,
+                    bridgeToken: context.bridgeToken || null,
+                    redis:       context.redis || null,
+                    onSentence:  context.onSentence || null,
+                });
+
+                bufferEvent('DISCOVERY_WIRE_OWNER', {
+                    matchSource:     ownerResult?.matchSource || 'UNKNOWN',
+                    responded:       !!ownerResult?.response,
+                    turn,
+                    inputPreview:    (userInput || '').substring(0, 60),
+                    responsePreview: (ownerResult?.response || '').substring(0, 80),
+                });
             }
 
             currentSection = 'PERSIST_STATE';
@@ -837,18 +778,15 @@ class CallRuntime {
             const triggerCard = ownerResult.triggerCard || null;
             const isUiOwned = !!(
                 triggerCard?.id ||
-                ownerResult.matchSource === 'AGENT2_DISCOVERY' ||
+                ownerResult.matchSource === 'GREETING' ||
                 ownerResult.matchSource === 'BOOKING_LOGIC_ENGINE' ||
                 ownerResult.uiPath ||
                 ownerResult.errorFallbackUiPath
             );
-            
+
             bufferEvent('TURN_TRACE_SUMMARY', {
                 // WHO OWNED THE MIC
-                ownerSelected: lane === 'BOOKING' ? 'BOOKING_ENGINE' : 
-                               (agent2Enabled ? 'AGENT2_DISCOVERY' : 'BREAK_GLASS_FALLBACK'),
-                agent2Enabled,
-                agent2Ran: agent2Enabled && ownerResult.matchSource !== 'BREAK_GLASS_NO_FALLBACK',
+                ownerSelected: lane === 'BOOKING' ? 'BOOKING_ENGINE' : ownerResult?.matchSource || 'DISCOVERY_WIRE',
                 
                 // TRIGGER EVALUATION
                 triggerPoolCount: ownerResult._triggerPoolCount ?? null,
@@ -895,10 +833,10 @@ class CallRuntime {
                 // VERDICT - One-liner for quick scanning
                 verdict: (() => {
                     if (triggerCard) return `TRIGGER:${triggerCard.label || triggerCard.id}`;
+                    if (ownerResult.matchSource === 'GREETING') return 'GREETING';
                     if (ownerResult.matchSource === 'KC_ENGINE') return `KC_ENGINE:${ownerResult.kcTrace?.path || 'UNKNOWN'}`;
-                    if (ownerResult.matchSource === 'AGENT2_DISCOVERY') return `AGENT2:${ownerResult._exitReason || 'UNKNOWN'}`;
                     if (lane === 'BOOKING') return 'BOOKING_ENGINE';
-                    return `FALLBACK:${ownerResult.matchSource || 'UNKNOWN'}`;
+                    return ownerResult.matchSource || 'DISCOVERY_WIRE';
                 })()
             });
 
@@ -1010,9 +948,6 @@ class CallRuntime {
             bufferEvent('TURN_TRACE_SUMMARY', {
                 // WHO OWNED THE MIC - Crash stole it
                 ownerSelected: 'CORE_ERROR_FALLBACK',
-                agent2Enabled: null,  // Unknown - crashed before we could check
-                agent2Ran: false,     // CRITICAL: Agent2 never ran
-                
                 // TRIGGER EVALUATION - Never happened
                 triggerPoolCount: null,
                 triggerMatched: null,
