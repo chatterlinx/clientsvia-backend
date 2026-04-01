@@ -89,20 +89,25 @@ const NO_PHRASES = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * set — Record that a mid-booking KC digression has occurred and we are
- * waiting for the caller to consent to returning to the booking step.
+ * set — Record that a mid-booking KC digression has occurred.
  *
- * @param {Object} ctx    — bookingCtx (mutated in place)
- * @param {Object} data
- * @param {string} data.step — STEPS.* constant for the interrupted step
+ * @param {Object}  ctx              — bookingCtx (mutated in place)
+ * @param {Object}  data
+ * @param {string}  data.step        — STEPS.* constant for the interrupted step
+ * @param {boolean} [data.inlineResumed=false]
+ *   When true: the KC answer and the step re-anchor were delivered in the
+ *   SAME response (IntentHold inline pattern). Gate 0 skips the consent check
+ *   and falls straight through to the step handler on the next turn.
+ *   When false (legacy): Gate 0 asks "Shall we get back to your booking?" first.
  */
-function set(ctx, { step }) {
+function set(ctx, { step, inlineResumed = false }) {
   if (!ctx || !step) return;
   ctx[CTX_KEY] = {
     step,
+    inlineResumed,
     anchoredAt: new Date().toISOString(),
   };
-  logger.debug('[BPFUQ] Pending set', { step });
+  logger.debug('[BPFUQ] Pending set', { step, inlineResumed });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

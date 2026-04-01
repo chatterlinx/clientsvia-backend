@@ -414,33 +414,50 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // ─────────────────────────────────────────────────────────────────────────
   const bpfuq = BPFUQService.load(ctx);
   if (bpfuq) {
-    const consent = BPFUQService.detectConsent(userInput);
-    events.push({ type: 'BK_BPFUQ_GATE', step: bpfuq.step, consent, timestamp: Date.now() });
 
-    if (consent === 'YES') {
+    if (bpfuq.inlineResumed) {
+      // ── IntentHold inline-resume path ─────────────────────────────────────
+      // Last turn we delivered: "[KC answer] [step re-anchor question]" in one
+      // response (bookingOfferMode:'none' + appended reAnchor).
+      // The caller's CURRENT input is their answer to that field question.
+      // Clear BPFUQ and fall straight through to the step handler — no consent
+      // gate needed. If the caller asks ANOTHER question, off-topic detection
+      // fires again and chains a fresh BPFUQ cycle naturally.
+      events.push({ type: 'BK_BPFUQ_INLINE_RESUME', step: bpfuq.step, timestamp: Date.now() });
       BPFUQService.clear(ctx);
-      const reAnchor = _getStepReAnchor(bpfuq.step, config);
-      return {
-        nextPrompt: reAnchor,
-        bookingCtx: ctx,
-        completed:  false,
-        _123rp:     { tier: 0, path: 'BK_BPFUQ_RESUME' }
-      };
-    }
+      // ↓ fall through to step handler
 
-    if (consent === 'NO') {
-      // Caller has more questions — clear BPFUQ and fall through to normal
-      // 123RP cascade. Tier 1.5 will re-set BPFUQ if they ask another KC question.
-      BPFUQService.clear(ctx);
-      // ↓ fall through
     } else {
-      // AMBIGUOUS (short/unclear) — gently re-ask
-      return {
-        nextPrompt: RETURN_TO_BOOKING_Q,
-        bookingCtx: ctx,
-        completed:  false,
-        _123rp:     { tier: 0, path: 'BK_BPFUQ_REASK' }
-      };
+      // ── Legacy consent gate ────────────────────────────────────────────────
+      // Used when inlineResumed=false (older turns, or if explicitly disabled).
+      // Groq closed with "Shall we get back to your booking?" — detect response.
+      const consent = BPFUQService.detectConsent(userInput);
+      events.push({ type: 'BK_BPFUQ_GATE', step: bpfuq.step, consent, timestamp: Date.now() });
+
+      if (consent === 'YES') {
+        BPFUQService.clear(ctx);
+        const reAnchor = _getStepReAnchor(bpfuq.step, config);
+        return {
+          nextPrompt: reAnchor,
+          bookingCtx: ctx,
+          completed:  false,
+          _123rp:     { tier: 0, path: 'BK_BPFUQ_RESUME' }
+        };
+      }
+
+      if (consent === 'NO') {
+        // Caller has more questions — clear BPFUQ and fall through to 123RP cascade.
+        BPFUQService.clear(ctx);
+        // ↓ fall through
+      } else {
+        // AMBIGUOUS — gently re-ask
+        return {
+          nextPrompt: RETURN_TO_BOOKING_Q,
+          bookingCtx: ctx,
+          completed:  false,
+          _123rp:     { tier: 0, path: 'BK_BPFUQ_REASK' }
+        };
+      }
     }
   }
 
@@ -539,24 +556,30 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
         const kcResult = await KCS.answer({
           container:  match.container,
           question:   userInput,
-          kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'return_to_booking' },
+          kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
           company:    { _id: companyId, companyName: config.companyName },
         });
         if (kcResult?.response) {
-          // BPFUQ: record which booking step was paused.
-          // Gate 0 will intercept next turn to resume or chain another KC question.
-          BPFUQService.set(ctx, { step: prevSnap.step });
+          // IntentHold inline-resume: deliver KC answer + step re-anchor in ONE response.
+          // Next turn Gate 0 sees inlineResumed=true → clears BPFUQ → falls straight
+          // through to the step handler. No consent gate needed.
+          const reAnchor = _getStepReAnchor(prevSnap.step, config);
+          const combined  = reAnchor
+            ? `${kcResult.response} ${reAnchor}`
+            : kcResult.response;
+          BPFUQService.set(ctx, { step: prevSnap.step, inlineResumed: true });
           events.push({
             type:           'BK_BPFUQ_KC_ANSWERED',
             step:           prevSnap.step,
             containerTitle: match.container.title,
             containerId:    String(match.container._id),
             kcId:           match.container.kcId || null,
+            inlineResumed:  true,
             timestamp:      Date.now()
           });
           ctx.lastPath = 'BK_KC_DIGRESSION';
           return {
-            nextPrompt: kcResult.response,
+            nextPrompt: combined,
             bookingCtx: ctx,
             completed:  false,
             _123rp:     { tier: 1.5, path: 'BK_KC_DIGRESSION', containerTitle: match.container.title }
