@@ -2078,6 +2078,17 @@ async function _handleLLMFallback({
       companyId, callSid, latencyMs: Date.now() - startMs,
     });
 
+    // qaLog: record LLM fallback for Calibration dashboard
+    _writeDiscoveryNotes(companyId, callSid, {
+      qaLog: [{
+        type:      'KC_LLM_FALLBACK',
+        turn:      turn ?? 0,
+        question:  userInput,
+        answer:    llmResult.response?.slice(0, 200) || null,
+        timestamp: new Date().toISOString(),
+      }],
+    }).catch(() => {});
+
     return {
       response:    llmResult.response,
       matchSource: 'KC_ENGINE',
@@ -2095,6 +2106,16 @@ async function _handleLLMFallback({
   });
 
   emit('KC_GRACEFUL_ACK_FIRED', { companyId, callSid, turn });
+
+  // qaLog: record graceful ack (no match) for Calibration dashboard
+  _writeDiscoveryNotes(companyId, callSid, {
+    qaLog: [{
+      type:      'KC_GRACEFUL_ACK',
+      turn:      turn ?? 0,
+      question:  userInput,
+      timestamp: new Date().toISOString(),
+    }],
+  }).catch(() => {});
 
   const ackResponse = (company?.knowledgeBaseSettings?.fallbackResponse || '').trim()
     || _gracefulAck();

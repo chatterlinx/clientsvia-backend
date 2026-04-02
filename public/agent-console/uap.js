@@ -634,4 +634,117 @@
   // Expose for inline onclick
   window.timingsSave = timingsSave;
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // CALIBRATION TAB — Layer 1/2/Unknown hit rate dashboard
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function _loadCalibration() {
+    if (!companyId) return;
+    const l1El      = document.getElementById('calLayer1Pct');
+    const l2El      = document.getElementById('calLayer2Pct');
+    const unkEl     = document.getElementById('calUnknownPct');
+    const bodyEl    = document.getElementById('calBody');
+    if (!bodyEl) return;
+
+    try {
+      const res = await fetch(`/api/admin/calibration/company/${companyId}/calibration/stats`, {
+        headers: { 'Authorization': `Bearer ${_getToken()}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Unknown error');
+
+      const s = data.stats;
+
+      // ── Populate stat cards ────────────────────────────────────────────
+      if (l1El)  l1El.textContent  = s.totalEntries > 0 ? `${s.layer1.pct}%`  : '—';
+      if (l2El)  l2El.textContent  = s.totalEntries > 0 ? `${s.layer2.pct}%`  : '—';
+      if (unkEl) unkEl.textContent = s.totalEntries > 0 ? `${s.unknown.pct}%` : '—';
+
+      // ── No data yet ────────────────────────────────────────────────────
+      if (s.totalEntries === 0) {
+        // Keep existing empty state
+        return;
+      }
+
+      // ── Progress bar + recent calls ────────────────────────────────────
+      const progress    = Math.min(100, Math.round((s.totalEntries / s.targetCalls) * 100));
+      const isBaseline  = s.totalEntries >= s.targetCalls;
+      const statusBadge = isBaseline
+        ? `<div style="display:inline-block;padding:4px 12px;background:#dcfce7;color:#166534;border-radius:6px;font-size:.75rem;font-weight:600;margin-bottom:12px;">✅ Calibration baseline established (${s.totalEntries} turns)</div>`
+        : `<div style="margin-bottom:12px;font-size:.8rem;color:#64748b;">${s.totalEntries} / ${s.targetCalls} turns collected</div>`;
+
+      const progressBar = isBaseline ? '' : `
+        <div style="width:100%;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:16px;">
+          <div style="width:${progress}%;height:100%;background:linear-gradient(90deg,#10b981,#059669);border-radius:4px;transition:width .3s;"></div>
+        </div>`;
+
+      // ── Recent calls table ─────────────────────────────────────────────
+      let callRows = '';
+      if (s.recentCalls && s.recentCalls.length > 0) {
+        callRows = s.recentCalls.map(c => {
+          const total = c.layer1 + c.layer2 + c.unknown;
+          const d     = c.capturedAt ? new Date(c.capturedAt) : null;
+          const when  = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+          return `<tr>
+            <td style="padding:6px 10px;font-size:.75rem;color:#334155;">${c.callSid?.slice(-8) || '—'}</td>
+            <td style="padding:6px 10px;font-size:.75rem;color:#64748b;">${when}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;">${c.turnCount || '—'}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#059669;font-weight:600;">${c.layer1}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#d97706;font-weight:600;">${c.layer2}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#dc2626;font-weight:600;">${c.unknown}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;">${total}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      const table = callRows ? `
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;">Call</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;">When</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Turns</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#059669;text-align:center;font-weight:500;">L1</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#d97706;text-align:center;font-weight:500;">L2</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#dc2626;text-align:center;font-weight:500;">Unk</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${callRows}</tbody>
+        </table>` : '';
+
+      // ── Assemble summary block ─────────────────────────────────────────
+      const summaryLine = `
+        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:.8rem;">
+          <span style="color:#059669;font-weight:600;">Layer 1: ${s.layer1.count}</span>
+          <span style="color:#d97706;font-weight:600;">LLM Agent: ${s.layer2.count}</span>
+          <span style="color:#dc2626;font-weight:600;">Unknown: ${s.unknown.count}</span>
+        </div>`;
+
+      bodyEl.innerHTML = `
+        ${statusBadge}
+        ${progressBar}
+        ${summaryLine}
+        <div style="font-size:.75rem;color:#64748b;margin-bottom:8px;font-weight:500;">Recent Calls (${s.recentCalls.length})</div>
+        ${table}
+      `;
+
+    } catch (err) {
+      console.warn('[Calibration] load failed', err);
+      if (bodyEl) {
+        bodyEl.innerHTML = `<div style="padding:16px;color:#dc2626;font-size:.8rem;">Failed to load calibration data: ${err.message}</div>`;
+      }
+    }
+  }
+
+  // Load calibration when tab becomes active (lazy load)
+  if (!window._calibrationTabHooked) {
+    window._calibrationTabHooked = true;
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab-btn[data-tab="calibration"]');
+      if (btn) _loadCalibration();
+    });
+  }
+
 })();
