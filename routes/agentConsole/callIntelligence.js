@@ -333,24 +333,23 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       };
 
       // ── Parse BK_* step events to determine routing tier ────────────
-      // 123RP (Tier 1 triggers / Tier 2 LLM / Tier 3 fallback) removed.
-      // Booking digressions now use BPFUQ exclusively (KC → services.html).
-      const bpfuqGate    = steps.find(s => s.type === 'BK_BPFUQ_GATE');
-      const bpfuqKcStep  = steps.find(s => s.type === 'BK_BPFUQ_KC_ANSWERED');
-      const bpfuqNoMatch = steps.find(s => s.type === 'BK_BPFUQ_KC_NO_MATCH');
+      // Booking digressions route exclusively through KC (services.html).
+      // Stateless — KC answer + re-anchor in one response, no consent gate.
+      const kcAnswered = steps.find(s =>
+        s.type === 'BK_KC_DIGRESSION_ANSWERED' || s.type === 'BK_BPFUQ_KC_ANSWERED'
+      );
+      const kcNoMatch  = steps.find(s =>
+        s.type === 'BK_KC_DIGRESSION_NO_MATCH' || s.type === 'BK_BPFUQ_KC_NO_MATCH'
+      );
       // Legacy event names kept for backward compat with old call data
       const legacyTier1_5 = steps.find(s => s.type === 'BK_123RP_TIER1_5_KC');
 
-      const kcDigressionStep = bpfuqKcStep || legacyTier1_5;
+      const kcDigressionStep = kcAnswered || legacyTier1_5;
 
       let routingPath = 'BK_STEP_NORMAL';
       let routingTierNum = 0;
-      if (bpfuqGate) {
-        const c = bpfuqGate.consent;
-        routingPath = c === 'YES' ? 'BK_BPFUQ_RESUME' : c === 'AMBIGUOUS' ? 'BK_BPFUQ_REASK' : 'BK_STEP_NORMAL';
-      }
-      if (bpfuqNoMatch)      { routingPath = 'BK_BPFUQ_NO_MATCH'; routingTierNum = 1.5; }
-      if (kcDigressionStep)  { routingPath = 'BK_KC_DIGRESSION';   routingTierNum = 1.5; }
+      if (kcNoMatch)         { routingPath = 'BK_KC_DIGRESSION_NO_MATCH'; routingTierNum = 1.5; }
+      if (kcDigressionStep)  { routingPath = 'BK_KC_DIGRESSION';          routingTierNum = 1.5; }
 
       turnData.routingTier = {
         tier:   routingTierNum,
@@ -358,7 +357,7 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         source: 'BOOKING_ENGINE',
       };
 
-      // ── KC digression (BPFUQ) — container + KC ID ───────────────────
+      // ── KC digression — container + KC ID ──────────────────────────
       if (kcDigressionStep) {
         turnData.kcEngine = {
           containerTitle: kcDigressionStep.containerTitle || null,
@@ -370,17 +369,8 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
           groqResponse:   (bsp.nextPromptPreview || '').substring(0, 500) || null,
           path:           'BK_KC_DIGRESSION',
           spfuqActive:    false,
-          bpfuqActive:    true,
           llmFallback:    false,
           gracefulAck:    false,
-        };
-      }
-
-      // ── BPFUQ consent gate state ─────────────────────────────────────
-      if (bpfuqGate) {
-        turnData.bpfuqState = {
-          consent:    bpfuqGate.consent,
-          pausedStep: bpfuqGate.step || null,
         };
       }
 
@@ -679,14 +669,16 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
       }
 
       // ── BOOKING ENGINE lane outcomes (most specific — checked first) ──
-      // Digressions use BPFUQ (KC only) — no trigger or LLM paths.
+      // Digressions route through KC (stateless) — no trigger or LLM paths.
       if (turnData.bookingStep) {
         if (turnData.bookingStep.isComplete)               return 'BOOKING_COMPLETE';
         const rp = turnData.routingTier?.path;
         if (rp === 'BK_KC_DIGRESSION')                    return 'BOOKING_KC_DIGRESSION';
-        if (rp === 'BK_BPFUQ_NO_MATCH')                   return 'BPFUQ_NO_MATCH';
-        if (rp === 'BK_BPFUQ_RESUME')                     return 'BPFUQ_RESUME';
-        if (rp === 'BK_BPFUQ_REASK')                      return 'BPFUQ_REASK';
+        if (rp === 'BK_KC_DIGRESSION_NO_MATCH')           return 'BOOKING_KC_NO_MATCH';
+        // Legacy BPFUQ outcomes from old call data
+        if (rp === 'BK_BPFUQ_NO_MATCH')                   return 'BOOKING_KC_NO_MATCH';
+        if (rp === 'BK_BPFUQ_RESUME')                     return 'BOOKING_STEP';
+        if (rp === 'BK_BPFUQ_REASK')                      return 'BOOKING_STEP';
         return 'BOOKING_STEP';
       }
 

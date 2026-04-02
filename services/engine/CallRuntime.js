@@ -402,7 +402,7 @@ async function runBookingLogicLane({
         });
     }
 
-    // BPFUQ: digression questions during booking are handled exclusively by KC
+    // KC Digression: mid-booking questions are handled exclusively by KC
     // inside BookingLogicEngine. No Groq T2 LLM override needed here.
 
     // ── BOOKING COMPLETION WIRING ─────────────────────────────────────────

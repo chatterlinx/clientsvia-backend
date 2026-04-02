@@ -35,15 +35,14 @@ const { BookingTriggerMatcher }      = require('./BookingTriggerMatcher');
 const GroqFieldExtractorService      = require('./GroqFieldExtractorService');
 const GlobalHubService     = require('../../GlobalHubService');
 const KCS                  = require('../agent2/KnowledgeContainerService');
-const BPFUQService         = require('../kc/BPFUQService');
+// BPFUQService REMOVED — Clean Sweep. Mid-booking KC questions are now stateless:
+// KC answers + re-anchor in ONE response. No state tracking, no consent gate.
 const DiscoveryNotesService = require('../../discoveryNotes/DiscoveryNotesService');
 const UAP                  = require('../kc/UtteranceActParser');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
 
-// ── 123RP: return-to-booking suffix appended to all Tier 1/2 intercept responses ──
-const RETURN_TO_BOOKING_Q = "Does that answer your question? Shall we get back to completing your booking?";
 
 /* ============================================================================
    BOOKING FLOW STEPS
@@ -375,23 +374,23 @@ function initializeContext(payload, config) {
 
 async function processCurrentStep(ctx, userInput, config, companyId, isTest, events) {
 
-  // ── BPFUQ: STEP-FIRST ARCHITECTURE ──────────────────────────────────────
+  // ── KC DIGRESSION: STEP-FIRST ARCHITECTURE ──────────────────────────────
   //
   // 1. Try to process as expected step input (step handler runs first).
-  // 2. If step did NOT advance AND input looks off-topic → BPFUQ:
+  // 2. If step did NOT advance AND input looks off-topic → KC digression:
   //      Go to KC (services.html containers) — the ONLY digression handler.
-  //      KC answers → BPFUQ records paused step → Gate 0 resumes next turn.
-  //      No KC match → graceful re-anchor to current booking step.
-  //      No triggers. No LLM fallback.
+  //      KC answers + re-anchor to current step in ONE response. Stateless.
+  //      No match → graceful re-anchor to current booking step.
+  //      No state tracking. No consent gate. No extra turn.
   // 3. Otherwise: return step result as-is.
   //
-  // DATA-ENTRY STEPS (phone, address, preferred day/time) never trigger BPFUQ —
-  // callers there are providing raw data, not expressing intent.
+  // DATA-ENTRY STEPS (phone, address, preferred day/time) never trigger KC
+  // digression — callers there are providing raw data, not expressing intent.
   //
   // Why step-first?
-  //   "John Smith"   at COLLECT_NAME → step handler extracts name → no BPFUQ needed.
-  //   "Today at 10"  at OFFER_TIMES  → step handler matches slot  → no BPFUQ needed.
-  //   "What if I change the battery?" at COLLECT_NAME → step fails → BPFUQ fires.
+  //   "John Smith"   at COLLECT_NAME → step handler extracts name → no digression.
+  //   "Today at 10"  at OFFER_TIMES  → step handler matches slot  → no digression.
+  //   "What if I change the battery?" at COLLECT_NAME → step fails → KC answers it.
   //   "What do you charge?"           at COLLECT_NAME → step fails → KC answers it.
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -403,68 +402,6 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     STEPS.COLLECT_PREFERRED_DAY,
     STEPS.COLLECT_PREFERRED_TIME,
   ]);
-
-  // ── Gate 0: BPFUQ — Booking Pending Follow-Up Question ───────────────────
-  // Fires BEFORE the step handler. Last turn answered a mid-booking KC
-  // question (Tier 1.5). Groq closed with "Shall we get back to your booking?"
-  // Now we detect whether the caller is ready to resume or has more questions.
-  //
-  //   YES      → clear BPFUQ, return step re-anchor (e.g. "What is the address?")
-  //   NO       → clear BPFUQ, fall through — BPFUQ will re-fire if another KC question
-  //              (chains naturally: KC answers → BPFUQ set → Gate 0 next turn)
-  //   AMBIGUOUS → keep BPFUQ alive, re-ask "Shall we get back to completing your booking?"
-  // ─────────────────────────────────────────────────────────────────────────
-  const bpfuq = BPFUQService.load(ctx);
-  if (bpfuq) {
-
-    if (bpfuq.inlineResumed) {
-      // ── IntentHold inline-resume path ─────────────────────────────────────
-      // Last turn we delivered: "[KC answer] [step re-anchor question]" in one
-      // response (bookingOfferMode:'none' + appended reAnchor).
-      // The caller's CURRENT input is their answer to that field question.
-      // Clear BPFUQ and fall straight through to the step handler — no consent
-      // gate needed. If the caller asks ANOTHER question, off-topic detection
-      // fires again and chains a fresh BPFUQ cycle naturally.
-      events.push({ type: 'BK_BPFUQ_INLINE_RESUME', step: bpfuq.step, timestamp: Date.now() });
-      BPFUQService.clear(ctx);
-
-      // Clear IntentHold — booking is resuming, side question resolved
-      if (ctx.callSid) {
-        DiscoveryNotesService.update(companyId, ctx.callSid, { committedAct: null }).catch(() => {});
-      }
-      // ↓ fall through to step handler
-
-    } else {
-      // ── Legacy consent gate ────────────────────────────────────────────────
-      // Used when inlineResumed=false (older turns, or if explicitly disabled).
-      // Groq closed with "Shall we get back to your booking?" — detect response.
-      const consent = BPFUQService.detectConsent(userInput);
-      events.push({ type: 'BK_BPFUQ_GATE', step: bpfuq.step, consent, timestamp: Date.now() });
-
-      if (consent === 'YES') {
-        BPFUQService.clear(ctx);
-        const reAnchor = _getStepReAnchor(bpfuq.step, config);
-        return {
-          nextPrompt: reAnchor,
-          bookingCtx: ctx,
-          completed:  false,
-        };
-      }
-
-      if (consent === 'NO') {
-        // Caller has more questions — clear BPFUQ and fall through to 123RP cascade.
-        BPFUQService.clear(ctx);
-        // ↓ fall through
-      } else {
-        // AMBIGUOUS — gently re-ask
-        return {
-          nextPrompt: RETURN_TO_BOOKING_Q,
-          bookingCtx: ctx,
-          completed:  false,
-        };
-      }
-    }
-  }
 
   // ── STEP 1: Run the normal step handler + UAP parse in parallel ─────────
   // UAP fires on every booking turn at zero added latency (Promise.all).
@@ -535,19 +472,19 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     }
   }
 
-  // ── STEP 2: Off-topic question — BPFUQ ──────────────────────────────────
+  // ── STEP 2: Off-topic question — KC Digression (stateless) ──────────────
   // All caller questions mid-booking route exclusively through KC (services.html).
-  // No triggers. No LLM fallback.
+  // No triggers. No LLM fallback. No state tracking.
   //
-  // KC answers → BPFUQ records the paused booking step → Gate 0 (top of this
-  // function) resumes booking next turn once the caller confirms they're done.
+  // KC answer + step re-anchor delivered in ONE response. Next turn, the
+  // caller's input goes straight to the step handler. If they ask ANOTHER
+  // question, off-topic detection fires again and chains naturally.
   //
   // No KC container match → clean re-anchor to current step question.
-  // The agent always knows exactly where booking was paused and returns there.
   // ─────────────────────────────────────────────────────────────────────────
   events.push({
-    type:           'BK_BPFUQ_START',
-    step:           prevSnap.step,
+    type:           'BK_KC_DIGRESSION_START',
+    step:           ctx.step,
     input:          userInput.substring(0, 100),
     uapContainerId: parsedAct?.containerId  || null,
     uapMatchType:   parsedAct?.matchType    || 'NONE',
@@ -561,12 +498,12 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     // The anchor container gets a 3× score multiplier in findContainer() so
     // mid-booking questions stay routed to the correct KC (e.g. Service Call pricing
     // stays in Service Call, not Maintenance, even if "maintenance" appears in the input).
-    const [containers, _dnBpfuq] = await Promise.all([
+    const [containers, _dnDigress] = await Promise.all([
       KCS.getActiveForCompany(companyId),
       DiscoveryNotesService.load(companyId, ctx.callSid).catch(() => null),
     ]);
-    const _anchorCtx = _dnBpfuq?.anchorContainerId
-      ? { anchorContainerId: _dnBpfuq.anchorContainerId }
+    const _anchorCtx = _dnDigress?.anchorContainerId
+      ? { anchorContainerId: _dnDigress.anchorContainerId }
       : null;
 
     if (containers.length) {
@@ -579,30 +516,20 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           company:    { _id: companyId, companyName: config.companyName },
         });
         if (kcResult?.response) {
-          // IntentHold inline-resume: deliver KC answer + step re-anchor in ONE response.
-          // Next turn Gate 0 sees inlineResumed=true → clears BPFUQ → falls straight
-          // through to the step handler. No consent gate needed.
-          const reAnchor = _getStepReAnchor(prevSnap.step, config);
-          const combined  = reAnchor
+          // Deliver KC answer + step re-anchor in ONE response.
+          // ctx.step is post-advance — if the step handler moved forward
+          // (e.g. INIT → COLLECT_NAME), re-anchor to the new step.
+          const reAnchor = _getStepReAnchor(ctx.step, config);
+          const combined = reAnchor
             ? `${kcResult.response} ${reAnchor}`
             : kcResult.response;
-          BPFUQService.set(ctx, { step: prevSnap.step, inlineResumed: true });
-
-          // IntentHold — stamp the paused booking position to discoveryNotes (permanent call chart)
-          // Cleared when booking resumes in Gate 0 inlineResumed block above.
-          if (ctx.callSid) {
-            DiscoveryNotesService.update(companyId, ctx.callSid, {
-              committedAct: { type: 'BOOKING', step: prevSnap.step, returnPrompt: reAnchor || null, pausedAt: Date.now() },
-            }).catch(() => {});
-          }
 
           events.push({
-            type:           'BK_BPFUQ_KC_ANSWERED',
-            step:           prevSnap.step,
+            type:           'BK_KC_DIGRESSION_ANSWERED',
+            step:           ctx.step,
             containerTitle: match.container.title,
             containerId:    String(match.container._id),
             kcId:           match.container.kcId || null,
-            inlineResumed:  true,
             timestamp:      Date.now()
           });
           ctx.lastPath = 'BK_KC_DIGRESSION';
@@ -615,22 +542,22 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
       }
     }
   } catch (kcErr) {
-    logger.warn(`[${ENGINE_ID}] BPFUQ KC lookup failed`, {
-      companyId, step: prevSnap.step, error: kcErr.message
+    logger.warn(`[${ENGINE_ID}] KC digression lookup failed`, {
+      companyId, step: ctx.step, error: kcErr.message
     });
-    events.push({ type: 'BK_BPFUQ_KC_ERROR', error: kcErr.message, timestamp: Date.now() });
+    events.push({ type: 'BK_KC_DIGRESSION_ERROR', error: kcErr.message, timestamp: Date.now() });
   }
 
   // No KC container matched — re-anchor cleanly to the current booking step.
   events.push({
-    type:      'BK_BPFUQ_KC_NO_MATCH',
-    step:      prevSnap.step,
+    type:      'BK_KC_DIGRESSION_NO_MATCH',
+    step:      ctx.step,
     input:     userInput.substring(0, 60),
     timestamp: Date.now()
   });
-  ctx.lastPath = 'BK_BPFUQ_NO_MATCH';
+  ctx.lastPath = 'BK_KC_DIGRESSION_NO_MATCH';
   return {
-    nextPrompt: _getStepReAnchor(prevSnap.step, config),
+    nextPrompt: _getStepReAnchor(ctx.step, config),
     bookingCtx: ctx,
     completed:  false,
   };
@@ -786,6 +713,14 @@ function _writeTempField(ctx, companyId, tempPatch) {
  */
 function _getStepReAnchor(step, config) {
   switch (step) {
+    case STEPS.INIT: {
+      // INIT hasn't advanced yet — use the first real step's prompt.
+      // If discriminator is configured → ask discriminator; otherwise → ask for name.
+      if (config.discriminatorQuestion?.text) {
+        return config.discriminatorQuestion.text;
+      }
+      return config.nameReAnchor || config.askNamePrompt || 'Could I get your first and last name?';
+    }
     case STEPS.DISCRIMINATOR: {
       const dq = config.discriminatorQuestion;
       return dq?.text || 'Could you let me know which option applies to you?';
@@ -919,7 +854,7 @@ async function _runStepHandler(ctx, userInput, config, companyId, isTest, events
    Phase 0b (responseScript + confirmation) was REMOVED — Clean Sweep.
    Booking never delivers knowledge/pricing content. All knowledge responses
    are KC's responsibility. If caller asks about pricing mid-booking,
-   BPFUQ → KC handles it automatically.
+   KC digression handles it automatically.
 
    Each option carries:
      serviceTypeOverride — sets discoveryNotes.temp.serviceType
@@ -936,7 +871,7 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
   // Phase 0b (responseScript + confirmation) REMOVED — Clean Sweep.
   // Booking never delivers knowledge/pricing content. Discriminator is a PURE
   // service-type classifier: match → set overrides → advance to field collection.
-  // If the caller asks pricing questions, BPFUQ→KC handles them mid-booking.
+  // If the caller asks pricing questions, KC digression handles them mid-booking.
   events.push({ type: 'BL0_DISCRIMINATOR_RECEIVE', input: input.slice(0, 80), timestamp: Date.now() });
 
   if (!input || opts.length === 0) {
@@ -1025,7 +960,7 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
   // Phase 0b (responseScript + confirmation) REMOVED — Clean Sweep.
   // Discriminator is a pure service-type classifier. Knowledge/pricing responses
   // are KC's responsibility. If caller asks about pricing during booking,
-  // BPFUQ → KC handles it.
+  // KC digression handles it.
   ctx.step = STEPS.INIT;
   return processInit(ctx, config, companyId, false, events);
 }
@@ -3602,7 +3537,7 @@ async function handleBookingTriggerHit({ ctx, config, companyId, isTest, events,
         // Answer the trigger question, then immediately ask for the missing field
         const collectPrompt = _getStepReAnchor(ctx.step, config);
         return {
-          nextPrompt: `${fullText} ${RETURN_TO_BOOKING_Q} ${collectPrompt}`,
+          nextPrompt: `${fullText} Now, to continue with your booking — ${collectPrompt}`,
           bookingCtx: ctx,
           completed:  false,
           _triggerHit: { ruleId: card.ruleId, behavior: 'REDIRECT', newMode: redirectMode }
