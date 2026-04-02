@@ -1914,6 +1914,15 @@ const _SOURCE_TYPE_MAP = {
   'AGENT2_DISCOVERY':     'LLM_GENERATED',
 };
 
+// ── KC attribution helper ─────────────────────────────────────────────────
+// Matches any turn where KC authored content was delivered — either directly
+// from KC_ENGINE or via a booking KC digression (BookingLogicEngine → KC).
+function _isKCAnswered(t) {
+  if (t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE') return true;
+  if (t.provenanceType === 'UI_OWNED' && t.provenancePath === 'BK_KC_DIGRESSION') return true;
+  return false;
+}
+
 // Canned KC paths that produce hardcoded text (not KC card content)
 const _HARDCODED_KC_PATHS = new Set([
   'KC_GRACEFUL_ACK',    // "I'll have someone follow up with you"
@@ -2090,10 +2099,8 @@ function buildStory(summary, discoveryNotes, convTurns, intelligence) {
 function buildVitals(summary, convTurns, discoveryNotes) {
   const agentTurns = convTurns.filter(t => t.speaker === 'agent');
   const totalAgentTurns = agentTurns.length || 1;
-  // KC hit = agent turn where KC_ENGINE answered from an authored KC card (UI_OWNED)
-  const kcTurns = agentTurns.filter(t =>
-    t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
-  ).length;
+  // KC hit = agent turn where KC answered from an authored card (direct or booking digression)
+  const kcTurns = agentTurns.filter(t => _isKCAnswered(t)).length;
   // LLM fallback = Turn 2+ agent turns where KC couldn't answer and fell to Claude.
   // Turn 1 is always LLM (intake/greeting) — exclude it from the fallback count.
   const llmTurns = agentTurns.filter(t =>
@@ -2218,18 +2225,13 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
         'No booking intent detected in this call'),
     stg('kc_answer', 'KC Answer Engine', 'D',
       (() => {
-        // UI_OWNED from KC_ENGINE = KC card answered
-        const hits = convTurns.filter(t =>
-          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
-        ).length;
+        const hits = convTurns.filter(t => _isKCAnswered(t)).length;
         if (hits > 0) return 'pass';
         if (convTurns.length > 1) return 'warn';
         return 'unknown';
       })(),
       (() => {
-        const hits = convTurns.filter(t =>
-          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
-        ).length;
+        const hits = convTurns.filter(t => _isKCAnswered(t)).length;
         const misses = convTurns.filter(t =>
           t.provenancePath?.toUpperCase().includes('LLM_FALLBACK') ||
           t.provenancePath?.toUpperCase().includes('LLM_AGENT')
@@ -2237,9 +2239,7 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
         return `${hits} KC hit${hits !== 1 ? 's' : ''}, ${misses} LLM fallback${misses !== 1 ? 's' : ''}`;
       })()),
     stg('groq_formatter', 'Groq Response Formatter', 'D',
-      convTurns.some(t =>
-        t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
-      ) ? 'pass' : 'unknown', null),
+      convTurns.some(t => _isKCAnswered(t)) ? 'pass' : 'unknown', null),
 
     // GROUP E — Engine Hub + Behavior Cards
     stg('engine_hub_runtime', 'Engine Hub Runtime', 'E',
@@ -2260,9 +2260,7 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
     stg('spfuq_agenda', 'SPFUQ + Agenda State', 'E',
       (() => {
         // If we have a KC hit, SPFUQ ran
-        const kcHit = convTurns.some(t =>
-          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
-        );
+        const kcHit = convTurns.some(t => _isKCAnswered(t));
         return kcHit ? 'info' : 'unknown';
       })(),
       'Hop factor now governed by Engine Hub getHopFactor() — Agenda State tracking pending'),
@@ -2270,9 +2268,7 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
     stg('behavior_card_kc', 'Behavior Card — KC Linked', 'E',
       (() => {
         // KC card present + behavior card would be injected into Groq
-        const kcTurns = convTurns.filter(t =>
-          t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE' && t.kcCard
-        ).length;
+        const kcTurns = convTurns.filter(t => _isKCAnswered(t) && t.kcCard).length;
         return kcTurns > 0 ? 'pass' : 'info';
       })(),
       'Category-linked BC injected into Groq prompt via KnowledgeContainerService.answer()'),
@@ -2677,9 +2673,7 @@ function buildAutoIssues(summary, convTurns, discoveryNotes) {
   }
 
   // KC answered a question but no booking CTA delivered anywhere in the call
-  const kcAnsweredTurns = convTurns.filter(t =>
-    t.provenanceType === 'UI_OWNED' && t.sourceKey === 'KC_ENGINE'
-  );
+  const kcAnsweredTurns = convTurns.filter(t => _isKCAnswered(t));
   const bookingCreated = !!summary?.appointmentCreatedId;
   const bookingIntentFired = convTurns.some(t =>
     t.flags?.some(f => f.code === 'BOOKING_INTENT_FIRED')
@@ -2727,6 +2721,43 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
   const startedAt = transcriptV2?.callMeta?.startedAt || summary?.startedAt;
   const rawTurns = transcriptV2?.turns || [];
   const convTurns = buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt);
+
+  // ── Upgrade booking turns with KC digression attribution ──────────────
+  // BookingLogicEngine KC digressions carry sourceKey='BOOKING_LOGIC_ENGINE'
+  // in the transcript (maps to HARDCODED). Cross-ref trace events to upgrade
+  // provenance and surface the KC card when KC actually answered.
+  const _traceEvts = transcriptV2?.trace || [];
+  for (const evt of _traceEvts) {
+    if (evt.kind !== 'BOOKING_LOGIC_TRACE' || !evt.payload?.steps) continue;
+    const kcStep = evt.payload.steps.find(s =>
+      s.type === 'BK_KC_DIGRESSION_ANSWERED' || s.type === 'BK_BPFUQ_KC_ANSWERED'
+    );
+    if (!kcStep) continue;
+
+    const agentTurn = convTurns.find(t =>
+      t.turnNumber === evt.turnNumber && t.speaker === 'agent' && t.sourceKey === 'BOOKING_LOGIC_ENGINE'
+    );
+    if (!agentTurn) continue;
+
+    // Upgrade provenance: this booking turn was answered by KC
+    agentTurn.provenanceType  = 'UI_OWNED';
+    agentTurn.provenanceLabel = 'KC (Booking Digression)';
+    agentTurn.provenancePath  = 'BK_KC_DIGRESSION';
+
+    // Surface the KC card if in kcMap
+    const cid = kcStep.containerId;
+    if (cid && kcMap.has(cid)) {
+      const kc = kcMap.get(cid);
+      agentTurn.kcCard = {
+        _id:           kc._id.toString(),
+        kcId:          kc.kcId || null,
+        title:         kc.title || null,
+        bookingAction: kc.bookingAction || null,
+        closingPrompt: kc.closingPrompt || null,
+        category:      kc.category || null
+      };
+    }
+  }
 
   // Engine Hub config — exposed in the report header and protocol audit
   const eh = company?.engineHub;
@@ -2810,6 +2841,19 @@ router.get('/:callSid/full-report', async (req, res) => {
       const trace = turn.trace || {};
       const cid = trace.kcTrace?.containerId || trace._123rp?.containerId || trace.provenance?.containerId;
       if (cid && mongoose.Types.ObjectId.isValid(cid)) kcLookupIds.add(cid.toString());
+    }
+
+    // 3b. Also extract container IDs from booking KC digression events in trace.
+    //     Booking turns carry sourceKey='BOOKING_LOGIC_ENGINE' — the KC containerId
+    //     is only inside the BOOKING_LOGIC_TRACE event, not the turn's embedded trace.
+    const traceEvents = transcriptV2?.trace || [];
+    for (const evt of traceEvents) {
+      if (evt.kind !== 'BOOKING_LOGIC_TRACE' || !evt.payload?.steps) continue;
+      for (const step of evt.payload.steps) {
+        if ((step.type === 'BK_KC_DIGRESSION_ANSWERED' || step.type === 'BK_BPFUQ_KC_ANSWERED') && step.containerId) {
+          if (mongoose.Types.ObjectId.isValid(step.containerId)) kcLookupIds.add(step.containerId);
+        }
+      }
     }
 
     // 4. Load KC cards
