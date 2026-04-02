@@ -56,9 +56,8 @@ const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesServ
 const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');
 
-// ── UAP Layer 1 (Step 6 — Build Step 5+6) ────────────────────────────────────
+// ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
-const BridgeService           = require('./BridgeService');
 
 // UAP confidence threshold (G12: UAP confidence ≥ 0.8 wins, else keyword scoring)
 const UAP_CONFIDENCE_THRESHOLD = 0.80;
@@ -598,26 +597,21 @@ class KCDiscoveryRunner {
     // are pre-fetched and ready if we need them.
     // ══════════════════════════════════════════════════════════════════════════
 
-    const hasEmbeddingKey = !!process.env.OPENAI_API_KEY;
     let spfuq               = null;
     let notes               = null;
     let containers          = [];
-    let containerEmbeddings = new Map();
     let rejectedContainerIds = new Set();   // IDs caller has explicitly rejected this call
 
     try {
       const _rejKey = `kc-rejected:${companyId}:${callSid}`;
       let _rejRaw;
-      [spfuq, notes, containers, containerEmbeddings, _rejRaw] = await Promise.all([
+      [spfuq, notes, containers, _rejRaw] = await Promise.all([
         SPFUQService.load(companyId, callSid).catch(() => null),
         DiscoveryNotesService.load(companyId, callSid).catch(() => null),
         KCS.getActiveForCompany(companyId).catch((_e) => {
           logger.warn('[KC_ENGINE] Failed to load containers', { companyId, callSid, err: _e.message });
           return [];
         }),
-        hasEmbeddingKey
-          ? KCS.getEmbeddingsForCompany(companyId).catch(() => new Map())
-          : Promise.resolve(new Map()),
         redis ? redis.get(_rejKey).catch(() => null) : Promise.resolve(null),
       ]);
       if (_rejRaw) {
@@ -760,108 +754,167 @@ class KCDiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // UAP LAYER 1 — Zero-latency intent fast path  (~1ms)
+    // GATE 2.5 — UAP LAYER 1 — Zero-latency phrase match  (<1ms)
     // ══════════════════════════════════════════════════════════════════════════
-    // UtteranceActParser classifies the utterance against the company's Bridge
-    // phrase index (pre-built from UAPArrays, cached in Redis).
+    // UtteranceActParser matches caller utterance against section.callerPhrases
+    // (indexed via BridgeService phraseIndex, cached in Redis).
     //
-    // G12 RULE: UAP confidence ≥ 0.8 → Bridge lookup → direct container match.
-    //           UAP confidence  < 0.8 → fall through to Gate 3 keyword scoring.
+    // UAP confidence ≥ 0.8 → containerId + sectionIdx resolved directly.
+    // UAP confidence  < 0.8 → fall through to Gate 2.8 (semantic) then Gate 3.
     //
-    // SPFUQ INTERLOCK: If an SPFUQ anchor is active AND UAP hits with confidence
-    // ≥ 0.8 on a DIFFERENT daType than the anchored container → UAP wins (topic hop).
-    // If same daType → SPFUQ continuation takes priority (answered below).
-    //
-    // GRACEFUL DEGRADE: Any UAP error returns NONE (confidence=0) → keyword scoring.
+    // GRACEFUL DEGRADE: Any UAP error returns NONE (confidence=0) → next gate.
     // ══════════════════════════════════════════════════════════════════════════
 
-    let match = null;  // declared here so UAP can set it before keyword scoring
+    let match = null;
     let uapResult = null;
 
     try {
       uapResult = await UtteranceActParser.parse(companyId, userInput);
 
-      if (uapResult.daType && uapResult.confidence >= UAP_CONFIDENCE_THRESHOLD) {
-        logger.info('[KC_ENGINE] 🧠 UAP Layer 1 HIT', {
+      if (uapResult.containerId && uapResult.confidence >= UAP_CONFIDENCE_THRESHOLD) {
+        logger.info('[KC_ENGINE] UAP Layer 1 HIT', {
           companyId, callSid, turn,
-          daType:        uapResult.daType,
+          containerId:   uapResult.containerId,
+          sectionIdx:    uapResult.sectionIdx,
+          sectionLabel:  uapResult.sectionLabel,
           confidence:    uapResult.confidence,
           matchType:     uapResult.matchType,
           matchedPhrase: uapResult.matchedPhrase,
         });
         emit('KC_UAP_HIT', {
           companyId, callSid, turn,
-          daType:     uapResult.daType,
-          confidence: uapResult.confidence,
-          matchType:  uapResult.matchType,
+          containerId: uapResult.containerId,
+          sectionIdx:  uapResult.sectionIdx,
+          confidence:  uapResult.confidence,
+          matchType:   uapResult.matchType,
         });
 
-        // Look up KC containers for this daType via Bridge
-        const bridgeContainers = await BridgeService.lookup(companyId, uapResult.daType);
+        // Hydrate — find the full container from our already-loaded scorable list
+        const fullContainer = scorableContainers.find(c =>
+          String(c._id || '') === uapResult.containerId
+        );
 
-        if (bridgeContainers?.length > 0) {
-          // Find the first scorable container (not rejected) from the bridge result
-          const bridgeContainer = bridgeContainers.find(bc =>
-            !rejectedContainerIds.has(bc.id) &&
-            scorableContainers.some(c => String(c._id || '') === bc.id)
-          );
+        if (fullContainer) {
+          const targetSection = fullContainer.sections?.[uapResult.sectionIdx] || null;
+          match = {
+            container:      fullContainer,
+            score:          Math.round(uapResult.confidence * 100),
+            matchSource:    'UAP_LAYER1',
+            uapResult,
+            targetSection,
+            targetSectionIdx: uapResult.sectionIdx,
+          };
 
-          if (bridgeContainer) {
-            // Hydrate — find the full container object from our already-loaded list
-            const fullContainer = scorableContainers.find(c =>
-              String(c._id || '') === bridgeContainer.id
-            );
-
-            if (fullContainer) {
-              match = {
-                container:    fullContainer,
-                score:        Math.round(uapResult.confidence * 100),
-                matchSource:  'UAP_LAYER1',
-                uapResult,
-                daSubTypeKey: uapResult.daSubTypeKey || null,  // enables section-level routing
-              };
-
-              logger.info('[KC_ENGINE] 🧠 UAP Bridge resolved container', {
-                companyId, callSid, turn,
-                containerTitle: fullContainer.title,
-                daType:         uapResult.daType,
-                confidence:     uapResult.confidence,
-              });
-            }
-          }
+          logger.info('[KC_ENGINE] UAP resolved container + section', {
+            companyId, callSid, turn,
+            containerTitle: fullContainer.title,
+            sectionLabel:   targetSection?.label || '(all)',
+            confidence:     uapResult.confidence,
+          });
         }
 
-        // Log UAP parse result to discoveryNotes qaLog (diagnostic, fire-and-forget)
+        // Log to discoveryNotes qaLog (diagnostic, fire-and-forget)
         _writeDiscoveryNotes(companyId, callSid, {
           qaLog: [{
-            type:      'UAP_LAYER1',
-            daType:    uapResult.daType,
-            confidence: uapResult.confidence,
-            matchType:  uapResult.matchType,
-            phrase:    uapResult.matchedPhrase,
-            hit:       !!match,
-            turn:      turn ?? 0,
+            type:       'UAP_LAYER1',
+            containerId: uapResult.containerId,
+            sectionIdx:  uapResult.sectionIdx,
+            confidence:  uapResult.confidence,
+            matchType:   uapResult.matchType,
+            phrase:      uapResult.matchedPhrase,
+            hit:         !!match,
+            turn:        turn ?? 0,
           }],
         }).catch(() => {});
 
-      } else if (uapResult.daType) {
-        // UAP hit but below threshold — log for calibration diagnostics
-        logger.debug('[KC_ENGINE] UAP Layer 1 below threshold — keyword scoring', {
+      } else if (uapResult.containerId) {
+        logger.debug('[KC_ENGINE] UAP Layer 1 below threshold — next gate', {
           companyId, callSid, turn,
-          daType:     uapResult.daType,
-          confidence: uapResult.confidence,
-          threshold:  UAP_CONFIDENCE_THRESHOLD,
+          containerId: uapResult.containerId,
+          confidence:  uapResult.confidence,
+          threshold:   UAP_CONFIDENCE_THRESHOLD,
         });
       }
     } catch (_uapErr) {
-      // UAP error — graceful degrade to keyword scoring, never block the call
-      logger.warn('[KC_ENGINE] UAP Layer 1 error — falling through to keyword scoring', {
+      logger.warn('[KC_ENGINE] UAP Layer 1 error — falling through', {
         companyId, callSid, err: _uapErr.message,
       });
     }
 
-    // Step 1: keyword match (synchronous, ~0ms) — skipped if UAP already found match
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 2.8 — SEMANTIC MATCH — Embedding similarity  (~50ms)
+    // ══════════════════════════════════════════════════════════════════════════
+    // When UAP phrase match misses, compare the caller's utterance embedding
+    // against section.callerPhrases[].embedding + section.contentEmbedding.
+    // Only fires if OPENAI_API_KEY is set. Falls through to Gate 3 on miss.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (!match) {
+      try {
+        const SemanticMatchService = require('./SemanticMatchService');
+        // Load containers with embeddings for semantic comparison
+        const ContainerModel = require('../../../models/CompanyKnowledgeContainer');
+        const embContainers = await ContainerModel
+          .find({ companyId, isActive: true })
+          .select('+sections.callerPhrases.embedding +sections.contentEmbedding')
+          .lean();
+
+        // Filter to scorable containers only
+        const scorableEmbContainers = rejectedContainerIds.size > 0
+          ? embContainers.filter(c => !rejectedContainerIds.has(String(c._id)))
+          : embContainers;
+
+        const semanticResult = await SemanticMatchService.findBestSection(
+          companyId, userInput, scorableEmbContainers
+        );
+
+        if (semanticResult) {
+          // Hydrate the full container from our original loaded list
+          const fullContainer = scorableContainers.find(c =>
+            String(c._id || '') === String(semanticResult.container._id)
+          );
+
+          if (fullContainer) {
+            match = {
+              container:        fullContainer,
+              score:            Math.round(semanticResult.similarity * 100),
+              matchSource:      'SEMANTIC',
+              targetSection:    fullContainer.sections?.[semanticResult.sectionIdx] || null,
+              targetSectionIdx: semanticResult.sectionIdx,
+            };
+
+            emit('KC_SEMANTIC_MATCH', {
+              containerTitle: fullContainer.title,
+              containerId:    String(fullContainer._id),
+              sectionLabel:   semanticResult.section?.label || null,
+              similarity:     semanticResult.similarity,
+              matchSource:    semanticResult.matchSource,
+            });
+
+            logger.info('[KC_ENGINE] Semantic match found', {
+              companyId, callSid, turn,
+              containerTitle: fullContainer.title,
+              sectionLabel:   semanticResult.section?.label || '(all)',
+              similarity:     semanticResult.similarity.toFixed(3),
+            });
+          }
+        }
+      } catch (_semErr) {
+        logger.warn('[KC_ENGINE] Semantic match error — falling through to keywords', {
+          companyId, callSid, err: _semErr.message,
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 3 — KEYWORD FALLBACK — contentKeywords + title scoring  (<1ms)
+    // ══════════════════════════════════════════════════════════════════════════
     if (!match) match = KCS.findContainer(scorableContainers, userInput, callContext);
+
+    // Carry bestSection from findContainer into the match for section routing
+    if (match && match.bestSection && !match.targetSection) {
+      match.targetSection    = match.bestSection;
+      match.targetSectionIdx = match.bestSectionIdx ?? null;
+    }
 
     if (match?.contextAssisted) {
       emit('KC_CONTEXT_MATCH', {
@@ -870,37 +923,6 @@ class KCDiscoveryRunner {
         score:          match.score,
         callReason:     notes?.callReason || null,
       });
-    }
-
-    // Step 2: embedding fallback — only when keyword confidence is below threshold
-    if ((!match || match.score < KCS.KEYWORD_CONFIDENCE_THRESHOLD) && containerEmbeddings.size > 0) {
-      try {
-        const utteranceEmbedding = await KCS._getUtteranceEmbedding(userInput, callSid, turn);
-        if (utteranceEmbedding) {
-          const embMatch = KCS.findContainer(scorableContainers, userInput, callContext, {
-            utteranceEmbedding,
-            containerEmbeddings,
-          });
-          if (embMatch?.embeddingAssisted) {
-            match = embMatch;
-            emit('KC_EMBEDDING_MATCH', {
-              containerTitle:      match.container.title,
-              containerId:         String(match.container._id || match.container.title || ''),
-              embeddingSimilarity: match.embeddingSimilarity,
-            });
-            logger.info('[KC_ENGINE] Embedding fallback matched container', {
-              companyId, callSid, turn,
-              containerTitle: match.container.title,
-              similarity:     match.embeddingSimilarity?.toFixed(3),
-            });
-          }
-        }
-      } catch (_embErr) {
-        // Non-fatal — keyword result (or null) stands
-        logger.warn('[KC_ENGINE] Utterance embedding failed — continuing with keyword result', {
-          companyId, callSid, err: _embErr.message,
-        });
-      }
     }
 
     // Convenience: extract priorVisit once so all handlers below can use it
@@ -1450,19 +1472,16 @@ async function _handleKCMatch({
   const containerTitle = container.title || 'Knowledge Container';
   const containerId    = String(container._id || containerTitle);
 
-  // ── Resolve targetSection from UAP daSubTypeKey ───────────────────────────
-  // When UAP matched with a specific daSubTypeKey, find the section whose
-  // daSubTypeKey matches — Groq reads ONLY that section's content.
-  // null = all sections sent to Groq (keyword match or general query).
-  const daSubTypeKey  = match.daSubTypeKey || null;
-  const targetSection = daSubTypeKey
-    ? (container.sections || []).find(s => s.daSubTypeKey === daSubTypeKey) || null
-    : null;
+  // ── Resolve targetSection from match ──────────────────────────────────────
+  // UAP (Gate 2.5) and Semantic (Gate 2.8) set match.targetSection directly.
+  // Keyword (Gate 3) may set match.bestSection → carried as match.targetSection.
+  // null = all sections sent to Groq (no specific section identified).
+  const targetSection = match.targetSection || null;
   const sectionId     = targetSection ? String(targetSection._id || '') : null;
 
   logger.info('[KC_ENGINE] Container matched', {
     companyId, callSid, containerTitle, score: match.score, turn,
-    ...(targetSection ? { daSubTypeKey, sectionLabel: targetSection.label } : {}),
+    ...(targetSection ? { sectionLabel: targetSection.label, matchSource: match.matchSource } : {}),
   });
 
   emit('KC_CONTAINER_MATCHED', {

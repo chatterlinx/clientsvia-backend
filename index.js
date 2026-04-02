@@ -300,7 +300,7 @@ async function loadAllRoutes() {
 
         // 🧠 Version 1.0 — discoveryNotes + UAP Intelligence
         routes.discoveryNotesSettingsRoutes = await loadRouteWithTimeout('./routes/admin/discoveryNotesSettings', 'discoveryNotesSettingsRoutes'); // 📋 Discovery Notes Settings (bookingFieldConfig, snapshots)
-        routes.uapArraysRoutes              = await loadRouteWithTimeout('./routes/admin/uapArrays',              'uapArraysRoutes');              // 🧩 UAP Arrays + Booking Fields (daType vocabulary, CRUD, pending)
+        // UAP Arrays route removed — matching now uses section.callerPhrases via BridgeService
 
         // 🎙️ Turn1Engine — First-turn triage and personalized welcome
         routes.turn1ConfigRoutes = await loadRouteWithTimeout('./routes/admin/turn1Config', 'turn1ConfigRoutes'); // 🎙️ Turn1Engine config (enabled, didntUnderstandText, returningCaller, historyDepth)
@@ -710,7 +710,7 @@ function registerRoutes(routes) {
 
     // 🧠 Version 1.0 — discoveryNotes + UAP Intelligence
     app.use('/api/admin/agent2/company', routes.discoveryNotesSettingsRoutes); // 📋 Discovery Notes Settings (bookingFieldConfig, snapshots)
-    app.use('/api/admin/agent2/company', routes.uapArraysRoutes);              // 🧩 UAP Arrays + Booking Fields (daType vocabulary, CRUD, pending)
+    // UAP Arrays route removed — matching now uses section.callerPhrases via BridgeService
 
     // ⚙️ Engine Hub — Governed Voice Operating System (V1 March 2026)
     app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)

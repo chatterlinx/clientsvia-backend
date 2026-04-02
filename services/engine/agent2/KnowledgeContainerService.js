@@ -196,11 +196,8 @@ const TIER2_SIGNALS = [
 
 const CACHE_TTL = 900; // 15 minutes
 
-/** Keyword score below this → try embedding fallback (env-configurable) */
-const KEYWORD_CONFIDENCE_THRESHOLD = parseInt(process.env.KC_KEYWORD_THRESHOLD, 10) || 5;
-
-/** Cosine similarity above this → accept embedding match (env-configurable) */
-const EMBEDDING_SIMILARITY_THRESHOLD = parseFloat(process.env.KC_EMBEDDING_THRESHOLD) || 0.45;
+/** Minimum keyword score for a match to be accepted (env-configurable) */
+const KEYWORD_CONFIDENCE_THRESHOLD = parseInt(process.env.KC_KEYWORD_THRESHOLD, 10) || 8;
 
 let _redis = null;
 function _getRedis() {
@@ -693,231 +690,196 @@ async function invalidateCache(companyId) {
 }
 
 /**
- * findContainer — Keyword-score all containers and return the best match.
+ * _scorePhrase — Score a single keyword/phrase against normalised input.
+ * Reused for title scoring, section contentKeywords, and negativeKeywords.
  *
- * Scoring algorithm:
- *   - Multi-word phrase match scores length × 2 (rewards specificity)
- *   - Single-word match scores by word length
- *   - Best score across all containers wins
+ * @param {string} phrase   — normalised keyword phrase
+ * @param {string} norm     — normalised caller utterance
+ * @param {Set<string>} inputWords — pre-split set of input words
+ * @returns {number} — score (0 = no match)
+ */
+function _scorePhrase(phrase, norm, inputWords) {
+  if (!phrase) return 0;
+
+  if (phrase.includes(' ')) {
+    // Multi-word: exact substring match (highest score)
+    if (norm.includes(phrase)) return phrase.length * 2;
+
+    // Word-overlap fallback: content words ≥5 chars
+    const contentWords = phrase.split(/\s+/).filter(w => w.length >= 5);
+    const hits = contentWords.filter(w => inputWords.has(w));
+    if (hits.length >= 1) {
+      return hits.reduce((s, w) => s + (w.length >= 8 ? Math.round(w.length * 1.5) : w.length), 0);
+    }
+    return 0;
+  }
+
+  // Single word: whole-word match
+  return inputWords.has(phrase) ? phrase.length : 0;
+}
+
+/**
+ * findContainer — Score all containers via section.contentKeywords + title
+ * and return the best match with optional bestSection.
+ *
+ * Scoring sources (in order of weight):
+ *   A. section.contentKeywords[] — auto-extracted bigrams from section content (0.9× per section)
+ *   B. container.title — implicit keywords from title (0.8× weight)
+ *   C. context callReason augmentation — fallback when direct scoring misses
+ *
+ * Minimum score threshold: KC_KEYWORD_THRESHOLD env (default 8).
+ * Anchor logic: 3× boost + ANCHOR_FLOOR=24 for call continuity.
+ * negativeKeywords exclusion: unchanged.
  *
  * @param {Array}  containers — Active CompanyKnowledgeContainer documents
  * @param {string} input      — Raw caller utterance
  * @param {Object} [context]  — Optional call context from discoveryNotes
- * @param {string} [context.callReason] — e.g. "annual maintenance" from Turn 1
- * @param {Object} [embeddingOpts]  — Optional embedding data for semantic fallback
- * @param {number[]}                [embeddingOpts.utteranceEmbedding]   — caller utterance vector
- * @param {Map<string, number[]>}   [embeddingOpts.containerEmbeddings]  — containerId → vector map
- * @returns {{ container: Object, score: number, contextAssisted?: boolean, embeddingAssisted?: boolean } | null}
+ * @param {string} [context.callReason] — e.g. "annual maintenance"
+ * @param {string} [context.anchorContainerId] — anchor container for 3× boost
+ * @returns {{ container, score, bestSection?, bestSectionIdx?, contextAssisted?, anchorBoosted?, anchorFloor? } | null}
  */
-function findContainer(containers, input, context = null, embeddingOpts = null) {
+function findContainer(containers, input, context = null) {
   if (!containers?.length || !input) return null;
 
-  const norm = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
+  const norm       = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
+  const inputWords = new Set(norm.split(/\s+/));
 
-  // ── NEGATIVE KEYWORD EXCLUSION ────────────────────────────────────────────
-  // If a container has negativeKeywords, check each one against the utterance.
-  // Any single match DISQUALIFIES that container for this turn (regardless of
-  // how well its positive keywords score). This lets admins prevent containers
-  // with broad positive keywords (e.g. "price") from firing on utterances that
-  // belong to a different topic (e.g. "maintenance price" → not system replacement).
-  //
-  // Matching rules mirror positive-keyword matching:
-  //   Multi-word negative keyword → exact substring match in normalised input
-  //   Single-word negative keyword → whole-word match in normalised input
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── NEGATIVE KEYWORD EXCLUSION ─────────────────────────────────────────
   const _isNegativelyExcluded = (container) => {
     const negKws = container.negativeKeywords;
     if (!Array.isArray(negKws) || !negKws.length) return false;
-    const inputWords = new Set(norm.split(/\s+/));
     for (const nk of negKws) {
       const nkNorm = nk.toLowerCase().trim();
       if (!nkNorm) continue;
       if (nkNorm.includes(' ')) {
-        if (norm.includes(nkNorm)) return true;          // multi-word exact hit
+        if (norm.includes(nkNorm)) return true;
       } else {
-        if (inputWords.has(nkNorm)) return true;         // single-word whole-word hit
+        if (inputWords.has(nkNorm)) return true;
       }
     }
     return false;
   };
 
-  let bestMatch = null;
-  let bestScore = 0;
-
-  // Anchor container ID — when set, this container gets a 3× score multiplier.
-  // The call stays on topic unless a competitor scores 3× higher (clear topic shift).
+  const MIN_THRESHOLD = parseInt(process.env.KC_KEYWORD_THRESHOLD, 10) || 8;
   const _anchorId = context?.anchorContainerId ? String(context.anchorContainerId) : null;
 
-  // Track anchor object + its best RAW keyword score this turn (before 3× boost).
-  // Used by the ANCHOR_FLOOR guard below.
+  let bestMatch           = null;
+  let bestScore           = 0;
   let _anchorContainer    = null;
-  let _anchorKeywordScore = 0;
+  let _anchorRawScore     = 0;
 
   for (const container of containers) {
-    if (_isNegativelyExcluded(container)) continue;      // ← exclusion gate
-    const keywords = container.keywords || [];
-    if (!keywords.length) continue;
+    if (_isNegativelyExcluded(container)) continue;
 
-    // Is this the anchor container for this call?
-    const isAnchor = !!(_anchorId && String(container._id || container.title) === _anchorId);
+    const isAnchor = !!(_anchorId && String(container._id) === _anchorId);
     if (isAnchor && !_anchorContainer) _anchorContainer = container;
 
-    for (const kw of keywords) {
-      const kwNorm = kw.toLowerCase().trim();
-      if (!kwNorm) continue;
+    let containerBestScore   = 0;
+    let containerBestSection = null;
+    let containerBestSIdx    = null;
 
-      let matched = false;
-      let score   = 0;
+    // ── Path A: Score section.contentKeywords per section ─────────────────
+    const sections = container.sections || [];
+    for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+      const section = sections[sIdx];
+      const keywords = section.contentKeywords || [];
+      if (!keywords.length) continue;
 
-      if (kwNorm.includes(' ')) {
-        if (norm.includes(kwNorm)) {
-          // Exact substring match — highest score, rewards specificity
-          matched = true;
-          score   = kwNorm.length * 2;
-        } else {
-          // Word-overlap fallback: extract content words (≥5 chars) from the
-          // keyword phrase and check how many appear as whole words in the input.
-          // This lets "maintenance charges" match keyword
-          // "how much is the maintenance plan" via the shared word "maintenance".
-          //
-          // Scoring: long domain-specific words (≥8 chars) get a 1.5× bonus so
-          // "maintenance" (11×1.5=17) beats a short generic exact like "how much"
-          // (8×2=16). Short content words keep face-value length.
-          // Net score stays below any multi-word EXACT match it belongs to.
-          const inputWords   = new Set(norm.split(/\s+/));
-          const contentWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
-          const hits         = contentWords.filter(w => inputWords.has(w));
-          if (hits.length >= 1) {
-            matched = true;
-            score   = hits.reduce((s, w) => s + (w.length >= 8 ? Math.round(w.length * 1.5) : w.length), 0);
-          }
-        }
-      } else {
-        // Single word: whole-word match
-        matched = norm.split(/\s+/).includes(kwNorm);
-        score   = matched ? kwNorm.length : 0;
+      let sectionScore = 0;
+      for (const kw of keywords) {
+        const kwNorm = kw.toLowerCase().trim();
+        const s = _scorePhrase(kwNorm, norm, inputWords);
+        if (s > sectionScore) sectionScore = s;
       }
 
-      if (matched) {
-        // Track anchor's best raw score before the 3× multiplier is applied.
-        if (isAnchor && score > _anchorKeywordScore) _anchorKeywordScore = score;
-
-        // Anchor container gets 3× multiplier — keeps the call on topic.
-        // A competitor can only displace the anchor by scoring 3× higher,
-        // which requires a clear, unambiguous topic shift from the caller.
-        const finalScore = isAnchor ? score * 3 : score;
-        if (finalScore > bestScore) {
-          bestScore = finalScore;
-          bestMatch = { container, score: finalScore, ...(isAnchor ? { anchorBoosted: true } : {}) };
-        }
+      // Apply 0.9× weight for section keywords
+      const weighted = Math.round(sectionScore * 0.9);
+      if (weighted > containerBestScore) {
+        containerBestScore   = weighted;
+        containerBestSection = section;
+        containerBestSIdx    = sIdx;
       }
+    }
+
+    // ── Path B: Score container.title (implicit keywords) ────────────────
+    if (container.title) {
+      const titleNorm = container.title.toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
+      const titleScore = _scorePhrase(titleNorm, norm, inputWords);
+      const weighted = Math.round(titleScore * 0.8);
+      if (weighted > containerBestScore) {
+        containerBestScore   = weighted;
+        containerBestSection = null; // title match → no specific section
+        containerBestSIdx    = null;
+      }
+    }
+
+    if (containerBestScore <= 0) continue;
+
+    // Track anchor raw score before multiplier
+    if (isAnchor && containerBestScore > _anchorRawScore) {
+      _anchorRawScore = containerBestScore;
+    }
+
+    const finalScore = isAnchor ? containerBestScore * 3 : containerBestScore;
+    if (finalScore > bestScore) {
+      bestScore = finalScore;
+      bestMatch = {
+        container,
+        score: finalScore,
+        bestSection:    containerBestSection,
+        bestSectionIdx: containerBestSIdx,
+        ...(isAnchor ? { anchorBoosted: true } : {}),
+      };
     }
   }
 
-  // ── ANCHOR FLOOR ──────────────────────────────────────────────────────────
-  // When the anchor container has NO keyword matches this turn (raw score = 0),
-  // the 3× multiplier yields 0 — a container matching even one random word wins.
-  // Example: caller says "you didn't ask me if I'm a customer" after an AC repair
-  // call → "customer" keyword scores 8 for "My System Is Old" → anchor drift.
-  //
-  // Fix: if anchor scored 0 and every competitor is below ANCHOR_FLOOR, the
-  // anchor holds with a synthetic floor score. A competitor must score ≥ ANCHOR_FLOOR
-  // to displace. Chosen at 24 so that:
-  //   • single-word noise  ("customer"=8, "system"=6) → anchor holds ✓
-  //   • exact phrase match ("comfort club"=24)         → tie breaks toward competitor ✓
-  //   • long exact phrase  ("maintenance plan"=28)     → anchor displaced ✓
+  // ── ANCHOR FLOOR ───────────────────────────────────────────────────────
   const ANCHOR_FLOOR = 24;
-  if (_anchorContainer && _anchorKeywordScore === 0 && bestScore < ANCHOR_FLOOR) {
+  if (_anchorContainer && _anchorRawScore === 0 && bestScore < ANCHOR_FLOOR) {
     bestMatch = { container: _anchorContainer, score: ANCHOR_FLOOR, anchorFloor: true };
     bestScore = ANCHOR_FLOOR;
   }
 
-  // ── CONTEXT FALLBACK: if no direct match and callReason available, retry
-  // with callReason words prepended to input. The word-overlap fallback in
-  // the scoring algorithm naturally picks up shared content words
-  // (e.g. "maintenance" from callReason matches "maintenance plan" keyword).
-  //
-  // Only fires when raw input had zero hits — never overrides a direct match.
-  // contextAssisted flag distinguishes this in trace events.
+  // ── CONTEXT FALLBACK ───────────────────────────────────────────────────
   if (!bestMatch && context?.callReason) {
-    const augmented = `${context.callReason} ${input}`;
-    const augNorm   = augmented.toLowerCase().replace(/[^a-z\s]/g, ' ');
+    const augmented  = `${context.callReason} ${input}`;
+    const augNorm    = augmented.toLowerCase().replace(/[^a-z\s]/g, ' ');
+    const augWords   = new Set(augNorm.split(/\s+/));
 
     for (const container of containers) {
-      if (_isNegativelyExcluded(container)) continue;    // ← exclusion gate (context pass too)
-      const keywords = container.keywords || [];
-      if (!keywords.length) continue;
+      if (_isNegativelyExcluded(container)) continue;
 
-      for (const kw of keywords) {
-        const kwNorm = kw.toLowerCase().trim();
-        if (!kwNorm) continue;
-
-        let matched = false;
-        let score   = 0;
-
-        if (kwNorm.includes(' ')) {
-          if (augNorm.includes(kwNorm)) {
-            matched = true;
-            score   = kwNorm.length * 2;
-          } else {
-            const inputWords   = new Set(augNorm.split(/\s+/));
-            const contentWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
-            const hits         = contentWords.filter(w => inputWords.has(w));
-            if (hits.length >= 1) {
-              matched = true;
-              score   = hits.reduce((s, w) => s + (w.length >= 8 ? Math.round(w.length * 1.5) : w.length), 0);
-            }
+      // Score against section contentKeywords with augmented input
+      for (let sIdx = 0; sIdx < (container.sections || []).length; sIdx++) {
+        const section  = container.sections[sIdx];
+        const keywords = section.contentKeywords || [];
+        for (const kw of keywords) {
+          const kwNorm = kw.toLowerCase().trim();
+          const s = _scorePhrase(kwNorm, augNorm, augWords);
+          const weighted = Math.round(s * 0.9);
+          if (weighted > bestScore) {
+            bestScore = weighted;
+            bestMatch = { container, score: weighted, bestSection: section, bestSectionIdx: sIdx, contextAssisted: true };
           }
-        } else {
-          matched = augNorm.split(/\s+/).includes(kwNorm);
-          score   = matched ? kwNorm.length : 0;
         }
+      }
 
-        if (matched && score > bestScore) {
-          bestScore = score;
-          bestMatch = { container, score, contextAssisted: true };
+      // Score title with augmented input
+      if (container.title) {
+        const titleNorm = container.title.toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
+        const s = _scorePhrase(titleNorm, augNorm, augWords);
+        const weighted = Math.round(s * 0.8);
+        if (weighted > bestScore) {
+          bestScore = weighted;
+          bestMatch = { container, score: weighted, contextAssisted: true };
         }
       }
     }
   }
 
-  // ── EMBEDDING FALLBACK: if keyword + context both missed (or score is weak),
-  // and embedding data was provided, compute cosine similarity against all
-  // container embeddings. Only fires on MISS — keyword matches above threshold
-  // always win (deterministic, 0ms). Embedding adds ~50ms but saves ~750ms
-  // vs Claude LLM fallback.
-  if (
-    (!bestMatch || bestMatch.score < KEYWORD_CONFIDENCE_THRESHOLD) &&
-    embeddingOpts?.utteranceEmbedding &&
-    embeddingOpts?.containerEmbeddings?.size > 0
-  ) {
-    const { cosineSimilarity } = _getEmbeddingService();
-    const utteranceVec   = embeddingOpts.utteranceEmbedding;
-    const containerMap   = embeddingOpts.containerEmbeddings;
-
-    let embBestSim       = 0;
-    let embBestContainer = null;
-
-    for (const container of containers) {
-      const vec = containerMap.get(String(container._id));
-      if (!vec) continue;
-
-      const sim = cosineSimilarity(utteranceVec, vec);
-      if (sim > embBestSim) {
-        embBestSim       = sim;
-        embBestContainer = container;
-      }
-    }
-
-    if (embBestSim >= EMBEDDING_SIMILARITY_THRESHOLD && embBestContainer) {
-      // Embedding match beats weak/absent keyword match
-      return {
-        container:         embBestContainer,
-        score:             Math.round(embBestSim * 100),   // normalized 0–100 for trace
-        embeddingAssisted: true,
-        embeddingSimilarity: embBestSim,
-      };
-    }
+  // ── MINIMUM THRESHOLD ──────────────────────────────────────────────────
+  if (bestMatch && bestMatch.score < MIN_THRESHOLD && !bestMatch.anchorFloor) {
+    return null;
   }
 
   return bestMatch;
@@ -1145,7 +1107,6 @@ module.exports = {
   TIER1_SIGNALS,
   TIER2_SIGNALS,
   KEYWORD_CONFIDENCE_THRESHOLD,
-  EMBEDDING_SIMILARITY_THRESHOLD,
   detect,
   detectTier,
   getActiveForCompany,

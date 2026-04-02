@@ -75,8 +75,8 @@ class Turn1Engine {
       lane,
       callerName:   callerName || null,
       isKnown,
-      uapDaType:    uapResult?.daType    || null,
-      uapSubType:   uapResult?.daSubTypeKey || null,
+      uapContainerId: uapResult?.containerId || null,
+      uapSectionIdx:  uapResult?.sectionIdx ?? null,
       uapConfidence: uapResult?.confidence ?? null,
       turn:         params.turn,
     });
@@ -109,7 +109,7 @@ class Turn1Engine {
         emit('TURN1_PATH', {
           path:     'CALLER_WITH_INTENT',
           prefix:   prefix || null,
-          uapDaType: uapResult?.daType || null,
+          uapContainerId: uapResult?.containerId || null,
           turn:     params.turn,
         });
         // Delegate the ACTION to KCDiscoveryRunner — it handles KC/booking/transfer
@@ -241,7 +241,7 @@ class Turn1Engine {
     }
 
     // Transfer / staff mention
-    if (uap?.daType === 'TRANSFER' || /\b(speak|talk|get|reach)\s+(to|with)\b/i.test(input)) {
+    if (/\b(speak|talk|get|reach)\s+(to|with)\b/i.test(input)) {
       return `${greet} Let me check on that for you —`;
     }
 

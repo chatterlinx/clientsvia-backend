@@ -468,7 +468,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // UAP fires on every booking turn at zero added latency (Promise.all).
   // It is the authoritative KC-question detector: if the caller is asking
   // about a service topic (pricing, warranty, scheduling, etc.) UAP will
-  // return a daType with confidence ≥ 0.70 — far more reliable than the
+  // return a containerId with confidence ≥ 0.70 — far more reliable than the
   // heuristic alone (the heuristic misses questions without "?" and short
   // queries like "how much?" that the STT transcribes without punctuation).
   const prevSnap = _snapshotCtx(ctx);
@@ -484,9 +484,9 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
 
   // UAP authority: compute before the early-return so a high-confidence KC question
-  // (daType != null, confidence ≥ 0.70) can override a step that "advanced" by
+  // (containerId != null, confidence ≥ 0.70) can override a step that "advanced" by
   // extracting the wrong thing (e.g. "Yeah" from "Yeah, how much do you charge?").
-  const uapDetectsKCQuestion = !!(parsedAct?.daType && parsedAct.confidence >= 0.70);
+  const uapDetectsKCQuestion = !!(parsedAct?.containerId && parsedAct.confidence >= 0.70);
 
   // No input → nothing to interrogate
   if (!userInput?.trim()) return stepResult;
@@ -547,7 +547,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     type:           'BK_BPFUQ_START',
     step:           prevSnap.step,
     input:          userInput.substring(0, 100),
-    uapDaType:      parsedAct?.daType       || null,
+    uapContainerId: parsedAct?.containerId  || null,
     uapMatchType:   parsedAct?.matchType    || 'NONE',
     uapConfidence:  parsedAct?.confidence   || 0,
     uapTriggered:   uapDetectsKCQuestion,
