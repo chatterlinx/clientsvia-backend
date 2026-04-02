@@ -27,10 +27,10 @@
  *   Examples: "Price", "What's Included", "Warranty", "Duration",
  *             "Availability", "How It Works", "Who Needs This"
  *
- * KEYWORD MATCHING:
- *   Runtime: KnowledgeContainerService.findContainer() scores all containers
- *   against the caller utterance. Best-scoring container wins.
- *   Keyword auto-generation via POST .../generate-keywords endpoint.
+ * MATCHING (3-tier):
+ *   Gate 2.5: UAP phrase match — callerPhrases[] per section → BridgeService phraseIndex → <1ms
+ *   Gate 2.8: Semantic embedding — section.contentEmbedding vs utterance embedding → ~50ms
+ *   Gate 3:   Keyword fallback — section.contentKeywords[] (auto-extracted) → <1ms
  *
  * BOOKING ACTION:
  *   offer_to_book    — after answering, Groq offers to schedule (or appends fixed phrase)
@@ -88,13 +88,24 @@ const upsellItemSchema = new mongoose.Schema(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CALLER PHRASE SUB-SCHEMA (embedded in sectionSchema.callerPhrases[])
+// ─────────────────────────────────────────────────────────────────────────────
+const callerPhraseSchema = new mongoose.Schema(
+  {
+    text:      { type: String, required: true, trim: true, maxlength: 200, comment: 'Full caller sentence, e.g. "I want someone to come out"' },
+    embedding: { type: [Number], default: undefined, select: false, comment: '512-dim embedding from text-embedding-3-small. Auto-generated on save.' },
+    addedAt:   { type: Date, default: Date.now, comment: 'When this phrase was added' },
+  },
+  { _id: false, versionKey: false }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION SUB-SCHEMA — each section is an independently routable knowledge unit
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// ROUTING:  daSubTypeKey links this section to a UAP array sub-type.
-//           When UAP resolves daSubType === section.daSubTypeKey, the agent
-//           routes here and reads ONLY this section's content.
-//           Set automatically by the Auto-label button.
+// ROUTING:  callerPhrases[] → BridgeService builds phraseIndex → UAP matches
+//           caller utterance against callerPhrases. Match → routes directly
+//           to this section. No more daSubTypeKey / UAPArray indirection.
 //
 // FLOW:     Agent lands on this section → pre-qualify fires (if text set)
 //           → Groq answers from this section's content → upsell fires (if items)
@@ -123,14 +134,34 @@ const sectionSchema = new mongoose.Schema(
       comment: 'Display and injection order — lower = earlier'
     },
 
-    // ── UAP routing key ────────────────────────────────────────────────────
-    // Set by Auto-label button. Links this section to UAPArray.daSubTypes[].key.
-    // null = section not yet classified; not reachable via UAP zero-latency routing.
-    daSubTypeKey: {
-      type:    String,
-      default: null,
-      trim:    true,
-      comment: 'UAP daSubType key that routes here (e.g. "_pricing", "_included"). Set by Auto-label.'
+    // ── Caller Phrases — what callers say when asking about this section ──
+    // Each phrase is a full sentence (e.g. "how much is a service call?").
+    // BridgeService indexes these into phraseIndex for UAP matching.
+    // Embeddings auto-generated on save via SemanticMatchService.
+    callerPhrases: { type: [callerPhraseSchema], default: [] },
+
+    // ── Auto-extracted content keywords (bigrams from section content) ────
+    // Used by Gate 3 keyword fallback when UAP + semantic miss.
+    // Regenerated on every save — no manual management.
+    contentKeywords: {
+      type:    [String],
+      default: [],
+      comment: 'Auto-extracted bigrams from section label + content. Regenerated on save.'
+    },
+
+    // ── Content embedding — for semantic matching ────────────────────────
+    // 512-dim vector of section content, used by SemanticMatchService.
+    // Auto-generated on save. select: false keeps it out of regular queries.
+    contentEmbedding: {
+      type:    [Number],
+      default: undefined,
+      select:  false,
+      comment: '512-dim embedding of section content. Auto-generated on save.'
+    },
+    contentEmbeddingAt: {
+      type:    Date,
+      default: undefined,
+      comment: 'Timestamp of last content embedding. Stale if older than section updatedAt.'
     },
 
     // ── Per-section booking action ─────────────────────────────────────────
@@ -145,7 +176,7 @@ const sectionSchema = new mongoose.Schema(
 
     // ── Per-section Fixed Response Mode ───────────────────────────────────
     // When true, Groq is bypassed for this specific section.
-    // Only fires when UAP routes a call to this section via daSubTypeKey.
+    // Only fires when UAP routes a call to this section via callerPhrases.
     // Audio is pre-cached on save (kind: 'KC_RESPONSE').
     // Falls through to Groq gracefully if content is missing.
     // Independent of container.useFixedResponse — each section decides for itself.
@@ -260,16 +291,6 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'Flexible labelled content blocks. Groq reads all sections and synthesises within wordLimit.'
     },
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // KEYWORDS — what the caller says to trigger this container
-    // Scored at runtime by KnowledgeContainerService.findContainer()
-    // ─────────────────────────────────────────────────────────────────────────
-    keywords: {
-      type:    [String],
-      default: [],
-      comment: 'Trigger phrases — what a caller might say when asking about this topic. Auto-generate via POST .../generate-keywords.'
-    },
-
     negativeKeywords: {
       type:    [String],
       default: [],
@@ -373,60 +394,6 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
     },
 
     // ─────────────────────────────────────────────────────────────────────────
-    // UAP CLASSIFICATION — which daType array this container maps to
-    // Set manually from UI or auto-generated via POST .../auto-classify.
-    // Runtime Bridge uses this for zero-latency intent routing.
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // The UAP daType this container belongs to (e.g. 'PRICING_QUERY', 'AVAILABILITY_QUERY').
-    // null = unclassified → runtime falls through to Gate 3 keyword scoring.
-    daType: {
-      type:    String,
-      default: null,
-      trim:    true,
-      comment: 'UAP daType key — links this container to a UAPArray. null = unclassified.'
-    },
-
-    // Sub-type keys within the daType array that point back to this container.
-    // Populated by the auto-classify route → upserted onto the UAPArray.daSubTypes[].attachedTo[].
-    daSubTypes: {
-      type:    [String],
-      default: [],
-      comment: 'UAPArray daSubType keys that reference this container. Set by auto-classify.'
-    },
-
-    // Classification provenance — how the daType was determined.
-    classificationStatus: {
-      type:    String,
-      enum:    ['AUTO_CONFIRMED', 'MANUAL', 'PENDING', 'UNCLASSIFIED'],
-      default: 'UNCLASSIFIED',
-      index:   true,
-      comment: 'How daType was set: AUTO_CONFIRMED=Groq inferred, MANUAL=owner set, PENDING=needs review, UNCLASSIFIED=not yet set.'
-    },
-
-    // Groq confidence score (0–1) from auto-classify — null if manually set.
-    classificationScore: {
-      type:    Number,
-      default: null,
-      comment: 'Auto-classify confidence score (0–1). null if manually classified.'
-    },
-
-    // Timestamp of last auto-classify run.
-    autoClassifiedAt: {
-      type:    Date,
-      default: null,
-      comment: 'Timestamp of last successful auto-classify run.'
-    },
-
-    // Trigger phrases generated by last auto-classify run — persisted so they
-    // survive page reload without a separate UAPArray fetch.
-    triggerPhrases: {
-      type:    [String],
-      default: [],
-      comment: 'Caller trigger phrases from last auto-classify. Mirrors UAPArray sub-type phrases.'
-    },
-
-    // ─────────────────────────────────────────────────────────────────────────
     // STATE & ORDERING
     // ─────────────────────────────────────────────────────────────────────────
     isActive: {
@@ -466,8 +433,7 @@ companyKnowledgeContainerSchema.index({ companyId: 1, category: 1 });
 // kcId lookup — unique per company (sparse: containers created before this feature have no kcId)
 companyKnowledgeContainerSchema.index({ companyId: 1, kcId: 1 }, { unique: true, sparse: true });
 
-// UAP Bridge lookup — find all containers for a company + daType (zero-latency routing)
-companyKnowledgeContainerSchema.index({ companyId: 1, daType: 1, isActive: 1 });
+// (daType index removed — callerPhrases are now indexed in BridgeService phraseIndex)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATIC HELPERS

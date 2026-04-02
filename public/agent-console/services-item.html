@@ -1022,20 +1022,9 @@
       <span class="form-card-badge optional">Recommended</span>
     </div>
     <div class="form-card-body">
-      <div class="form-group full">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-          <span class="form-label">Trigger Keywords</span>
-          <button type="button" class="btn-generate-kw" id="btnGenKw" onclick="generateKeywords()">
-            ✨ Auto-Generate from Content
-          </button>
-        </div>
-        <div class="keyword-input-wrap" id="kwWrap" onclick="document.getElementById('kwInner').focus()">
-          <input type="text" id="kwInner" class="kw-input-inner"
-            placeholder="Type keyword and press Enter or comma…"
-            onkeydown="kwKeydown(event)">
-        </div>
-        <div class="kw-hint">Press <strong>Enter</strong> or <strong>,</strong> to add a phrase. Click × to remove. Multi-word phrases score higher than single words.</div>
-        <div id="kwPreview" class="kw-preview-panel" style="display:none;"></div>
+      <div class="form-hint" style="margin-bottom:12px;">
+        Content keywords are <strong>auto-extracted</strong> from section content on every save — no manual management needed.
+        Caller phrases (per-section) handle fast matching. This card manages <strong>exclusion keywords</strong> and the test diagnostic.
       </div>
 
       <!-- Negative keywords -->
@@ -1277,66 +1266,6 @@
 
   <div class="form-card">
     <div class="form-card-header">
-      <span class="form-card-icon">🧠</span>
-      <div>
-        <div class="form-card-title">Agent Routing</div>
-        <div class="form-card-subtitle">Links this card to a caller intent so the agent reaches it instantly — run Auto-classify after writing your content above</div>
-      </div>
-      <span class="form-card-badge optional" id="uapStatusBadge" style="display:none;"></span>
-    </div>
-    <div class="form-card-body">
-
-      <!-- daType selector row -->
-      <div class="form-row" style="align-items:flex-end;">
-        <div class="form-group">
-          <label class="form-label">Intent Array (daType)</label>
-          <select id="fDaType" class="form-select" onchange="onDaTypeChange()">
-            <option value="">— Unclassified —</option>
-            <!-- Populated from /uap-arrays API -->
-          </select>
-          <div class="form-hint" style="margin-top:4px;">Which type of caller question does this container answer?
-            <a href="#" id="uapManageLink" style="color:var(--color-primary);text-decoration:none;font-size:11px;display:inline-block;margin-left:4px;" target="_blank">Manage arrays ↗</a>
-          </div>
-        </div>
-        <div class="form-group" id="grpDaSubType" style="display:none;">
-          <label class="form-label">Sub-Type (optional)</label>
-          <select id="fDaSubType" class="form-select">
-            <option value="">— Any sub-type —</option>
-          </select>
-          <div class="form-hint" style="margin-top:4px;">Narrow down to a specific sub-category within this array.</div>
-        </div>
-      </div>
-
-      <!-- Current classification status -->
-      <div id="uapClassificationStatus" style="display:none; padding:10px 14px; border-radius:8px; font-size:12px; background:#f8fafc; border:1px solid var(--border);">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <span id="uapStatusLabel" style="font-weight:600;"></span>
-          <span id="uapScoreChip" style="display:none;font-size:11px;padding:1px 7px;border-radius:10px;background:#dbeafe;color:#1d4ed8;"></span>
-          <span id="uapClassifiedAt" style="color:var(--text-muted);font-size:11px;"></span>
-        </div>
-        <div id="uapTriggerPhrasesWrap" style="display:none;margin-top:8px;">
-          <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">Trigger phrases generated:</div>
-          <div id="uapTriggerPhrases" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-        </div>
-      </div>
-
-      <!-- Auto-classify button -->
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <button type="button" class="btn-secondary" id="btnAutoClassify" onclick="autoClassify()"
-          title="Ask Groq to infer the best daType and generate trigger phrases from this container's content"
-          style="display:flex;align-items:center;gap:6px;">
-          <span>⚡</span><span>Auto-classify from Content</span>
-        </button>
-        <div id="uapAutoClassifyStatus" style="font-size:12px;color:var(--text-muted);display:none;"></div>
-      </div>
-
-      <div class="form-hint">
-        <strong>How it works:</strong> Auto-classify reads this container's title and sections, infers the best intent category, and generates caller trigger phrases — which are automatically added to the matching UAP array.
-        The agent uses these at runtime for zero-latency routing (before KC keyword scoring).
-        You can also set the daType manually and leave auto-classify for trigger phrase generation.
-      </div>
-    </div>
-  </div>
 
   <!-- ── Bottom action bar ──────────────────────────────────────────────────── -->
   <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px;">
@@ -1376,23 +1305,14 @@ const S = {
   companyId:        null,
   itemId:           null,       // null = create mode; string = edit mode
   isEdit:           false,
-  keywords:         [],         // positive trigger keywords
   negativeKeywords: [],         // exclusion keywords (any match → container skipped)
   sampleQuestions:  [],         // example caller utterances generated with keywords — persisted to DB
   sectionSeq:       0,          // monotonic ID for section DOM nodes
   conflictMap:      {},         // { keyword: [{id, title}] } — from keyword-health endpoint
   evalResult:       null,       // last evaluation result from /evaluate
   evalLoading:      false,
-  // UAP classification state
-  uapArrays:        [],         // [{daType, label, daSubTypes:[{key,label}]}] — loaded on init
-  daType:           null,       // currently selected daType (string or null)
-  daSubType:        null,       // currently selected sub-type key (string or null)
-  classificationStatus: null,   // AUTO_CONFIRMED | MANUAL | PENDING | UNCLASSIFIED
-  classificationScore:  null,
-  autoClassifiedAt:     null,
-  triggerPhrases:       [],     // persisted phrases from last auto-classify
   // Per-section funnel state — keyed by section DOM id (sid)
-  // { daSubTypeKey, pq: {enabled, text, fieldKey, options[]}, upsellChain: [] }
+  // { callerPhrases: [], pq: {enabled, text, fieldKey, options[]}, upsellChain: [] }
   sectionData: new Map(),
   // Variable substitution — {placeholder} detection + value store
   companyVariables: new Map(), // varName → value (loaded from API)
@@ -1558,9 +1478,6 @@ async function _saveItemVar(varName, value) {
   // Populate category datalist from existing containers
   _loadCategoryOptions();
 
-  // Populate UAP daType dropdown + manage link
-  _loadUAPArrays();
-
   // Load variable values + scan section content for {placeholders}
   _loadItemVars();
 })();
@@ -1584,7 +1501,7 @@ async function _loadConflictMap() {
     );
     if (data?.success && data.conflictMap) {
       S.conflictMap = data.conflictMap;
-      _renderKeywords();  // Re-render chips with conflict indicators
+      // Conflict data loaded — available for diagnostics
     }
   } catch (_e) {
     // Graceful degrade — conflict indicators are purely informational
@@ -1663,10 +1580,6 @@ function _populateForm(c) {
   const radio = document.querySelector(`[name="bookingAction"][value="${ba}"]`);
   if (radio) radio.checked = true;
 
-  // Keywords
-  S.keywords = [...(c.keywords || [])];
-  _renderKeywords();
-
   // Negative keywords
   S.negativeKeywords = [...(c.negativeKeywords || [])];
   _renderNegKeywords();
@@ -1689,7 +1602,7 @@ function _populateForm(c) {
   const sorted = [...(c.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
   if (sorted.length) {
     sorted.forEach(s => addSection(s.label, s.content, {
-      daSubTypeKey:       s.daSubTypeKey       || null,
+      callerPhrases:      (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
       useFixedResponse:   !!s.useFixedResponse,
       preQualifyQuestion: s.preQualifyQuestion || null,
       upsellChain:        s.upsellChain        || [],
@@ -1700,14 +1613,6 @@ function _populateForm(c) {
   // Complexity indicator needs sections in DOM — update now that they are rendered
   _updateComplexityIndicator();
 
-  // UAP classification state — populate after uapArrays loaded (may race; _loadUAPArrays handles re-render)
-  S.daType              = c.daType              || null;
-  S.daSubType           = (c.daSubTypes || [])[0] || null;
-  S.classificationStatus = c.classificationStatus || 'UNCLASSIFIED';
-  S.classificationScore  = c.classificationScore  || null;
-  S.autoClassifiedAt     = c.autoClassifiedAt     || null;
-  S.triggerPhrases       = c.triggerPhrases       || [];
-  _renderUAPStatus();
 }
 
 function _showForm() {
@@ -1726,7 +1631,7 @@ function _showForm() {
  * @param {string} label        — section label (empty = new blank)
  * @param {string} content      — section content
  * @param {Object} [sectionMeta] — optional existing data
- *   { daSubTypeKey, preQualifyQuestion: {text,fieldKey,options[]}, upsellChain: [] }
+ *   { callerPhrases: [], preQualifyQuestion: {text,fieldKey,options[]}, upsellChain: [] }
  */
 function addSection(label = '', content = '', sectionMeta = null) {
   const id       = ++S.sectionSeq;
@@ -1742,7 +1647,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
   const useFixedResponse = !!sectionMeta?.useFixedResponse;
 
   S.sectionData.set(id, {
-    daSubTypeKey:     sectionMeta?.daSubTypeKey || null,
+    callerPhrases:    sectionMeta?.callerPhrases || [],
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
     pq: {
@@ -1785,11 +1690,10 @@ function addSection(label = '', content = '', sectionMeta = null) {
       <span class="section-number">${rowCount + 1}</span>
       <input type="text" class="section-label-input" placeholder="${suggestion || 'Section label…'}"
         maxlength="80" value="${_esc(label)}" onchange="updateSectionNumbers()">
-      <button type="button" class="btn-suggest-label" onclick="suggestLabel(this)" title="Auto-generate label from content">✨ Auto-label</button>
-      <span class="section-uap-chip${sectionMeta?.daSubTypeKey ? ' mapped' : ''}"
-        title="${sectionMeta?.daSubTypeKey ? 'Mapped to ' + _esc(sectionMeta.daSubTypeKey) : 'UAP daType mapping for this section'}"
-        style="display:${sectionMeta?.daSubTypeKey ? 'flex' : 'none'}">
-        ${sectionMeta?.daSubTypeKey ? '✓ ' + _esc(sectionMeta.daSubTypeKey) : ''}
+      <button type="button" class="btn-suggest-label" onclick="suggestPhrases(this)" title="AI-generate caller phrases from content">✨ Suggest phrases</button>
+      <span class="section-phrase-count" id="phrase-count-${id}"
+        style="display:${(sectionMeta?.callerPhrases?.length) ? 'flex' : 'none'};font-size:11px;color:#059669;font-weight:600;align-items:center;gap:3px;">
+        ${(sectionMeta?.callerPhrases?.length) ? '🎯 ' + sectionMeta.callerPhrases.length + ' phrases' : ''}
       </span>
       <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Remove section">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1814,6 +1718,22 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </div>
     </div>
     <div id="gap-panel-${id}" class="gap-panel" style="display:none;"></div>
+
+    <!-- 🎯 Caller Phrases — per section ──────────────────────────── -->
+    <div class="section-phrases-wrap" id="phrases-wrap-${id}" style="padding:8px 14px 10px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:11px;font-weight:700;color:#374151;">🎯 Caller Phrases</span>
+        <span style="font-size:10px;color:#9ca3af;">— what callers say to reach this section</span>
+      </div>
+      <div class="keyword-input-wrap" id="cpWrap-${id}" onclick="document.getElementById('cpInner-${id}').focus()"
+        style="min-height:32px;padding:4px 6px;">
+        <input type="text" id="cpInner-${id}" class="kw-input-inner"
+          placeholder="Type a caller phrase and press Enter…"
+          onkeydown="cpKeydown(event, ${id})"
+          style="font-size:12px;">
+      </div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Full sentences callers say — "how much is a tune-up", "my AC isn't working". Press Enter to add.</div>
+    </div>
 
     <!-- ⚡ Per-section Fixed Response Mode strip ─────────────────────── -->
     <!-- OFF: neutral stone bar. ON: amber — Groq skipped, audio pre-cached. -->
@@ -1921,9 +1841,10 @@ function addSection(label = '', content = '', sectionMeta = null) {
 
   list.appendChild(row);
 
-  // Render pq options and upsell items if loaded from existing data
+  // Render pq options, upsell items, and caller phrases if loaded from existing data
   renderSectionPqOptions(id);
   renderSectionUpsellItems(id);
+  _renderCallerPhrases(id);
 
   // Restore audio UI state from saved URLs (survive page refresh)
   if (sectionMeta?.audioUrl && useFixedResponse) {
@@ -1944,163 +1865,132 @@ function addSection(label = '', content = '', sectionMeta = null) {
   }
 }
 
-async function suggestLabel(btn) {
+/**
+ * suggestPhrases — AI-generate caller phrases for a section.
+ * Calls /generate-phrases endpoint, populates section callerPhrases + updates label.
+ */
+async function suggestPhrases(btn) {
   const row        = btn.closest('.section-row');
   const textarea   = row.querySelector('textarea');
   const labelInput = row.querySelector('.section-label-input');
-  const chip       = row.querySelector('.section-uap-chip');
   const sid        = parseInt(row.dataset.sid, 10);
   const sData      = (sid && S.sectionData.has(sid)) ? S.sectionData.get(sid) : null;
 
-  // ── Content source: prequal section vs normal content section ─────────────
-  // When pre-qualify is enabled the textarea is irrelevant for routing.
-  // The section's identity is its qualifying question + options — use those.
-  let content          = textarea?.value?.trim() || '';
-  let isPrequalSection = false;
-
-  if (sData?.pq?.enabled && sData.pq.text?.trim()) {
-    const pqLines = [`Pre-qualifying question: "${sData.pq.text.trim()}"`];
-    const opts = sData.pq.options || [];
-    if (opts.length > 0) {
-      pqLines.push('Answer options:');
-      for (const opt of opts) {
-        const ctx = (opt.responseContext || '').trim();
-        if (opt.label || ctx) pqLines.push(`- ${opt.label || opt.value}: "${ctx}"`);
-      }
-    }
-    content          = pqLines.join('\n');
-    isPrequalSection = true;
-  }
-
+  const content = textarea?.value?.trim() || '';
   if (!content) {
-    _toast(isPrequalSection
-      ? 'Add your pre-qualifying question first, then auto-label'
-      : 'Add some content first, then auto-label it', 'error');
+    _toast('Add some content first, then generate phrases', 'error');
     return;
   }
 
   btn.disabled    = true;
   btn.textContent = '…';
-  if (chip) { chip.style.display = 'none'; }
 
   try {
     const data = await apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/knowledge/suggest-label`,
+      `/api/admin/agent2/company/${S.companyId}/knowledge/generate-phrases`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content,
-          sectionLabel:    labelInput?.value?.trim() || '',
-          containerId:     S.itemId || null,
-          isPrequalSection,
+          sectionLabel: labelInput?.value?.trim() || '',
+          containerId:  S.itemId || null,
         }) }
     );
 
     if (!data.success) {
-      _toast(data.error || 'Could not generate label', 'error');
+      _toast(data.error || 'Could not generate phrases', 'error');
       return;
     }
 
-    // ── 1. Set label ─────────────────────────────────────────────────────────
-    if (data.suggestion && labelInput) {
+    // Set label if empty
+    if (data.suggestion && labelInput && !labelInput.value.trim()) {
       labelInput.value = data.suggestion;
     }
 
-    // ── 2. Show UAP chip and store daSubTypeKey in section state ─────────────
-    if (chip && data.daType) {
-      // Store daSubTypeKey so _getSections() can include it in the save payload
-      const sid = parseInt(row.dataset.sid, 10);
-      if (sid && S.sectionData.has(sid)) {
-        S.sectionData.get(sid).daSubTypeKey = data.subTypeKey || data.daType || null;
+    // Merge generated phrases into section state (dedup)
+    if (sData && Array.isArray(data.callerPhrases)) {
+      const existing = new Set(sData.callerPhrases.map(p => p.toLowerCase()));
+      let added = 0;
+      for (const phrase of data.callerPhrases) {
+        if (!existing.has(phrase.toLowerCase())) {
+          sData.callerPhrases.push(phrase);
+          existing.add(phrase.toLowerCase());
+          added++;
+        }
       }
-
-      if (data.needsArray) {
-        // Array doesn't exist — suggest creating it
-        const humanLabel = data.suggestedArrayLabel || data.daTypeLabel || data.daType;
-        chip.className = 'section-uap-chip needs-array';
-        chip.innerHTML = `
-          💡 Classified as <strong>${_esc(humanLabel)}</strong> — not active yet&nbsp;
-          <button class="chip-create-btn"
-            data-datype="${_esc(data.daType)}"
-            data-label="${_esc(humanLabel)}"
-            data-subtype-key="${_esc(data.subTypeKey || '')}"
-            data-subtype-label="${_esc(data.subTypeLabel || '')}"
-            data-phrases="${_esc(JSON.stringify(data.triggerPhrases || []))}"
-            onclick="_createArrayFromChip(this)"
-            title="Creates the routing array so callers saying booking-related phrases are directed here">
-            ✦ Activate routing
-          </button>`;
-        chip.style.display = 'flex';
-      } else {
-        // Array exists — sub-type was upserted in background
-        chip.className = 'section-uap-chip mapped';
-        chip.innerHTML = `✓ ${_esc(data.subTypeKey || data.daType)}`;
-        chip.title     = `Mapped to ${data.daTypeLabel || data.daType}${data.subTypeKey ? ' → ' + data.subTypeKey : ''} · ${(data.triggerPhrases||[]).length} phrases`;
-        chip.style.display = 'flex';
-        _toast(`Mapped to ${data.daTypeLabel || data.daType} ✓`, 'success');
-        return; // already toasted
-      }
+      _renderCallerPhrases(sid);
+      _toast(`Added ${added} caller phrase${added !== 1 ? 's' : ''} ✓`, 'success');
     }
 
-    _toast('Label generated ✓', 'success');
+    // Merge negative keywords if returned
+    if (Array.isArray(data.negativeKeywords)) {
+      let negAdded = 0;
+      for (const kw of data.negativeKeywords) {
+        if (!S.negativeKeywords.includes(kw)) { S.negativeKeywords.push(kw); negAdded++; }
+      }
+      if (negAdded > 0) _renderNegKeywords();
+    }
 
   } catch (_e) {
-    _toast('Could not generate label', 'error');
+    _toast('Could not generate phrases', 'error');
   } finally {
     btn.disabled    = false;
-    btn.textContent = '✨ Auto-label';
+    btn.textContent = '✨ Suggest phrases';
   }
 }
 
 /**
- * Called when user clicks "+ Create '…'" inside a section UAP chip.
- * Creates the UAPArray, then upserts the sub-type into it.
+ * _renderCallerPhrases — render chip tags for a section's callerPhrases.
  */
-async function _createArrayFromChip(createBtn) {
-  const chip       = createBtn.closest('.section-uap-chip');
-  const daType     = createBtn.dataset.datype;
-  const label      = createBtn.dataset.label;
-  const subTypeKey = createBtn.dataset.subtypeKey;
-  const subTypeLabel = createBtn.dataset.subtypeLabel;
-  let   phrases    = [];
-  try { phrases = JSON.parse(createBtn.dataset.phrases || '[]'); } catch (_) {}
+function _renderCallerPhrases(sid) {
+  const wrap  = document.getElementById(`cpWrap-${sid}`);
+  const input = document.getElementById(`cpInner-${sid}`);
+  const count = document.getElementById(`phrase-count-${sid}`);
+  if (!wrap || !input) return;
 
-  createBtn.disabled    = true;
-  createBtn.textContent = '…';
+  const data    = S.sectionData.get(sid);
+  const phrases = data?.callerPhrases || [];
 
-  try {
-    // Build initial daSubTypes if we have a sub-type key
-    const daSubTypes = subTypeKey ? [{
-      key:              subTypeKey,
-      label:            subTypeLabel || subTypeKey,
-      triggerPhrases:   phrases,
-      attachedTo:       (S.mongoId || S.itemId) ? [S.mongoId || S.itemId] : [],
-      classificationStatus: 'AUTO_CONFIRMED',
-    }] : [];
+  // Remove existing tags (keep the input)
+  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
 
-    const res = await apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/uap/arrays`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daType, label, daSubTypes }) }
-    );
+  // Insert tags before the input
+  phrases.forEach((phrase, idx) => {
+    const tag       = document.createElement('span');
+    tag.className   = 'kw-tag';
+    tag.style.cssText = 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;';
+    tag.innerHTML   = `${_esc(phrase)} <button type="button" onclick="removeCallerPhrase(${sid}, ${idx})">×</button>`;
+    wrap.insertBefore(tag, input);
+  });
 
-    if (!res.success) throw new Error(res.error || 'Create array failed');
-
-    // Flip chip to "mapped" state
-    chip.className   = 'section-uap-chip mapped';
-    chip.innerHTML   = `✓ ${_esc(daType)}`;
-    chip.title       = `Array created: ${label}${subTypeKey ? ' → ' + subTypeKey : ''} · ${phrases.length} phrases`;
-    chip.style.display = 'flex';
-
-    _toast(`Array "${label}" created ✓`, 'success');
-
-    // Reload UAP arrays dropdown so new array is visible in classification card
-    await _loadUAPArrays();
-
-  } catch (err) {
-    _toast(err.message || 'Failed to create array', 'error');
-    createBtn.disabled    = false;
-    createBtn.textContent = `+ Create "${label}"`;
+  // Update count badge in section header
+  if (count) {
+    count.style.display = phrases.length > 0 ? 'flex' : 'none';
+    count.textContent   = phrases.length > 0 ? `🎯 ${phrases.length} phrases` : '';
   }
+}
+
+function cpKeydown(e, sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const val = e.target.value.trim().toLowerCase();
+    if (val && val.length > 2 && !data.callerPhrases.some(p => p.toLowerCase() === val)) {
+      data.callerPhrases.push(val);
+      _renderCallerPhrases(sid);
+    }
+    e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && data.callerPhrases.length) {
+    data.callerPhrases.pop();
+    _renderCallerPhrases(sid);
+  }
+}
+
+function removeCallerPhrase(sid, idx) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.callerPhrases.splice(idx, 1);
+  _renderCallerPhrases(sid);
 }
 
 function deleteSection(btn) {
@@ -2295,7 +2185,7 @@ function _getSections() {
         label,
         content,
         order:              idx,
-        daSubTypeKey:       data.daSubTypeKey      || null,
+        callerPhrases:      (data.callerPhrases || []).filter(p => p.trim()),
         useFixedResponse:   !!data.useFixedResponse,
         audioUrl:           data.contentAudioUrl   || null,
         preQualifyQuestion: preQualifyQuestion     || null,
@@ -2309,47 +2199,6 @@ function _getSections() {
 // ─────────────────────────────────────────────────────────────────────────────
 // KEYWORDS
 // ─────────────────────────────────────────────────────────────────────────────
-function _renderKeywords() {
-  const wrap  = document.getElementById('kwWrap');
-  const input = document.getElementById('kwInner');
-  // Remove existing tags (keep the input)
-  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
-  // Insert tags before the input
-  S.keywords.forEach(kw => {
-    const tag        = document.createElement('span');
-    const conflicts  = S.conflictMap[kw.toLowerCase().trim()] || [];
-    // Exclude self from conflict list
-    const others     = conflicts.filter(c => c.id !== (S.mongoId || S.itemId));
-    const hasConflict = others.length > 0;
-    tag.className    = 'kw-tag' + (hasConflict ? ' conflict' : '');
-    const conflictTip = hasConflict
-      ? `<span class="kw-conflict-tip" title="Also used by: ${others.map(c => c.title).join(', ')}">⚠️</span>`
-      : '';
-    tag.innerHTML = `${_esc(kw)} ${conflictTip}<button type="button" onclick="removeKeyword('${_esc(kw).replace(/'/g, "\\'")}')">×</button>`;
-    wrap.insertBefore(tag, input);
-  });
-}
-
-function kwKeydown(e) {
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault();
-    const val = e.target.value.trim().replace(/,/g, '').toLowerCase();
-    if (val && !S.keywords.includes(val)) {
-      S.keywords.push(val);
-      _renderKeywords();
-    }
-    e.target.value = '';
-  } else if (e.key === 'Backspace' && !e.target.value && S.keywords.length) {
-    S.keywords.pop();
-    _renderKeywords();
-  }
-}
-
-function removeKeyword(kw) {
-  S.keywords = S.keywords.filter(k => k !== kw);
-  _renderKeywords();
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // NEGATIVE KEYWORDS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2477,7 +2326,6 @@ async function runEvaluation() {
     title,
     category,
     sections,
-    keywords:          S.keywords,
     negativeKeywords:  S.negativeKeywords,
     wordLimit:         (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled:  document.getElementById('fWordLimitEnabled')?.checked !== false,
@@ -2621,13 +2469,9 @@ function toggleEvalDim(id, row) {
   if (arrow) arrow.textContent = open ? '▾' : '▸';
 }
 
-function _applyEvalKeywords(keywords) {
-  let added = 0;
-  (keywords || []).forEach(kw => {
-    if (!S.keywords.includes(kw)) { S.keywords.push(kw); added++; }
-  });
-  _renderKeywords();
-  _toast(`Added ${added} keyword${added !== 1 ? 's' : ''}`, 'success');
+function _applyEvalKeywords(_keywords) {
+  // Content keywords are now auto-extracted on save — no manual management needed
+  _toast('Keywords are auto-extracted from content on save', 'info');
 }
 
 function _applyMissingSections(sections) {
@@ -2684,74 +2528,6 @@ async function generateSampleResponse() {
   }
 }
 
-async function generateKeywords() {
-  const btn = document.getElementById('btnGenKw');
-  btn.disabled    = true;
-  btn.textContent = '✨ Generating…';
-
-  const title    = document.getElementById('fTitle').value?.trim() || '';
-  const sections = _getSections();
-
-  if (!title && !sections.length) {
-    _toast('Add a title and at least one section first', 'error');
-    btn.disabled    = false;
-    btn.textContent = '✨ Auto-Generate from Content';
-    return;
-  }
-
-  try {
-    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/generate-keywords`, {
-      method: 'POST',
-      body:   JSON.stringify({ title, sections }),
-    });
-    if (!data.success) throw new Error(data.error || 'Generation failed');
-
-    // Merge trigger keywords (dedup)
-    let added = 0;
-    (data.keywords || []).forEach(kw => {
-      if (!S.keywords.includes(kw)) { S.keywords.push(kw); added++; }
-    });
-    _renderKeywords();
-
-    // Merge negative keywords (dedup)
-    let negAdded = 0;
-    (data.negativeKeywords || []).forEach(kw => {
-      if (!S.negativeKeywords.includes(kw)) { S.negativeKeywords.push(kw); negAdded++; }
-    });
-    if (negAdded > 0) _renderNegKeywords();
-
-    // Store sample questions in state (persisted on Save Container)
-    S.sampleQuestions = (data.sampleQuestions || []).slice(0, 3);
-
-    // Show "will fire on" sample questions preview
-    const previewPanel = document.getElementById('kwPreview');
-    if (previewPanel) {
-      if (S.sampleQuestions.length) {
-        previewPanel.style.display = 'block';
-        previewPanel.innerHTML = `
-          <div class="kw-preview-title">🎯 Will fire on calls like these</div>
-          ${S.sampleQuestions.map(q => `<div class="kw-preview-q"><span class="kw-preview-q-icon">📞</span>${_esc(q)}</div>`).join('')}
-          <div style="margin-top:8px;text-align:right;">
-            <button type="button" onclick="document.getElementById('kwPreview').style.display='none'"
-              style="font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0;">Dismiss</button>
-          </div>`;
-      } else {
-        previewPanel.style.display = 'none';
-      }
-    }
-
-    // Toast — summarise what was added
-    const parts = [`${added} keyword${added !== 1 ? 's' : ''}`];
-    if (negAdded > 0) parts.push(`${negAdded} exclusion${negAdded !== 1 ? 's' : ''}`);
-    _toast(`Added ${parts.join(' + ')}`, 'success');
-  } catch (err) {
-    _toast(err.message || 'Keyword generation failed', 'error');
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = '✨ Auto-Generate from Content';
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // SAVE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2780,31 +2556,21 @@ async function saveContainer() {
   // Build payload
   const wordLimitVal    = parseInt(document.getElementById('fWordLimit').value, 10);
   const followUpDepthRaw = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
-  // UAP classification fields — manual daType selection
-  const selectedDaType    = document.getElementById('fDaType')?.value?.trim() || null;
-  const selectedDaSubType = document.getElementById('fDaSubType')?.value?.trim() || null;
 
   const payload = {
     title,
-    category:       document.getElementById('fCategory').value?.trim() || '',
+    category:         document.getElementById('fCategory').value?.trim() || '',
     sections,
-    keywords:         S.keywords,
     negativeKeywords: S.negativeKeywords,
     sampleQuestions:  S.sampleQuestions,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
     sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
-    bookingAction:  document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
-    closingPrompt:  (document.getElementById('fClosingPrompt')?.value || '').trim(),
-    followUpDepth:  (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
-    isActive:       document.getElementById('fActive').checked,
-    priority:       parseInt(document.getElementById('fPriority').value, 10) || 100,
-    // UAP classification — manual selection only; auto-classify writes its own fields via separate route
-    daType:               selectedDaType   || null,
-    daSubTypes:           selectedDaSubType ? [selectedDaSubType] : [],
-    classificationStatus: selectedDaType
-      ? (S.classificationStatus === 'AUTO_CONFIRMED' ? 'AUTO_CONFIRMED' : 'MANUAL')
-      : 'UNCLASSIFIED',
+    bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+    closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
+    followUpDepth:    (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
+    isActive:         document.getElementById('fActive').checked,
+    priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
     // preQualifyQuestion and upsellChain are now per-section (inside sections[])
     // NOT at container level — explicitly cleared so legacy data is not re-saved
     preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
@@ -2842,15 +2608,12 @@ function downloadJSON() {
 
   const wordLimitVal      = parseInt(document.getElementById('fWordLimit').value, 10);
   const followUpDepthRaw  = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
-  const selectedDaType    = document.getElementById('fDaType')?.value?.trim()    || null;
-  const selectedDaSubType = document.getElementById('fDaSubType')?.value?.trim() || null;
 
   // Same payload shape as saveContainer — no validation, just snapshot current state
   const payload = {
     title,
     category:         document.getElementById('fCategory').value?.trim() || '',
     sections,
-    keywords:         S.keywords,
     negativeKeywords: S.negativeKeywords,
     sampleQuestions:  S.sampleQuestions,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
@@ -2861,11 +2624,6 @@ function downloadJSON() {
     followUpDepth:    (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
     isActive:         document.getElementById('fActive').checked,
     priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
-    daType:           selectedDaType    || null,
-    daSubTypes:       selectedDaSubType ? [selectedDaSubType] : [],
-    classificationStatus: selectedDaType
-      ? (S.classificationStatus === 'AUTO_CONFIRMED' ? 'AUTO_CONFIRMED' : 'MANUAL')
-      : 'UNCLASSIFIED',
   };
 
   // Inspection extras — beyond the save payload, useful for debugging routing issues
@@ -2877,12 +2635,6 @@ function downloadJSON() {
       isEdit:       S.isEdit  || false,
       pageUrl:      window.location.href,
     },
-    _keywordConflicts: Object.entries(S.conflictMap || {})
-      .filter(([kw]) => S.keywords.includes(kw))
-      .reduce((acc, [kw, containers]) => {
-        acc[kw] = containers.map(c => ({ id: c.id, title: c.title }));
-        return acc;
-      }, {}),
     _sectionDataMap: Object.fromEntries(
       [...(S.sectionData || new Map()).entries()].map(([sid, data]) => [sid, data])
     ),
@@ -2901,86 +2653,6 @@ function downloadJSON() {
   _toast('JSON downloaded ✓', 'success');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UAP CLASSIFICATION
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function _loadUAPArrays() {
-  try {
-    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/uap-arrays`);
-    S.uapArrays = data.arrays || [];
-  } catch (_e) {
-    S.uapArrays = [];
-  }
-
-  // Wire manage link
-  const manageLink = document.getElementById('uapManageLink');
-  if (manageLink) {
-    manageLink.href = `/agent-console/uap.html?companyId=${S.companyId}`;
-  }
-
-  // Populate daType dropdown
-  const sel = document.getElementById('fDaType');
-  if (!sel) return;
-
-  // Keep placeholder option, add all daTypes
-  sel.innerHTML = '<option value="">— Unclassified —</option>' +
-    S.uapArrays.map(a =>
-      `<option value="${_esc(a.daType)}">${_esc(a.label)} (${_esc(a.daType)})</option>`
-    ).join('');
-
-  // Set current value from state (may have been populated by _populateForm already)
-  if (S.daType) {
-    sel.value = S.daType;
-    _populateSubTypeDropdown(S.daType, S.daSubType);
-  }
-
-  // Render status block after arrays are loaded
-  _renderUAPStatus();
-}
-
-function onDaTypeChange() {
-  const sel = document.getElementById('fDaType');
-  S.daType  = sel?.value?.trim() || null;
-  S.daSubType = null;
-  _populateSubTypeDropdown(S.daType, null);
-  // Update status badge
-  const badge = document.getElementById('uapStatusBadge');
-  if (badge) {
-    if (S.daType) {
-      badge.textContent = 'MANUAL';
-      badge.style.cssText = 'display:;background:#fef9c3;border-color:#fde047;color:#854d0e;';
-    } else {
-      badge.style.display = 'none';
-    }
-  }
-}
-
-function _populateSubTypeDropdown(daType, selectedSubTypeKey) {
-  const grp = document.getElementById('grpDaSubType');
-  const sel = document.getElementById('fDaSubType');
-  if (!grp || !sel) return;
-
-  if (!daType) {
-    grp.style.display = 'none';
-    sel.innerHTML = '<option value="">— Any sub-type —</option>';
-    return;
-  }
-
-  const array = S.uapArrays.find(a => a.daType === daType);
-  const subTypes = array?.daSubTypes || [];
-
-  if (!subTypes.length) {
-    grp.style.display = 'none';
-    return;
-  }
-
-  grp.style.display = '';
-  sel.innerHTML = '<option value="">— Any sub-type —</option>' +
-    subTypes.map(s =>
-      `<option value="${_esc(s.key)}" ${selectedSubTypeKey === s.key ? 'selected' : ''}>${_esc(s.label)}</option>`
-    ).join('');
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PER-SECTION FUNNEL — accordion toggle
@@ -3236,127 +2908,6 @@ function _updateSectionFunnelBadges(sid) {
     hasUpsell ? `<span class="funnel-badge upsell">Upsell ×${data.upsellChain.length}</span>` : '',
   ].join('');
   toggle.classList.toggle('has-funnel', !!(hasPQ || hasUpsell));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UAP CLASSIFICATION
-// ─────────────────────────────────────────────────────────────────────────────
-
-function _renderUAPStatus() {
-  const statusWrap = document.getElementById('uapClassificationStatus');
-  const badge      = document.getElementById('uapStatusBadge');
-  if (!statusWrap) return;
-
-  if (!S.classificationStatus || S.classificationStatus === 'UNCLASSIFIED') {
-    statusWrap.style.display = 'none';
-    if (badge) badge.style.display = 'none';
-    return;
-  }
-
-  statusWrap.style.display = '';
-
-  // Badge
-  const BADGE_STYLES = {
-    AUTO_CONFIRMED: 'background:#dcfce7;border-color:#86efac;color:#166534;',
-    MANUAL:         'background:#fef9c3;border-color:#fde047;color:#854d0e;',
-    PENDING:        'background:#fef3c7;border-color:#fcd34d;color:#92400e;',
-  };
-  if (badge) {
-    badge.style.cssText = BADGE_STYLES[S.classificationStatus] || '';
-    badge.textContent   = S.classificationStatus.replace('_', ' ');
-    badge.style.display = '';
-  }
-
-  // Status label
-  const labelMap = {
-    AUTO_CONFIRMED: '✅ Auto-classified by Groq',
-    MANUAL:         '✏️ Manually set',
-    PENDING:        '⏳ Pending review',
-  };
-  const statusLabel = document.getElementById('uapStatusLabel');
-  if (statusLabel) statusLabel.textContent = labelMap[S.classificationStatus] || S.classificationStatus;
-
-  // Confidence score chip
-  const scoreChip = document.getElementById('uapScoreChip');
-  if (scoreChip) {
-    if (S.classificationScore !== null && S.classificationScore !== undefined) {
-      const pct = Math.round(S.classificationScore * 100);
-      scoreChip.textContent = `${pct}% confidence`;
-      scoreChip.style.display = '';
-    } else {
-      scoreChip.style.display = 'none';
-    }
-  }
-
-  // Classified at timestamp
-  const classifiedAt = document.getElementById('uapClassifiedAt');
-  if (classifiedAt && S.autoClassifiedAt) {
-    const d = new Date(S.autoClassifiedAt);
-    classifiedAt.textContent = `Classified ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
-  }
-
-  // Trigger phrase chips — show on load from persisted data or after auto-classify
-  const phrasesWrap = document.getElementById('uapTriggerPhrasesWrap');
-  const phrasesDiv  = document.getElementById('uapTriggerPhrases');
-  if (phrasesWrap && phrasesDiv) {
-    if (S.triggerPhrases && S.triggerPhrases.length > 0) {
-      phrasesDiv.innerHTML = S.triggerPhrases.map(p =>
-        `<span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;border:1px solid #bfdbfe;">${_esc(p)}</span>`
-      ).join('');
-      phrasesWrap.style.display = '';
-    } else {
-      phrasesWrap.style.display = 'none';
-    }
-  }
-
-  // Set dropdowns to current state
-  const daTypeSel = document.getElementById('fDaType');
-  if (daTypeSel && S.daType) {
-    daTypeSel.value = S.daType;
-    _populateSubTypeDropdown(S.daType, S.daSubType);
-  }
-}
-
-async function autoClassify() {
-  if (!S.itemId) {
-    _toast('Save the container first, then auto-classify', 'error');
-    return;
-  }
-
-  const btn    = document.getElementById('btnAutoClassify');
-  const status = document.getElementById('uapAutoClassifyStatus');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span>⚡</span><span>Classifying…</span>'; }
-  if (status) { status.textContent = 'Running Groq classification…'; status.style.display = ''; }
-
-  try {
-    const data = await apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/knowledge/${S.mongoId || S.itemId}/auto-classify`,
-      { method: 'POST' }
-    );
-    if (!data.success) throw new Error(data.error || 'Classification failed');
-
-    // Update local state
-    S.daType               = data.daType;
-    S.daSubType            = data.subTypeKey || null;
-    S.classificationStatus = 'AUTO_CONFIRMED';
-    S.classificationScore  = data.classificationScore;
-    S.autoClassifiedAt     = new Date().toISOString();
-    S.triggerPhrases       = data.triggerPhrases || [];
-
-    // Reload UAP arrays (trigger phrases were added — sub-types may have changed)
-    await _loadUAPArrays();
-
-    // _renderUAPStatus now handles phrase chips from S.triggerPhrases
-    _renderUAPStatus();
-    if (status) { status.textContent = `✓ ${data.message || 'Classification complete'}`; }
-    _toast(`Classified as ${data.daTypeLabel || data.daType} ✓`, 'success');
-
-  } catch (err) {
-    if (status) { status.textContent = ''; status.style.display = 'none'; }
-    _toast(err.message || 'Auto-classification failed', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<span>⚡</span><span>Auto-classify from Content</span>'; }
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

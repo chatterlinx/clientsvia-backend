@@ -26,8 +26,9 @@
  *   GET    /:companyId/knowledge/active                 — List active only (runtime)
  *   POST   /:companyId/knowledge                        — Create container
  *   POST   /:companyId/knowledge/generate-keywords      — Groq keyword generation (pre-save)
+ *   POST   /:companyId/knowledge/generate-phrases       — Groq caller phrase generation (per section)
  *   POST   /:companyId/knowledge/analyze-gaps           — Content Coach gap analysis (per section)
- *   POST   /:companyId/knowledge/generate-sample        — ✨ Groq-generated ideal response example
+ *   POST   /:companyId/knowledge/generate-sample        — Groq-generated ideal response example
  *   POST   /:companyId/knowledge/preview-fixed-audio    — 🎙️ Generate + return URL for ⚡ Fixed section audio
  *   POST   /:companyId/knowledge/reorder                — Bulk priority update
  * ⚠️ GET    /:companyId/knowledge/:id                   — Get single (AFTER literal routes)
@@ -50,8 +51,8 @@ const CompanyTriggerSettings       = require('../../models/CompanyTriggerSetting
 const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
 const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthService');
-const UAPArray                     = require('../../models/UAPArray');
 const BridgeService                = require('../../services/engine/kc/BridgeService');
+const SemanticMatchService         = require('../../services/engine/kc/SemanticMatchService');
 const Customer                     = require('../../models/Customer');
 const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
 
@@ -90,9 +91,8 @@ function _resolveContainerQuery(id, companyId) {
 // Allowed fields for container CRUD operations
 const ALLOWED_FIELDS = [
   'title', 'category',
-  // sections now carry per-section daSubTypeKey, bookingAction, preQualifyQuestion, upsellChain
+  // sections carry callerPhrases, bookingAction, preQualifyQuestion, upsellChain per section
   'sections',
-  'keywords',
   'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
   'sampleQuestions',    // Example caller utterances generated alongside keywords — display + analytics
   'wordLimit',
@@ -104,10 +104,6 @@ const ALLOWED_FIELDS = [
   'closingPrompt',
   'isActive',
   'priority',
-  // UAP classification fields — owner can manually set daType, auto-classify sets the rest
-  'daType',
-  'daSubTypes',
-  'classificationStatus',
 ];
 
 // Allowed fields for settings PATCH
@@ -120,8 +116,47 @@ const SETTINGS_FIELDS = [
 ];
 
 /**
+ * _extractContentKeywords — Synchronous NLP extraction of bigrams + significant
+ * unigrams from section label + content. Used by Gate 3 keyword fallback.
+ *
+ * @param {string} label
+ * @param {string} content
+ * @returns {string[]}
+ */
+function _extractContentKeywords(label, content) {
+  const STOP = new Set([
+    'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'that', 'this',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'could',
+    'should', 'may', 'might', 'can', 'to', 'for', 'of', 'on', 'in', 'at',
+    'by', 'with', 'about', 'and', 'or', 'but', 'so', 'if', 'when', 'what',
+    'how', 'why', 'who', 'where', 'not', 'no', 'yes', 'all', 'any', 'each',
+    'from', 'they', 'them', 'their', 'than', 'then', 'also', 'just', 'more',
+    'most', 'some', 'such', 'only', 'very', 'into', 'over', 'after', 'before',
+  ]);
+
+  const text = `${label || ''} ${content || ''}`.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const words = text.split(/\s+/).filter(w => w.length >= 3 && !STOP.has(w));
+  if (!words.length) return [];
+
+  const keywords = new Set();
+
+  // Significant unigrams (≥5 chars, domain words)
+  for (const w of words) {
+    if (w.length >= 5) keywords.add(w);
+  }
+
+  // Bigrams — consecutive meaningful word pairs
+  for (let i = 0; i < words.length - 1; i++) {
+    keywords.add(`${words[i]} ${words[i + 1]}`);
+  }
+
+  return [...keywords].slice(0, 40); // cap at 40 keywords
+}
+
+/**
  * _sanitiseBody — Strip fields not in ALLOWED_FIELDS and clean values.
- * Keywords are deduped and lowercased. Sections are validated minimally.
+ * Sections are validated minimally. contentKeywords auto-extracted on save.
  *
  * @param {Object} body
  * @returns {Object}
@@ -132,14 +167,7 @@ function _sanitiseBody(body) {
     if (key in body) out[key] = body[key];
   }
 
-  // Normalise keywords — trim, lowercase, deduplicate
-  if (Array.isArray(out.keywords)) {
-    out.keywords = [...new Set(
-      out.keywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
-    )];
-  }
-
-  // Normalise negativeKeywords — same rules as keywords
+  // Normalise negativeKeywords — trim, lowercase, deduplicate
   if (Array.isArray(out.negativeKeywords)) {
     out.negativeKeywords = [...new Set(
       out.negativeKeywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
@@ -160,10 +188,18 @@ function _sanitiseBody(body) {
           ...(s._id ? { _id: s._id } : {}),
         };
 
-        // UAP routing key — set by Auto-label, links section to UAPArray sub-type
-        if (typeof s.daSubTypeKey === 'string' && s.daSubTypeKey.trim()) {
-          section.daSubTypeKey = s.daSubTypeKey.trim().slice(0, 80);
+        // Caller phrases — full sentences that callers use when asking about this section
+        if (Array.isArray(s.callerPhrases)) {
+          section.callerPhrases = s.callerPhrases
+            .filter(p => (typeof p === 'string' ? p.trim() : p?.text?.trim()))
+            .map(p => {
+              const text = (typeof p === 'string' ? p : p.text).trim().slice(0, 200);
+              return { text, addedAt: p?.addedAt || new Date() };
+            });
         }
+
+        // Auto-extract contentKeywords from section label + content
+        section.contentKeywords = _extractContentKeywords(section.label, section.content);
 
         // Per-section booking action override
         const BA_VALID = ['offer_to_book', 'advisor_callback', 'none'];
@@ -344,20 +380,27 @@ router.post('/:companyId/knowledge', async (req, res) => {
 
     const container = await CompanyKnowledgeContainer.create({ companyId, kcId, ...body });
 
-    // Invalidate runtime cache — next call sees fresh data
+    // Invalidate runtime cache + Bridge phrase index — next call sees fresh data
     KnowledgeContainerService.invalidateCache(companyId).catch(e =>
       logger.warn('[companyKnowledge] cache invalidation failed on POST', { companyId, e: e.message })
     );
+    BridgeService.invalidate(companyId).catch(() => {});
 
-    // Invalidate Bridge if container has a daType (it's now part of the routing table)
-    if (body.daType) {
-      BridgeService.invalidate(companyId).catch(() => {});
-    }
-
-    // Generate semantic embedding fire-and-forget — failure never blocks the response
-    setImmediate(() =>
-      KCKeywordHealthService.generateAndStoreEmbedding(container._id).catch(() => {})
-    );
+    // Fire-and-forget: embed callerPhrases + section content via SemanticMatchService
+    setImmediate(async () => {
+      try {
+        const sections = container.sections || [];
+        const phraseCount   = await SemanticMatchService.embedCallerPhrases(sections);
+        const contentCount  = await SemanticMatchService.embedSectionContent(sections);
+        if (phraseCount > 0 || contentCount > 0) {
+          await CompanyKnowledgeContainer.updateOne(
+            { _id: container._id },
+            { $set: { sections } }
+          );
+        }
+      } catch (_e) { /* non-fatal */ }
+      KCKeywordHealthService.generateAndStoreEmbedding(container._id).catch(() => {});
+    });
 
     // Pre-generate instant audio when any Fixed Response Mode is active on creation
     // Covers: container.useFixedResponse (Section 1) AND per-section useFixedResponse
@@ -513,7 +556,7 @@ async function _runEvaluation(companyId, payload, res) {
   }
 
   const {
-    title = '', category = '', sections = [], keywords = [], negativeKeywords = [],
+    title = '', category = '', sections = [], negativeKeywords = [],
     wordLimit = null, wordLimitEnabled = true, sampleResponse = '',
     bookingAction = 'offer_to_book', closingPrompt = '',
   } = payload;
@@ -524,7 +567,6 @@ async function _runEvaluation(companyId, payload, res) {
     .map(s => {
       const lines = [`[SECTION: ${s.label.trim().toUpperCase()}]`];
       lines.push(`Content: ${s.content.trim().slice(0, 500)}`);
-      if (s.daSubTypeKey) lines.push(`Sub-type key: ${s.daSubTypeKey}`);
       const pq = s.preQualifyQuestion;
       if (pq?.enabled && pq.text?.trim()) {
         const opts = (pq.options || []).map(o => o.label || o.value).filter(Boolean).join(', ');
@@ -543,7 +585,6 @@ async function _runEvaluation(companyId, payload, res) {
     })
     .join('\n\n') || '(no sections)';
 
-  const kwList    = (keywords || []).slice(0, 20).join(', ') || '(none)';
   const negKwList = (negativeKeywords || []).slice(0, 10).join(', ') || '(none)';
   const wlDisplay = !wordLimitEnabled
     ? 'DISABLED — agent may use as many words as needed'
@@ -552,7 +593,6 @@ async function _runEvaluation(companyId, payload, res) {
   const userContent = `CONTAINER:
 Title: "${title}"
 Category: "${category || 'none'}"
-Keywords: [${kwList}]
 Negative keywords (exclude-triggers): [${negKwList}]
 Word Limit: ${wlDisplay} | Booking Action: ${bookingAction}
 Closing Prompt: "${closingPrompt || '(none)'}"
@@ -720,115 +760,83 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
 
   try {
     const KCS = require('../../services/engine/agent2/KnowledgeContainerService');
+    const UAP = require('../../services/engine/kc/UtteranceActParser');
     const containers = await KCS.getActiveForCompany(companyId);
 
     if (!containers.length) {
-      return res.json({ ok: true, winner: null, scores: [], excluded: [], utteranceNorm: utterance.trim(), note: 'No active containers found for this company.' });
+      return res.json({ ok: true, winner: null, paths: {}, utteranceNorm: utterance.trim(), note: 'No active containers found for this company.' });
     }
 
-    const norm = utterance.toLowerCase().replace(/[^a-z\s]/g, ' ');
+    const results = { uap: null, semantic: null, keyword: null };
 
-    // ── Score EVERY container (including negatively-excluded ones for the report)
-    const scores   = [];
-    const excluded = [];
-
-    const _scoreContainer = (container, inputNorm) => {
-      const keywords = container.keywords || [];
-      let bestKw = null, bestScore = 0;
-      for (const kw of keywords) {
-        const kwNorm = kw.toLowerCase().trim();
-        if (!kwNorm) continue;
-        let score = 0;
-        if (kwNorm.includes(' ')) {
-          if (inputNorm.includes(kwNorm)) {
-            score = kwNorm.length * 2;
-          } else {
-            const iWords = new Set(inputNorm.split(/\s+/));
-            const cWords = kwNorm.split(/\s+/).filter(w => w.length >= 5);
-            const hits   = cWords.filter(w => iWords.has(w));
-            if (hits.length) score = hits.reduce((s, w) => s + w.length, 0);
-          }
-        } else {
-          score = inputNorm.split(/\s+/).includes(kwNorm) ? kwNorm.length : 0;
-        }
-        if (score > bestScore) { bestScore = score; bestKw = kw; }
+    // ── Path 1: UAP phrase match ──────────────────────────────────────────
+    try {
+      const uapResult = await UAP.parse(companyId, utterance);
+      if (uapResult.containerId) {
+        const c = containers.find(ct => String(ct._id) === uapResult.containerId);
+        results.uap = {
+          containerId:  uapResult.containerId,
+          sectionIdx:   uapResult.sectionIdx,
+          sectionLabel: uapResult.sectionLabel || c?.sections?.[uapResult.sectionIdx]?.label || null,
+          containerTitle: c?.title || null,
+          confidence:   uapResult.confidence,
+          matchType:    uapResult.matchType,
+          matchedPhrase: uapResult.matchedPhrase,
+        };
       }
-      return { score: bestScore, matchedKeyword: bestKw };
-    };
+    } catch (_) { /* non-fatal */ }
 
-    const _checkNegative = (container) => {
-      const negKws = container.negativeKeywords || [];
-      const iWords = new Set(norm.split(/\s+/));
-      for (const nk of negKws) {
-        const nkNorm = nk.toLowerCase().trim();
-        if (!nkNorm) continue;
-        if (nkNorm.includes(' ') ? norm.includes(nkNorm) : iWords.has(nkNorm)) {
-          return nk;   // Return the trigger negative keyword
-        }
+    // ── Path 2: Semantic embedding match ──────────────────────────────────
+    try {
+      const embContainers = await CompanyKnowledgeContainer
+        .find({ companyId, isActive: true })
+        .select('+sections.callerPhrases.embedding +sections.contentEmbedding')
+        .lean();
+      const semResult = await SemanticMatchService.findBestSection(companyId, utterance, embContainers);
+      if (semResult) {
+        results.semantic = {
+          containerId:    String(semResult.container._id),
+          containerTitle: semResult.container.title,
+          sectionIdx:     semResult.sectionIdx,
+          sectionLabel:   semResult.section?.label || null,
+          similarity:     semResult.similarity,
+          matchSource:    semResult.matchSource,
+        };
       }
-      return null;
-    };
+    } catch (_) { /* non-fatal */ }
 
-    for (const c of containers) {
-      const negHit = _checkNegative(c);
-      const { score, matchedKeyword } = _scoreContainer(c, norm);
-
-      if (negHit) {
-        excluded.push({
-          id:                String(c._id),
-          title:             c.title,
-          positiveScore:     score,
-          matchedKeyword:    matchedKeyword || null,
-          excludedBy:        negHit,
-          negativeKeywords:  c.negativeKeywords || [],
-        });
-      } else {
-        scores.push({
-          id:               String(c._id),
-          title:            c.title,
-          score,
-          matchedKeyword:   matchedKeyword || null,
-          keywords:         c.keywords     || [],
-          negativeKeywords: c.negativeKeywords || [],
-          wouldWin:         false, // filled below
-        });
-      }
+    // ── Path 3: Keyword scoring ───────────────────────────────────────────
+    const context = callReason ? { callReason } : null;
+    const kwMatch = KCS.findContainer(containers, utterance, context);
+    if (kwMatch) {
+      results.keyword = {
+        containerId:    String(kwMatch.container._id),
+        containerTitle: kwMatch.container.title,
+        score:          kwMatch.score,
+        bestSection:    kwMatch.bestSection?.label || null,
+        contextAssisted: kwMatch.contextAssisted || false,
+      };
     }
 
-    // Sort by score desc, mark winner
-    scores.sort((a, b) => b.score - a.score);
-    const winner = scores.find(s => s.score > 0) || null;
-    if (winner) winner.wouldWin = true;
-
-    // Also run context-augmented pass if callReason provided and no winner
-    let contextWinner = null;
-    if (!winner && callReason) {
-      const augNorm = `${callReason} ${utterance}`.toLowerCase().replace(/[^a-z\s]/g, ' ');
-      for (const c of containers) {
-        if (_checkNegative(c)) continue;
-        const { score, matchedKeyword } = _scoreContainer(c, augNorm);
-        if (score > 0) {
-          contextWinner = { id: String(c._id), title: c.title, score, matchedKeyword, contextAssisted: true };
-          break;
-        }
-      }
-    }
+    // Determine overall winner (same priority as runtime: UAP > Semantic > Keyword)
+    const winner = results.uap?.confidence >= 0.80
+      ? { ...results.uap, via: 'UAP' }
+      : results.semantic
+        ? { ...results.semantic, via: 'SEMANTIC' }
+        : results.keyword
+          ? { ...results.keyword, via: 'KEYWORD' }
+          : null;
 
     return res.json({
-      ok:           true,
-      utterance:    utterance.trim(),
-      utteranceNorm: norm.trim(),
-      callReason:   callReason || null,
-      winner:       winner   || contextWinner || null,
-      scores,
-      excluded,
-      totalContainers:  containers.length,
-      activeScored:     scores.length,
-      negativeExcluded: excluded.length,
-      threshold:        KCS.KEYWORD_CONFIDENCE_THRESHOLD,
+      ok:              true,
+      utterance:       utterance.trim(),
+      callReason:      callReason || null,
+      winner,
+      paths:           results,
+      totalContainers: containers.length,
       note: winner
-        ? `"${winner.matchedKeyword}" scored ${winner.score} in "${winner.title}"`
-        : (contextWinner ? `Context-assisted match via callReason: "${contextWinner.matchedKeyword}" → "${contextWinner.title}"` : 'No container matched — would fall through to LLM'),
+        ? `Matched via ${winner.via}: "${winner.containerTitle}"${winner.sectionLabel ? ` → ${winner.sectionLabel}` : ''}`
+        : 'No match — would fall through to LLM',
     });
 
   } catch (err) {
@@ -920,63 +928,6 @@ router.get('/:companyId/knowledge/keyword-health', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /:companyId/knowledge/uap-arrays — UAP array list for classification card
-// Returns daType, label, and daSubTypes key/label for the UI dropdown.
-// ⚠️ MUST be before GET /:id — Express will match 'uap-arrays' as :id otherwise
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/:companyId/knowledge/uap-arrays', async (req, res) => {
-  const { companyId } = req.params;
-  if (!_validateCompanyAccess(req, res, companyId)) return;
-
-  try {
-    const arrays = await UAPArray.find({ companyId, isActive: true })
-      .select('daType label daSubTypes.key daSubTypes.label')
-      .sort({ daType: 1 })
-      .lean();
-
-    return res.json({ success: true, arrays });
-  } catch (err) {
-    logger.error('[companyKnowledge] uap-arrays error', { companyId, err: err.message });
-    return res.status(500).json({ success: false, error: 'Failed to load UAP arrays' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /:companyId/knowledge/by-subtype-key/:key
-// Lookup which KC container+section owns a given daSubTypeKey.
-// Used by UAP Arrays page to show linked KC card per sub-type.
-// Returns { found, containerId, containerTitle, sectionId, sectionLabel }
-// ⚠️ MUST be before GET /:id — Express will match 'by-subtype-key' as :id otherwise
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/:companyId/knowledge/by-subtype-key/:key', async (req, res) => {
-  const { companyId, key } = req.params;
-  if (!_validateCompanyAccess(req, res, companyId)) return;
-
-  try {
-    const container = await CompanyKnowledgeContainer.findOne({
-      companyId,
-      'sections.daSubTypeKey': key,
-    }).select('_id title sections').lean();
-
-    if (!container) {
-      return res.json({ success: true, found: false });
-    }
-
-    const section = (container.sections || []).find(s => s.daSubTypeKey === key);
-    return res.json({
-      success:        true,
-      found:          true,
-      containerId:    String(container._id),
-      containerTitle: container.title || '',
-      sectionId:      section?._id ? String(section._id) : null,
-      sectionLabel:   section?.label || '',
-    });
-  } catch (err) {
-    logger.error('[companyKnowledge] by-subtype-key error', { companyId, key, err: err.message });
-    return res.status(500).json({ success: false, error: 'Lookup failed' });
-  }
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/analyze-gaps — Content Coach: "Callers will also ask"
@@ -1354,17 +1305,6 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
   }
 
   try {
-    // ── Option C: capture old daSubTypeKeys before update ──────────────────
-    // When sections change, diff old vs new to find orphaned UAP sub-types
-    let oldSubTypeKeys = [];
-    if (updates.sections !== undefined) {
-      const old = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId))
-        .select('sections.daSubTypeKey').lean();
-      if (old) {
-        oldSubTypeKeys = (old.sections || []).map(s => s.daSubTypeKey).filter(Boolean);
-      }
-    }
-
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
       _resolveContainerQuery(id, companyId),
       { $set: updates },
@@ -1373,43 +1313,28 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
 
     if (!container) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
 
+    // Invalidate runtime cache + Bridge phrase index on every save
     KnowledgeContainerService.invalidateCache(companyId).catch(e =>
       logger.warn('[companyKnowledge] cache invalidation failed on PATCH', { companyId, e: e.message })
     );
+    BridgeService.invalidate(companyId).catch(() => {});
 
-    // Invalidate Bridge if daType, isActive, or sections changed (routing table must be rebuilt)
-    if (updates.daType !== undefined || updates.isActive !== undefined || updates.sections !== undefined) {
-      BridgeService.invalidate(companyId).catch(e =>
-        logger.warn('[companyKnowledge] Bridge invalidation failed (non-blocking)', { companyId, e: e.message })
-      );
-    }
-
-    // ── Option C: pull orphaned daSubTypeKeys from UAPArray (fire-and-forget) ─
-    if (updates.sections !== undefined && oldSubTypeKeys.length) {
-      const newSubTypeKeys = new Set(
-        (container.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
-      );
-      const orphaned = oldSubTypeKeys.filter(k => !newSubTypeKeys.has(k));
-      if (orphaned.length) {
-        setImmediate(async () => {
-          try {
-            await UAPArray.updateMany(
-              { companyId },
-              { $pull: { daSubTypes: { key: { $in: orphaned } } } }
-            );
-            logger.info('[companyKnowledge] Pulled orphaned daSubTypeKeys on PATCH', { companyId, id, orphaned });
-          } catch (e) {
-            logger.warn('[companyKnowledge] Orphaned daSubType cleanup failed (non-blocking)', { companyId, e: e.message });
-          }
-        });
-      }
-    }
-
-    // Re-embed if title or sections changed (the fields that affect semantic meaning)
+    // Fire-and-forget: embed callerPhrases + section content + keyword health
     if (updates.title !== undefined || updates.sections !== undefined) {
-      setImmediate(() =>
-        KCKeywordHealthService.generateAndStoreEmbedding(id).catch(() => {})
-      );
+      setImmediate(async () => {
+        try {
+          const sections = container.sections || [];
+          const phraseCount  = await SemanticMatchService.embedCallerPhrases(sections);
+          const contentCount = await SemanticMatchService.embedSectionContent(sections);
+          if (phraseCount > 0 || contentCount > 0) {
+            await CompanyKnowledgeContainer.updateOne(
+              { _id: container._id },
+              { $set: { sections } }
+            );
+          }
+        } catch (_e) { /* non-fatal */ }
+        KCKeywordHealthService.generateAndStoreEmbedding(id).catch(() => {});
+      });
     }
 
     // Pre-generate instant audio for Fixed Response Mode — four trigger cases:
@@ -1444,13 +1369,6 @@ router.delete('/:companyId/knowledge/:id', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    // Capture section daSubTypeKeys BEFORE deactivation for Option C cleanup
-    const preDelete = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId))
-      .select('sections.daSubTypeKey').lean();
-    const keysToOrphan = preDelete
-      ? (preDelete.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
-      : [];
-
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
       _resolveContainerQuery(id, companyId),
       { $set: { isActive: false } },
@@ -1461,21 +1379,6 @@ router.delete('/:companyId/knowledge/:id', async (req, res) => {
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
     BridgeService.invalidate(companyId).catch(() => {});
-
-    // Option C: pull orphaned sub-types from UAPArray (fire-and-forget)
-    if (keysToOrphan.length) {
-      setImmediate(async () => {
-        try {
-          await UAPArray.updateMany(
-            { companyId },
-            { $pull: { daSubTypes: { key: { $in: keysToOrphan } } } }
-          );
-          logger.info('[companyKnowledge] Pulled orphaned daSubTypeKeys on soft-delete', { companyId, id, keysToOrphan });
-        } catch (e) {
-          logger.warn('[companyKnowledge] Orphaned daSubType cleanup on soft-delete failed', { companyId, e: e.message });
-        }
-      });
-    }
 
     logger.info('[companyKnowledge] Soft-deleted container', { companyId, id });
     return res.json({ success: true, message: 'Knowledge container deactivated' });
@@ -1493,33 +1396,11 @@ router.delete('/:companyId/knowledge/:id/hard', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    // Capture section daSubTypeKeys BEFORE deletion for Option C cleanup
-    const preDelete = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId))
-      .select('sections.daSubTypeKey').lean();
-    const keysToOrphan = preDelete
-      ? (preDelete.sections || []).map(s => s.daSubTypeKey).filter(Boolean)
-      : [];
-
     const result = await CompanyKnowledgeContainer.deleteOne(_resolveContainerQuery(id, companyId));
     if (!result.deletedCount) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
     BridgeService.invalidate(companyId).catch(() => {});
-
-    // Option C: pull orphaned sub-types from UAPArray (fire-and-forget)
-    if (keysToOrphan.length) {
-      setImmediate(async () => {
-        try {
-          await UAPArray.updateMany(
-            { companyId },
-            { $pull: { daSubTypes: { key: { $in: keysToOrphan } } } }
-          );
-          logger.info('[companyKnowledge] Pulled orphaned daSubTypeKeys on hard-delete', { companyId, id, keysToOrphan });
-        } catch (e) {
-          logger.warn('[companyKnowledge] Orphaned daSubType cleanup on hard-delete failed', { companyId, e: e.message });
-        }
-      });
-    }
 
     logger.info('[companyKnowledge] Hard-deleted container', { companyId, id });
     return res.json({ success: true, message: 'Knowledge container permanently deleted' });
@@ -1645,26 +1526,19 @@ Return ONLY a valid JSON array — no markdown, no explanation:
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /:companyId/knowledge/suggest-label
+// POST /:companyId/knowledge/generate-phrases
 // Body: { content: string, sectionLabel?: string, containerId?: string }
-// — sectionLabel: existing label if already typed (improves classification accuracy)
-// — containerId: loads container title+category + used for attachedTo on upsert
 //
-// Groq receives: company name + trade/industry + container title + category + section content
-// → industry-specific trigger phrases, not generic ones (multi-tenant requirement)
+// Groq generates 5-10 sample caller phrases for a section — industry-specific.
+// Returns: { success, suggestion (label), callerPhrases[], negativeKeywords[] }
 //
-// Single Groq call → returns:
-//   { success, suggestion, daType, daTypeLabel, subTypeKey, subTypeLabel,
-//     triggerPhrases[], arrayExists, needsArray, suggestedArrayLabel }
-//
-// If arrayExists → fire-and-forget upsert sub-type into UAPArray.
-// If !arrayExists → needsArray:true, UI shows "Create '[label]' array" prompt.
+// UI calls this from "Suggest phrases" button per section.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
+router.post('/:companyId/knowledge/generate-phrases', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  const { content, sectionLabel = '', containerId = null, isPrequalSection = false } = req.body;
+  const { content, sectionLabel = '', containerId = null } = req.body;
   if (!content?.trim()) {
     return res.status(400).json({ success: false, error: 'No content provided' });
   }
@@ -1682,37 +1556,27 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
           : { kcId: containerId, companyId })
       : null;
 
-    // Load in parallel: UAP arrays + company identity + container meta
-    const [uapArrays, company, container] = await Promise.all([
-      UAPArray.find({ companyId, isActive: true }).lean(),
+    // Load company identity + container meta
+    const [company, container] = await Promise.all([
       v2Company.findById(companyId, 'companyName tradeCategories').lean(),
       _containerQuery
         ? CompanyKnowledgeContainer.findOne(_containerQuery, '_id title category').lean()
         : Promise.resolve(null),
     ]);
 
-    // ── Company context for trade-aware trigger phrases ─────────────────────
     const companyName  = company?.companyName?.trim()   || null;
     const trades       = (company?.tradeCategories || []).filter(Boolean);
     const tradeString  = trades.length > 0 ? trades.join(', ') : null;
-
-    // ── Container context (title + category tell us the topic scope) ─────────
     const containerTitle    = container?.title?.trim()    || null;
     const containerCategory = container?.category?.trim() || null;
 
-    // ── UAP arrays catalogue ─────────────────────────────────────────────────
-    const arraysCat = uapArrays.length > 0
-      ? uapArrays.map(a => `${a.daType}: "${a.label}"`).join('\n')
-      : 'No arrays seeded yet — infer the most logical daType for this content.';
-
     // ── Build context block for Groq ─────────────────────────────────────────
     const contextLines = [];
-    if (companyName)         contextLines.push(`Company: "${companyName}"`);
-    if (tradeString)         contextLines.push(`Trade/Industry: ${tradeString}`);
-    if (containerTitle)      contextLines.push(`Container title: "${containerTitle}"`);
-    if (containerCategory)   contextLines.push(`Container category: "${containerCategory}"`);
-    if (sectionLabel?.trim())  contextLines.push(`Current section label hint: "${sectionLabel.trim()}"`);
-    if (isPrequalSection)      contextLines.push(`Section type: PRE-QUALIFYING (asks caller a qualifying question before answering — trigger phrases must match what the caller says to ARRIVE at this fork, not what the answer says)`);
+    if (companyName)           contextLines.push(`Company: "${companyName}"`);
+    if (tradeString)           contextLines.push(`Trade/Industry: ${tradeString}`);
+    if (containerTitle)        contextLines.push(`Container title: "${containerTitle}"`);
+    if (containerCategory)     contextLines.push(`Container category: "${containerCategory}"`);
+    if (sectionLabel?.trim())  contextLines.push(`Section label: "${sectionLabel.trim()}"`);
     const contextBlock = contextLines.length > 0
       ? `CONTEXT:\n${contextLines.join('\n')}\n\n`
       : '';
@@ -1720,32 +1584,30 @@ router.post('/:companyId/knowledge/suggest-label', async (req, res) => {
     const result = await GroqStreamAdapter.streamFull({
       apiKey,
       model:       'llama-3.3-70b-versatile',
-      maxTokens:   260,
-      temperature: 0.2,
+      maxTokens:   400,
+      temperature: 0.3,
       jsonMode:    true,
-      system: `You are a Knowledge Section classifier for a phone AI platform used by service companies.
-Given a section's content and company context, you will:
-1. Write a concise label (5-10 words, plain English, title-case, describes the caller's question NOT the answer)
-2. Classify which intent category (daType) this section answers
-3. Generate 6-10 trigger phrases — phrases must be INDUSTRY-SPECIFIC using the company's trade (e.g. for HVAC: "how much is an AC tune-up", not just "how much does it cost")
+      system: `You are a caller-phrase generator for a phone AI platform used by service companies.
+Given a section's content and company context, generate:
+1. A concise section label (5-10 words, title-case, describes the caller's QUESTION not the answer)
+2. 5-10 caller phrases — full sentences a real caller would say on the phone that should route to this section
+3. 2-5 negative keywords — words that should EXCLUDE a caller from this section
 
-STANDARD daType vocabulary (prefer these unless a better fit exists):
-PRICING_QUERY | AVAILABILITY_QUERY | BOOKING_INTENT | SERVICE_DETAILS_QUERY
-PROMOTIONS_QUERY | WARRANTY_QUERY | EMERGENCY_QUERY | COMPANY_INFO_QUERY
-PAYMENT_QUERY | CANCELLATION_QUERY | COMPLAINT_QUERY
+Rules for caller phrases:
+- Must sound like natural phone speech ("how much is an AC tune-up", "my heater isn't working")
+- Must be INDUSTRY-SPECIFIC using the company's trade — not generic
+- Include both question forms AND statement forms ("I need...", "my ... is broken", "do you do...")
+- Each phrase should be 4-15 words, lowercase
 
-If none fit, invent a logical UPPERCASE_SNAKE_CASE daType.
-
-Critical for multi-tenant accuracy:
-- Use the company's trade/industry to make trigger phrases specific (not generic)
-- Use the container title + category to scope the sub-type key correctly
-- subTypeKey must reflect BOTH the topic and the trade (e.g. "hvac_maintenance_pricing" not "pricing")
+Rules for negative keywords:
+- Words that would indicate the caller is asking about a DIFFERENT topic
+- Single words or short phrases that should disqualify this section from matching
 
 Return ONLY valid JSON — no markdown:
-{"suggestion":"Annual Maintenance Plan Cost","daType":"PRICING_QUERY","daTypeLabel":"Pricing Questions","subTypeKey":"hvac_maintenance_pricing","subTypeLabel":"HVAC Maintenance Plan Pricing","triggerPhrases":["how much is the AC maintenance plan","what does the annual HVAC service cost","price for the maintenance agreement"]}`,
+{"suggestion":"Annual Maintenance Plan Cost","callerPhrases":["how much is the AC maintenance plan","what does the annual HVAC service cost","price for the maintenance agreement","I want to sign up for the maintenance plan","do you have a yearly service plan"],"negativeKeywords":["installation","new unit","replacement"]}`,
       messages: [{
         role: 'user',
-        content: `UAP ARRAYS:\n${arraysCat}\n\n${contextBlock}SECTION CONTENT:\n${content.trim().slice(0, 600)}`
+        content: `${contextBlock}SECTION CONTENT:\n${content.trim().slice(0, 800)}`
       }],
     });
 
@@ -1753,99 +1615,47 @@ Return ONLY valid JSON — no markdown:
       return res.status(500).json({ success: false, error: 'Groq returned no response' });
     }
 
-    // Parse response
     let parsed;
     try {
       const raw = result.response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       const m   = raw.match(/\{[\s\S]*\}/);
       parsed    = JSON.parse(m ? m[0] : raw);
-      if (!parsed.suggestion) throw new Error('missing suggestion field');
     } catch (pe) {
-      logger.warn('[companyKnowledge] suggest-label: parse failed', { companyId, err: pe.message });
+      logger.warn('[companyKnowledge] generate-phrases: parse failed', { companyId, err: pe.message });
       return res.status(500).json({ success: false, error: 'Could not parse Groq response' });
     }
 
     const {
-      suggestion,
-      daType        = null,
-      daTypeLabel   = daType,
-      subTypeKey    = null,
-      subTypeLabel  = null,
-      triggerPhrases = [],
+      suggestion      = sectionLabel || '',
+      callerPhrases   = [],
+      negativeKeywords = [],
     } = parsed;
 
     const cleanPhrases = [...new Set(
-      (Array.isArray(triggerPhrases) ? triggerPhrases : [])
+      (Array.isArray(callerPhrases) ? callerPhrases : [])
         .filter(p => typeof p === 'string')
         .map(p => p.toLowerCase().trim())
-        .filter(p => p.length > 2 && p.length < 120)
-    )].slice(0, 14);
+        .filter(p => p.length > 2 && p.length < 200)
+    )].slice(0, 12);
 
-    // Check if matching UAPArray already exists for this company
-    const matchingArray = daType
-      ? uapArrays.find(a => a.daType === daType)
-      : null;
-    const arrayExists   = !!matchingArray;
-    const needsArray    = !!daType && !arrayExists;
+    const cleanNegKw = [...new Set(
+      (Array.isArray(negativeKeywords) ? negativeKeywords : [])
+        .filter(k => typeof k === 'string')
+        .map(k => k.toLowerCase().trim())
+        .filter(k => k.length > 1 && k.length < 50)
+    )].slice(0, 8);
 
-    // Resolve the stable MongoDB _id for attachedTo (container may have been looked up by kcId)
-    const attachedToId = container ? String(container._id) : null;
-
-    // If array exists → fire-and-forget upsert sub-type + trigger phrases
-    if (arrayExists && cleanPhrases.length > 0) {
-      setImmediate(async () => {
-        try {
-          if (subTypeKey) {
-            const subExists = (matchingArray.daSubTypes || []).some(s => s.key === subTypeKey);
-            if (subExists) {
-              await UAPArray.updateOne(
-                { companyId, daType, 'daSubTypes.key': subTypeKey },
-                {
-                  $addToSet: { 'daSubTypes.$.triggerPhrases': { $each: cleanPhrases },
-                               ...(attachedToId ? { 'daSubTypes.$.attachedTo': attachedToId } : {}) },
-                }
-              );
-            } else {
-              await UAPArray.findOneAndUpdate(
-                { companyId, daType },
-                { $push: { daSubTypes: {
-                    key: subTypeKey, label: subTypeLabel || subTypeKey,
-                    triggerPhrases: cleanPhrases,
-                    attachedTo: attachedToId ? [attachedToId] : [],
-                    classificationStatus: 'AUTO_CONFIRMED',
-                } } }
-              );
-            }
-          }
-          BridgeService.invalidate(companyId).catch(() => {});
-          logger.info('[companyKnowledge] suggest-label: UAP sub-type upserted', {
-            companyId, daType, subTypeKey, phrasesAdded: cleanPhrases.length
-          });
-        } catch (uapErr) {
-          logger.warn('[companyKnowledge] suggest-label: UAP upsert failed (non-blocking)', {
-            companyId, daType, err: uapErr.message
-          });
-        }
-      });
-    }
-
-    logger.debug('[companyKnowledge] suggest-label', { companyId, suggestion, daType, arrayExists });
+    logger.debug('[companyKnowledge] generate-phrases', { companyId, phrasesGenerated: cleanPhrases.length });
     return res.json({
-      success:            true,
-      suggestion:         suggestion.trim().replace(/^["'`]|["'`]$/g, ''),
-      daType,
-      daTypeLabel,
-      subTypeKey,
-      subTypeLabel,
-      triggerPhrases:     cleanPhrases,
-      arrayExists,
-      needsArray,
-      suggestedArrayLabel: daTypeLabel || daType,
+      success:          true,
+      suggestion:       (suggestion || '').trim().replace(/^["'`]|["'`]$/g, ''),
+      callerPhrases:    cleanPhrases,
+      negativeKeywords: cleanNegKw,
     });
 
   } catch (err) {
-    logger.error('[companyKnowledge] suggest-label error', { companyId, err: err.message });
-    return res.status(500).json({ success: false, error: 'Failed to generate label suggestion' });
+    logger.error('[companyKnowledge] generate-phrases error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to generate phrases' });
   }
 });
 
@@ -1868,234 +1678,6 @@ router.post('/:companyId/knowledge/generate-embeddings', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /:companyId/knowledge/:id/auto-classify
-// ⚠️  MUST be registered AFTER /:id routes to avoid :id capturing the literal
-//
-// Uses Groq to:
-//   1. Infer the best daType from company's UAPArrays
-//   2. Generate trigger phrases for the matching UAPArray sub-type
-//   3. Upsert those trigger phrases onto the UAPArray (fire-and-forget)
-//   4. Update container: daType, classificationStatus, classificationScore, autoClassifiedAt
-//
-// Returns:
-//   { success, daType, daTypeLabel, triggerPhrases, classificationScore, message }
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/:companyId/knowledge/:id/auto-classify', async (req, res) => {
-  const { companyId, id } = req.params;
-  if (!_validateCompanyAccess(req, res, companyId)) return;
-
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    return res.status(503).json({ success: false, error: 'Groq API key not configured' });
-  }
-
-  try {
-    // Load container
-    const container = await CompanyKnowledgeContainer.findOne(_resolveContainerQuery(id, companyId)).lean();
-    if (!container) {
-      return res.status(404).json({ success: false, error: 'Knowledge container not found' });
-    }
-
-    // Load company's UAP arrays — if none seeded, can still classify (result won't attach)
-    const uapArrays = await UAPArray.find({ companyId, isActive: true }).lean();
-
-    // Build content block for Groq
-    const sectionBlock = (container.sections || [])
-      .filter(s => s.label?.trim() && s.content?.trim())
-      .map(s => `${s.label.trim()}: ${s.content.trim().slice(0, 400)}`)
-      .join('\n');
-
-    const containerContent = [
-      `Title: "${container.title || ''}"`,
-      container.category ? `Category: "${container.category}"` : null,
-      sectionBlock ? `Sections:\n${sectionBlock}` : null,
-    ].filter(Boolean).join('\n\n');
-
-    // Build UAP array catalogue for Groq
-    const arraysCatalogue = uapArrays.length > 0
-      ? uapArrays.map(a =>
-          `daType: ${a.daType} | label: "${a.label}" | subTypes: [${
-            (a.daSubTypes || []).map(s => `${s.key}: "${s.label}"`).join(', ')
-          }]`
-        ).join('\n')
-      : 'No UAP arrays seeded yet — infer the most logical daType for this content.';
-
-    const result = await GroqStreamAdapter.streamFull({
-      apiKey,
-      model:       'llama-3.3-70b-versatile',
-      maxTokens:   600,
-      temperature: 0.15,
-      jsonMode:    true,
-      system: `You are a UAP (Utterance Act Parser) classifier for a phone AI platform.
-Given a Knowledge Container and a catalogue of daType arrays, classify the container into the BEST matching daType.
-Then generate 8–14 trigger phrases a caller might say that would route to this container.
-
-Rules:
-- Pick the SINGLE best daType. If no array matches well, invent the most logical daType key (UPPERCASE_SNAKE_CASE).
-- Trigger phrases must sound like real caller speech ("how much does it cost", "what's covered", "can I get a tune-up").
-- confidence: 0.0–1.0 — how certain you are this daType is correct.
-- subTypeKey: snake_case key for the sub-type within this daType that best describes this container (or null if not applicable).
-- subTypeLabel: human-readable label for that sub-type (or null).
-
-Return ONLY valid JSON. No markdown.
-{"daType":"PRICING_QUERY","daTypeLabel":"Pricing Questions","subTypeKey":"maintenance","subTypeLabel":"Maintenance Visit Pricing","confidence":0.92,"triggerPhrases":["how much is a tune-up","what does the maintenance cost","price for annual service"]}`,
-      messages: [{
-        role: 'user',
-        content: `UAP ARRAYS:\n${arraysCatalogue}\n\nCONTAINER:\n${containerContent}`
-      }],
-    });
-
-    if (!result.response) {
-      return res.status(500).json({ success: false, error: 'Groq returned no response' });
-    }
-
-    // Parse Groq response
-    let classification;
-    try {
-      const raw = result.response.trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/, '');
-      const objMatch = raw.match(/\{[\s\S]*\}/);
-      classification = JSON.parse(objMatch ? objMatch[0] : raw);
-      if (!classification.daType) throw new Error('missing daType field');
-    } catch (parseErr) {
-      logger.warn('[companyKnowledge] auto-classify: parse failed', {
-        companyId, id, err: parseErr.message, preview: result.response?.slice(0, 300)
-      });
-      return res.status(500).json({ success: false, error: 'Could not parse classification response' });
-    }
-
-    const {
-      daType,
-      daTypeLabel    = daType,
-      subTypeKey     = null,
-      subTypeLabel   = null,
-      confidence     = null,
-      triggerPhrases = [],
-    } = classification;
-
-    // Clean trigger phrases
-    const cleanedPhrases = [...new Set(
-      (Array.isArray(triggerPhrases) ? triggerPhrases : [])
-        .filter(p => typeof p === 'string')
-        .map(p => p.toLowerCase().trim())
-        .filter(p => p.length > 2 && p.length < 120)
-    )].slice(0, 16);
-
-    // ── 1. Update the container record ───────────────────────────────────────
-    const containerUpdate = {
-      $set: {
-        daType,
-        classificationStatus: 'AUTO_CONFIRMED',
-        classificationScore:  typeof confidence === 'number' ? Math.round(confidence * 100) / 100 : null,
-        autoClassifiedAt:     new Date(),
-        triggerPhrases:       cleanedPhrases,   // persisted so reload shows them
-      },
-    };
-    if (subTypeKey) {
-      containerUpdate.$addToSet = { daSubTypes: subTypeKey };
-    }
-    await CompanyKnowledgeContainer.findOneAndUpdate(
-      _resolveContainerQuery(id, companyId),
-      containerUpdate,
-      { new: true }
-    );
-
-    // ── 2. Upsert trigger phrases onto matching UAPArray (fire-and-forget) ───
-    if (cleanedPhrases.length > 0 && uapArrays.length > 0) {
-      setImmediate(async () => {
-        try {
-          const matchingArray = uapArrays.find(a => a.daType === daType);
-          if (matchingArray) {
-            // If subTypeKey specified — upsert into that sub-type's triggerPhrases
-            if (subTypeKey) {
-              const subExists = (matchingArray.daSubTypes || []).some(s => s.key === subTypeKey);
-              if (subExists) {
-                // Add trigger phrases + attachedTo to existing sub-type in one atomic update.
-                // $push with $each and $addToSet can be combined on DIFFERENT paths in the same update.
-                await UAPArray.updateOne(
-                  { companyId, daType, 'daSubTypes.key': subTypeKey },
-                  {
-                    $push:    { 'daSubTypes.$.triggerPhrases': { $each: cleanedPhrases } },
-                    $addToSet: { 'daSubTypes.$.attachedTo': String(id) },
-                  }
-                );
-              } else {
-                // Create new sub-type entry
-                await UAPArray.findOneAndUpdate(
-                  { companyId, daType },
-                  {
-                    $push: {
-                      daSubTypes: {
-                        key:              subTypeKey,
-                        label:            subTypeLabel || subTypeKey,
-                        triggerPhrases:   cleanedPhrases,
-                        attachedTo:       [String(id)],
-                        classificationStatus: 'AUTO_CONFIRMED',
-                        classificationScore:  typeof confidence === 'number' ? confidence : null,
-                      }
-                    }
-                  }
-                );
-              }
-            } else {
-              // No sub-type — just ensure container is listed in first sub-type's attachedTo
-              // (graceful degrade — not blocking)
-            }
-          } else {
-            // No matching UAPArray found — create it so owner can see + edit it
-            await UAPArray.create({
-              companyId,
-              daType,
-              label:     daTypeLabel,
-              isStandard: false,
-              daSubTypes: subTypeKey ? [{
-                key:              subTypeKey,
-                label:            subTypeLabel || subTypeKey,
-                triggerPhrases:   cleanedPhrases,
-                attachedTo:       [String(id)],
-                classificationStatus: 'AUTO_CONFIRMED',
-                classificationScore:  typeof confidence === 'number' ? confidence : null,
-              }] : [],
-              isActive: true,
-            });
-          }
-          logger.info('[companyKnowledge] auto-classify: UAPArray upserted', {
-            companyId, daType, subTypeKey, phrasesAdded: cleanedPhrases.length
-          });
-        } catch (uapErr) {
-          logger.warn('[companyKnowledge] auto-classify: UAPArray upsert failed (non-blocking)', {
-            companyId, id, daType, err: uapErr.message
-          });
-        }
-      });
-    }
-
-    // Invalidate KC cache + Bridge (daType field changed)
-    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
-    BridgeService.invalidate(companyId).catch(() => {});
-
-    logger.info('[companyKnowledge] auto-classify complete', {
-      companyId, id, daType, confidence, phrasesGenerated: cleanedPhrases.length
-    });
-
-    return res.json({
-      success:           true,
-      daType,
-      daTypeLabel,
-      subTypeKey,
-      subTypeLabel,
-      classificationScore: typeof confidence === 'number' ? confidence : null,
-      triggerPhrases:    cleanedPhrases,
-      message:           `Classified as ${daTypeLabel} (${daType}) with ${cleanedPhrases.length} trigger phrases generated`,
-    });
-
-  } catch (err) {
-    logger.error('[companyKnowledge] auto-classify error', { companyId, id, err: err.message });
-    return res.status(500).json({ success: false, error: 'Auto-classification failed' });
-  }
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INSTANT AUDIO PRE-GENERATION — Fixed Response Mode (container + per-section)
