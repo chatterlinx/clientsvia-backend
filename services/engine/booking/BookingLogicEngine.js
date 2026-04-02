@@ -422,16 +422,25 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // Check if the step made progress (new data captured or step changed)
   const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
 
-  // UAP authority: compute before the early-return so a high-confidence KC question
-  // (containerId != null, confidence ≥ 0.70) can override a step that "advanced" by
-  // extracting the wrong thing (e.g. "Yeah" from "Yeah, how much do you charge?").
+  // UAP authority: two-tier signal computed before early-return gates.
+  //
+  // Tier 1 — uapDetectsKCQuestion: HIGH confidence (≥ 0.70) override.  Used in the
+  //   heuristic gate (line below) where the input doesn't *look* off-topic but UAP
+  //   is confident it's a KC question.
+  //
+  // Tier 2 — uapHasAnyMatch: ANY UAP match (even WORD_OVERLAP_LOW at 0.40).
+  //   Prevents the "step advanced → skip digression" gate from killing a legitimate
+  //   question.  If UAP matched callerPhrases at any confidence, the digression code
+  //   should at least get a chance to run (the actual container match quality + KC
+  //   answer gate still protect against false-positives).
   const uapDetectsKCQuestion = !!(parsedAct?.containerId && parsedAct.confidence >= 0.70);
+  const uapHasAnyMatch       = !!parsedAct?.containerId;
 
   // No input → nothing to interrogate
   if (!userInput?.trim()) return stepResult;
 
-  // Step advanced AND UAP is quiet → caller was providing booking data; accept it
-  if (advanced && !uapDetectsKCQuestion) return stepResult;
+  // Step advanced AND UAP found nothing at all → caller was providing booking data
+  if (advanced && !uapHasAnyMatch) return stepResult;
 
   // DATA-ENTRY STEPS bypass 123RP to prevent false-positives on phone digits,
   // address names, etc. — UNLESS the input is clearly a question/confusion
@@ -507,13 +516,40 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
       : null;
 
     if (containers.length) {
-      const match = KCS.findContainer(containers, userInput, _anchorCtx);
+      // Prefer UAP match — it scores against user-configured callerPhrases
+      // which are more precise than auto-generated contentKeywords.  UAP
+      // already ran in the Promise.all above; reuse the result at any
+      // confidence (even WORD_OVERLAP_LOW) rather than re-scoring from scratch.
+      let match = null;
+      let targetSection = null;
+
+      if (parsedAct?.containerId) {
+        const uapContainer = containers.find(c => String(c._id) === String(parsedAct.containerId));
+        if (uapContainer) {
+          const sIdx = parsedAct.sectionIdx ?? null;
+          match = {
+            container:      uapContainer,
+            score:          Math.round((parsedAct.confidence || 0) * 100),
+            bestSection:    sIdx != null ? uapContainer.sections?.[sIdx] : null,
+            bestSectionIdx: sIdx,
+            uapAssisted:    true,
+          };
+          targetSection = match.bestSection || null;
+        }
+      }
+
+      // Fall back to contentKeywords scoring if UAP had no match
+      if (!match) {
+        match = KCS.findContainer(containers, userInput, _anchorCtx);
+      }
+
       if (match) {
         const kcResult = await KCS.answer({
-          container:  match.container,
-          question:   userInput,
-          kbSettings: { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
-          company:    { _id: companyId, companyName: config.companyName },
+          container:     match.container,
+          targetSection,
+          question:      userInput,
+          kbSettings:    { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
+          company:       { _id: companyId, companyName: config.companyName },
         });
         if (kcResult?.response) {
           // Deliver KC answer + step re-anchor in ONE response.
