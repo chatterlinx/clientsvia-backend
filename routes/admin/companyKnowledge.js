@@ -1447,7 +1447,7 @@ router.post('/:companyId/knowledge/optimize-priorities', async (req, res) => {
 
   try {
     const containers = await CompanyKnowledgeContainer.find({ companyId })
-      .select('_id title category keywords kcId priority isActive')
+      .select('_id title category sections.label sections.contentKeywords sections.callerPhrases.text kcId priority isActive negativeKeywords')
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
@@ -1455,10 +1455,18 @@ router.post('/:companyId/knowledge/optimize-priorities', async (req, res) => {
       return res.status(400).json({ success: false, error: 'No containers found for this company' });
     }
 
-    // Compact summary for Groq — titles, categories, sample keywords only
+    // Compact summary for Groq — titles, categories, section callerPhrases + contentKeywords
     const summary = containers.map((c, i) => {
-      const kwSample = (c.keywords || []).slice(0, 6).join(', ');
-      const kwExtra  = (c.keywords || []).length > 6 ? ` +${(c.keywords||[]).length - 6} more` : '';
+      const sections = c.sections || [];
+      // Collect unique keywords from all sections' contentKeywords + callerPhrase text
+      const allKw = new Set();
+      for (const s of sections) {
+        for (const kw of (s.contentKeywords || [])) allKw.add(kw);
+        for (const cp of (s.callerPhrases || [])) if (cp.text) allKw.add(cp.text.toLowerCase().slice(0, 40));
+      }
+      const kwArr    = [...allKw];
+      const kwSample = kwArr.slice(0, 6).join(', ');
+      const kwExtra  = kwArr.length > 6 ? ` +${kwArr.length - 6} more` : '';
       return `${i + 1}. ID:${c._id} | "${c.title}" | cat:${c.category || 'none'} | kw:[${kwSample}${kwExtra}]`;
     }).join('\n');
 

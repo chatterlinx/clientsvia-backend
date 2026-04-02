@@ -99,14 +99,17 @@ async function _getRedis() {
 function _kcReadiness(kc) {
   const sections  = kc.sections || [];
   const wordCount = sections.reduce((s, sec) => s + (sec.content || '').trim().split(/\s+/).filter(Boolean).length, 0);
-  const kwCount   = (kc.keywords || []).length;
-  const hasUAP    = !!(kc.daType);
-  const hasAction = !!(kc.bookingAction) || sections.some(s => s.bookingAction);
+
+  // Count callerPhrases + contentKeywords across all sections (replaced dead container.keywords + daType)
+  const phraseCount  = sections.reduce((s, sec) => s + (sec.callerPhrases || []).length, 0);
+  const kwCount      = sections.reduce((s, sec) => s + (sec.contentKeywords || []).length, 0);
+  const hasRouting   = phraseCount > 0 || kwCount > 0;
+  const hasAction    = !!(kc.bookingAction) || sections.some(s => s.bookingAction);
 
   const issues = [];
-  if (wordCount < 30)  issues.push(`thin content (${wordCount} words)`);
-  if (kwCount < 2)     issues.push(`few keywords (${kwCount})`);
-  if (!hasUAP && !hasAction) issues.push('no UAP link or booking action');
+  if (wordCount < 30)   issues.push(`thin content (${wordCount} words)`);
+  if (phraseCount < 1)  issues.push(`no caller phrases (add phrases so callers can find this topic)`);
+  if (!hasRouting && !hasAction) issues.push('no matching phrases or booking action');
 
   // Build a brief content excerpt for Groq (foundation mode)
   const contentExcerpt = sections
@@ -120,17 +123,26 @@ function _kcReadiness(kc) {
     : issues.length <= 1             ? 'PARTIAL'
     : 'NOT_READY';
 
+  // Collect sample callerPhrases for display
+  const samplePhrases = [];
+  for (const s of sections) {
+    for (const cp of (s.callerPhrases || [])) {
+      if (cp.text && samplePhrases.length < 6) samplePhrases.push(cp.text);
+    }
+  }
+
   return {
     id:             kc._id?.toString(),
     title:          kc.title || '(untitled)',
     status,
     issues,
     wordCount,
+    phraseCount,
     kwCount,
-    hasUAP,
+    hasRouting,
     hasAction,
     contentExcerpt,
-    keywords:       (kc.keywords || []).slice(0, 6),
+    samplePhrases,
   };
 }
 
@@ -159,7 +171,7 @@ router.get('/:companyId/agentlab/readiness', async (req, res) => {
 
   try {
     const kcs = await CompanyKnowledgeContainer.find({ companyId, isActive: { $ne: false } })
-      .select('title category sections keywords bookingAction daType')
+      .select('title category sections.label sections.content sections.callerPhrases.text sections.contentKeywords sections.bookingAction bookingAction')
       .lean();
 
     const scored = kcs.map(_kcReadiness);
@@ -198,7 +210,7 @@ router.post('/:companyId/agentlab/scenarios', async (req, res) => {
     if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
 
     const kcs = await CompanyKnowledgeContainer.find({ companyId, isActive: { $ne: false } })
-      .select('title category sections keywords bookingAction daType')
+      .select('title category sections.label sections.content sections.callerPhrases.text sections.contentKeywords sections.bookingAction bookingAction')
       .lean();
 
     const diffConfig   = DIFFICULTY_CONFIG[foundation ? 1 : difficulty] || DIFFICULTY_CONFIG[1];
@@ -262,8 +274,15 @@ OUTPUT FORMAT — return a valid JSON array only, no prose, no markdown fences:
       // ── STANDARD MODE: difficulty-based creative scenarios ────────────────────
       const kcSummary = kcs.slice(0, 20).map(kc => {
         const labels   = (kc.sections || []).map(s => s.label).filter(Boolean).join(', ');
-        const kwSample = (kc.keywords || []).slice(0, 5).join(', ');
-        return `• ${kc.title}${labels ? ` (subtopics: ${labels})` : ''}${kwSample ? ` [keywords: ${kwSample}]` : ''}`;
+        // Collect sample callerPhrases from sections for scenario context
+        const phrases  = [];
+        for (const s of (kc.sections || [])) {
+          for (const cp of (s.callerPhrases || [])) {
+            if (cp.text && phrases.length < 5) phrases.push(cp.text);
+          }
+        }
+        const phraseSample = phrases.join(', ');
+        return `• ${kc.title}${labels ? ` (subtopics: ${labels})` : ''}${phraseSample ? ` [phrases: ${phraseSample}]` : ''}`;
       }).join('\n');
 
       systemPrompt = `You are a master call scenario writer for a ${tradeContext} company called "${companyName}".

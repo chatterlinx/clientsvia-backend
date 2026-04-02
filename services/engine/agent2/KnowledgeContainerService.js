@@ -384,7 +384,7 @@ async function _getUtteranceEmbedding(text, callSid, turn) {
  * or keyword-matched container without a specific section sub-type).
  *
  * @param {Object}      container      — CompanyKnowledgeContainer document
- * @param {Object|null} [targetSection] — specific section (from daSubType routing), or null
+ * @param {Object|null} [targetSection] — specific section (from UAP callerPhrases routing), or null
  * @returns {string}
  */
 function _buildContainerBlock(container, targetSection = null) {
@@ -902,7 +902,7 @@ function findContainer(containers, input, context = null) {
 async function answer(opts) {
   const {
     container,
-    targetSection   = null, // specific section resolved by UAP daSubType; null = all sections
+    targetSection   = null, // specific section resolved by UAP callerPhrases; null = all sections
     question,
     kbSettings  = {},
     company     = {},

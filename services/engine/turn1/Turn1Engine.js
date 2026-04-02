@@ -26,7 +26,7 @@ function _getUAP() {
   return _UAP;
 }
 
-// ── Pure-greeting regex — UAP won't match these (no UAPArray entry) ──────────
+// ── Pure-greeting regex — UAP won't match these (no callerPhrase match) ──────
 const _GREETING_RE = /^(hi+|hey+|hello+|howdy|yo+|good\s+(morning|afternoon|evening))\W*$/i;
 
 // ── Problem-signal keywords for acknowledgment composition ───────────────────
