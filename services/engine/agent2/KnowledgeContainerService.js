@@ -748,6 +748,11 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
   // The call stays on topic unless a competitor scores 3× higher (clear topic shift).
   const _anchorId = context?.anchorContainerId ? String(context.anchorContainerId) : null;
 
+  // Track anchor object + its best RAW keyword score this turn (before 3× boost).
+  // Used by the ANCHOR_FLOOR guard below.
+  let _anchorContainer    = null;
+  let _anchorKeywordScore = 0;
+
   for (const container of containers) {
     if (_isNegativelyExcluded(container)) continue;      // ← exclusion gate
     const keywords = container.keywords || [];
@@ -755,6 +760,7 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
 
     // Is this the anchor container for this call?
     const isAnchor = !!(_anchorId && String(container._id || container.title) === _anchorId);
+    if (isAnchor && !_anchorContainer) _anchorContainer = container;
 
     for (const kw of keywords) {
       const kwNorm = kw.toLowerCase().trim();
@@ -793,6 +799,9 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
       }
 
       if (matched) {
+        // Track anchor's best raw score before the 3× multiplier is applied.
+        if (isAnchor && score > _anchorKeywordScore) _anchorKeywordScore = score;
+
         // Anchor container gets 3× multiplier — keeps the call on topic.
         // A competitor can only displace the anchor by scoring 3× higher,
         // which requires a clear, unambiguous topic shift from the caller.
@@ -803,6 +812,24 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
         }
       }
     }
+  }
+
+  // ── ANCHOR FLOOR ──────────────────────────────────────────────────────────
+  // When the anchor container has NO keyword matches this turn (raw score = 0),
+  // the 3× multiplier yields 0 — a container matching even one random word wins.
+  // Example: caller says "you didn't ask me if I'm a customer" after an AC repair
+  // call → "customer" keyword scores 8 for "My System Is Old" → anchor drift.
+  //
+  // Fix: if anchor scored 0 and every competitor is below ANCHOR_FLOOR, the
+  // anchor holds with a synthetic floor score. A competitor must score ≥ ANCHOR_FLOOR
+  // to displace. Chosen at 24 so that:
+  //   • single-word noise  ("customer"=8, "system"=6) → anchor holds ✓
+  //   • exact phrase match ("comfort club"=24)         → tie breaks toward competitor ✓
+  //   • long exact phrase  ("maintenance plan"=28)     → anchor displaced ✓
+  const ANCHOR_FLOOR = 24;
+  if (_anchorContainer && _anchorKeywordScore === 0 && bestScore < ANCHOR_FLOOR) {
+    bestMatch = { container: _anchorContainer, score: ANCHOR_FLOOR, anchorFloor: true };
+    bestScore = ANCHOR_FLOOR;
   }
 
   // ── CONTEXT FALLBACK: if no direct match and callReason available, retry
