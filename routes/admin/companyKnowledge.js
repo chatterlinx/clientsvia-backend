@@ -55,6 +55,7 @@ const BridgeService                = require('../../services/engine/kc/BridgeSer
 const SemanticMatchService         = require('../../services/engine/kc/SemanticMatchService');
 const Customer                     = require('../../models/Customer');
 const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
+const { replacePlaceholders }      = require('../../utils/placeholderReplacer');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -1162,14 +1163,8 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
     }
 
     const trimmed = text.trim();
-    if (trimmed.length > 420) {
-      return res.status(400).json({
-        success: false,
-        error: `Content too long for pre-caching (${trimmed.length} chars — max 420). Shorten the section to enable instant audio.`,
-      });
-    }
 
-    // Load company voice settings
+    // Load company (needed for both voice settings and variable resolution)
     const company = await v2Company.findById(companyId).lean();
     const vs      = company?.aiAgentSettings?.voiceSettings;
     if (!vs?.voiceId) {
@@ -1179,24 +1174,46 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
       });
     }
 
+    // ── Resolve company-level variables before TTS ──────────────────────
+    // System vars ({companyName}, {serviceAreas}, etc.) + custom vars
+    // ({reg_diagnostic_fee}, etc.) are known at edit time and can be baked
+    // into the audio.  Caller-specific runtime vars ({customerName}, etc.)
+    // remain unresolved and must block generation.
+    const resolvedText = replacePlaceholders(trimmed, company);
+    const remainingVars = resolvedText.match(/\{[^}]+\}/g);
+    if (remainingVars?.length) {
+      const unique = [...new Set(remainingVars)];
+      return res.status(400).json({
+        success: false,
+        error: `Cannot pre-record: ${unique.join(', ')} ${unique.length === 1 ? 'is a' : 'are'} caller-specific variable${unique.length === 1 ? '' : 's'} resolved at call time`,
+      });
+    }
+
+    if (resolvedText.length > 420) {
+      return res.status(400).json({
+        success: false,
+        error: `Content too long for pre-caching (${resolvedText.length} chars — max 420). Shorten the section to enable instant audio.`,
+      });
+    }
+
     // ── Check disk cache first — may already exist from last save ─────────
     const existing = InstantAudioService.getStatus({
       companyId,
       kind:          'KC_RESPONSE',
-      text:          trimmed,
+      text:          resolvedText,
       voiceSettings: vs,
     });
 
     if (existing.exists) {
-      logger.info('[companyKnowledge] preview-fixed-audio — cache hit', { companyId, chars: trimmed.length });
-      return res.json({ success: true, url: existing.url, generated: false, chars: trimmed.length });
+      logger.info('[companyKnowledge] preview-fixed-audio — cache hit', { companyId, chars: resolvedText.length });
+      return res.json({ success: true, url: existing.url, generated: false, chars: resolvedText.length, resolvedText });
     }
 
     // ── Not cached — synthesise now (synchronous for immediate playback) ──
     await InstantAudioService.generate({
       companyId,
       kind:          'KC_RESPONSE',
-      text:          trimmed,
+      text:          resolvedText,
       company,
       voiceSettings: vs,
     });
@@ -1204,7 +1221,7 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
     const fresh = InstantAudioService.getStatus({
       companyId,
       kind:          'KC_RESPONSE',
-      text:          trimmed,
+      text:          resolvedText,
       voiceSettings: vs,
     });
 
@@ -1212,8 +1229,8 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Generation succeeded but file not found — try again.' });
     }
 
-    logger.info('[companyKnowledge] preview-fixed-audio — generated', { companyId, chars: trimmed.length });
-    return res.json({ success: true, url: fresh.url, generated: true, chars: trimmed.length });
+    logger.info('[companyKnowledge] preview-fixed-audio — generated', { companyId, chars: resolvedText.length });
+    return res.json({ success: true, url: fresh.url, generated: true, chars: resolvedText.length, resolvedText });
 
   } catch (err) {
     logger.error('[companyKnowledge] preview-fixed-audio error', { companyId, err: err.message });

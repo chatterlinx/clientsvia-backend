@@ -3032,17 +3032,9 @@ async function _kcGenAudio(sid, key, textElId) {
     return;
   }
 
-  // Variables like {reg_diagnostic_fee} are replaced at call time — audio must be
-  // pre-recorded with fixed text only. ElevenLabs would literally say the variable
-  // name. Block generation and explain clearly.
-  const varMatch = text.match(/\{[^}]+\}/);
-  if (varMatch) {
-    if (hintEl) {
-      hintEl.textContent = `🚫 Contains ${varMatch[0]} — variables are substituted at call time and cannot be pre-recorded`;
-      hintEl.className   = 'kc-audio-hint vars';
-    }
-    return;
-  }
+  // Company-level variables ({reg_diagnostic_fee}, {companyName}, etc.) are
+  // resolved server-side before TTS generation.  Only caller-specific runtime
+  // variables ({customerName}, etc.) will cause the backend to return an error.
 
   genBtn.disabled    = true;
   genBtn.textContent = '⏳ Generating…';
@@ -3123,32 +3115,17 @@ function _restoreKcAudioState(sid, key, url, generatedText) {
   if (hintEl)  { hintEl.textContent  = '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
 }
 
-// Mark audio stale (or block with variable warning) when source text changes.
+// Mark audio stale when source text changes.
 // Called from each text field's oninput.
+// Company-level variables ({reg_diagnostic_fee}, etc.) are resolved server-side
+// before TTS — no need to block here.  Only runtime vars trigger a backend 400.
 function _kcMarkStale(sid, key, currentText) {
   const mapKey = `${sid}--${key}`;
   const hintEl = document.getElementById(`kc-hint-${mapKey}`);
   const genBtn = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
 
-  // Variable check runs regardless of whether audio has been generated —
-  // user needs to know immediately that this field is not recordable.
-  const varMatch = (currentText || '').match(/\{[^}]+\}/);
-  if (varMatch) {
-    if (hintEl) {
-      hintEl.textContent = `🚫 Contains ${varMatch[0]} — variables are substituted at call time and cannot be pre-recorded`;
-      hintEl.className   = 'kc-audio-hint vars';
-    }
-    return;
-  }
-
-  // Clear variable warning if user removed the variable
-  if (hintEl?.classList.contains('vars')) {
-    hintEl.textContent = '';
-    hintEl.className   = 'kc-audio-hint';
-  }
-
   const state = _kcAudio.get(mapKey);
-  if (!state?.url) return; // No audio generated yet — nothing else to mark stale
+  if (!state?.url) return; // No audio generated yet — nothing to mark stale
   if ((currentText?.trim() ?? '') !== state.generatedText) {
     if (hintEl) { hintEl.textContent = '⚠️ Text changed — regenerate audio'; hintEl.className = 'kc-audio-hint stale'; }
     if (genBtn) genBtn.textContent = '🔄 Regenerate';

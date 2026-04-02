@@ -228,12 +228,37 @@ function purgeCompanyTriggerAudio(companyId) {
   return { removed };
 }
 
+/**
+ * Remove all cached KC response audio for a company.
+ * Used when voice settings change or a company variable value changes —
+ * variable-resolved audio is stale and must be regenerated.
+ */
+function purgeCompanyKCResponseAudio(companyId) {
+  ensureAudioDir();
+  const safeCompany = `${companyId || ''}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+  if (!safeCompany) return { removed: 0 };
+
+  const prefix = `fd_KC_RESPONSE_${safeCompany}_`;
+  let removed = 0;
+  try {
+    const files = fs.readdirSync(AUDIO_DIR);
+    for (const f of files) {
+      if (f.startsWith(prefix) && f.endsWith('.mp3')) {
+        fs.unlinkSync(path.join(AUDIO_DIR, f));
+        removed++;
+      }
+    }
+  } catch (_) { /* best-effort */ }
+  return { removed };
+}
+
 module.exports = {
   AUDIO_SUBDIR,
   getStatus,
   generate,
   generateAllTriggers,
   purgeCompanyTriggerAudio,
+  purgeCompanyKCResponseAudio,
   remove
 };
 

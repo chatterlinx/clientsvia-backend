@@ -614,6 +614,28 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             logger.warn('[SAVE-24b] Trigger audio purge failed (non-fatal)', { error: purgeErr.message });
         }
 
+        // Purge pre-cached KC response audio + clear stored audioUrl pointers
+        // (voice changed → all fixed-response audio is stale)
+        try {
+            const InstantAudioService = require('../../services/instantAudio/InstantAudioService');
+            const kcPurged = InstantAudioService.purgeCompanyKCResponseAudio(companyId);
+            if (kcPurged.removed > 0) {
+                logger.info(`[SAVE-24c] Purged ${kcPurged.removed} cached KC response audio files (voice changed)`, { companyId });
+            }
+            // Clear audioUrl from all KC sections so UI doesn't show stale Play buttons
+            const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
+            await CompanyKnowledgeContainer.updateMany(
+                { companyId },
+                [{ $set: { sections: { $map: {
+                    input: '$sections', as: 's',
+                    in: { $mergeObjects: ['$$s', { audioUrl: null }] }
+                }}}}]
+            );
+            logger.info(`[SAVE-24c] Cleared KC section audioUrl fields (voice changed)`, { companyId });
+        } catch (kcPurgeErr) {
+            logger.warn('[SAVE-24c] KC audio purge failed (non-fatal)', { error: kcPurgeErr.message });
+        }
+
         // Return safe response (mask API key)
         const safeSettings = { ...newVoiceSettings };
         if (safeSettings.apiKey) {

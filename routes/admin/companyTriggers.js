@@ -52,6 +52,7 @@ const TriggerAudio = require('../../models/TriggerAudio');
 const v2Company = require('../../models/v2Company');
 const { resolveAudioUrl } = require('../../services/engine/agent2/TriggerService');
 const InstantAudioService = require('../../services/instantAudio/InstantAudioService');
+const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
 const { invalidateKCVariablesCache } = require('../../services/engine/agent2/KnowledgeContainerService');
 
 // Helper to clear Redis cache after company config changes
@@ -1761,14 +1762,35 @@ router.put('/:companyId/variables',
       if (changedVarNames.length > 0) {
         invalidateKCVariablesCache(companyId);  // KC sections re-read on next call
         invalidationResult = await TriggerAudio.invalidateAudioUsingVariables(companyId, changedVarNames);
-        
+
         if (invalidationResult.invalidatedCount > 0) {
-          logger.info('[CompanyTriggers] Audio invalidated due to variable change', {
+          logger.info('[CompanyTriggers] Trigger audio invalidated due to variable change', {
             companyId,
             changedVariables: changedVarNames,
             invalidatedCount: invalidationResult.invalidatedCount,
             invalidatedRuleIds: invalidationResult.invalidatedRuleIds
           });
+        }
+
+        // Purge KC fixed-response audio — variable values are baked into the
+        // audio at generation time, so any change makes existing files stale.
+        try {
+          const kcPurged = InstantAudioService.purgeCompanyKCResponseAudio(companyId);
+          if (kcPurged.removed > 0) {
+            logger.info('[CompanyTriggers] KC response audio purged due to variable change', {
+              companyId, changedVariables: changedVarNames, removed: kcPurged.removed,
+            });
+          }
+          // Clear audioUrl from all KC sections so UI doesn't show stale Play buttons
+          await CompanyKnowledgeContainer.updateMany(
+            { companyId },
+            [{ $set: { sections: { $map: {
+              input: '$sections', as: 's',
+              in: { $mergeObjects: ['$$s', { audioUrl: null }] }
+            }}}}]
+          );
+        } catch (kcPurgeErr) {
+          logger.warn('[CompanyTriggers] KC audio purge failed (non-fatal)', { error: kcPurgeErr.message });
         }
       }
 
