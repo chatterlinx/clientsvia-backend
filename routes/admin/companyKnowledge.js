@@ -1179,7 +1179,14 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
     // ({reg_diagnostic_fee}, etc.) are known at edit time and can be baked
     // into the audio.  Caller-specific runtime vars ({customerName}, etc.)
     // remain unresolved and must block generation.
-    const resolvedText = replacePlaceholders(trimmed, company);
+    //
+    // Custom variables live in CompanyTriggerSettings.companyVariables —
+    // pass them as additionalVars so replacePlaceholders resolves them too.
+    const triggerSettings = await CompanyTriggerSettings.findOne({ companyId }).lean();
+    const customVars = triggerSettings?.companyVariables instanceof Map
+      ? Object.fromEntries(triggerSettings.companyVariables)
+      : (triggerSettings?.companyVariables || {});
+    const resolvedText = replacePlaceholders(trimmed, company, customVars);
     const remainingVars = resolvedText.match(/\{[^}]+\}/g);
     if (remainingVars?.length) {
       const unique = [...new Set(remainingVars)];
