@@ -12,12 +12,12 @@
  * MOUNT: /api/admin/calibration/company
  *
  * ENDPOINTS:
- *   GET /:companyId/calibration/stats — aggregated qaLog stats + recent calls
+ *   GET /:companyId/stats — aggregated qaLog stats + recent calls
  *
  * DATA SOURCE:
  *   Customer.discoveryNotes[].qaLog[] — written by KCDiscoveryRunner.js
  *   Entry types:
- *     - { type: 'UAP_LAYER1', hit: true/false, ... }  — Layer 1 diagnostic
+ *     - { type: 'UAP_LAYER1', hit: true/false, ... }  — Diagnostic only (SKIPPED)
  *     - { question, answer, ... } (no type field)      — KC direct answer (Layer 1)
  *     - { type: 'KC_LLM_FALLBACK', ... }               — LLM Agent fallback (Layer 2)
  *     - { type: 'KC_GRACEFUL_ACK', ... }                — No match (Unknown)
@@ -50,10 +50,10 @@ function _validateCompanyAccess(req, res, companyId) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// GET /:companyId/calibration/stats
+// GET /:companyId/stats
 // ══════════════════════════════════════════════════════════════════════════════
 
-router.get('/:companyId/calibration/stats', async (req, res) => {
+router.get('/:companyId/stats', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
@@ -77,10 +77,10 @@ router.get('/:companyId/calibration/stats', async (req, res) => {
           _layer: {
             $switch: {
               branches: [
-                // UAP_LAYER1 with hit:false → skip (diagnostic only, pairs with another outcome)
-                { case: { $and: [{ $eq: ['$_qaEntry.type', 'UAP_LAYER1'] }, { $eq: ['$_qaEntry.hit', false] }] }, then: 'SKIP' },
-                // UAP_LAYER1 with hit:true → Layer 1
-                { case: { $eq: ['$_qaEntry.type', 'UAP_LAYER1'] }, then: 'layer1' },
+                // UAP_LAYER1 → always SKIP (diagnostic only — the actual outcome is
+                // recorded as a separate entry: {question,answer} for KC match,
+                // KC_LLM_FALLBACK for Layer 2, or KC_GRACEFUL_ACK for unknown)
+                { case: { $eq: ['$_qaEntry.type', 'UAP_LAYER1'] }, then: 'SKIP' },
                 // KC_LLM_FALLBACK → Layer 2
                 { case: { $eq: ['$_qaEntry.type', 'KC_LLM_FALLBACK'] }, then: 'layer2' },
                 // KC_GRACEFUL_ACK → Unknown

@@ -646,8 +646,14 @@
     const bodyEl    = document.getElementById('calBody');
     if (!bodyEl) return;
 
+    // Show loading state
+    if (l1El)  l1El.textContent  = '…';
+    if (l2El)  l2El.textContent  = '…';
+    if (unkEl) unkEl.textContent = '…';
+    bodyEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.813rem;">Loading calibration data…</div>';
+
     try {
-      const res = await fetch(`/api/admin/calibration/company/${companyId}/calibration/stats`, {
+      const res = await fetch(`/api/admin/calibration/company/${companyId}/stats`, {
         headers: { 'Authorization': `Bearer ${_getToken()}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -663,7 +669,16 @@
 
       // ── No data yet ────────────────────────────────────────────────────
       if (s.totalEntries === 0) {
-        // Keep existing empty state
+        bodyEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <div class="empty-title">Collecting first call data...</div>
+            <div class="empty-sub">
+              Calibration data populates automatically as calls come in via qaLog[] entries.
+              Target: 500 calls for meaningful baseline accuracy.
+              No action required — this updates automatically.
+            </div>
+          </div>`;
         return;
       }
 
@@ -687,8 +702,8 @@
           const d     = c.capturedAt ? new Date(c.capturedAt) : null;
           const when  = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
           return `<tr>
-            <td style="padding:6px 10px;font-size:.75rem;color:#334155;">${c.callSid?.slice(-8) || '—'}</td>
-            <td style="padding:6px 10px;font-size:.75rem;color:#64748b;">${when}</td>
+            <td style="padding:6px 10px;font-size:.75rem;color:#334155;">${_esc(c.callSid?.slice(-8) || '—')}</td>
+            <td style="padding:6px 10px;font-size:.75rem;color:#64748b;">${_esc(when)}</td>
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;">${c.turnCount || '—'}</td>
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#059669;font-weight:600;">${c.layer1}</td>
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#d97706;font-weight:600;">${c.layer2}</td>
@@ -733,7 +748,7 @@
     } catch (err) {
       console.warn('[Calibration] load failed', err);
       if (bodyEl) {
-        bodyEl.innerHTML = `<div style="padding:16px;color:#dc2626;font-size:.8rem;">Failed to load calibration data: ${err.message}</div>`;
+        bodyEl.innerHTML = `<div style="padding:16px;color:#dc2626;font-size:.8rem;">Failed to load calibration data: ${_esc(err.message)}</div>`;
       }
     }
   }
