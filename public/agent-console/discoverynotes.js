@@ -386,22 +386,10 @@
             Only add keywords here for <em>option-specific</em> phrases the caller might say (e.g. <em>plan member, I have the plan</em>).
           </div>
         </div>
-        <div style="margin-bottom:8px;">
-          <label class="form-label" style="font-size:.7rem;">
-            Response Script
-            <span style="font-weight:400;color:#64748b;margin-left:4px;">— spoken verbatim after match, should end with a yes/no question to confirm scheduling</span>
-          </label>
-          <textarea class="form-input" style="font-size:.8rem;min-height:72px;resize:vertical;" oninput="window.DNPage.updateDqOption(${i},'responseScript',this.value)" placeholder="Great! Since you're on our plan, there's no charge for the service call on repairs over $89 — and you save an additional 10% on parts. Would you like to go ahead and schedule?">${_esc(opt.responseScript || '')}</textarea>
-        </div>
-        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:6px;font-size:.75rem;cursor:pointer;padding-top:4px;white-space:nowrap;">
-            <input type="checkbox" ${opt.requiresConfirmation !== false && opt.responseScript ? 'checked' : ''} onchange="window.DNPage.updateDqOption(${i},'requiresConfirmation',this.checked)" />
-            Wait for yes/no before collecting fields
-          </label>
-          <div style="flex:1;min-width:200px;">
-            <label class="form-label" style="font-size:.7rem;">If caller declines (says no)</label>
-            <input class="form-input" style="font-size:.8rem;" value="${_esc(opt.declineResponse || '')}" oninput="window.DNPage.updateDqOption(${i},'declineResponse',this.value)" placeholder="No problem — give us a call whenever you're ready. Have a great day!" />
-          </div>
+        <div style="margin-top:6px;padding:6px 10px;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;font-size:11px;color:#92400e;line-height:1.45;">
+          ℹ️ <strong>Discriminator is a pure service-type classifier.</strong>
+          After matching, booking immediately proceeds to collect name/phone/address.
+          Pricing and service info are handled by <strong>Knowledge Containers (KC)</strong> — if the caller asks about pricing mid-booking, KC answers automatically.
         </div>
       </div>`).join('');
   }

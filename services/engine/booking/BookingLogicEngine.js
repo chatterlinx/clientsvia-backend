@@ -29,7 +29,9 @@ const v2Company            = require('../../../models/v2Company');
 const GoogleCalendarService = require('../../GoogleCalendarService');
 const HolidayService       = require('../../HolidayService');
 const { BookingTriggerMatcher }      = require('./BookingTriggerMatcher');
-const BookingLLMInterceptService     = require('./BookingLLMInterceptService');
+// BookingLLMInterceptService REMOVED — all knowledge responses now route through KC containers
+// via _kcQuickAnswer(). Booking only asks booking questions; KC is the single source of truth
+// for pricing, procedures, service info, and all knowledge-type content.
 const GroqFieldExtractorService      = require('./GroqFieldExtractorService');
 const GlobalHubService     = require('../../GlobalHubService');
 const KCS                  = require('../agent2/KnowledgeContainerService');
@@ -801,6 +803,54 @@ function _getStepReAnchor(step, config) {
 }
 
 /**
+ * _kcQuickAnswer — Route a mid-booking question to KC (Knowledge Containers).
+ *
+ * Single source of truth for knowledge responses during booking.
+ * Replaces BookingLLMInterceptService — booking never generates knowledge content.
+ * KC containers are the ONLY knowledge source. If no container matches, returns null
+ * and the step handler falls back to a generic acknowledgment.
+ *
+ * Uses discoveryNotes.anchorContainerId for 3× scoring multiplier so mid-booking
+ * questions stay routed to the same KC (e.g. Service Call pricing stays in
+ * Service Call, not Maintenance).
+ *
+ * @param {string} companyId  - Tenant scoping
+ * @param {string} question   - Caller's question text
+ * @param {Object} ctx        - Booking context (must have callSid)
+ * @param {Object} config     - Company booking config (knowledgeBaseSettings, companyName)
+ * @returns {Promise<string|null>} - KC answer text, or null if no match
+ */
+async function _kcQuickAnswer(companyId, question, ctx, config) {
+  try {
+    const [containers, dn] = await Promise.all([
+      KCS.getActiveForCompany(companyId),
+      ctx?.callSid
+        ? DiscoveryNotesService.load(companyId, ctx.callSid).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    if (!containers.length) return null;
+
+    const anchorCtx = dn?.anchorContainerId
+      ? { anchorContainerId: dn.anchorContainerId }
+      : null;
+
+    const match = KCS.findContainer(containers, question, anchorCtx);
+    if (!match) return null;
+
+    const kcResult = await KCS.answer({
+      container:  match.container,
+      question,
+      kbSettings: { ...(config?.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
+      company:    { _id: companyId, companyName: config?.companyName },
+    });
+    return kcResult?.response || null;
+  } catch (err) {
+    logger.warn(`[${ENGINE_ID}] _kcQuickAnswer failed`, { companyId, err: err.message });
+    return null;
+  }
+}
+
+/**
  * Return required fields that have not yet been collected.
  * Used by the REDIRECT guard to decide whether we can safely jump to OFFER_TIMES.
  *
@@ -863,27 +913,18 @@ async function _runStepHandler(ctx, userInput, config, companyId, isTest, events
 /* ============================================================================
    STEP: DISCRIMINATOR  (Phase 0 — fires before field collection)
    ============================================================================
-   Two sub-phases — both handled by this single step:
+   Pure service-type classifier. ONE question, ONE answer.
+   Match caller's reply against options[] → set overrides → advance to INIT.
 
-   Phase 0a — Question answer: match caller's reply against options[].
-     · No match  → re-ask with explicit option list.
-     · Match found, option has responseScript → Phase 0b: deliver the script,
-       stay in DISCRIMINATOR step, set ctx._discriminatorPhase = 'CONFIRM'.
-     · Match found, no responseScript → apply overrides, fall through to INIT.
+   Phase 0b (responseScript + confirmation) was REMOVED — Clean Sweep.
+   Booking never delivers knowledge/pricing content. All knowledge responses
+   are KC's responsibility. If caller asks about pricing mid-booking,
+   BPFUQ → KC handles it automatically.
 
-   Phase 0b — Script + confirmation: option has responseScript so agent just
-   delivered a pitch. Now receiving yes/no:
-     · YES → apply overrides, advance to INIT (field collection begins).
-     · NO  → graceful close with option.declineResponse (or default). completed=true.
-     · AMBIGUOUS → re-ask "Shall we go ahead and schedule?"
-
-   Each option may carry:
-     responseScript      — spoken VERBATIM after match before any field collection
-     requiresConfirmation— true = wait for yes/no after script (default true if script set)
-     declineResponse     — what the agent says if caller says NO to the script
+   Each option carries:
      serviceTypeOverride — sets discoveryNotes.temp.serviceType
      schedPriority       — 'high'|'urgent' pre-fills ASAP, 'normal' is default
-     keywords[]          — owner-defined match words (e.g. "yes", "I have", "plan")
+     keywords[]          — owner-defined match words (e.g. "plan member")
    ============================================================================ */
 
 async function processDiscriminator(ctx, userInput, config, companyId, events) {
@@ -891,51 +932,11 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
   const opts  = dq?.options || [];
   const input = (userInput || '').toLowerCase().trim();
 
-  // ── Phase 0b: Receiving confirmation after script delivery ────────────────
-  if (ctx._discriminatorPhase === 'CONFIRM') {
-    const matched = ctx._discriminatorMatchedOption;
-
-    events.push({ type: 'BL0_DISCRIMINATOR_CONFIRM_RECEIVE', input: input.slice(0, 80), timestamp: Date.now() });
-
-    // Detect yes / no / ambiguous
-    const YES_RE = /\b(yes|yeah|yep|sure|absolutely|go ahead|please|proceed|schedule|book|let's do it|sounds good|do it)\b/i;
-    const NO_RE  = /\b(no|nope|not today|maybe later|not right now|nevermind|cancel|don't|do not|no thanks)\b/i;
-
-    const isYes = YES_RE.test(input);
-    const isNo  = NO_RE.test(input);
-
-    if (isYes || (!isNo && input.length <= 3)) {
-      // Caller confirmed — apply overrides and fall through to field collection
-      events.push({ type: 'BL0_DISCRIMINATOR_CONFIRM_YES', value: matched?.value, timestamp: Date.now() });
-      ctx._discriminatorPhase = null;
-      ctx.step = STEPS.INIT;
-      return processInit(ctx, config, companyId, false, events);
-    }
-
-    if (isNo) {
-      // Caller declined — graceful close
-      const declineMsg = matched?.declineResponse
-        || "No problem at all — give us a call whenever you're ready. Have a great day!";
-      events.push({ type: 'BL0_DISCRIMINATOR_CONFIRM_NO', value: matched?.value, timestamp: Date.now() });
-      ctx._discriminatorPhase    = null;
-      ctx._discriminatorAnswered = true;
-      return {
-        nextPrompt: declineMsg,
-        bookingCtx: { ...ctx, completed: true },
-        completed:  true,
-      };
-    }
-
-    // Ambiguous — re-ask gently
-    const reAskConfirm = matched?.confirmReAsk || 'Would you like to go ahead and schedule?';
-    return {
-      nextPrompt: reAskConfirm,
-      bookingCtx: ctx,
-      completed:  false,
-    };
-  }
-
   // ── Phase 0a: Receiving answer to the discriminator question ─────────────
+  // Phase 0b (responseScript + confirmation) REMOVED — Clean Sweep.
+  // Booking never delivers knowledge/pricing content. Discriminator is a PURE
+  // service-type classifier: match → set overrides → advance to field collection.
+  // If the caller asks pricing questions, BPFUQ→KC handles them mid-booking.
   events.push({ type: 'BL0_DISCRIMINATOR_RECEIVE', input: input.slice(0, 80), timestamp: Date.now() });
 
   if (!input || opts.length === 0) {
@@ -986,7 +987,6 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
   // ── Match found — apply classification overrides ──────────────────────────
   ctx._discriminatorAnswered      = true;
   ctx._discriminatorValue         = matched.value;
-  ctx._discriminatorMatchedOption = matched;   // stashed for Phase 0b
   if (matched.serviceTypeOverride) {
     ctx._discriminatorServiceType = matched.serviceTypeOverride;
   }
@@ -1018,37 +1018,14 @@ async function processDiscriminator(ctx, userInput, config, companyId, events) {
     value:         matched.value,
     serviceType:   matched.serviceTypeOverride || null,
     schedPriority: matched.schedPriority || null,
-    hasScript:     !!matched.responseScript,
     timestamp:     Date.now()
   });
 
-  // ── Phase 0b gate: if option has a responseScript, deliver it and wait ────
-  // requiresConfirmation defaults to true whenever a responseScript is present.
-  const hasScript      = !!(matched.responseScript?.trim());
-  const needsConfirm   = hasScript && (matched.requiresConfirmation !== false);
-
-  if (needsConfirm) {
-    // Deliver the script — stay in DISCRIMINATOR step, set phase to 'CONFIRM'
-    ctx._discriminatorPhase = 'CONFIRM';
-    return {
-      nextPrompt: matched.responseScript.trim(),
-      bookingCtx: ctx,
-      completed:  false,
-    };
-  }
-
-  if (hasScript && !needsConfirm) {
-    // Script exists but no confirmation needed — deliver script and immediately fall through
-    // Return the script as a prefix; next turn INIT runs automatically via step advance
-    ctx.step = STEPS.INIT;
-    const initResult = await processInit(ctx, config, companyId, false, events);
-    return {
-      ...initResult,
-      nextPrompt: `${matched.responseScript.trim()} ${initResult.nextPrompt}`,
-    };
-  }
-
-  // No script — fall straight through to field collection
+  // ── Classify and advance — no script delivery, no confirmation wait ──────
+  // Phase 0b (responseScript + confirmation) REMOVED — Clean Sweep.
+  // Discriminator is a pure service-type classifier. Knowledge/pricing responses
+  // are KC's responsibility. If caller asks about pricing during booking,
+  // BPFUQ → KC handles it.
   ctx.step = STEPS.INIT;
   return processInit(ctx, config, companyId, false, events);
 }
@@ -1683,12 +1660,7 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
       // their last name.  Answer via 123BRP T2 then re-ask for last name.
       ctx._nameSubStep = 'GET_LAST'; // stay on last name — don't advance
       events.push({ type: 'BL1_NAME_STEP_DIGRESSION', rawInput: userInput?.substring(0, 60), timestamp: Date.now() });
-      const llmAnswer = await BookingLLMInterceptService.answer({
-        question: userInput,
-        companyId,
-        ctx,
-        config,
-      }).catch(() => null);
+      const llmAnswer = await _kcQuickAnswer(companyId, userInput, ctx, config);
       const anchor = `And what is your last name?`;
       return {
         nextPrompt: llmAnswer ? `${llmAnswer} ${anchor}` : `${config.t2DigressionAck} ${anchor}`,
@@ -1781,10 +1753,7 @@ async function processCollectName(ctx, userInput, config, companyId, isTest, eve
 
   // Caller asked a question alongside their name — answer it before asking for last name
   if (_embeddedNameQuestion) {
-    const nameAnswer = await BookingLLMInterceptService.answer({
-      question: _embeddedNameQuestion,
-      companyId, ctx, config,
-    }).catch(() => null);
+    const nameAnswer = await _kcQuickAnswer(companyId, _embeddedNameQuestion, ctx, config);
     return {
       nextPrompt: `${nameAnswer || config.t2DigressionAck} ${lastNamePrompt}`,
       bookingCtx: ctx,
@@ -2126,7 +2095,7 @@ async function processCollectPhone(ctx, userInput, config, companyId, isTest, ev
         events.push({ type: 'BL1_PHONE_T2_DIGRESSION', rawInput: extraction.embeddedQuestion?.substring(0, 60), timestamp: Date.now() });
         // Use LLM to actually answer the question — caller asked, we respond
         const question = extraction.embeddedQuestion || userInput;
-        const llmAnswer = await BookingLLMInterceptService.answer({ question, companyId, ctx, config }).catch(() => null);
+        const llmAnswer = await _kcQuickAnswer(companyId, question, ctx, config);
         const advanceResult = await advanceAfterPhone(ctx, config, companyId, isTest, events);
         return {
           ...advanceResult,
@@ -2433,7 +2402,7 @@ async function processCollectAddress(ctx, userInput, config, companyId, isTest, 
       events.push({ type: 'BL1_ADDRESS_T2_DIGRESSION', rawInput: addrExtraction.embeddedQuestion?.substring(0, 60), timestamp: Date.now() });
       // Use LLM to actually answer the question — caller asked, we respond
       const addrQuestion = addrExtraction.embeddedQuestion || userInput;
-      const addrLlmAnswer = await BookingLLMInterceptService.answer({ question: addrQuestion, companyId, ctx, config }).catch(() => null);
+      const addrLlmAnswer = await _kcQuickAnswer(companyId, addrQuestion, ctx, config);
       const addrAck = addrLlmAnswer || config.t2DigressionAck;
 
       // Process address components (same logic as PROVIDING)
@@ -3027,16 +2996,14 @@ async function processCollectPreferredDay(ctx, userInput, config, companyId, isT
 
   // ── General question / digression ───────────────────────────────────────
   // Caller asked a non-scheduling question mid-booking (pricing, coverage, etc.).
-  // Route to BookingLLMInterceptService to answer it, then re-ask for day.
+  // Route to KC for the answer, then re-ask for day.
   // Detection: input ends with "?" and no parseable day/time preference is present.
   const dayPref  = parseDayPreference(userInput);
   const timePref = parseTimePreference(userInput);
 
   if (!dayPref && !timePref && /\?/.test(userInput)) {
     events.push({ type: 'BL1_SCHEDULE_DIGRESSION', rawInput: userInput.substring(0, 80), timestamp: Date.now() });
-    const _llmAnswer = await BookingLLMInterceptService.answer({
-      question: userInput, companyId, ctx, config
-    }).catch(() => null);
+    const _llmAnswer = await _kcQuickAnswer(companyId, userInput, ctx, config);
     const _ack = config.preferenceCapture.scheduleDigressionAck || config.t2DigressionAck;
     const _answer = _llmAnswer || _ack;
     return {
@@ -3096,9 +3063,7 @@ async function processCollectPreferredTime(ctx, userInput, config, companyId, is
   const timePref = parseTimePreference(userInput);
   if (!timePref && /\?/.test(userInput)) {
     events.push({ type: 'BL1_SCHEDULE_DIGRESSION', rawInput: userInput.substring(0, 80), timestamp: Date.now() });
-    const _llmAnswer = await BookingLLMInterceptService.answer({
-      question: userInput, companyId, ctx, config
-    }).catch(() => null);
+    const _llmAnswer = await _kcQuickAnswer(companyId, userInput, ctx, config);
     const _ack = config.preferenceCapture.scheduleDigressionAck || config.t2DigressionAck;
     return {
       nextPrompt: `${_llmAnswer || _ack} ${_askTimePrompt}`,
