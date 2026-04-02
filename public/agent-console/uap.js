@@ -557,7 +557,7 @@
     if (!companyId) return;
     try {
       const res = await fetch(`/api/agent-console/${companyId}/agent2/config`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${_getToken()}` }
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -610,14 +610,14 @@
     try {
       const res = await fetch(`/api/agent-console/${companyId}/agent2/config`, {
         method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_getToken()}` },
         body:    JSON.stringify({ speechDetection }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      _showToast('✅ Timings saved', 'success');
+      _toast('success', 'Timings saved');
     } catch (err) {
       console.error('[Timings] save failed', err);
-      _showToast('❌ Failed to save timings', 'error');
+      _toast('error', 'Failed to save timings');
     }
   }
 
