@@ -1604,6 +1604,7 @@ function _populateForm(c) {
     sorted.forEach(s => addSection(s.label, s.content, {
       callerPhrases:      (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
       useFixedResponse:   !!s.useFixedResponse,
+      audioUrl:           s.audioUrl || null,
       preQualifyQuestion: s.preQualifyQuestion || null,
       upsellChain:        s.upsellChain        || [],
     }));
