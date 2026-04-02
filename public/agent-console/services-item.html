@@ -3103,17 +3103,33 @@ function _kcPlayAudio(sid, key) {
 }
 
 // Restore audio UI state from a saved URL (called on page load / re-render).
-// Sets the _kcAudio Map entry and shows Play button + Regenerate label + ✅ hint.
+// HEAD-checks the file first — Render's ephemeral disk wipes cached MP3s on
+// deploy, so a stored audioUrl may point to a deleted file.
 function _restoreKcAudioState(sid, key, url, generatedText) {
   if (!url) return;
-  const mapKey = `${sid}--${key}`;
-  _kcAudio.set(mapKey, { url, generatedText: generatedText?.trim() || '', audio: null });
+  const mapKey  = `${sid}--${key}`;
   const playBtn = document.getElementById(`kc-play-${mapKey}`);
   const genBtn  = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
   const hintEl  = document.getElementById(`kc-hint-${mapKey}`);
-  if (playBtn) playBtn.style.display = '';
-  if (genBtn)  genBtn.textContent    = '🔄 Regenerate';
-  if (hintEl)  { hintEl.textContent  = '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
+
+  // Quick HEAD check — is the MP3 still on disk?
+  fetch(url, { method: 'HEAD' }).then(r => {
+    if (r.ok) {
+      // File exists — show Play + ✅ Cached
+      _kcAudio.set(mapKey, { url, generatedText: generatedText?.trim() || '', audio: null });
+      if (playBtn) playBtn.style.display = '';
+      if (genBtn)  genBtn.textContent    = '🔄 Regenerate';
+      if (hintEl)  { hintEl.textContent  = '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
+    } else {
+      // File gone (deploy wiped it) — prompt regeneration
+      if (genBtn)  genBtn.textContent = '🔄 Regenerate';
+      if (hintEl)  { hintEl.textContent = '⚠️ Audio lost after deploy — regenerate'; hintEl.className = 'kc-audio-hint stale'; }
+    }
+  }).catch(() => {
+    // Network error — degrade gracefully, show regenerate
+    if (genBtn)  genBtn.textContent = '🔄 Regenerate';
+    if (hintEl)  { hintEl.textContent = '⚠️ Audio unavailable — regenerate'; hintEl.className = 'kc-audio-hint stale'; }
+  });
 }
 
 // Mark audio stale when source text changes.
