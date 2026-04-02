@@ -1781,6 +1781,14 @@ router.put('/:companyId/variables',
               companyId, changedVariables: changedVarNames, removed: kcPurged.removed,
             });
           }
+          // Purge MongoDB backup — variable values are baked into audio
+          const KCResponseAudio = require('../../models/KCResponseAudio');
+          const mongoPurge = await KCResponseAudio.purgeByCompany(companyId);
+          if (mongoPurge.removed > 0) {
+            logger.info('[CompanyTriggers] KC audio MongoDB docs purged (variable change)', {
+              companyId, changedVariables: changedVarNames, removed: mongoPurge.removed,
+            });
+          }
           // Clear audioUrl from all KC sections so UI doesn't show stale Play buttons
           await CompanyKnowledgeContainer.updateMany(
             { companyId },

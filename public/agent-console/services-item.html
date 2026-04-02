@@ -3107,16 +3107,18 @@ function _kcPlayAudio(sid, key) {
 // deploy, so a stored audioUrl may point to a deleted file.
 function _restoreKcAudioState(sid, key, url, generatedText) {
   if (!url) return;
+  // Normalize old /audio/ URLs to /audio-safe/ (MongoDB-backed fallback route)
+  const safeUrl = url.replace('/audio/instant-lines/', '/audio-safe/instant-lines/');
   const mapKey  = `${sid}--${key}`;
   const playBtn = document.getElementById(`kc-play-${mapKey}`);
   const genBtn  = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
   const hintEl  = document.getElementById(`kc-hint-${mapKey}`);
 
-  // Quick HEAD check — is the MP3 still on disk?
-  fetch(url, { method: 'HEAD' }).then(r => {
+  // Quick HEAD check — tries disk first, then MongoDB via /audio-safe/ route
+  fetch(safeUrl, { method: 'HEAD' }).then(r => {
     if (r.ok) {
-      // File exists — show Play + ✅ Cached
-      _kcAudio.set(mapKey, { url, generatedText: generatedText?.trim() || '', audio: null });
+      // File exists (disk or MongoDB) — show Play + ✅ Cached
+      _kcAudio.set(mapKey, { url: safeUrl, generatedText: generatedText?.trim() || '', audio: null });
       if (playBtn) playBtn.style.display = '';
       if (genBtn)  genBtn.textContent    = '🔄 Regenerate';
       if (hintEl)  { hintEl.textContent  = '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }

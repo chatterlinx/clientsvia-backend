@@ -6396,7 +6396,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           });
 
           if (kcStatus.exists) {
-            audioUrl               = `${getSecureBaseUrl(req)}${kcStatus.url}`;
+            const kcSafeUrl        = kcStatus.url.replace('/audio/', '/audio-safe/');
+            audioUrl               = `${getSecureBaseUrl(req)}${kcSafeUrl}`;
             localVoiceProviderUsed = 'instant_audio_kc';
             vd_audioUrlPresent     = true;
             vd_preflightPassed     = true;

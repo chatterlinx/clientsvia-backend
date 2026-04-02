@@ -622,6 +622,12 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             if (kcPurged.removed > 0) {
                 logger.info(`[SAVE-24c] Purged ${kcPurged.removed} cached KC response audio files (voice changed)`, { companyId });
             }
+            // Purge MongoDB backup — voice changed means all KC audio is stale
+            const KCResponseAudio = require('../../models/KCResponseAudio');
+            const mongoPurge = await KCResponseAudio.purgeByCompany(companyId);
+            if (mongoPurge.removed > 0) {
+                logger.info(`[SAVE-24c] Purged ${mongoPurge.removed} KC audio MongoDB docs (voice changed)`, { companyId });
+            }
             // Clear audioUrl from all KC sections so UI doesn't show stale Play buttons
             const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
             await CompanyKnowledgeContainer.updateMany(

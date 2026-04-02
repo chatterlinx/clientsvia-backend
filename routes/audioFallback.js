@@ -32,6 +32,7 @@ const logger = require('../utils/logger');
 // Models that store audio in MongoDB
 const TriggerAudio = require('../models/TriggerAudio');
 const GreetingAudio = require('../models/GreetingAudio');
+const KCResponseAudio = require('../models/KCResponseAudio');
 
 const PUBLIC_AUDIO_DIR = path.join(__dirname, '../public/audio');
 const INSTANT_LINES_DIR = path.join(PUBLIC_AUDIO_DIR, 'instant-lines');
@@ -210,6 +211,41 @@ router.get('/instant-lines/:filename', async (req, res) => {
     }
     
     logger.warn('[AudioFallback] Trigger audio not found in MongoDB', { filename });
+
+    // ── KC Response audio fallback ─────────────────────────────────────────
+    // KC pre-recorded audio files live alongside trigger audio in instant-lines
+    // but use the prefix fd_KC_RESPONSE_. Check KCResponseAudio collection.
+    if (filename.startsWith('fd_KC_RESPONSE_')) {
+      logger.debug('[AudioFallback] Checking KCResponseAudio for KC file', { filename });
+
+      // Try 1: Exact audioUrl match
+      audioDoc = await KCResponseAudio.findOne({
+        audioUrl: `/audio-safe/instant-lines/${filename}`,
+        isValid: true
+      }).select('audioData').lean();
+
+      if (audioDoc?.audioData) {
+        logger.info('[AudioFallback] Found KC audio via audioUrl', { filename, bytes: audioDoc.audioData.length });
+        return audioDoc.audioData;
+      }
+
+      // Try 2: Match by fileHash (last 16 hex chars before .mp3)
+      const kcHash = filename.match(/([a-f0-9]{16})\.mp3$/);
+      if (kcHash) {
+        audioDoc = await KCResponseAudio.findOne({
+          fileHash: kcHash[1],
+          isValid: true
+        }).select('audioData').lean();
+
+        if (audioDoc?.audioData) {
+          logger.info('[AudioFallback] Found KC audio via fileHash', { filename, hash: kcHash[1] });
+          return audioDoc.audioData;
+        }
+      }
+
+      logger.warn('[AudioFallback] KC response audio not found in MongoDB', { filename });
+    }
+
     return null;
   });
 });

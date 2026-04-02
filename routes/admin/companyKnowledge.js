@@ -55,7 +55,32 @@ const BridgeService                = require('../../services/engine/kc/BridgeSer
 const SemanticMatchService         = require('../../services/engine/kc/SemanticMatchService');
 const Customer                     = require('../../models/Customer');
 const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
+const KCResponseAudio              = require('../../models/KCResponseAudio');
 const { replacePlaceholders }      = require('../../utils/placeholderReplacer');
+
+const fs   = require('fs');
+
+// ── Helper: persist KC audio to MongoDB for deploy-proof serving ─────────────
+// Extracts the 16-char fileHash from the InstantAudioService filename,
+// reads the MP3 from disk, and upserts into KCResponseAudio.
+// Fire-and-forget — errors are logged but never block the caller.
+function _persistKcAudioToMongo(companyId, status, sourceText, voiceId) {
+  const hashMatch = status.fileName?.match(/([a-f0-9]{16})\.mp3$/);
+  if (!hashMatch) return;
+  const fileHash = hashMatch[1];
+  const safeUrl  = status.url.replace('/audio/', '/audio-safe/');
+
+  (async () => {
+    try {
+      const buffer = fs.readFileSync(status.filePath);
+      await KCResponseAudio.saveAudio(companyId, fileHash, safeUrl, sourceText, voiceId, buffer);
+    } catch (err) {
+      logger.warn('[companyKnowledge] MongoDB audio backup failed (non-fatal)', {
+        companyId, fileHash, error: err.message,
+      });
+    }
+  })();
+}
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -1212,8 +1237,11 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
     });
 
     if (existing.exists) {
+      // Ensure MongoDB backup exists (covers files generated before this feature)
+      _persistKcAudioToMongo(companyId, existing, resolvedText, vs.voiceId);
+      const safeUrl = existing.url.replace('/audio/', '/audio-safe/');
       logger.info('[companyKnowledge] preview-fixed-audio — cache hit', { companyId, chars: resolvedText.length });
-      return res.json({ success: true, url: existing.url, generated: false, chars: resolvedText.length, resolvedText });
+      return res.json({ success: true, url: safeUrl, generated: false, chars: resolvedText.length, resolvedText });
     }
 
     // ── Not cached — synthesise now (synchronous for immediate playback) ──
@@ -1236,8 +1264,12 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Generation succeeded but file not found — try again.' });
     }
 
+    // Persist to MongoDB for deploy-proof serving
+    _persistKcAudioToMongo(companyId, fresh, resolvedText, vs.voiceId);
+    const safeUrl = fresh.url.replace('/audio/', '/audio-safe/');
+
     logger.info('[companyKnowledge] preview-fixed-audio — generated', { companyId, chars: resolvedText.length });
-    return res.json({ success: true, url: fresh.url, generated: true, chars: resolvedText.length, resolvedText });
+    return res.json({ success: true, url: safeUrl, generated: true, chars: resolvedText.length, resolvedText });
 
   } catch (err) {
     logger.error('[companyKnowledge] preview-fixed-audio error', { companyId, err: err.message });
@@ -1782,13 +1814,16 @@ function _preGenAudioFixed(companyId, container, reason) {
           continue;
         }
 
-        await InstantAudioService.generate({
+        const genResult = await InstantAudioService.generate({
           companyId,
           kind:          'KC_RESPONSE',
           text,
           company,
           voiceSettings: vs,
         });
+
+        // Persist to MongoDB for deploy-proof serving
+        _persistKcAudioToMongo(companyId, genResult, text, vs.voiceId);
 
         logger.info('[companyKnowledge] Fixed response audio pre-generated', {
           companyId, title: container.title, chars: text.length, reason,
