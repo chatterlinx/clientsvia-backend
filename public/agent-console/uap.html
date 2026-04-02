@@ -15,16 +15,14 @@
          No Groq round-trip for classification. Pure rule-based
          Layer 1 → Groq Layer 2 only on misses.
 
-       FOUR TABS:
-         1. Arrays    — daType grid + sub-types + trigger phrases.
-                        "Seed Standard Arrays" button.
-         2. UAPB      — Booking confirmation settings. IntentHold.
-                        GracefulPivot + ResumePrompt templates.
-                        Booking Fields (same source as DN page).
-         3. Pending   — Sub-types with classificationStatus=PENDING.
-                        Owner approves or overrides.
-         4. Calibration — Layer 1 hit rate once real calls run.
+       TABS:
+         1. UAPB        — Booking confirmation settings. IntentHold.
+                          GracefulPivot + ResumePrompt templates.
+                          Booking Fields (same source as DN page).
+         2. Calibration — Layer 1 hit rate once real calls run.
                           Empty state until first 500 calls.
+         3. LAP         — Listener Act Parser settings.
+         4. Timings     — Speech detection timing settings.
 
        API BASE: /api/admin/agent2/company/:companyId/uap
   ============================================================ -->

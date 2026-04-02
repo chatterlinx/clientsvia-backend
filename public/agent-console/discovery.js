@@ -554,48 +554,46 @@
       order:    14,
       icon:     '🧠',
       name:     'UAP — Utterance Act Parser (Layer 1)',
-      subtitle: 'Rule-based daType intent classifier. UAPArrays, model, UI, and APIs built. Runtime parser is build step 6.',
-      status:   'partial',
+      subtitle: '3-tier section matching: UAP phrase match → Semantic embedding → Keyword fallback. All built and wired.',
+      status:   'built',
       group:    'Turn 2+ — KC Engine',
 
-      why: 'Every utterance has an intent (daType). UAP Layer 1 classifies it in zero latency using company-owned trigger phrase arrays stored in MongoDB (UAPArrays collection). No LLM call — pure rule-based matching. The result is a ParsedUtterance { daType, daSubTypes[], confidence, topicWords[] } that feeds the Bridge to retrieve the matching KC container instantly. Layer 1 must hit ~80% for the zero-latency promise to hold — if it misses, Layer 2 (Groq fallback) handles it. UAP replaces the old _REJECTION_RE keyword filter in KCDiscoveryRunner (build step 7). CURRENT STATE: UAPArray model, seed data, admin UI (uap.html), and CRUD routes are all built (v1.0). UtteranceActParser runtime (build step 6) and Bridge cache (build step 5) are the next two build steps.',
+      why: 'Every utterance has an intent. The 3-tier matching pipeline resolves it to the correct KC section in near-zero latency. Gate 2.5: UAP Layer 1 matches caller utterance against section.callerPhrases (BridgeService phraseIndex, Redis-cached) — <1ms. Gate 2.8: SemanticMatchService compares utterance embedding against callerPhrase + content embeddings (OpenAI text-embedding-3-small, 512-dim) — ~50ms. Gate 3: Keyword fallback scores section.contentKeywords (auto-extracted bigrams) — <1ms. The result is a ParsedUtterance { containerId, sectionIdx, confidence, topicWords[] } that routes directly to the matching KC section. No intermediate daType/UAPArray indirection.',
 
-      engine:   'UtteranceActParser — NOT YET BUILT (build step 6)',
-      provider: 'Synchronous (no AI) — rule-based phrase matching against UAPArrays in Redis/MongoDB',
-      model:    null,
-      fires:    '⚠️ NOT YET WIRED — intended to fire Turn 2+ before Engine Hub, after booking gate.',
-      writesTo: 'ParsedUtterance { daType, daSubTypes[], confidence, topicWords[] } → Bridge lookup → KC container',
+      engine:   'UtteranceActParser + SemanticMatchService + KnowledgeContainerService.findContainer()',
+      provider: 'UAP: synchronous rule-based | Semantic: OpenAI embedding | Keywords: synchronous scoring',
+      model:    'text-embedding-3-small (512-dim) — Gate 2.8 only',
+      fires:    'Gate 2.5 (UAP) fires every turn. Gate 2.8 (semantic) fires only on UAP miss. Gate 3 (keywords) fires only on semantic miss.',
+      writesTo: 'ParsedUtterance { containerId, sectionIdx, confidence, topicWords[] } → KC section → Groq answer',
       wiredIn:  [
-        '⚠️ UtteranceActParser — NOT YET BUILT (build step 6)',
-        '⚠️ Bridge Redis cache — NOT YET BUILT (build step 5)',
-        'models/UAPArray.js — utterance vocabulary schema ✅ BUILT v1.0',
-        'routes/admin/uapArrays.js — CRUD + seed + pending endpoints ✅ BUILT v1.0',
-        'public/agent-console/uap.html — 4-tab admin UI ✅ BUILT v1.0',
+        'services/engine/kc/UtteranceActParser.js — 3-pass rule matching (EXACT/PARTIAL/WORD_OVERLAP) ✅ BUILT v2.0',
+        'services/engine/kc/BridgeService.js — phraseIndex from section.callerPhrases, Redis-cached ✅ BUILT v2.0',
+        'services/engine/kc/SemanticMatchService.js — embedding comparison, cosine similarity ✅ BUILT v1.0',
+        'services/engine/kc/KCDiscoveryRunner.js — Gate 2.5 + 2.8 + 3 wired ✅ BUILT',
+        'public/agent-console/uap.html — UAPB + Calibration + LAP + Timings ✅ BUILT',
       ],
-      configIn:  'UAP Intelligence',
+      configIn:  'UAP Intelligence + KC Editor (per-section callerPhrases)',
       configUrl: 'uap.html',
 
       configFields: [
-        { key: 'uapArray.daType',           label: 'daType',               unit: 'string',   note: 'e.g. PRICING_QUERY, AVAILABILITY_QUERY, SERVICE_QUERY — the utterance intent category' },
-        { key: 'uapArray.daSubTypes',        label: 'Sub-Types',            unit: 'array',    note: 'Each daType has sub-types with their own trigger phrases (e.g. FINANCING, WARRANTY)' },
-        { key: 'uapArray.triggerPhrases',    label: 'Trigger Phrases',      unit: 'string[]', note: 'Phrases that match this daType — add/remove in uap.html. Auto-generated at KC save (step 4).' },
-        { key: 'uapArray.classificationStatus', label: 'Classification',   unit: 'enum',     note: 'AUTO_CONFIRMED | MANUAL | PENDING — pending items appear in UAP → Pending tab' },
+        { key: 'section.callerPhrases',      label: 'Caller Phrases',       unit: 'string[]', note: 'Full sentences callers say to reach this section. Managed per-section in services-item.html.' },
+        { key: 'section.contentKeywords',     label: 'Content Keywords',     unit: 'string[]', note: 'Auto-extracted bigrams from section content. Regenerated on every save.' },
+        { key: 'section.contentEmbedding',    label: 'Content Embedding',    unit: '[Number]',  note: '512-dim vector for semantic matching. Auto-generated on save.' },
+        { key: 'container.negativeKeywords',  label: 'Negative Keywords',    unit: 'string[]', note: 'Exclusion phrases — if any appear in utterance, container is skipped.' },
       ],
 
       extracts: [],
 
       gaps: [
-        'UtteranceActParser runtime (step 6) not yet built — UAPArrays exist in DB, parser code is the next step.',
-        'Bridge Redis cache (step 5) not yet built — maps daType → KC container ID at near-zero latency.',
-        'Semantic auto-map at KC save (step 4) not yet built — LLM generates trigger phrases + infers daType when a KC card is saved.',
-        'Wire UAP into KCDiscoveryRunner (step 7) not yet done — will replace _REJECTION_RE, feed topicWords + daSubTypes to Bridge.',
         'UAP accuracy unknown until real calls run — Layer 1 ~80% is the target. First 500 PSTN calls = calibration data.',
+        'Semantic match threshold (0.50) may need tuning after real call data analysis.',
       ],
 
       routing: {
-        'Layer 1 hit (confidence ≥ 0.8)': 'Bridge → KC container (zero LLM latency)',
-        'Layer 1 miss / confidence < 0.8': 'Layer 2 Groq fallback (planned)',
-        'UNKNOWN daType':                   'topicWords passed to Gate 3 KC scoring (G5)',
+        'Gate 2.5 hit (UAP confidence ≥ 0.8)': 'Direct section → Groq answer (zero embedding latency)',
+        'Gate 2.8 hit (semantic similarity ≥ 0.5)': 'Best section → Groq answer (~50ms embedding)',
+        'Gate 3 hit (keyword score ≥ 8)': 'Best container + section → Groq answer',
+        'All gates miss': 'Gate 4 LLM fallback (Claude)',
       },
     },
 
@@ -1237,14 +1235,14 @@
         }
       }
 
-      // UAP Layer 1: show array count and warn if unseeded
+      // UAP Layer 1: show phrase count from BridgeService
       if (stage.id === 'uap_layer1') {
-        const count = apiData.pipeline?.uapArraysCount ?? 0;
+        const count = apiData.pipeline?.bridgePhraseCount ?? 0;
         if (count > 0) {
-          enriched.dynamicBadge = `${count} daType array${count !== 1 ? 's' : ''} seeded`;
+          enriched.dynamicBadge = `${count} phrase${count !== 1 ? 's' : ''} indexed`;
         } else {
-          enriched.dynamicBadge = '⚠️ Not seeded — click Seed in uap.html';
-          enriched.gaps.push('No UAP arrays seeded — go to uap.html and click "Seed Standard Arrays" to initialize utterance vocabulary for this company.');
+          enriched.dynamicBadge = '⚠️ No phrases — add callerPhrases on KC sections';
+          enriched.gaps.push('No caller phrases configured — open each KC container and add callerPhrases per section so the UAP can match caller utterances.');
         }
       }
 
