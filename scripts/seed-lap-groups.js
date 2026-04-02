@@ -35,7 +35,7 @@ const LAP_GROUPS = [
     name: 'Connection Distress',
     action: 'respond',
     systemKeywords: [
-      'hello', 'hello?', 'are you there', 'can you hear me',
+      'are you there', 'can you hear me',
       'anyone there', 'hello hello', 'is anyone there', 'testing testing',
       'can you hear me now', 'hello are you there'
     ],
@@ -67,7 +67,7 @@ const LAP_GROUPS = [
     name: 'Repeat Request',
     action: 'repeat_last',
     systemKeywords: [
-      'what', 'come again', 'say that again', 'repeat that',
+      'repeat that',
       'what did you say', 'pardon', 'what was that', 'could you repeat',
       'say again', 'excuse me', 'i didn\'t catch that', 'i didn\'t hear you',
       'can you repeat', 'what was the question'
