@@ -741,7 +741,10 @@ class KCDiscoveryRunner {
     // this call (rejectedContainerIds). This prevents re-matching a container
     // the caller already said was the wrong answer, breaking the loop.
     const discoveryContext = _buildDiscoveryContext(notes);
-    const callContext      = notes ? { callReason: notes.callReason } : null;
+    const callContext      = notes ? {
+      callReason:        notes.callReason,
+      anchorContainerId: notes.anchorContainerId || null,  // 3× multiplier applied in findContainer()
+    } : null;
 
     const scorableContainers = rejectedContainerIds.size > 0
       ? containers.filter(c => !rejectedContainerIds.has(String(c._id || c.title || '')))
@@ -1673,9 +1676,10 @@ async function _handleKCMatch({
 
     // ── discoveryNotes: callReason + objective BOOKING for BookingLogicEngine
     _writeDiscoveryNotes(companyId, callSid, {
-      callReason: containerTitle,
-      objective:  'BOOKING',
-      turnNumber: turn ?? 0,
+      callReason:        containerTitle,
+      objective:         'BOOKING',
+      turnNumber:        turn ?? 0,
+      anchorContainerId: containerId,   // anchor — all subsequent KC lookups bias to this container
       ...(callerName ? { entities: { firstName: callerName } } : {}),
     }).catch(() => {});
 
@@ -1713,9 +1717,10 @@ async function _handleKCMatch({
   // ── discoveryNotes: record callReason + Q&A so BookingLogicEngine knows
   //    what the call was about when the caller eventually says "let's book" ──
   _writeDiscoveryNotes(companyId, callSid, {
-    callReason:         containerTitle,
-    objective:          'DISCOVERY',
-    turnNumber:         turn ?? 0,
+    callReason:          containerTitle,
+    objective:           'DISCOVERY',
+    turnNumber:          turn ?? 0,
+    anchorContainerId:   containerId,   // anchor — all subsequent KC lookups bias to this container
     lastMeaningfulInput: userInput?.slice(0, 200) || null,
     ...(callerName ? { entities: { firstName: callerName } } : {}),
     qaLog: [{
@@ -1739,9 +1744,10 @@ async function _handleKCMatch({
     nextState.agent2.discovery = nextState.agent2.discovery || {};
     nextState.agent2.discovery.pendingBookingFromKC = true;
     _writeDiscoveryNotes(companyId, callSid, {
-      callReason: containerTitle,
-      objective:  'BOOKING',
-      turnNumber: turn ?? 0,
+      callReason:        containerTitle,
+      objective:         'BOOKING',
+      turnNumber:        turn ?? 0,
+      anchorContainerId: containerId,   // anchor for compound-booking path
       ...(callerName ? { entities: { firstName: callerName } } : {}),
     }).catch(() => {});
     SPFUQService.clear(companyId, callSid).catch(() => {});

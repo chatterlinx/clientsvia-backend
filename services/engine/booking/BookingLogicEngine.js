@@ -555,9 +555,20 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   });
 
   try {
-    const containers = await KCS.getActiveForCompany(companyId);
+    // Load containers and discoveryNotes anchor in parallel — zero added latency.
+    // The anchor container gets a 3× score multiplier in findContainer() so
+    // mid-booking questions stay routed to the correct KC (e.g. Service Call pricing
+    // stays in Service Call, not Maintenance, even if "maintenance" appears in the input).
+    const [containers, _dnBpfuq] = await Promise.all([
+      KCS.getActiveForCompany(companyId),
+      DiscoveryNotesService.load(companyId, ctx.callSid).catch(() => null),
+    ]);
+    const _anchorCtx = _dnBpfuq?.anchorContainerId
+      ? { anchorContainerId: _dnBpfuq.anchorContainerId }
+      : null;
+
     if (containers.length) {
-      const match = KCS.findContainer(containers, userInput);
+      const match = KCS.findContainer(containers, userInput, _anchorCtx);
       if (match) {
         const kcResult = await KCS.answer({
           container:  match.container,

@@ -534,7 +534,7 @@ function _buildSystemPrompt({
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
 ${activeTopicBlock}${callContextBlock}${preQualBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
-${noGreetingRule}1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. NEVER invent prices, dates, or details not written there.
+${noGreetingRule}1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. If a specific price, fee, or rate is NOT written verbatim in the container content below, say "I'd need to confirm that exact pricing for you" — NEVER estimate or invent a number.
 2. ${wordCapRule}
 3. Be natural and conversational — sound human, never robotic or scripted. Tone: ${toneDescriptor}.
 4. If the caller signals readiness to book or schedule, set intent to "BOOKING_READY".
@@ -744,10 +744,17 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
   let bestMatch = null;
   let bestScore = 0;
 
+  // Anchor container ID — when set, this container gets a 3× score multiplier.
+  // The call stays on topic unless a competitor scores 3× higher (clear topic shift).
+  const _anchorId = context?.anchorContainerId ? String(context.anchorContainerId) : null;
+
   for (const container of containers) {
     if (_isNegativelyExcluded(container)) continue;      // ← exclusion gate
     const keywords = container.keywords || [];
     if (!keywords.length) continue;
+
+    // Is this the anchor container for this call?
+    const isAnchor = !!(_anchorId && String(container._id || container.title) === _anchorId);
 
     for (const kw of keywords) {
       const kwNorm = kw.toLowerCase().trim();
@@ -785,9 +792,15 @@ function findContainer(containers, input, context = null, embeddingOpts = null) 
         score   = matched ? kwNorm.length : 0;
       }
 
-      if (matched && score > bestScore) {
-        bestScore = score;
-        bestMatch = { container, score };
+      if (matched) {
+        // Anchor container gets 3× multiplier — keeps the call on topic.
+        // A competitor can only displace the anchor by scoring 3× higher,
+        // which requires a clear, unambiguous topic shift from the caller.
+        const finalScore = isAnchor ? score * 3 : score;
+        if (finalScore > bestScore) {
+          bestScore = finalScore;
+          bestMatch = { container, score: finalScore, ...(isAnchor ? { anchorBoosted: true } : {}) };
+        }
       }
     }
   }

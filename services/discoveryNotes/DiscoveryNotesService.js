@@ -153,8 +153,12 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
     //   timestamp:        ISO string
     // }
     digressionStack: [],
-    committedAct:    null,   // IntentHold — booking step held while side question resolves
-                             // { type:'BOOKING', step, returnPrompt, pausedAt }
+    committedAct:      null,   // IntentHold — booking step held while side question resolves
+                               // { type:'BOOKING', step, returnPrompt, pausedAt }
+    anchorContainerId: null,   // KC anchor — ID of the winning container for this call.
+                               // All findContainer() calls apply a 3× score multiplier to
+                               // this container so the call stays on topic.
+                               // Only displaced when a competitor scores 3× higher.
 
     // ── Timestamps ──────────────────────────────────────────────────────────
     startedAt: now,
