@@ -207,6 +207,19 @@ function _sanitiseBody(body) {
           section.bookingAction = s.bookingAction;
         }
 
+        // Per-section Fixed Response Mode (bypass Groq, read verbatim, audio pre-cached)
+        if (typeof s.useFixedResponse === 'boolean') {
+          section.useFixedResponse = s.useFixedResponse;
+        }
+        if (typeof s.audioUrl === 'string' && s.audioUrl.trim()) {
+          section.audioUrl = s.audioUrl.trim();
+        }
+
+        // Per-section daSubTypeKey (UAP sub-type routing link)
+        if (typeof s.daSubTypeKey === 'string' && s.daSubTypeKey.trim()) {
+          section.daSubTypeKey = s.daSubTypeKey.trim();
+        }
+
         // Per-section pre-qualify question
         // Always saved when text exists — enabled is a mode switch, not a data gate.
         // enabled=false → agent reads text content above; enabled=true → agent asks prequal.
