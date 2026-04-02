@@ -2147,7 +2147,11 @@ router.post('/voice', async (req, res) => {
         let audioFileExists = false;
         
         // Check if this is a local file path we can verify
-        if (rawAudioPath.startsWith('/audio/')) {
+        if (rawAudioPath.startsWith('/audio-safe/')) {
+          // /audio-safe/ is an Express route with MongoDB fallback — always trust it.
+          // Disk cache is restored automatically from MongoDB if missing after deploy.
+          audioFileExists = true;
+        } else if (rawAudioPath.startsWith('/audio/')) {
           const localFilePath = path.join(__dirname, '../public', rawAudioPath);
           audioFileExists = fs.existsSync(localFilePath);
           if (!audioFileExists) {
