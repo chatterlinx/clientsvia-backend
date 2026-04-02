@@ -153,6 +153,8 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
     //   timestamp:        ISO string
     // }
     digressionStack: [],
+    committedAct:    null,   // IntentHold — booking step held while side question resolves
+                             // { type:'BOOKING', step, returnPrompt, pausedAt }
 
     // ── Timestamps ──────────────────────────────────────────────────────────
     startedAt: now,

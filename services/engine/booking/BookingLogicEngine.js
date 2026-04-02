@@ -425,6 +425,11 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
       // fires again and chains a fresh BPFUQ cycle naturally.
       events.push({ type: 'BK_BPFUQ_INLINE_RESUME', step: bpfuq.step, timestamp: Date.now() });
       BPFUQService.clear(ctx);
+
+      // Clear IntentHold — booking is resuming, side question resolved
+      if (ctx.callSid) {
+        DiscoveryNotesService.update(companyId, ctx.callSid, { committedAct: null }).catch(() => {});
+      }
       // ↓ fall through to step handler
 
     } else {
@@ -478,10 +483,16 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // Check if the step made progress (new data captured or step changed)
   const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
 
-  // If step advanced or no user input → return as-is
-  if (advanced || !userInput?.trim()) {
-    return stepResult;
-  }
+  // UAP authority: compute before the early-return so a high-confidence KC question
+  // (daType != null, confidence ≥ 0.70) can override a step that "advanced" by
+  // extracting the wrong thing (e.g. "Yeah" from "Yeah, how much do you charge?").
+  const uapDetectsKCQuestion = !!(parsedAct?.daType && parsedAct.confidence >= 0.70);
+
+  // No input → nothing to interrogate
+  if (!userInput?.trim()) return stepResult;
+
+  // Step advanced AND UAP is quiet → caller was providing booking data; accept it
+  if (advanced && !uapDetectsKCQuestion) return stepResult;
 
   // DATA-ENTRY STEPS bypass 123RP to prevent false-positives on phone digits,
   // address names, etc. — UNLESS the input is clearly a question/confusion
@@ -491,11 +502,8 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     return stepResult;
   }
 
-  // UAP authority: confidence ≥ 0.70 means the Bridge found a phrase match —
-  // caller is asking about a KC service topic, not providing booking data.
-  // Combined with the heuristic (long sentence OR explicit ?) to cover phrases
-  // UAP hasn't been trained on yet (new KC containers, uncommon phrasings).
-  const uapDetectsKCQuestion = !!(parsedAct?.daType && parsedAct.confidence >= 0.70);
+  // Combined heuristic: long sentence OR explicit "?" covers phrases UAP hasn't
+  // been trained on yet (new KC containers, uncommon phrasings).
   if (!_isLikelyOffTopic(userInput, prevSnap.step) && !uapDetectsKCQuestion) {
     return stepResult;
   }
@@ -566,6 +574,15 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
             ? `${kcResult.response} ${reAnchor}`
             : kcResult.response;
           BPFUQService.set(ctx, { step: prevSnap.step, inlineResumed: true });
+
+          // IntentHold — stamp the paused booking position to discoveryNotes (permanent call chart)
+          // Cleared when booking resumes in Gate 0 inlineResumed block above.
+          if (ctx.callSid) {
+            DiscoveryNotesService.update(companyId, ctx.callSid, {
+              committedAct: { type: 'BOOKING', step: prevSnap.step, returnPrompt: reAnchor || null, pausedAt: Date.now() },
+            }).catch(() => {});
+          }
+
           events.push({
             type:           'BK_BPFUQ_KC_ANSWERED',
             step:           prevSnap.step,
