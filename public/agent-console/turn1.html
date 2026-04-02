@@ -373,7 +373,7 @@
      HEADER
 ═══════════════════════════════════════════════════════════════ -->
 <header class="page-header">
-  <a class="btn-back" href="/agent-console/index.html">
+  <a class="btn-back" id="btn-back" href="/agent-console/index.html">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
       <path d="M10 13L5 8l5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
@@ -632,8 +632,15 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<script src="/agent-console/lib/auth.js"></script>
 <script>
 'use strict';
+
+/* ── Auth gate ─────────────────────────────────────────────────── */
+if (!AgentConsoleAuth.requireAuth()) {
+  // Redirect to login — halt script
+  throw new Error('Not authenticated');
+}
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 const qs  = s => document.querySelector(s);
@@ -653,6 +660,12 @@ function showToast(msg, type = 'success') {
 let companyId  = qsp('companyId');
 let companyName = qsp('companyName', 'Unknown Company');
 let dirty = false;
+
+/* ── Wire back button with companyId ────────────────────────── */
+const backBtn = qs('#btn-back');
+if (backBtn && companyId) {
+  backBtn.href = `/agent-console/index.html?companyId=${encodeURIComponent(companyId)}`;
+}
 
 function markDirty() {
   dirty = true;
@@ -686,9 +699,7 @@ async function loadConfig() {
   setHeader(decodeURIComponent(companyName), companyId);
 
   try {
-    const res  = await fetch(`/api/admin/turn1/company/${companyId}/config`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || res.statusText);
+    const data = await AgentConsoleAuth.apiFetch(`/api/admin/turn1/company/${companyId}/config`);
 
     applyConfig(data.config || {});
     qs('#btn-save').disabled = false;
@@ -728,13 +739,10 @@ async function save() {
   };
 
   try {
-    const res  = await fetch(`/api/admin/turn1/company/${companyId}/config`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
+    await AgentConsoleAuth.apiFetch(`/api/admin/turn1/company/${companyId}/config`, {
+      method: 'PATCH',
+      body:   payload,
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || res.statusText);
 
     dirty = false;
     setBadge(payload.enabled);
