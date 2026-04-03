@@ -685,6 +685,131 @@
       letter-spacing: 0.02em;
     }
 
+    /* ── KC Diagnostic card ────────────────────────────────────────────── */
+    .diag-body { padding: 0; }
+    .diag-body.collapsed { display: none; }
+    .diag-tabs {
+      display: flex; gap: 2px; border-bottom: 2px solid var(--border); padding: 0 20px;
+    }
+    .diag-tab {
+      padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: none; background: none; color: var(--text-muted);
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color .15s, border-color .15s;
+    }
+    .diag-tab:hover { color: var(--text-primary); }
+    .diag-tab.active { color: #0284c7; border-bottom-color: #0284c7; }
+    .diag-tab-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; border-radius: 9px; font-size: 10px;
+      font-weight: 700; padding: 0 5px; margin-left: 5px;
+    }
+    .diag-tab-badge.red   { background: #fee2e2; color: #dc2626; }
+    .diag-tab-badge.amber { background: #fef3c7; color: #92400e; }
+    .diag-tab-badge.green { background: #dcfce7; color: #15803d; }
+    .diag-panel { display: none; padding: 20px; }
+    .diag-panel.active { display: block; }
+
+    .diag-test-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .diag-test-input {
+      flex: 1; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 14px; font-family: inherit;
+    }
+    .diag-test-input:focus { border-color: var(--border-focus); outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+    .diag-test-btn {
+      padding: 10px 20px; border-radius: 8px; border: none;
+      background: #0284c7; color: #fff; font-size: 14px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    .diag-test-btn:hover { background: #0369a1; }
+    .diag-test-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .diag-result {
+      background: #f8fafc; border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+    }
+    .diag-result.agree { border-color: #86efac; background: #f0fdf4; }
+    .diag-result.partial { border-color: #fde68a; background: #fffbeb; }
+    .diag-result.disagree { border-color: #fca5a5; background: #fef2f2; }
+    .diag-winner {
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 12px;
+      font-size: 14px; font-weight: 600;
+    }
+    .diag-winner.match { background: #dcfce7; color: #166534; }
+    .diag-winner.miss  { background: #fef3c7; color: #92400e; }
+    .diag-paths-header {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .diag-path-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px; border-radius: 6px; font-size: 13px;
+      margin-bottom: 4px; background: #fff;
+    }
+    .diag-path-row.winner { background: #dcfce7; }
+    .diag-path-label { font-weight: 700; font-size: 11px; width: 75px; flex-shrink: 0; }
+    .diag-path-uap { color: #7c3aed; }
+    .diag-path-sem { color: #0ea5e9; }
+    .diag-path-kw  { color: #f59e0b; }
+    .diag-path-detail { color: var(--text-muted); font-size: 12px; }
+    .diag-conflict-note {
+      margin-top: 8px; padding: 8px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+    }
+    .diag-conflict-note.warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .diag-conflict-note.danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* Coverage gaps */
+    .diag-summary-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .diag-chip {
+      font-size: 12px; font-weight: 700; padding: 4px 12px;
+      border-radius: 20px; border: 1px solid; white-space: nowrap;
+    }
+    .diag-chip.high  { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+    .diag-chip.warn  { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+    .diag-chip.info  { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+    .diag-chip.clean { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+    .diag-gap-container { margin-bottom: 12px; }
+    .diag-gap-title {
+      font-weight: 600; font-size: 13px; color: var(--text-primary);
+      padding: 6px 0; cursor: default;
+    }
+    .diag-gap-issue {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 4px 0 4px 18px; font-size: 12px; color: #4b5563; line-height: 1.5;
+    }
+    .diag-gap-sev { flex-shrink: 0; font-size: 12px; }
+
+    /* Simulation */
+    .diag-sim-summary {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      margin-bottom: 14px; font-size: 14px; font-weight: 600;
+    }
+    .diag-sim-pct { font-size: 24px; font-weight: 800; }
+    .diag-sim-pct.good { color: #15803d; }
+    .diag-sim-pct.ok   { color: #92400e; }
+    .diag-sim-pct.bad  { color: #dc2626; }
+    .diag-sim-filters { display: flex; gap: 4px; margin-bottom: 12px; }
+    .diag-sim-filter {
+      padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--border); background: #fff; cursor: pointer;
+      transition: background .15s;
+    }
+    .diag-sim-filter:hover { background: #f1f5f9; }
+    .diag-sim-filter.active { background: #0284c7; color: #fff; border-color: #0284c7; }
+    .diag-sim-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .diag-sim-table th {
+      background: #f8fafc; padding: 8px 12px; text-align: left;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+    }
+    .diag-sim-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .diag-sim-table tr.wrong td { background: #fef2f2; }
+    .diag-sim-table tr.nomatch td { background: #fffbeb; }
+    .diag-progress { height: 4px; background: #e2e8f0; border-radius: 2px; margin-bottom: 12px; overflow: hidden; display: none; }
+    .diag-progress-fill { height: 100%; background: #0284c7; transition: width .2s; border-radius: 2px; width: 0; }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .page-header { padding: 12px 16px; }
@@ -889,6 +1014,68 @@
   </div>
 </div>
 
+<!-- ── KC Diagnostic (collapsible) ──────────────────────────────────────── -->
+<div class="settings-wrap" id="diagWrap">
+  <div class="settings-card" style="border-color:#7dd3fc;">
+    <div class="settings-header" id="diagHeader" onclick="toggleDiagnostic()">
+      <div class="settings-header-left">
+        <span style="font-size:18px;">🔬</span>
+        <div>
+          <div class="settings-title">KC Diagnostic</div>
+          <div class="settings-subtitle">Test routing, find coverage gaps, run call simulations</div>
+        </div>
+      </div>
+      <svg id="diagChevron" class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div id="diagBody" class="diag-body collapsed">
+      <!-- Tab bar -->
+      <div class="diag-tabs">
+        <button class="diag-tab active" id="diagTabTest" onclick="switchDiagTab('test')">🔍 Test Utterance</button>
+        <button class="diag-tab" id="diagTabCoverage" onclick="switchDiagTab('coverage')">📊 Coverage <span class="diag-tab-badge" id="diagBadgeCoverage" style="display:none;"></span></button>
+        <button class="diag-tab" id="diagTabSim" onclick="switchDiagTab('sim')">📞 Call Simulation <span class="diag-tab-badge" id="diagBadgeSim" style="display:none;"></span></button>
+      </div>
+
+      <!-- Tab 1: Test Utterance -->
+      <div class="diag-panel active" id="diagPanelTest">
+        <div class="diag-test-row">
+          <input type="text" class="diag-test-input" id="diagTestInput"
+            placeholder='Type what a caller would say, e.g. "how much is a tune-up?"'
+            onkeydown="if(event.key==='Enter') diagTestUtterance()">
+          <button class="diag-test-btn" onclick="diagTestUtterance()" id="diagTestBtn">Test →</button>
+        </div>
+        <div id="diagTestResults"></div>
+      </div>
+
+      <!-- Tab 2: Coverage Gaps -->
+      <div class="diag-panel" id="diagPanelCoverage">
+        <div id="diagCoverageContent">
+          <div style="color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center;">
+            Click to analyze coverage gaps across all containers…
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+          <button class="btn-secondary" onclick="showKeywordHealth()" style="font-size:13px;">
+            ⚠️ Open Conflict Map (Keyword Health)
+          </button>
+          <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">Full semantic + keyword conflict detection</span>
+        </div>
+      </div>
+
+      <!-- Tab 3: Call Simulation -->
+      <div class="diag-panel" id="diagPanelSim">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+          <button class="diag-test-btn" onclick="diagRunSimulation()" id="diagSimBtn">▶ Run Simulation</button>
+          <span style="font-size:12px;color:var(--text-muted);" id="diagSimStatus">
+            Tests every container's sample questions and checks if the right container wins
+          </span>
+        </div>
+        <div class="diag-progress" id="diagSimProgress"><div class="diag-progress-fill" id="diagSimProgressFill"></div></div>
+        <div id="diagSimContent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Toolbar ────────────────────────────────────────────────────────────── -->
 <div class="toolbar">
   <button class="filter-btn active" id="filterAll"   onclick="setFilter('all')">All</button>
@@ -1025,6 +1212,11 @@ const S = {
   detectedVars:     new Set(),  // variable names found in KC section content
   healthData:       null,       // cached conflict report from last health check
   healthLoading:    false,
+  // KC Diagnostic state
+  diagCache:        new Map(),  // utterance → test-match result
+  diagCoverage:     null,       // computed coverage gap data
+  diagSimResults:   null,       // batch simulation results
+  diagSimRunning:   false,
 };
 
 // Category dot colour palette — cycles through for variety
@@ -1084,6 +1276,10 @@ async function loadContainers() {
 
     S.containers       = data.containers || [];
     S.companyVariables = new Map(Object.entries(data.companyVariables || {}));
+    // Invalidate diagnostic caches when containers reload
+    S.diagCache.clear();
+    S.diagCoverage  = null;
+    S.diagSimResults = null;
     _updateStats();
     _populateCatFilter();
     applyFilters();
@@ -2052,6 +2248,382 @@ function downloadContainersJson() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KC DIAGNOSTIC
+// ─────────────────────────────────────────────────────────────────────────────
+
+function toggleDiagnostic() {
+  const body = document.getElementById('diagBody');
+  const chev = document.getElementById('diagChevron');
+  const hdr  = document.getElementById('diagHeader');
+  body.classList.toggle('collapsed');
+  chev.classList.toggle('open');
+  hdr.classList.toggle('open');
+  // Lazy-compute coverage on first open
+  if (!body.classList.contains('collapsed') && !S.diagCoverage) {
+    _computeCoverageGaps();
+  }
+}
+
+function switchDiagTab(tab) {
+  ['test', 'coverage', 'sim'].forEach(t => {
+    const capT = t.charAt(0).toUpperCase() + t.slice(1);
+    document.getElementById(`diagTab${capT}`).classList.toggle('active', t === tab);
+    document.getElementById(`diagPanel${capT}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'coverage' && !S.diagCoverage) _computeCoverageGaps();
+}
+
+// ── Tab 1: Test Utterance ─────────────────────────────────────────────────
+
+async function diagTestUtterance() {
+  const input = document.getElementById('diagTestInput');
+  const utterance = (input.value || '').trim();
+  if (!utterance) return;
+
+  const cacheKey = utterance.toLowerCase();
+  if (S.diagCache.has(cacheKey)) {
+    _renderDiagResult(utterance, S.diagCache.get(cacheKey));
+    return;
+  }
+
+  const resultsEl = document.getElementById('diagTestResults');
+  resultsEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;">⏳ Testing…</div>';
+  document.getElementById('diagTestBtn').disabled = true;
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/test-match`,
+      { method: 'POST', body: JSON.stringify({ utterance }) }
+    );
+    if (!data.ok) throw new Error(data.error || 'Test failed');
+    S.diagCache.set(cacheKey, data);
+    _renderDiagResult(utterance, data);
+  } catch (err) {
+    resultsEl.innerHTML = `<div style="color:#dc2626;font-size:13px;">❌ ${_esc(err.message)}</div>`;
+  } finally {
+    document.getElementById('diagTestBtn').disabled = false;
+  }
+}
+
+function _renderDiagResult(utterance, data) {
+  const w = data.winner;
+  const paths = data.paths || {};
+
+  // Check path agreement
+  const pathIds = [
+    paths.uap?.containerId,
+    paths.semantic?.containerId,
+    paths.keyword?.containerId,
+  ].filter(Boolean);
+  const uniqueIds = [...new Set(pathIds)];
+  const agreement = pathIds.length === 0 ? 'miss'
+    : uniqueIds.length === 1 ? 'agree'
+    : uniqueIds.length === 2 ? 'partial'
+    : 'disagree';
+
+  let html = `<div class="diag-result ${agreement}">`;
+
+  // Winner banner
+  if (w) {
+    html += `<div class="diag-winner match">
+      ✅ <strong>"${_esc(w.containerTitle || '')}"</strong> matched via <strong>${_esc(w.via || '')}</strong>
+      ${w.sectionLabel ? ` → <em>${_esc(w.sectionLabel)}</em>` : ''}
+    </div>`;
+  } else {
+    html += `<div class="diag-winner miss">⚠️ No container matched — would fall through to LLM</div>`;
+  }
+
+  // Path breakdown
+  html += `<div class="diag-paths-header">Matching paths</div>`;
+
+  const pathDefs = [
+    { key: 'uap',      label: '🎯 UAP',      cls: 'diag-path-uap', data: paths.uap },
+    { key: 'semantic',  label: '🧠 Semantic',  cls: 'diag-path-sem', data: paths.semantic },
+    { key: 'keyword',   label: '🔑 Keyword',   cls: 'diag-path-kw',  data: paths.keyword },
+  ];
+
+  for (const p of pathDefs) {
+    const isWinner = w && w.via === p.key.toUpperCase();
+    html += `<div class="diag-path-row ${isWinner ? 'winner' : ''}">`;
+    html += `<span class="diag-path-label ${p.cls}">${p.label}</span>`;
+    if (!p.data) {
+      html += `<span style="color:var(--text-muted);font-size:12px;">— no match</span>`;
+    } else {
+      const d = p.data;
+      html += `<span>→ <strong>"${_esc(d.containerTitle || '')}"</strong></span>`;
+      let detail = '';
+      if (d.confidence != null) detail += ` · confidence: ${(d.confidence * 100).toFixed(0)}%`;
+      if (d.score != null) detail += ` · score: ${d.score}`;
+      if (d.similarity != null) detail += ` · similarity: ${(d.similarity * 100).toFixed(0)}%`;
+      if (d.matchedPhrase) detail += ` · phrase: "<em>${_esc(d.matchedPhrase)}</em>"`;
+      if (d.sectionLabel) detail += ` · section: <em>${_esc(d.sectionLabel)}</em>`;
+      html += `<span class="diag-path-detail">${detail}</span>`;
+    }
+    html += `</div>`;
+  }
+
+  // Conflict warning
+  if (agreement === 'partial') {
+    html += `<div class="diag-conflict-note warn">⚠️ Paths disagree — one path routes to a different container. Check keyword overlap.</div>`;
+  } else if (agreement === 'disagree') {
+    html += `<div class="diag-conflict-note danger">🔴 All 3 paths disagree — this utterance has a routing conflict that needs fixing.</div>`;
+  }
+
+  html += `</div>`;
+
+  // Prepend (newest on top)
+  const resultsEl = document.getElementById('diagTestResults');
+  resultsEl.insertAdjacentHTML('afterbegin', html);
+}
+
+// ── Tab 2: Coverage Gaps ──────────────────────────────────────────────────
+
+function _computeCoverageGaps() {
+  const issues = [];
+  const active = S.containers.filter(c => c.isActive);
+
+  for (const c of active) {
+    const cIssues = [];
+
+    if (!c.sections?.length) {
+      cIssues.push({ sev: 'HIGH', msg: 'No sections defined — container is empty' });
+    }
+
+    if (!(c.sampleQuestions?.length)) {
+      cIssues.push({ sev: 'INFO', msg: 'No sample questions — cannot be batch-tested in simulation' });
+    }
+
+    if (!c.embeddingUpdatedAt) {
+      cIssues.push({ sev: 'WARN', msg: 'Missing embedding — no semantic matching available' });
+    }
+
+    for (const s of (c.sections || [])) {
+      const sLabel = s.label || 'Untitled section';
+      if (!(s.callerPhrases?.length)) {
+        cIssues.push({ sev: 'WARN', msg: `"${sLabel}" — no caller phrases (UAP blind spot)` });
+      }
+      if ((s.contentKeywords || []).length < 3) {
+        cIssues.push({ sev: 'INFO', msg: `"${sLabel}" — fewer than 3 content keywords (weak keyword path)` });
+      }
+      if (!(s.negativeKeywords?.length)) {
+        cIssues.push({ sev: 'INFO', msg: `"${sLabel}" — no exclusion keywords (no false-positive protection)` });
+      }
+    }
+
+    if (cIssues.length) {
+      issues.push({ id: c._id, title: c.title, issues: cIssues });
+    }
+  }
+
+  const allIssues = issues.flatMap(i => i.issues);
+  S.diagCoverage = {
+    containers: issues,
+    totalContainers: active.length,
+    totalSections: active.reduce((sum, c) => sum + (c.sections?.length || 0), 0),
+    high:  allIssues.filter(i => i.sev === 'HIGH').length,
+    warn:  allIssues.filter(i => i.sev === 'WARN').length,
+    info:  allIssues.filter(i => i.sev === 'INFO').length,
+    clean: active.length - issues.length,
+  };
+  _renderCoverageGaps();
+}
+
+function _renderCoverageGaps() {
+  const d = S.diagCoverage;
+  if (!d) return;
+
+  let html = '';
+
+  // Summary chips
+  html += `<div class="diag-summary-chips">`;
+  if (d.high) html += `<span class="diag-chip high">🔴 ${d.high} critical</span>`;
+  if (d.warn) html += `<span class="diag-chip warn">🟡 ${d.warn} warnings</span>`;
+  if (d.info) html += `<span class="diag-chip info">🔵 ${d.info} info</span>`;
+  html += `<span class="diag-chip clean">✅ ${d.clean} clean containers</span>`;
+  html += `</div>`;
+
+  html += `<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+    ${d.totalContainers} active containers · ${d.totalSections} total sections
+  </div>`;
+
+  // Per-container issues
+  if (!d.containers.length) {
+    html += `<div style="color:#15803d;font-size:14px;padding:16px 0;text-align:center;">🎉 All containers look healthy! No gaps detected.</div>`;
+  } else {
+    for (const c of d.containers) {
+      html += `<div class="diag-gap-container">`;
+      html += `<div class="diag-gap-title">📋 ${_esc(c.title)}</div>`;
+      for (const issue of c.issues) {
+        const icon = issue.sev === 'HIGH' ? '🔴' : issue.sev === 'WARN' ? '🟡' : '🔵';
+        html += `<div class="diag-gap-issue"><span class="diag-gap-sev">${icon}</span><span>${_esc(issue.msg)}</span></div>`;
+      }
+      html += `</div>`;
+    }
+  }
+
+  // Update badge
+  const badge = document.getElementById('diagBadgeCoverage');
+  const total = d.high + d.warn;
+  if (total > 0) {
+    badge.textContent = total;
+    badge.className = `diag-tab-badge ${d.high > 0 ? 'red' : 'amber'}`;
+    badge.style.display = '';
+  }
+
+  document.getElementById('diagCoverageContent').innerHTML = html;
+}
+
+// ── Tab 3: Call Simulation ────────────────────────────────────────────────
+
+async function diagRunSimulation() {
+  if (S.diagSimRunning) return;
+  S.diagSimRunning = true;
+
+  const btn = document.getElementById('diagSimBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+
+  // Collect sampleQuestions from all active containers
+  const tests = [];
+  for (const c of S.containers.filter(c => c.isActive)) {
+    for (const q of (c.sampleQuestions || [])) {
+      tests.push({ utterance: q, expectedId: String(c._id), expectedTitle: c.title });
+    }
+  }
+
+  if (!tests.length) {
+    document.getElementById('diagSimContent').innerHTML =
+      '<div style="color:var(--text-muted);padding:16px 0;text-align:center;">No sample questions found. Add sample questions to your containers first (use "Suggest Phrases" on each container).</div>';
+    btn.disabled = false;
+    btn.textContent = '▶ Run Simulation';
+    S.diagSimRunning = false;
+    return;
+  }
+
+  const progressEl = document.getElementById('diagSimProgress');
+  const fillEl     = document.getElementById('diagSimProgressFill');
+  const statusEl   = document.getElementById('diagSimStatus');
+  progressEl.style.display = 'block';
+  fillEl.style.width = '0%';
+
+  const results = [];
+  const CONCURRENCY = 3;
+
+  for (let i = 0; i < tests.length; i += CONCURRENCY) {
+    const batch = tests.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.allSettled(batch.map(async (t) => {
+      const cacheKey = t.utterance.toLowerCase();
+      if (S.diagCache.has(cacheKey)) return { ...t, result: S.diagCache.get(cacheKey) };
+      try {
+        const data = await apiFetch(
+          `/api/admin/agent2/company/${S.companyId}/knowledge/test-match`,
+          { method: 'POST', body: JSON.stringify({ utterance: t.utterance }) }
+        );
+        S.diagCache.set(cacheKey, data);
+        return { ...t, result: data };
+      } catch (err) {
+        return { ...t, result: null, error: err.message };
+      }
+    }));
+    for (const r of batchResults) {
+      results.push(r.status === 'fulfilled' ? r.value : { ...batch[0], result: null, error: 'Failed' });
+    }
+    const pct = Math.round((results.length / tests.length) * 100);
+    fillEl.style.width = pct + '%';
+    statusEl.textContent = `Testing ${results.length}/${tests.length}…`;
+  }
+
+  // Classify
+  S.diagSimResults = results.map(r => {
+    const winnerId = r.result?.winner?.containerId ? String(r.result.winner.containerId) : null;
+    const status = !r.result ? 'error'
+      : !winnerId ? 'nomatch'
+      : winnerId === r.expectedId ? 'correct'
+      : 'wrong';
+    return {
+      utterance:     r.utterance,
+      expectedId:    r.expectedId,
+      expectedTitle: r.expectedTitle,
+      winnerId,
+      winnerTitle:   r.result?.winner?.containerTitle || null,
+      via:           r.result?.winner?.via || null,
+      status,
+    };
+  });
+
+  progressEl.style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = '▶ Run Simulation';
+  statusEl.textContent = '';
+  S.diagSimRunning = false;
+  _renderSimResults('all');
+}
+
+function _renderSimResults(filter) {
+  const all = S.diagSimResults || [];
+  if (!all.length) return;
+
+  const correct = all.filter(r => r.status === 'correct').length;
+  const wrong   = all.filter(r => r.status === 'wrong').length;
+  const nomatch = all.filter(r => r.status === 'nomatch').length;
+  const pct     = Math.round((correct / all.length) * 100);
+  const pctCls  = pct >= 90 ? 'good' : pct >= 70 ? 'ok' : 'bad';
+
+  let html = '';
+
+  // Summary
+  html += `<div class="diag-sim-summary">
+    <span class="diag-sim-pct ${pctCls}">${pct}%</span>
+    <span>${correct}/${all.length} correct</span>
+    ${wrong > 0 ? `<span style="color:#dc2626;">· ${wrong} misrouted</span>` : ''}
+    ${nomatch > 0 ? `<span style="color:#92400e;">· ${nomatch} no match</span>` : ''}
+  </div>`;
+
+  // Filter buttons
+  html += `<div class="diag-sim-filters">
+    <button class="diag-sim-filter ${filter==='all'?'active':''}" onclick="_renderSimResults('all')">All (${all.length})</button>
+    <button class="diag-sim-filter ${filter==='correct'?'active':''}" onclick="_renderSimResults('correct')">✅ Correct (${correct})</button>
+    <button class="diag-sim-filter ${filter==='wrong'?'active':''}" onclick="_renderSimResults('wrong')">❌ Wrong (${wrong})</button>
+    <button class="diag-sim-filter ${filter==='nomatch'?'active':''}" onclick="_renderSimResults('nomatch')">⚠️ No Match (${nomatch})</button>
+  </div>`;
+
+  // Table
+  const filtered = filter === 'all' ? all : all.filter(r => r.status === filter);
+
+  html += `<table class="diag-sim-table"><thead><tr>
+    <th>Utterance</th><th>Expected</th><th>Actual Winner</th><th>Path</th><th>Status</th>
+  </tr></thead><tbody>`;
+
+  for (const r of filtered) {
+    const rowCls = r.status === 'wrong' ? 'wrong' : r.status === 'nomatch' ? 'nomatch' : '';
+    const statusIcon = r.status === 'correct' ? '✅' : r.status === 'wrong' ? '❌' : r.status === 'nomatch' ? '⚠️' : '💥';
+    html += `<tr class="${rowCls}">
+      <td style="max-width:300px;word-break:break-word;">${_esc(r.utterance)}</td>
+      <td>${_esc(r.expectedTitle || '')}</td>
+      <td>${r.winnerTitle ? _esc(r.winnerTitle) : '<span style="color:var(--text-muted);">—</span>'}</td>
+      <td>${r.via ? `<span style="font-weight:600;">${_esc(r.via)}</span>` : '—'}</td>
+      <td style="text-align:center;">${statusIcon}</td>
+    </tr>`;
+  }
+
+  html += `</tbody></table>`;
+
+  // Update sim badge
+  const badge = document.getElementById('diagBadgeSim');
+  if (wrong > 0) {
+    badge.textContent = wrong;
+    badge.className = 'diag-tab-badge red';
+    badge.style.display = '';
+  } else if (nomatch > 0) {
+    badge.textContent = nomatch;
+    badge.className = 'diag-tab-badge amber';
+    badge.style.display = '';
+  }
+
+  document.getElementById('diagSimContent').innerHTML = html;
 }
 </script>
 </body>
