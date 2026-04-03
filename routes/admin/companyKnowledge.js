@@ -229,6 +229,13 @@ function _sanitiseBody(body) {
         // Auto-extract contentKeywords from section label + content
         section.contentKeywords = _extractContentKeywords(section.label, section.content);
 
+        // Per-section exclusion keywords — trim, lowercase, deduplicate
+        if (Array.isArray(s.negativeKeywords)) {
+          section.negativeKeywords = [...new Set(
+            s.negativeKeywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
+          )];
+        }
+
         // Per-section booking action override
         const BA_VALID = ['offer_to_book', 'advisor_callback', 'none'];
         if (s.bookingAction && BA_VALID.includes(s.bookingAction)) {

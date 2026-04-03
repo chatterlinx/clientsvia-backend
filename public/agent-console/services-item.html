@@ -1649,6 +1649,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
 
   S.sectionData.set(id, {
     callerPhrases:    sectionMeta?.callerPhrases || [],
+    negativeKeywords: sectionMeta?.negativeKeywords || [],
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
     pq: {
@@ -1734,6 +1735,21 @@ function addSection(label = '', content = '', sectionMeta = null) {
           style="font-size:12px;">
       </div>
       <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Full sentences callers say — "how much is a tune-up", "my AC isn't working". Press Enter to add.</div>
+    </div>
+
+    <!-- 🚫 Per-section Exclusion Keywords ────────────────────────────── -->
+    <div class="section-negkw-wrap" id="negkw-wrap-${id}" style="padding:4px 14px 10px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:11px;font-weight:700;color:#b91c1c;">🚫 Exclusion Keywords</span>
+        <span style="font-size:10px;color:#9ca3af;">— skip this section if these words appear</span>
+      </div>
+      <div class="keyword-input-wrap neg-wrap" id="secNegKwWrap-${id}" onclick="document.getElementById('secNegKwInner-${id}').focus()"
+        style="min-height:32px;padding:4px 6px;">
+        <input type="text" id="secNegKwInner-${id}" class="kw-input-inner"
+          placeholder="Type an exclusion keyword and press Enter…"
+          onkeydown="secNegKwKeydown(event, ${id})"
+          style="font-size:12px;">
+      </div>
     </div>
 
     <!-- ⚡ Per-section Fixed Response Mode strip ─────────────────────── -->
@@ -1846,6 +1862,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
   renderSectionPqOptions(id);
   renderSectionUpsellItems(id);
   _renderCallerPhrases(id);
+  _renderSecNegKeywords(id);
 
   // Restore audio UI state from saved URLs (survive page refresh)
   if (sectionMeta?.audioUrl && useFixedResponse) {
@@ -1922,13 +1939,16 @@ async function suggestPhrases(btn) {
       _toast(`Added ${added} caller phrase${added !== 1 ? 's' : ''} ✓`, 'success');
     }
 
-    // Merge negative keywords if returned
-    if (Array.isArray(data.negativeKeywords)) {
+    // Merge negative keywords into section (per-section, not container-level)
+    if (sData && Array.isArray(data.negativeKeywords)) {
       let negAdded = 0;
       for (const kw of data.negativeKeywords) {
-        if (!S.negativeKeywords.includes(kw)) { S.negativeKeywords.push(kw); negAdded++; }
+        if (!sData.negativeKeywords.includes(kw)) { sData.negativeKeywords.push(kw); negAdded++; }
       }
-      if (negAdded > 0) _renderNegKeywords();
+      if (negAdded > 0) {
+        _renderSecNegKeywords(sid);
+        _toast(`Added ${negAdded} exclusion keyword${negAdded !== 1 ? 's' : ''} to section ✓`, 'success');
+      }
     }
 
   } catch (_e) {
@@ -1992,6 +2012,49 @@ function removeCallerPhrase(sid, idx) {
   if (!data) return;
   data.callerPhrases.splice(idx, 1);
   _renderCallerPhrases(sid);
+}
+
+// ── Per-section exclusion keywords ─────────────────────────────────────────
+function _renderSecNegKeywords(sid) {
+  const wrap  = document.getElementById(`secNegKwWrap-${sid}`);
+  const input = document.getElementById(`secNegKwInner-${sid}`);
+  if (!wrap || !input) return;
+
+  const data = S.sectionData.get(sid);
+  const kws  = data?.negativeKeywords || [];
+
+  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
+  kws.forEach((kw, idx) => {
+    const tag       = document.createElement('span');
+    tag.className   = 'kw-tag';
+    tag.style.cssText = 'background:#fef2f2;color:#b91c1c;border-color:#fecaca;';
+    tag.innerHTML   = `🚫 ${_esc(kw)} <button type="button" onclick="removeSecNegKeyword(${sid}, ${idx})">×</button>`;
+    wrap.insertBefore(tag, input);
+  });
+}
+
+function secNegKwKeydown(e, sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.trim().replace(/,/g, '').toLowerCase();
+    if (val && !data.negativeKeywords.includes(val)) {
+      data.negativeKeywords.push(val);
+      _renderSecNegKeywords(sid);
+    }
+    e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && data.negativeKeywords.length) {
+    data.negativeKeywords.pop();
+    _renderSecNegKeywords(sid);
+  }
+}
+
+function removeSecNegKeyword(sid, idx) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.negativeKeywords.splice(idx, 1);
+  _renderSecNegKeywords(sid);
 }
 
 function deleteSection(btn) {
@@ -2187,6 +2250,7 @@ function _getSections() {
         content,
         order:              idx,
         callerPhrases:      (data.callerPhrases || []).filter(p => p.trim()),
+        negativeKeywords:   data.negativeKeywords || [],
         useFixedResponse:   !!data.useFixedResponse,
         audioUrl:           data.contentAudioUrl   || null,
         preQualifyQuestion: preQualifyQuestion     || null,

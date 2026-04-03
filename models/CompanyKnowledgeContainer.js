@@ -149,6 +149,15 @@ const sectionSchema = new mongoose.Schema(
       comment: 'Auto-extracted bigrams from section label + content. Regenerated on save.'
     },
 
+    // ── Per-section exclusion keywords ─────────────────────────────────────
+    // If ANY of these words/phrases appear in the caller's utterance, this
+    // section is skipped during keyword scoring — even if contentKeywords match.
+    // Container-level negativeKeywords still exist as a global gate.
+    negativeKeywords: {
+      type:    [String],
+      default: [],
+    },
+
     // ── Content embedding — for semantic matching ────────────────────────
     // 512-dim vector of section content, used by SemanticMatchService.
     // Auto-generated on save. select: false keeps it out of regular queries.

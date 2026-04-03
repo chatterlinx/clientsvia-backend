@@ -742,20 +742,22 @@ function findContainer(containers, input, context = null) {
   const inputWords = new Set(norm.split(/\s+/));
 
   // ── NEGATIVE KEYWORD EXCLUSION ─────────────────────────────────────────
-  const _isNegativelyExcluded = (container) => {
-    const negKws = container.negativeKeywords;
+  // Reusable matcher — works for both container-level and section-level negatives.
+  const _matchesNegativeKeywords = (negKws) => {
     if (!Array.isArray(negKws) || !negKws.length) return false;
     for (const nk of negKws) {
       const nkNorm = nk.toLowerCase().trim();
       if (!nkNorm) continue;
       if (nkNorm.includes(' ')) {
-        if (norm.includes(nkNorm)) return true;
+        if (norm.includes(nkNorm)) return true;   // Multi-word: substring
       } else {
-        if (inputWords.has(nkNorm)) return true;
+        if (inputWords.has(nkNorm)) return true;   // Single word: whole-word
       }
     }
     return false;
   };
+  // Container-level convenience alias (backward compat)
+  const _isNegativelyExcluded = (container) => _matchesNegativeKeywords(container.negativeKeywords);
 
   const MIN_THRESHOLD = parseInt(process.env.KC_KEYWORD_THRESHOLD, 10) || 8;
   const _anchorId = context?.anchorContainerId ? String(context.anchorContainerId) : null;
@@ -779,6 +781,10 @@ function findContainer(containers, input, context = null) {
     const sections = container.sections || [];
     for (let sIdx = 0; sIdx < sections.length; sIdx++) {
       const section = sections[sIdx];
+
+      // Section-level exclusion — skip THIS section if negative keywords match
+      if (_matchesNegativeKeywords(section.negativeKeywords)) continue;
+
       const keywords = section.contentKeywords || [];
       if (!keywords.length) continue;
 
