@@ -954,15 +954,29 @@ async function answer(opts) {
       // ── Resolve {variable} placeholders (same as Groq path) ──────────────
       const resolvedText = await _resolveKCVariables(companyId, fixedText);
 
+      // ── Append booking CTA if applicable ──────────────────────────────────
+      // The Groq path handles this via the system prompt (bookingInstruction #5)
+      // but Fixed Response bypasses Groq entirely.  Respect the container's
+      // bookingAction and the company's bookingOfferMode so the CTA is
+      // delivered even on fixed responses.
+      let finalResponse = resolvedText;
+      const _bookingAction = (targetSection?.bookingAction) || container.bookingAction || 'offer_to_book';
+      const _bookingMode   = kbSettings.bookingOfferMode || 'groq';
+      if (_bookingAction === 'offer_to_book' && _bookingMode !== 'none') {
+        const phrase = (kbSettings.bookingOfferPhrase || BUILT_IN_BOOKING_OFFER).trim();
+        if (phrase) finalResponse = `${resolvedText} ${phrase}`;
+      }
+
       logger.debug('[KnowledgeContainer] Fixed response shortcut — Groq bypassed', {
         companyId, callSid, containerTitle,
         scope: fixedScope,
         sectionLabel: fixedScope === 'section' ? (targetSection?.label || '') : undefined,
-        chars: resolvedText.length,
+        chars: finalResponse.length,
         hadVariables: resolvedText !== fixedText,
+        bookingCta:   finalResponse !== resolvedText,
       });
       return {
-        response:   resolvedText,
+        response:   finalResponse,
         intent:     INTENT.ANSWERED,
         confidence: 1.0,
         latencyMs:  Date.now() - startMs,
