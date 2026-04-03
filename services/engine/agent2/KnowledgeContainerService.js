@@ -976,7 +976,12 @@ async function answer(opts) {
         bookingCta:   finalResponse !== resolvedText,
       });
       return {
-        response:   finalResponse,
+        response:      finalResponse,
+        // audioHintText: resolved content WITHOUT the booking CTA.
+        // v2twilio uses this for InstantAudioService text-hash matching.
+        // Pre-cached audio covers the section content; the CTA is appended
+        // at the text level but shouldn't break the audio cache lookup.
+        audioHintText: resolvedText,
         intent:     INTENT.ANSWERED,
         confidence: 1.0,
         latencyMs:  Date.now() - startMs,

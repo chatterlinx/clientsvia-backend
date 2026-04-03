@@ -259,6 +259,8 @@ function _sanitiseBody(body) {
               fieldKey: (typeof pq.fieldKey === 'string' && pq.fieldKey.trim())
                 ? pq.fieldKey.trim().slice(0, 60)
                 : 'preQualifyAnswer',
+              // Audio URL — persisted so pre-cached audio survives page refreshes + deploys
+              audioUrl: typeof pq.audioUrl === 'string' && pq.audioUrl.trim() ? pq.audioUrl.trim() : null,
               options: Array.isArray(pq.options)
                 ? pq.options.map(o => ({
                     label:           typeof o.label === 'string'           ? o.label.trim().slice(0, 100)           : '',
@@ -276,11 +278,15 @@ function _sanitiseBody(body) {
           section.upsellChain = s.upsellChain
             .filter(u => u && typeof u.offerScript === 'string' && u.offerScript.trim())
             .map(u => ({
-              offerScript: u.offerScript.trim().slice(0, 600),
-              yesScript:   typeof u.yesScript === 'string' ? u.yesScript.trim().slice(0, 400) : '',
-              noScript:    typeof u.noScript  === 'string' ? u.noScript.trim().slice(0, 400)  : '',
-              itemKey:     typeof u.itemKey   === 'string' ? u.itemKey.trim().slice(0, 60)    : '',
-              price:       (typeof u.price === 'number' && !isNaN(u.price)) ? u.price : null,
+              offerScript:   u.offerScript.trim().slice(0, 600),
+              yesScript:     typeof u.yesScript === 'string' ? u.yesScript.trim().slice(0, 400) : '',
+              noScript:      typeof u.noScript  === 'string' ? u.noScript.trim().slice(0, 400)  : '',
+              itemKey:       typeof u.itemKey   === 'string' ? u.itemKey.trim().slice(0, 60)    : '',
+              price:         (typeof u.price === 'number' && !isNaN(u.price)) ? u.price : null,
+              // Audio URLs — persisted so pre-cached audio survives page refreshes + deploys
+              offerAudioUrl: typeof u.offerAudioUrl === 'string' && u.offerAudioUrl.trim() ? u.offerAudioUrl.trim() : null,
+              yesAudioUrl:   typeof u.yesAudioUrl   === 'string' && u.yesAudioUrl.trim()   ? u.yesAudioUrl.trim()   : null,
+              noAudioUrl:    typeof u.noAudioUrl    === 'string' && u.noAudioUrl.trim()    ? u.noAudioUrl.trim()    : null,
             }));
         }
 
@@ -2005,7 +2011,28 @@ function _preGenAudioFixed(companyId, container, reason) {
       // Guard: voice must be configured — skip silently if not
       if (!vs?.voiceId) return;
 
-      for (const text of textsToGen) {
+      // ── Resolve company-level variables ────────────────────────────────────
+      // Must match what preview-fixed-audio does so the text-hash (and thus
+      // filename) is identical. Without this, _preGenAudioFixed would create
+      // duplicate MongoDB entries with raw {variable} text that nothing ever
+      // references.
+      const triggerSettings = await CompanyTriggerSettings.findOne({ companyId }).lean();
+      const customVars = triggerSettings?.companyVariables instanceof Map
+        ? Object.fromEntries(triggerSettings.companyVariables)
+        : (triggerSettings?.companyVariables || {});
+
+      for (const rawText of textsToGen) {
+        // Resolve {companyName}, {serviceAreas}, {reg_diagnostic_fee}, etc.
+        const text = replacePlaceholders(rawText, company, customVars);
+
+        // Skip if unresolved runtime variables remain ({customerName}, etc.)
+        if (text.match(/\{[^}]+\}/)) {
+          logger.info('[companyKnowledge] Fixed response audio skipped — runtime variables present', {
+            companyId, title: container.title, vars: text.match(/\{[^}]+\}/g), reason,
+          });
+          continue;
+        }
+
         // Guard: InstantAudioService hard limit for non-TRIGGER kinds
         if (text.length > 420) {
           logger.info('[companyKnowledge] Fixed response audio skipped — content exceeds 420 chars', {

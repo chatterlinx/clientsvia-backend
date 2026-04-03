@@ -6455,6 +6455,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Fires for KC, Booking, and Turn1 responses. Only prompts that were pre-generated
       // via preview-fixed-audio will have a matching hash on disk — all others return
       // exists:false and fall through silently to ElevenLabs. Cost: ~0.1ms synchronous file stat.
+      //
+      // audioHintText: KC Fixed Response appends a booking CTA after variable
+      // resolution — the CTA changes the text-hash so the pre-cached audio
+      // (generated from section content ONLY) wouldn't match. audioHintText
+      // carries the resolved content WITHOUT the CTA for correct hash lookup.
       try {
         const isPreCachedAudioCandidate = [
           'KC_ENGINE',
@@ -6463,10 +6468,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         ].includes(runtimeResult?.matchSource) && responseText;
         if (!audioUrl && isPreCachedAudioCandidate) {
           const InstantAudioService = require('../services/instantAudio/InstantAudioService');
+          const audioHashText = runtimeResult?.audioHintText || responseText;
           const kcStatus = InstantAudioService.getStatus({
             companyId:    companyID,
             kind:         'KC_RESPONSE',
-            text:         responseText,
+            text:         audioHashText,
             voiceSettings,
           });
 

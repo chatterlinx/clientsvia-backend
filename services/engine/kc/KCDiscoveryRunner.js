@@ -1031,10 +1031,11 @@ async function _handlePrequalResponse({
 
     if (_escapedResult?.response) {
       return {
-        response:    _escapedResult.response,
-        matchSource: 'KC_ENGINE',
-        state:       nextState,
-        kcTrace:     _buildKcTrace(PATH.KC_DIRECT_ANSWER, { containerId, intent: 'PREQUAL_ESCAPED', latencyMs: Date.now() - startMs }),
+        response:      _escapedResult.response,
+        audioHintText: _escapedResult.audioHintText || null,
+        matchSource:   'KC_ENGINE',
+        state:         nextState,
+        kcTrace:       _buildKcTrace(PATH.KC_DIRECT_ANSWER, { containerId, intent: 'PREQUAL_ESCAPED', latencyMs: Date.now() - startMs }),
       };
     }
 
@@ -1115,10 +1116,11 @@ async function _handlePrequalResponse({
     nextState.agent2.discovery.pendingBookingFromKC = true;
     nextState.agent2.discovery.lastPath             = PATH.KC_BOOKING_INTENT;
     return {
-      response:    kcResult.response,
-      matchSource: 'KC_ENGINE',
-      state:       nextState,
-      kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, { containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs }),
+      response:      kcResult.response,
+      audioHintText: kcResult.audioHintText || null,
+      matchSource:   'KC_ENGINE',
+      state:         nextState,
+      kcTrace:       _buildKcTrace(PATH.KC_BOOKING_INTENT, { containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs }),
     };
   }
 
@@ -1139,10 +1141,11 @@ async function _handlePrequalResponse({
   });
 
   return {
-    response:    kcResult.response,
-    matchSource: 'KC_ENGINE',
-    state:       nextState,
-    kcTrace:     _buildKcTrace(PATH.KC_DIRECT_ANSWER, {
+    response:      kcResult.response,
+    audioHintText: kcResult.audioHintText || null,
+    matchSource:   'KC_ENGINE',
+    state:         nextState,
+    kcTrace:       _buildKcTrace(PATH.KC_DIRECT_ANSWER, {
       containerId, containerTitle, intent: kcResult.intent, latencyMs: Date.now() - startMs,
     }),
   };
@@ -1398,10 +1401,11 @@ async function _handleKCMatch({
     }).catch(() => {});
 
     return {
-      response:    kcResult.response,
-      matchSource: 'KC_ENGINE',
-      state:       nextState,
-      kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, {
+      response:      kcResult.response,
+      audioHintText: kcResult.audioHintText || null,
+      matchSource:   'KC_ENGINE',
+      state:         nextState,
+      kcTrace:       _buildKcTrace(PATH.KC_BOOKING_INTENT, {
         containerId, containerTitle, kcId: container.kcId || null,
         intent: kcResult.intent, latencyMs: Date.now() - startMs,
       }),
@@ -1481,10 +1485,11 @@ async function _handleKCMatch({
   });
 
   return {
-    response:    kcResult.response,
-    matchSource: 'KC_ENGINE',
-    state:       nextState,
-    kcTrace:     _buildKcTrace(finalPath, {
+    response:      kcResult.response,
+    audioHintText: kcResult.audioHintText || null,
+    matchSource:   'KC_ENGINE',
+    state:         nextState,
+    kcTrace:       _buildKcTrace(finalPath, {
       containerId, containerTitle, kcId: container.kcId || null,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
