@@ -30,6 +30,7 @@
  *   POST   /:companyId/knowledge/analyze-gaps           — Content Coach gap analysis (per section)
  *   POST   /:companyId/knowledge/generate-sample        — Groq-generated ideal response example
  *   POST   /:companyId/knowledge/preview-fixed-audio    — 🎙️ Generate + return URL for ⚡ Fixed section audio
+ *   POST   /:companyId/knowledge/regenerate-audio       — Batch-regenerate all missing KC section audio
  *   POST   /:companyId/knowledge/reorder                — Bulk priority update
  * ⚠️ GET    /:companyId/knowledge/:id                   — Get single (AFTER literal routes)
  *   PATCH  /:companyId/knowledge/:id                    — Partial update
@@ -1337,6 +1338,100 @@ ${sectionText.trim().slice(0, 1200)}`;
   } catch (err) {
     logger.error('[companyKnowledge] generate-sample error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Sample generation failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/regenerate-audio — Batch-regenerate missing KC audio
+// ─────────────────────────────────────────────────────────────────────────────
+// Iterates all containers with useFixedResponse sections, checks if a MongoDB
+// backup (KCResponseAudio) exists for each, and regenerates any that are missing.
+// This is the one-click fix after a deploy wipes disk cache for audio that was
+// generated before the MongoDB persistence feature existed.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/regenerate-audio', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const company = await v2Company.findById(companyId).lean();
+    if (!company) return res.status(404).json({ success: false, error: 'Company not found' });
+
+    const vs = company?.aiAgentSettings?.voiceSettings;
+    if (!vs?.voiceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'No voice configured — set your ElevenLabs voice in Agent Settings first.',
+      });
+    }
+
+    // Load custom company variables for placeholder resolution
+    const triggerSettings = await CompanyTriggerSettings.findOne({ companyId }).lean();
+    const customVars = triggerSettings?.companyVariables instanceof Map
+      ? Object.fromEntries(triggerSettings.companyVariables)
+      : (triggerSettings?.companyVariables || {});
+
+    // Load all active containers
+    const containers = await CompanyKnowledgeContainer.find({
+      companyId, isActive: true,
+    }).lean();
+
+    let regenerated = 0, skipped = 0, errors = 0, alreadyCached = 0;
+
+    for (const container of containers) {
+      const sections = container.sections || [];
+      for (const section of sections) {
+        if (!section.useFixedResponse) continue;
+        const rawText = section.content?.trim();
+        if (!rawText) { skipped++; continue; }
+
+        // Resolve company-level variables (same logic as preview-fixed-audio)
+        const resolvedText = replacePlaceholders(rawText, company, customVars);
+        const remainingVars = resolvedText.match(/\{[^}]+\}/g);
+        if (remainingVars?.length) { skipped++; continue; } // has runtime vars
+        if (resolvedText.length > 420) { skipped++; continue; } // too long
+
+        // Check if InstantAudioService knows the hash
+        const status = InstantAudioService.getStatus({
+          companyId, kind: 'KC_RESPONSE', text: resolvedText, voiceSettings: vs,
+        });
+        const hashMatch = status.fileName?.match(/([a-f0-9]{16})\.mp3$/);
+        if (!hashMatch) { skipped++; continue; }
+
+        // Check if MongoDB backup already exists
+        const existing = await KCResponseAudio.findOne({
+          companyId, fileHash: hashMatch[1], isValid: true,
+        }).select('_id').lean();
+
+        if (existing) { alreadyCached++; continue; }
+
+        // Generate audio + persist to MongoDB
+        try {
+          const genResult = await InstantAudioService.generate({
+            companyId, kind: 'KC_RESPONSE', text: resolvedText, company, voiceSettings: vs,
+          });
+          _persistKcAudioToMongo(companyId, genResult, resolvedText, vs.voiceId);
+          regenerated++;
+          logger.info('[companyKnowledge] regenerate-audio — generated', {
+            companyId, container: container.title, hash: hashMatch[1],
+          });
+        } catch (genErr) {
+          errors++;
+          logger.warn('[companyKnowledge] regenerate-audio — generation failed', {
+            companyId, container: container.title, error: genErr.message,
+          });
+        }
+      }
+    }
+
+    logger.info('[companyKnowledge] regenerate-audio complete', {
+      companyId, regenerated, alreadyCached, skipped, errors,
+    });
+
+    res.json({ success: true, regenerated, alreadyCached, skipped, errors });
+  } catch (err) {
+    logger.error('[companyKnowledge] regenerate-audio error', { companyId, err: err.message });
+    res.status(500).json({ success: false, error: err.message || 'Batch regeneration failed' });
   }
 });
 

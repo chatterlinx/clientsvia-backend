@@ -799,7 +799,9 @@
           <tbody id="ah-tbody"></tbody>
         </table>
       </div>
-      <div style="padding:12px 24px; border-top:1px solid var(--color-gray-200); display:flex; justify-content:flex-end;">
+      <div style="padding:12px 24px; border-top:1px solid var(--color-gray-200); display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn btn-sm" id="ah-regen" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:.8rem; font-weight:600; cursor:pointer; display:none;" title="Regenerate all missing KC section audio and save to deploy-proof storage">🔄 Regenerate Missing Audio</button>
+        <span id="ah-regen-status" style="font-size:.8rem; color:var(--color-gray-500);"></span>
         <button class="btn btn-secondary btn-sm" id="ah-refresh">Refresh</button>
       </div>
     </div>
@@ -823,6 +825,8 @@
     const tbodyEl    = document.getElementById('ah-tbody');
     const miniEl     = document.getElementById('ah-mini-status');
     const lightEl    = document.getElementById('ah-status-light');
+    const regenBtn   = document.getElementById('ah-regen');
+    const regenStatus = document.getElementById('ah-regen-status');
     let _data        = null;
     let _expanded    = {};
 
@@ -853,6 +857,36 @@
     closeBtn.addEventListener('click', () => { modal.classList.remove('open'); });
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
     refreshBtn.addEventListener('click', fetchData);
+
+    // ── Regenerate Missing Audio ─────────────────────────────────────
+    regenBtn.addEventListener('click', async () => {
+      const companyId = getCompanyId();
+      if (!companyId) return;
+      regenBtn.disabled = true;
+      regenBtn.textContent = '⏳ Regenerating...';
+      regenStatus.textContent = '';
+      try {
+        const result = await AgentConsoleAuth.apiFetch(
+          `/api/admin/agent2/company/${companyId}/knowledge/regenerate-audio`,
+          { method: 'POST' }
+        );
+        if (result.success) {
+          regenStatus.textContent = `✅ ${result.regenerated} regenerated, ${result.alreadyCached} already cached`;
+          regenStatus.style.color = '#16a34a';
+          // Refresh dashboard to reflect new state
+          setTimeout(fetchData, 500);
+        } else {
+          regenStatus.textContent = `❌ ${result.error || 'Failed'}`;
+          regenStatus.style.color = '#dc2626';
+        }
+      } catch (err) {
+        regenStatus.textContent = `❌ ${err.message}`;
+        regenStatus.style.color = '#dc2626';
+      } finally {
+        regenBtn.disabled = false;
+        regenBtn.textContent = '🔄 Regenerate Missing Audio';
+      }
+    });
 
     // ── Auto-load on page ready ────────────────────────────────────
     setTimeout(() => { if (getCompanyId()) fetchData(); }, 600);
@@ -906,6 +940,9 @@
         statCard(s.totalHealthy, 'Healthy', '#16a34a'),
         statCard(needsAttention, 'Needs Attention', needsAttention > 0 ? '#d97706' : '#16a34a'),
       ].join('');
+
+      // ── Show regenerate button if there are missing/stale items ──
+      regenBtn.style.display = needsAttention > 0 ? '' : 'none';
 
       // ── Table rows ──────────────────────────────────────────────
       let html = '';
