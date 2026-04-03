@@ -2266,9 +2266,28 @@ router.post('/voice', async (req, res) => {
           if (elevenLabsVoice && initResult.greeting) {
             try {
               logger.info(`[GREETING] 🎙️ TTS fallback for missing audio (ElevenLabs: ${elevenLabsVoice})`);
-              const ttsStartTime = Date.now();
               const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
-              
+
+              // ── Try GreetingAudio MongoDB cache BEFORE calling ElevenLabs ──
+              let greetFallbackPlayed = false;
+              try {
+                const GreetingAudio = require('../models/GreetingAudio');
+                const crypto = require('crypto');
+                const gTextHash = crypto.createHash('sha256').update(greetingText.trim()).digest('hex');
+                const cachedGreeting = await GreetingAudio.findOne({
+                  companyId: `${company._id}`, textHash: gTextHash
+                }).select('audioData audioUrl').lean();
+                if (cachedGreeting?.audioData) {
+                  // Restore disk + play via /audio-safe/
+                  const gAudioUrl = cachedGreeting.audioUrl || `/audio-safe/greetings/greet_fallback_${gTextHash.slice(0, 16)}.mp3`;
+                  gather.play(`${getSecureBaseUrl(req)}${gAudioUrl}`);
+                  greetFallbackPlayed = true;
+                  logger.info('[GREETING] ✅ TTS fallback served from GreetingAudio MongoDB cache');
+                }
+              } catch (_gErr) { /* non-fatal — fall through to ElevenLabs */ }
+
+              if (!greetFallbackPlayed) {
+              const ttsStartTime = Date.now();
               const _vs = company.aiAgentSettings?.voiceSettings || {};
               const buffer = await synthesizeSpeech({
                 text: greetingText,
@@ -2285,7 +2304,7 @@ router.post('/voice', async (req, res) => {
 
               const ttsTime = Date.now() - ttsStartTime;
               logger.info(`[GREETING] ✅ TTS fallback completed in ${ttsTime}ms`);
-              
+
               const fileName = `ai_greet_fallback_${Date.now()}.mp3`;
               const audioDir = path.join(__dirname, '../public/audio');
               if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
@@ -2293,6 +2312,7 @@ router.post('/voice', async (req, res) => {
               await fs.promises.writeFile(greetFallbackPath, buffer);
               scheduleTempAudioDelete(greetFallbackPath);
               gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+              }
             } catch (ttsErr) {
               logger.error(`[GREETING] ❌ TTS fallback failed: ${ttsErr.message}`);
               gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
@@ -2324,9 +2344,29 @@ router.post('/voice', async (req, res) => {
       else if (elevenLabsVoice && initResult.greeting) {
         try {
           logger.debug(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting (source: ${greetingSource})`);
-          const ttsStartTime = Date.now();
           const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
-          
+
+          // ── Try GreetingAudio MongoDB cache BEFORE calling ElevenLabs ──────
+          // Greeting text is usually identical across calls. First call pays the
+          // ElevenLabs cost; all subsequent calls play from cache for free.
+          let _greetCacheHit = false;
+          try {
+            const GreetingAudio = require('../models/GreetingAudio');
+            const crypto = require('crypto');
+            const _gHash = crypto.createHash('sha256').update(greetingText.trim()).digest('hex');
+            const _gCached = await GreetingAudio.findOne({
+              companyId: `${company._id}`, textHash: _gHash
+            }).select('audioData audioUrl').lean();
+            if (_gCached?.audioData && _gCached.audioUrl) {
+              gather.play(`${getSecureBaseUrl(req)}${_gCached.audioUrl}`);
+              _greetCacheHit = true;
+              logger.info('[GREETING] ✅ Realtime TTS skipped — served from GreetingAudio cache');
+            }
+          } catch (_gcErr) { /* non-fatal */ }
+
+          if (!_greetCacheHit) {
+          const ttsStartTime = Date.now();
+
           // 📼 BLACK BOX: Log TTS started
           if (CallLogger) {
             CallLogger.QuickLog.ttsStarted(
@@ -2337,7 +2377,7 @@ router.post('/voice', async (req, res) => {
               greetingText.length
             ).catch(() => {});
           }
-          
+
           const _vs2 = company.aiAgentSettings?.voiceSettings || {};
           const buffer = await synthesizeSpeech({
             text: greetingText,
@@ -2439,6 +2479,7 @@ router.post('/voice', async (req, res) => {
               }
             }).catch(() => {});
           }
+          } // end if (!_greetCacheHit)
         } catch (err) {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);
           
@@ -3101,6 +3142,15 @@ router.post('/handle-speech', async (req, res) => {
         try {
           const retryMsgClean = cleanTextForTTS(stripMarkdown(retryMsg));
           const _vs3 = company.aiAgentSettings?.voiceSettings || {};
+
+          // ── Check InstantAudioService cache — retry messages are near-static ──
+          const _retryIAS = require('../services/instantAudio/InstantAudioService');
+          const _retryStatus = _retryIAS.getStatus({
+            companyId: companyID, kind: 'RETRY_PROMPT', text: retryMsgClean, voiceSettings: _vs3,
+          });
+          if (_retryStatus.exists) {
+            gather.play(`${getSecureBaseUrl(req)}${_retryStatus.url.replace('/audio/', '/audio-safe/')}`);
+          } else {
           const buffer = await synthesizeSpeech({
             text: retryMsgClean,
             voiceId: elevenLabsVoice,
@@ -3113,12 +3163,16 @@ router.post('/handle-speech', async (req, res) => {
             optimize_streaming_latency: _vs3.streamingLatency,
             company
           });
-          
+
+          // Cache for next retry — same text, pays ElevenLabs once
+          try { fs.writeFileSync(_retryStatus.filePath, buffer); } catch (_) {}
+
           const audioKey = `audio:retry:${callSid}`;
           if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
-          
+
           const audioUrl = `https://${req.get('host')}/api/twilio/audio/retry/${callSid}`;
           gather.play(audioUrl);
+          }
         } catch (err) {
           logger.error('[LOW CONFIDENCE] ElevenLabs TTS failed, falling back to <Say>:', err);
           gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
@@ -5104,6 +5158,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             const _vs = company.aiAgentSettings?.voiceSettings || {};
             if (_vs.voiceId) {
               try {
+                // ── Check InstantAudioService cache — LAP responses are static text ──
+                const _lapIAS = require('../services/instantAudio/InstantAudioService');
+                const _lapStatus = _lapIAS.getStatus({
+                  companyId: companyID, kind: 'LAP_RESPONSE', text: cleanText, voiceSettings: _vs,
+                });
+                if (_lapStatus.exists) {
+                  lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
+                  return;
+                }
                 const lapBuf = await synthesizeSpeech({
                   text:                       cleanText,
                   voiceId:                    _vs.voiceId,
@@ -5116,11 +5179,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   optimize_streaming_latency: _vs.streamingLatency,
                   company,
                 });
-                const lapFname = `lap_${Date.now()}_${Math.floor(Math.random() * 9999)}.mp3`;
-                const lapFpath = path.join(__dirname, '../public/audio', lapFname);
-                await fs.promises.writeFile(lapFpath, lapBuf);
-                scheduleTempAudioDelete(lapFpath);
-                lapTwiml.play(`${getSecureBaseUrl(req)}/audio/${lapFname}`);
+                // Cache for next call — LAP text is static, pays ElevenLabs once
+                try { fs.writeFileSync(_lapStatus.filePath, lapBuf); } catch (_) {}
+                lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
                 return;
               } catch (ttsErr) {
                 logger.warn('[LAP GATE] ElevenLabs TTS failed, falling back to Twilio say', { error: ttsErr.message });
@@ -5713,6 +5774,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
         if (elevenLabsVoice) {
           try {
+            // ── Check cache — patience check-in text is static per company ──
+            const _pIAS = require('../services/instantAudio/InstantAudioService');
+            const _pClean = cleanTextForTTS(checkinText);
+            const _pStatus = _pIAS.getStatus({
+              companyId: companyID, kind: 'PATIENCE_CHECKIN', text: _pClean, voiceSettings,
+            });
+            if (_pStatus.exists) {
+              gather.play(`https://${hostHeader}${_pStatus.url.replace('/audio/', '/audio-safe/')}`);
+            } else {
             const buffer = await synthesizeSpeech({
               text: checkinText, voiceId: elevenLabsVoice,
               stability: voiceSettings.stability, similarity_boost: voiceSettings.similarityBoost,
@@ -5720,13 +5790,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               model_id: voiceSettings.aiModel, output_format: voiceSettings.outputFormat,
               optimize_streaming_latency: voiceSettings.streamingLatency, company
             });
-            const fileName       = `patience_checkin_${callSid}_${Date.now()}.mp3`;
-            const audioDir       = path.join(__dirname, '../public/audio');
-            if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-            const checkinAudioPath = path.join(audioDir, fileName);
-            await fs.promises.writeFile(checkinAudioPath, buffer);
-            scheduleTempAudioDelete(checkinAudioPath);
-            gather.play(`https://${hostHeader}/audio/${fileName}`);
+            // Cache for next patience cycle
+            try { fs.writeFileSync(_pStatus.filePath, buffer); } catch (__) {}
+            gather.play(`https://${hostHeader}${_pStatus.url.replace('/audio/', '/audio-safe/')}`);
+            }
           } catch (_) {
             gather.say(escapeTwiML(checkinText));
           }
