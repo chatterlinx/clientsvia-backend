@@ -3924,6 +3924,7 @@ const companySchema = new mongoose.Schema({
             didntUnderstandText:    { type: String,  default: "I'm sorry, I missed that — could you say that again?" },
             returningCallerEnabled: { type: Boolean, default: true },
             historyDepthDays:       { type: Number,  default: 180 },  // how far back to surface context signals
+            promptAudio:            { type: mongoose.Schema.Types.Mixed, default: {} }, // { key: { url, generatedText } }
         },
 
         // -------------------------------------------------------------------
@@ -4188,7 +4189,11 @@ const companySchema = new mongoose.Schema({
                     key:            { type: String },                // canonical key e.g. 'thanksgiving'
                     closeRegular:   { type: Boolean, default: false },
                     closeEmergency: { type: Boolean, default: false }
-                }]
+                }],
+
+                // ── PROMPT AUDIO PRE-CACHING STATE ────────────────────────
+                // Map of { key: { url, generatedText } } for pre-recorded booking prompts
+                promptAudio: { type: mongoose.Schema.Types.Mixed, default: {} }
             },
 
             discovery: {
@@ -5592,7 +5597,14 @@ const companySchema = new mongoose.Schema({
         firstPromptSoft: { type: Boolean, default: true },
         semanticSearchEnabled: { type: Boolean, default: true },
         confidenceScoring: { type: Boolean, default: true },
-        autoLearningQueue: { type: Boolean, default: true }
+        autoLearningQueue: { type: Boolean, default: true },
+        // Discovery Notes settings (written by discoveryNotesSettings.js route)
+        discoverySettings: {
+            bookingFieldConfig:    { type: mongoose.Schema.Types.Mixed, default: {} },
+            uapbTemplates:         { type: mongoose.Schema.Types.Mixed, default: {} },
+            discriminatorQuestion: { type: mongoose.Schema.Types.Mixed, default: null },
+            promptAudio:           { type: mongoose.Schema.Types.Mixed, default: {} }  // { key: { url, generatedText } }
+        }
     },
     
     // AI AGENT SETTINGS - NEW ISOLATED SYSTEM (100% separate from AI Agent Logic)
