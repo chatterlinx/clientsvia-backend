@@ -82,6 +82,23 @@
       <div class="single-column-layout-full">
 
         <!-- ───────────────────────────────────────────────────────────
+             AUDIO HEALTH STATUS BAR (top of page)
+             ─────────────────────────────────────────────────────────── -->
+          <div id="audio-health-card" style="cursor:pointer; background:var(--color-gray-50); border:1px solid var(--color-gray-200); border-radius:12px; padding:14px 20px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; transition: border-color .15s, box-shadow .15s;" onmouseenter="this.style.borderColor='var(--color-gray-300)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)';" onmouseleave="this.style.borderColor='var(--color-gray-200)'; this.style.boxShadow='none';">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span id="ah-status-light" style="width:14px; height:14px; border-radius:50%; background:#94a3b8; display:inline-block; flex-shrink:0; box-shadow:0 0 0 3px rgba(148,163,184,.25);"></span>
+              <div>
+                <span style="font-size:.9rem; font-weight:700; color:var(--color-gray-800);">Audio Health</span>
+                <span style="font-size:.75rem; color:var(--color-gray-400); margin-left:8px;">Pre-cached audio coverage</span>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span id="ah-mini-status" style="font-size:.82rem; font-weight:600; color:var(--color-gray-400);">Loading...</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="opacity:.4;"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+
+        <!-- ───────────────────────────────────────────────────────────
              CARD: Knowledge Base
              ─────────────────────────────────────────────────────────── -->
           <div class="card nav-card" data-navigate="services" draggable="true">
@@ -690,19 +707,6 @@
           </div>
 
         <!-- ───────────────────────────────────────────────────────────
-             CARD: Audio Health (opens modal)
-             ─────────────────────────────────────────────────────────── -->
-          <div class="card" id="audio-health-card" style="cursor: pointer;">
-            <div class="card-header">
-              <div>
-                <h2 class="card-title">Audio Health</h2>
-                <p class="card-subtitle">Pre-cached audio coverage and integrity across all pages</p>
-              </div>
-              <div id="ah-mini-status" style="font-size: .82rem; font-weight: 600; color: var(--color-gray-400);">Click to load</div>
-            </div>
-          </div>
-
-        <!-- ───────────────────────────────────────────────────────────
              CARD: Runtime Truth
              ─────────────────────────────────────────────────────────── -->
           <div class="card">
@@ -787,9 +791,9 @@
           <thead>
             <tr>
               <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Page</th>
-              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Fixed</th>
-              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Audio</th>
-              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Health</th>
+              <th style="text-align:center; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Toggles On</th>
+              <th style="text-align:center; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Audio Cached</th>
+              <th style="text-align:center; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Health</th>
             </tr>
           </thead>
           <tbody id="ah-tbody"></tbody>
@@ -811,18 +815,34 @@
   (function() {
     'use strict';
 
-    const modal     = document.getElementById('ah-modal');
-    const card      = document.getElementById('audio-health-card');
-    const closeBtn  = document.getElementById('ah-close');
+    const modal      = document.getElementById('ah-modal');
+    const card       = document.getElementById('audio-health-card');
+    const closeBtn   = document.getElementById('ah-close');
     const refreshBtn = document.getElementById('ah-refresh');
-    const summaryEl = document.getElementById('ah-summary');
-    const tbodyEl   = document.getElementById('ah-tbody');
-    const miniEl    = document.getElementById('ah-mini-status');
-    let _data       = null;
-    let _expanded   = {};
+    const summaryEl  = document.getElementById('ah-summary');
+    const tbodyEl    = document.getElementById('ah-tbody');
+    const miniEl     = document.getElementById('ah-mini-status');
+    const lightEl    = document.getElementById('ah-status-light');
+    let _data        = null;
+    let _expanded    = {};
+
+    // ── Page → link mapping ────────────────────────────────────────
+    const PAGE_LINKS = {
+      'KC / Services': 'services.html',
+      'Booking':       'booking.html',
+      'Turn1':         'turn1.html',
+      'UAP':           'uap.html',
+      'Greetings':     'agent2.html',
+      'Triggers':      'interceptors.html',
+    };
 
     function getCompanyId() {
       return new URLSearchParams(window.location.search).get('companyId');
+    }
+    function pageUrl(pageName) {
+      const file = PAGE_LINKS[pageName];
+      if (!file) return null;
+      return `/agent-console/${file}?companyId=${getCompanyId()}`;
     }
 
     // ── Open / Close ───────────────────────────────────────────────
@@ -834,19 +854,32 @@
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
     refreshBtn.addEventListener('click', fetchData);
 
+    // ── Auto-load on page ready ────────────────────────────────────
+    setTimeout(() => { if (getCompanyId()) fetchData(); }, 600);
+
     // ── Fetch ──────────────────────────────────────────────────────
     async function fetchData() {
       const companyId = getCompanyId();
-      if (!companyId) { summaryEl.textContent = 'No companyId'; return; }
+      if (!companyId) { miniEl.textContent = 'No companyId'; return; }
 
-      tbodyEl.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--color-gray-400);">Loading...</td></tr>';
-      summaryEl.innerHTML = '';
+      miniEl.textContent = 'Loading...';
+      miniEl.style.color = 'var(--color-gray-400)';
+      if (modal.style.display !== 'none') {
+        tbodyEl.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--color-gray-400);">Loading...</td></tr>';
+        summaryEl.innerHTML = '';
+      }
 
       try {
         _data = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/company/${companyId}/audio-health`);
         render();
       } catch (err) {
-        tbodyEl.innerHTML = `<tr><td colspan="4" style="padding:20px; color:#dc2626;">Error: ${err.message}</td></tr>`;
+        miniEl.textContent = 'Error';
+        miniEl.style.color = '#dc2626';
+        lightEl.style.background = '#dc2626';
+        lightEl.style.boxShadow = '0 0 0 3px rgba(220,38,38,.2)';
+        if (modal.style.display !== 'none') {
+          tbodyEl.innerHTML = `<tr><td colspan="4" style="padding:20px; color:#dc2626;">Error: ${err.message}</td></tr>`;
+        }
       }
     }
 
@@ -855,35 +888,64 @@
       if (!_data?.pages) return;
       const s = _data.summary;
 
-      // Summary cards
+      // ── Status light + mini text on the top card ────────────────
       const needsAttention = s.totalFixed - s.totalHealthy;
+      const allGood = needsAttention === 0 && s.totalFixed > 0;
+      const lightColor = allGood ? '#16a34a' : needsAttention > 5 ? '#dc2626' : '#d97706';
+
+      lightEl.style.background = lightColor;
+      lightEl.style.boxShadow  = `0 0 0 3px ${lightColor}33`;
+
+      miniEl.textContent = `${s.totalHealthy}/${s.totalFixed} healthy`;
+      miniEl.style.color = lightColor;
+
+      // ── Summary cards in modal ──────────────────────────────────
       summaryEl.innerHTML = [
-        statCard(s.totalFixed, 'Fixed', '#334155'),
+        statCard(s.totalFixed, 'Fixed Prompts', '#334155'),
         statCard(s.totalWithAudio, 'Audio Cached', '#0ea5e9'),
         statCard(s.totalHealthy, 'Healthy', '#16a34a'),
         statCard(needsAttention, 'Needs Attention', needsAttention > 0 ? '#d97706' : '#16a34a'),
       ].join('');
 
-      // Mini status on dashboard card
-      miniEl.textContent = `${s.totalHealthy}/${s.totalFixed} healthy`;
-      miniEl.style.color = s.totalHealthy === s.totalFixed ? '#16a34a' : '#d97706';
-
-      // Table rows
+      // ── Table rows ──────────────────────────────────────────────
       let html = '';
       for (const page of _data.pages) {
-        const statusColor = page.status === 'ok' ? '#16a34a' : page.status === 'warning' ? '#d97706' : '#dc2626';
-        const statusIcon  = page.status === 'ok' ? '&#10003;' : page.status === 'warning' ? '&#9888;' : '&#10007;';
-        const hasDetails  = page.details && page.details.length > 0;
-        const arrow       = _expanded[page.page] ? '&#9660;' : '&#9654;';
+        const hasDetails = page.details && page.details.length > 0;
+        const arrow      = _expanded[page.page] ? '&#9660;' : '&#9654;';
+        const link       = pageUrl(page.page);
 
-        html += `<tr class="ah-page-row" data-page="${esc(page.page)}" style="cursor:pointer;" title="Click to expand">
-          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); font-weight:600;">
-            ${hasDetails ? `<span style="font-size:.7rem; margin-right:6px;">${arrow}</span>` : ''}
-            ${esc(page.page)}
+        // Health indicator dot
+        const hDot = page.status === 'ok'
+          ? '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; margin-right:6px;"></span>'
+          : page.status === 'warning'
+          ? '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#d97706; margin-right:6px;"></span>'
+          : '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#dc2626; margin-right:6px;"></span>';
+
+        // Fixed toggle ratio badge
+        const togglePct = page.totalPrompts > 0 ? Math.round(page.fixedCount / page.totalPrompts * 100) : 0;
+        const toggleColor = togglePct === 100 ? '#16a34a' : togglePct >= 50 ? '#d97706' : '#dc2626';
+
+        // Audio ratio badge
+        const audioPct = page.fixedCount > 0 ? Math.round(page.audioCount / page.fixedCount * 100) : 0;
+        const audioColor = audioPct === 100 ? '#16a34a' : audioPct >= 50 ? '#d97706' : '#dc2626';
+
+        html += `<tr class="ah-page-row" data-page="${esc(page.page)}" style="cursor:pointer;" title="Click to expand details">
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100);">
+            <div style="display:flex; align-items:center; gap:6px;">
+              ${hasDetails ? `<span style="font-size:.65rem; color:var(--color-gray-400);">${arrow}</span>` : '<span style="width:10px;"></span>'}
+              <span style="font-weight:600;">${esc(page.page)}</span>
+              ${link ? `<a href="${link}" onclick="event.stopPropagation();" style="font-size:.7rem; color:#0ea5e9; text-decoration:none; margin-left:4px;" title="Open ${esc(page.page)} page">&#8599;</a>` : ''}
+            </div>
           </td>
-          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); font-variant-numeric:tabular-nums;">${page.fixedCount} / ${page.totalPrompts}</td>
-          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); font-variant-numeric:tabular-nums;">${page.audioCount} / ${page.fixedCount}</td>
-          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100);"><span style="color:${statusColor}; font-weight:600;">${statusIcon} ${cap(page.status)}</span></td>
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); text-align:center; font-variant-numeric:tabular-nums;">
+            <span style="color:${toggleColor}; font-weight:600;">${page.fixedCount}</span><span style="color:var(--color-gray-400);">/${page.totalPrompts}</span>
+          </td>
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); text-align:center; font-variant-numeric:tabular-nums;">
+            <span style="color:${audioColor}; font-weight:600;">${page.audioCount}</span><span style="color:var(--color-gray-400);">/${page.fixedCount}</span>
+          </td>
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); text-align:center;">
+            ${hDot}<span style="font-size:.78rem; font-weight:500; color:var(--color-gray-600);">${cap(page.status)}</span>
+          </td>
         </tr>`;
 
         // Detail rows (hidden unless expanded)
@@ -894,17 +956,22 @@
                          : d.health === 'missing'  ? '#dc2626'
                          : d.health === 'at-risk'  ? '#d97706'
                          : '#94a3b8';
-            const hIcon  = d.health === 'healthy' ? '&#10003;'
-                         : d.health === 'stale'   ? '&#9888;'
-                         : d.health === 'missing'  ? '&#10007;'
-                         : d.health === 'at-risk'  ? '&#9888;'
-                         : '—';
+            const hSmall = d.health === 'healthy'
+              ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a;"></span>'
+              : d.health === 'stale'
+              ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#d97706;"></span>'
+              : d.health === 'missing'
+              ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#dc2626;"></span>'
+              : d.health === 'at-risk'
+              ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#d97706;"></span>'
+              : '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#94a3b8;"></span>';
+
             html += `<tr style="background:var(--color-gray-50);">
-              <td style="padding:4px 14px 4px 40px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">${esc(d.label)}</td>
-              <td style="padding:4px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">${d.isFixed ? 'Yes' : '—'}</td>
-              <td style="padding:4px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">${d.hasAudio ? 'Yes' : '—'}</td>
-              <td style="padding:4px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">
-                <span style="color:${hColor};">${hIcon}</span>
+              <td style="padding:5px 14px 5px 44px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem; color:var(--color-gray-600);">${esc(d.label)}</td>
+              <td style="padding:5px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem; text-align:center; color:var(--color-gray-500);">${d.isFixed ? 'Yes' : '—'}</td>
+              <td style="padding:5px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem; text-align:center; color:var(--color-gray-500);">${d.hasAudio ? 'Yes' : '—'}</td>
+              <td style="padding:5px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem; text-align:center;">
+                ${hSmall}
                 ${d.notes ? `<span style="color:#7c3aed; font-size:.72rem; margin-left:6px;">${esc(d.notes)}</span>` : ''}
               </td>
             </tr>`;
