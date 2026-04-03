@@ -2600,10 +2600,17 @@ function _renderSimResults(filter) {
   for (const r of filtered) {
     const rowCls = r.status === 'wrong' ? 'wrong' : r.status === 'nomatch' ? 'nomatch' : '';
     const statusIcon = r.status === 'correct' ? '✅' : r.status === 'wrong' ? '❌' : r.status === 'nomatch' ? '⚠️' : '💥';
+    const editUrl = id => `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${id}`;
+    const expectedLink = r.expectedId
+      ? `<a href="${editUrl(r.expectedId)}" style="color:inherit;text-decoration:underline dotted;text-underline-offset:3px;" title="Edit this container">${_esc(r.expectedTitle || '')}</a>`
+      : _esc(r.expectedTitle || '');
+    const winnerLink = r.winnerId
+      ? `<a href="${editUrl(r.winnerId)}" style="color:inherit;text-decoration:underline dotted;text-underline-offset:3px;" title="Edit this container">${_esc(r.winnerTitle)}</a>`
+      : (r.winnerTitle ? _esc(r.winnerTitle) : '<span style="color:var(--text-muted);">—</span>');
     html += `<tr class="${rowCls}">
       <td style="max-width:300px;word-break:break-word;">${_esc(r.utterance)}</td>
-      <td>${_esc(r.expectedTitle || '')}</td>
-      <td>${r.winnerTitle ? _esc(r.winnerTitle) : '<span style="color:var(--text-muted);">—</span>'}</td>
+      <td>${expectedLink}</td>
+      <td>${winnerLink}</td>
       <td>${r.via ? `<span style="font-weight:600;">${_esc(r.via)}</span>` : '—'}</td>
       <td style="text-align:center;">${statusIcon}</td>
     </tr>`;
