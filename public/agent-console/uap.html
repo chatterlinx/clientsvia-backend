@@ -635,7 +635,7 @@
           Message the agent uses when caller pivots mid-booking.
           Leave blank → Groq generates contextually.
         </div>
-        <textarea class="form-textarea" id="gracefulPivotTpl"
+        <textarea class="form-textarea" id="gracefulPivotTpl" data-audio-key="gracefulPivot"
           placeholder="e.g. No problem — before we answer that, let me just confirm your booking details..."
           rows="3"></textarea>
         <div class="form-hint">Blank = Groq-generated (recommended for most companies). Set a template to control the exact wording.</div>
@@ -647,7 +647,7 @@
           Message the agent uses to resume booking after answering a pivot question.
           Leave blank → Groq generates contextually.
         </div>
-        <textarea class="form-textarea" id="resumePromptTpl"
+        <textarea class="form-textarea" id="resumePromptTpl" data-audio-key="resumePrompt"
           placeholder="e.g. Great — now let me get you scheduled..."
           rows="3"></textarea>
         <div class="form-hint">Blank = Groq-generated (recommended). These templates are stored per company — runtime never uses hardcoded values.</div>
@@ -957,6 +957,7 @@
 <!-- ─── Toast Container ──────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="/agent-console/lib/prompt-audio.js"></script>
 <script src="uap.js"></script>
 </body>
 </html>

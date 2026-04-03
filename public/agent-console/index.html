@@ -690,6 +690,19 @@
           </div>
 
         <!-- ───────────────────────────────────────────────────────────
+             CARD: Audio Health (opens modal)
+             ─────────────────────────────────────────────────────────── -->
+          <div class="card" id="audio-health-card" style="cursor: pointer;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Audio Health</h2>
+                <p class="card-subtitle">Pre-cached audio coverage and integrity across all pages</p>
+              </div>
+              <div id="ah-mini-status" style="font-size: .82rem; font-weight: 600; color: var(--color-gray-400);">Click to load</div>
+            </div>
+          </div>
+
+        <!-- ───────────────────────────────────────────────────────────
              CARD: Runtime Truth
              ─────────────────────────────────────────────────────────── -->
           <div class="card">
@@ -757,9 +770,169 @@
     <div class="toast-container" id="toast-container"></div>
   </div>
 
+  <!-- ================================================================
+       AUDIO HEALTH MODAL
+       ================================================================ -->
+  <div class="modal-overlay" id="ah-modal" style="display:none;">
+    <div class="modal" style="max-width: 920px; width: 95%;">
+      <div class="modal-header" style="display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid var(--color-gray-200);">
+        <h3 style="margin:0; font-size:1.1rem; font-weight:700;">Audio Health Dashboard</h3>
+        <button class="btn btn-ghost btn-sm" id="ah-close" style="font-size:1.2rem; line-height:1;">&times;</button>
+      </div>
+      <div style="padding:20px 24px; overflow-y:auto; max-height:70vh;">
+        <!-- Summary bar -->
+        <div id="ah-summary" style="display:flex; gap:12px; margin-bottom:18px; flex-wrap:wrap;"></div>
+        <!-- Table -->
+        <table id="ah-table" style="width:100%; border-collapse:collapse; font-size:.85rem;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Page</th>
+              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Fixed</th>
+              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Audio</th>
+              <th style="text-align:left; padding:10px 14px; background:var(--color-gray-50); border-bottom:2px solid var(--color-gray-200); font-weight:600; color:var(--color-gray-600); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px;">Health</th>
+            </tr>
+          </thead>
+          <tbody id="ah-tbody"></tbody>
+        </table>
+      </div>
+      <div style="padding:12px 24px; border-top:1px solid var(--color-gray-200); display:flex; justify-content:flex-end;">
+        <button class="btn btn-secondary btn-sm" id="ah-refresh">Refresh</button>
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript -->
   <script src="/agent-console/lib/auth.js"></script>
   <script src="/agent-console/shared/truthButton.js"></script>
   <script src="/agent-console/index.js"></script>
+
+  <!-- Audio Health Modal Logic -->
+  <script>
+  (function() {
+    'use strict';
+
+    const modal     = document.getElementById('ah-modal');
+    const card      = document.getElementById('audio-health-card');
+    const closeBtn  = document.getElementById('ah-close');
+    const refreshBtn = document.getElementById('ah-refresh');
+    const summaryEl = document.getElementById('ah-summary');
+    const tbodyEl   = document.getElementById('ah-tbody');
+    const miniEl    = document.getElementById('ah-mini-status');
+    let _data       = null;
+    let _expanded   = {};
+
+    function getCompanyId() {
+      return new URLSearchParams(window.location.search).get('companyId');
+    }
+
+    // ── Open / Close ───────────────────────────────────────────────
+    card.addEventListener('click', () => {
+      modal.style.display = 'flex';
+      if (!_data) fetchData();
+    });
+    closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    refreshBtn.addEventListener('click', fetchData);
+
+    // ── Fetch ──────────────────────────────────────────────────────
+    async function fetchData() {
+      const companyId = getCompanyId();
+      if (!companyId) { summaryEl.textContent = 'No companyId'; return; }
+
+      tbodyEl.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--color-gray-400);">Loading...</td></tr>';
+      summaryEl.innerHTML = '';
+
+      try {
+        _data = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/company/${companyId}/audio-health`);
+        render();
+      } catch (err) {
+        tbodyEl.innerHTML = `<tr><td colspan="4" style="padding:20px; color:#dc2626;">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    // ── Render ─────────────────────────────────────────────────────
+    function render() {
+      if (!_data?.pages) return;
+      const s = _data.summary;
+
+      // Summary cards
+      const needsAttention = s.totalFixed - s.totalHealthy;
+      summaryEl.innerHTML = [
+        statCard(s.totalFixed, 'Fixed', '#334155'),
+        statCard(s.totalWithAudio, 'Audio Cached', '#0ea5e9'),
+        statCard(s.totalHealthy, 'Healthy', '#16a34a'),
+        statCard(needsAttention, 'Needs Attention', needsAttention > 0 ? '#d97706' : '#16a34a'),
+      ].join('');
+
+      // Mini status on dashboard card
+      miniEl.textContent = `${s.totalHealthy}/${s.totalFixed} healthy`;
+      miniEl.style.color = s.totalHealthy === s.totalFixed ? '#16a34a' : '#d97706';
+
+      // Table rows
+      let html = '';
+      for (const page of _data.pages) {
+        const statusColor = page.status === 'ok' ? '#16a34a' : page.status === 'warning' ? '#d97706' : '#dc2626';
+        const statusIcon  = page.status === 'ok' ? '&#10003;' : page.status === 'warning' ? '&#9888;' : '&#10007;';
+        const hasDetails  = page.details && page.details.length > 0;
+        const arrow       = _expanded[page.page] ? '&#9660;' : '&#9654;';
+
+        html += `<tr class="ah-page-row" data-page="${esc(page.page)}" style="cursor:pointer;" title="Click to expand">
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); font-weight:600;">
+            ${hasDetails ? `<span style="font-size:.7rem; margin-right:6px;">${arrow}</span>` : ''}
+            ${esc(page.page)}
+          </td>
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); font-variant-numeric:tabular-nums;">${page.fixedCount} / ${page.totalPrompts}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100); font-variant-numeric:tabular-nums;">${page.audioCount} / ${page.fixedCount}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid var(--color-gray-100);"><span style="color:${statusColor}; font-weight:600;">${statusIcon} ${cap(page.status)}</span></td>
+        </tr>`;
+
+        // Detail rows (hidden unless expanded)
+        if (hasDetails && _expanded[page.page]) {
+          for (const d of page.details) {
+            const hColor = d.health === 'healthy' ? '#16a34a'
+                         : d.health === 'stale'   ? '#d97706'
+                         : d.health === 'missing'  ? '#dc2626'
+                         : d.health === 'at-risk'  ? '#d97706'
+                         : '#94a3b8';
+            const hIcon  = d.health === 'healthy' ? '&#10003;'
+                         : d.health === 'stale'   ? '&#9888;'
+                         : d.health === 'missing'  ? '&#10007;'
+                         : d.health === 'at-risk'  ? '&#9888;'
+                         : '—';
+            html += `<tr style="background:var(--color-gray-50);">
+              <td style="padding:4px 14px 4px 40px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">${esc(d.label)}</td>
+              <td style="padding:4px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">${d.isFixed ? 'Yes' : '—'}</td>
+              <td style="padding:4px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">${d.hasAudio ? 'Yes' : '—'}</td>
+              <td style="padding:4px 14px; border-bottom:1px solid var(--color-gray-100); font-size:.78rem;">
+                <span style="color:${hColor};">${hIcon}</span>
+                ${d.notes ? `<span style="color:#7c3aed; font-size:.72rem; margin-left:6px;">${esc(d.notes)}</span>` : ''}
+              </td>
+            </tr>`;
+          }
+        }
+      }
+      tbodyEl.innerHTML = html;
+
+      // Wire expand/collapse
+      tbodyEl.querySelectorAll('.ah-page-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const page = row.dataset.page;
+          _expanded[page] = !_expanded[page];
+          render();
+        });
+      });
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────
+    function statCard(value, label, color) {
+      return `<div style="flex:1; min-width:110px; padding:12px 16px; background:var(--color-gray-50); border-radius:12px; text-align:center;">
+        <div style="font-size:1.5rem; font-weight:700; color:${color};">${value}</div>
+        <div style="font-size:.72rem; color:var(--color-gray-500); margin-top:2px;">${label}</div>
+      </div>`;
+    }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+  })();
+  </script>
 </body>
 </html>

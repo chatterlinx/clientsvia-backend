@@ -75,8 +75,9 @@ router.get('/:companyId/discovery/settings', async (req, res) => {
     const bookingFieldConfig   = discoverySettings.bookingFieldConfig   || {};
     const uapbTemplates        = discoverySettings.uapbTemplates        || {};
     const discriminatorQuestion = discoverySettings.discriminatorQuestion || null;
+    const promptAudio          = discoverySettings.promptAudio          || {};
 
-    return res.json({ success: true, bookingFieldConfig, uapbTemplates, discriminatorQuestion });
+    return res.json({ success: true, bookingFieldConfig, uapbTemplates, discriminatorQuestion, promptAudio });
   } catch (err) {
     logger.error('[DNSettings] GET settings error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Failed to load settings' });
@@ -98,10 +99,10 @@ router.patch('/:companyId/discovery/settings', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
-  const { bookingFieldConfig, uapbTemplates, discriminatorQuestion } = req.body;
+  const { bookingFieldConfig, uapbTemplates, discriminatorQuestion, promptAudio } = req.body;
 
-  if (bookingFieldConfig === undefined && uapbTemplates === undefined && discriminatorQuestion === undefined) {
-    return res.status(400).json({ success: false, error: 'bookingFieldConfig, uapbTemplates, or discriminatorQuestion is required' });
+  if (bookingFieldConfig === undefined && uapbTemplates === undefined && discriminatorQuestion === undefined && promptAudio === undefined) {
+    return res.status(400).json({ success: false, error: 'bookingFieldConfig, uapbTemplates, discriminatorQuestion, or promptAudio is required' });
   }
 
   if (bookingFieldConfig !== undefined && (typeof bookingFieldConfig !== 'object' || Array.isArray(bookingFieldConfig))) {
@@ -130,6 +131,11 @@ router.patch('/:companyId/discovery/settings', async (req, res) => {
       $set['agentSettings.discoverySettings.discriminatorQuestion'] = discriminatorQuestion;
       // Also write to aiAgentSettings.agent2.bookingConfig so BookingLogicEngine picks it up
       $set['aiAgentSettings.agent2.bookingConfig.discriminatorQuestion'] = discriminatorQuestion;
+    }
+
+    // Prompt audio pre-caching state for UAPB textareas
+    if (promptAudio && typeof promptAudio === 'object') {
+      $set['agentSettings.discoverySettings.promptAudio'] = promptAudio;
     }
 
     const result = await Company.updateOne({ _id: companyId }, { $set });

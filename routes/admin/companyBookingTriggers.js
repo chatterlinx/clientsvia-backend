@@ -857,7 +857,10 @@ router.get('/:companyId/booking-config',
         },
         // Holidays: merge stored prefs with catalog so UI always sees the full list
         // with this-year dates computed server-side
-        holidays: HolidayService.mergeWithCompanyPrefs(bc.holidays || [])
+        holidays: HolidayService.mergeWithCompanyPrefs(bc.holidays || []),
+
+        // Prompt audio pre-caching state
+        promptAudio: bc.promptAudio || {}
       };
 
       return res.json({ success: true, bookingConfig: response });
@@ -895,7 +898,7 @@ router.post('/:companyId/booking-config',
       }
 
       // Write unified bookingConfig
-      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'addressConfig', 'preferenceCapture', 'technicians', 'serviceTypes', 'emergencySchedule', 'holidays'];
+      const bcFields = ['callerRecognition', 'builtinPrompts', 'customFields', 'altContact', 'confirmation', 'calendar', 'slotFilling', 'requiredFieldsConfig', 'addressConfig', 'preferenceCapture', 'technicians', 'serviceTypes', 'emergencySchedule', 'holidays', 'promptAudio'];
       for (const field of bcFields) {
         if (body[field] !== undefined) {
           updates[`aiAgentSettings.agent2.bookingConfig.${field}`] = body[field];

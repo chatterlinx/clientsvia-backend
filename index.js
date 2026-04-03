@@ -306,6 +306,9 @@ async function loadAllRoutes() {
         // 🎙️ Turn1Engine — First-turn triage and personalized welcome
         routes.turn1ConfigRoutes = await loadRouteWithTimeout('./routes/admin/turn1Config', 'turn1ConfigRoutes'); // 🎙️ Turn1Engine config (enabled, didntUnderstandText, returningCaller, historyDepth)
 
+        // 🔊 Audio Health — aggregation dashboard
+        routes.audioHealthRoutes = await loadRouteWithTimeout('./routes/admin/audioHealth', 'audioHealthRoutes'); // 🔊 Audio Health (per-page pre-cached audio stats)
+
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -718,6 +721,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)
     app.use('/api/admin/behavior-cards', routes.behaviorCardsRoutes); // 🃏 Behavior Cards (governs HOW the agent operates per KC category + flow scenarios)
     app.use('/api/admin/turn1',          routes.turn1ConfigRoutes);   // 🎙️ Turn1Engine config (first-turn triage + personalized welcome)
+    app.use('/api/admin/agent2/company', routes.audioHealthRoutes);  // 🔊 Audio Health (per-page pre-cached audio stats)
 
     app.use('/api/admin/agent2', routes.greetingsRoutes); // 🎙️ Greetings (Call Start + Greeting Interceptor)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)

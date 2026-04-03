@@ -946,7 +946,7 @@
         <div class="card">
           <div class="form-group">
             <label for="bridge-phrase">Bridge Phrase</label>
-            <textarea id="bridge-phrase" rows="2" placeholder="e.g. Alright, let me get that scheduled for you..."></textarea>
+            <textarea id="bridge-phrase" data-audio-key="bridgePhrase" rows="2" placeholder="e.g. Alright, let me get that scheduled for you..."></textarea>
             <div class="field-hint">Keep it under 10 words for instant delivery. Longer phrases are cached as MP3 automatically on save.</div>
           </div>
         </div>
@@ -972,7 +972,7 @@
           <div id="recognition-settings" class="sub-settings hidden">
             <div class="form-group">
               <label for="recognition-confirm-prompt">Confirm-All Prompt</label>
-              <textarea id="recognition-confirm-prompt" rows="2" placeholder="We have {name} at {address} on file — is all of that still correct for today's visit?"></textarea>
+              <textarea id="recognition-confirm-prompt" data-audio-key="recognitionConfirmPrompt" rows="2" placeholder="We have {name} at {address} on file — is all of that still correct for today's visit?"></textarea>
               <div class="field-hint">Variables: {name} {phone} {address}</div>
             </div>
             <div class="form-group">
@@ -1008,11 +1008,11 @@
             <div class="form-row" style="margin-top:16px">
               <div class="form-group">
                 <label for="builtin-ask-name">Ask Prompt</label>
-                <textarea id="builtin-ask-name" rows="2" placeholder="To get started, may I have your name?"></textarea>
+                <textarea id="builtin-ask-name" data-audio-key="builtinName.askPrompt" rows="2" placeholder="To get started, may I have your name?"></textarea>
               </div>
               <div class="form-group">
                 <label for="builtin-name-reanchor">Re-Anchor Phrase</label>
-                <textarea id="builtin-name-reanchor" rows="2" placeholder="What is your first and last name?"></textarea>
+                <textarea id="builtin-name-reanchor" data-audio-key="builtinName.reanchorPhrase" rows="2" placeholder="What is your first and last name?"></textarea>
                 <div class="field-hint">Said after a digression to redirect back to this field.</div>
               </div>
             </div>
@@ -1021,35 +1021,35 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="builtin-confirm-full-name">Confirm Full Name</label>
-                <textarea id="builtin-confirm-full-name" rows="2" placeholder="I assume your name is {name}, is that correct?"></textarea>
+                <textarea id="builtin-confirm-full-name" data-audio-key="builtinName.confirmFull" rows="2" placeholder="I assume your name is {name}, is that correct?"></textarea>
                 <div class="field-hint">Placeholder: <code>{name}</code> = full name</div>
               </div>
               <div class="form-group">
                 <label for="builtin-confirm-first-ask-last">Confirm First Name + Ask Last</label>
-                <textarea id="builtin-confirm-first-ask-last" rows="2" placeholder="I assume your first name is {firstName}, is that correct? And your last name?"></textarea>
+                <textarea id="builtin-confirm-first-ask-last" data-audio-key="builtinName.confirmFirstAskLast" rows="2" placeholder="I assume your first name is {firstName}, is that correct? And your last name?"></textarea>
                 <div class="field-hint">Placeholder: <code>{firstName}</code></div>
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="builtin-ask-last-name-only">Ask Last Name Only</label>
-                <textarea id="builtin-ask-last-name-only" rows="2" placeholder="And what is your last name?"></textarea>
+                <textarea id="builtin-ask-last-name-only" data-audio-key="builtinName.askLastOnly" rows="2" placeholder="And what is your last name?"></textarea>
               </div>
               <div class="form-group">
                 <label for="builtin-confirm-name-ambiguous">Ambiguous Re-Ask</label>
-                <textarea id="builtin-confirm-name-ambiguous" rows="2" placeholder="Just to confirm — is your name {name}? A simple yes or no works."></textarea>
+                <textarea id="builtin-confirm-name-ambiguous" data-audio-key="builtinName.confirmAmbiguous" rows="2" placeholder="Just to confirm — is your name {name}? A simple yes or no works."></textarea>
                 <div class="field-hint">Said when caller's response to name confirmation is unclear. Placeholder: <code>{name}</code></div>
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="builtin-confirm-name-partial">Partial Correction → Ask Last</label>
-                <textarea id="builtin-confirm-name-partial" rows="2" placeholder="Got it, {firstName}! And your last name?"></textarea>
+                <textarea id="builtin-confirm-name-partial" data-audio-key="builtinName.confirmPartialAskLast" rows="2" placeholder="Got it, {firstName}! And your last name?"></textarea>
                 <div class="field-hint">Caller corrected only their first name. Placeholder: <code>{firstName}</code></div>
               </div>
               <div class="form-group">
                 <label for="builtin-confirm-first-got-last">Confirmed First → Ask Last</label>
-                <textarea id="builtin-confirm-first-got-last" rows="2" placeholder="Great, {firstName}! And what is your last name?"></textarea>
+                <textarea id="builtin-confirm-first-got-last" data-audio-key="builtinName.confirmFirstGotLast" rows="2" placeholder="Great, {firstName}! And what is your last name?"></textarea>
                 <div class="field-hint">Caller confirmed first name, now collect last name. Placeholder: <code>{firstName}</code></div>
               </div>
             </div>
@@ -1070,16 +1070,16 @@
             <div class="form-row" style="margin-top:16px">
               <div class="form-group">
                 <label for="builtin-ask-phone">Ask Prompt</label>
-                <textarea id="builtin-ask-phone" rows="2" placeholder="What's the best callback number for you?"></textarea>
+                <textarea id="builtin-ask-phone" data-audio-key="builtinPhone.askPrompt" rows="2" placeholder="What's the best callback number for you?"></textarea>
               </div>
               <div class="form-group">
                 <label for="builtin-phone-reanchor">Re-Anchor Phrase</label>
-                <textarea id="builtin-phone-reanchor" rows="2" placeholder="What phone number can we reach you at?"></textarea>
+                <textarea id="builtin-phone-reanchor" data-audio-key="builtinPhone.reanchorPhrase" rows="2" placeholder="What phone number can we reach you at?"></textarea>
               </div>
             </div>
             <div class="form-group">
               <label for="builtin-phone-invalid">Invalid Number Re-Ask</label>
-              <textarea id="builtin-phone-invalid" rows="2" placeholder="I didn't quite catch a phone number there. What number should we use to reach you?"></textarea>
+              <textarea id="builtin-phone-invalid" data-audio-key="builtinPhone.invalidRe" rows="2" placeholder="I didn't quite catch a phone number there. What number should we use to reach you?"></textarea>
               <div class="field-hint">Said when caller input can't be parsed as a valid phone number.</div>
             </div>
           </div>
@@ -1112,11 +1112,11 @@
             <div class="form-row" style="margin-top:12px">
               <div class="form-group">
                 <label for="builtin-ask-address">Ask Prompt</label>
-                <textarea id="builtin-ask-address" rows="2" placeholder="And what is the service address?"></textarea>
+                <textarea id="builtin-ask-address" data-audio-key="builtinAddress.askPrompt" rows="2" placeholder="And what is the service address?"></textarea>
               </div>
               <div class="form-group">
                 <label for="builtin-address-reanchor">Re-Anchor Phrase</label>
-                <textarea id="builtin-address-reanchor" rows="2" placeholder="What is the service address for this appointment?"></textarea>
+                <textarea id="builtin-address-reanchor" data-audio-key="builtinAddress.reanchorPhrase" rows="2" placeholder="What is the service address for this appointment?"></textarea>
               </div>
             </div>
 
@@ -1208,23 +1208,23 @@
             <div class="form-row" style="margin-top:12px">
               <div class="form-group">
                 <label for="preference-ask-day">Ask Day Prompt</label>
-                <textarea id="preference-ask-day" rows="2" placeholder="What day works best for you?"></textarea>
+                <textarea id="preference-ask-day" data-audio-key="preferenceDay.askPrompt" rows="2" placeholder="What day works best for you?"></textarea>
               </div>
               <div class="form-group">
                 <label for="preference-urgent">Urgency Response <span style="font-size:11px;color:#64748b;font-weight:400">— "asap", "right now", "first available", etc.</span></label>
-                <textarea id="preference-urgent" rows="2" placeholder="I completely understand — let me pull up the very first opening we have for you."></textarea>
+                <textarea id="preference-urgent" data-audio-key="preferenceDay.urgencyResponse" rows="2" placeholder="I completely understand — let me pull up the very first opening we have for you."></textarea>
                 <div class="field-hint">Caller hears this + slots immediately. Time question is skipped.</div>
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="preference-ask-time">Ask Time Prompt</label>
-                <textarea id="preference-ask-time" rows="2" placeholder="And what time works for you {day}? I'll check our availability."></textarea>
+                <textarea id="preference-ask-time" data-audio-key="preferenceTime.askPrompt" rows="2" placeholder="And what time works for you {day}? I'll check our availability."></textarea>
                 <div class="field-hint">Placeholder: <code>{day}</code> = the day they selected</div>
               </div>
               <div class="form-group">
                 <label for="preference-no-slots">No Slots on Day Prompt</label>
-                <textarea id="preference-no-slots" rows="2" placeholder="I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work?"></textarea>
+                <textarea id="preference-no-slots" data-audio-key="preferenceTime.noSlotsPrompt" rows="2" placeholder="I don't see any openings for {day} — the next available slot I have is {alternative}. Does that work?"></textarea>
                 <div class="field-hint">Placeholders: <code>{day}</code>, <code>{alternative}</code> = nearest open slot</div>
               </div>
             </div>
@@ -1282,7 +1282,7 @@
           <div id="altcontact-settings" class="sub-settings hidden">
             <div class="form-group">
               <label for="altcontact-offer-prompt">Offer Prompt</label>
-              <textarea id="altcontact-offer-prompt" rows="2" placeholder="Is this the best number to reach you, or do you have an alternate contact we should have on file?"></textarea>
+              <textarea id="altcontact-offer-prompt" data-audio-key="altContact.offerPrompt" rows="2" placeholder="Is this the best number to reach you, or do you have an alternate contact we should have on file?"></textarea>
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -1338,7 +1338,7 @@
           <div id="confirmation-settings" class="sub-settings">
             <div class="form-group">
               <label for="confirmation-template">Confirmation Template</label>
-              <textarea id="confirmation-template" rows="3" placeholder="Just to confirm: {name}, best number {phone}, service at {address} — does that all sound right?"></textarea>
+              <textarea id="confirmation-template" data-audio-key="confirmation.template" rows="3" placeholder="Just to confirm: {name}, best number {phone}, service at {address} — does that all sound right?"></textarea>
               <div class="field-hint">Variables: {name} {firstName} {lastName} {phone} {address} {customFields}</div>
             </div>
             <div class="form-group">
@@ -1354,12 +1354,12 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="confirmation-time-confirm">Time Confirm Prompt</label>
-                <textarea id="confirmation-time-confirm" rows="2" placeholder="Just to confirm — shall I book you for {time}?"></textarea>
+                <textarea id="confirmation-time-confirm" data-audio-key="confirmation.timeConfirmPrompt" rows="2" placeholder="Just to confirm — shall I book you for {time}?"></textarea>
                 <div class="field-hint">Placeholder: <code>{time}</code> = selected time slot display string</div>
               </div>
               <div class="form-group">
                 <label for="confirmation-time-ambiguous">Time Ambiguous Re-Ask</label>
-                <textarea id="confirmation-time-ambiguous" rows="2" placeholder="I want to make sure I have this right — shall I book you for {time}?"></textarea>
+                <textarea id="confirmation-time-ambiguous" data-audio-key="confirmation.timeAmbiguousPrompt" rows="2" placeholder="I want to make sure I have this right — shall I book you for {time}?"></textarea>
                 <div class="field-hint">Said when caller's response to time confirmation is unclear.</div>
               </div>
             </div>
@@ -1376,23 +1376,23 @@
         <div class="card">
           <div class="form-group">
             <label for="calendar-hold-message">Hold Message</label>
-            <textarea id="calendar-hold-message" rows="2" placeholder="One moment while I check our available times..."></textarea>
+            <textarea id="calendar-hold-message" data-audio-key="calendar.holdMessage" rows="2" placeholder="One moment while I check our available times..."></textarea>
             <div class="field-hint">Plays while the system queries Google Calendar. Keep it natural and brief.</div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label for="calendar-offer-times">Offer Times Prompt</label>
-              <textarea id="calendar-offer-times" rows="2" placeholder="I have {t1} or {t2} available — which works better for you?"></textarea>
+              <textarea id="calendar-offer-times" data-audio-key="calendar.offerTimesPrompt" rows="2" placeholder="I have {t1} or {t2} available — which works better for you?"></textarea>
               <div class="field-hint">Variables: {t1} {t2} {t3}</div>
             </div>
             <div class="form-group">
               <label for="calendar-no-times">No Times Available Prompt</label>
-              <textarea id="calendar-no-times" rows="2" placeholder="I'm not seeing availability right now — could you do {alternative}?"></textarea>
+              <textarea id="calendar-no-times" data-audio-key="calendar.noTimesPrompt" rows="2" placeholder="I'm not seeing availability right now — could you do {alternative}?"></textarea>
             </div>
           </div>
           <div class="form-group">
             <label for="calendar-confirmation-msg">Booking Confirmation Message</label>
-            <textarea id="calendar-confirmation-msg" rows="2" placeholder="You're all set! A technician will be out {date} at {time}. You'll receive a confirmation shortly."></textarea>
+            <textarea id="calendar-confirmation-msg" data-audio-key="calendar.confirmationMessage" rows="2" placeholder="You're all set! A technician will be out {date} at {time}. You'll receive a confirmation shortly."></textarea>
             <div class="field-hint">Variables: {name} {date} {time} {endTime}</div>
           </div>
           <hr class="section-divider">
@@ -1467,7 +1467,7 @@
           <hr class="section-divider">
           <div class="form-group">
             <label for="builtin-t2-digression-ack">T2 Digression Acknowledgment</label>
-            <textarea id="builtin-t2-digression-ack" rows="2" placeholder="Absolutely — we'll make sure that gets addressed."></textarea>
+            <textarea id="builtin-t2-digression-ack" data-audio-key="digressionAck" rows="2" placeholder="Absolutely — we'll make sure that gets addressed."></textarea>
             <div class="field-hint">Spoken before the re-anchor phrase when Groq handles an off-topic question mid-booking. The re-anchor phrase for each field follows automatically.</div>
           </div>
         </div>
@@ -1766,6 +1766,7 @@
   <div id="toast-container" class="toast-container" style="position:fixed;bottom:20px;right:20px;z-index:300;display:flex;flex-direction:column;gap:8px;"></div>
 
   <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/lib/prompt-audio.js"></script>
   <script src="/agent-console/booking.js"></script>
 </body>
 </html>

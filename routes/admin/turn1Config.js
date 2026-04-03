@@ -21,6 +21,7 @@ const ALLOWED_FIELDS = [
   'didntUnderstandText',
   'returningCallerEnabled',
   'historyDepthDays',
+  'promptAudio',
 ];
 
 // ── GET /api/admin/turn1/company/:companyId/config ────────────────────────────

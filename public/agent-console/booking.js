@@ -222,6 +222,13 @@ async function loadConfig() {
 
     populateForm(bookingConfig);
 
+    // Initialize prompt audio controls on all data-audio-key textareas
+    if (typeof PromptAudioControls !== 'undefined') {
+      PromptAudioControls.init({ companyId, apiFetch: AgentConsoleAuth.apiFetch });
+      PromptAudioControls.injectAll();
+      PromptAudioControls.loadState(bookingConfig.promptAudio || {});
+    }
+
     // Show company name if available from auth
     if (typeof AgentConsoleAuth.getCompanyName === 'function') {
       const name = await AgentConsoleAuth.getCompanyName(companyId);
@@ -464,7 +471,12 @@ function collectForm() {
       defaultMaxAttempts:    parseInt(getSelectValue('slot-max-attempts'), 10) || 3,
       defaultFallbackAction: getSelectValue('slot-fallback-action') || 'RE_ASK_PLAIN',
       reAnchorSuffix:        getValue('slot-reanchor-suffix')
-    }
+    },
+
+    // Audio pre-caching state for all prompt textareas
+    promptAudio: typeof PromptAudioControls !== 'undefined'
+      ? PromptAudioControls.collectAll()
+      : {}
   };
 }
 

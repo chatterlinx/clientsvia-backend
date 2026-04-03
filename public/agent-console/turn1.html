@@ -544,7 +544,7 @@
     <div class="card-body">
       <div class="form-row">
         <label class="form-label" for="ta-didnt">Re-ask text (Lane 4 — Didn't Understand)</label>
-        <textarea class="form-control" id="ta-didnt" rows="3"
+        <textarea class="form-control" id="ta-didnt" data-audio-key="didntUnderstandText" rows="3"
           placeholder="I'm sorry, I missed that — could you say that again?"></textarea>
         <div class="form-hint">
           Triggered when the caller says ≤2 words with no recognisable intent and no greeting.
@@ -633,6 +633,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="/agent-console/lib/auth.js"></script>
+<script src="/agent-console/lib/prompt-audio.js"></script>
 <script>
 'use strict';
 
@@ -701,7 +702,26 @@ async function loadConfig() {
   try {
     const data = await AgentConsoleAuth.apiFetch(`/api/admin/turn1/company/${companyId}/config`);
 
-    applyConfig(data.config || {});
+    const cfg = data.config || {};
+    applyConfig(cfg);
+
+    // Initialize prompt audio controls
+    if (typeof PromptAudioControls !== 'undefined') {
+      const _apiFetch = typeof AgentConsoleAuth !== 'undefined'
+        ? AgentConsoleAuth.apiFetch
+        : async (url, opts) => {
+            const r = await fetch(url, {
+              method: opts?.method || 'GET',
+              headers: { 'Content-Type': 'application/json' },
+              body: opts?.body ? JSON.stringify(opts.body) : undefined,
+            });
+            return r.json();
+          };
+      PromptAudioControls.init({ companyId, apiFetch: _apiFetch });
+      PromptAudioControls.injectAll();
+      PromptAudioControls.loadState(cfg.promptAudio || {});
+    }
+
     qs('#btn-save').disabled = false;
     dirty = false;
   } catch (err) {
@@ -736,6 +756,9 @@ async function save() {
     returningCallerEnabled: qs('#toggle-returning').checked,
     historyDepthDays:       parseInt(qs('#sel-depth').value, 10),
     didntUnderstandText:    qs('#ta-didnt').value.trim(),
+    promptAudio:            typeof PromptAudioControls !== 'undefined'
+                              ? PromptAudioControls.collectAll()
+                              : {},
   };
 
   try {

@@ -6451,13 +6451,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.warn('[V2 RESPOND] Instant audio trigger cache check failed', { error: e.message });
       }
 
-      // ── INSTANT AUDIO: Pre-cached KC fixed response (disk, zero-latency path) ──
-      // Fires for every KC_ENGINE response. Only KC cards with useFixedResponse:true
-      // will have a pre-cached KC_RESPONSE file on disk — all others return exists:false
-      // and fall through silently to ElevenLabs. Cost: ~0.1ms synchronous file stat.
+      // ── INSTANT AUDIO: Pre-cached text-hash response (disk, zero-latency path) ──
+      // Fires for KC, Booking, and Turn1 responses. Only prompts that were pre-generated
+      // via preview-fixed-audio will have a matching hash on disk — all others return
+      // exists:false and fall through silently to ElevenLabs. Cost: ~0.1ms synchronous file stat.
       try {
-        const isKcEngineResponse = runtimeResult?.matchSource === 'KC_ENGINE' && responseText;
-        if (!audioUrl && isKcEngineResponse) {
+        const isPreCachedAudioCandidate = [
+          'KC_ENGINE',
+          'BOOKING_LOGIC_ENGINE',
+          'TURN1_ENGINE',
+        ].includes(runtimeResult?.matchSource) && responseText;
+        if (!audioUrl && isPreCachedAudioCandidate) {
           const InstantAudioService = require('../services/instantAudio/InstantAudioService');
           const kcStatus = InstantAudioService.getStatus({
             companyId:    companyID,
@@ -6478,12 +6482,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               CallLogger.logEvent({
                 callId:    callSid,
                 companyId: companyID,
-                type:      'INSTANT_AUDIO_KC_HIT',
+                type:      'INSTANT_AUDIO_TEXT_HASH_HIT',
                 turn:      turnNumber,
                 data: {
                   fileName:    kcStatus.fileName,
                   url:         kcStatus.url,
-                  matchSource: 'KC_ENGINE',
+                  matchSource: runtimeResult?.matchSource || 'KC_ENGINE',
                 }
               }).catch(() => {});
             }

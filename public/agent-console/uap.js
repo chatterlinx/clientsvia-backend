@@ -107,6 +107,16 @@
       const rpEl = document.getElementById('resumePromptTpl');
       if (gpEl) gpEl.value = tpl.gracefulPivot || '';
       if (rpEl) rpEl.value = tpl.resumePrompt  || '';
+
+      // Initialize prompt audio controls for UAPB textareas
+      if (typeof PromptAudioControls !== 'undefined') {
+        PromptAudioControls.init({
+          companyId,
+          apiFetch: (url, opts) => _api(opts?.method || 'GET', url, opts?.body),
+        });
+        PromptAudioControls.injectAll();
+        PromptAudioControls.loadState(data.promptAudio || {});
+      }
     } catch (err) {
       _toast('error', `Failed to load booking fields: ${err.message}`);
     }
@@ -147,7 +157,10 @@
       // UAPB template settings stored in Company discoverySettings — extend same endpoint
       await _api('PATCH', `${dnApi}/settings`, {
         bookingFieldConfig,
-        uapbTemplates: { gracefulPivot, resumePrompt }
+        uapbTemplates: { gracefulPivot, resumePrompt },
+        promptAudio: typeof PromptAudioControls !== 'undefined'
+          ? PromptAudioControls.collectAll()
+          : {}
       });
       _toast('success', 'UAPB settings saved');
     } catch (err) {
