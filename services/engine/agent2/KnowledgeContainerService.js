@@ -951,14 +951,18 @@ async function answer(opts) {
     }
 
     if (fixedText) {
+      // ── Resolve {variable} placeholders (same as Groq path) ──────────────
+      const resolvedText = await _resolveKCVariables(companyId, fixedText);
+
       logger.debug('[KnowledgeContainer] Fixed response shortcut — Groq bypassed', {
         companyId, callSid, containerTitle,
         scope: fixedScope,
         sectionLabel: fixedScope === 'section' ? (targetSection?.label || '') : undefined,
-        chars: fixedText.length,
+        chars: resolvedText.length,
+        hadVariables: resolvedText !== fixedText,
       });
       return {
-        response:   fixedText,
+        response:   resolvedText,
         intent:     INTENT.ANSWERED,
         confidence: 1.0,
         latencyMs:  Date.now() - startMs,
