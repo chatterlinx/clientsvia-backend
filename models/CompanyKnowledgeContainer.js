@@ -134,6 +134,16 @@ const sectionSchema = new mongoose.Schema(
       comment: 'Display and injection order — lower = earlier'
     },
 
+    // ── Section Active Toggle ──────────────────────────────────────────────
+    // Allows business owners to disable a section without deleting it.
+    // Inactive sections are skipped during KC scoring, UAP phrase indexing,
+    // and Groq prompt building. Content is preserved for easy re-enable.
+    isActive: {
+      type:    Boolean,
+      default: true,
+      comment: 'Per-section on/off toggle. false = skipped at runtime, content preserved.'
+    },
+
     // ── Caller Phrases — what callers say when asking about this section ──
     // Each phrase is a full sentence (e.g. "how much is a service call?").
     // BridgeService indexes these into phraseIndex for UAP matching.

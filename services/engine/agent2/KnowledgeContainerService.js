@@ -393,7 +393,7 @@ function _buildContainerBlock(container, targetSection = null) {
     : [...(container.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const lines = source
-    .filter(s => s.label?.trim() && s.content?.trim())
+    .filter(s => s.isActive !== false && s.label?.trim() && s.content?.trim())
     .map(s => `${s.label.trim().toUpperCase()}: ${s.content.trim()}`);
 
   return lines.join('\n\n');
@@ -771,6 +771,9 @@ function findContainer(containers, input, context = null) {
     for (let sIdx = 0; sIdx < sections.length; sIdx++) {
       const section = sections[sIdx];
 
+      // Section-level active toggle — skip disabled sections entirely
+      if (section.isActive === false) continue;
+
       // Section-level exclusion — skip THIS section if negative keywords match
       if (_matchesNegativeKeywords(section.negativeKeywords)) continue;
 
@@ -842,6 +845,8 @@ function findContainer(containers, input, context = null) {
       // Score against section contentKeywords with augmented input
       for (let sIdx = 0; sIdx < (container.sections || []).length; sIdx++) {
         const section  = container.sections[sIdx];
+        // Section-level active toggle — skip disabled sections
+        if (section.isActive === false) continue;
         // Section-level exclusion — same check as main loop
         if (_matchesNegativeKeywords(section.negativeKeywords)) continue;
         const keywords = section.contentKeywords || [];
@@ -946,7 +951,7 @@ async function answer(opts) {
       const effectiveSections = targetSection
         ? [targetSection]
         : [...(container.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
-      fixedText  = effectiveSections.find(s => s.content?.trim())?.content?.trim() || null;
+      fixedText  = effectiveSections.find(s => s.isActive !== false && s.content?.trim())?.content?.trim() || null;
       fixedScope = 'container';
     }
 

@@ -98,7 +98,7 @@ function _normalise(str) {
 async function _buildBridge(companyId) {
   const containers = await CompanyKnowledgeContainer
     .find({ companyId, isActive: true })
-    .select('_id kcId title sections.label sections.callerPhrases.text sections.order priority')
+    .select('_id kcId title sections.label sections.isActive sections.callerPhrases.text sections.order priority')
     .sort({ priority: 1, createdAt: 1 })
     .lean();
 
@@ -110,6 +110,8 @@ async function _buildBridge(companyId) {
 
     for (let sIdx = 0; sIdx < sections.length; sIdx++) {
       const section = sections[sIdx];
+      // Skip inactive sections — their phrases should not be indexed for UAP matching
+      if (section.isActive === false) continue;
       for (const phrase of (section.callerPhrases || [])) {
         const norm = _normalise(phrase.text);
         if (!norm) continue;

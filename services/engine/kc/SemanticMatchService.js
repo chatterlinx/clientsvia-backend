@@ -193,6 +193,9 @@ async function findBestSection(companyId, utterance, containers) {
     for (let sIdx = 0; sIdx < sections.length; sIdx++) {
       const section = sections[sIdx];
 
+      // Skip inactive sections — disabled by business owner, not eligible for matching
+      if (section.isActive === false) continue;
+
       // A. Compare against each callerPhrase embedding
       for (const phrase of (section.callerPhrases || [])) {
         if (!phrase.embedding?.length) continue;

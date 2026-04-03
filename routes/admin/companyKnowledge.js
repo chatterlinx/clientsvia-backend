@@ -253,6 +253,8 @@ function _sanitiseBody(body) {
           label:   s.label.trim().slice(0, 80),
           content: s.content.trim().slice(0, 2000),
           order:   typeof s.order === 'number' ? s.order : idx,
+          // Per-section active toggle — false = skipped at runtime, content preserved
+          isActive: s.isActive !== false,   // default true; only false when explicitly set
           // Preserve existing _id if provided (for updates)
           ...(s._id ? { _id: s._id } : {}),
         };
