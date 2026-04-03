@@ -439,8 +439,12 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // No input → nothing to interrogate
   if (!userInput?.trim()) return stepResult;
 
-  // Step advanced AND UAP found nothing at all → caller was providing booking data
-  if (advanced && !uapHasAnyMatch) return stepResult;
+  // Step advanced AND UAP found nothing at all AND input doesn't look like a
+  // question → caller was providing booking data.  The _isLikelyOffTopic guard
+  // prevents this gate from swallowing obvious questions: "What does it include?"
+  // at COLLECT_NAME would be incorrectly parsed as a name (parseName is greedy),
+  // causing `advanced = true` even though no real data was collected.
+  if (advanced && !uapHasAnyMatch && !_isLikelyOffTopic(userInput, prevSnap.step)) return stepResult;
 
   // DATA-ENTRY STEPS bypass 123RP to prevent false-positives on phone digits,
   // address names, etc. — UNLESS the input is clearly a question/confusion
@@ -479,6 +483,33 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
         completed:  false,
       };
     }
+  }
+
+  // ── ROLLBACK: undo step-handler mutations when digression fires ─────────
+  // The step handler ran first (step-first architecture) and may have mutated
+  // ctx with garbage data — e.g. parseName("What does it include?") sets
+  // firstName="What" and _nameSubStep='SPELL_LAST'.  When we reach digression,
+  // we need a clean ctx so that:
+  //   (a) re-anchor prompts use the correct step (not an incorrectly advanced one)
+  //   (b) the next turn retries the step cleanly without stale sub-step flags
+  // Only rollback fields the step handler could have changed; preserve existing
+  // data that was collected in prior turns (prevSnap records what existed BEFORE).
+  if (advanced) {
+    ctx.step = prevSnap.step;
+    const cf = ctx.collectedFields || {};
+    if (!prevSnap.firstName)      cf.firstName = null;
+    if (!prevSnap.lastName)       cf.lastName  = null;
+    if (!prevSnap.phone)          cf.phone     = null;
+    if (!prevSnap.address)        cf.address   = null;
+    if (!prevSnap.selectedTime)   ctx.selectedTime  = null;
+    if (!prevSnap.preferredDay)   ctx.preferredDay  = null;
+    if (!prevSnap.preferredTime)  ctx.preferredTime = null;
+    if (prevSnap.addressStep !== ctx.addressStep)     ctx.addressStep    = prevSnap.addressStep;
+    if (prevSnap._addressStreet !== ctx._addressStreet) ctx._addressStreet = prevSnap._addressStreet;
+    if (prevSnap._addressCity !== ctx._addressCity)     ctx._addressCity   = prevSnap._addressCity;
+    // Clear any sub-step flags the step handler set (SPELL_FIRST, SPELL_LAST, GET_LAST, etc.)
+    delete ctx._nameSubStep;
+    events.push({ type: 'BK_KC_DIGRESSION_CTX_ROLLBACK', step: prevSnap.step, timestamp: Date.now() });
   }
 
   // ── STEP 2: Off-topic question — KC Digression (stateless) ──────────────
@@ -538,9 +569,13 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
         }
       }
 
-      // Fall back to contentKeywords scoring if UAP had no match
+      // Fall back to contentKeywords scoring if UAP had no match.
+      // Pass through bestSection so KCS.answer() targets the correct section —
+      // without this, useFixedResponse containers default to the first section
+      // regardless of what the caller actually asked.
       if (!match) {
         match = KCS.findContainer(containers, userInput, _anchorCtx);
+        if (match) targetSection = match.bestSection || null;
       }
 
       if (match) {
@@ -553,8 +588,8 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
         });
         if (kcResult?.response) {
           // Deliver KC answer + step re-anchor in ONE response.
-          // ctx.step is post-advance — if the step handler moved forward
-          // (e.g. INIT → COLLECT_NAME), re-anchor to the new step.
+          // ctx.step is the current booking step (rolled back if the step handler
+          // incorrectly advanced on a question input).
           const reAnchor = _getStepReAnchor(ctx.step, config);
           const combined = reAnchor
             ? `${kcResult.response} ${reAnchor}`
@@ -809,7 +844,8 @@ async function _kcQuickAnswer(companyId, question, ctx, config) {
     if (!match) return null;
 
     const kcResult = await KCS.answer({
-      container:  match.container,
+      container:     match.container,
+      targetSection: match.bestSection || null,
       question,
       kbSettings: { ...(config?.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
       company:    { _id: companyId, companyName: config?.companyName },
