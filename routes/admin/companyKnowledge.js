@@ -84,6 +84,55 @@ function _persistKcAudioToMongo(companyId, status, sourceText, voiceId) {
   })();
 }
 
+// ── Helper: persist audioUrl to a container's section immediately ────────────
+// Same pattern as greeting audio: when the owner clicks "Generate Audio",
+// the URL is written to the container document in the same API call —
+// no separate "Save Container" needed.
+// Fire-and-forget — errors are logged but never block the response.
+function _persistAudioUrlToContainer(companyId, containerId, sectionIndex, audioKey, audioUrl) {
+  (async () => {
+    try {
+      const container = await CompanyKnowledgeContainer.findOne(
+        _resolveContainerQuery(containerId, companyId)
+      );
+      if (!container) return;
+
+      const section = container.sections?.[sectionIndex];
+      if (!section) {
+        logger.warn('[companyKnowledge] _persistAudioUrlToContainer — section not found', {
+          companyId, containerId, sectionIndex, audioKey,
+        });
+        return;
+      }
+
+      // Route to the right field based on audioKey
+      if (audioKey === 'content') {
+        section.audioUrl = audioUrl;
+      } else if (audioKey === 'pq') {
+        if (section.preQualifyQuestion) section.preQualifyQuestion.audioUrl = audioUrl;
+      } else {
+        // upsell-{idx}-{offer|yes|no}
+        const m = audioKey.match(/^upsell-(\d+)-(offer|yes|no)$/);
+        if (m && section.upsellChain?.[+m[1]]) {
+          const fieldMap = { offer: 'offerAudioUrl', yes: 'yesAudioUrl', no: 'noAudioUrl' };
+          section.upsellChain[+m[1]][fieldMap[m[2]]] = audioUrl;
+        }
+      }
+
+      container.markModified('sections');
+      await container.save();
+
+      logger.info('[companyKnowledge] audioUrl persisted to container', {
+        companyId, containerId, sectionIndex, audioKey,
+      });
+    } catch (err) {
+      logger.warn('[companyKnowledge] _persistAudioUrlToContainer failed (non-fatal)', {
+        companyId, containerId, sectionIndex, audioKey, error: err.message,
+      });
+    }
+  })();
+}
+
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
 
@@ -1192,7 +1241,7 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    const { text } = req.body || {};
+    const { text, containerId, sectionIndex, audioKey } = req.body || {};
     if (!text?.trim()) {
       return res.status(400).json({ success: false, error: 'text is required' });
     }
@@ -1246,40 +1295,53 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
       voiceSettings: vs,
     });
 
+    let safeUrl;
+    let generated;
+
     if (existing.exists) {
       // Ensure MongoDB backup exists (covers files generated before this feature)
       _persistKcAudioToMongo(companyId, existing, resolvedText, vs.voiceId);
-      const safeUrl = existing.url.replace('/audio/', '/audio-safe/');
+      safeUrl   = existing.url.replace('/audio/', '/audio-safe/');
+      generated = false;
       logger.info('[companyKnowledge] preview-fixed-audio — cache hit', { companyId, chars: resolvedText.length });
-      return res.json({ success: true, url: safeUrl, generated: false, chars: resolvedText.length, resolvedText });
+    } else {
+      // ── Not cached — synthesise now (synchronous for immediate playback) ──
+      await InstantAudioService.generate({
+        companyId,
+        kind:          'KC_RESPONSE',
+        text:          resolvedText,
+        company,
+        voiceSettings: vs,
+      });
+
+      const fresh = InstantAudioService.getStatus({
+        companyId,
+        kind:          'KC_RESPONSE',
+        text:          resolvedText,
+        voiceSettings: vs,
+      });
+
+      if (!fresh.exists) {
+        return res.status(500).json({ success: false, error: 'Generation succeeded but file not found — try again.' });
+      }
+
+      // Persist to MongoDB for deploy-proof serving
+      _persistKcAudioToMongo(companyId, fresh, resolvedText, vs.voiceId);
+      safeUrl   = fresh.url.replace('/audio/', '/audio-safe/');
+      generated = true;
+      logger.info('[companyKnowledge] preview-fixed-audio — generated', { companyId, chars: resolvedText.length });
     }
 
-    // ── Not cached — synthesise now (synchronous for immediate playback) ──
-    await InstantAudioService.generate({
-      companyId,
-      kind:          'KC_RESPONSE',
-      text:          resolvedText,
-      company,
-      voiceSettings: vs,
-    });
-
-    const fresh = InstantAudioService.getStatus({
-      companyId,
-      kind:          'KC_RESPONSE',
-      text:          resolvedText,
-      voiceSettings: vs,
-    });
-
-    if (!fresh.exists) {
-      return res.status(500).json({ success: false, error: 'Generation succeeded but file not found — try again.' });
+    // ── BULLETPROOF PERSISTENCE: write audioUrl to container immediately ────
+    // Same pattern as greeting audio: the Generate button persists the URL to
+    // the database in a single API call — no separate "Save Container" needed.
+    // This prevents the URL from being lost if the user refreshes/navigates
+    // before clicking Save.
+    if (containerId && sectionIndex != null && sectionIndex >= 0) {
+      _persistAudioUrlToContainer(companyId, containerId, sectionIndex, audioKey || 'content', safeUrl);
     }
 
-    // Persist to MongoDB for deploy-proof serving
-    _persistKcAudioToMongo(companyId, fresh, resolvedText, vs.voiceId);
-    const safeUrl = fresh.url.replace('/audio/', '/audio-safe/');
-
-    logger.info('[companyKnowledge] preview-fixed-audio — generated', { companyId, chars: resolvedText.length });
-    return res.json({ success: true, url: safeUrl, generated: true, chars: resolvedText.length, resolvedText });
+    return res.json({ success: true, url: safeUrl, generated, chars: resolvedText.length, resolvedText });
 
   } catch (err) {
     logger.error('[companyKnowledge] preview-fixed-audio error', { companyId, err: err.message });

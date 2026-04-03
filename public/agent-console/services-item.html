@@ -3001,6 +3001,16 @@ function _onSectionFixedChange(sid) {
 // ─────────────────────────────────────────────────────────────────────────────
 const _kcAudio = new Map(); // key → { url, generatedText, audio }
 
+// Helper: get the 0-based index of a section by its sid in the current DOM order.
+// Needed so preview-fixed-audio can persist the audioUrl to the right section.
+function _getSectionIndex(sid) {
+  const rows = document.querySelectorAll('#sectionsList .section-row');
+  for (let i = 0; i < rows.length; i++) {
+    if (parseInt(rows[i].dataset.sid, 10) === sid) return i;
+  }
+  return null;
+}
+
 // Generate (or regenerate) audio for a specific field.
 // textElId — DOM id of the textarea/input to read text from.
 async function _kcGenAudio(sid, key, textElId) {
@@ -3026,9 +3036,18 @@ async function _kcGenAudio(sid, key, textElId) {
   if (hintEl)  { hintEl.textContent = ''; hintEl.className = 'kc-audio-hint'; }
 
   try {
+    // Send containerId + sectionIndex so the backend can persist the audioUrl
+    // immediately to the container document (same pattern as greeting audio).
+    // This makes audio survive without requiring a separate "Save Container" click.
+    const sectionIndex = _getSectionIndex(sid);
     const data = await apiFetch(
       `/api/admin/agent2/company/${S.companyId}/knowledge/preview-fixed-audio`,
-      { method: 'POST', body: { text } }
+      { method: 'POST', body: {
+        text,
+        containerId: S.mongoId || S.itemId || null,
+        sectionIndex: sectionIndex != null ? sectionIndex : null,
+        audioKey: key,  // 'content', 'pq', 'upsell-0-offer', etc.
+      } }
     );
     if (!data.success) throw new Error(data.error || 'Generation failed');
 
