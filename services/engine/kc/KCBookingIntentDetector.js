@@ -17,7 +17,7 @@
  *   const { isBookingIntent, isExitIntent } = require('./KCBookingIntentDetector');
  *
  *   if (isBookingIntent(userInput)) { ... }   // → KC_BOOKING_INTENT
- *   if (isExitIntent(userInput))    { ... }   // → KC_TOPIC_HOP or KC_GRACEFUL_ACK
+ *   if (isExitIntent(userInput))    { ... }   // → topic change or KC_GRACEFUL_ACK
  *
  * EXTENSION:
  *   Add phrases to BOOKING_PHRASES or EXIT_PHRASES arrays below.
@@ -118,7 +118,7 @@ const BOOKING_PHRASES = [
 /**
  * EXIT_PHRASES — Caller wants to end the topic or the call entirely.
  *
- * Used to clear SPFUQ anchors and prevent stale topic lock-in.
+ * Used to clear topic anchors and prevent stale topic lock-in.
  */
 const EXIT_PHRASES = [
   // Negative / disinterested

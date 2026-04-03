@@ -155,7 +155,7 @@ class DiscoveryWire {
     //   GATE 0.5 Transfer intent
     //   GATE 0.7 Pre-qualify / upsell state
     //   GATE 1   Booking intent
-    //   GATE 2   SPFUQ anchor
+    //   GATE 2   Anchor container (discoveryNotes)
     //   GATE 3   Container scoring → Groq answer
     //   GATE 3.5 Pre-qualify intercept
     //   GATE 4   No match → KC_LLM_FALLBACK / KC_GRACEFUL_ACK

@@ -119,7 +119,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     70,
     bookingAction: 'offer_to_book',
-    followUpDepth: 4,
+
     closingPrompt: 'After answering, naturally offer to schedule the service call today. Acknowledge any discomfort the caller may be experiencing (heat, noise, water, etc.).',
     priority:      10,
     isActive:      true
@@ -170,7 +170,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     70,
     bookingAction: 'offer_to_book',
-    followUpDepth: 4,
+
     closingPrompt: 'Emphasize fast response times for heating failures, especially in winter. Offer same-day scheduling. Note the 1-year warranty to build confidence.',
     priority:      11,
     isActive:      true
@@ -221,7 +221,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     65,
     bookingAction: 'offer_to_book',
-    followUpDepth: 4,
+
     closingPrompt: 'After explaining the tune-up, offer to schedule one. Mention the Comfort Club as a cost-saving option that includes tune-ups. Encourage booking before the busy season.',
     priority:      20,
     isActive:      true
@@ -272,7 +272,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     85,
     bookingAction: 'offer_to_book',
-    followUpDepth: 4,
+
     closingPrompt: 'Offer to enroll the caller right now or schedule their first tune-up. This is a high-value retention play — be helpful and value-focused, not pushy.',
     priority:      21,
     isActive:      true
@@ -323,7 +323,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     85,
     bookingAction: 'advisor_callback',
-    followUpDepth: 4,
+
     closingPrompt: 'Always offer a free in-home assessment — never quote a final price without one. This is a major purchase decision. Be consultative and educational, never pushy.',
     priority:      30,
     isActive:      true
@@ -373,7 +373,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     85,
     bookingAction: 'advisor_callback',
-    followUpDepth: 4,
+
     closingPrompt: 'Offer a free in-home assessment. Mention available federal tax credits and 0% financing. Be consultative and patient — this is a major purchase.',
     priority:      31,
     isActive:      true
@@ -412,7 +412,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     60,
     bookingAction: 'offer_to_book',
-    followUpDepth: 2,
+
     closingPrompt: 'EMERGENCY — move immediately to scheduling. Acknowledge their distress first. Do not make them listen through lengthy explanations before booking.',
     priority:      5,
     isActive:      true
@@ -455,7 +455,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     75,
     bookingAction: 'offer_to_book',
-    followUpDepth: 4,
+
     closingPrompt: 'Connect the solution to the caller\'s specific concern (allergies, odors, dust, viruses). Offer a free IAQ assessment as the natural next step.',
     priority:      40,
     isActive:      true
@@ -498,7 +498,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     70,
     bookingAction: 'offer_to_book',
-    followUpDepth: 4,
+
     closingPrompt: 'Offer a free duct assessment or to book the service. If caller has comfort or uneven temperature complaints, mention duct sealing energy savings.',
     priority:      41,
     isActive:      true
@@ -541,7 +541,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     80,
     bookingAction: 'none',
-    followUpDepth: 4,
+
     closingPrompt: 'Be reassuring — money is a real barrier for many callers. Be specific with numbers. If they want detailed financing info, offer a callback from the finance team.',
     priority:      50,
     isActive:      true
@@ -584,7 +584,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     80,
     bookingAction: 'advisor_callback',
-    followUpDepth: 4,
+
     closingPrompt: 'Commercial callers are high-value B2B accounts. Offer to connect them with a commercial account manager for a custom proposal. Be professional and business-focused.',
     priority:      60,
     isActive:      true
@@ -622,7 +622,7 @@ const KC_CONTAINERS = [
     ],
     wordLimit:     55,
     bookingAction: 'offer_to_book',
-    followUpDepth: 2,
+
     closingPrompt: 'After answering hours or area questions, offer to schedule an appointment.',
     priority:      70,
     isActive:      true

@@ -1189,34 +1189,7 @@
     </div>
   </div>
 
-  <!-- ── 6. Follow-Up Depth ───────────────────────────────────────────────── -->
-  <div class="form-card">
-    <div class="form-card-header">
-      <span class="form-card-icon">🔁</span>
-      <div>
-        <div class="form-card-title">Conversation Depth</div>
-        <div class="form-card-subtitle">How many follow-up turns ("what does it include?", "how about that one?") the agent stays anchored to this topic before moving on</div>
-      </div>
-      <span class="form-card-badge optional">Optional</span>
-    </div>
-    <div class="form-card-body">
-      <div class="form-group" style="max-width:340px;">
-        <label class="form-label">Follow-Up Turns</label>
-        <select id="fFollowUpDepth" class="form-select">
-          <option value="">Standard (4 turns) — default</option>
-          <option value="2">Short (2 turns) — simple topics, quick answers</option>
-          <option value="4">Standard (4 turns) — general Q&amp;A</option>
-          <option value="6">Deep (6 turns) — complex multi-option topics</option>
-        </select>
-        <div class="form-hint" style="margin-top:6px;">
-          Controls how long the agent stays anchored when the caller uses pronouns instead of repeating the topic keyword.
-          <strong>Short</strong> = best for one-liner answers (hours, address). <strong>Deep</strong> = best for service comparisons or pricing tiers.
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 7. Status ─────────────────────────────────────────────────────────── -->
+  <!-- ── 6. Status ──────────────────────────────────────────────────────────── -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">📡</span>
@@ -1554,13 +1527,7 @@ function _populateForm(c) {
     charCount(el, 400, 'ccClosingPrompt');
   }
 
-  // Follow-Up Depth
-  const fud = document.getElementById('fFollowUpDepth');
-  if (fud) {
-    fud.value = (c.followUpDepth === 2 || c.followUpDepth === 4 || c.followUpDepth === 6)
-      ? String(c.followUpDepth)
-      : '';
-  }
+
 
   // Booking action
   const ba = c.bookingAction || 'offer_to_book';
@@ -2579,7 +2546,6 @@ async function saveContainer() {
 
   // Build payload — negativeKeywords are per-section (inside sections[])
   const wordLimitVal    = parseInt(document.getElementById('fWordLimit').value, 10);
-  const followUpDepthRaw = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
 
   const payload = {
     title,
@@ -2591,7 +2557,6 @@ async function saveContainer() {
     sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
     bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
     closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
-    followUpDepth:    (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
     isActive:         document.getElementById('fActive').checked,
     priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
     // preQualifyQuestion and upsellChain are now per-section (inside sections[])
@@ -2630,7 +2595,6 @@ function downloadJSON() {
   const sections = _getSections();
 
   const wordLimitVal      = parseInt(document.getElementById('fWordLimit').value, 10);
-  const followUpDepthRaw  = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
 
   // Same payload shape as saveContainer — no validation, just snapshot current state
   const payload = {
@@ -2643,7 +2607,6 @@ function downloadJSON() {
     sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
     bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
     closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
-    followUpDepth:    (!isNaN(followUpDepthRaw) && [2, 4, 6].includes(followUpDepthRaw)) ? followUpDepthRaw : null,
     isActive:         document.getElementById('fActive').checked,
     priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
   };

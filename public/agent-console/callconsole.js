@@ -1442,7 +1442,6 @@
     if (rp?.source === 'KC_ENGINE') {
       const KC_PATH_LABELS = {
         KC_DIRECT_ANSWER:  'Direct Answer',
-        KC_SPFUQ_CONTINUE: 'Follow-Up (SPFUQ)',
         KC_TOPIC_HOP:      'Topic Hop',
         KC_BOOKING_INTENT: 'Booking Intent',
         KC_LLM_FALLBACK:   'LLM Fallback',
@@ -1454,8 +1453,6 @@
       const kcId        = rp.kcId   || '';          // human ID: "700c4-01"
       const objectId    = rp.containerId || '';     // MongoDB _id: for the link
       const latencyMs   = typeof rp.latencyMs === 'number' ? rp.latencyMs : null;
-      const spfuqActive = rp.spfuqActive === true;
-
       // Direct link to the KC card edit page
       const openLink = (objectId && state.companyId)
         ? `<a class="trace-kc-open-link"
@@ -1466,8 +1463,6 @@
            </a>`
         : '';
 
-      const spfuqHtml  = spfuqActive
-        ? `<span class="trace-kc-spfuq">⚓ SPFUQ active</span>` : '';
       const latencyHtml = latencyMs !== null
         ? `<span class="trace-kc-latency">${latencyMs}ms</span>` : '';
 
@@ -1482,7 +1477,6 @@
           <div class="trace-kc-row2">
             <span class="trace-kc-title">${escapeHtml(kcTitle)}</span>
             ${latencyHtml}
-            ${spfuqHtml}
           </div>
         </div>`);
     }

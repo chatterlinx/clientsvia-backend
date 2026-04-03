@@ -23,8 +23,8 @@
  *   Async methods (getStandaloneBC) → catch all errors → return null → LLM runs without BC
  *
  * REPLACES:
- *   The hardcoded 1.5× SPFUQ topic-hop multiplier in KCDiscoveryRunner GATE 3b.
- *   The single-anchor SPFUQ model is augmented by Engine Hub Agenda State tracking.
+ *   The hardcoded 1.5x topic-hop multiplier in KCDiscoveryRunner GATE 3b.
+ *   The single-anchor model is augmented by Engine Hub Agenda State tracking.
  *
  * WIRED INTO:
  *   services/engine/kc/KCDiscoveryRunner.js   (GATE 2, GATE 3b, GATE 6)

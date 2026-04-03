@@ -614,12 +614,12 @@
       status:   'wired',
       group:    'Engine Hub + Behavior Cards',
 
-      why: 'Engine Hub is the intelligence layer that sits above KC and SPFUQ. Without it, KC uses a hardcoded 1.5× topic-hop multiplier and no behavioral rules. With it, every routing decision (hop threshold, policy selection, LLM fallback behavior, BC injection) is governed by per-company admin settings. The runtime loads synchronously in GATE 2 alongside SPFUQ at ~0ms cost. It returns null when Engine Hub is disabled — callers fall back to hardcoded defaults with zero impact on live calls.',
+      why: 'Engine Hub is the intelligence layer that sits above KC. Without it, KC uses a hardcoded 1.5x topic-hop multiplier and no behavioral rules. With it, every routing decision (hop threshold, policy selection, LLM fallback behavior, BC injection) is governed by per-company admin settings. The runtime loads synchronously in GATE 2 at ~0ms cost. It returns null when Engine Hub is disabled — callers fall back to hardcoded defaults with zero impact on live calls.',
 
       engine:   'EngineHubRuntime.load(company)',
       provider: 'MongoDB (company.engineHub sub-document)',
       model:    null,
-      fires:    'Every Turn 2+ — GATE 2, loaded alongside SPFUQ + discoveryNotes + containers (~0ms, sync)',
+      fires:    'Every Turn 2+ — GATE 2, loaded alongside discoveryNotes + containers (~0ms, sync)',
       writesTo: 'ehConfig (local) — passed to GATE 3b (hop threshold) and GATE 6 (BC injection)',
       wiredIn:  [
         'services/engine/EngineHubRuntime.js — load(), getHopFactor(), getConfidenceThreshold()',
@@ -638,41 +638,40 @@
       gaps:     [],
 
       routing: {
-        'enabled + learning/active': 'spfuq_agenda — Engine Hub governs hop threshold + BC injection',
-        'disabled or passive':       'spfuq_agenda — Engine Hub null, hardcoded defaults apply',
+        'enabled + learning/active': 'anchor_agenda — Engine Hub governs hop threshold + BC injection',
+        'disabled or passive':       'anchor_agenda — Engine Hub null, hardcoded defaults apply',
       },
     },
 
-    // ── [16] SPFUQ + Engine Hub Agenda State ─────────────────────────────
+    // ── [16] Anchor + Engine Hub Agenda State ─────────────────────────────
     {
-      id:       'spfuq_agenda',
+      id:       'anchor_agenda',
       order:    16,
       icon:     '🧵',
-      name:     'SPFUQ + Engine Hub Agenda State',
-      subtitle: 'Topic anchor keeps KC context across turns — hop threshold now governed by Engine Hub instead of hardcoded 1.5×',
+      name:     'Anchor + Engine Hub Agenda State',
+      subtitle: 'Topic anchor keeps KC context across turns — hop threshold now governed by Engine Hub instead of hardcoded 1.5x',
       status:   'partial',
       group:    'Engine Hub + Behavior Cards',
 
-      why: 'SPFUQ (Single Purpose Follow-Up Query) keeps a KC container "in context" across multiple turns so callers can ask follow-ups without the agent losing their topic. The hop threshold (how much stronger a new container must be to steal the conversation from the anchor) was hardcoded at 1.5×. Engine Hub now governs this: at confidenceThreshold=0.72 the hop factor is 1.39 — slightly more permissive. At 0.50 it is 2.0 — very strict. The Agenda State settings (maxDeferredIntents, autoSurfaceDeferred, deferredTimeoutTurns) are configured and loaded but do not yet replace the single-anchor SPFUQ model.',
+      why: 'The anchor container keeps a KC container "in context" across multiple turns so callers can ask follow-ups without the agent losing their topic. The hop threshold (how much stronger a new container must be to steal the conversation from the anchor) was hardcoded at 1.5x. Engine Hub now governs this: at confidenceThreshold=0.72 the hop factor is 1.39 — slightly more permissive. At 0.50 it is 2.0 — very strict. The Agenda State settings (maxDeferredIntents, autoSurfaceDeferred, deferredTimeoutTurns) are configured and loaded but not yet fully active.',
 
-      engine:   'SPFUQService (Redis) + EngineHubRuntime.getHopFactor()',
-      provider: 'Redis (SPFUQ anchor key) + MongoDB (Engine Hub config)',
+      engine:   'discoveryNotes.anchorContainerId + EngineHubRuntime.getHopFactor()',
+      provider: 'discoveryNotes (in-memory) + MongoDB (Engine Hub config)',
       model:    null,
       fires:    'Every Turn 2+ — GATE 2 parallel load, GATE 3b hop evaluation',
-      writesTo: 'spfuq (Redis) — set/updated after each KC answer, cleared on topic hop or booking intent',
+      writesTo: 'discoveryNotes.anchorContainerId — set/updated after each KC answer, cleared on topic hop or booking intent',
       wiredIn:  [
-        'services/engine/kc/SPFUQService.js — load(), set(), clear(), isExpiredByTurnBudget()',
-        'services/engine/kc/KCDiscoveryRunner.js — GATE 2 (load), GATE 3b (hop threshold, ~line 424)',
+        'services/engine/kc/KCDiscoveryRunner.js — GATE 2 (load), GATE 3b (hop threshold)',
         'services/engine/EngineHubRuntime.js — getHopFactor(), getConfidenceThreshold()',
       ],
       configIn:  'Engine Hub → Intent Detection + Agenda State',
       configUrl: 'enginehub.html',
 
       configFields: [
-        { key: 'engineHub.intentDetection.confidenceThreshold', label: 'Confidence Threshold',  unit: '0–1',   note: '0.72 → hop factor 1.39 (replaces old hardcoded 1.5×). Lower = more permissive topic hops.' },
+        { key: 'engineHub.intentDetection.confidenceThreshold', label: 'Confidence Threshold',  unit: '0–1',   note: '0.72 → hop factor 1.39 (replaces old hardcoded 1.5x). Lower = more permissive topic hops.' },
         { key: 'engineHub.intentDetection.multiIntentEnabled',  label: 'Multi-Intent',          unit: 'bool',  note: 'Catch compound questions in a single turn ("how much AND do you have availability?")' },
         { key: 'engineHub.intentDetection.maxIntentsPerTurn',   label: 'Max Intents Per Turn',  unit: 'number', note: 'Max 2 prevents agenda bloat on compound questions' },
-        { key: 'engineHub.agendaState.maxDeferredIntents',      label: 'Max Deferred Intents',  unit: 'number', note: 'Agenda State tracks up to N open intents (replaces SPFUQ single anchor — not yet live)' },
+        { key: 'engineHub.agendaState.maxDeferredIntents',      label: 'Max Deferred Intents',  unit: 'number', note: 'Agenda State tracks up to N open intents — not yet live' },
         { key: 'engineHub.agendaState.autoSurfaceDeferred',     label: 'Auto-Surface Deferred', unit: 'bool',  note: 'Agent proactively raises deferred topics at natural conversation gaps' },
         { key: 'engineHub.agendaState.deferredTimeoutTurns',    label: 'Deferred Timeout',      unit: 'turns', note: 'Deferred intents expire after N turns — prevents ghost agenda' },
       ],
@@ -680,15 +679,13 @@
       extracts: [],
 
       gaps: [
-        'Agenda State is configured and loaded but does not yet replace SPFUQ — SPFUQ single-anchor model still routes calls',
-        'Multi-intent detection flag loaded in config but multi-intent parsing not yet active in the turn router',
-        'SPFUQ subjectBrief (50-char summary) still injected into Groq instead of full Engine Hub conversation context',
+        'Agenda State is configured and loaded but multi-intent parsing not yet active in the turn router',
       ],
 
       routing: {
-        'SPFUQ active + new container scores above hop threshold': 'kc_answer — topic hop confirmed (Engine Hub hop factor governs)',
-        'SPFUQ active + new container scores below hop threshold': 'KC_SPFUQ_CONTINUE — stays in SPFUQ topic',
-        'No SPFUQ anchor': 'kc_answer — fresh KC match attempt',
+        'Anchor active + new container scores above hop threshold': 'kc_answer — topic hop confirmed (Engine Hub hop factor governs)',
+        'Anchor active + new container scores below hop threshold': 'stays in anchored topic',
+        'No anchor': 'kc_answer — fresh KC match attempt',
       },
     },
 
@@ -702,13 +699,13 @@
       status:   'wired',
       group:    'Engine Hub + Behavior Cards',
 
-      why: 'When a caller asks "how much is a service call?" the answer must come from company-authored content, not LLM general knowledge. This stage scores every knowledge container against the utterance, picks the best match, passes its content to Groq, and gets a natural spoken answer bounded entirely to that container. Zero hallucination. Category-linked Behavior Cards (Stage 16) are injected into the Groq system prompt here — they govern HOW the answer is delivered (tone, rules, CTA shape). SPFUQ/Engine Hub Agenda State keeps the topic in context across multi-turn follow-ups.',
+      why: 'When a caller asks "how much is a service call?" the answer must come from company-authored content, not LLM general knowledge. This stage scores every knowledge container against the utterance, picks the best match, passes its content to Groq, and gets a natural spoken answer bounded entirely to that container. Zero hallucination. Category-linked Behavior Cards are injected into the Groq system prompt here — they govern HOW the answer is delivered (tone, rules, CTA shape). Anchor-based topic continuity keeps the topic in context across multi-turn follow-ups.',
 
       engine:   'KnowledgeContainerService.answer() + BehaviorCardService.forCategory()',
       provider: 'Groq',
       model:    'llama-3.3-70b-versatile',
       fires:    'Turn 2+ when a KC container matches (keyword score or embedding). Also Turn 1 via Question Detector TIER 1 fast path.',
-      writesTo: 'discoveryNotes.callReason (container title), discoveryNotes.qaLog (new entry), SPFUQ anchor (Redis)',
+      writesTo: 'discoveryNotes.callReason (container title), discoveryNotes.qaLog (new entry), anchorContainerId (discoveryNotes)',
       wiredIn:  [
         'services/engine/kc/KCDiscoveryRunner.js — GATE 3 (container match), GATE 4 (Groq answer)',
         'services/engine/agent2/KnowledgeContainerService.js — findContainer(), answer(), _buildSystemPrompt()',
@@ -1970,7 +1967,7 @@
         turnResult.stages.push(bookingStage);
 
         // [4] KC Answer
-        const kcPath = turnResult.path.includes('KC_DIRECT') || turnResult.path.includes('KC_SPFUQ') || turnResult.path.includes('KC_TOPIC');
+        const kcPath = turnResult.path.includes('KC_DIRECT') || turnResult.path.includes('KC_TOPIC');
         const kcStage = {
           stageId: 'kc_answer',
           icon: '📦', name: 'KC Answer',

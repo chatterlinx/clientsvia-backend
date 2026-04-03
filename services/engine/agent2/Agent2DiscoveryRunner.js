@@ -2440,7 +2440,7 @@ class Agent2DiscoveryRunner {
       });
 
       // ════════════════════════════════════════════════════════════════════
-      // SPFUQ × PFUQ INTERLOCK GATE
+      // KC × PFUQ INTERLOCK GATE
       // ════════════════════════════════════════════════════════════════════
       // When KC engine is active (default — engine !== 'scrabengine'), it
       // owns ALL non-pure-YES turns inside the PFUQ block.
@@ -2449,10 +2449,10 @@ class Agent2DiscoveryRunner {
       // is active (PFUQ block returns early). This gate is the KC engine's
       // entry point for PFUQ turns.
       //
-      // KC engine handles SPFUQ internally:
-      //   - SPFUQ anchor exists  → KC_SPFUQ_CONTINUE (stays in topic)
-      //   - No anchor / new topic → KC_DIRECT_ANSWER (fresh container match)
-      //   - No KC match           → KC_LLM_FALLBACK (Claude COMPLEX)
+      // KC engine routes internally:
+      //   - Anchor container exists → stays in topic (anchor-based continuity)
+      //   - No anchor / new topic   → KC_DIRECT_ANSWER (fresh container match)
+      //   - No KC match             → KC_LLM_FALLBACK (Claude COMPLEX)
       // In all paths: Groq answer + pendingBookingQuestion appended + PFUQ
       // re-asserted in state so consent fires cleanly next turn.
       //
@@ -2469,7 +2469,7 @@ class Agent2DiscoveryRunner {
         if (!_pureYes) {
           // KC engine owns this PFUQ turn — answers question, re-appends PFUQ,
           // re-asserts pendingFollowUpQuestion in state for next consent check.
-          emit('SPFUQ_PFUQ_INTERLOCK_KC_ROUTE', {
+          emit('KC_PFUQ_INTERLOCK_KC_ROUTE', {
             inputPreview: clip(input, 60),
             hasQ: _hasQ,
             turn,
@@ -4008,7 +4008,7 @@ class Agent2DiscoveryRunner {
     // 🧠 KC DISCOVERY ENGINE SWITCH
     // ══════════════════════════════════════════════════════════════════════════
     // Bypasses ScrabEngine + all legacy trigger/interceptor logic and routes
-    // through the KC Discovery Engine (Groq-powered, SPFUQ-anchored).
+    // through the KC Discovery Engine (Groq-powered, anchor-based).
     //
     // Toggle:     agent2.html > "🧠 Discovery Engine" card
     // Config:     company.aiAgentSettings.agent2.discovery.engine

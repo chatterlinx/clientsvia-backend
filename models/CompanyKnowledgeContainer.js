@@ -372,21 +372,6 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment:   'Suggested closing / follow-up language for Groq to adapt after answering. Leave blank for Groq default.'
     },
 
-    // How many pronoun-only follow-up turns to stay anchored to this container.
-    // When the caller asks "what does it include?" without repeating the topic,
-    // SPFUQ keeps Groq in this container. This field controls the max depth.
-    // null = use system default (4 turns). Admin can set per topic:
-    //   2 = Short  (simple topics — price check, one-liner answer)
-    //   4 = Standard (default — general Q&A topics)
-    //   6 = Deep (complex topics — multi-option services, pricing tiers)
-    followUpDepth: {
-      type:    Number,
-      default: null,
-      min:     2,
-      max:     6,
-      comment: 'Max SPFUQ follow-up turns (pronoun resolution depth). null = system default (4). Options: 2 Short, 4 Standard, 6 Deep.'
-    },
-
     // ─────────────────────────────────────────────────────────────────────────
     // SEMANTIC EMBEDDING — for keyword health / conflict detection
     // Generated automatically on save via KCKeywordHealthService.

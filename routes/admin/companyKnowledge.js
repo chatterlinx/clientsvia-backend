@@ -127,7 +127,6 @@ const ALLOWED_FIELDS = [
   'wordLimitEnabled',   // Boolean — when false, omits hard word cap from Groq prompt
   'useFixedResponse',   // Boolean — when true, bypasses Groq; agent reads Section 1 verbatim with pre-cached audio
   'sampleResponse',     // String — ideal example answer injected as guardrail into Groq prompt
-  'followUpDepth',      // 2 | 4 | 6 — SPFUQ turn budget for this container (null = system default)
   'bookingAction',      // Container-level default; sections can override per-section
   'closingPrompt',
   'isActive',

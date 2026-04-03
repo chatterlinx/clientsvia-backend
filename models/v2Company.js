@@ -4199,7 +4199,7 @@ const companySchema = new mongoose.Schema({
             discovery: {
                 enabled: { type: Boolean, default: false },
                 // ── DISCOVERY ENGINE SELECTION ──────────────────────────────
-                // 'kc'          → KC Discovery Engine (Groq-powered, SPFUQ anchoring)
+                // 'kc'          → KC Discovery Engine (Groq-powered, anchor-based)
                 // 'scrabengine' → Legacy keyword pipeline (triggers + interceptors)
                 // Default: 'kc'  Toggle: agent2.html > "🧠 Discovery Engine"
                 // ──────────────────────────────────────────────────────────
@@ -6061,7 +6061,7 @@ const companySchema = new mongoose.Schema({
         },
 
         // ── Agenda State ──────────────────────────────────────────────────────
-        // Replaces the single SPFUQ anchor. Tracks all open intents per call.
+        // Tracks all open intents per call (pending, deferred, resolved).
         agendaState: {
             maxDeferredIntents: {
                 type:    Number,

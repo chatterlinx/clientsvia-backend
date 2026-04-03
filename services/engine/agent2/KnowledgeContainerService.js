@@ -413,8 +413,6 @@ function _buildContainerBlock(container, targetSection = null) {
  * @param {string}  opts.bookingOfferMode  — 'groq' | 'fixed'
  * @param {string}  opts.bookingOfferPhrase — used when mode is 'fixed'
  * @param {string}  opts.bookingAction     — container-level booking action
- * @param {string}  [opts.spfuqContext]    — active topic reminder injected when SPFUQ anchor is live.
- *                                           Helps Groq resolve pronouns ('it', 'that') to the current topic.
  * @returns {string}
  */
 function _buildSystemPrompt({
@@ -428,7 +426,6 @@ function _buildSystemPrompt({
   bookingOfferPhrase,
   bookingAction,
   closingPrompt,
-  spfuqContext,
   discoveryContext,
   responseTone,
   responseStyle,
@@ -462,15 +459,9 @@ function _buildSystemPrompt({
     bookingInstruction = '5. After answering, read the caller\'s tone and engagement. If they sound interested or ready, invite them to schedule in one warm, natural sentence. If the topic was purely informational or the caller seems hesitant, offer to answer any other questions instead. Never force a booking pitch if the context doesn\'t call for it.';
   }
 
-  // ACTIVE TOPIC block — injected when SPFUQ anchor is live so Groq resolves
-  // pronouns ('it', 'that', 'they', 'those') back to the anchored container topic.
-  const activeTopicBlock = spfuqContext
-    ? `\nACTIVE TOPIC: The caller is currently discussing "${containerTitle}". Resolve pronouns ('it', 'that', 'they', 'those') as references to "${containerTitle}" unless the caller explicitly introduces a new topic.\n`
-    : '';
-
   // CALL CONTEXT block — injected when discoveryNotes provide call-level context
   // (callReason, caller name, urgency) so Groq connects its answer to the
-  // caller's specific situation. Additive — does not replace ACTIVE TOPIC.
+  // caller's specific situation.
   const callContextBlock = discoveryContext
     ? `\nCALL CONTEXT: ${discoveryContext}\nUse this context to connect your answer to what the caller is specifically calling about.\n`
     : '';
@@ -526,7 +517,7 @@ function _buildSystemPrompt({
 
   return `You are the phone agent for ${companyName}.
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
-${activeTopicBlock}${callContextBlock}${preQualBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
+${callContextBlock}${preQualBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
 ${noGreetingRule}1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. If a specific price, fee, or rate is NOT written verbatim in the container content below, say "I'd need to confirm that exact pricing for you" — NEVER estimate or invent a number.
 2. ${wordCapRule}
@@ -910,7 +901,6 @@ async function answer(opts) {
     callerName,
     callSid,
     turn            = null, // current turn number — used to suppress greeting on turn 1
-    spfuqContext,           // optional — active topic reminder for pronoun resolution
     discoveryContext,       // optional — call-level context from discoveryNotes
     priorVisit  = false,    // optional — true when caller is a returning customer
     preQualifyContext = '', // optional — caller's pre-qualify answer context
@@ -1031,7 +1021,6 @@ async function answer(opts) {
     bookingOfferPhrase:       kbSettings.bookingOfferPhrase          || BUILT_IN_BOOKING_OFFER,
     bookingAction:            effectiveBookingAction,
     closingPrompt:            container.closingPrompt                || '',
-    spfuqContext:             spfuqContext                           || null,
     discoveryContext:         discoveryContext                        || null,
     responseTone:             kbSettings.responseTone                || 'friendly',
     responseStyle:            kbSettings.responseStyle               || 'concise',

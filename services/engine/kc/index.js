@@ -7,11 +7,10 @@
  * Each export is also importable directly from its own file.
  *
  * Usage:
- *   const { KCDiscoveryRunner, SPFUQService, KCBookingIntentDetector } = require('./kc');
+ *   const { KCDiscoveryRunner, KCBookingIntentDetector } = require('./kc');
  */
 
 module.exports = {
   KCDiscoveryRunner:       require('./KCDiscoveryRunner'),
-  SPFUQService:            require('./SPFUQService'),
   KCBookingIntentDetector: require('./KCBookingIntentDetector'),
 };

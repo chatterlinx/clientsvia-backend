@@ -250,13 +250,12 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
 
     // ── KC ENGINE DATA ───────────────────────────────────────────────────
     // Populate per-turn KC engine details from trace events emitted by
-    // KCDiscoveryRunner. Shows container match, SPFUQ state, Groq answer,
-    // booking intent, LLM fallback, caller screening — everything needed
-    // to understand what the KC engine did on this turn.
+    // KCDiscoveryRunner. Shows container match, Groq answer, booking
+    // intent, LLM fallback, caller screening — everything needed to
+    // understand what the KC engine did on this turn.
     // ─────────────────────────────────────────────────────────────────────
     const kcContainerMatched = traceByKind.get(`${turnNum}:KC_CONTAINER_MATCHED`);
     const kcGroqAnswered     = traceByKind.get(`${turnNum}:KC_GROQ_ANSWERED`);
-    const kcSpfuqLoaded      = traceByKind.get(`${turnNum}:KC_SPFUQ_LOADED`);
     const kcPfuqReask        = traceByKind.get(`${turnNum}:KC_PFUQ_REASK_FIRED`);
     const kcBookingFired     = traceByKind.get(`${turnNum}:KC_BOOKING_INTENT_FIRED`);
     const kcLlmFallback      = traceByKind.get(`${turnNum}:KC_LLM_FALLBACK_FIRED`);
@@ -284,8 +283,6 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         containerBlockPreview: kcGroqAnswered?.payload?.containerBlockPreview || null,
 
         // ── State flags ───────────────────────────────────────────────────
-        spfuqActive:     !!kcSpfuqLoaded,
-        spfuqContainer:  kcSpfuqLoaded?.payload?.containerTitle || null,
         pfuqReask:       !!kcPfuqReask,
         bookingFired:    !!kcBookingFired,
         llmFallback:     !!kcLlmFallback,
@@ -368,7 +365,6 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
           groqLatencyMs:  null,
           groqResponse:   (bsp.nextPromptPreview || '').substring(0, 500) || null,
           path:           'BK_KC_DIGRESSION',
-          spfuqActive:    false,
           llmFallback:    false,
           gracefulAck:    false,
         };
@@ -518,15 +514,14 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
     }
 
     // ── KC ENGINE — build dedicated kcEngine block when KC trace is present ──
-    // kcTrace.containerId, containerTitle, kcId, intent, latencyMs, spfuqActive
+    // kcTrace.containerId, containerTitle, kcId, intent, latencyMs
     // come from KCDiscoveryRunner._buildKcTrace() (or legacy _build123rp).
     // KC_CONTAINER_MATCHED / KC_GROQ_ANSWERED events are used as fallback sources.
     if (kcTrace) {
       const kcContainerMatched = traceByKind.get(`${turnNum}:KC_CONTAINER_MATCHED`);
       const kcGroqAnswered = traceByKind.get(`${turnNum}:KC_GROQ_ANSWERED`);
-      const kcSpfuqLoaded = traceByKind.get(`${turnNum}:KC_SPFUQ_LOADED`);
       turnData.kcEngine = {
-        containerId:    kcTrace.containerId || kcSpfuqLoaded?.payload?.containerId || null,
+        containerId:    kcTrace.containerId || null,
         containerTitle: kcTrace.containerTitle || kcContainerMatched?.payload?.containerTitle || null,
         kcId:           kcTrace.kcId || null,
         matchScore:     kcContainerMatched?.payload?.score ?? null,
@@ -534,7 +529,6 @@ function buildTurnByTurnFlow(turns = [], trace = []) {
         groqLatencyMs:  kcTrace.latencyMs || kcGroqAnswered?.payload?.latencyMs || null,
         groqResponse:   turnData.agentResponse?.text || null,
         path:           kcTrace.path || null,
-        spfuqActive:    kcTrace.spfuqActive ?? false,
         llmFallback:    kcTrace.path === 'KC_LLM_FALLBACK',
         gracefulAck:    kcTrace.path === 'KC_GRACEFUL_ACK',
       };
@@ -1014,11 +1008,6 @@ function buildAutoSummary(callContext) {
       `KC engine answered ${kcTurns.length} question${kcTurns.length > 1 ? 's' : ''} ` +
       `from container: "${kcContainers.join('", "')}".`
     );
-    // SPFUQ follow-ups
-    const spfuqCount = kcTurns.filter(t => t.kcEngine.spfuqActive).length;
-    if (spfuqCount > 0) {
-      lines.push(`${spfuqCount} follow-up question${spfuqCount > 1 ? 's' : ''} answered via SPFUQ (same KC container re-used).`);
-    }
   }
 
   // ── Routing distribution ───────────────────────────────────────────────────
@@ -2257,9 +2246,8 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
         return 'Wired in GATE 2 — per-call trace pending runtime persistence';
       })()),
 
-    stg('spfuq_agenda', 'SPFUQ + Agenda State', 'E',
+    stg('anchor_agenda', 'Anchor + Agenda State', 'E',
       (() => {
-        // If we have a KC hit, SPFUQ ran
         const kcHit = convTurns.some(t => _isKCAnswered(t));
         return kcHit ? 'info' : 'unknown';
       })(),

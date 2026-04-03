@@ -8,7 +8,10 @@
  * PURPOSE:
  *   Enterprise-grade Knowledge Container-first discovery engine. Replaces the
  *   ScrabEngine → Triggers → LLM cascade with a cleaner, more conversational
- *   KC → SPFUQ → Groq → LLM pipeline.
+ *   KC → Groq → LLM pipeline.
+ *
+ *   Topic persistence is handled by discoveryNotes.anchorContainerId (3× score
+ *   multiplier + ANCHOR_FLOOR=24 in findContainer). No separate Redis state.
  *
  *   Activated by:  company.aiAgentSettings.agent2.discovery.engine = 'kc'
  *   Toggled from:  agent2.html > "🧠 Discovery Engine" card
@@ -16,17 +19,14 @@
  *
  * PIPELINE (in order):
  *   1. Booking intent check   (KCBookingIntentDetector — synchronous, ~0ms)
- *   2. SPFUQ anchor load      (SPFUQService / Redis — ~1ms)
- *   3. KC container match     (KnowledgeContainerService.findContainer — ~2ms)
- *   4. Groq answer            (KnowledgeContainerService.answer — ~500ms)
- *   5. LLM fallback           (callLLMAgentForFollowUp — ~800ms, only if no KC)
- *   6. Graceful ACK           (canned response, only if LLM also unavailable)
+ *   2. KC container match     (KnowledgeContainerService.findContainer — ~2ms)
+ *   3. Groq answer            (KnowledgeContainerService.answer — ~500ms)
+ *   4. LLM fallback           (callLLMAgentForFollowUp — ~800ms, only if no KC)
+ *   5. Graceful ACK           (canned response, only if LLM also unavailable)
  *
  * PATH CONSTANTS (visible in Call Review Console trace):
  *   KC_DIRECT_ANSWER    — KC matched, Groq answered, conversation continues
  *   KC_BOOKING_INTENT   — Booking signal detected → PFUQ/booking on next turn
- *   KC_SPFUQ_CONTINUE   — Active anchor, same topic, Groq re-answers with context
- *   KC_TOPIC_HOP        — Active anchor, new topic matched → clear + re-anchor
  *   KC_LLM_FALLBACK     — No KC match → callLLMAgentForFollowUp (Claude, COMPLEX)
  *   KC_GRACEFUL_ACK     — No KC + LLM unavailable → canned acknowledgment
  *
@@ -37,7 +37,6 @@
  * GRACEFUL DEGRADE CHAIN:
  *   KC match fails → LLM fallback
  *   LLM unavailable → Graceful ACK
- *   Redis down → no SPFUQ (call continues, no anchor, works fine)
  *   Groq down → NO_DATA / ERROR intent → LLM fallback
  *
  * WIRING:
@@ -47,7 +46,6 @@
  * ============================================================================
  */
 
-const SPFUQService            = require('./SPFUQService');
 const KCBookingIntentDetector = require('./KCBookingIntentDetector');
 const KCTransferIntentDetector = require('./KCTransferIntentDetector');
 const KCS                     = require('../agent2/KnowledgeContainerService');
@@ -69,8 +67,6 @@ const UAP_CONFIDENCE_THRESHOLD = 0.80;
 const PATH = {
   KC_DIRECT_ANSWER:  'KC_DIRECT_ANSWER',   // KC match → Groq answered
   KC_BOOKING_INTENT: 'KC_BOOKING_INTENT',  // Booking signal detected
-  KC_SPFUQ_CONTINUE: 'KC_SPFUQ_CONTINUE', // Same-topic SPFUQ continuation
-  KC_TOPIC_HOP:      'KC_TOPIC_HOP',       // SPFUQ active, new container matched
   KC_LLM_FALLBACK:   'KC_LLM_FALLBACK',   // No KC match → Claude LLM
   KC_GRACEFUL_ACK:   'KC_GRACEFUL_ACK',   // No KC + LLM unavailable
   KC_PFUQ_REASK:     'KC_PFUQ_REASK',     // KC answered follow-up, re-asked booking Q
@@ -429,9 +425,6 @@ class KCDiscoveryRunner {
             },
           }).catch(() => {});
 
-          // Clear any active SPFUQ — transfer intent ends the topic anchor
-          SPFUQService.clear(companyId, callSid).catch(() => {});
-
           logger.info('[KC_ENGINE] GATE 0.5: Transfer executing', {
             companyId, callSid, turn,
             dest: bestDest.name, mode: transferMode, urgency: hint.urgency,
@@ -520,8 +513,7 @@ class KCDiscoveryRunner {
     // Only fires on PURE booking signals. If the caller's utterance also
     // contains a question ("yeah but do you offer maintenance?"), the question
     // takes priority — answer it first, let Groq's closingPrompt naturally
-    // re-offer booking. This mirrors the _pureYes filter in the SPFUQ×PFUQ
-    // interlock gate (Agent2DiscoveryRunner.js).
+    // re-offer booking.
     //
     // Without this filter, "yeah I'd like to know if you offer maintenance"
     // would fire KC_BOOKING_INTENT on "yeah" and the caller's question would
@@ -574,9 +566,6 @@ class KCDiscoveryRunner {
         ...(callerName ? { entities: { firstName: callerName } } : {}),
       }).catch(() => {});
 
-      // Clear any active SPFUQ — booking intent ends the topic anchor
-      SPFUQService.clear(companyId, callSid).catch(() => {});
-
       const bookingResponse = "Great! Let me get that scheduled for you.";
 
       return {
@@ -588,16 +577,18 @@ class KCDiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // GATE 2+3 — PARALLEL LOAD: SPFUQ + Notes + Containers + Container Embeddings
+    // GATE 2+3 — PARALLEL LOAD: Notes + Containers + Rejected IDs
     // ══════════════════════════════════════════════════════════════════════════
-    // 4 data sources fire concurrently. Utterance embedding is intentionally
+    // 3 data sources fire concurrently. Utterance embedding is intentionally
     // NOT here — it fires only on keyword miss so the happy path (keyword hit)
     // has zero embedding latency. Net latency of this Promise.all ≈ 2ms (all
     // Redis/cache). Container embeddings load from Redis cache (1ms) so they
     // are pre-fetched and ready if we need them.
+    //
+    // Topic persistence: discoveryNotes.anchorContainerId + 3× score multiplier
+    // + ANCHOR_FLOOR=24 in findContainer() handles follow-up turns naturally.
     // ══════════════════════════════════════════════════════════════════════════
 
-    let spfuq               = null;
     let notes               = null;
     let containers          = [];
     let rejectedContainerIds = new Set();   // IDs caller has explicitly rejected this call
@@ -605,8 +596,7 @@ class KCDiscoveryRunner {
     try {
       const _rejKey = `kc-rejected:${companyId}:${callSid}`;
       let _rejRaw;
-      [spfuq, notes, containers, _rejRaw] = await Promise.all([
-        SPFUQService.load(companyId, callSid).catch(() => null),
+      [notes, containers, _rejRaw] = await Promise.all([
         DiscoveryNotesService.load(companyId, callSid).catch(() => null),
         KCS.getActiveForCompany(companyId).catch((_e) => {
           logger.warn('[KC_ENGINE] Failed to load containers', { companyId, callSid, err: _e.message });
@@ -622,16 +612,11 @@ class KCDiscoveryRunner {
     }
 
     // ── Engine Hub Runtime — load config from company document (sync, ~0ms) ──
-    // Returns null if Engine Hub is disabled, not configured, or passive mode.
-    // Passive = settings loaded for logging only, no routing changes applied.
-    // Learning / Active = settings govern hop threshold, policy selection, BC injection.
     const ehConfig = EngineHubRuntime.load(company);
     if (ehConfig) {
       EngineHubRuntime.logTrace(companyId, callSid, 'EH_ACTIVE', {
         mode:              ehConfig.mode,
         confidenceThresh:  ehConfig.intentDetection.confidenceThreshold,
-        hopFactor:         EngineHubRuntime.getHopFactor(ehConfig).toFixed(2),
-        spfuqActive:       !!spfuq,
         containerCount:    containers.length,
       }, ehConfig);
     }
@@ -644,47 +629,14 @@ class KCDiscoveryRunner {
       });
     }
 
-    if (spfuq) {
-      if (SPFUQService.isExpiredByTurnBudget(spfuq)) {
-        logger.info('[KC_ENGINE] SPFUQ anchor expired (turn budget exhausted) — clearing', {
-          companyId, callSid,
-          containerTitle: spfuq.containerTitle,
-          turnsRemaining: spfuq.turnsRemaining,
-        });
-        SPFUQService.clear(companyId, callSid).catch(() => {});
-        spfuq = null;
-      } else {
-        logger.info('[KC_ENGINE] SPFUQ anchor loaded', {
-          companyId, callSid, containerId: spfuq.containerId,
-          containerTitle: spfuq.containerTitle, lastTurn: spfuq.lastTurn,
-          turnsRemaining: spfuq.turnsRemaining,
-        });
-        emit('KC_SPFUQ_LOADED', {
-          containerId: spfuq.containerId, containerTitle: spfuq.containerTitle,
-          lastTurn: spfuq.lastTurn, turnsRemaining: spfuq.turnsRemaining,
-        });
-      }
-    }
-
     // ══════════════════════════════════════════════════════════════════════════
     // REJECTION DETECTOR — fires before container scoring
     // ══════════════════════════════════════════════════════════════════════════
-    // PROBLEM this fixes (observed in production, March 2026):
-    //   1. KC matches container A (wrong — e.g. "System Replacement").
-    //   2. SPFUQ anchors to container A.
-    //   3. Caller: "No, it's not a system replacement. I need maintenance price."
-    //   4. Engine scores new container B (maintenance) — B.score < hopThreshold.
-    //      Confidence-gap logic stays in A ("not strong enough to hop").
-    //   5. Agent answers with "System Replacement" AGAIN. Loop repeats 5+ turns.
-    //
-    // FIX: When the caller's turn starts with an explicit rejection pattern AND
-    // an SPFUQ anchor is active, treat it as a CANCEL (not a weak hop).
-    //   → Clear SPFUQ immediately (regardless of hop threshold).
-    //   → Add the rejected container ID to `rejectedContainerIds` (Redis, 4h TTL)
-    //     so it is excluded from ALL scoring for the rest of this call.
-    //   → Write the container title to discoveryNotes.rejectedTopics[] so the
-    //     LLM fallback (GATE 4) knows what NOT to repeat.
-    //   → Re-score fresh without the rejected container.
+    // When the caller explicitly rejects the previous answer ("no, that's not
+    // what I asked") AND we have an anchored container from discoveryNotes,
+    // add it to the rejected set so it's excluded from scoring this call.
+    // Also write the title to discoveryNotes.rejectedTopics[] so Groq/LLM
+    // knows what NOT to repeat. Clear the anchor to allow fresh matching.
     // ══════════════════════════════════════════════════════════════════════════
 
     // Phrases that signal explicit rejection of the previous answer.
@@ -692,11 +644,13 @@ class KCDiscoveryRunner {
     //   "I know that's not right but…" (contains 'not' but not a rejection opener)
     const _REJECTION_RE = /^(no[,!.\s]|nope[,!.\s]|that'?s?\s+not|it'?s?\s+not|that\s+is\s+not|i\s+said|i\s+don'?t\s+need|i\s+didn'?t\s+ask|i\s+am\s+not\s+(asking|calling|looking)|i'?m\s+not\s+(asking|calling|looking)|wrong\b|not\s+(a|an|the|that|what|this|it)\b)/i;
 
-    if (spfuq && _REJECTION_RE.test((userInput || '').trim())) {
-      const _rejectedId    = String(spfuq.containerId    || '');
-      const _rejectedTitle = String(spfuq.containerTitle || '');
+    const _anchorId = notes?.anchorContainerId ? String(notes.anchorContainerId) : null;
 
-      logger.info('[KC_ENGINE] 🚫 REJECTION DETECTED — cancelling SPFUQ anchor', {
+    if (_anchorId && _REJECTION_RE.test((userInput || '').trim())) {
+      const _rejectedContainer = containers.find(c => String(c._id || '') === _anchorId);
+      const _rejectedTitle = _rejectedContainer?.title || '';
+
+      logger.info('[KC_ENGINE] 🚫 REJECTION DETECTED — clearing anchor', {
         companyId, callSid, turn,
         rejectedContainer: _rejectedTitle,
         inputPreview: _clip(userInput, 60),
@@ -706,23 +660,24 @@ class KCDiscoveryRunner {
         rejectedContainer: _rejectedTitle,
       });
 
-      if (_rejectedId) {
-        rejectedContainerIds.add(_rejectedId);
-        // Persist rejected list for this call (4h TTL — matches discoveryNotes)
-        if (redis) {
-          const _rk = `kc-rejected:${companyId}:${callSid}`;
-          redis.setex(_rk, 4 * 3600, JSON.stringify([...rejectedContainerIds])).catch(() => {});
-        }
-        // Write rejected topic name to discoveryNotes so Groq/LLM knows to avoid it
-        if (_rejectedTitle) {
-          _writeDiscoveryNotes(companyId, callSid, {
-            rejectedTopics: [_rejectedTitle],
-          }).catch(() => {});
-        }
+      rejectedContainerIds.add(_anchorId);
+      // Persist rejected list for this call (4h TTL — matches discoveryNotes)
+      if (redis) {
+        const _rk = `kc-rejected:${companyId}:${callSid}`;
+        redis.setex(_rk, 4 * 3600, JSON.stringify([...rejectedContainerIds])).catch(() => {});
       }
-      // Clear the anchor — caller has explicitly cancelled it
-      SPFUQService.clear(companyId, callSid).catch(() => {});
-      spfuq = null;
+      // Write rejected topic name to discoveryNotes so Groq/LLM knows to avoid it
+      // Also clear the anchor — caller has explicitly rejected it
+      if (_rejectedTitle) {
+        _writeDiscoveryNotes(companyId, callSid, {
+          rejectedTopics:    [_rejectedTitle],
+          anchorContainerId: null,
+        }).catch(() => {});
+      } else {
+        _writeDiscoveryNotes(companyId, callSid, {
+          anchorContainerId: null,
+        }).catch(() => {});
+      }
     }
 
     // ── CONTAINER MATCH — keyword-first (0ms), embedding fallback ONLY on miss
@@ -928,82 +883,14 @@ class KCDiscoveryRunner {
     // Convenience: extract priorVisit once so all handlers below can use it
     const priorVisit = notes?.priorVisit === true;
 
-    // ── SPFUQ ACTIVE + NEW CONTAINER MATCHED → TOPIC HOP (with confidence gap)
-    if (spfuq && match && match.container) {
-      const matchedId  = String(match.container._id || match.container.title || '');
-      const anchoredId = String(spfuq.containerId || '');
-
-      if (matchedId && anchoredId && matchedId !== anchoredId) {
-        // FIX 2: Confidence gap — require the new container to score ≥ 1.5× what
-        // the anchored container scores on this same input before allowing a hop.
-        // This prevents a single generic word (e.g. "price") in another container
-        // from stealing the caller away from their current topic.
-        const anchorContainer = containers.find(c =>
-          String(c._id || c.title || '') === anchoredId ||
-          (c.title && c.title === spfuq.containerTitle)
-        );
-        const anchorMatch   = anchorContainer ? KCS.findContainer([anchorContainer], userInput) : null;
-        const anchorScore   = anchorMatch?.score ?? 0;
-
-        // Engine Hub governs the hop factor — replaces hardcoded 1.5×.
-        // getHopFactor() returns 1/confidenceThreshold so:
-        //   threshold=0.72 → factor=1.39 (slightly more permissive than old 1.5×)
-        //   threshold=0.50 → factor=2.00 (very strict, stays in topic longer)
-        //   threshold=0.90 → factor=1.11 (permissive, easy topic hops)
-        // Falls back to 1.39 when Engine Hub is disabled/passive.
-        const hopFactor     = EngineHubRuntime.getHopFactor(ehConfig);
-        const hopThreshold  = Math.max(anchorScore * hopFactor, 1);
-
-        if (match.score < hopThreshold) {
-          // New match not strong enough — stay in SPFUQ topic.
-          // NULL out match so the SPFUQ-continue path fires below (not _handleKCMatch).
-          logger.info('[KC_ENGINE] Topic hop blocked (confidence gap) — staying in SPFUQ topic', {
-            companyId, callSid,
-            from: spfuq.containerTitle, to: match.container.title,
-            matchScore: match.score, anchorScore, hopThreshold, hopFactor,
-          });
-          EngineHubRuntime.logTrace(companyId, callSid, 'KC_HOP_BLOCKED', {
-            from: spfuq.containerTitle, to: match.container.title,
-            matchScore: match.score, anchorScore, hopThreshold, hopFactor,
-          }, ehConfig);
-          match = null; // Force SPFUQ continue path below
-        } else {
-          // Caller clearly moved to a different topic — clear old anchor, hop
-          logger.info('[KC_ENGINE] Topic hop confirmed (confidence gap cleared) — switching container', {
-            companyId, callSid,
-            from: spfuq.containerTitle, to: match.container.title,
-            matchScore: match.score, anchorScore, hopThreshold,
-          });
-          emit('KC_CONTAINER_MATCHED', {
-            containerTitle: match.container.title,
-            containerId:    String(match.container._id || match.container.title || ''),
-            kcId:           match.container.kcId || null,
-            score:          match.score,
-            path:           PATH.KC_TOPIC_HOP,
-          });
-
-          SPFUQService.clear(companyId, callSid).catch(() => {});
-          spfuq = null; // Treat as fresh match below (falls into direct-answer path)
-        }
-      }
-    }
-
-    // ── SPFUQ ACTIVE + NO NEW MATCH (OR SAME CONTAINER) → CONTINUE ──────────
-    if (spfuq && (!match || !match.container)) {
-      // Caller asked a follow-up, no new container matched — stay in SPFUQ topic
-      return await _handleSPFUQContinue({
-        spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
-        containers, channel, nextState, emit, startMs, turn,
-        bridgeToken, redis, onSentence, pendingBookingQuestion,
-        discoveryContext, priorVisit,
-        compoundBookingIntent: _hasCompoundBookingIntent,
-      });
-    }
-
-    // ── NEW MATCH (or same container after hop cleared) → DIRECT ANSWER ──────
+    // ── MATCH → DIRECT ANSWER ─────────────────────────────────────────────
+    // Topic persistence is handled by discoveryNotes.anchorContainerId — the
+    // 3× score multiplier + ANCHOR_FLOOR=24 in findContainer() ensures follow-up
+    // questions ("how much is it?") naturally re-match the anchored container.
+    // No separate Redis anchor or topic-hop detection needed.
     if (match && match.container) {
       return await _handleKCMatch({
-        match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
+        match, userInput, companyId, callSid, company, kbSettings, callerName,
         channel, nextState, emit, startMs, turn,
         bridgeToken, redis, onSentence, pendingBookingQuestion,
         discoveryContext, priorVisit,
@@ -1023,197 +910,6 @@ class KCDiscoveryRunner {
       notes,        // discoveryNotes for building Claude callContext
     });
   }
-}
-
-// ============================================================================
-// HANDLER: KC SPFUQ CONTINUE
-// ============================================================================
-
-async function _handleSPFUQContinue({
-  spfuq, userInput, companyId, callSid, company, kbSettings, callerName,
-  containers,   // already loaded in run() — no second DB round-trip
-  channel, nextState, emit, startMs, turn,
-  bridgeToken            = null,
-  redis                  = null,
-  onSentence             = null,
-  pendingBookingQuestion = null,
-  discoveryContext       = null,
-  priorVisit             = false,
-  compoundBookingIntent  = false,
-}) {
-  const containerTitle = spfuq.containerTitle || 'this topic';
-
-  logger.info('[KC_ENGINE] SPFUQ_CONTINUE — re-answering in existing topic', {
-    companyId, callSid, containerTitle, turn,
-  });
-
-  // Containers already loaded in run() via Promise.all — no second DB call needed.
-  // Guard: if somehow empty (e.g. caller entered this path from Turn-1 fast path
-  // where containers haven't been pre-loaded), fall back to a fresh load.
-  if (!containers?.length) {
-    try {
-      containers = await KCS.getActiveForCompany(companyId);
-    } catch (_e) { containers = []; }
-  }
-
-  const anchorMatch = containers.find(c =>
-    String(c._id || c.title || '') === String(spfuq.containerId || '') ||
-    (c.title && c.title === spfuq.containerTitle)
-  );
-
-  if (!anchorMatch) {
-    // Anchored container no longer exists — clear anchor, fall to LLM
-    logger.warn('[KC_ENGINE] SPFUQ container no longer found — clearing anchor, falling to LLM', {
-      companyId, callSid, containerId: spfuq.containerId,
-    });
-    SPFUQService.clear(companyId, callSid).catch(() => {});
-    return await _handleLLMFallback({
-      userInput, companyId, callSid, company, channel: 'call', nextState, emit,
-      startMs, turn, bridgeToken, redis, callerName, onSentence,
-    });
-  }
-
-  // Build spfuqContext — injected into the system prompt so Groq resolves pronouns
-  // ('it', 'that', 'they') back to the anchored container.  Previously this was
-  // prepended to the user message, which confused Groq's role boundary.
-  // Now it lives in the system prompt via KCS.answer({ spfuqContext }).
-  const spfuqContext = spfuq.subjectBrief || `Caller is asking about ${containerTitle}`;
-
-  emit('KC_CONTAINER_MATCHED', {
-    containerTitle: anchorMatch.title,
-    containerId:    String(anchorMatch._id || anchorMatch.title || ''),
-    kcId:           anchorMatch.kcId || null,
-    score:          'spfuq',
-    path:           PATH.KC_SPFUQ_CONTINUE,
-  });
-
-  let kcResult;
-  try {
-    kcResult = await KCS.answer({
-      container:    anchorMatch,
-      question:     userInput,
-      kbSettings,
-      company,
-      callerName,
-      callSid,
-      turn,
-      spfuqContext,
-      discoveryContext,
-      priorVisit,   // passed from run() — was notes?.priorVisit (out-of-scope bug fixed)
-    });
-  } catch (_e) {
-    logger.error('[KC_ENGINE] Groq error on SPFUQ_CONTINUE', { companyId, callSid, err: _e.message });
-    kcResult = { response: null, intent: KCS.INTENT.ERROR };
-  }
-
-  if (!kcResult?.response) {
-    // Groq couldn't answer even with context — fall to LLM
-    return await _handleLLMFallback({
-      userInput, companyId, callSid, company, channel: 'call', nextState, emit,
-      startMs, turn, bridgeToken, redis, callerName, onSentence,
-    });
-  }
-
-  // Update SPFUQ anchor with new Q&A context + decrement turn budget (FIX 3)
-  const updatedBrief    = SPFUQService.buildBrief(spfuq, userInput, kcResult.response);
-  const turnsRemaining  = typeof spfuq.turnsRemaining === 'number'
-    ? Math.max(0, spfuq.turnsRemaining - 1)
-    : SPFUQService.DEFAULT_TURN_BUDGET - 1;
-  SPFUQService.set(companyId, callSid, {
-    ...spfuq,
-    lastTurn:       turn ?? spfuq.lastTurn,
-    lastQuestion:   userInput,
-    lastAnswer:     kcResult.response,
-    subjectBrief:   updatedBrief,
-    turnsRemaining,   // decremented — next turn checks this in GATE 2
-  }).catch(() => {});
-
-  // ── discoveryNotes: keep callReason + Q&A log current across SPFUQ turns ─
-  _writeDiscoveryNotes(companyId, callSid, {
-    callReason:         anchorMatch.title,
-    objective:          'DISCOVERY',
-    turnNumber:         turn ?? 0,
-    lastMeaningfulInput: userInput?.slice(0, 200) || null,
-    qaLog: [{
-      turn:      turn ?? 0,
-      question:  userInput,
-      answer:    kcResult.response?.slice(0, 200) || null,
-      timestamp: new Date().toISOString(),
-    }],
-  }).catch(() => {});
-
-  // ── Compound booking intent: KC answered the question; now transition to booking ──
-  // Caller had both a booking signal and a topic question in the same utterance.
-  // Set lane = 'BOOKING' so v2twilio redirects to BookingLogicEngine after this response.
-  if (compoundBookingIntent && !nextState.lane) {
-    logger.info('[KC_ENGINE] Compound booking intent (SPFUQ) — transitioning to BOOKING after KC answer', {
-      companyId, callSid, containerTitle: anchorMatch.title, turn,
-    });
-    nextState.lane        = 'BOOKING';
-    nextState.sessionMode = 'BOOKING';
-    nextState.agent2 = nextState.agent2 || {};
-    nextState.agent2.discovery = nextState.agent2.discovery || {};
-    nextState.agent2.discovery.pendingBookingFromKC = true;
-    _writeDiscoveryNotes(companyId, callSid, {
-      callReason: anchorMatch.title,
-      objective:  'BOOKING',
-      turnNumber: turn ?? 0,
-    }).catch(() => {});
-    SPFUQService.clear(companyId, callSid).catch(() => {});
-  }
-
-  // ── Path: KC_PFUQ_REASK when booking consent was pending ──────────────────
-  // Groq's closingPrompt already asked the booking question naturally as part
-  // of its response. We re-assert PFUQ in state ONLY — no second question is
-  // appended to the spoken response. The consent gate catches yes/no next turn.
-  const finalPath = pendingBookingQuestion ? PATH.KC_PFUQ_REASK : PATH.KC_SPFUQ_CONTINUE;
-
-  nextState.agent2            = nextState.agent2 || {};
-  nextState.agent2.discovery  = nextState.agent2.discovery || {};
-  nextState.agent2.discovery.lastPath    = finalPath;
-  nextState.agent2.discovery.lastKCTitle = anchorMatch.title;
-
-  if (pendingBookingQuestion) {
-    nextState.agent2.discovery.pendingFollowUpQuestion     = pendingBookingQuestion;
-    nextState.agent2.discovery.pendingFollowUpQuestionTurn = turn ?? 0;
-    emit('KC_PFUQ_REASK_FIRED', {
-      containerId:    String(anchorMatch._id || anchorMatch.title || ''),
-      containerTitle: anchorMatch.title,
-      turn,
-      path:           finalPath,
-    });
-  }
-
-  emit('KC_GROQ_ANSWERED', {
-    intent:                kcResult.intent,
-    confidence:            kcResult.confidence ?? null,
-    latencyMs:             kcResult.latencyMs,
-    path:                  finalPath,
-    responsePreview:       _clip(kcResult.response, 200),
-    containerTitle:        anchorMatch.title,
-    containerId:           String(anchorMatch._id || anchorMatch.title || ''),
-    kcId:                  anchorMatch.kcId || null,
-    containerBlockPreview: kcResult.containerBlockPreview || null,
-  });
-
-  logger.info('[KC_ENGINE] ✅ KC_SPFUQ_CONTINUE complete', {
-    companyId, callSid, containerTitle: anchorMatch.title,
-    intent: kcResult.intent, latencyMs: Date.now() - startMs,
-  });
-
-  return {
-    response:    kcResult.response,
-    matchSource: 'KC_ENGINE',
-    state:       nextState,
-    kcTrace:     _buildKcTrace(finalPath, {
-      containerId:    String(anchorMatch._id || anchorMatch.title || ''),
-      containerTitle: anchorMatch.title,
-      kcId:           anchorMatch.kcId || null,
-      intent:         kcResult.intent,
-      latencyMs:      Date.now() - startMs,
-      spfuqActive:    true,
-    }),
-  };
 }
 
 // ============================================================================
@@ -1418,7 +1114,6 @@ async function _handlePrequalResponse({
     nextState.agent2.discovery = nextState.agent2.discovery || {};
     nextState.agent2.discovery.pendingBookingFromKC = true;
     nextState.agent2.discovery.lastPath             = PATH.KC_BOOKING_INTENT;
-    SPFUQService.clear(companyId, callSid).catch(() => {});
     return {
       response:    kcResult.response,
       matchSource: 'KC_ENGINE',
@@ -1458,7 +1153,7 @@ async function _handlePrequalResponse({
 // ============================================================================
 
 async function _handleKCMatch({
-  match, userInput, spfuq, companyId, callSid, company, kbSettings, callerName,
+  match, userInput, companyId, callSid, company, kbSettings, callerName,
   channel, nextState, emit, startMs, turn,
   bridgeToken            = null,
   redis                  = null,
@@ -1702,8 +1397,6 @@ async function _handleKCMatch({
       ...(callerName ? { entities: { firstName: callerName } } : {}),
     }).catch(() => {});
 
-    SPFUQService.clear(companyId, callSid).catch(() => {});
-
     return {
       response:    kcResult.response,
       matchSource: 'KC_ENGINE',
@@ -1714,24 +1407,6 @@ async function _handleKCMatch({
       }),
     };
   }
-
-  // ── ANSWERED — set/update SPFUQ anchor and return ────────────────────────
-  const newBrief = SPFUQService.buildBrief(null, userInput, kcResult.response);
-  // FIX 3+4: Initialize turn budget from container.followUpDepth (admin-set) or system default
-  const initialTurns = (typeof container.followUpDepth === 'number' && container.followUpDepth >= 2)
-    ? container.followUpDepth
-    : SPFUQService.DEFAULT_TURN_BUDGET;
-  SPFUQService.set(companyId, callSid, {
-    containerId,
-    containerTitle,
-    containerKeywords: container.keywords || [],
-    anchoredAt:        new Date().toISOString(),
-    lastTurn:          turn ?? 0,
-    lastQuestion:      userInput,
-    lastAnswer:        kcResult.response,
-    subjectBrief:      newBrief,
-    turnsRemaining:    initialTurns,    // reset budget on fresh match / topic hop
-  }).catch(() => {});
 
   // ── discoveryNotes: record callReason + Q&A so BookingLogicEngine knows
   //    what the call was about when the caller eventually says "let's book" ──
@@ -1769,7 +1444,6 @@ async function _handleKCMatch({
       anchorContainerId: containerId,   // anchor for compound-booking path
       ...(callerName ? { entities: { firstName: callerName } } : {}),
     }).catch(() => {});
-    SPFUQService.clear(companyId, callSid).catch(() => {});
   }
 
   // ── Path: KC_PFUQ_REASK when booking consent was pending ──────────────────
@@ -1814,7 +1488,6 @@ async function _handleKCMatch({
       containerId, containerTitle, kcId: container.kcId || null,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
-      spfuqActive: false,
     }),
   };
 }

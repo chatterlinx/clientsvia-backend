@@ -913,7 +913,7 @@
       <div class="info-banner-body" id="rules-banner-body">
         <p><strong>Platform Tier (locked)</strong> — Built-in interceptors that fire first on every call. The Greeting Interceptor handles turn 1. Promotions and Pricing are anti-hallucination guardrails that read from MongoDB. Their signals can be extended per company.</p>
         <p><strong>Rule Intents (your custom rules)</strong> — Keyword-based rules you build here. Evaluated in priority order after platform rules. First match wins. Use rules to give instant, guaranteed answers for specific phrases — no AI scoring needed.</p>
-        <p><strong>KC Semantic Engine</strong> — Scores all Knowledge Containers against the utterance. Fires when no rule matches. Manages SPFUQ topic anchors. Fast lane via Groq.</p>
+        <p><strong>KC Semantic Engine</strong> — Scores all Knowledge Containers against the utterance. Fires when no rule matches. Maintains topic anchoring across turns. Fast lane via Groq.</p>
         <p><strong>LLM Fallback → Graceful ACK</strong> — Claude handles anything KC cannot confidently answer. Graceful ACK is the terminal catch-all.</p>
       </div>
     </div>
@@ -1058,7 +1058,7 @@
               <div class="card-meta">
                 <span class="badge badge-action-route-kc">Semantic</span>
                 <span class="badge badge-kw-count" id="kc-container-count">— containers</span>
-                <span class="text-sm text-muted">Groq fast lane · SPFUQ topic anchoring</span>
+                <span class="text-sm text-muted">Groq fast lane · topic anchoring</span>
               </div>
             </div>
             <div class="card-actions">

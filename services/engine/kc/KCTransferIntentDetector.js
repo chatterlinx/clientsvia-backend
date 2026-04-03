@@ -27,7 +27,7 @@
  *
  *   [GATE 0.5]  KCTransferIntentDetector  ← this file
  *   [GATE 1]    KCBookingIntentDetector
- *   [GATE 2]    Load SPFUQ anchor (Redis)
+ *   [GATE 2]    Load anchor container (discoveryNotes)
  *   [GATE 3]    Container match scoring
  *   [GATE 4]    LLM fallback
  *

@@ -16,7 +16,7 @@
  *     1. Interceptors (this collection) — priority-sorted, keyword-matched
  *        → RESPOND / ROUTE_KC / BOOK / TRANSFER fired instantly
  *     2. ArbitrationEngine — scores all candidate signals
- *     3. KCRunner (GATE 1→4) — containers, SPFUQ, LLM fallback
+ *     3. KCRunner (GATE 1→4) — containers, anchor scoring, LLM fallback
  *     4. LLM catch-all (HybridReceptionistLLM)
  *
  *   Interceptors are the FASTEST possible response path. They consume no LLM
