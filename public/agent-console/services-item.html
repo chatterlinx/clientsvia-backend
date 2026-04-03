@@ -2263,46 +2263,60 @@ async function runTestMatch() {
     if (!data.ok) throw new Error(data.error || 'Test failed');
 
     const w = data.winner;
+    const paths = data.paths || {};
     let html = '';
 
     // Winner banner
-    if (w && w.score > 0) {
+    if (w) {
       html += `<div class="tmr-winner win">
-        ✅ <strong>"${_esc(w.title)}"</strong> would match &mdash;
-        keyword: <code>${_esc(w.matchedKeyword)}</code>, score: <strong>${w.score}</strong>
+        ✅ <strong>"${_esc(w.containerTitle || '')}"</strong> matched via <strong>${_esc(w.via || 'KEYWORD')}</strong>
+        ${w.sectionLabel ? ` → section: <em>${_esc(w.sectionLabel)}</em>` : ''}
+        ${w.score ? ` · score: <strong>${w.score}</strong>` : ''}
+        ${w.confidence ? ` · confidence: <strong>${(w.confidence * 100).toFixed(0)}%</strong>` : ''}
+        ${w.similarity ? ` · similarity: <strong>${(w.similarity * 100).toFixed(0)}%</strong>` : ''}
         ${w.contextAssisted ? '<span style="font-size:11px;color:#166534;">(context-assisted)</span>' : ''}
       </div>`;
-    } else if (data.excluded.length && !w) {
-      html += `<div class="tmr-winner miss">⚠️ All matching containers were negatively excluded — would fall through to LLM.</div>`;
     } else {
       html += `<div class="tmr-winner miss">⚠️ No container matched — would fall through to LLM (KC miss).</div>`;
     }
 
-    // Scores table
-    const nonZero = data.scores.filter(s => s.score > 0);
-    const zero    = data.scores.filter(s => s.score === 0);
+    // Path breakdown — show all 3 matching paths
+    const pathEntries = [
+      { key: 'uap',      label: '🎯 UAP (phrase match)',  data: paths.uap },
+      { key: 'semantic',  label: '🧠 Semantic (embedding)', data: paths.semantic },
+      { key: 'keyword',   label: '🔑 Keyword (scoring)',    data: paths.keyword },
+    ];
 
-    if (nonZero.length || data.excluded.length) {
-      html += `<div class="tmr-scores-header">All container scores</div>`;
-      [...nonZero, ...data.excluded, ...zero].forEach((s, i) => {
-        const isWinner  = s.wouldWin;
-        const isExcl    = !!s.excludedBy;
-        const badge     = isExcl ? `<span class="tmr-neg-badge">🚫 excluded by: "${_esc(s.excludedBy)}"</span>`
-          : s.score > 0 ? `<span class="tmr-score-badge ${isWinner ? 'high' : ''}">${s.score}</span>`
-          : `<span class="tmr-score-badge zero">0</span>`;
-        const kw = s.matchedKeyword ? `<span style="color:var(--text-muted);font-size:12px;"> — keyword: <em>${_esc(s.matchedKeyword)}</em></span>` : '';
-        html += `<div class="tmr-score-row ${isWinner ? 'winner-row' : ''} ${isExcl ? 'excluded-row' : ''}">
-          ${badge} <span>${_esc(s.title)}</span>${kw}
+    const hasAnyPath = pathEntries.some(p => p.data);
+    if (hasAnyPath) {
+      html += `<div class="tmr-scores-header" style="margin-top:12px;">Matching paths</div>`;
+      for (const p of pathEntries) {
+        if (!p.data) {
+          html += `<div class="tmr-score-row" style="opacity:.5;">
+            <span class="tmr-score-badge zero">—</span> <span>${p.label}</span>
+            <span style="color:var(--text-muted);font-size:12px;"> — no match</span>
+          </div>`;
+          continue;
+        }
+        const d = p.data;
+        const isWinner = w && w.via === p.key.toUpperCase();
+        let detail = '';
+        if (d.confidence != null) detail += ` · confidence: ${(d.confidence * 100).toFixed(0)}%`;
+        if (d.score != null) detail += ` · score: ${d.score}`;
+        if (d.similarity != null) detail += ` · similarity: ${(d.similarity * 100).toFixed(0)}%`;
+        if (d.matchedPhrase) detail += ` · phrase: <em>"${_esc(d.matchedPhrase)}"</em>`;
+        if (d.sectionLabel) detail += ` · section: <em>${_esc(d.sectionLabel)}</em>`;
+        if (d.contextAssisted) detail += ' <span style="color:#166534;">(context-assisted)</span>';
+        html += `<div class="tmr-score-row ${isWinner ? 'winner-row' : ''}">
+          <span class="tmr-score-badge ${isWinner ? 'high' : ''}">${isWinner ? '✓' : '·'}</span>
+          <span>${p.label} → <strong>"${_esc(d.containerTitle || '')}"</strong></span>
+          <span style="color:var(--text-muted);font-size:12px;">${detail}</span>
         </div>`;
-      });
-    }
-
-    if (data.excluded.length) {
-      html += `<div style="font-size:12px;color:#b91c1c;margin-top:8px;">🚫 ${data.excluded.length} container${data.excluded.length!==1?'s':''} negatively excluded</div>`;
+      }
     }
 
     html += `<div style="font-size:11px;color:var(--text-muted);margin-top:10px;">
-      ${data.totalContainers} total containers · threshold: ${data.threshold} · utterance norm: <code>${_esc(data.utteranceNorm)}</code>
+      ${data.totalContainers || 0} total containers · utterance: <code>${_esc(data.utterance || utterance)}</code>
     </div>`;
 
     resultEl.innerHTML = html;
