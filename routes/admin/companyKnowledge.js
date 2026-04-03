@@ -31,6 +31,7 @@
  *   POST   /:companyId/knowledge/generate-sample        — Groq-generated ideal response example
  *   POST   /:companyId/knowledge/preview-fixed-audio    — 🎙️ Generate + return URL for ⚡ Fixed section audio
  *   POST   /:companyId/knowledge/regenerate-audio       — Batch-regenerate all missing KC section audio
+ *   POST   /:companyId/knowledge/enable-all-fixed       — Bulk-enable useFixedResponse on all sections
  *   POST   /:companyId/knowledge/reorder                — Bulk priority update
  * ⚠️ GET    /:companyId/knowledge/:id                   — Get single (AFTER literal routes)
  *   PATCH  /:companyId/knowledge/:id                    — Partial update
@@ -1342,16 +1343,17 @@ ${sectionText.trim().slice(0, 1200)}`;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /:companyId/knowledge/regenerate-audio — Batch-regenerate missing KC audio
+// POST /:companyId/knowledge/regenerate-audio — Batch-regenerate KC audio
 // ─────────────────────────────────────────────────────────────────────────────
-// Iterates all containers with useFixedResponse sections, checks if a MongoDB
-// backup (KCResponseAudio) exists for each, and regenerates any that are missing.
-// This is the one-click fix after a deploy wipes disk cache for audio that was
-// generated before the MongoDB persistence feature existed.
+// Default: regenerates only MISSING audio (no MongoDB backup).
+// With { force: true }: regenerates ALL qualifying fixed sections (overwrites).
+// Writes audioUrl back to each section and persists audio to MongoDB (deploy-proof).
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge/regenerate-audio', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const force = req.body?.force === true || req.query?.force === 'true';
 
   try {
     const company = await v2Company.findById(companyId).lean();
@@ -1371,15 +1373,17 @@ router.post('/:companyId/knowledge/regenerate-audio', async (req, res) => {
       ? Object.fromEntries(triggerSettings.companyVariables)
       : (triggerSettings?.companyVariables || {});
 
-    // Load all active containers
+    // Full Mongoose docs (not lean) — need .save() for audioUrl writeback
     const containers = await CompanyKnowledgeContainer.find({
       companyId, isActive: true,
-    }).lean();
+    });
 
     let regenerated = 0, skipped = 0, errors = 0, alreadyCached = 0;
 
     for (const container of containers) {
       const sections = container.sections || [];
+      let containerDirty = false;
+
       for (const section of sections) {
         if (!section.useFixedResponse) continue;
         const rawText = section.content?.trim();
@@ -1398,22 +1402,44 @@ router.post('/:companyId/knowledge/regenerate-audio', async (req, res) => {
         const hashMatch = status.fileName?.match(/([a-f0-9]{16})\.mp3$/);
         if (!hashMatch) { skipped++; continue; }
 
-        // Check if MongoDB backup already exists
-        const existing = await KCResponseAudio.findOne({
-          companyId, fileHash: hashMatch[1], isValid: true,
-        }).select('_id').lean();
+        // When not force: only regenerate if MongoDB backup missing
+        if (!force) {
+          const existing = await KCResponseAudio.findOne({
+            companyId, fileHash: hashMatch[1], isValid: true,
+          }).select('_id').lean();
 
-        if (existing) { alreadyCached++; continue; }
+          if (existing) { alreadyCached++; continue; }
+        }
 
-        // Generate audio + persist to MongoDB
+        // Generate audio + persist to MongoDB (awaited, not fire-and-forget)
         try {
           const genResult = await InstantAudioService.generate({
             companyId, kind: 'KC_RESPONSE', text: resolvedText, company, voiceSettings: vs,
+            force,
           });
-          _persistKcAudioToMongo(companyId, genResult, resolvedText, vs.voiceId);
+
+          const safeUrl = genResult.url.replace('/audio/', '/audio-safe/');
+          const fh = hashMatch[1];
+
+          // Await MongoDB persist for batch reliability
+          try {
+            const buffer = fs.readFileSync(genResult.filePath);
+            await KCResponseAudio.saveAudio(companyId, fh, safeUrl, resolvedText, vs.voiceId, buffer);
+          } catch (persistErr) {
+            logger.warn('[companyKnowledge] regenerate-audio — MongoDB persist failed', {
+              companyId, fileHash: fh, error: persistErr.message,
+            });
+          }
+
+          // Write audioUrl back to section document
+          if (!section.audioUrl || section.audioUrl !== safeUrl) {
+            section.audioUrl = safeUrl;
+            containerDirty = true;
+          }
+
           regenerated++;
           logger.info('[companyKnowledge] regenerate-audio — generated', {
-            companyId, container: container.title, hash: hashMatch[1],
+            companyId, container: container.title, hash: fh, force,
           });
         } catch (genErr) {
           errors++;
@@ -1422,16 +1448,92 @@ router.post('/:companyId/knowledge/regenerate-audio', async (req, res) => {
           });
         }
       }
+
+      // Save container if any audioUrl was updated
+      if (containerDirty) {
+        try { await container.save(); } catch (saveErr) {
+          logger.warn('[companyKnowledge] regenerate-audio — container save failed', {
+            companyId, containerId: container._id, error: saveErr.message,
+          });
+        }
+      }
     }
 
+    // Invalidate runtime cache after bulk changes
+    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+
     logger.info('[companyKnowledge] regenerate-audio complete', {
-      companyId, regenerated, alreadyCached, skipped, errors,
+      companyId, regenerated, alreadyCached, skipped, errors, force,
     });
 
     res.json({ success: true, regenerated, alreadyCached, skipped, errors });
   } catch (err) {
     logger.error('[companyKnowledge] regenerate-audio error', { companyId, err: err.message });
     res.status(500).json({ success: false, error: err.message || 'Batch regeneration failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/enable-all-fixed — Bulk-enable useFixedResponse
+// ─────────────────────────────────────────────────────────────────────────────
+// Flips useFixedResponse=true on EVERY section of EVERY active container.
+// One-click bulk toggle from the Audio Health dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/enable-all-fixed', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const containers = await CompanyKnowledgeContainer.find({
+      companyId, isActive: true,
+    });
+
+    let containersUpdated = 0, sectionsEnabled = 0, alreadyEnabled = 0;
+
+    for (const container of containers) {
+      let changed = false;
+
+      // Container-level toggle
+      if (!container.useFixedResponse) {
+        container.useFixedResponse = true;
+        changed = true;
+      }
+
+      // Per-section toggles
+      for (const section of (container.sections || [])) {
+        if (section.useFixedResponse) {
+          alreadyEnabled++;
+        } else {
+          section.useFixedResponse = true;
+          sectionsEnabled++;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await container.save();
+        containersUpdated++;
+      }
+    }
+
+    // Invalidate runtime caches
+    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
+
+    logger.info('[companyKnowledge] enable-all-fixed complete', {
+      companyId, containersUpdated, sectionsEnabled, alreadyEnabled,
+    });
+
+    res.json({
+      success: true,
+      containersUpdated,
+      sectionsEnabled,
+      alreadyEnabled,
+      totalSections: sectionsEnabled + alreadyEnabled,
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] enable-all-fixed error', { companyId, err: err.message });
+    res.status(500).json({ success: false, error: err.message || 'Bulk enable failed' });
   }
 });
 

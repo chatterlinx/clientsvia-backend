@@ -799,8 +799,11 @@
           <tbody id="ah-tbody"></tbody>
         </table>
       </div>
-      <div style="padding:12px 24px; border-top:1px solid var(--color-gray-200); display:flex; justify-content:space-between; align-items:center;">
-        <button class="btn btn-sm" id="ah-regen" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:.8rem; font-weight:600; cursor:pointer; display:none;" title="Regenerate all missing KC section audio and save to deploy-proof storage">🔄 Regenerate Missing Audio</button>
+      <div style="padding:12px 24px; border-top:1px solid var(--color-gray-200); display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+        <button class="btn btn-sm" id="ah-enable-all-fixed" style="background:#7c3aed; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:.8rem; font-weight:600; cursor:pointer;" title="Enable Fixed Response on ALL sections of ALL active KC containers">⚡ Enable All Fixed</button>
+        <button class="btn btn-sm" id="ah-generate-all" style="background:#059669; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:.8rem; font-weight:600; cursor:pointer;" title="Generate TTS audio for all fixed sections (uses ElevenLabs credits)">🎙️ Generate All Audio</button>
+        <button class="btn btn-sm" id="ah-regen" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:.8rem; font-weight:600; cursor:pointer; display:none;" title="Regenerate only missing KC section audio">🔄 Regenerate Missing</button>
+        <div style="flex:1;"></div>
         <span id="ah-regen-status" style="font-size:.8rem; color:var(--color-gray-500);"></span>
         <button class="btn btn-secondary btn-sm" id="ah-refresh">Refresh</button>
       </div>
@@ -825,9 +828,11 @@
     const tbodyEl    = document.getElementById('ah-tbody');
     const miniEl     = document.getElementById('ah-mini-status');
     const lightEl    = document.getElementById('ah-status-light');
-    const regenBtn   = document.getElementById('ah-regen');
-    const regenStatus = document.getElementById('ah-regen-status');
-    let _data        = null;
+    const regenBtn      = document.getElementById('ah-regen');
+    const regenStatus   = document.getElementById('ah-regen-status');
+    const enableAllBtn  = document.getElementById('ah-enable-all-fixed');
+    const generateAllBtn = document.getElementById('ah-generate-all');
+    let _data           = null;
     let _expanded    = {};
 
     // ── Page → link mapping ────────────────────────────────────────
@@ -884,7 +889,67 @@
         regenStatus.style.color = '#dc2626';
       } finally {
         regenBtn.disabled = false;
-        regenBtn.textContent = '🔄 Regenerate Missing Audio';
+        regenBtn.textContent = '🔄 Regenerate Missing';
+      }
+    });
+
+    // ── Enable All Fixed ─────────────────────────────────────────────
+    enableAllBtn.addEventListener('click', async () => {
+      const companyId = getCompanyId();
+      if (!companyId) return;
+      if (!confirm('This will enable Fixed Response on ALL sections of ALL active KC containers. Continue?')) return;
+      enableAllBtn.disabled = true;
+      enableAllBtn.textContent = '⏳ Enabling...';
+      regenStatus.textContent = '';
+      try {
+        const result = await AgentConsoleAuth.apiFetch(
+          `/api/admin/agent2/company/${companyId}/knowledge/enable-all-fixed`,
+          { method: 'POST' }
+        );
+        if (result.success) {
+          regenStatus.textContent = `✅ ${result.sectionsEnabled} sections enabled (${result.alreadyEnabled} already on)`;
+          regenStatus.style.color = '#16a34a';
+          setTimeout(fetchData, 500);
+        } else {
+          regenStatus.textContent = `❌ ${result.error || 'Failed'}`;
+          regenStatus.style.color = '#dc2626';
+        }
+      } catch (err) {
+        regenStatus.textContent = `❌ ${err.message}`;
+        regenStatus.style.color = '#dc2626';
+      } finally {
+        enableAllBtn.disabled = false;
+        enableAllBtn.textContent = '⚡ Enable All Fixed';
+      }
+    });
+
+    // ── Generate All Audio ───────────────────────────────────────────
+    generateAllBtn.addEventListener('click', async () => {
+      const companyId = getCompanyId();
+      if (!companyId) return;
+      if (!confirm('This will generate TTS audio for ALL fixed sections using ElevenLabs credits. This may take a few minutes. Continue?')) return;
+      generateAllBtn.disabled = true;
+      generateAllBtn.textContent = '⏳ Generating...';
+      regenStatus.textContent = '';
+      try {
+        const result = await AgentConsoleAuth.apiFetch(
+          `/api/admin/agent2/company/${companyId}/knowledge/regenerate-audio`,
+          { method: 'POST', body: JSON.stringify({ force: true }) }
+        );
+        if (result.success) {
+          regenStatus.textContent = `✅ ${result.regenerated} generated, ${result.alreadyCached} cached, ${result.skipped} skipped`;
+          regenStatus.style.color = '#16a34a';
+          setTimeout(fetchData, 500);
+        } else {
+          regenStatus.textContent = `❌ ${result.error || 'Failed'}`;
+          regenStatus.style.color = '#dc2626';
+        }
+      } catch (err) {
+        regenStatus.textContent = `❌ ${err.message}`;
+        regenStatus.style.color = '#dc2626';
+      } finally {
+        generateAllBtn.disabled = false;
+        generateAllBtn.textContent = '🎙️ Generate All Audio';
       }
     });
 
