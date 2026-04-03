@@ -1024,20 +1024,7 @@
     <div class="form-card-body">
       <div class="form-hint" style="margin-bottom:12px;">
         Content keywords are <strong>auto-extracted</strong> from section content on every save — no manual management needed.
-        Caller phrases (per-section) handle fast matching. This card manages <strong>exclusion keywords</strong> and the test diagnostic.
-      </div>
-
-      <!-- Negative keywords -->
-      <div class="form-group full" style="margin-top:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-          <span class="form-label" style="color:#b91c1c;">🚫 Exclusion Keywords <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(negative)</span></span>
-        </div>
-        <div class="keyword-input-wrap neg-wrap" id="negKwWrap" onclick="document.getElementById('negKwInner').focus()">
-          <input type="text" id="negKwInner" class="kw-input-inner"
-            placeholder="Type an exclusion phrase and press Enter…"
-            onkeydown="negKwKeydown(event)">
-        </div>
-        <div class="kw-hint">If <em>any</em> of these words/phrases appear in the caller's utterance this container is <strong>skipped</strong>, even if its positive keywords match. Example: add <code>maintenance</code> to a "System Replacement" container so it never fires when callers ask about maintenance pricing.</div>
+        Caller phrases and exclusion keywords are managed <strong>per-section</strong> below each section's content.
       </div>
 
       <!-- Live test-match diagnostic -->
@@ -1305,7 +1292,7 @@ const S = {
   companyId:        null,
   itemId:           null,       // null = create mode; string = edit mode
   isEdit:           false,
-  negativeKeywords: [],         // exclusion keywords (any match → container skipped)
+  // negativeKeywords removed — exclusion keywords are now per-section only
   sampleQuestions:  [],         // example caller utterances generated with keywords — persisted to DB
   sectionSeq:       0,          // monotonic ID for section DOM nodes
   conflictMap:      {},         // { keyword: [{id, title}] } — from keyword-health endpoint
@@ -1580,10 +1567,6 @@ function _populateForm(c) {
   const radio = document.querySelector(`[name="bookingAction"][value="${ba}"]`);
   if (radio) radio.checked = true;
 
-  // Negative keywords
-  S.negativeKeywords = [...(c.negativeKeywords || [])];
-  _renderNegKeywords();
-
   // Sample questions (persisted from last Auto-Generate run)
   S.sampleQuestions = [...(c.sampleQuestions || [])];
   const previewPanel = document.getElementById('kwPreview');
@@ -1741,12 +1724,12 @@ function addSection(label = '', content = '', sectionMeta = null) {
     <div class="section-negkw-wrap" id="negkw-wrap-${id}" style="padding:4px 14px 10px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
         <span style="font-size:11px;font-weight:700;color:#b91c1c;">🚫 Exclusion Keywords</span>
-        <span style="font-size:10px;color:#9ca3af;">— skip this section if these words appear</span>
+        <span style="font-size:10px;color:#9ca3af;">— skip this section if these words or phrases appear</span>
       </div>
       <div class="keyword-input-wrap neg-wrap" id="secNegKwWrap-${id}" onclick="document.getElementById('secNegKwInner-${id}').focus()"
         style="min-height:32px;padding:4px 6px;">
         <input type="text" id="secNegKwInner-${id}" class="kw-input-inner"
-          placeholder="Type an exclusion keyword and press Enter…"
+          placeholder="Word or phrase, e.g. 'ac repair' or 'new system installation'… Enter to add"
           onkeydown="secNegKwKeydown(event, ${id})"
           style="font-size:12px;">
       </div>
@@ -2262,44 +2245,6 @@ function _getSections() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KEYWORDS
-// ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// NEGATIVE KEYWORDS
-// ─────────────────────────────────────────────────────────────────────────────
-function _renderNegKeywords() {
-  const wrap  = document.getElementById('negKwWrap');
-  const input = document.getElementById('negKwInner');
-  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
-  S.negativeKeywords.forEach(kw => {
-    const tag     = document.createElement('span');
-    tag.className = 'kw-tag negative';
-    tag.innerHTML = `🚫 ${_esc(kw)} <button type="button" onclick="removeNegKeyword('${_esc(kw).replace(/'/g, "\\'")}')">×</button>`;
-    wrap.insertBefore(tag, input);
-  });
-}
-
-function negKwKeydown(e) {
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault();
-    const val = e.target.value.trim().replace(/,/g, '').toLowerCase();
-    if (val && !S.negativeKeywords.includes(val)) {
-      S.negativeKeywords.push(val);
-      _renderNegKeywords();
-    }
-    e.target.value = '';
-  } else if (e.key === 'Backspace' && !e.target.value && S.negativeKeywords.length) {
-    S.negativeKeywords.pop();
-    _renderNegKeywords();
-  }
-}
-
-function removeNegKeyword(kw) {
-  S.negativeKeywords = S.negativeKeywords.filter(k => k !== kw);
-  _renderNegKeywords();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // TEST MATCH — live diagnostic
 // ─────────────────────────────────────────────────────────────────────────────
 async function runTestMatch() {
@@ -2391,7 +2336,6 @@ async function runEvaluation() {
     title,
     category,
     sections,
-    negativeKeywords:  S.negativeKeywords,
     wordLimit:         (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled:  document.getElementById('fWordLimitEnabled')?.checked !== false,
     useFixedResponse:  document.getElementById('fUseFixedResponse')?.checked === true,
@@ -2618,7 +2562,7 @@ async function saveContainer() {
 
   if (!valid) return;
 
-  // Build payload
+  // Build payload — negativeKeywords are per-section (inside sections[])
   const wordLimitVal    = parseInt(document.getElementById('fWordLimit').value, 10);
   const followUpDepthRaw = parseInt(document.getElementById('fFollowUpDepth')?.value, 10);
 
@@ -2626,7 +2570,6 @@ async function saveContainer() {
     title,
     category:         document.getElementById('fCategory').value?.trim() || '',
     sections,
-    negativeKeywords: S.negativeKeywords,
     sampleQuestions:  S.sampleQuestions,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
@@ -2679,7 +2622,6 @@ function downloadJSON() {
     title,
     category:         document.getElementById('fCategory').value?.trim() || '',
     sections,
-    negativeKeywords: S.negativeKeywords,
     sampleQuestions:  S.sampleQuestions,
     wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
     wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,

@@ -726,7 +726,7 @@ function _scorePhrase(phrase, norm, inputWords) {
  *
  * Minimum score threshold: KC_KEYWORD_THRESHOLD env (default 8).
  * Anchor logic: 3× boost + ANCHOR_FLOOR=24 for call continuity.
- * negativeKeywords exclusion: unchanged.
+ * negativeKeywords exclusion: per-SECTION (not container). Single words → whole-word, phrases → substring.
  *
  * @param {Array}  containers — Active CompanyKnowledgeContainer documents
  * @param {string} input      — Raw caller utterance
@@ -741,23 +741,23 @@ function findContainer(containers, input, context = null) {
   const norm       = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
   const inputWords = new Set(norm.split(/\s+/));
 
-  // ── NEGATIVE KEYWORD EXCLUSION ─────────────────────────────────────────
-  // Reusable matcher — works for both container-level and section-level negatives.
+  // ── NEGATIVE KEYWORD EXCLUSION (section-level) ───────────────────────
+  // Single words → whole-word match (Set lookup).
+  // Multi-word phrases/sentences → substring match against full input.
+  // This gives precise exclusion: "ac repair" won't block "duct cleaning".
   const _matchesNegativeKeywords = (negKws) => {
     if (!Array.isArray(negKws) || !negKws.length) return false;
     for (const nk of negKws) {
       const nkNorm = nk.toLowerCase().trim();
       if (!nkNorm) continue;
       if (nkNorm.includes(' ')) {
-        if (norm.includes(nkNorm)) return true;   // Multi-word: substring
+        if (norm.includes(nkNorm)) return true;   // Multi-word phrase: substring
       } else {
         if (inputWords.has(nkNorm)) return true;   // Single word: whole-word
       }
     }
     return false;
   };
-  // Container-level convenience alias (backward compat)
-  const _isNegativelyExcluded = (container) => _matchesNegativeKeywords(container.negativeKeywords);
 
   const MIN_THRESHOLD = parseInt(process.env.KC_KEYWORD_THRESHOLD, 10) || 8;
   const _anchorId = context?.anchorContainerId ? String(context.anchorContainerId) : null;
@@ -768,8 +768,6 @@ function findContainer(containers, input, context = null) {
   let _anchorRawScore     = 0;
 
   for (const container of containers) {
-    if (_isNegativelyExcluded(container)) continue;
-
     const isAnchor = !!(_anchorId && String(container._id) === _anchorId);
     if (isAnchor && !_anchorContainer) _anchorContainer = container;
 
@@ -850,11 +848,11 @@ function findContainer(containers, input, context = null) {
     const augWords   = new Set(augNorm.split(/\s+/));
 
     for (const container of containers) {
-      if (_isNegativelyExcluded(container)) continue;
-
       // Score against section contentKeywords with augmented input
       for (let sIdx = 0; sIdx < (container.sections || []).length; sIdx++) {
         const section  = container.sections[sIdx];
+        // Section-level exclusion — same check as main loop
+        if (_matchesNegativeKeywords(section.negativeKeywords)) continue;
         const keywords = section.contentKeywords || [];
         for (const kw of keywords) {
           const kwNorm = kw.toLowerCase().trim();

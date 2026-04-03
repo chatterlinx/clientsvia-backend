@@ -121,7 +121,7 @@ const ALLOWED_FIELDS = [
   'title', 'category',
   // sections carry callerPhrases, bookingAction, preQualifyQuestion, upsellChain per section
   'sections',
-  'negativeKeywords',   // Exclusion phrases — any match disqualifies this container for that turn
+  // negativeKeywords removed from container level — exclusion is per-section now (inside sections[])
   'sampleQuestions',    // Example caller utterances generated alongside keywords — display + analytics
   'wordLimit',
   'wordLimitEnabled',   // Boolean — when false, omits hard word cap from Groq prompt
@@ -193,13 +193,6 @@ function _sanitiseBody(body) {
   const out = {};
   for (const key of ALLOWED_FIELDS) {
     if (key in body) out[key] = body[key];
-  }
-
-  // Normalise negativeKeywords — trim, lowercase, deduplicate
-  if (Array.isArray(out.negativeKeywords)) {
-    out.negativeKeywords = [...new Set(
-      out.negativeKeywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
-    )];
   }
 
   // Sanitise sections array — remove empty labels/content, preserve per-section fields
@@ -514,7 +507,7 @@ Given a knowledge card topic and content, return a JSON object with EXACTLY thes
 
 "keywords" — array of 12-18 short phrases that a caller might say when asking about this topic over the phone. Multi-word phrases score higher than single words, so prefer them. Cover natural variations: pricing, scheduling, what's included, availability, refunds, emergency, same-day, etc.
 
-"negativeKeywords" — array of 3-6 adjacent topics this card should NOT handle. These prevent false positives where a similar-sounding question fires the wrong card. Think: what other services or topics share some of the same words but mean something completely different?
+"negativeKeywords" — array of 3-6 adjacent topics this card should NOT handle. Use multi-word phrases when possible ("dryer vent cleaning" not just "dryer") for precision. Think: what other services or topics share some of the same words but mean something completely different?
 
 "sampleQuestions" — array of exactly 3 real caller phrases that SHOULD trigger this card. Natural phone-call language, not formal. These validate that the keywords are correct.
 
@@ -592,7 +585,7 @@ Return ONLY this JSON object — no markdown, no extra text, no other field name
  *             COMPLETENESS | RESPONSE_SETTINGS | FUNNEL_CONFIG
  *
  * @param {string} companyId
- * @param {Object} payload   — { title, category, sections, keywords, negativeKeywords,
+ * @param {Object} payload   — { title, category, sections,
  *                               wordLimit, wordLimitEnabled, sampleResponse,
  *                               bookingAction, closingPrompt }
  * @param {Object} res       — Express response object
@@ -604,17 +597,22 @@ async function _runEvaluation(companyId, payload, res) {
   }
 
   const {
-    title = '', category = '', sections = [], negativeKeywords = [],
+    title = '', category = '', sections = [],
     wordLimit = null, wordLimitEnabled = true, sampleResponse = '',
     bookingAction = 'offer_to_book', closingPrompt = '',
   } = payload;
 
-  // ── Build rich section block — includes prequal + upsell per section ────────
+  // ── Build rich section block — includes negKw + prequal + upsell per section ──
   const sectionBlock = (sections || [])
     .filter(s => s.label?.trim() && s.content?.trim())
     .map(s => {
       const lines = [`[SECTION: ${s.label.trim().toUpperCase()}]`];
       lines.push(`Content: ${s.content.trim().slice(0, 500)}`);
+      // Per-section exclusion keywords
+      const secNeg = (s.negativeKeywords || []).filter(Boolean);
+      if (secNeg.length) {
+        lines.push(`Exclusion keywords: [${secNeg.join(', ')}]`);
+      }
       const pq = s.preQualifyQuestion;
       if (pq?.enabled && pq.text?.trim()) {
         const opts = (pq.options || []).map(o => o.label || o.value).filter(Boolean).join(', ');
@@ -633,7 +631,6 @@ async function _runEvaluation(companyId, payload, res) {
     })
     .join('\n\n') || '(no sections)';
 
-  const negKwList = (negativeKeywords || []).slice(0, 10).join(', ') || '(none)';
   const wlDisplay = !wordLimitEnabled
     ? 'DISABLED — agent may use as many words as needed'
     : wordLimit ? `${wordLimit} words` : 'not set (falls back to global default ~40)';
@@ -641,7 +638,6 @@ async function _runEvaluation(companyId, payload, res) {
   const userContent = `CONTAINER:
 Title: "${title}"
 Category: "${category || 'none'}"
-Negative keywords (exclude-triggers): [${negKwList}]
 Word Limit: ${wlDisplay} | Booking Action: ${bookingAction}
 Closing Prompt: "${closingPrompt || '(none)'}"
 Sample Response (ideal example): "${sampleResponse?.trim() || '(none)'}"
@@ -1720,7 +1716,7 @@ router.post('/:companyId/knowledge/optimize-priorities', async (req, res) => {
 
   try {
     const containers = await CompanyKnowledgeContainer.find({ companyId })
-      .select('_id title category sections.label sections.contentKeywords sections.callerPhrases.text kcId priority isActive negativeKeywords')
+      .select('_id title category sections.label sections.contentKeywords sections.callerPhrases.text sections.negativeKeywords kcId priority isActive')
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
@@ -1881,8 +1877,9 @@ Rules for caller phrases:
 - Each phrase should be 4-15 words, lowercase
 
 Rules for negative keywords:
-- Words that would indicate the caller is asking about a DIFFERENT topic
-- Single words or short phrases that should disqualify this section from matching
+- Words or phrases that indicate the caller is asking about a DIFFERENT topic
+- Can be single words ("repair") or multi-word phrases ("air conditioning repair", "new system installation")
+- Multi-word phrases are more precise and preferred — "dryer vent cleaning" won't accidentally block "duct cleaning"
 
 Return ONLY valid JSON — no markdown:
 {"suggestion":"Annual Maintenance Plan Cost","callerPhrases":["how much is the AC maintenance plan","what does the annual HVAC service cost","price for the maintenance agreement","I want to sign up for the maintenance plan","do you have a yearly service plan"],"negativeKeywords":["installation","new unit","replacement"]}`,

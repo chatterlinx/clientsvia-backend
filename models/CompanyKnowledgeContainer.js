@@ -152,7 +152,7 @@ const sectionSchema = new mongoose.Schema(
     // ── Per-section exclusion keywords ─────────────────────────────────────
     // If ANY of these words/phrases appear in the caller's utterance, this
     // section is skipped during keyword scoring — even if contentKeywords match.
-    // Container-level negativeKeywords still exist as a global gate.
+    // Supports single words ("repair") and multi-word phrases ("ac repair").
     negativeKeywords: {
       type:    [String],
       default: [],
@@ -300,10 +300,13 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'Flexible labelled content blocks. Groq reads all sections and synthesises within wordLimit.'
     },
 
+    // DEPRECATED — exclusion keywords are now per-SECTION (section.negativeKeywords).
+    // This container-level field is kept for backward compatibility but is no longer
+    // populated by the UI or checked by the scoring engine.
     negativeKeywords: {
       type:    [String],
       default: [],
-      comment: 'Exclusion phrases — if ANY of these appear in the caller\'s utterance, this container is immediately excluded from scoring for that turn. Use to prevent containers with broad positive keywords from firing on unrelated topics. E.g. "System Replacement" container adds negativeKeywords: ["maintenance", "tune-up"] to stop matching maintenance price questions.'
+      comment: 'DEPRECATED — use section.negativeKeywords instead. Legacy container-level exclusion phrases.'
     },
 
     sampleQuestions: {
