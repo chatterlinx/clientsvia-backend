@@ -59,8 +59,21 @@ const Customer                     = require('../../models/Customer');
 const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
 const KCResponseAudio              = require('../../models/KCResponseAudio');
 const { replacePlaceholders }      = require('../../utils/placeholderReplacer');
+const Anthropic                    = require('@anthropic-ai/sdk');
 
 const fs   = require('fs');
+
+// ── Cosine similarity between two equal-length numeric vectors ───────────────
+function _cosineSimilarity(a, b) {
+  let dot = 0, ma = 0, mb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    ma  += a[i] * a[i];
+    mb  += b[i] * b[i];
+  }
+  if (!ma || !mb) return 0;
+  return dot / (Math.sqrt(ma) * Math.sqrt(mb));
+}
 
 // ── Helper: persist KC audio to MongoDB for deploy-proof serving ─────────────
 // Extracts the 16-char fileHash from the InstantAudioService filename,
@@ -299,6 +312,14 @@ function _sanitiseBody(body) {
         }
         if (typeof s.promotionLabel === 'string') {
           section.promotionLabel = s.promotionLabel.trim().slice(0, 120);
+        }
+
+        // Per-section anchor terms — preserve on save (only written by anchor-extract route)
+        if (Array.isArray(s.anchorTerms)) {
+          section.anchorTerms = s.anchorTerms.map(t => `${t}`.toLowerCase().trim()).filter(Boolean).slice(0, 10);
+        }
+        if (s.anchorTermsUpdatedAt) {
+          section.anchorTermsUpdatedAt = s.anchorTermsUpdatedAt;
         }
 
         // Per-section daSubTypeKey (UAP sub-type routing link)
@@ -2135,5 +2156,290 @@ function _preGenAudioFixed(companyId, container, reason) {
     }
   })();
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/knowledge/phrase-score
+// 3-tier phrase quality scoring for the admin KC section editor.
+//
+// Body: { containerId, sectionIndex, phrases: string[] }
+//
+// Tier 1 — Confidence:  cosine(phrase_embedding, section_content_embedding) ≥ 0.75
+// Tier 2 — Clarity:     gap between T1 score and best score across ALL other
+//                        sections in the company ≥ 0.20 (Einstein's dual metric)
+// Tier 3 — Anchor Match: phrase contains ≥ 2 of the section's anchorTerms
+//
+// Returns: { scores: { [phrase]: { t1, t2, t3, status } } }
+//   status: 'green' | 'yellow' | 'orange' | 'red'
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { containerId, sectionIndex, phrases } = req.body;
+  if (!containerId || typeof sectionIndex !== 'number' || !Array.isArray(phrases) || !phrases.length) {
+    return res.status(400).json({ success: false, error: 'containerId, sectionIndex, and phrases[] required' });
+  }
+
+  try {
+    // ── Load target section contentEmbedding ─────────────────────────────
+    const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
+      _resolveContainerQuery(containerId, companyId),
+      { projection: { 'sections.contentEmbedding': 1, 'sections.anchorTerms': 1, 'sections.isActive': 1 } }
+    );
+    if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
+
+    const targetSection = targetRaw.sections?.[sectionIndex];
+    if (!targetSection) return res.status(400).json({ success: false, error: 'Section index out of range' });
+
+    const targetEmb = targetSection.contentEmbedding;
+    if (!targetEmb?.length) {
+      return res.status(400).json({ success: false, error: 'Section has no content embedding — save the section first to generate one' });
+    }
+
+    const anchorTerms = (targetSection.anchorTerms || []).map(t => t.toLowerCase().trim());
+
+    // ── Load all other sections' embeddings (for Tier 2 clarity gap) ─────
+    const allRaw = await CompanyKnowledgeContainer.collection.find(
+      { companyId, isActive: true },
+      { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, _id: 1 } }
+    ).toArray();
+
+    // Flatten all other sections' embeddings (excluding the target section)
+    const otherEmbeddings = [];
+    const targetId = targetRaw._id.toString();
+    for (const doc of allRaw) {
+      const docId = doc._id.toString();
+      (doc.sections || []).forEach((sec, idx) => {
+        if (!sec.contentEmbedding?.length) return;
+        if (sec.isActive === false) return;
+        if (docId === targetId && idx === sectionIndex) return; // skip self
+        otherEmbeddings.push(sec.contentEmbedding);
+      });
+    }
+
+    // ── Embed all phrases in one batch ────────────────────────────────────
+    const cleanPhrases = phrases.map(p => `${p}`.trim()).filter(Boolean);
+    const embeddings   = await SemanticMatchService.embedBatch(cleanPhrases);
+
+    // ── Score each phrase ─────────────────────────────────────────────────
+    const scores = {};
+    for (let i = 0; i < cleanPhrases.length; i++) {
+      const phrase = cleanPhrases[i];
+      const emb    = embeddings[i];
+
+      if (!emb?.length) {
+        scores[phrase] = { t1: 0, t2: 0, t3: false, status: 'red' };
+        continue;
+      }
+
+      // T1 — Confidence: cosine vs target section content
+      const t1Score = _cosineSimilarity(emb, targetEmb);
+      const t1Pass  = t1Score >= 0.75;
+
+      // T2 — Clarity: gap to best competing section
+      let bestCompeting = 0;
+      for (const otherEmb of otherEmbeddings) {
+        const sim = _cosineSimilarity(emb, otherEmb);
+        if (sim > bestCompeting) bestCompeting = sim;
+      }
+      const t2Gap  = t1Score - bestCompeting;
+      const t2Pass = t2Gap >= 0.20;
+
+      // T3 — Anchor Match: phrase contains ≥ 2 anchor terms
+      let anchorHits = 0;
+      const phraseLower = phrase.toLowerCase();
+      for (const anchor of anchorTerms) {
+        if (anchor && phraseLower.includes(anchor)) anchorHits++;
+      }
+      const t3Pass = anchorTerms.length === 0 ? null : anchorHits >= 2;
+
+      // Determine status
+      let status;
+      if (!t1Pass) {
+        status = 'red';
+      } else if (!t2Pass) {
+        status = 'orange';
+      } else if (t3Pass === false) {
+        status = 'yellow';
+      } else {
+        status = 'green';
+      }
+
+      scores[phrase] = {
+        t1: Math.round(t1Score * 100) / 100,
+        t2: Math.round(t2Gap  * 100) / 100,
+        t3: t3Pass,
+        anchorHits,
+        anchorCount: anchorTerms.length,
+        status,
+      };
+    }
+
+    return res.json({ success: true, scores });
+  } catch (err) {
+    logger.error('[companyKnowledge] phrase-score error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Phrase scoring failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/knowledge/anchor-extract
+// Extract 3-5 anchor terms from section content using Claude Haiku.
+// Saves anchorTerms + anchorTermsUpdatedAt to the section document.
+//
+// Body: { containerId, sectionIndex }
+// Returns: { anchorTerms: string[], contentWords: string[] }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/anchor-extract', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { containerId, sectionIndex } = req.body;
+  if (!containerId || typeof sectionIndex !== 'number') {
+    return res.status(400).json({ success: false, error: 'containerId and sectionIndex required' });
+  }
+
+  try {
+    const container = await CompanyKnowledgeContainer.findOne(
+      _resolveContainerQuery(containerId, companyId)
+    );
+    if (!container) return res.status(404).json({ success: false, error: 'Container not found' });
+
+    const section = container.sections?.[sectionIndex];
+    if (!section) return res.status(400).json({ success: false, error: 'Section index out of range' });
+
+    const content = `${section.label}: ${section.content}`.trim();
+
+    // ── Call Claude Haiku for anchor extraction ───────────────────────────
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response  = await anthropic.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages: [{
+        role:    'user',
+        content: `Extract 3 to 5 key anchor terms from this business knowledge section. These should be the most topic-specific words that uniquely identify what this section is about — not generic words. Return ONLY a JSON array of lowercase strings, no explanation.\n\nSection:\n${content}`,
+      }],
+    });
+
+    let anchorTerms = [];
+    try {
+      const text = response.content?.[0]?.text?.trim() || '[]';
+      // Extract JSON array from response (handle any surrounding text)
+      const match = text.match(/\[[\s\S]*?\]/);
+      anchorTerms = match ? JSON.parse(match[0]) : [];
+      anchorTerms = anchorTerms
+        .filter(t => typeof t === 'string' && t.trim())
+        .map(t => t.toLowerCase().trim())
+        .slice(0, 8);
+    } catch (_) {
+      anchorTerms = [];
+    }
+
+    // ── Persist to section document ───────────────────────────────────────
+    container.sections[sectionIndex].anchorTerms          = anchorTerms;
+    container.sections[sectionIndex].anchorTermsUpdatedAt = new Date();
+    container.markModified('sections');
+    await container.save();
+
+    // Collect content words for the chip panel (words in content, ≥ 4 chars, unique)
+    const contentWords = [...new Set(
+      content.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+        .filter(w => w.length >= 4)
+    )].slice(0, 80);
+
+    return res.json({ success: true, anchorTerms, contentWords });
+  } catch (err) {
+    logger.error('[companyKnowledge] anchor-extract error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Anchor extraction failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/knowledge/phrase-suggestions
+// Return missed utterances from production calls that semantically match
+// this section — sourced from Customer.discoveryNotes[].qaLog[] where
+// type is KC_LLM_FALLBACK or KC_GRACEFUL_ACK (missed by KC, fell to LLM/ack).
+//
+// Body: { containerId, sectionIndex }
+// Returns: { suggestions: [{ text, type, similarity, seenAt }] }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/phrase-suggestions', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { containerId, sectionIndex } = req.body;
+  if (!containerId || typeof sectionIndex !== 'number') {
+    return res.status(400).json({ success: false, error: 'containerId and sectionIndex required' });
+  }
+
+  try {
+    // ── Load target section embedding ─────────────────────────────────────
+    const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
+      _resolveContainerQuery(containerId, companyId),
+      { projection: { 'sections.contentEmbedding': 1 } }
+    );
+    if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
+
+    const targetEmb = targetRaw.sections?.[sectionIndex]?.contentEmbedding;
+    if (!targetEmb?.length) {
+      return res.json({ success: true, suggestions: [], note: 'No content embedding — save section first' });
+    }
+
+    // ── Aggregate missed utterances from qaLog ────────────────────────────
+    // Collect questions from KC_LLM_FALLBACK and KC_GRACEFUL_ACK entries
+    const pipeline = [
+      { $match: { companyId } },
+      { $unwind: { path: '$discoveryNotes', preserveNullAndEmptyArrays: false } },
+      { $unwind: { path: '$discoveryNotes.qaLog', preserveNullAndEmptyArrays: false } },
+      {
+        $match: {
+          'discoveryNotes.qaLog.type': { $in: ['KC_LLM_FALLBACK', 'KC_GRACEFUL_ACK'] },
+          'discoveryNotes.qaLog.question': { $exists: true, $ne: '' },
+        },
+      },
+      {
+        $group: {
+          _id:     { $toLower: '$discoveryNotes.qaLog.question' },
+          type:    { $first: '$discoveryNotes.qaLog.type' },
+          seenAt:  { $max:   '$discoveryNotes.capturedAt' },
+          count:   { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 100 },
+    ];
+
+    const missedRaw = await Customer.aggregate(pipeline);
+    if (!missedRaw.length) return res.json({ success: true, suggestions: [] });
+
+    // ── Embed the missed questions ────────────────────────────────────────
+    const texts      = missedRaw.map(r => r._id);
+    const embeddings = await SemanticMatchService.embedBatch(texts);
+
+    // ── Score against target section + filter by relevance ───────────────
+    const scored = [];
+    for (let i = 0; i < texts.length; i++) {
+      const emb = embeddings[i];
+      if (!emb?.length) continue;
+      const sim = _cosineSimilarity(emb, targetEmb);
+      if (sim >= 0.65) {  // Lower threshold for suggestions — 0.65 = relevant but not yet optimized
+        scored.push({
+          text:       texts[i],
+          type:       missedRaw[i].type,
+          count:      missedRaw[i].count,
+          similarity: Math.round(sim * 100) / 100,
+          seenAt:     missedRaw[i].seenAt,
+        });
+      }
+    }
+
+    // Sort by similarity desc, return top 15
+    scored.sort((a, b) => b.similarity - a.similarity);
+    return res.json({ success: true, suggestions: scored.slice(0, 15) });
+  } catch (err) {
+    logger.error('[companyKnowledge] phrase-suggestions error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Phrase suggestions failed' });
+  }
+});
 
 module.exports = router;

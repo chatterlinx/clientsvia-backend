@@ -314,6 +314,68 @@
     .kw-tag.negative { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
     .kw-tag.negative button { color: #b91c1c; }
     .kw-tag.negative button:hover { color: #7f1d1d; }
+    /* Score dot — colored circle prepended to phrase chip */
+    .score-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      display: inline-block;
+    }
+    .score-dot.green  { background: #16a34a; }
+    .score-dot.yellow { background: #d97706; }
+    .score-dot.orange { background: #ea580c; }
+    .score-dot.red    { background: #dc2626; }
+    .score-dot.none   { background: #d1d5db; }
+    /* Eval controls row */
+    .phrase-eval-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 14px 6px;
+      flex-wrap: wrap;
+    }
+    .btn-eval {
+      padding: 3px 10px; border-radius: 6px; border: 1px solid #d1d5db;
+      background: #f9fafb; color: #374151; font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .btn-eval:hover { background: #f1f5f9; border-color: #9ca3af; }
+    .btn-eval.stale { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+    .btn-eval:disabled { opacity: .5; cursor: default; pointer-events: none; }
+    /* Anchor chip panel */
+    .anchor-panel {
+      padding: 4px 14px 8px; display: none; flex-wrap: wrap; gap: 6px;
+      background: #fffbeb; border-top: 1px dashed #fde68a;
+      align-items: center;
+    }
+    .anchor-panel.visible { display: flex; }
+    .anchor-chip {
+      padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: background .12s, color .12s; border: 1.5px solid #f59e0b;
+      background: #fef3c7; color: #92400e; user-select: none;
+    }
+    .anchor-chip.off { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+    /* Suggestions panel */
+    .phrase-suggestions-panel {
+      padding: 6px 14px 10px; border-top: 1px dashed #bfdbfe; display: none;
+    }
+    .phrase-suggestions-panel.visible { display: block; }
+    .phrase-sugg-header {
+      font-size: 10.5px; font-weight: 700; color: #1d4ed8; margin-bottom: 5px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .phrase-sugg-item {
+      display: flex; align-items: center; gap: 8px; padding: 4px 0;
+      border-bottom: 1px solid #eff6ff; font-size: 11.5px; color: #374151;
+    }
+    .phrase-sugg-item:last-child { border-bottom: none; }
+    .phrase-sugg-badge {
+      font-size: 9px; padding: 1px 5px; border-radius: 4px; font-weight: 600;
+      background: #fee2e2; color: #991b1b; white-space: nowrap;
+    }
+    .phrase-sugg-badge.fallback { background: #fff3cd; color: #856404; }
+    .btn-sugg-add {
+      padding: 1px 8px; border-radius: 4px; border: 1px solid #bfdbfe;
+      background: #eff6ff; color: #1d4ed8; font-size: 10px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; margin-left: auto;
+    }
+    .btn-sugg-add:hover { background: #dbeafe; }
     /* Test match panel */
     .test-match-panel { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 8px; }
     .test-match-input-row { display:flex; gap:8px; }
@@ -1652,6 +1714,10 @@ function _populateForm(c) {
       audioUrl:           s.audioUrl || null,
       preQualifyQuestion: s.preQualifyQuestion || null,
       upsellChain:        s.upsellChain        || [],
+      anchorTerms:        s.anchorTerms        || [],
+      isActive:           s.isActive !== false,
+      isPromotion:        !!s.isPromotion,
+      promotionLabel:     s.promotionLabel || '',
     }));
   } else {
     addSection();
@@ -1704,6 +1770,8 @@ function addSection(label = '', content = '', sectionMeta = null) {
     negativeKeywords: sectionMeta?.negativeKeywords || [],
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
+    phraseScores:     {},                               // { phrase → { t1, t2, t3, status } }
+    anchorTerms:      sectionMeta?.anchorTerms || [],   // LLM-extracted topic anchors (cached)
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
@@ -1795,6 +1863,29 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </div>
       <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Full sentences callers say — "how much is a tune-up", "my AC isn't working". Press Enter to add.</div>
     </div>
+
+    <!-- 📊 3-Tier Phrase Eval controls ──────────────────────────────── -->
+    <div class="phrase-eval-row" id="eval-row-${id}">
+      <button type="button" class="btn-eval" id="btn-rescore-${id}"
+        onclick="_reScorePhrases(${id})" title="Score each phrase: T1 Confidence · T2 Clarity gap · T3 Anchor match">
+        ↻ Re-score Phrases
+      </button>
+      <button type="button" class="btn-eval" id="btn-anchors-${id}"
+        onclick="_refreshAnchors(${id})" title="Claude Haiku extracts 3-5 anchor terms from section content">
+        ✦ Refresh Anchors
+      </button>
+      <span id="anchor-count-${id}" style="font-size:10px;color:#6b7280;"></span>
+      <button type="button" class="btn-eval" id="btn-suggestions-${id}"
+        onclick="_loadPhraseSuggestions(${id})" title="Show missed caller questions from live calls">
+        📡 Live Suggestions
+      </button>
+    </div>
+
+    <!-- 🟡 Anchor chip panel ────────────────────────────────────────── -->
+    <div class="anchor-panel" id="anchor-panel-${id}"></div>
+
+    <!-- 📡 Live Suggestions panel ──────────────────────────────────── -->
+    <div class="phrase-suggestions-panel" id="sugg-panel-${id}"></div>
 
     <!-- 🚫 Per-section Exclusion Keywords ────────────────────────────── -->
     <div class="section-negkw-wrap" id="negkw-wrap-${id}" style="padding:4px 14px 10px;">
@@ -1945,6 +2036,13 @@ function addSection(label = '', content = '', sectionMeta = null) {
   _renderCallerPhrases(id);
   _renderSecNegKeywords(id);
 
+  // Restore anchor panel if anchor terms exist
+  if (sectionMeta?.anchorTerms?.length) {
+    _renderAnchorPanel(id, sectionMeta.anchorTerms, []);
+    const countEl = document.getElementById(`anchor-count-${id}`);
+    if (countEl) countEl.textContent = `${sectionMeta.anchorTerms.length} anchors`;
+  }
+
   // Restore audio UI state from saved URLs (survive page refresh)
   if (sectionMeta?.audioUrl && useFixedResponse) {
     _restoreKcAudioState(id, 'content', sectionMeta.audioUrl, content);
@@ -2056,11 +2154,13 @@ function _renderCallerPhrases(sid) {
   wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
 
   // Insert tags before the input
+  const scores = data?.phraseScores || {};
   phrases.forEach((phrase, idx) => {
     const tag       = document.createElement('span');
     tag.className   = 'kw-tag';
     tag.style.cssText = 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;';
-    tag.innerHTML   = `${_esc(phrase)} <button type="button" onclick="removeCallerPhrase(${sid}, ${idx})">×</button>`;
+    const dot = _phraseScoreDot(scores[phrase]?.status);
+    tag.innerHTML   = `${dot}${_esc(phrase)} <button type="button" onclick="removeCallerPhrase(${sid}, ${idx})">×</button>`;
     wrap.insertBefore(tag, input);
   });
 
@@ -2339,6 +2439,7 @@ function _getSections() {
         audioUrl:           data.contentAudioUrl   || null,
         preQualifyQuestion: preQualifyQuestion     || null,
         upsellChain,
+        anchorTerms:        data.anchorTerms       || [],
       });
     }
   });
@@ -3304,12 +3405,245 @@ function _kcMarkStale(sid, key, currentText) {
   const genBtn = document.querySelector(`#kc-ar-${mapKey} .kc-audio-gen-btn`);
 
   const state = _kcAudio.get(mapKey);
-  if (!state?.url) return; // No audio generated yet — nothing to mark stale
+  if (!state?.url) {
+    // Even if no audio generated, mark eval buttons stale when content changes
+    if (key === 'content') _markEvalStale(sid);
+    return;
+  }
   if ((currentText?.trim() ?? '') !== state.generatedText) {
     if (hintEl) { hintEl.textContent = '⚠️ Text changed — regenerate audio'; hintEl.className = 'kc-audio-hint stale'; }
     if (genBtn) genBtn.textContent = '🔄 Regenerate';
   }
+  // Eval buttons stale when section content changes
+  if (key === 'content') _markEvalStale(sid);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3-TIER PHRASE SCORING SYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * _phraseScoreDot — returns an HTML colored circle span for a phrase status.
+ * status: 'green' | 'yellow' | 'orange' | 'red' | undefined
+ */
+function _phraseScoreDot(status) {
+  const cls = status || 'none';
+  const titles = {
+    green:  'All 3 tiers pass — T1 Confidence ✓ T2 Clarity ✓ T3 Anchors ✓',
+    yellow: 'T1+T2 pass · T3 Anchor match weak — phrase may lack topic specificity',
+    orange: 'T2 fail — conflicts with another section (low clarity gap)',
+    red:    'T1 fail — phrase not semantically aligned with this section content',
+    none:   'Not yet scored — click ↻ Re-score Phrases',
+  };
+  return `<span class="score-dot ${cls}" title="${titles[cls] || ''}"></span>`;
+}
+
+/**
+ * _markEvalStale — turn both eval buttons yellow (stale) when content changes.
+ */
+function _markEvalStale(sid) {
+  const r = document.getElementById(`btn-rescore-${sid}`);
+  const a = document.getElementById(`btn-anchors-${sid}`);
+  if (r && !r.classList.contains('stale')) r.classList.add('stale');
+  if (a && !a.classList.contains('stale')) a.classList.add('stale');
+}
+
+/**
+ * _reScorePhrases — batch-score all caller phrases for a section via /phrase-score.
+ */
+async function _reScorePhrases(sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  if (!S.itemId) { _toast('Save the container first, then score phrases', 'error'); return; }
+
+  const phrases = (data.callerPhrases || []).filter(p => p.trim());
+  if (!phrases.length) { _toast('Add caller phrases first', 'error'); return; }
+
+  const sectionIdx = _getSectionIndexBySid(sid);
+  if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
+
+  const btn = document.getElementById(`btn-rescore-${sid}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Scoring…'; }
+
+  try {
+    const result = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/phrase-score`,
+      { method: 'POST', body: JSON.stringify({ containerId: S.itemId, sectionIndex: sectionIdx, phrases }) }
+    );
+    if (!result.success) throw new Error(result.error || 'Scoring failed');
+
+    data.phraseScores = result.scores || {};
+    _renderCallerPhrases(sid);
+
+    const statuses = Object.values(data.phraseScores).map(s => s.status);
+    const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
+    statuses.forEach(s => { if (counts[s] !== undefined) counts[s]++; });
+
+    let summary = [];
+    if (counts.green)  summary.push(`🟢 ${counts.green}`);
+    if (counts.yellow) summary.push(`🟡 ${counts.yellow}`);
+    if (counts.orange) summary.push(`🟠 ${counts.orange}`);
+    if (counts.red)    summary.push(`🔴 ${counts.red}`);
+    _toast(`Scored ${phrases.length} phrases: ${summary.join(' ')}`, 'success');
+  } catch (err) {
+    _toast(err.message || 'Scoring failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Re-score Phrases'; btn.classList.remove('stale'); }
+  }
+}
+
+/**
+ * _refreshAnchors — call Claude Haiku to extract anchor terms for this section.
+ */
+async function _refreshAnchors(sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  if (!S.itemId) { _toast('Save the container first, then extract anchors', 'error'); return; }
+
+  const sectionIdx = _getSectionIndexBySid(sid);
+  if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
+
+  const btn = document.getElementById(`btn-anchors-${sid}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Extracting…'; }
+
+  try {
+    const result = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/anchor-extract`,
+      { method: 'POST', body: JSON.stringify({ containerId: S.itemId, sectionIndex: sectionIdx }) }
+    );
+    if (!result.success) throw new Error(result.error || 'Extraction failed');
+
+    data.anchorTerms = result.anchorTerms || [];
+    _renderAnchorPanel(sid, result.anchorTerms, result.contentWords || []);
+
+    const countEl = document.getElementById(`anchor-count-${sid}`);
+    if (countEl) countEl.textContent = data.anchorTerms.length ? `${data.anchorTerms.length} anchors` : '';
+
+    _toast(`${result.anchorTerms.length} anchor terms extracted ✓`, 'success');
+
+    // Scores are now stale (anchors changed) — mark rescore button yellow
+    const rBtn = document.getElementById(`btn-rescore-${sid}`);
+    if (rBtn) rBtn.classList.add('stale');
+  } catch (err) {
+    _toast(err.message || 'Anchor extraction failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✦ Refresh Anchors'; btn.classList.remove('stale'); }
+  }
+}
+
+/**
+ * _renderAnchorPanel — render yellow anchor chips + gray content word chips.
+ */
+function _renderAnchorPanel(sid, anchorTerms, contentWords) {
+  const panel = document.getElementById(`anchor-panel-${sid}`);
+  if (!panel) return;
+
+  panel.innerHTML = '';
+  if (!anchorTerms.length && !contentWords.length) {
+    panel.classList.remove('visible');
+    return;
+  }
+
+  panel.classList.add('visible');
+
+  const header = document.createElement('span');
+  header.style.cssText = 'font-size:10px;font-weight:700;color:#92400e;white-space:nowrap;';
+  header.textContent = 'Topic anchors:';
+  panel.appendChild(header);
+
+  // Anchor terms — yellow (active)
+  for (const term of anchorTerms) {
+    const chip = document.createElement('span');
+    chip.className = 'anchor-chip';
+    chip.textContent = term;
+    chip.title = 'Active anchor — phrases must contain ≥2 anchors to pass T3';
+    panel.appendChild(chip);
+  }
+}
+
+/**
+ * _getSectionIndexBySid — find the 0-based index of a section by its sectionData sid.
+ * Matches by DOM order in #sectionsList.
+ */
+function _getSectionIndexBySid(sid) {
+  const rows = [...document.querySelectorAll('#sectionsList .section-row')];
+  return rows.findIndex(r => parseInt(r.dataset.sid) === sid);
+}
+
+/**
+ * _loadPhraseSuggestions — fetch missed utterances from live calls that match this section.
+ */
+async function _loadPhraseSuggestions(sid) {
+  if (!S.itemId) { _toast('Save the container first', 'error'); return; }
+  const sectionIdx = _getSectionIndexBySid(sid);
+  if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
+
+  const btn = document.getElementById(`btn-suggestions-${sid}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading…'; }
+
+  try {
+    const result = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/phrase-suggestions`,
+      { method: 'POST', body: JSON.stringify({ containerId: S.itemId, sectionIndex: sectionIdx }) }
+    );
+    if (!result.success) throw new Error(result.error || 'Failed to load suggestions');
+
+    const panel  = document.getElementById(`sugg-panel-${sid}`);
+    if (!panel) return;
+
+    if (!result.suggestions?.length) {
+      panel.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:4px 0;">No relevant missed calls found yet — data builds over time.</div>';
+      panel.classList.add('visible');
+      _toast('No matching live suggestions yet', 'success');
+      return;
+    }
+
+    const data = S.sectionData.get(sid);
+    let html = `<div class="phrase-sugg-header">📡 Suggested from live calls <span style="font-weight:400;color:#6b7280;">(${result.suggestions.length} missed utterances matched this section)</span></div>`;
+    result.suggestions.forEach(s => {
+      const badgeClass = s.type === 'KC_LLM_FALLBACK' ? 'fallback' : '';
+      const badgeText  = s.type === 'KC_LLM_FALLBACK' ? 'LLM fallback' : 'No match';
+      const simPct     = Math.round(s.similarity * 100);
+      const alreadyAdded = data?.callerPhrases?.some(p => p.toLowerCase() === s.text.toLowerCase());
+      html += `<div class="phrase-sugg-item">
+        <span class="phrase-sugg-badge ${badgeClass}">${badgeText}</span>
+        <span style="flex:1;">"${_esc(s.text)}"</span>
+        <span style="font-size:10px;color:#9ca3af;">${simPct}% match · ×${s.count}</span>
+        ${alreadyAdded
+          ? '<span style="font-size:10px;color:#6b7280;margin-left:auto;">✓ added</span>'
+          : `<button class="btn-sugg-add" onclick="_addSuggestionPhrase(${sid}, '${_esc(s.text).replace(/'/g,"\\'")}')">+ Add phrase</button>`}
+      </div>`;
+    });
+    panel.innerHTML = html;
+    panel.classList.add('visible');
+    _toast(`${result.suggestions.length} live suggestions loaded`, 'success');
+  } catch (err) {
+    _toast(err.message || 'Failed to load suggestions', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📡 Live Suggestions'; }
+  }
+}
+
+/**
+ * _addSuggestionPhrase — add a suggestion to the section's caller phrases.
+ */
+function _addSuggestionPhrase(sid, phrase) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  const clean = phrase.trim().toLowerCase();
+  if (!clean || data.callerPhrases.some(p => p.toLowerCase() === clean)) {
+    _toast('Phrase already added', 'error'); return;
+  }
+  data.callerPhrases.push(clean);
+  _renderCallerPhrases(sid);
+  // Refresh suggestions panel to update "✓ added" status
+  _loadPhraseSuggestions(sid);
+  _toast('Phrase added ✓', 'success');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// END 3-TIER PHRASE SCORING
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _toggleWordLimitEnabled() {
   const cb    = document.getElementById('fWordLimitEnabled');

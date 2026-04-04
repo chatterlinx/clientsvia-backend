@@ -227,6 +227,21 @@ const sectionSchema = new mongoose.Schema(
       comment:   'Short promo title (e.g. "Spring Tune-Up — $49"). Falls back to section label if empty.'
     },
 
+    // ── Anchor Terms — LLM-extracted topic anchors for Tier 3 phrase scoring ──
+    // 3-5 key domain-specific words extracted by Claude Haiku from section content.
+    // Cached here so Tier 3 check (≥2 anchors present in phrase) needs no LLM call.
+    // Regenerated explicitly via the admin "Refresh Anchors" button — not auto.
+    anchorTerms: {
+      type:    [String],
+      default: [],
+      comment: '3-5 topic anchor terms extracted by Claude Haiku. Used by T3 phrase scoring.'
+    },
+    anchorTermsUpdatedAt: {
+      type:    Date,
+      default: undefined,
+      comment: 'Timestamp of last anchor extraction. Stale if content changed since.'
+    },
+
     // ── Pre-qualify question (optional) ───────────────────────────────────
     // Agent asks this BEFORE answering this section's content.
     // Caller's answer is matched to options[].keywords → responseContext injected into Groq.
