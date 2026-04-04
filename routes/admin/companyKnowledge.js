@@ -2208,8 +2208,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     const anchorTerms = (targetSection.anchorTerms || []).map(t => t.toLowerCase().trim());
 
     // ── Load all other sections' embeddings (for Tier 2 clarity gap) ─────
+    // Use $ne: false (not === true) to include docs where isActive wasn't explicitly set
+    // (Mongoose defaults isActive to true, but raw docs may lack the field entirely)
     const allRaw = await CompanyKnowledgeContainer.collection.find(
-      { companyId, isActive: true },
+      { companyId, isActive: { $ne: false } },
       { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, _id: 1 } }
     ).toArray();
 

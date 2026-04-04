@@ -354,14 +354,14 @@
     .pst-row {
       display: grid; grid-template-columns: 1fr 140px 80px 60px 100px;
       padding: 7px 14px; border-bottom: 1px solid #f3f4f6; align-items: center;
-      transition: background .1s;
+      transition: background .1s; border-left: 3px solid transparent;
     }
     .pst-row:last-child { border-bottom: none; }
     .pst-row:hover { background: #f8fafc; }
-    .pst-row.st-red    { border-left: 3px solid #fca5a5; }
-    .pst-row.st-orange { border-left: 3px solid #fb923c; }
-    .pst-row.st-yellow { border-left: 3px solid #fbbf24; }
-    .pst-row.st-green  { border-left: 3px solid #4ade80; }
+    .pst-row.st-red    { border-left-color: #fca5a5; }
+    .pst-row.st-orange { border-left-color: #fb923c; }
+    .pst-row.st-yellow { border-left-color: #fbbf24; }
+    .pst-row.st-green  { border-left-color: #4ade80; }
     .pst-phrase { font-size: 12px; color: #1e293b; }
     .pst-bar-wrap { display: flex; align-items: center; gap: 6px; }
     .pst-bar-track {
@@ -3539,6 +3539,14 @@ function _markEvalStale(sid) {
   const a = document.getElementById(`btn-anchors-${sid}`);
   if (r && !r.classList.contains('stale')) r.classList.add('stale');
   if (a && !a.classList.contains('stale')) a.classList.add('stale');
+  // Hide stale score table — old scores no longer valid after content change
+  const table = document.getElementById(`score-table-${sid}`);
+  if (table && table.classList.contains('visible')) {
+    table.classList.remove('visible');
+    // Clear stored scores so chips don't show stale data
+    const data = S.sectionData.get(sid);
+    if (data) data.phraseScores = {};
+  }
 }
 
 /**
@@ -3690,19 +3698,21 @@ async function _loadPhraseSuggestions(sid) {
     }
 
     const data = S.sectionData.get(sid);
+    // Store suggestions on the section data for safe click handling (no inline JS strings)
+    data._suggestions = result.suggestions;
     let html = `<div class="phrase-sugg-header">📡 Suggested from live calls <span style="font-weight:400;color:#6b7280;">(${result.suggestions.length} missed utterances matched this section)</span></div>`;
-    result.suggestions.forEach(s => {
+    result.suggestions.forEach((s, i) => {
       const badgeClass = s.type === 'KC_LLM_FALLBACK' ? 'fallback' : '';
       const badgeText  = s.type === 'KC_LLM_FALLBACK' ? 'LLM fallback' : 'No match';
       const simPct     = Math.round(s.similarity * 100);
       const alreadyAdded = data?.callerPhrases?.some(p => p.toLowerCase() === s.text.toLowerCase());
-      html += `<div class="phrase-sugg-item">
+      html += `<div class="phrase-sugg-item" id="sugg-item-${sid}-${i}">
         <span class="phrase-sugg-badge ${badgeClass}">${badgeText}</span>
         <span style="flex:1;">"${_esc(s.text)}"</span>
         <span style="font-size:10px;color:#9ca3af;">${simPct}% match · ×${s.count}</span>
         ${alreadyAdded
-          ? '<span style="font-size:10px;color:#6b7280;margin-left:auto;">✓ added</span>'
-          : `<button class="btn-sugg-add" onclick="_addSuggestionPhrase(${sid}, '${_esc(s.text).replace(/'/g,"\\'")}')">+ Add phrase</button>`}
+          ? '<span style="font-size:10px;color:#16a34a;margin-left:auto;">✓ added</span>'
+          : `<button class="btn-sugg-add" onclick="_addSuggestionByIndex(${sid}, ${i})">+ Add phrase</button>`}
       </div>`;
     });
     panel.innerHTML = html;
@@ -3716,19 +3726,30 @@ async function _loadPhraseSuggestions(sid) {
 }
 
 /**
- * _addSuggestionPhrase — add a suggestion to the section's caller phrases.
+ * _addSuggestionByIndex — add a suggestion by index (avoids inline JS string escaping issues).
+ * Updates the suggestion row DOM locally instead of re-fetching the full list.
  */
-function _addSuggestionPhrase(sid, phrase) {
+function _addSuggestionByIndex(sid, idx) {
   const data = S.sectionData.get(sid);
-  if (!data) return;
-  const clean = phrase.trim().toLowerCase();
+  if (!data || !data._suggestions?.[idx]) return;
+  const phrase = data._suggestions[idx].text;
+  const clean  = phrase.trim().toLowerCase();
   if (!clean || data.callerPhrases.some(p => p.toLowerCase() === clean)) {
     _toast('Phrase already added', 'error'); return;
   }
   data.callerPhrases.push(clean);
   _renderCallerPhrases(sid);
-  // Refresh suggestions panel to update "✓ added" status
-  _loadPhraseSuggestions(sid);
+  // Update the suggestion row in place — swap button for "✓ added" label
+  const row = document.getElementById(`sugg-item-${sid}-${idx}`);
+  if (row) {
+    const btn = row.querySelector('.btn-sugg-add');
+    if (btn) {
+      const lbl = document.createElement('span');
+      lbl.style.cssText = 'font-size:10px;color:#16a34a;margin-left:auto;';
+      lbl.textContent = '✓ added';
+      btn.replaceWith(lbl);
+    }
+  }
   _toast('Phrase added ✓', 'success');
 }
 
