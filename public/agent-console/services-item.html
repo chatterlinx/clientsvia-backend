@@ -461,10 +461,22 @@
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
       color: #64748b; margin-bottom: 8px;
     }
-    .pq-anchor-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pq-anchor-chips { display: flex; flex-wrap: wrap; gap: 5px; }
     .pq-anchor-chip {
       padding: 3px 12px; border-radius: 14px; font-size: 11px; font-weight: 600;
-      background: #fef3c7; color: #92400e; border: 1px solid #fde68a; user-select: none;
+      cursor: pointer; user-select: none; transition: all .15s;
+    }
+    .pq-anchor-chip.active {
+      background: #fef3c7; color: #92400e; border: 1.5px solid #f59e0b;
+    }
+    .pq-anchor-chip.active:hover {
+      background: #fde68a; border-color: #d97706;
+    }
+    .pq-anchor-chip.available {
+      background: #f1f5f9; color: #94a3b8; border: 1.5px solid #e2e8f0;
+    }
+    .pq-anchor-chip.available:hover {
+      background: #e2e8f0; color: #64748b; border-color: #cbd5e1;
     }
     /* Suggestions section */
     .pq-sugg-section {
@@ -1890,6 +1902,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
     contentAudioUrl:  sectionMeta?.audioUrl || null,
     phraseScores:     {},                               // { phrase → { t1, t2, t3, status } }
     anchorTerms:      sectionMeta?.anchorTerms || [],   // LLM-extracted topic anchors (cached)
+    _contentWords:    [...new Set(content.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4))].slice(0, 80),
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
@@ -2157,7 +2170,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
 
   // Restore anchor panel if anchor terms exist
   if (sectionMeta?.anchorTerms?.length) {
-    _renderAnchorPanel(id, sectionMeta.anchorTerms, []);
+    _renderAnchorPanel(id);
     const countEl = document.getElementById(`anchor-count-${id}`);
     if (countEl) countEl.textContent = `${sectionMeta.anchorTerms.length} anchors`;
   }
@@ -3735,8 +3748,9 @@ async function _refreshAnchors(sid) {
     );
     if (!result.success) throw new Error(result.error || 'Extraction failed');
 
-    data.anchorTerms = result.anchorTerms || [];
-    _renderAnchorPanel(sid, result.anchorTerms, result.contentWords || []);
+    data.anchorTerms  = result.anchorTerms  || [];
+    data._contentWords = result.contentWords || [];
+    _renderAnchorPanel(sid);
 
     const countEl = document.getElementById(`anchor-count-${sid}`);
     if (countEl) countEl.textContent = data.anchorTerms.length ? `${data.anchorTerms.length} anchors` : '';
@@ -3754,35 +3768,89 @@ async function _refreshAnchors(sid) {
 }
 
 /**
- * _renderAnchorPanel — render anchor chips inside the card's anchor section.
+ * _renderAnchorPanel — interactive toggleable anchor chips.
+ * Active (yellow) = counts toward T3. Available (gray) = click to add.
  */
-function _renderAnchorPanel(sid, anchorTerms, contentWords) {
+function _renderAnchorPanel(sid) {
   const panel = document.getElementById(`anchor-panel-${sid}`);
   if (!panel) return;
 
+  const data         = S.sectionData.get(sid);
+  const anchorTerms  = data?.anchorTerms  || [];
+  const contentWords = data?._contentWords || [];
+
   panel.innerHTML = '';
-  if (!anchorTerms.length) {
+
+  // Nothing to show if no anchors AND no content words
+  if (!anchorTerms.length && !contentWords.length) {
     panel.classList.remove('visible');
     return;
   }
 
   panel.classList.add('visible');
 
+  const activeCount = anchorTerms.length;
   const lbl = document.createElement('div');
   lbl.className = 'pq-section-label';
-  lbl.textContent = `Topic Anchors — ${anchorTerms.length} terms (phrases need ≥2 to pass T3)`;
+  lbl.textContent = activeCount
+    ? `Topic Anchors — ${activeCount} active (phrases need ≥2 to pass T3) · click to toggle`
+    : 'Topic Anchors — click words to mark as anchors';
   panel.appendChild(lbl);
 
   const wrap = document.createElement('div');
   wrap.className = 'pq-anchor-chips';
+
+  // Active anchors first (yellow)
+  const anchorSet = new Set(anchorTerms.map(t => t.toLowerCase()));
   for (const term of anchorTerms) {
     const chip = document.createElement('span');
-    chip.className = 'pq-anchor-chip';
+    chip.className = 'pq-anchor-chip active';
     chip.textContent = term;
-    chip.title = 'Active anchor — phrases must contain ≥2 anchors to pass T3';
+    chip.title = 'Active anchor — click to remove';
+    chip.onclick = () => _toggleAnchor(sid, term, false);
     wrap.appendChild(chip);
   }
+
+  // Available content words (gray) — exclude ones already active
+  for (const word of contentWords) {
+    if (anchorSet.has(word.toLowerCase())) continue;
+    const chip = document.createElement('span');
+    chip.className = 'pq-anchor-chip available';
+    chip.textContent = word;
+    chip.title = 'Click to add as anchor';
+    chip.onclick = () => _toggleAnchor(sid, word, true);
+    wrap.appendChild(chip);
+  }
+
   panel.appendChild(wrap);
+}
+
+/**
+ * _toggleAnchor — add or remove an anchor term and re-render.
+ */
+function _toggleAnchor(sid, term, addIt) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+
+  const lower = term.toLowerCase().trim();
+  if (addIt) {
+    if (!data.anchorTerms.some(t => t.toLowerCase() === lower)) {
+      data.anchorTerms.push(lower);
+    }
+  } else {
+    data.anchorTerms = data.anchorTerms.filter(t => t.toLowerCase() !== lower);
+  }
+
+  // Update anchor count badge
+  const countEl = document.getElementById(`anchor-count-${sid}`);
+  if (countEl) countEl.textContent = data.anchorTerms.length ? `${data.anchorTerms.length} anchors` : '';
+
+  // Mark rescore stale (anchors changed)
+  const rBtn = document.getElementById(`btn-rescore-${sid}`);
+  if (rBtn) rBtn.classList.add('stale');
+
+  // Re-render
+  _renderAnchorPanel(sid);
 }
 
 /**
