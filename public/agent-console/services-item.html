@@ -1749,6 +1749,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
         style="display:${(sectionMeta?.callerPhrases?.length) ? 'flex' : 'none'};font-size:11px;color:#059669;font-weight:600;align-items:center;gap:3px;">
         ${(sectionMeta?.callerPhrases?.length) ? '🎯 ' + sectionMeta.callerPhrases.length + ' phrases' : ''}
       </span>
+      <span id="sec-active-lbl-${id}" style="font-size:11px;font-weight:600;color:${sectionIsActive ? '#16a34a' : '#9ca3af'};">${sectionIsActive ? 'Active' : 'Off'}</span>
       <label class="section-active-switch" title="Toggle section on/off — inactive sections are skipped during live calls">
         <input type="checkbox" id="sec-active-${id}"
           onchange="_onSectionActiveChange(${id})"
@@ -3120,6 +3121,9 @@ function _onSectionActiveChange(sid) {
   // Toggle the fade class on the section row
   const row = document.querySelector(`.section-row[data-sid="${sid}"]`);
   if (row) row.classList.toggle('section-inactive', !checked);
+  // Update the label text and color
+  const lbl = document.getElementById(`sec-active-lbl-${sid}`);
+  if (lbl) { lbl.textContent = checked ? 'Active' : 'Off'; lbl.style.color = checked ? '#16a34a' : '#9ca3af'; }
 }
 
 function _onSectionFixedChange(sid) {
