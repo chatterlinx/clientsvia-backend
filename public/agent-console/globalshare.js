@@ -125,6 +125,7 @@
       loadStats();
       loadSignals();
       loadLapGroups();
+      loadPhraseIntelligence();
       console.log('[GlobalShare] Initialization complete');
     } catch (err) {
       console.error('[GlobalShare] Initialization error:', err);
@@ -709,6 +710,243 @@
   window._addLapKeyword    = _addLapKeyword;
   window._removeLapKeyword = _removeLapKeyword;
   window._saveLapGroup     = _saveLapGroup;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PHRASE INTELLIGENCE
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // In-memory state for the PI card
+  const piState = {
+    intentNormalizers: [],
+    synonymGroups:     [],
+    stopWords:         [],
+    dangerWords:       [],
+  };
+
+  async function loadPhraseIntelligence() {
+    try {
+      console.log('[GlobalShare] Loading phrase intelligence config…');
+      const data = await AgentConsoleAuth.apiFetch('/api/admin/globalshare/phrase-intelligence');
+      piState.intentNormalizers = data.intentNormalizers || [];
+      piState.synonymGroups    = data.synonymGroups    || [];
+      piState.stopWords        = data.stopWords        || [];
+      piState.dangerWords      = data.dangerWords      || [];
+
+      _renderPiNormalizers();
+      _renderPiSynonyms();
+      _renderPiStopWords();
+      _renderPiDangerWords();
+      _updatePiStat();
+      _bindPiTabs();
+    } catch (err) {
+      console.error('[GlobalShare] Failed to load phrase intelligence:', err);
+    }
+  }
+
+  function _bindPiTabs() {
+    const tabs = document.querySelectorAll('#pi-tabs .pi-tab');
+    tabs.forEach(tab => {
+      tab.onclick = () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.pi-panel').forEach(p => p.classList.remove('visible'));
+        const panel = document.getElementById(`pi-panel-${tab.dataset.piTab}`);
+        if (panel) panel.classList.add('visible');
+      };
+    });
+  }
+
+  function _updatePiStat() {
+    const el = document.getElementById('stat-pi');
+    if (el) el.textContent = String(piState.intentNormalizers.length + piState.synonymGroups.length);
+  }
+
+  // ── Intent Normalizers ─────────────────────────────────────────────────
+
+  function _renderPiNormalizers() {
+    const body = document.getElementById('pi-normalizers-body');
+    if (!body) return;
+    body.innerHTML = piState.intentNormalizers.map((n, i) => `
+      <tr>
+        <td>${escapeHtml(n.pattern)}</td>
+        <td>${n.token ? '<code>' + escapeHtml(n.token) + '</code>' : '<span style="color:#94a3b8;font-style:italic;">(strip)</span>'}</td>
+        <td style="text-align:center"><span class="pi-row-remove" onclick="piRemoveNormalizer(${i})">×</span></td>
+      </tr>
+    `).join('');
+  }
+
+  function piAddNormalizer() {
+    const patEl = document.getElementById('pi-norm-pattern');
+    const tokEl = document.getElementById('pi-norm-token');
+    const pattern = (patEl?.value || '').trim().toLowerCase();
+    if (!pattern) return;
+    const token = (tokEl?.value || '').trim().toLowerCase();
+    piState.intentNormalizers.push({ pattern, token });
+    _renderPiNormalizers();
+    if (patEl) patEl.value = '';
+    if (tokEl) tokEl.value = '';
+    patEl?.focus();
+  }
+
+  function piRemoveNormalizer(idx) {
+    piState.intentNormalizers.splice(idx, 1);
+    _renderPiNormalizers();
+  }
+
+  // ── Synonym Groups ────────────────────────────────────────────────────
+
+  function _renderPiSynonyms() {
+    const body = document.getElementById('pi-synonyms-body');
+    if (!body) return;
+    body.innerHTML = piState.synonymGroups.map((g, i) => `
+      <tr>
+        <td><code>${escapeHtml(g.token)}</code></td>
+        <td>${(g.synonyms || []).map(s => escapeHtml(s)).join(', ')}</td>
+        <td style="text-align:center"><span class="pi-row-remove" onclick="piRemoveSynonym(${i})">×</span></td>
+      </tr>
+    `).join('');
+  }
+
+  function piAddSynonym() {
+    const tokEl = document.getElementById('pi-syn-token');
+    const synEl = document.getElementById('pi-syn-synonyms');
+    const token = (tokEl?.value || '').trim().toLowerCase();
+    const synonyms = (synEl?.value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (!token || !synonyms.length) return;
+    piState.synonymGroups.push({ token, synonyms });
+    _renderPiSynonyms();
+    if (tokEl) tokEl.value = '';
+    if (synEl) synEl.value = '';
+    tokEl?.focus();
+  }
+
+  function piRemoveSynonym(idx) {
+    piState.synonymGroups.splice(idx, 1);
+    _renderPiSynonyms();
+  }
+
+  // ── Stop Words ────────────────────────────────────────────────────────
+
+  function _renderPiStopWords() {
+    const wrap = document.getElementById('pi-stopwords-tags');
+    if (!wrap) return;
+    wrap.innerHTML = piState.stopWords.map((w, i) =>
+      `<span class="pi-tag">${escapeHtml(w)}<span class="pi-tag-remove" onclick="piRemoveStopWord(${i})">×</span></span>`
+    ).join('');
+  }
+
+  function piAddStopWord() {
+    const el = document.getElementById('pi-stop-input');
+    const word = (el?.value || '').trim().toLowerCase();
+    if (!word || piState.stopWords.includes(word)) return;
+    piState.stopWords.push(word);
+    _renderPiStopWords();
+    if (el) el.value = '';
+    el?.focus();
+  }
+
+  function piRemoveStopWord(idx) {
+    piState.stopWords.splice(idx, 1);
+    _renderPiStopWords();
+  }
+
+  // ── Danger Words ──────────────────────────────────────────────────────
+
+  function _renderPiDangerWords() {
+    const wrap = document.getElementById('pi-dangerwords-tags');
+    if (!wrap) return;
+    wrap.innerHTML = piState.dangerWords.map((w, i) =>
+      `<span class="pi-tag" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;">${escapeHtml(w)}<span class="pi-tag-remove" onclick="piRemoveDangerWord(${i})">×</span></span>`
+    ).join('');
+  }
+
+  function piAddDangerWord() {
+    const el = document.getElementById('pi-danger-input');
+    const word = (el?.value || '').trim().toLowerCase();
+    if (!word || piState.dangerWords.includes(word)) return;
+    piState.dangerWords.push(word);
+    _renderPiDangerWords();
+    if (el) el.value = '';
+    el?.focus();
+  }
+
+  function piRemoveDangerWord(idx) {
+    piState.dangerWords.splice(idx, 1);
+    _renderPiDangerWords();
+  }
+
+  // ── Save Section ──────────────────────────────────────────────────────
+
+  async function piSaveSection(section) {
+    const dataMap = {
+      intentNormalizers: piState.intentNormalizers,
+      synonymGroups:     piState.synonymGroups,
+      stopWords:         piState.stopWords,
+      dangerWords:       piState.dangerWords,
+    };
+    try {
+      await AgentConsoleAuth.apiFetch(`/api/admin/globalshare/phrase-intelligence/${section}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataMap[section] }),
+      });
+      _updatePiStat();
+      alert(`${section} saved successfully!`);
+    } catch (err) {
+      console.error('[GlobalShare] Failed to save PI section:', err);
+      alert('Save failed: ' + err.message);
+    }
+  }
+
+  // ── Test Phrase ───────────────────────────────────────────────────────
+
+  async function piTestPhrase() {
+    const phrase = document.getElementById('pi-test-phrase')?.value?.trim();
+    if (!phrase) return;
+    const sectionContent = document.getElementById('pi-test-content')?.value?.trim() || '';
+
+    try {
+      const result = await AgentConsoleAuth.apiFetch('/api/admin/globalshare/phrase-intelligence/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase, sectionContent }),
+      });
+
+      const resWrap = document.getElementById('pi-test-results');
+      if (resWrap) resWrap.style.display = 'block';
+
+      const rawEl       = document.getElementById('pi-res-raw');
+      const coreEl      = document.getElementById('pi-res-core');
+      const protEl      = document.getElementById('pi-res-protected');
+      const patternsEl  = document.getElementById('pi-res-patterns');
+
+      if (rawEl)  rawEl.textContent  = result.raw || '';
+      if (coreEl) coreEl.textContent = result.core || '(empty)';
+      if (protEl) protEl.textContent = (result.protectedEntities || []).length
+        ? result.protectedEntities.join(', ')
+        : '(none)';
+      if (patternsEl) patternsEl.innerHTML = (result.normalizedPatterns || []).length
+        ? result.normalizedPatterns.map(p =>
+            `<span style="margin-right:8px;">"${escapeHtml(p.pattern)}" &rarr; <strong>${escapeHtml(p.token)}</strong></span>`
+          ).join('')
+        : '(none)';
+    } catch (err) {
+      console.error('[GlobalShare] Phrase test error:', err);
+      alert('Test failed: ' + err.message);
+    }
+  }
+
+  // Expose PI functions for inline onclick handlers
+  window.piAddNormalizer     = piAddNormalizer;
+  window.piRemoveNormalizer  = piRemoveNormalizer;
+  window.piAddSynonym        = piAddSynonym;
+  window.piRemoveSynonym     = piRemoveSynonym;
+  window.piAddStopWord       = piAddStopWord;
+  window.piRemoveStopWord    = piRemoveStopWord;
+  window.piAddDangerWord     = piAddDangerWord;
+  window.piRemoveDangerWord  = piRemoveDangerWord;
+  window.piSaveSection       = piSaveSection;
+  window.piTestPhrase        = piTestPhrase;
 
   // ══════════════════════════════════════════════════════════════════════════
   // UTILITIES

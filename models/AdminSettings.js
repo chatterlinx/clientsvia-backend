@@ -1047,7 +1047,31 @@ const adminSettingsSchema = new mongoose.Schema({
             description: 'LAP system keyword groups — global, inherited by all companies'
         },
         lapGroupsUpdatedAt: { type: Date,   default: null },
-        lapGroupsUpdatedBy: { type: String, default: null }
+        lapGroupsUpdatedBy: { type: String, default: null },
+
+        // ────────────────────────────────────────────────────────────────────
+        // PHRASE INTELLIGENCE — Global English-language rules for reducing
+        // caller phrases to routing-optimised cores. Used by PhraseReducerService
+        // to improve Tier 3 scoring in KC phrase quality.
+        //
+        // Architecture:
+        //   Layer 1 (global)  — intentNormalizers, synonymGroups, stopWords,
+        //                        dangerWords — universal English, lives here.
+        //   Layer 2 (company) — protectedPhrases auto-extracted from KC
+        //                        section content — no admin setup needed.
+        // ────────────────────────────────────────────────────────────────────
+        phraseIntelligence: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {
+                intentNormalizers: [],   // [{ pattern: "how much", token: "cost" }]
+                synonymGroups:     [],   // [{ token: "cost", synonyms: ["price","fee","charge"] }]
+                stopWords:         [],   // ["i","you","we","the","a","an","my","your",…]
+                dangerWords:       [],   // ["not","no","emergency","cancel","urgent"]
+            },
+            description: 'Phrase Intelligence — global English rules for phrase reduction (T3 scoring)'
+        },
+        phraseIntelligenceUpdatedAt: { type: Date,   default: null },
+        phraseIntelligenceUpdatedBy: { type: String, default: null }
     },
     
     // Metadata

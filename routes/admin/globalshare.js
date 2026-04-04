@@ -529,4 +529,113 @@ router.post('/signals/test', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHRASE INTELLIGENCE ROUTES
+// Global English-language rules for reducing caller phrases to routing cores.
+// Used by PhraseReducerService for Tier 3 scoring in KC phrase quality.
+// ════════════════════════════════════════════════════════════════════════════
+
+const PhraseReducerService = require('../../services/phraseIntelligence/PhraseReducerService');
+
+/**
+ * GET /api/admin/globalshare/phrase-intelligence
+ * Returns the current phrase intelligence config (or defaults if never saved).
+ */
+router.get('/phrase-intelligence', async (req, res) => {
+    try {
+        logger.info('[GlobalShare API] Getting phrase intelligence config');
+        const settings = await AdminSettings.getSettings();
+        const pi = settings?.globalHub?.phraseIntelligence || {};
+
+        res.json({
+            intentNormalizers: pi.intentNormalizers?.length > 0
+                ? pi.intentNormalizers
+                : PhraseReducerService.DEFAULT_INTENT_NORMALIZERS,
+            synonymGroups: pi.synonymGroups?.length > 0
+                ? pi.synonymGroups
+                : PhraseReducerService.DEFAULT_SYNONYM_GROUPS,
+            stopWords: pi.stopWords?.length > 0
+                ? pi.stopWords
+                : PhraseReducerService.DEFAULT_STOP_WORDS,
+            dangerWords: pi.dangerWords?.length > 0
+                ? pi.dangerWords
+                : PhraseReducerService.DEFAULT_DANGER_WORDS,
+            updatedAt: pi.updatedAt || settings?.globalHub?.phraseIntelligenceUpdatedAt || null,
+            updatedBy: pi.updatedBy || settings?.globalHub?.phraseIntelligenceUpdatedBy || null,
+        });
+    } catch (error) {
+        logger.error('[GlobalShare API] Get phrase intelligence error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * PATCH /api/admin/globalshare/phrase-intelligence/:section
+ * Save one section of the phrase intelligence config.
+ * section: 'intentNormalizers' | 'synonymGroups' | 'stopWords' | 'dangerWords'
+ */
+const VALID_PI_SECTIONS = ['intentNormalizers', 'synonymGroups', 'stopWords', 'dangerWords'];
+
+router.patch('/phrase-intelligence/:section', async (req, res) => {
+    try {
+        const { section } = req.params;
+        if (!VALID_PI_SECTIONS.includes(section)) {
+            return res.status(400).json({ error: `Unknown section: ${section}. Valid: ${VALID_PI_SECTIONS.join(', ')}` });
+        }
+
+        const { data } = req.body;
+        if (!Array.isArray(data)) {
+            return res.status(400).json({ error: 'data must be an array' });
+        }
+
+        logger.info('[GlobalShare API] Saving phrase intelligence section', { section, count: data.length });
+
+        const now = new Date();
+        await AdminSettings.findOneAndUpdate(
+            {},
+            { $set: {
+                [`globalHub.phraseIntelligence.${section}`]: data,
+                'globalHub.phraseIntelligenceUpdatedAt': now,
+                'globalHub.phraseIntelligenceUpdatedBy': req.user?.email || 'api'
+            }},
+            { upsert: true }
+        );
+
+        // Invalidate the in-memory cache so next reduce() picks up changes
+        PhraseReducerService.invalidateCache();
+
+        res.json({ success: true, section, count: data.length });
+    } catch (error) {
+        logger.error('[GlobalShare API] Save phrase intelligence error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/globalshare/phrase-intelligence/test
+ * Test the reducer on a phrase with optional section content.
+ * Body: { phrase: string, sectionContent?: string }
+ * Returns the full reduction breakdown.
+ */
+router.post('/phrase-intelligence/test', async (req, res) => {
+    try {
+        const { phrase, sectionContent } = req.body;
+        if (!phrase || !phrase.trim()) {
+            return res.status(400).json({ error: 'phrase is required' });
+        }
+
+        logger.info('[GlobalShare API] Testing phrase reducer', { phrase });
+
+        const result = await PhraseReducerService.reduce(phrase, sectionContent || '');
+
+        res.json({
+            ...result,
+            note: 'Stage 1: protected entities from section content | Stage 2: intent normalization | Stage 3: stop word removal'
+        });
+    } catch (error) {
+        logger.error('[GlobalShare API] Phrase intelligence test error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

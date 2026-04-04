@@ -418,12 +418,14 @@
     .pq-gap { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
     .pq-gap.pass { color: #16a34a; }
     .pq-gap.fail { color: #dc2626; }
-    /* Anchors column */
-    .pq-anchor-cell { text-align: center; }
-    .pq-anchor-check { font-size: 14px; font-weight: 700; }
-    .pq-anchor-check.pass { color: #16a34a; }
-    .pq-anchor-check.fail { color: #dc2626; }
-    .pq-anchor-check.na   { color: #cbd5e1; }
+    /* Core column (reduced phrase) */
+    .pq-core-cell { max-width: 200px; }
+    .pq-core-text {
+      font-size: 11px; color: #6366f1; font-weight: 600; font-style: italic;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      display: inline-block;
+    }
+    .pq-core-text.na { color: #cbd5e1; font-style: normal; font-weight: 400; }
     /* Status badge */
     .pq-status { text-align: center; }
     .pq-badge {
@@ -451,33 +453,8 @@
       padding: 24px 16px; text-align: center; color: #94a3b8; font-size: 12px;
     }
     .pq-empty-icon { font-size: 24px; margin-bottom: 6px; opacity: .6; }
-    /* Anchor section */
+    /* Section divider */
     .pq-section-divider { border-top: 1px solid #f1f5f9; }
-    .pq-anchor-section {
-      padding: 10px 16px 12px; display: none;
-    }
-    .pq-anchor-section.visible { display: block; }
-    .pq-section-label {
-      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-      color: #64748b; margin-bottom: 8px;
-    }
-    .pq-anchor-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-    .pq-anchor-chip {
-      padding: 3px 12px; border-radius: 14px; font-size: 11px; font-weight: 600;
-      cursor: pointer; user-select: none; transition: all .15s;
-    }
-    .pq-anchor-chip.active {
-      background: #fef3c7; color: #92400e; border: 1.5px solid #f59e0b;
-    }
-    .pq-anchor-chip.active:hover {
-      background: #fde68a; border-color: #d97706;
-    }
-    .pq-anchor-chip.available {
-      background: #f1f5f9; color: #94a3b8; border: 1.5px solid #e2e8f0;
-    }
-    .pq-anchor-chip.available:hover {
-      background: #e2e8f0; color: #64748b; border-color: #cbd5e1;
-    }
     /* Suggestions section */
     .pq-sugg-section {
       padding: 10px 16px 12px; display: none;
@@ -1997,15 +1974,9 @@ function addSection(label = '', content = '', sectionMeta = null) {
         </div>
         <span class="pq-toolbar-sep"></span>
         <button type="button" class="pq-toolbar-btn" id="btn-rescore-${id}"
-          onclick="_reScorePhrases(${id})" title="Score each phrase against 3 tiers: Confidence, Clarity, Anchors">
+          onclick="_reScorePhrases(${id})" title="Score each phrase against 3 tiers: Confidence, Clarity, Core Match">
           <span class="pq-btn-icon">↻</span> Re-score
         </button>
-        <span class="pq-toolbar-sep"></span>
-        <button type="button" class="pq-toolbar-btn" id="btn-anchors-${id}"
-          onclick="_refreshAnchors(${id})" title="Extract topic anchor terms via Claude Haiku">
-          <span class="pq-btn-icon">◇</span> Anchors
-        </button>
-        <span id="anchor-count-${id}" style="font-size:10px;color:#64748b;font-weight:600;"></span>
         <span class="pq-toolbar-sep"></span>
         <button type="button" class="pq-toolbar-btn" id="btn-suggestions-${id}"
           onclick="_loadPhraseSuggestions(${id})" title="Show missed caller questions from live calls">
@@ -2013,8 +1984,6 @@ function addSection(label = '', content = '', sectionMeta = null) {
         </button>
       </div>
       <div class="pq-table-wrap" id="score-table-${id}"></div>
-      <div class="pq-section-divider"></div>
-      <div class="pq-anchor-section" id="anchor-panel-${id}"></div>
       <div class="pq-section-divider"></div>
       <div class="pq-sugg-section" id="sugg-panel-${id}"></div>
     </div>
@@ -2167,13 +2136,6 @@ function addSection(label = '', content = '', sectionMeta = null) {
   renderSectionUpsellItems(id);
   _renderCallerPhrases(id);
   _renderSecNegKeywords(id);
-
-  // Restore anchor panel if anchor terms exist
-  if (sectionMeta?.anchorTerms?.length) {
-    _renderAnchorPanel(id);
-    const countEl = document.getElementById(`anchor-count-${id}`);
-    if (countEl) countEl.textContent = `${sectionMeta.anchorTerms.length} anchors`;
-  }
 
   // Restore audio UI state from saved URLs (survive page refresh)
   if (sectionMeta?.audioUrl && useFixedResponse) {
@@ -3539,8 +3501,8 @@ function _kcMarkStale(sid, key, currentText) {
 
 const _statusLabel = { green: 'Bulletproof', yellow: 'Topical', orange: 'Conflict', red: 'Off-target' };
 const _statusTitle = {
-  green:  'All 3 tiers pass — Confidence ✓  Clarity ✓  Anchors ✓',
-  yellow: 'T1+T2 pass — Anchors weak: phrase may lack topic specificity',
+  green:  'All 3 tiers pass — Confidence ✓  Clarity ✓  Core ✓',
+  yellow: 'T1+T2 pass — Core weak: reduced phrase drifts from section topic',
   orange: 'Clarity fail — conflicts with another section (gap < 0.20)',
   red:    'Confidence fail — phrase not aligned with this section content',
 };
@@ -3561,7 +3523,7 @@ function _buildPhraseRow(phrase, score, sid, idx) {
         </div>
       </td>
       <td style="text-align:center"><span class="pq-gap pq-pending-val">—</span></td>
-      <td class="pq-anchor-cell"><span class="pq-anchor-check na">—</span></td>
+      <td class="pq-core-cell"><span class="pq-core-text na">—</span></td>
       <td class="pq-status"><span class="pq-badge pending">Pending</span></td>
       ${delBtn}
     </tr>`;
@@ -3570,8 +3532,11 @@ function _buildPhraseRow(phrase, score, sid, idx) {
   const barCls    = t1Pct >= 75 ? 'high' : t1Pct >= 65 ? 'mid' : 'low';
   const gapVal    = score.t2 != null ? (score.t2 >= 0 ? `+${score.t2.toFixed(2)}` : score.t2.toFixed(2)) : '—';
   const gapCls    = score.t2 >= 0.20 ? 'pass' : 'fail';
-  const anchorCls = score.t3 === true ? 'pass' : score.t3 === false ? 'fail' : 'na';
-  const anchorIcn = score.t3 === true ? '✓' : score.t3 === false ? '✗' : '—';
+  const coreText  = score.core || '—';
+  const coreCls   = score.t3 === true ? '' : score.t3 === false ? '' : 'na';
+  const coreTitle = score.core
+    ? `Reduced core (T3 score: ${score.t3Score != null ? Math.round(score.t3Score * 100) + '%' : '—'})`
+    : '';
   return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
     <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
     <td class="pq-conf-cell">
@@ -3581,7 +3546,7 @@ function _buildPhraseRow(phrase, score, sid, idx) {
       </div>
     </td>
     <td style="text-align:center"><span class="pq-gap ${gapCls}">${gapVal}</span></td>
-    <td class="pq-anchor-cell"><span class="pq-anchor-check ${anchorCls}">${anchorIcn}</span></td>
+    <td class="pq-core-cell"><span class="pq-core-text ${coreCls}" title="${_esc(coreTitle)}">${_esc(coreText)}</span></td>
     <td class="pq-status"><span class="pq-badge ${score.status}">${_statusLabel[score.status]}</span></td>
     ${delBtn}
   </tr>`;
@@ -3614,7 +3579,7 @@ function _renderPhraseTable(sid) {
       <th>Phrase</th>
       <th>Confidence</th>
       <th class="pq-th-center">Clarity</th>
-      <th class="pq-th-center">Anchors</th>
+      <th>Core</th>
       <th class="pq-th-center">Status</th>
       <th style="width:36px;"></th>
     </tr></thead><tbody>`;
@@ -3679,9 +3644,7 @@ function _renderScoreTable(sid, scores) {
  */
 function _markEvalStale(sid) {
   const r = document.getElementById(`btn-rescore-${sid}`);
-  const a = document.getElementById(`btn-anchors-${sid}`);
   if (r && !r.classList.contains('stale')) r.classList.add('stale');
-  if (a && !a.classList.contains('stale')) a.classList.add('stale');
   // Clear stale scores — table stays visible but reverts to pending rows
   const data = S.sectionData.get(sid);
   if (data) data.phraseScores = {};
@@ -3727,131 +3690,7 @@ async function _reScorePhrases(sid) {
   }
 }
 
-/**
- * _refreshAnchors — call Claude Haiku to extract anchor terms for this section.
- */
-async function _refreshAnchors(sid) {
-  const data = S.sectionData.get(sid);
-  if (!data) return;
-  if (!S.mongoId && !S.itemId) { _toast('Save the container first, then extract anchors', 'error'); return; }
-
-  const sectionIdx = _getSectionIndexBySid(sid);
-  if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
-
-  const btn = document.getElementById(`btn-anchors-${sid}`);
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="pq-btn-icon">⏳</span> Extracting…'; }
-
-  try {
-    const result = await apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/knowledge/anchor-extract`,
-      { method: 'POST', body: JSON.stringify({ containerId: S.mongoId || S.itemId, sectionIndex: sectionIdx }) }
-    );
-    if (!result.success) throw new Error(result.error || 'Extraction failed');
-
-    data.anchorTerms  = result.anchorTerms  || [];
-    data._contentWords = result.contentWords || [];
-    _renderAnchorPanel(sid);
-
-    const countEl = document.getElementById(`anchor-count-${sid}`);
-    if (countEl) countEl.textContent = data.anchorTerms.length ? `${data.anchorTerms.length} anchors` : '';
-
-    _toast(`${result.anchorTerms.length} anchor terms extracted`, 'success');
-
-    // Scores are now stale (anchors changed) — mark rescore button yellow
-    const rBtn = document.getElementById(`btn-rescore-${sid}`);
-    if (rBtn) rBtn.classList.add('stale');
-  } catch (err) {
-    _toast(err.message || 'Anchor extraction failed', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">◇</span> Anchors'; btn.classList.remove('stale'); }
-  }
-}
-
-/**
- * _renderAnchorPanel — interactive toggleable anchor chips.
- * Active (yellow) = counts toward T3. Available (gray) = click to add.
- */
-function _renderAnchorPanel(sid) {
-  const panel = document.getElementById(`anchor-panel-${sid}`);
-  if (!panel) return;
-
-  const data         = S.sectionData.get(sid);
-  const anchorTerms  = data?.anchorTerms  || [];
-  const contentWords = data?._contentWords || [];
-
-  panel.innerHTML = '';
-
-  // Nothing to show if no anchors AND no content words
-  if (!anchorTerms.length && !contentWords.length) {
-    panel.classList.remove('visible');
-    return;
-  }
-
-  panel.classList.add('visible');
-
-  const activeCount = anchorTerms.length;
-  const lbl = document.createElement('div');
-  lbl.className = 'pq-section-label';
-  lbl.textContent = activeCount
-    ? `Topic Anchors — ${activeCount} active (phrases need ≥2 to pass T3) · click to toggle`
-    : 'Topic Anchors — click words to mark as anchors';
-  panel.appendChild(lbl);
-
-  const wrap = document.createElement('div');
-  wrap.className = 'pq-anchor-chips';
-
-  // Active anchors first (yellow)
-  const anchorSet = new Set(anchorTerms.map(t => t.toLowerCase()));
-  for (const term of anchorTerms) {
-    const chip = document.createElement('span');
-    chip.className = 'pq-anchor-chip active';
-    chip.textContent = term;
-    chip.title = 'Active anchor — click to remove';
-    chip.onclick = () => _toggleAnchor(sid, term, false);
-    wrap.appendChild(chip);
-  }
-
-  // Available content words (gray) — exclude ones already active
-  for (const word of contentWords) {
-    if (anchorSet.has(word.toLowerCase())) continue;
-    const chip = document.createElement('span');
-    chip.className = 'pq-anchor-chip available';
-    chip.textContent = word;
-    chip.title = 'Click to add as anchor';
-    chip.onclick = () => _toggleAnchor(sid, word, true);
-    wrap.appendChild(chip);
-  }
-
-  panel.appendChild(wrap);
-}
-
-/**
- * _toggleAnchor — add or remove an anchor term and re-render.
- */
-function _toggleAnchor(sid, term, addIt) {
-  const data = S.sectionData.get(sid);
-  if (!data) return;
-
-  const lower = term.toLowerCase().trim();
-  if (addIt) {
-    if (!data.anchorTerms.some(t => t.toLowerCase() === lower)) {
-      data.anchorTerms.push(lower);
-    }
-  } else {
-    data.anchorTerms = data.anchorTerms.filter(t => t.toLowerCase() !== lower);
-  }
-
-  // Update anchor count badge
-  const countEl = document.getElementById(`anchor-count-${sid}`);
-  if (countEl) countEl.textContent = data.anchorTerms.length ? `${data.anchorTerms.length} anchors` : '';
-
-  // Mark rescore stale (anchors changed)
-  const rBtn = document.getElementById(`btn-rescore-${sid}`);
-  if (rBtn) rBtn.classList.add('stale');
-
-  // Re-render
-  _renderAnchorPanel(sid);
-}
+// (Anchor panel removed — T3 now uses PhraseReducerService core matching)
 
 /**
  * _getSectionIndexBySid — find the 0-based index of a section by its sectionData sid.

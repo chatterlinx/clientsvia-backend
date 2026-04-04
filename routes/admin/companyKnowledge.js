@@ -60,6 +60,7 @@ const InstantAudioService          = require('../../services/instantAudio/Instan
 const KCResponseAudio              = require('../../models/KCResponseAudio');
 const { replacePlaceholders }      = require('../../utils/placeholderReplacer');
 const Anthropic                    = require('@anthropic-ai/sdk');
+const PhraseReducerService         = require('../../services/phraseIntelligence/PhraseReducerService');
 
 const fs   = require('fs');
 
@@ -2175,9 +2176,11 @@ function _preGenAudioFixed(companyId, container, reason) {
 // Tier 1 — Confidence:  cosine(phrase_embedding, section_content_embedding) ≥ 0.75
 // Tier 2 — Clarity:     gap between T1 score and best score across ALL other
 //                        sections in the company ≥ 0.20 (Einstein's dual metric)
-// Tier 3 — Anchor Match: phrase contains ≥ 2 of the section's anchorTerms
+// Tier 3 — Core Match:  Reduce phrase via PhraseReducerService, embed the
+//                        reduced "core", compare to section content embedding.
+//                        Core cosine ≥ 0.70 → pass (stripped phrase still routes correctly)
 //
-// Returns: { scores: { [phrase]: { t1, t2, t3, status } } }
+// Returns: { scores: { [phrase]: { t1, t2, t3, t3Score, core, status } } }
 //   status: 'green' | 'yellow' | 'orange' | 'red'
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
@@ -2190,10 +2193,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   }
 
   try {
-    // ── Load target section contentEmbedding ─────────────────────────────
+    // ── Load target section ──────────────────────────────────────────────
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
       _resolveRawQuery(containerId, companyId),
-      { projection: { 'sections.contentEmbedding': 1, 'sections.anchorTerms': 1, 'sections.isActive': 1 } }
+      { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, 'sections.label': 1, 'sections.content': 1 } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
 
@@ -2205,17 +2208,15 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Section has no content embedding — save the section first to generate one' });
     }
 
-    const anchorTerms = (targetSection.anchorTerms || []).map(t => t.toLowerCase().trim());
+    // Section content text for PhraseReducerService (protected phrases extraction)
+    const sectionContentText = `${targetSection.label || ''}: ${targetSection.content || ''}`.trim();
 
     // ── Load all other sections' embeddings (for Tier 2 clarity gap) ─────
-    // Use $ne: false (not === true) to include docs where isActive wasn't explicitly set
-    // (Mongoose defaults isActive to true, but raw docs may lack the field entirely)
     const allRaw = await CompanyKnowledgeContainer.collection.find(
       { companyId, isActive: { $ne: false } },
       { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, _id: 1 } }
     ).toArray();
 
-    // Flatten all other sections' embeddings (excluding the target section)
     const otherEmbeddings = [];
     const targetId = targetRaw._id.toString();
     for (const doc of allRaw) {
@@ -2223,23 +2224,34 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       (doc.sections || []).forEach((sec, idx) => {
         if (!sec.contentEmbedding?.length) return;
         if (sec.isActive === false) return;
-        if (docId === targetId && idx === sectionIndex) return; // skip self
+        if (docId === targetId && idx === sectionIndex) return;
         otherEmbeddings.push(sec.contentEmbedding);
       });
     }
 
-    // ── Embed all phrases in one batch ────────────────────────────────────
+    // ── Clean phrases ────────────────────────────────────────────────────
     const cleanPhrases = phrases.map(p => `${p}`.trim()).filter(Boolean);
-    const embeddings   = await SemanticMatchService.embedBatch(cleanPhrases);
+
+    // ── T3 prep: reduce all phrases via PhraseReducerService ────────────
+    const reductions = await PhraseReducerService.reduceBatch(cleanPhrases, sectionContentText);
+    const cores = reductions.map(r => r.core);
+
+    // ── Embed raw phrases + reduced cores in parallel ───────────────────
+    const [rawEmbeddings, coreEmbeddings] = await Promise.all([
+      SemanticMatchService.embedBatch(cleanPhrases),
+      SemanticMatchService.embedBatch(cores.map(c => c || '_empty_')),
+    ]);
 
     // ── Score each phrase ─────────────────────────────────────────────────
     const scores = {};
     for (let i = 0; i < cleanPhrases.length; i++) {
-      const phrase = cleanPhrases[i];
-      const emb    = embeddings[i];
+      const phrase    = cleanPhrases[i];
+      const emb       = rawEmbeddings[i];
+      const coreEmb   = coreEmbeddings[i];
+      const reduction = reductions[i];
 
       if (!emb?.length) {
-        scores[phrase] = { t1: 0, t2: 0, t3: false, status: 'red' };
+        scores[phrase] = { t1: 0, t2: 0, t3: false, t3Score: 0, core: reduction.core, status: 'red' };
         continue;
       }
 
@@ -2256,13 +2268,13 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       const t2Gap  = t1Score - bestCompeting;
       const t2Pass = t2Gap >= 0.20;
 
-      // T3 — Anchor Match: phrase contains ≥ 2 anchor terms
-      let anchorHits = 0;
-      const phraseLower = phrase.toLowerCase();
-      for (const anchor of anchorTerms) {
-        if (anchor && phraseLower.includes(anchor)) anchorHits++;
+      // T3 — Core Match: reduced phrase embedding vs section content
+      let t3Score = 0;
+      let t3Pass  = null;
+      if (coreEmb?.length && reduction.core) {
+        t3Score = _cosineSimilarity(coreEmb, targetEmb);
+        t3Pass  = t3Score >= 0.70;
       }
-      const t3Pass = anchorTerms.length === 0 ? null : anchorHits >= 2;
 
       // Determine status
       let status;
@@ -2280,8 +2292,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         t1: Math.round(t1Score * 100) / 100,
         t2: Math.round(t2Gap  * 100) / 100,
         t3: t3Pass,
-        anchorHits,
-        anchorCount: anchorTerms.length,
+        t3Score: Math.round(t3Score * 100) / 100,
+        core: reduction.core,
+        protectedEntities: reduction.protectedEntities,
+        normalizedPatterns: reduction.normalizedPatterns,
         status,
       };
     }

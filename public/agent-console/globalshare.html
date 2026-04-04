@@ -191,6 +191,106 @@
     .signals-test-dot.hit  { background: #22c55e; }
     .signals-test-dot.miss { background: #cbd5e1; }
 
+    /* ── Phrase Intelligence card ────────────────────────────────────────── */
+    .pi-card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px;
+      grid-column: 1 / -1;
+    }
+    .pi-card-header {
+      display: flex; align-items: flex-start; gap: 16px; margin-bottom: 8px;
+    }
+    .resource-icon.pi {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); color: #fff;
+    }
+    .pi-intro {
+      font-size: 13px; color: #475569; line-height: 1.6;
+      padding: 12px 14px; background: #f5f3ff;
+      border-left: 3px solid #8b5cf6; border-radius: 6px;
+      margin-bottom: 24px;
+    }
+    .pi-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; }
+    .pi-tab {
+      padding: 8px 16px; font-size: 12px; font-weight: 600; color: #64748b;
+      background: none; border: none; border-bottom: 2px solid transparent;
+      margin-bottom: -2px; cursor: pointer; transition: all .15s;
+    }
+    .pi-tab:hover { color: #334155; }
+    .pi-tab.active { color: #6366f1; border-bottom-color: #6366f1; }
+    .pi-panel { display: none; }
+    .pi-panel.visible { display: block; }
+    .pi-table-wrap { max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .pi-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .pi-table thead th {
+      padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em; color: #64748b;
+      background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+      position: sticky; top: 0; z-index: 1;
+    }
+    .pi-table tbody td {
+      padding: 6px 12px; border-bottom: 1px solid #f1f5f9; color: #334155;
+    }
+    .pi-table tbody tr:last-child td { border-bottom: none; }
+    .pi-table tbody tr:hover { background: #f8fafc; }
+    .pi-add-row { display: flex; gap: 8px; margin-top: 8px; }
+    .pi-add-input {
+      flex: 1; padding: 7px 12px; font-size: 13px;
+      border: 1px solid #e2e8f0; border-radius: 8px; outline: none;
+      transition: border-color .15s;
+    }
+    .pi-add-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.1); }
+    .pi-add-btn {
+      padding: 7px 14px; font-size: 12px; font-weight: 600;
+      background: #6366f1; color: #fff; border: none; border-radius: 8px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .pi-add-btn:hover { background: #4f46e5; }
+    .pi-save-btn {
+      padding: 6px 14px; font-size: 12px; font-weight: 600;
+      background: #10b981; color: #fff; border: none; border-radius: 8px;
+      cursor: pointer; margin-top: 8px;
+    }
+    .pi-save-btn:hover { background: #059669; }
+    .pi-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .pi-row-remove {
+      cursor: pointer; color: #94a3b8; font-size: 14px; line-height: 1; padding: 0 4px;
+    }
+    .pi-row-remove:hover { color: #dc2626; }
+    .pi-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; background: #f1f5f9;
+      border: 1px solid #e2e8f0; border-radius: 999px;
+      font-size: 12px; color: #334155; margin: 3px;
+    }
+    .pi-tag-remove {
+      cursor: pointer; color: #94a3b8; font-size: 14px; line-height: 1; padding: 0 2px;
+    }
+    .pi-tag-remove:hover { color: #dc2626; }
+    .pi-tags-wrap { display: flex; flex-wrap: wrap; gap: 4px; min-height: 32px; margin-bottom: 8px; }
+    .pi-test-zone {
+      border: 1px dashed #cbd5e1; border-radius: 10px; padding: 16px;
+      background: #fafafa; margin-top: 16px;
+    }
+    .pi-test-title {
+      font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 10px;
+    }
+    .pi-test-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .pi-test-input {
+      flex: 1; padding: 8px 12px; font-size: 14px;
+      border: 1px solid #e2e8f0; border-radius: 8px; outline: none;
+    }
+    .pi-test-input:focus { border-color: #6366f1; }
+    .pi-test-btn {
+      padding: 8px 18px; font-weight: 600; font-size: 13px;
+      background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer;
+    }
+    .pi-test-btn:hover { background: #7c3aed; }
+    .pi-test-result {
+      font-size: 13px; padding: 12px; background: #fff; border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+    .pi-test-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+    .pi-test-value { font-size: 14px; font-weight: 600; color: #6366f1; }
+
     /* ── LAP Keyword Groups card ──────────────────────────────────────────── */
     .lap-card {
       background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px;
@@ -320,6 +420,10 @@
             <div class="sidebar-stat">
               <span class="sidebar-stat-label">Signal Phrases</span>
               <span class="sidebar-stat-value" id="stat-signals">—</span>
+            </div>
+            <div class="sidebar-stat">
+              <span class="sidebar-stat-label">Intent Rules</span>
+              <span class="sidebar-stat-value" id="stat-pi">—</span>
             </div>
           </div>
           
@@ -491,6 +595,140 @@
                 <button class="signals-test-btn" onclick="testSignalPhrase()">Test</button>
               </div>
               <div class="signals-test-results" id="signals-test-results"></div>
+            </div>
+          </div>
+
+          <!-- PHRASE INTELLIGENCE (full-width — follows Signals card) -->
+          <div class="pi-card">
+            <div class="pi-card-header">
+              <div class="resource-icon pi">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <path d="M6 16L12 10L18 16L24 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M6 22L12 16L18 22L24 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="resource-info">
+                <h2 class="resource-title">Phrase Intelligence</h2>
+                <p class="resource-subtitle">Reduces caller phrases to routing-optimised cores — powers Tier 3 scoring in KC phrase quality</p>
+              </div>
+            </div>
+
+            <div class="pi-intro">
+              <strong>What is this?</strong> When a caller says "how much is a service call?", the AI strips the noise
+              ("how much is a" &rarr; <strong>cost</strong>) and keeps the routing core (<strong>cost service call</strong>).
+              The core is then embedded and compared to section content — this is Tier 3 scoring.
+              <br><br>
+              <strong>Why global?</strong> "How much" means "cost" in every industry. Intent normalizers, stop words,
+              synonym groups, and danger words are universal English — shared across all companies.
+              Protected domain phrases (like "service call" or "maintenance plan") are auto-extracted per-company from KC content.
+              <strong>Changes go live on the next phrase score (no restart needed).</strong>
+            </div>
+
+            <div class="pi-tabs" id="pi-tabs">
+              <button class="pi-tab active" data-pi-tab="normalizers">Intent Normalizers</button>
+              <button class="pi-tab" data-pi-tab="synonyms">Synonym Groups</button>
+              <button class="pi-tab" data-pi-tab="stopwords">Stop Words</button>
+              <button class="pi-tab" data-pi-tab="dangerwords">Danger Words</button>
+            </div>
+
+            <!-- Intent Normalizers -->
+            <div class="pi-panel visible" id="pi-panel-normalizers">
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">
+                Multi-word question patterns mapped to single intent tokens. Longest patterns match first.
+                An empty token means "strip entirely" (the verb already covers it).
+              </p>
+              <div class="pi-table-wrap">
+                <table class="pi-table" id="pi-normalizers-table">
+                  <thead><tr><th>Pattern</th><th>Token</th><th style="width:36px;"></th></tr></thead>
+                  <tbody id="pi-normalizers-body"></tbody>
+                </table>
+              </div>
+              <div class="pi-add-row">
+                <input type="text" class="pi-add-input" id="pi-norm-pattern" placeholder="Pattern (e.g. how much)">
+                <input type="text" class="pi-add-input" id="pi-norm-token" placeholder="Token (e.g. cost)" style="max-width:160px;">
+                <button class="pi-add-btn" onclick="piAddNormalizer()">+ Add</button>
+              </div>
+              <button class="pi-save-btn" onclick="piSaveSection('intentNormalizers')">Save Intent Normalizers</button>
+            </div>
+
+            <!-- Synonym Groups -->
+            <div class="pi-panel" id="pi-panel-synonyms">
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">
+                Words that mean the same thing collapse to a canonical token. E.g. price, fee, charge &rarr; <strong>cost</strong>.
+              </p>
+              <div class="pi-table-wrap">
+                <table class="pi-table" id="pi-synonyms-table">
+                  <thead><tr><th>Canonical Token</th><th>Synonyms</th><th style="width:36px;"></th></tr></thead>
+                  <tbody id="pi-synonyms-body"></tbody>
+                </table>
+              </div>
+              <div class="pi-add-row">
+                <input type="text" class="pi-add-input" id="pi-syn-token" placeholder="Token (e.g. cost)" style="max-width:160px;">
+                <input type="text" class="pi-add-input" id="pi-syn-synonyms" placeholder="Synonyms, comma-separated (e.g. price, fee, charge)">
+                <button class="pi-add-btn" onclick="piAddSynonym()">+ Add</button>
+              </div>
+              <button class="pi-save-btn" onclick="piSaveSection('synonymGroups')">Save Synonym Groups</button>
+            </div>
+
+            <!-- Stop Words -->
+            <div class="pi-panel" id="pi-panel-stopwords">
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">
+                Common words stripped during reduction. Pronouns, articles, prepositions, filler words.
+                Danger words are never stripped (see Danger Words tab).
+              </p>
+              <div class="pi-tags-wrap" id="pi-stopwords-tags"></div>
+              <div class="pi-add-row">
+                <input type="text" class="pi-add-input" id="pi-stop-input" placeholder="Add stop word…" onkeydown="if(event.key==='Enter'){piAddStopWord();event.preventDefault();}">
+                <button class="pi-add-btn" onclick="piAddStopWord()">+ Add</button>
+              </div>
+              <button class="pi-save-btn" onclick="piSaveSection('stopWords')">Save Stop Words</button>
+            </div>
+
+            <!-- Danger Words -->
+            <div class="pi-panel" id="pi-panel-dangerwords">
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">
+                Words that flip meaning or carry critical intent — <strong>never stripped</strong>.
+                "not", "cancel", "emergency", "refund" etc.
+              </p>
+              <div class="pi-tags-wrap" id="pi-dangerwords-tags"></div>
+              <div class="pi-add-row">
+                <input type="text" class="pi-add-input" id="pi-danger-input" placeholder="Add danger word…" onkeydown="if(event.key==='Enter'){piAddDangerWord();event.preventDefault();}">
+                <button class="pi-add-btn" onclick="piAddDangerWord()">+ Add</button>
+              </div>
+              <button class="pi-save-btn" onclick="piSaveSection('dangerWords')">Save Danger Words</button>
+            </div>
+
+            <!-- Test Reducer Tool -->
+            <div class="pi-test-zone">
+              <div class="pi-test-title">🧪 Test Phrase Reducer</div>
+              <p style="font-size: 12px; color: #64748b; margin: 0 0 10px 0;">
+                Type a caller phrase and optionally paste section content to see the full reduction breakdown.
+              </p>
+              <div class="pi-test-row">
+                <input type="text" class="pi-test-input" id="pi-test-phrase" placeholder='e.g. "how much is a service call"'>
+                <button class="pi-test-btn" onclick="piTestPhrase()">Reduce</button>
+              </div>
+              <textarea id="pi-test-content" rows="2" style="width:100%;padding:8px 12px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px;resize:vertical;" placeholder="(Optional) Paste section content here to test protected phrase extraction…"></textarea>
+              <div id="pi-test-results" style="display:none;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div>
+                    <div class="pi-test-label">Raw Input</div>
+                    <div class="pi-test-value" id="pi-res-raw"></div>
+                  </div>
+                  <div>
+                    <div class="pi-test-label">Reduced Core</div>
+                    <div class="pi-test-value" id="pi-res-core"></div>
+                  </div>
+                  <div>
+                    <div class="pi-test-label">Protected Entities</div>
+                    <div id="pi-res-protected" style="font-size:13px;color:#334155;"></div>
+                  </div>
+                  <div>
+                    <div class="pi-test-label">Normalized Patterns</div>
+                    <div id="pi-res-patterns" style="font-size:13px;color:#334155;"></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
