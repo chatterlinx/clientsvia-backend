@@ -336,7 +336,7 @@ async function reduce(rawPhrase, sectionContent, configOverride) {
   const placeholders = {};
   let placeholderIdx = 0;
 
-  // Sort by length DESC so longer phrases match first
+  // Sort by length DESC so longer phrases match first (prevents partial overlap)
   const sortedProtected = [...protectedPhrases].sort((a, b) => b.length - a.length);
 
   for (const pp of sortedProtected) {
@@ -346,9 +346,6 @@ async function reduce(rawPhrase, sectionContent, configOverride) {
       placeholders[placeholder] = pp;
       protectedEntities.push(pp);
       placeholderIdx++;
-      // Only match the first (longest) protected phrase per pass
-      // to avoid overlapping replacements
-      break;
     }
   }
 

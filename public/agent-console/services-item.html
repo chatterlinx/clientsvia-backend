@@ -1821,7 +1821,6 @@ function _populateForm(c) {
       audioUrl:           s.audioUrl || null,
       preQualifyQuestion: s.preQualifyQuestion || null,
       upsellChain:        s.upsellChain        || [],
-      anchorTerms:        s.anchorTerms        || [],
       isActive:           s.isActive !== false,
       isPromotion:        !!s.isPromotion,
       promotionLabel:     s.promotionLabel || '',
@@ -1878,8 +1877,6 @@ function addSection(label = '', content = '', sectionMeta = null) {
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
     phraseScores:     {},                               // { phrase → { t1, t2, t3, status } }
-    anchorTerms:      sectionMeta?.anchorTerms || [],   // LLM-extracted topic anchors (cached)
-    _contentWords:    [...new Set(content.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4))].slice(0, 80),
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
@@ -2516,7 +2513,6 @@ function _getSections() {
         audioUrl:           data.contentAudioUrl   || null,
         preQualifyQuestion: preQualifyQuestion     || null,
         upsellChain,
-        anchorTerms:        data.anchorTerms       || [],
       });
     }
   });
@@ -3689,8 +3685,6 @@ async function _reScorePhrases(sid) {
     if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">↻</span> Re-score'; btn.classList.remove('stale'); }
   }
 }
-
-// (Anchor panel removed — T3 now uses PhraseReducerService core matching)
 
 /**
  * _getSectionIndexBySid — find the 0-based index of a section by its sectionData sid.

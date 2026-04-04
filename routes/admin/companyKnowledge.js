@@ -59,7 +59,6 @@ const Customer                     = require('../../models/Customer');
 const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
 const KCResponseAudio              = require('../../models/KCResponseAudio');
 const { replacePlaceholders }      = require('../../utils/placeholderReplacer');
-const Anthropic                    = require('@anthropic-ai/sdk');
 const PhraseReducerService         = require('../../services/phraseIntelligence/PhraseReducerService');
 
 const fs   = require('fs');
@@ -322,14 +321,6 @@ function _sanitiseBody(body) {
         }
         if (typeof s.promotionLabel === 'string') {
           section.promotionLabel = s.promotionLabel.trim().slice(0, 120);
-        }
-
-        // Per-section anchor terms — preserve on save (only written by anchor-extract route)
-        if (Array.isArray(s.anchorTerms)) {
-          section.anchorTerms = s.anchorTerms.map(t => `${t}`.toLowerCase().trim()).filter(Boolean).slice(0, 10);
-        }
-        if (s.anchorTermsUpdatedAt) {
-          section.anchorTermsUpdatedAt = s.anchorTermsUpdatedAt;
         }
 
         // Per-section daSubTypeKey (UAP sub-type routing link)
@@ -2236,11 +2227,19 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     const reductions = await PhraseReducerService.reduceBatch(cleanPhrases, sectionContentText);
     const cores = reductions.map(r => r.core);
 
-    // ── Embed raw phrases + reduced cores in parallel ───────────────────
-    const [rawEmbeddings, coreEmbeddings] = await Promise.all([
+    // ── Embed raw phrases + non-empty reduced cores in parallel ─────────
+    const coreTexts  = [];
+    const coreIdxMap = [];                       // maps coreTexts[j] → original index i
+    cores.forEach((c, i) => { if (c) { coreTexts.push(c); coreIdxMap.push(i); } });
+
+    const [rawEmbeddings, coreEmbeddingsRaw] = await Promise.all([
       SemanticMatchService.embedBatch(cleanPhrases),
-      SemanticMatchService.embedBatch(cores.map(c => c || '_empty_')),
+      coreTexts.length ? SemanticMatchService.embedBatch(coreTexts) : Promise.resolve([]),
     ]);
+
+    // Spread core embeddings back to original indices
+    const coreEmbeddings = new Array(cores.length).fill(null);
+    coreIdxMap.forEach((origIdx, j) => { coreEmbeddings[origIdx] = coreEmbeddingsRaw[j]; });
 
     // ── Score each phrase ─────────────────────────────────────────────────
     const scores = {};
@@ -2304,78 +2303,6 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   } catch (err) {
     logger.error('[companyKnowledge] phrase-score error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Phrase scoring failed' });
-  }
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// POST /:companyId/knowledge/anchor-extract
-// Extract 3-5 anchor terms from section content using Claude Haiku.
-// Saves anchorTerms + anchorTermsUpdatedAt to the section document.
-//
-// Body: { containerId, sectionIndex }
-// Returns: { anchorTerms: string[], contentWords: string[] }
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/:companyId/knowledge/anchor-extract', async (req, res) => {
-  const { companyId } = req.params;
-  if (!_validateCompanyAccess(req, res, companyId)) return;
-
-  const { containerId, sectionIndex } = req.body;
-  if (!containerId || typeof sectionIndex !== 'number') {
-    return res.status(400).json({ success: false, error: 'containerId and sectionIndex required' });
-  }
-
-  try {
-    const container = await CompanyKnowledgeContainer.findOne(
-      _resolveContainerQuery(containerId, companyId)
-    );
-    if (!container) return res.status(404).json({ success: false, error: 'Container not found' });
-
-    const section = container.sections?.[sectionIndex];
-    if (!section) return res.status(400).json({ success: false, error: 'Section index out of range' });
-
-    const content = `${section.label}: ${section.content}`.trim();
-
-    // ── Call Claude Haiku for anchor extraction ───────────────────────────
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response  = await anthropic.messages.create({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 100,
-      messages: [{
-        role:    'user',
-        content: `Extract 3 to 5 key anchor terms from this business knowledge section. These should be the most topic-specific words that uniquely identify what this section is about — not generic words. Return ONLY a JSON array of lowercase strings, no explanation.\n\nSection:\n${content}`,
-      }],
-    });
-
-    let anchorTerms = [];
-    try {
-      const text = response.content?.[0]?.text?.trim() || '[]';
-      // Extract JSON array from response (handle any surrounding text)
-      const match = text.match(/\[[\s\S]*?\]/);
-      anchorTerms = match ? JSON.parse(match[0]) : [];
-      anchorTerms = anchorTerms
-        .filter(t => typeof t === 'string' && t.trim())
-        .map(t => t.toLowerCase().trim())
-        .slice(0, 8);
-    } catch (_) {
-      anchorTerms = [];
-    }
-
-    // ── Persist to section document ───────────────────────────────────────
-    container.sections[sectionIndex].anchorTerms          = anchorTerms;
-    container.sections[sectionIndex].anchorTermsUpdatedAt = new Date();
-    container.markModified('sections');
-    await container.save();
-
-    // Collect content words for the chip panel (words in content, ≥ 4 chars, unique)
-    const contentWords = [...new Set(
-      content.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
-        .filter(w => w.length >= 4)
-    )].slice(0, 80);
-
-    return res.json({ success: true, anchorTerms, contentWords });
-  } catch (err) {
-    logger.error('[companyKnowledge] anchor-extract error', { companyId, error: err.message });
-    return res.status(500).json({ success: false, error: 'Anchor extraction failed' });
   }
 });
 

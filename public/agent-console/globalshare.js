@@ -884,17 +884,22 @@
       stopWords:         piState.stopWords,
       dangerWords:       piState.dangerWords,
     };
+    // Find the save button that triggered this call for visual feedback
+    const panel = document.querySelector(`.pi-panel:not([style*="display: none"]):not([style*="display:none"])`);
+    const btn   = panel?.querySelector('.pi-save-btn');
+    const originalText = btn?.textContent || '';
     try {
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
       await AgentConsoleAuth.apiFetch(`/api/admin/globalshare/phrase-intelligence/${section}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: dataMap[section] }),
       });
       _updatePiStat();
-      alert(`${section} saved successfully!`);
+      if (btn) { btn.textContent = '✓ Saved'; setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 1500); }
     } catch (err) {
       console.error('[GlobalShare] Failed to save PI section:', err);
-      alert('Save failed: ' + err.message);
+      if (btn) { btn.textContent = '✗ Failed'; btn.style.color = '#ef4444'; setTimeout(() => { btn.textContent = originalText; btn.style.color = ''; btn.disabled = false; }, 2000); }
     }
   }
 

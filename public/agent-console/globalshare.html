@@ -644,8 +644,8 @@
                 </table>
               </div>
               <div class="pi-add-row">
-                <input type="text" class="pi-add-input" id="pi-norm-pattern" placeholder="Pattern (e.g. how much)">
-                <input type="text" class="pi-add-input" id="pi-norm-token" placeholder="Token (e.g. cost)" style="max-width:160px;">
+                <input type="text" class="pi-add-input" id="pi-norm-pattern" placeholder="Pattern (e.g. how much)" onkeydown="if(event.key==='Enter'){piAddNormalizer();event.preventDefault();}">
+                <input type="text" class="pi-add-input" id="pi-norm-token" placeholder="Token (e.g. cost)" style="max-width:160px;" onkeydown="if(event.key==='Enter'){piAddNormalizer();event.preventDefault();}">
                 <button class="pi-add-btn" onclick="piAddNormalizer()">+ Add</button>
               </div>
               <button class="pi-save-btn" onclick="piSaveSection('intentNormalizers')">Save Intent Normalizers</button>
@@ -663,8 +663,8 @@
                 </table>
               </div>
               <div class="pi-add-row">
-                <input type="text" class="pi-add-input" id="pi-syn-token" placeholder="Token (e.g. cost)" style="max-width:160px;">
-                <input type="text" class="pi-add-input" id="pi-syn-synonyms" placeholder="Synonyms, comma-separated (e.g. price, fee, charge)">
+                <input type="text" class="pi-add-input" id="pi-syn-token" placeholder="Token (e.g. cost)" style="max-width:160px;" onkeydown="if(event.key==='Enter'){piAddSynonym();event.preventDefault();}">
+                <input type="text" class="pi-add-input" id="pi-syn-synonyms" placeholder="Synonyms, comma-separated (e.g. price, fee, charge)" onkeydown="if(event.key==='Enter'){piAddSynonym();event.preventDefault();}">
                 <button class="pi-add-btn" onclick="piAddSynonym()">+ Add</button>
               </div>
               <button class="pi-save-btn" onclick="piSaveSection('synonymGroups')">Save Synonym Groups</button>
