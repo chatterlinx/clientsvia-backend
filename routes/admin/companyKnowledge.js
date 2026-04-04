@@ -63,6 +63,15 @@ const Anthropic                    = require('@anthropic-ai/sdk');
 
 const fs   = require('fs');
 
+// ── Raw-driver container query — converts id string → ObjectId for collection.findOne() ──
+// Mongoose Model.findOne() auto-casts string IDs; collection.findOne() (raw driver) does NOT.
+function _resolveRawQuery(id, companyId) {
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    return { _id: new mongoose.Types.ObjectId(id), companyId };
+  }
+  return { kcId: id, companyId }; // kcId is a string — no cast needed
+}
+
 // ── Cosine similarity between two equal-length numeric vectors ───────────────
 function _cosineSimilarity(a, b) {
   let dot = 0, ma = 0, mb = 0;
@@ -2183,7 +2192,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   try {
     // ── Load target section contentEmbedding ─────────────────────────────
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
-      _resolveContainerQuery(containerId, companyId),
+      _resolveRawQuery(containerId, companyId),
       { projection: { 'sections.contentEmbedding': 1, 'sections.anchorTerms': 1, 'sections.isActive': 1 } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
@@ -2375,7 +2384,7 @@ router.post('/:companyId/knowledge/phrase-suggestions', async (req, res) => {
   try {
     // ── Load target section embedding ─────────────────────────────────────
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
-      _resolveContainerQuery(containerId, companyId),
+      _resolveRawQuery(containerId, companyId),
       { projection: { 'sections.contentEmbedding': 1 } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
