@@ -346,6 +346,7 @@
     .pq-pill.yellow .pq-dot { background: #eab308; }
     .pq-pill.orange .pq-dot { background: #f97316; }
     .pq-pill.red    .pq-dot { background: #ef4444; }
+    .pq-pill.pending { background: #f1f5f9; color: #94a3b8; }
     /* Toolbar */
     .pq-toolbar {
       display: flex; align-items: center; gap: 6px;
@@ -362,6 +363,15 @@
     .pq-toolbar-btn.stale { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
     .pq-toolbar-btn .pq-btn-icon { font-size: 11px; }
     .pq-toolbar-sep { width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }
+    /* Phrase input inside toolbar */
+    .pq-add-phrase-wrap { flex: 1; min-width: 180px; }
+    .pq-add-input {
+      width: 100%; padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
+      font-size: 12px; font-family: inherit; color: #1e293b; background: #f8fafc;
+      outline: none; transition: border-color .15s, background .15s;
+    }
+    .pq-add-input:focus { border-color: #6366f1; background: white; }
+    .pq-add-input::placeholder { color: #94a3b8; }
     /* Score table */
     .pq-table-wrap { display: none; }
     .pq-table-wrap.visible { display: block; }
@@ -425,6 +435,17 @@
     .pq-badge.yellow { background: #fef9c3; color: #713f12; }
     .pq-badge.orange { background: #ffedd5; color: #7c2d12; }
     .pq-badge.red    { background: #fee2e2; color: #991b1b; }
+    .pq-badge.pending { background: #f1f5f9; color: #94a3b8; }
+    /* Row delete button */
+    .pq-row-delete {
+      width: 22px; height: 22px; border: none; background: transparent;
+      color: #cbd5e1; cursor: pointer; font-size: 14px; line-height: 1;
+      border-radius: 4px; transition: color .12s, background .12s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pq-row-delete:hover { color: #ef4444; background: #fef2f2; }
+    .pq-del-cell { width: 36px; text-align: center; }
+    .pq-pending-val { color: #cbd5e1; }
     /* Empty / loading state */
     .pq-empty {
       padding: 24px 16px; text-align: center; color: #94a3b8; font-size: 12px;
@@ -1945,33 +1966,23 @@ function addSection(label = '', content = '', sectionMeta = null) {
     </div>
     <div id="gap-panel-${id}" class="gap-panel" style="display:none;"></div>
 
-    <!-- 🎯 Caller Phrases — per section ──────────────────────────── -->
-    <div class="section-phrases-wrap" id="phrases-wrap-${id}" style="padding:8px 14px 10px;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <span style="font-size:11px;font-weight:700;color:#374151;">🎯 Caller Phrases</span>
-        <span style="font-size:10px;color:#9ca3af;">— what callers say to reach this section</span>
-      </div>
-      <div class="keyword-input-wrap" id="cpWrap-${id}" onclick="document.getElementById('cpInner-${id}').focus()"
-        style="min-height:32px;padding:4px 6px;">
-        <input type="text" id="cpInner-${id}" class="kw-input-inner"
-          placeholder="Type a caller phrase and press Enter…"
-          onkeydown="cpKeydown(event, ${id})"
-          style="font-size:12px;">
-      </div>
-      <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Full sentences callers say — "how much is a tune-up", "my AC isn't working". Press Enter to add.</div>
-    </div>
-
-    <!-- ── Phrase Quality Card ─────────────────────────────────────── -->
+    <!-- ── Phrase Quality Card (single source of truth for phrases) ── -->
     <div class="phrase-quality-card" id="pq-card-${id}">
       <div class="pq-header">
         <div class="pq-header-icon">◆</div>
         <div class="pq-header-text">
-          <span class="pq-header-title">Phrase Quality</span>
-          <span class="pq-header-sub" id="pq-sub-${id}">Score phrases to evaluate routing accuracy</span>
+          <span class="pq-header-title">Caller Phrases</span>
+          <span class="pq-header-sub" id="pq-sub-${id}">What callers say to reach this section</span>
         </div>
         <div class="pq-header-pills" id="pq-pills-${id}"></div>
       </div>
       <div class="pq-toolbar">
+        <div class="pq-add-phrase-wrap">
+          <input type="text" id="cpInner-${id}" class="pq-add-input"
+            placeholder="Type a caller phrase and press Enter…"
+            onkeydown="cpKeydown(event, ${id})">
+        </div>
+        <span class="pq-toolbar-sep"></span>
         <button type="button" class="pq-toolbar-btn" id="btn-rescore-${id}"
           onclick="_reScorePhrases(${id})" title="Score each phrase against 3 tiers: Confidence, Clarity, Anchors">
           <span class="pq-btn-icon">↻</span> Re-score
@@ -2247,34 +2258,22 @@ async function suggestPhrases(btn) {
 }
 
 /**
- * _renderCallerPhrases — render chip tags for a section's callerPhrases.
+ * _renderCallerPhrases — re-renders the phrase table (phrases live in the table now, not chips).
+ * Also updates the count badge in the section header.
  */
 function _renderCallerPhrases(sid) {
-  const wrap  = document.getElementById(`cpWrap-${sid}`);
-  const input = document.getElementById(`cpInner-${sid}`);
-  const count = document.getElementById(`phrase-count-${sid}`);
-  if (!wrap || !input) return;
-
   const data    = S.sectionData.get(sid);
   const phrases = data?.callerPhrases || [];
-
-  // Remove existing tags (keep the input)
-  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
-
-  // Insert tags before the input
-  phrases.forEach((phrase, idx) => {
-    const tag       = document.createElement('span');
-    tag.className   = 'kw-tag';
-    tag.style.cssText = 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;';
-    tag.innerHTML   = `${_esc(phrase)} <button type="button" onclick="removeCallerPhrase(${sid}, ${idx})">×</button>`;
-    wrap.insertBefore(tag, input);
-  });
+  const count   = document.getElementById(`phrase-count-${sid}`);
 
   // Update count badge in section header
   if (count) {
     count.style.display = phrases.length > 0 ? 'flex' : 'none';
-    count.textContent   = phrases.length > 0 ? `🎯 ${phrases.length} phrases` : '';
+    count.textContent   = phrases.length > 0 ? `${phrases.length} phrases` : '';
   }
+
+  // Re-render the phrase table
+  _renderPhraseTable(sid);
 }
 
 function cpKeydown(e, sid) {
@@ -2288,9 +2287,6 @@ function cpKeydown(e, sid) {
       _renderCallerPhrases(sid);
     }
     e.target.value = '';
-  } else if (e.key === 'Backspace' && !e.target.value && data.callerPhrases.length) {
-    data.callerPhrases.pop();
-    _renderCallerPhrases(sid);
   }
 }
 
@@ -3528,31 +3524,122 @@ function _kcMarkStale(sid, key, currentText) {
 // 3-TIER PHRASE SCORING SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
 
+const _statusLabel = { green: 'Bulletproof', yellow: 'Topical', orange: 'Conflict', red: 'Off-target' };
+const _statusTitle = {
+  green:  'All 3 tiers pass — Confidence ✓  Clarity ✓  Anchors ✓',
+  yellow: 'T1+T2 pass — Anchors weak: phrase may lack topic specificity',
+  orange: 'Clarity fail — conflicts with another section (gap < 0.20)',
+  red:    'Confidence fail — phrase not aligned with this section content',
+};
+
 /**
- * _renderScoreTable — builds an enterprise-grade quality table for phrase scores.
- * Called after _reScorePhrases returns results.
+ * _buildPhraseRow — render a single <tr> for a phrase (scored or pending).
+ * sid + idx used for the delete button.
  */
-function _renderScoreTable(sid, scores) {
+function _buildPhraseRow(phrase, score, sid, idx) {
+  const delBtn = `<td class="pq-del-cell"><button type="button" class="pq-row-delete" onclick="removeCallerPhrase(${sid},${idx})" title="Remove phrase">×</button></td>`;
+  if (!score) {
+    return `<tr class="pq-row-pending">
+      <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
+      <td class="pq-conf-cell">
+        <div class="pq-bar-row">
+          <div class="pq-bar-track"><div class="pq-bar-fill" style="width:0%"></div></div>
+          <span class="pq-bar-pct pq-pending-val">—</span>
+        </div>
+      </td>
+      <td style="text-align:center"><span class="pq-gap pq-pending-val">—</span></td>
+      <td class="pq-anchor-cell"><span class="pq-anchor-check na">—</span></td>
+      <td class="pq-status"><span class="pq-badge pending">Pending</span></td>
+      ${delBtn}
+    </tr>`;
+  }
+  const t1Pct     = Math.round((score.t1 || 0) * 100);
+  const barCls    = t1Pct >= 75 ? 'high' : t1Pct >= 65 ? 'mid' : 'low';
+  const gapVal    = score.t2 != null ? (score.t2 >= 0 ? `+${score.t2.toFixed(2)}` : score.t2.toFixed(2)) : '—';
+  const gapCls    = score.t2 >= 0.20 ? 'pass' : 'fail';
+  const anchorCls = score.t3 === true ? 'pass' : score.t3 === false ? 'fail' : 'na';
+  const anchorIcn = score.t3 === true ? '✓' : score.t3 === false ? '✗' : '—';
+  return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
+    <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
+    <td class="pq-conf-cell">
+      <div class="pq-bar-row">
+        <div class="pq-bar-track"><div class="pq-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
+        <span class="pq-bar-pct">${t1Pct}%</span>
+      </div>
+    </td>
+    <td style="text-align:center"><span class="pq-gap ${gapCls}">${gapVal}</span></td>
+    <td class="pq-anchor-cell"><span class="pq-anchor-check ${anchorCls}">${anchorIcn}</span></td>
+    <td class="pq-status"><span class="pq-badge ${score.status}">${_statusLabel[score.status]}</span></td>
+    ${delBtn}
+  </tr>`;
+}
+
+/**
+ * _renderPhraseTable — always-visible table showing all phrases with score columns.
+ * Shows "Pending" placeholder rows for unscored phrases, real data for scored ones.
+ * Called whenever phrases change (add/remove/reorder) and after scoring.
+ */
+function _renderPhraseTable(sid) {
   const panel = document.getElementById(`score-table-${sid}`);
   if (!panel) return;
 
-  const entries = Object.entries(scores);
-  if (!entries.length) { panel.classList.remove('visible'); return; }
+  const data    = S.sectionData.get(sid);
+  const phrases = (data?.callerPhrases || []).filter(p => p.trim());
+  const scores  = data?.phraseScores || {};
 
-  // Summary counts
-  const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
-  entries.forEach(([, s]) => { if (counts[s.status] !== undefined) counts[s.status]++; });
+  // No phrases → hide table entirely
+  if (!phrases.length) {
+    panel.innerHTML = '';
+    panel.classList.remove('visible');
+    _updatePqHeader(sid, null);
+    return;
+  }
 
-  const statusLabel = { green: 'Bulletproof', yellow: 'Topical', orange: 'Conflict', red: 'Off-target' };
-  const statusTitle = {
-    green:  'All 3 tiers pass — Confidence ✓  Clarity ✓  Anchors ✓',
-    yellow: 'T1+T2 pass — Anchors weak: phrase may lack topic specificity',
-    orange: 'Clarity fail — conflicts with another section (gap < 0.20)',
-    red:    'Confidence fail — phrase not aligned with this section content',
-  };
+  // Build table
+  let html = `<table class="pq-table">
+    <thead><tr>
+      <th>Phrase</th>
+      <th>Confidence</th>
+      <th class="pq-th-center">Clarity</th>
+      <th class="pq-th-center">Anchors</th>
+      <th class="pq-th-center">Status</th>
+      <th style="width:36px;"></th>
+    </tr></thead><tbody>`;
 
-  // Update header pills
+  phrases.forEach((phrase, idx) => {
+    html += _buildPhraseRow(phrase, scores[phrase] || null, sid, idx);
+  });
+
+  html += '</tbody></table>';
+  panel.innerHTML = html;
+  panel.classList.add('visible');
+
+  // Update header with score summary (if any scored)
+  const scoredEntries = phrases.filter(p => scores[p]).map(p => scores[p]);
+  _updatePqHeader(sid, scoredEntries.length ? scoredEntries : null);
+}
+
+/**
+ * _updatePqHeader — update the card header pills + subtitle text.
+ */
+function _updatePqHeader(sid, scoredEntries) {
   const pillsEl = document.getElementById(`pq-pills-${sid}`);
+  const subEl   = document.getElementById(`pq-sub-${sid}`);
+  const data    = S.sectionData.get(sid);
+  const total   = (data?.callerPhrases || []).filter(p => p.trim()).length;
+
+  if (!scoredEntries || !scoredEntries.length) {
+    if (pillsEl) pillsEl.innerHTML = total ? `<span class="pq-pill pending">${total} pending</span>` : '';
+    if (subEl) subEl.textContent = total
+      ? `${total} phrase${total !== 1 ? 's' : ''} · click Re-score to evaluate`
+      : 'Add caller phrases then score them';
+    return;
+  }
+
+  const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
+  scoredEntries.forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
+  const passRate = Math.round((counts.green / scoredEntries.length) * 100);
+
   if (pillsEl) {
     pillsEl.innerHTML = [
       counts.green  ? `<span class="pq-pill green"><span class="pq-dot"></span>${counts.green}</span>`  : '',
@@ -3561,70 +3648,31 @@ function _renderScoreTable(sid, scores) {
       counts.red    ? `<span class="pq-pill red"><span class="pq-dot"></span>${counts.red}</span>`       : '',
     ].filter(Boolean).join('');
   }
-
-  // Update header subtitle
-  const subEl = document.getElementById(`pq-sub-${sid}`);
-  const total = entries.length;
-  const passRate = total ? Math.round((counts.green / total) * 100) : 0;
-  if (subEl) subEl.textContent = `${total} phrases scored · ${passRate}% bulletproof`;
-
-  // Build table HTML
-  let html = `<table class="pq-table">
-    <thead><tr>
-      <th>Phrase</th>
-      <th>Confidence</th>
-      <th class="pq-th-center">Clarity</th>
-      <th class="pq-th-center">Anchors</th>
-      <th class="pq-th-center">Status</th>
-    </tr></thead><tbody>`;
-
-  for (const [phrase, s] of entries) {
-    const t1Pct  = Math.round((s.t1 || 0) * 100);
-    const barCls = t1Pct >= 75 ? 'high' : t1Pct >= 65 ? 'mid' : 'low';
-    const gapVal = s.t2 != null ? (s.t2 >= 0 ? `+${s.t2.toFixed(2)}` : s.t2.toFixed(2)) : '—';
-    const gapCls = s.t2 >= 0.20 ? 'pass' : 'fail';
-    const anchorCls = s.t3 === true ? 'pass' : s.t3 === false ? 'fail' : 'na';
-    const anchorIcon = s.t3 === true ? '✓' : s.t3 === false ? '✗' : '—';
-
-    html += `<tr class="st-${s.status}" title="${statusTitle[s.status] || ''}">
-      <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
-      <td class="pq-conf-cell">
-        <div class="pq-bar-row">
-          <div class="pq-bar-track"><div class="pq-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
-          <span class="pq-bar-pct">${t1Pct}%</span>
-        </div>
-      </td>
-      <td style="text-align:center"><span class="pq-gap ${gapCls}">${gapVal}</span></td>
-      <td class="pq-anchor-cell"><span class="pq-anchor-check ${anchorCls}">${anchorIcon}</span></td>
-      <td class="pq-status"><span class="pq-badge ${s.status}">${statusLabel[s.status]}</span></td>
-    </tr>`;
-  }
-
-  html += '</tbody></table>';
-  panel.innerHTML = html;
-  panel.classList.add('visible');
+  if (subEl) subEl.textContent = `${scoredEntries.length} phrases scored · ${passRate}% bulletproof`;
 }
 
 /**
- * _markEvalStale — turn eval buttons yellow (stale) when content changes.
+ * _renderScoreTable — called after scoring to update phraseScores then re-render table.
+ */
+function _renderScoreTable(sid, scores) {
+  const data = S.sectionData.get(sid);
+  if (data) data.phraseScores = scores;
+  _renderPhraseTable(sid);
+}
+
+/**
+ * _markEvalStale — reset scores + mark buttons yellow when content changes.
+ * Table stays visible but rows revert to "Pending" state.
  */
 function _markEvalStale(sid) {
   const r = document.getElementById(`btn-rescore-${sid}`);
   const a = document.getElementById(`btn-anchors-${sid}`);
   if (r && !r.classList.contains('stale')) r.classList.add('stale');
   if (a && !a.classList.contains('stale')) a.classList.add('stale');
-  // Hide stale score table — old scores no longer valid after content change
-  const table = document.getElementById(`score-table-${sid}`);
-  if (table && table.classList.contains('visible')) {
-    table.classList.remove('visible');
-    const data = S.sectionData.get(sid);
-    if (data) data.phraseScores = {};
-  }
-  // Reset header pills + subtitle
-  const pills = document.getElementById(`pq-pills-${sid}`);
-  if (pills) pills.innerHTML = '';
-  const sub = document.getElementById(`pq-sub-${sid}`);
-  if (sub) sub.textContent = 'Score phrases to evaluate routing accuracy';
+  // Clear stale scores — table stays visible but reverts to pending rows
+  const data = S.sectionData.get(sid);
+  if (data) data.phraseScores = {};
+  _renderPhraseTable(sid);
 }
 
 /**
