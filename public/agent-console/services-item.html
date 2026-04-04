@@ -314,112 +314,165 @@
     .kw-tag.negative { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
     .kw-tag.negative button { color: #b91c1c; }
     .kw-tag.negative button:hover { color: #7f1d1d; }
-    /* ── Phrase Quality System ─────────────────────────────────────────── */
-    /* Eval controls row */
-    .phrase-eval-row {
-      display: flex; align-items: center; gap: 8px; padding: 4px 14px 8px;
-      flex-wrap: wrap; border-top: 1px solid #f1f5f9;
+    /* ── Phrase Quality System — Enterprise Card ─────────────────────── */
+    .phrase-quality-card {
+      margin: 10px 14px 12px; border: 1px solid #e2e8f0; border-radius: 10px;
+      background: #ffffff; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.02);
     }
-    .btn-eval {
-      padding: 4px 12px; border-radius: 6px; border: 1px solid #d1d5db;
-      background: #f9fafb; color: #374151; font-size: 11.5px; font-weight: 600;
-      cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+    .pq-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
     }
-    .btn-eval:hover { background: #f1f5f9; border-color: #9ca3af; }
-    .btn-eval.stale { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-    .btn-eval:disabled { opacity: .5; cursor: default; pointer-events: none; }
-    /* Phrase score table */
-    .phrase-score-table {
-      margin: 0 14px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
-      overflow: hidden; display: none; font-size: 12px;
+    .pq-header-icon {
+      width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #6366f1, #818cf8);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      font-size: 13px; color: white;
     }
-    .phrase-score-table.visible { display: block; }
-    .pst-summary {
-      display: flex; align-items: center; gap: 12px;
-      padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
-      font-size: 11px; font-weight: 600; color: #374151;
+    .pq-header-text { display: flex; flex-direction: column; gap: 1px; }
+    .pq-header-title { font-size: 13px; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
+    .pq-header-sub { font-size: 10px; color: #64748b; font-weight: 500; }
+    .pq-header-pills { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .pq-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap;
     }
-    .pst-summary-pill {
-      padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 11px;
+    .pq-pill.green  { background: #dcfce7; color: #166534; }
+    .pq-pill.yellow { background: #fef9c3; color: #713f12; }
+    .pq-pill.orange { background: #ffedd5; color: #7c2d12; }
+    .pq-pill.red    { background: #fee2e2; color: #991b1b; }
+    .pq-pill .pq-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .pq-pill.green  .pq-dot { background: #22c55e; }
+    .pq-pill.yellow .pq-dot { background: #eab308; }
+    .pq-pill.orange .pq-dot { background: #f97316; }
+    .pq-pill.red    .pq-dot { background: #ef4444; }
+    /* Toolbar */
+    .pq-toolbar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-bottom: 1px solid #f1f5f9;
     }
-    .pst-summary-pill.green  { background: #dcfce7; color: #166534; }
-    .pst-summary-pill.yellow { background: #fef9c3; color: #713f12; }
-    .pst-summary-pill.orange { background: #ffedd5; color: #7c2d12; }
-    .pst-summary-pill.red    { background: #fee2e2; color: #991b1b; }
-    .pst-thead {
-      display: grid; grid-template-columns: 1fr 140px 80px 60px 100px;
-      padding: 5px 14px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb;
-      font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em;
+    .pq-toolbar-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 14px; border-radius: 6px; border: 1px solid #e2e8f0;
+      background: white; color: #374151; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .15s; white-space: nowrap;
     }
-    .pst-row {
-      display: grid; grid-template-columns: 1fr 140px 80px 60px 100px;
-      padding: 7px 14px; border-bottom: 1px solid #f3f4f6; align-items: center;
-      transition: background .1s; border-left: 3px solid transparent;
+    .pq-toolbar-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
+    .pq-toolbar-btn:disabled { opacity: .5; cursor: default; pointer-events: none; }
+    .pq-toolbar-btn.stale { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+    .pq-toolbar-btn .pq-btn-icon { font-size: 11px; }
+    .pq-toolbar-sep { width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }
+    /* Score table */
+    .pq-table-wrap { display: none; }
+    .pq-table-wrap.visible { display: block; }
+    .pq-table {
+      width: 100%; border-collapse: collapse;
     }
-    .pst-row:last-child { border-bottom: none; }
-    .pst-row:hover { background: #f8fafc; }
-    .pst-row.st-red    { border-left-color: #fca5a5; }
-    .pst-row.st-orange { border-left-color: #fb923c; }
-    .pst-row.st-yellow { border-left-color: #fbbf24; }
-    .pst-row.st-green  { border-left-color: #4ade80; }
-    .pst-phrase { font-size: 12px; color: #1e293b; }
-    .pst-bar-wrap { display: flex; align-items: center; gap: 6px; }
-    .pst-bar-track {
-      flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden;
+    .pq-table thead th {
+      padding: 8px 16px; text-align: left;
+      font-size: 10px; font-weight: 700; color: #64748b;
+      text-transform: uppercase; letter-spacing: .05em;
+      background: #f8fafc; border-bottom: 1px solid #e2e8f0;
     }
-    .pst-bar-fill {
-      height: 100%; border-radius: 3px; transition: width .3s;
+    .pq-table thead th:last-child { text-align: center; }
+    .pq-table thead th.pq-th-center { text-align: center; }
+    .pq-table tbody tr {
+      border-left: 3px solid transparent; transition: background .1s;
     }
-    .pst-bar-fill.high   { background: #22c55e; }
-    .pst-bar-fill.mid    { background: #f59e0b; }
-    .pst-bar-fill.low    { background: #ef4444; }
-    .pst-bar-pct { font-size: 10px; font-weight: 700; color: #6b7280; min-width: 28px; }
-    .pst-gap { font-size: 11px; font-weight: 600; }
-    .pst-gap.pass { color: #16a34a; }
-    .pst-gap.fail { color: #dc2626; }
-    .pst-anchor { font-size: 13px; text-align: center; }
-    .pst-badge {
-      padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;
-      text-align: center; white-space: nowrap;
+    .pq-table tbody tr:hover { background: #f8fafc; }
+    .pq-table tbody tr.st-green  { border-left-color: #22c55e; }
+    .pq-table tbody tr.st-yellow { border-left-color: #eab308; }
+    .pq-table tbody tr.st-orange { border-left-color: #f97316; }
+    .pq-table tbody tr.st-red    { border-left-color: #ef4444; }
+    .pq-table tbody td {
+      padding: 10px 16px; border-bottom: 1px solid #f1f5f9;
+      font-size: 12px; color: #1e293b; vertical-align: middle;
     }
-    .pst-badge.green  { background: #dcfce7; color: #166534; }
-    .pst-badge.yellow { background: #fef9c3; color: #713f12; }
-    .pst-badge.orange { background: #ffedd5; color: #7c2d12; }
-    .pst-badge.red    { background: #fee2e2; color: #991b1b; }
-    /* Anchor chip panel */
-    .anchor-panel {
-      padding: 6px 14px 8px; display: none; flex-wrap: wrap; gap: 6px;
-      background: #fffbeb; border-top: 1px dashed #fde68a; align-items: center;
+    .pq-table tbody tr:last-child td { border-bottom: none; }
+    .pq-phrase-text { font-weight: 500; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Confidence bar */
+    .pq-conf-cell { min-width: 160px; }
+    .pq-bar-row { display: flex; align-items: center; gap: 8px; }
+    .pq-bar-track {
+      flex: 1; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;
+      min-width: 80px;
     }
-    .anchor-panel.visible { display: flex; }
-    .anchor-chip {
-      padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
-      border: 1.5px solid #f59e0b; background: #fef3c7; color: #92400e; user-select: none;
+    .pq-bar-fill {
+      height: 100%; border-radius: 4px; transition: width .4s ease;
     }
-    /* Suggestions panel */
-    .phrase-suggestions-panel {
-      padding: 6px 14px 10px; border-top: 1px dashed #bfdbfe; display: none;
+    .pq-bar-fill.high { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .pq-bar-fill.mid  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .pq-bar-fill.low  { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .pq-bar-pct { font-size: 11px; font-weight: 700; color: #475569; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+    /* Clarity gap */
+    .pq-gap { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pq-gap.pass { color: #16a34a; }
+    .pq-gap.fail { color: #dc2626; }
+    /* Anchors column */
+    .pq-anchor-cell { text-align: center; }
+    .pq-anchor-check { font-size: 14px; font-weight: 700; }
+    .pq-anchor-check.pass { color: #16a34a; }
+    .pq-anchor-check.fail { color: #dc2626; }
+    .pq-anchor-check.na   { color: #cbd5e1; }
+    /* Status badge */
+    .pq-status { text-align: center; }
+    .pq-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 700;
+      white-space: nowrap; letter-spacing: .02em;
     }
-    .phrase-suggestions-panel.visible { display: block; }
-    .phrase-sugg-header {
-      font-size: 11px; font-weight: 700; color: #1d4ed8; margin-bottom: 6px;
+    .pq-badge.green  { background: #dcfce7; color: #166534; }
+    .pq-badge.yellow { background: #fef9c3; color: #713f12; }
+    .pq-badge.orange { background: #ffedd5; color: #7c2d12; }
+    .pq-badge.red    { background: #fee2e2; color: #991b1b; }
+    /* Empty / loading state */
+    .pq-empty {
+      padding: 24px 16px; text-align: center; color: #94a3b8; font-size: 12px;
     }
-    .phrase-sugg-item {
-      display: flex; align-items: center; gap: 8px; padding: 5px 0;
-      border-bottom: 1px solid #eff6ff; font-size: 12px; color: #374151;
+    .pq-empty-icon { font-size: 24px; margin-bottom: 6px; opacity: .6; }
+    /* Anchor section */
+    .pq-section-divider { border-top: 1px solid #f1f5f9; }
+    .pq-anchor-section {
+      padding: 10px 16px 12px; display: none;
     }
-    .phrase-sugg-item:last-child { border-bottom: none; }
-    .phrase-sugg-badge {
-      font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700;
-      background: #fee2e2; color: #991b1b; white-space: nowrap;
+    .pq-anchor-section.visible { display: block; }
+    .pq-section-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+      color: #64748b; margin-bottom: 8px;
     }
-    .phrase-sugg-badge.fallback { background: #fef3c7; color: #92400e; }
+    .pq-anchor-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pq-anchor-chip {
+      padding: 3px 12px; border-radius: 14px; font-size: 11px; font-weight: 600;
+      background: #fef3c7; color: #92400e; border: 1px solid #fde68a; user-select: none;
+    }
+    /* Suggestions section */
+    .pq-sugg-section {
+      padding: 10px 16px 12px; display: none;
+    }
+    .pq-sugg-section.visible { display: block; }
+    .pq-sugg-table { width: 100%; border-collapse: collapse; }
+    .pq-sugg-table thead th {
+      padding: 6px 0; text-align: left; font-size: 10px; font-weight: 700;
+      color: #64748b; text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .pq-sugg-table tbody td {
+      padding: 8px 0; border-bottom: 1px solid #f8fafc; font-size: 12px; color: #374151; vertical-align: middle;
+    }
+    .pq-sugg-table tbody tr:last-child td { border-bottom: none; }
+    .pq-sugg-type {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 9px; font-weight: 700; white-space: nowrap;
+    }
+    .pq-sugg-type.no-match { background: #fee2e2; color: #991b1b; }
+    .pq-sugg-type.fallback { background: #fef3c7; color: #92400e; }
+    .pq-sugg-meta { font-size: 10px; color: #94a3b8; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .btn-sugg-add {
-      padding: 2px 10px; border-radius: 4px; border: 1px solid #bfdbfe;
-      background: #eff6ff; color: #1d4ed8; font-size: 11px; font-weight: 600;
-      cursor: pointer; white-space: nowrap; margin-left: auto;
+      padding: 4px 12px; border-radius: 6px; border: 1px solid #c7d2fe;
+      background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: all .12s;
     }
-    .btn-sugg-add:hover { background: #dbeafe; }
+    .btn-sugg-add:hover { background: #e0e7ff; border-color: #a5b4fc; }
     /* Test match panel */
     .test-match-panel { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 8px; }
     .test-match-input-row { display:flex; gap:8px; }
@@ -1908,31 +1961,39 @@ function addSection(label = '', content = '', sectionMeta = null) {
       <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Full sentences callers say — "how much is a tune-up", "my AC isn't working". Press Enter to add.</div>
     </div>
 
-    <!-- 📊 3-Tier Phrase Eval controls ──────────────────────────────── -->
-    <div class="phrase-eval-row" id="eval-row-${id}">
-      <button type="button" class="btn-eval" id="btn-rescore-${id}"
-        onclick="_reScorePhrases(${id})" title="Score each phrase: T1 Confidence · T2 Clarity gap · T3 Anchor match">
-        ↻ Re-score Phrases
-      </button>
-      <button type="button" class="btn-eval" id="btn-anchors-${id}"
-        onclick="_refreshAnchors(${id})" title="Claude Haiku extracts 3-5 anchor terms from section content">
-        ✦ Refresh Anchors
-      </button>
-      <span id="anchor-count-${id}" style="font-size:10px;color:#6b7280;"></span>
-      <button type="button" class="btn-eval" id="btn-suggestions-${id}"
-        onclick="_loadPhraseSuggestions(${id})" title="Show missed caller questions from live calls">
-        📡 Live Suggestions
-      </button>
+    <!-- ── Phrase Quality Card ─────────────────────────────────────── -->
+    <div class="phrase-quality-card" id="pq-card-${id}">
+      <div class="pq-header">
+        <div class="pq-header-icon">◆</div>
+        <div class="pq-header-text">
+          <span class="pq-header-title">Phrase Quality</span>
+          <span class="pq-header-sub" id="pq-sub-${id}">Score phrases to evaluate routing accuracy</span>
+        </div>
+        <div class="pq-header-pills" id="pq-pills-${id}"></div>
+      </div>
+      <div class="pq-toolbar">
+        <button type="button" class="pq-toolbar-btn" id="btn-rescore-${id}"
+          onclick="_reScorePhrases(${id})" title="Score each phrase against 3 tiers: Confidence, Clarity, Anchors">
+          <span class="pq-btn-icon">↻</span> Re-score
+        </button>
+        <span class="pq-toolbar-sep"></span>
+        <button type="button" class="pq-toolbar-btn" id="btn-anchors-${id}"
+          onclick="_refreshAnchors(${id})" title="Extract topic anchor terms via Claude Haiku">
+          <span class="pq-btn-icon">◇</span> Anchors
+        </button>
+        <span id="anchor-count-${id}" style="font-size:10px;color:#64748b;font-weight:600;"></span>
+        <span class="pq-toolbar-sep"></span>
+        <button type="button" class="pq-toolbar-btn" id="btn-suggestions-${id}"
+          onclick="_loadPhraseSuggestions(${id})" title="Show missed caller questions from live calls">
+          <span class="pq-btn-icon">⊕</span> Live Suggestions
+        </button>
+      </div>
+      <div class="pq-table-wrap" id="score-table-${id}"></div>
+      <div class="pq-section-divider"></div>
+      <div class="pq-anchor-section" id="anchor-panel-${id}"></div>
+      <div class="pq-section-divider"></div>
+      <div class="pq-sugg-section" id="sugg-panel-${id}"></div>
     </div>
-
-    <!-- 📊 Phrase Quality Score Table ──────────────────────────────── -->
-    <div class="phrase-score-table" id="score-table-${id}"></div>
-
-    <!-- 🟡 Anchor chip panel ────────────────────────────────────────── -->
-    <div class="anchor-panel" id="anchor-panel-${id}"></div>
-
-    <!-- 📡 Live Suggestions panel ──────────────────────────────────── -->
-    <div class="phrase-suggestions-panel" id="sugg-panel-${id}"></div>
 
     <!-- 🚫 Per-section Exclusion Keywords ────────────────────────────── -->
     <div class="section-negkw-wrap" id="negkw-wrap-${id}" style="padding:4px 14px 10px;">
@@ -3468,7 +3529,7 @@ function _kcMarkStale(sid, key, currentText) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * _renderScoreTable — builds a structured quality table for phrase scores.
+ * _renderScoreTable — builds an enterprise-grade quality table for phrase scores.
  * Called after _reScorePhrases returns results.
  */
 function _renderScoreTable(sid, scores) {
@@ -3482,57 +3543,70 @@ function _renderScoreTable(sid, scores) {
   const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
   entries.forEach(([, s]) => { if (counts[s.status] !== undefined) counts[s.status]++; });
 
-  const statusLabel  = { green: 'Bulletproof', yellow: 'Topical', orange: 'Conflict', red: 'Off-target' };
-  const statusTitle  = {
+  const statusLabel = { green: 'Bulletproof', yellow: 'Topical', orange: 'Conflict', red: 'Off-target' };
+  const statusTitle = {
     green:  'All 3 tiers pass — Confidence ✓  Clarity ✓  Anchors ✓',
     yellow: 'T1+T2 pass — Anchors weak: phrase may lack topic specificity',
     orange: 'Clarity fail — conflicts with another section (gap < 0.20)',
     red:    'Confidence fail — phrase not aligned with this section content',
   };
 
-  let html = `
-    <div class="pst-summary">
-      <span style="color:#6b7280;">Phrase Quality:</span>
-      ${counts.green  ? `<span class="pst-summary-pill green">🟢 ${counts.green} Bulletproof</span>`  : ''}
-      ${counts.yellow ? `<span class="pst-summary-pill yellow">🟡 ${counts.yellow} Topical</span>`     : ''}
-      ${counts.orange ? `<span class="pst-summary-pill orange">🟠 ${counts.orange} Conflict</span>`    : ''}
-      ${counts.red    ? `<span class="pst-summary-pill red">🔴 ${counts.red} Off-target</span>`       : ''}
-    </div>
-    <div class="pst-thead">
-      <span>Phrase</span>
-      <span>Confidence (T1)</span>
-      <span>Clarity (T2)</span>
-      <span>Anchors</span>
-      <span>Status</span>
-    </div>`;
-
-  for (const [phrase, s] of entries) {
-    const t1Pct   = Math.round((s.t1 || 0) * 100);
-    const barCls  = t1Pct >= 75 ? 'high' : t1Pct >= 65 ? 'mid' : 'low';
-    const gapVal  = s.t2 != null ? (s.t2 >= 0 ? `+${(s.t2).toFixed(2)}` : s.t2.toFixed(2)) : '—';
-    const gapCls  = s.t2 >= 0.20 ? 'pass' : 'fail';
-    const anchorIcon = s.t3 === true ? '✓' : s.t3 === false ? '✗' : '—';
-    const anchorStyle = s.t3 === true ? 'color:#16a34a;font-weight:700' : s.t3 === false ? 'color:#dc2626' : 'color:#9ca3af';
-
-    html += `
-      <div class="pst-row st-${s.status}" title="${statusTitle[s.status] || ''}">
-        <span class="pst-phrase">${_esc(phrase)}</span>
-        <div class="pst-bar-wrap">
-          <div class="pst-bar-track"><div class="pst-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
-          <span class="pst-bar-pct">${t1Pct}%</span>
-        </div>
-        <span class="pst-gap ${gapCls}">${gapVal}</span>
-        <span class="pst-anchor" style="${anchorStyle}">${anchorIcon}</span>
-        <span class="pst-badge ${s.status}">${statusLabel[s.status] || s.status}</span>
-      </div>`;
+  // Update header pills
+  const pillsEl = document.getElementById(`pq-pills-${sid}`);
+  if (pillsEl) {
+    pillsEl.innerHTML = [
+      counts.green  ? `<span class="pq-pill green"><span class="pq-dot"></span>${counts.green}</span>`  : '',
+      counts.yellow ? `<span class="pq-pill yellow"><span class="pq-dot"></span>${counts.yellow}</span>` : '',
+      counts.orange ? `<span class="pq-pill orange"><span class="pq-dot"></span>${counts.orange}</span>` : '',
+      counts.red    ? `<span class="pq-pill red"><span class="pq-dot"></span>${counts.red}</span>`       : '',
+    ].filter(Boolean).join('');
   }
 
+  // Update header subtitle
+  const subEl = document.getElementById(`pq-sub-${sid}`);
+  const total = entries.length;
+  const passRate = total ? Math.round((counts.green / total) * 100) : 0;
+  if (subEl) subEl.textContent = `${total} phrases scored · ${passRate}% bulletproof`;
+
+  // Build table HTML
+  let html = `<table class="pq-table">
+    <thead><tr>
+      <th>Phrase</th>
+      <th>Confidence</th>
+      <th class="pq-th-center">Clarity</th>
+      <th class="pq-th-center">Anchors</th>
+      <th class="pq-th-center">Status</th>
+    </tr></thead><tbody>`;
+
+  for (const [phrase, s] of entries) {
+    const t1Pct  = Math.round((s.t1 || 0) * 100);
+    const barCls = t1Pct >= 75 ? 'high' : t1Pct >= 65 ? 'mid' : 'low';
+    const gapVal = s.t2 != null ? (s.t2 >= 0 ? `+${s.t2.toFixed(2)}` : s.t2.toFixed(2)) : '—';
+    const gapCls = s.t2 >= 0.20 ? 'pass' : 'fail';
+    const anchorCls = s.t3 === true ? 'pass' : s.t3 === false ? 'fail' : 'na';
+    const anchorIcon = s.t3 === true ? '✓' : s.t3 === false ? '✗' : '—';
+
+    html += `<tr class="st-${s.status}" title="${statusTitle[s.status] || ''}">
+      <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
+      <td class="pq-conf-cell">
+        <div class="pq-bar-row">
+          <div class="pq-bar-track"><div class="pq-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
+          <span class="pq-bar-pct">${t1Pct}%</span>
+        </div>
+      </td>
+      <td style="text-align:center"><span class="pq-gap ${gapCls}">${gapVal}</span></td>
+      <td class="pq-anchor-cell"><span class="pq-anchor-check ${anchorCls}">${anchorIcon}</span></td>
+      <td class="pq-status"><span class="pq-badge ${s.status}">${statusLabel[s.status]}</span></td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
   panel.innerHTML = html;
   panel.classList.add('visible');
 }
 
 /**
- * _markEvalStale — turn both eval buttons yellow (stale) when content changes.
+ * _markEvalStale — turn eval buttons yellow (stale) when content changes.
  */
 function _markEvalStale(sid) {
   const r = document.getElementById(`btn-rescore-${sid}`);
@@ -3543,10 +3617,14 @@ function _markEvalStale(sid) {
   const table = document.getElementById(`score-table-${sid}`);
   if (table && table.classList.contains('visible')) {
     table.classList.remove('visible');
-    // Clear stored scores so chips don't show stale data
     const data = S.sectionData.get(sid);
     if (data) data.phraseScores = {};
   }
+  // Reset header pills + subtitle
+  const pills = document.getElementById(`pq-pills-${sid}`);
+  if (pills) pills.innerHTML = '';
+  const sub = document.getElementById(`pq-sub-${sid}`);
+  if (sub) sub.textContent = 'Score phrases to evaluate routing accuracy';
 }
 
 /**
@@ -3564,7 +3642,7 @@ async function _reScorePhrases(sid) {
   if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
 
   const btn = document.getElementById(`btn-rescore-${sid}`);
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Scoring…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="pq-btn-icon">⏳</span> Scoring…'; }
 
   try {
     const result = await apiFetch(
@@ -3578,16 +3656,13 @@ async function _reScorePhrases(sid) {
 
     const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
     Object.values(data.phraseScores).forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
-    let summary = [];
-    if (counts.green)  summary.push(`🟢 ${counts.green}`);
-    if (counts.yellow) summary.push(`🟡 ${counts.yellow}`);
-    if (counts.orange) summary.push(`🟠 ${counts.orange}`);
-    if (counts.red)    summary.push(`🔴 ${counts.red}`);
-    _toast(`Scored ${phrases.length} phrases: ${summary.join(' ')}`, 'success');
+    const total = Object.keys(data.phraseScores).length;
+    const passRate = total ? Math.round((counts.green / total) * 100) : 0;
+    _toast(`${total} phrases scored · ${passRate}% bulletproof`, 'success');
   } catch (err) {
     _toast(err.message || 'Scoring failed', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '↻ Re-score Phrases'; btn.classList.remove('stale'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">↻</span> Re-score'; btn.classList.remove('stale'); }
   }
 }
 
@@ -3603,7 +3678,7 @@ async function _refreshAnchors(sid) {
   if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
 
   const btn = document.getElementById(`btn-anchors-${sid}`);
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Extracting…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="pq-btn-icon">⏳</span> Extracting…'; }
 
   try {
     const result = await apiFetch(
@@ -3618,7 +3693,7 @@ async function _refreshAnchors(sid) {
     const countEl = document.getElementById(`anchor-count-${sid}`);
     if (countEl) countEl.textContent = data.anchorTerms.length ? `${data.anchorTerms.length} anchors` : '';
 
-    _toast(`${result.anchorTerms.length} anchor terms extracted ✓`, 'success');
+    _toast(`${result.anchorTerms.length} anchor terms extracted`, 'success');
 
     // Scores are now stale (anchors changed) — mark rescore button yellow
     const rBtn = document.getElementById(`btn-rescore-${sid}`);
@@ -3626,38 +3701,40 @@ async function _refreshAnchors(sid) {
   } catch (err) {
     _toast(err.message || 'Anchor extraction failed', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✦ Refresh Anchors'; btn.classList.remove('stale'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">◇</span> Anchors'; btn.classList.remove('stale'); }
   }
 }
 
 /**
- * _renderAnchorPanel — render yellow anchor chips + gray content word chips.
+ * _renderAnchorPanel — render anchor chips inside the card's anchor section.
  */
 function _renderAnchorPanel(sid, anchorTerms, contentWords) {
   const panel = document.getElementById(`anchor-panel-${sid}`);
   if (!panel) return;
 
   panel.innerHTML = '';
-  if (!anchorTerms.length && !contentWords.length) {
+  if (!anchorTerms.length) {
     panel.classList.remove('visible');
     return;
   }
 
   panel.classList.add('visible');
 
-  const header = document.createElement('span');
-  header.style.cssText = 'font-size:10px;font-weight:700;color:#92400e;white-space:nowrap;';
-  header.textContent = 'Topic anchors:';
-  panel.appendChild(header);
+  const lbl = document.createElement('div');
+  lbl.className = 'pq-section-label';
+  lbl.textContent = `Topic Anchors — ${anchorTerms.length} terms (phrases need ≥2 to pass T3)`;
+  panel.appendChild(lbl);
 
-  // Anchor terms — yellow (active)
+  const wrap = document.createElement('div');
+  wrap.className = 'pq-anchor-chips';
   for (const term of anchorTerms) {
     const chip = document.createElement('span');
-    chip.className = 'anchor-chip';
+    chip.className = 'pq-anchor-chip';
     chip.textContent = term;
     chip.title = 'Active anchor — phrases must contain ≥2 anchors to pass T3';
-    panel.appendChild(chip);
+    wrap.appendChild(chip);
   }
+  panel.appendChild(wrap);
 }
 
 /**
@@ -3678,7 +3755,7 @@ async function _loadPhraseSuggestions(sid) {
   if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
 
   const btn = document.getElementById(`btn-suggestions-${sid}`);
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="pq-btn-icon">⏳</span> Loading…'; }
 
   try {
     const result = await apiFetch(
@@ -3687,41 +3764,50 @@ async function _loadPhraseSuggestions(sid) {
     );
     if (!result.success) throw new Error(result.error || 'Failed to load suggestions');
 
-    const panel  = document.getElementById(`sugg-panel-${sid}`);
+    const panel = document.getElementById(`sugg-panel-${sid}`);
     if (!panel) return;
 
     if (!result.suggestions?.length) {
-      panel.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:4px 0;">No relevant missed calls found yet — data builds over time.</div>';
+      panel.innerHTML = '<div class="pq-section-label">Live Suggestions</div><div class="pq-empty"><div class="pq-empty-icon">📡</div>No missed calls matched this section yet — data builds over time.</div>';
       panel.classList.add('visible');
       _toast('No matching live suggestions yet', 'success');
       return;
     }
 
     const data = S.sectionData.get(sid);
-    // Store suggestions on the section data for safe click handling (no inline JS strings)
     data._suggestions = result.suggestions;
-    let html = `<div class="phrase-sugg-header">📡 Suggested from live calls <span style="font-weight:400;color:#6b7280;">(${result.suggestions.length} missed utterances matched this section)</span></div>`;
+
+    let html = `<div class="pq-section-label">Live Suggestions — ${result.suggestions.length} missed utterances</div>
+      <table class="pq-sugg-table"><thead><tr>
+        <th style="width:80px;">Source</th>
+        <th>Utterance</th>
+        <th style="width:100px;text-align:right;">Match</th>
+        <th style="width:90px;text-align:right;">Action</th>
+      </tr></thead><tbody>`;
+
     result.suggestions.forEach((s, i) => {
-      const badgeClass = s.type === 'KC_LLM_FALLBACK' ? 'fallback' : '';
-      const badgeText  = s.type === 'KC_LLM_FALLBACK' ? 'LLM fallback' : 'No match';
-      const simPct     = Math.round(s.similarity * 100);
+      const typeCls  = s.type === 'KC_LLM_FALLBACK' ? 'fallback' : 'no-match';
+      const typeText = s.type === 'KC_LLM_FALLBACK' ? 'LLM fallback' : 'No match';
+      const simPct   = Math.round(s.similarity * 100);
       const alreadyAdded = data?.callerPhrases?.some(p => p.toLowerCase() === s.text.toLowerCase());
-      html += `<div class="phrase-sugg-item" id="sugg-item-${sid}-${i}">
-        <span class="phrase-sugg-badge ${badgeClass}">${badgeText}</span>
-        <span style="flex:1;">"${_esc(s.text)}"</span>
-        <span style="font-size:10px;color:#9ca3af;">${simPct}% match · ×${s.count}</span>
-        ${alreadyAdded
-          ? '<span style="font-size:10px;color:#16a34a;margin-left:auto;">✓ added</span>'
-          : `<button class="btn-sugg-add" onclick="_addSuggestionByIndex(${sid}, ${i})">+ Add phrase</button>`}
-      </div>`;
+      html += `<tr id="sugg-item-${sid}-${i}">
+        <td><span class="pq-sugg-type ${typeCls}">${typeText}</span></td>
+        <td>"${_esc(s.text)}"</td>
+        <td style="text-align:right"><span class="pq-sugg-meta">${simPct}% · ×${s.count}</span></td>
+        <td style="text-align:right">${alreadyAdded
+          ? '<span style="font-size:10px;color:#16a34a;font-weight:600;">✓ Added</span>'
+          : `<button class="btn-sugg-add" onclick="_addSuggestionByIndex(${sid}, ${i})">+ Add</button>`}</td>
+      </tr>`;
     });
+
+    html += '</tbody></table>';
     panel.innerHTML = html;
     panel.classList.add('visible');
     _toast(`${result.suggestions.length} live suggestions loaded`, 'success');
   } catch (err) {
     _toast(err.message || 'Failed to load suggestions', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '📡 Live Suggestions'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">⊕</span> Live Suggestions'; }
   }
 }
 
@@ -3739,18 +3825,18 @@ function _addSuggestionByIndex(sid, idx) {
   }
   data.callerPhrases.push(clean);
   _renderCallerPhrases(sid);
-  // Update the suggestion row in place — swap button for "✓ added" label
+  // Update the suggestion row in place — swap button for "✓ Added" label
   const row = document.getElementById(`sugg-item-${sid}-${idx}`);
   if (row) {
     const btn = row.querySelector('.btn-sugg-add');
     if (btn) {
       const lbl = document.createElement('span');
-      lbl.style.cssText = 'font-size:10px;color:#16a34a;margin-left:auto;';
-      lbl.textContent = '✓ added';
+      lbl.style.cssText = 'font-size:10px;color:#16a34a;font-weight:600;';
+      lbl.textContent = '✓ Added';
       btn.replaceWith(lbl);
     }
   }
-  _toast('Phrase added ✓', 'success');
+  _toast('Phrase added', 'success');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
