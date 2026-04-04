@@ -907,25 +907,25 @@
 </div>
 
 <!-- ── Live Promotions card ──────────────────────────────────────────────── -->
-<div id="kcPromotionsCard" style="display:none; margin: 0 0 16px 0; background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06); overflow:hidden;">
+<div id="kcPromotionsCard" style="display:none; margin: 0 0 16px 0; background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%); border:1.5px solid #6ee7b7; border-radius:12px; box-shadow:0 2px 8px rgba(16,185,129,.18),0 1px 3px rgba(0,0,0,.06); overflow:hidden;">
   <div style="padding:16px 20px 10px;">
     <div style="display:flex;align-items:center;gap:8px;">
-      <h2 style="margin:0;font-size:1rem;font-weight:700;color:#111827;">🏷️ Live Promotions</h2>
-      <span id="kcPromoCountBadge" style="background:#d1fae5;color:#065f46;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:.04em;">0</span>
+      <h2 style="margin:0;font-size:1rem;font-weight:700;color:#064e3b;">🏷️ Live Promotions</h2>
+      <span id="kcPromoCountBadge" style="background:#059669;color:#fff;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:.04em;">0</span>
     </div>
-    <p style="margin:4px 0 0;color:#6b7280;font-size:0.875rem;">
+    <p style="margin:4px 0 0;color:#065f46;font-size:0.875rem;">
       Sections tagged as promotions across your knowledge base. Click edit to manage.
     </p>
   </div>
   <div style="padding:0;">
     <table style="width:100%;border-collapse:collapse;">
       <thead>
-        <tr style="background:#f3f4f6;border-bottom:2px solid #d1d5db;">
-          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Promo Title</th>
-          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Container</th>
-          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Section</th>
-          <th style="padding:10px 16px;text-align:center;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;width:80px;">Status</th>
-          <th style="padding:10px 16px;text-align:center;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;width:60px;">Edit</th>
+        <tr style="background:rgba(0,0,0,.06);border-bottom:2px solid #6ee7b7;">
+          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em;">Promo Title</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em;">Container</th>
+          <th style="padding:10px 16px;text-align:left;font-size:0.7rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em;">Section</th>
+          <th style="padding:10px 16px;text-align:center;font-size:0.7rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em;width:80px;">Status</th>
+          <th style="padding:10px 16px;text-align:center;font-size:0.7rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em;width:60px;">Edit</th>
         </tr>
       </thead>
       <tbody id="kcPromotionsTableBody">
@@ -1613,14 +1613,14 @@ function renderLivePromotions() {
     const statusHtml = isLive
       ? '<span style="color:#16a34a;font-weight:600;">🟢 Live</span>'
       : '<span style="color:#f59e0b;font-weight:600;">⏸ Paused</span>';
-    return `<tr style="border-bottom:1px solid #f3f4f6;${!isLive ? 'opacity:0.55;' : ''}">
-      <td style="padding:10px 16px;font-weight:600;color:#111827;font-size:0.85rem;">
+    return `<tr style="border-bottom:1px solid rgba(0,0,0,.07);${!isLive ? 'opacity:0.55;' : ''}">
+      <td style="padding:10px 16px;font-weight:600;color:#064e3b;font-size:0.85rem;">
         🏷️ ${_esc(p.promotionLabel)}
       </td>
-      <td style="padding:10px 16px;font-size:0.8rem;color:#6b7280;">
+      <td style="padding:10px 16px;font-size:0.8rem;color:#065f46;">
         ${_esc(p.containerTitle)}
       </td>
-      <td style="padding:10px 16px;font-size:0.8rem;color:#6b7280;">${_esc(p.sectionLabel)}</td>
+      <td style="padding:10px 16px;font-size:0.8rem;color:#065f46;">${_esc(p.sectionLabel)}</td>
       <td style="padding:10px 16px;text-align:center;font-size:0.8rem;">${statusHtml}</td>
       <td style="padding:10px 16px;text-align:center;">
         <a href="${editUrl(p.containerId)}" style="color:#0ea5e9;font-weight:600;font-size:0.8rem;text-decoration:none;" title="Edit container">✏️</a>
