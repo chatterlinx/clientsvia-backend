@@ -210,6 +210,23 @@ const sectionSchema = new mongoose.Schema(
       comment: 'Pre-cached audio URL for section content (shown/generated when useFixedResponse is true).'
     },
 
+    // ── Per-section Promotion Flag ──────────────────────────────────────
+    // Tags this section as a live promotion. Promotions appear on the admin
+    // Knowledge Base listing as a summary card (Live Promotions).
+    // Runtime promo-list behavior is built separately on top of this flag.
+    isPromotion: {
+      type:    Boolean,
+      default: false,
+      comment: 'Per-section: tag as live promotion. Shows in admin Live Promotions card.'
+    },
+    promotionLabel: {
+      type:      String,
+      default:   '',
+      trim:      true,
+      maxlength: 120,
+      comment:   'Short promo title (e.g. "Spring Tune-Up — $49"). Falls back to section label if empty.'
+    },
+
     // ── Pre-qualify question (optional) ───────────────────────────────────
     // Agent asks this BEFORE answering this section's content.
     // Caller's answer is matched to options[].keywords → responseContext injected into Groq.

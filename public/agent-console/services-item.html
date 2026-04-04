@@ -480,6 +480,69 @@
     }
     .section-fixed-switch input:checked + .section-fixed-knob { background: #f59e0b; }
     .section-fixed-switch input:checked + .section-fixed-knob::before { transform: translateX(16px); }
+
+    /* ── Per-section Promotion strip ──────────────────────────────────── */
+    /* Same layout as Fixed Response strip. Emerald when active.          */
+    .section-promo-strip {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 18px;
+      background: #fafaf9;
+      border-top: 1px solid var(--border);
+      transition: background .18s, border-color .18s;
+    }
+    .section-promo-strip.is-active {
+      background: #ecfdf5;
+      border-top-color: #a7f3d0;
+    }
+    .section-promo-label-wrap {
+      display: flex; align-items: center; gap: 8px;
+      flex: 1; cursor: pointer; user-select: none;
+    }
+    .section-promo-badge {
+      font-size: .68rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px;
+      letter-spacing: .02em;
+      background: #e7e5e4; color: #78716c;
+      transition: background .18s, color .18s;
+    }
+    .section-promo-strip.is-active .section-promo-badge {
+      background: #10b981; color: #fff;
+    }
+    .section-promo-desc {
+      font-size: .74rem; color: #a8a29e;
+      transition: color .18s;
+    }
+    .section-promo-strip.is-active .section-promo-desc {
+      color: #065f46;
+    }
+    .section-promo-switch {
+      position: relative; display: inline-block;
+      width: 34px; height: 18px; flex-shrink: 0;
+    }
+    .section-promo-switch input { opacity: 0; width: 0; height: 0; }
+    .section-promo-knob {
+      position: absolute; inset: 0;
+      background: #d1d5db; border-radius: 18px;
+      cursor: pointer; transition: background .18s;
+    }
+    .section-promo-knob::before {
+      content: ''; position: absolute;
+      height: 12px; width: 12px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%;
+      transition: transform .18s;
+    }
+    .section-promo-switch input:checked + .section-promo-knob { background: #10b981; }
+    .section-promo-switch input:checked + .section-promo-knob::before { transform: translateX(16px); }
+    .section-promo-input {
+      font-size: .78rem; padding: 4px 10px; border: 1px solid #d1d5db;
+      border-radius: 6px; width: 100%; max-width: 320px;
+      font-family: inherit;
+      transition: border-color .18s;
+    }
+    .section-promo-input:focus {
+      outline: none; border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.15);
+    }
+
     /* ── Per-field audio controls: Generate · Play · stale hint ─────────────── */
     /* Each verbatim text field (section content, pq question, upsell scripts)  */
     /* gets an audio row below it — mirrors the triggers.html pattern.           */
@@ -1630,8 +1693,13 @@ function addSection(label = '', content = '', sectionMeta = null) {
   const useFixedResponse = !!sectionMeta?.useFixedResponse;
   const sectionIsActive  = sectionMeta?.isActive !== false;   // default true
 
+  const isPromotion     = !!sectionMeta?.isPromotion;
+  const promotionLabel  = sectionMeta?.promotionLabel || '';
+
   S.sectionData.set(id, {
     isActive:         sectionIsActive,
+    isPromotion,
+    promotionLabel,
     callerPhrases:    sectionMeta?.callerPhrases || [],
     negativeKeywords: sectionMeta?.negativeKeywords || [],
     useFixedResponse,
@@ -1755,6 +1823,28 @@ function addSection(label = '', content = '', sectionMeta = null) {
           ${useFixedResponse ? 'checked' : ''}>
         <span class="section-fixed-knob"></span>
       </label>
+    </div>
+
+    <!-- 🏷️ Per-section Promotion strip ────────────────────────────────── -->
+    <!-- OFF: neutral stone bar. ON: emerald — section is a live promotion. -->
+    <div class="section-promo-strip${isPromotion ? ' is-active' : ''}" id="sec-promo-bar-${id}">
+      <label class="section-promo-label-wrap" for="sec-promo-${id}">
+        <span class="section-promo-badge">🏷️ Promo</span>
+        <span class="section-promo-desc">Tag as a live promotion — appears on Knowledge Base dashboard</span>
+      </label>
+      <label class="section-promo-switch" title="Toggle promotion flag for this section">
+        <input type="checkbox" id="sec-promo-${id}"
+          onchange="_onSectionPromotionChange(${id})"
+          ${isPromotion ? 'checked' : ''}>
+        <span class="section-promo-knob"></span>
+      </label>
+    </div>
+    <div id="sec-promo-label-row-${id}" style="display:${isPromotion ? 'flex' : 'none'};align-items:center;gap:8px;padding:6px 18px;background:#ecfdf5;border-top:1px dashed #a7f3d0;">
+      <span style="font-size:11px;font-weight:600;color:#065f46;white-space:nowrap;">Promo title:</span>
+      <input type="text" class="section-promo-input" id="sec-promo-label-${id}"
+        value="${_esc(promotionLabel)}" maxlength="120"
+        placeholder="e.g. Spring Maintenance Sale — $49 (falls back to section label)"
+        oninput="S.sectionData.get(${id}).promotionLabel=this.value">
     </div>
 
     <!-- ── Sales Funnel accordion ─────────────────────────────────────── -->
@@ -2240,6 +2330,8 @@ function _getSections() {
         content,
         order:              idx,
         isActive:           data.isActive !== false,   // default true
+        isPromotion:        !!data.isPromotion,
+        promotionLabel:     (data.promotionLabel || '').trim().slice(0, 120),
         callerPhrases:      (data.callerPhrases || []).filter(p => p.trim()),
         negativeKeywords:   data.negativeKeywords || [],
         useFixedResponse:   !!data.useFixedResponse,
@@ -3039,6 +3131,18 @@ function _onSectionFixedChange(sid) {
   // Show/hide the content audio row based on Fixed mode state
   const contentAudio = document.getElementById(`kc-ar-${sid}--content`);
   if (contentAudio) contentAudio.style.display = checked ? 'flex' : 'none';
+}
+
+function _onSectionPromotionChange(sid) {
+  const checked = document.getElementById(`sec-promo-${sid}`)?.checked === true;
+  const data    = S.sectionData.get(sid);
+  if (data) data.isPromotion = checked;
+  // Toggle the active class on the promo strip
+  const bar = document.getElementById(`sec-promo-bar-${sid}`);
+  if (bar) bar.classList.toggle('is-active', checked);
+  // Show/hide the promotion label input row
+  const labelRow = document.getElementById(`sec-promo-label-row-${sid}`);
+  if (labelRow) labelRow.style.display = checked ? 'flex' : 'none';
 }
 
 // ── Per-field Audio Controls ──────────────────────────────────────────────────

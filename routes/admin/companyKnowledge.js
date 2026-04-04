@@ -293,6 +293,14 @@ function _sanitiseBody(body) {
           section.audioUrl = s.audioUrl.trim();
         }
 
+        // Per-section Promotion flag + label
+        if (typeof s.isPromotion === 'boolean') {
+          section.isPromotion = s.isPromotion;
+        }
+        if (typeof s.promotionLabel === 'string') {
+          section.promotionLabel = s.promotionLabel.trim().slice(0, 120);
+        }
+
         // Per-section daSubTypeKey (UAP sub-type routing link)
         if (typeof s.daSubTypeKey === 'string' && s.daSubTypeKey.trim()) {
           section.daSubTypeKey = s.daSubTypeKey.trim();
