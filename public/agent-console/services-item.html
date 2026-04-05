@@ -121,6 +121,8 @@
     .form-input::placeholder, .form-textarea::placeholder { color: #9ca3af; }
     .form-textarea { resize: vertical; min-height: 96px; line-height: 1.6; }
     .form-textarea.tall { min-height: 140px; }
+    .form-textarea.content-over  { color: #dc2626; }
+    .form-textarea.content-short { color: #d97706; }
     .form-hint { font-size: 11.5px; color: var(--text-xs); line-height: 1.5; }
     .char-count { font-size: 11px; color: var(--text-xs); text-align: right; }
     .char-count.warn { color: #f59e0b; }
@@ -1981,13 +1983,13 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </button>
     </div>
     <div class="section-row-body">
-      <textarea class="form-textarea tall" id="sec-content-${id}"
+      <textarea class="form-textarea tall${_wordCount(content) > 42 || content.length > 180 ? ' content-over' : _wordCount(content) > 0 && _wordCount(content) < 35 && content.length <= 180 ? ' content-short' : ''}" id="sec-content-${id}"
         placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
         oninput="charCount(this, 2000, null); _queueVarScan(); _kcMarkStale(${id},'content',this.value)"
         maxlength="2000">${_esc(content)}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
         <button type="button" class="gap-analyze-btn" onclick="analyzeGaps(${id})" title="AI checks what caller questions this section cannot answer">🔍 What's missing?</button>
-        <span class="char-count" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} / 2000 chars</span>
+        <span class="char-count${_wordCount(content) > 42 || content.length > 180 ? ' over' : _wordCount(content) > 0 && _wordCount(content) < 35 && content.length <= 180 ? ' warn' : ''}" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} chars${_wordCount(content) > 42 || content.length > 180 ? ' · over limit' : _wordCount(content) > 0 && _wordCount(content) < 35 && content.length <= 180 ? ' · short' : ''}</span>
       </div>
       <!-- Audio row — shown only when ⚡ Fixed mode is ON for this section -->
       <div class="kc-audio-row" id="kc-ar-${id}--content" style="display:${useFixedResponse ? 'flex' : 'none'}">
@@ -3306,14 +3308,26 @@ function charCount(el, max, countId) {
       counter.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
     }
   }
-  // Section row textareas: show word count as primary, chars as secondary
+  // Section content textareas: word/char awareness thresholds
   const parent = el.closest('.section-row-body');
   if (parent) {
-    const span = parent.querySelector('.char-count');
+    const span  = parent.querySelector('.char-count');
+    const words = _wordCount(el.value);
+
+    // Determine content density state
+    const isOver  = words > 42 || len > 180;   // rambling — too long
+    const isShort = words > 0 && words < 35 && len <= 180;  // may sound robotic
+
+    // Color the textarea text itself
+    el.classList.toggle('content-over',  isOver);
+    el.classList.toggle('content-short', isShort && !isOver);
+
     if (span) {
-      const words = _wordCount(el.value);
-      span.textContent = `${words} word${words !== 1 ? 's' : ''} · ${len} / ${max} chars`;
-      span.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
+      let hint = '';
+      if (isOver)       hint = ' · over limit';
+      else if (isShort) hint = ' · short';
+      span.textContent = `${words} word${words !== 1 ? 's' : ''} · ${len} chars${hint}`;
+      span.className   = 'char-count' + (isOver ? ' over' : isShort ? ' warn' : '');
     }
     _updateComplexityIndicator();
   }
