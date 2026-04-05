@@ -1955,6 +1955,9 @@ function addSection(label = '', content = '', sectionMeta = null) {
   const hasUpsell = (sectionMeta?.upsellChain || []).length > 0;
   const funnelHasFunnel = hasPQ || hasUpsell;
 
+  // Pre-compute content density for initial template render
+  const _cd = _contentDensity(content, useFixedResponse);
+
   const row = document.createElement('div');
   row.className = 'section-row' + (sectionIsActive ? '' : ' section-inactive');
   row.dataset.sid = id;
@@ -1983,13 +1986,13 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </button>
     </div>
     <div class="section-row-body">
-      <textarea class="form-textarea tall${_wordCount(content) > 42 || content.length > 180 ? ' content-over' : _wordCount(content) > 0 && _wordCount(content) < 35 && content.length <= 180 ? ' content-short' : ''}" id="sec-content-${id}"
-        placeholder="Write as much as you need — Groq reads this and synthesises within the word limit…"
+      <textarea class="form-textarea tall${_cd.isOver ? ' content-over' : (_cd.isShort || _cd.isWarn) ? ' content-short' : ''}" id="sec-content-${id}"
+        placeholder="${useFixedResponse ? 'Write the exact spoken response (35-42 words ideal)…' : 'Write as much as you need — Groq reads this and synthesises within the word limit…'}"
         oninput="charCount(this, 2000, null); _queueVarScan(); _kcMarkStale(${id},'content',this.value)"
         maxlength="2000">${_esc(content)}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
         <button type="button" class="gap-analyze-btn" onclick="analyzeGaps(${id})" title="AI checks what caller questions this section cannot answer">🔍 What's missing?</button>
-        <span class="char-count${_wordCount(content) > 42 || content.length > 180 ? ' over' : _wordCount(content) > 0 && _wordCount(content) < 35 && content.length <= 180 ? ' warn' : ''}" style="font-size:11px;">${_wordCount(content)} word${_wordCount(content) !== 1 ? 's' : ''} · ${content.length} chars${_wordCount(content) > 42 || content.length > 180 ? ' · over limit' : _wordCount(content) > 0 && _wordCount(content) < 35 && content.length <= 180 ? ' · short' : ''}</span>
+        <span class="char-count${_cd.cls}" style="font-size:11px;">${_cd.label}</span>
       </div>
       <!-- Audio row — shown only when ⚡ Fixed mode is ON for this section -->
       <div class="kc-audio-row" id="kc-ar-${id}--content" style="display:${useFixedResponse ? 'flex' : 'none'}">
@@ -3308,26 +3311,22 @@ function charCount(el, max, countId) {
       counter.className   = 'char-count' + (pct > .95 ? ' over' : pct > .8 ? ' warn' : '');
     }
   }
-  // Section content textareas: word/char awareness thresholds
+  // Section content textareas: mode-aware density thresholds
   const parent = el.closest('.section-row-body');
   if (parent) {
-    const span  = parent.querySelector('.char-count');
-    const words = _wordCount(el.value);
-
-    // Determine content density state
-    const isOver  = words > 42 || len > 180;   // rambling — too long
-    const isShort = words > 0 && words < 35 && len <= 180;  // may sound robotic
+    const row   = parent.closest('.section-row');
+    const sid   = row ? Number(row.dataset.sid) : null;
+    const data  = sid != null ? S.sectionData.get(sid) : null;
+    const d     = _contentDensity(el.value, !!data?.useFixedResponse);
 
     // Color the textarea text itself
-    el.classList.toggle('content-over',  isOver);
-    el.classList.toggle('content-short', isShort && !isOver);
+    el.classList.toggle('content-over',  d.isOver);
+    el.classList.toggle('content-short', (d.isShort || d.isWarn) && !d.isOver);
 
+    const span = parent.querySelector('.char-count');
     if (span) {
-      let hint = '';
-      if (isOver)       hint = ' · over limit';
-      else if (isShort) hint = ' · short';
-      span.textContent = `${words} word${words !== 1 ? 's' : ''} · ${len} chars${hint}`;
-      span.className   = 'char-count' + (isOver ? ' over' : isShort ? ' warn' : '');
+      span.textContent = d.label;
+      span.className   = 'char-count' + d.cls;
     }
     _updateComplexityIndicator();
   }
@@ -3335,6 +3334,42 @@ function charCount(el, max, countId) {
 
 function _wordCount(str) {
   return str.trim() ? str.trim().split(/\s+/).length : 0;
+}
+
+/**
+ * Mode-aware content density thresholds.
+ * Fixed ON  → audio playback, tight limits (35-42 words, 180 chars)
+ * Fixed OFF → Groq source material, wider limits (25-150 sweet spot)
+ */
+function _contentDensity(text, isFixed) {
+  const words = _wordCount(text);
+  const len   = text.length;
+  const ws    = `${words} word${words !== 1 ? 's' : ''}`;
+
+  if (!words) return { isOver: false, isShort: false, isWarn: false, cls: '', label: `0 words · ${len} chars` };
+
+  if (isFixed) {
+    // Fixed mode — content IS the spoken response (tight limits)
+    const isOver  = words > 42 || len > 180;
+    const isShort = words < 35 && !isOver;
+    const hint    = isOver ? ' · over limit' : isShort ? ' · short' : '';
+    return {
+      isOver, isShort, isWarn: false,
+      cls:   isOver ? ' over' : isShort ? ' warn' : '',
+      label: `${ws} · ${len} chars${hint}`,
+    };
+  }
+
+  // Groq synthesis mode — content is source material
+  const isOver  = words > 300;
+  const isWarn  = words > 150 && !isOver;
+  const isShort = words < 25;
+  const hint    = isOver ? ' · split section' : isWarn ? ' · getting dense' : isShort ? ' · thin for Groq' : '';
+  return {
+    isOver, isShort, isWarn,
+    cls:   isOver ? ' over' : (isWarn || isShort) ? ' warn' : '',
+    label: `${ws}${hint}`,
+  };
 }
 
 // ── Container-level Fixed Response Mode toggle ───────────────────────────────
@@ -3375,6 +3410,14 @@ function _onSectionFixedChange(sid) {
   // Show/hide the content audio row based on Fixed mode state
   const contentAudio = document.getElementById(`kc-ar-${sid}--content`);
   if (contentAudio) contentAudio.style.display = checked ? 'flex' : 'none';
+  // Re-evaluate content density with new mode thresholds + update placeholder
+  const ta = document.getElementById(`sec-content-${sid}`);
+  if (ta) {
+    ta.placeholder = checked
+      ? 'Write the exact spoken response (35-42 words ideal)…'
+      : 'Write as much as you need — Groq reads this and synthesises within the word limit…';
+    charCount(ta, 2000, null);
+  }
 }
 
 function _onSectionPromotionChange(sid) {
