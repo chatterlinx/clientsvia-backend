@@ -392,11 +392,21 @@ async function reduceBatch(phrases, sectionContent) {
 // EXPORTS
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Public accessor for synonym groups (5-min cached from AdminSettings).
+ * Consumed by UtteranceActParser Pass 4A for synonym-expanded matching.
+ */
+async function getSynonymGroups() {
+  const config = await _loadConfig();
+  return config.synonymGroups || [];
+}
+
 module.exports = {
   reduce,
   reduceBatch,
   extractProtectedPhrases,
   invalidateCache,
+  getSynonymGroups,
   // Exposed for seeding/admin
   DEFAULT_INTENT_NORMALIZERS,
   DEFAULT_SYNONYM_GROUPS,

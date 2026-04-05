@@ -2,7 +2,7 @@
 
 /**
  * ============================================================================
- * BRIDGE SERVICE  (v2.0 — Semantic Section Matching)
+ * BRIDGE SERVICE  (v3.0 — Semantic Section Matching + Phonetic Index)
  * ============================================================================
  *
  * PURPOSE:
@@ -46,6 +46,7 @@
 const { getSharedRedisClient } = require('../../redisClientFactory');
 const CompanyKnowledgeContainer = require('../../../models/CompanyKnowledgeContainer');
 const logger                   = require('../../../utils/logger');
+const { doubleMetaphone }      = require('../../../utils/stringDistance');
 
 // ============================================================================
 // CONFIGURATION
@@ -53,8 +54,21 @@ const logger                   = require('../../../utils/logger');
 
 const CONFIG = {
   KEY_PREFIX: 'bridge',  // Redis key: bridge:{companyId}
-  VERSION:   2,          // v2 — callerPhrases-based (v1 was UAPArray-based)
+  VERSION:   3,          // v3 — adds phoneticIndex for fuzzy recovery
 };
+
+// Stop words for phonetic indexing (mirrors UAP CONFIG.STOP_WORDS)
+const STOP_WORDS = new Set([
+  'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'that', 'this',
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'could',
+  'should', 'may', 'might', 'can', 'to', 'for', 'of', 'on', 'in', 'at',
+  'by', 'with', 'about', 'and', 'or', 'but', 'so', 'if', 'when', 'what',
+  'how', 'why', 'who', 'where', 'tell', 'know', 'get', 'want', 'need',
+  'help', 'more', 'just', 'please', 'yes', 'no', 'okay', 'yeah', 'hi',
+  'hello', 'there', 'here',
+]);
+const MIN_WORD_LEN = 3;
 
 // ============================================================================
 // PRIVATE HELPERS
@@ -128,12 +142,31 @@ async function _buildBridge(companyId) {
     }
   }
 
+  // ── Build phonetic index for UAP Pass 4B (fuzzy recovery) ──────────────
+  const phoneticIndex = {};
+  for (const [phrase, entry] of Object.entries(phraseIndex)) {
+    const words = phrase.split(/\s+/).filter(w => w.length >= MIN_WORD_LEN && !STOP_WORDS.has(w));
+    for (const word of words) {
+      const [primary, alternate] = doubleMetaphone(word);
+      const record = { word, phrase, containerId: entry.containerId, sectionIdx: entry.sectionIdx, sectionLabel: entry.sectionLabel };
+      if (primary) {
+        if (!phoneticIndex[primary]) phoneticIndex[primary] = [];
+        phoneticIndex[primary].push(record);
+      }
+      if (alternate && alternate !== primary) {
+        if (!phoneticIndex[alternate]) phoneticIndex[alternate] = [];
+        phoneticIndex[alternate].push(record);
+      }
+    }
+  }
+
   return {
     builtAt:     new Date().toISOString(),
     version:     CONFIG.VERSION,
     companyId,
     phraseCount: Object.keys(phraseIndex).length,
     phraseIndex,
+    phoneticIndex,
   };
 }
 
@@ -249,6 +282,25 @@ const BridgeService = {
     try {
       const bridge = await BridgeService.load(companyId);
       return bridge?.phraseIndex || {};
+    } catch (_e) {
+      return {};
+    }
+  },
+
+  /**
+   * getAllPhonetics — Return the full phonetic index.
+   * Used by UtteranceActParser Pass 4B for fuzzy/phonetic matching.
+   *
+   * Returns: { [metaphoneCode]: [{ word, phrase, containerId, sectionIdx, sectionLabel }] }
+   *
+   * @param {string} companyId
+   * @returns {Promise<Object>}
+   */
+  async getAllPhonetics(companyId) {
+    if (!companyId) return {};
+    try {
+      const bridge = await BridgeService.load(companyId);
+      return bridge?.phoneticIndex || {};
     } catch (_e) {
       return {};
     }

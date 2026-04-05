@@ -244,7 +244,7 @@
     .toggle input:checked + .toggle-slider::after { transform: translateX(16px); }
 
     /* ── Calibration tab ─────────────────────────────────────── */
-    .cal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .cal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .cal-stat {
       background: var(--bg-card); border: 1px solid var(--border);
       border-radius: var(--radius-sm); padding: 20px;
@@ -255,6 +255,7 @@
     .cal-stat.layer1 .cal-stat-value  { color: var(--color-success); }
     .cal-stat.layer2 .cal-stat-value  { color: var(--color-warning); }
     .cal-stat.unknown .cal-stat-value { color: var(--color-danger); }
+    .cal-stat.fuzzy .cal-stat-value   { color: #8b5cf6; }
 
     /* ── Buttons ─────────────────────────────────────────────── */
     .btn {
@@ -724,6 +725,10 @@
     <div class="cal-stat unknown">
       <div class="cal-stat-value" id="calUnknownPct">—</div>
       <div class="cal-stat-label">UNKNOWN<br><small style="opacity:.7;">No match</small></div>
+    </div>
+    <div class="cal-stat fuzzy">
+      <div class="cal-stat-value" id="calFuzzyPct">—</div>
+      <div class="cal-stat-label">Fuzzy Recovery<br><small style="opacity:.7;">Synonym + Phonetic</small></div>
     </div>
   </div>
 

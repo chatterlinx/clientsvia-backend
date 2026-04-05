@@ -787,8 +787,26 @@ class KCDiscoveryRunner {
           companyId, callSid, turn,
           containerId: uapResult.containerId,
           confidence:  uapResult.confidence,
+          matchType:   uapResult.matchType,
           threshold:   UAP_CONFIDENCE_THRESHOLD,
         });
+
+        // Log fuzzy recovery attempts so calibration dashboard can track them
+        if (uapResult.matchType === 'SYNONYM' || uapResult.matchType === 'FUZZY_PHONETIC') {
+          _writeDiscoveryNotes(companyId, callSid, {
+            qaLog: [{
+              type:          'UAP_LAYER1',
+              containerId:   uapResult.containerId,
+              sectionIdx:    uapResult.sectionIdx,
+              confidence:    uapResult.confidence,
+              matchType:     uapResult.matchType,
+              phrase:        uapResult.matchedPhrase,
+              hit:           false,
+              fuzzyRecovery: true,
+              turn:          turn ?? 0,
+            }],
+          }).catch(() => {});
+        }
       }
     } catch (_uapErr) {
       logger.warn('[KC_ENGINE] UAP Layer 1 error — falling through', {

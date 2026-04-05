@@ -77,7 +77,17 @@ router.get('/:companyId/stats', async (req, res) => {
           _layer: {
             $switch: {
               branches: [
-                // UAP_LAYER1 → always SKIP (diagnostic only — the actual outcome is
+                // UAP_LAYER1 with fuzzyRecovery flag → track separately
+                {
+                  case: {
+                    $and: [
+                      { $eq: ['$_qaEntry.type', 'UAP_LAYER1'] },
+                      { $eq: ['$_qaEntry.fuzzyRecovery', true] },
+                    ]
+                  },
+                  then: 'fuzzyRecovery'
+                },
+                // UAP_LAYER1 → SKIP (diagnostic only — the actual outcome is
                 // recorded as a separate entry: {question,answer} for KC match,
                 // KC_LLM_FALLBACK for Layer 2, or KC_GRACEFUL_ACK for unknown)
                 { case: { $eq: ['$_qaEntry.type', 'UAP_LAYER1'] }, then: 'SKIP' },
@@ -98,7 +108,7 @@ router.get('/:companyId/stats', async (req, res) => {
       { $match: { _layer: { $ne: 'SKIP' } } },
     ];
 
-    // ── Facet: summary stats + recent calls ──────────────────────────────────
+    // ── Facet: summary stats + recent calls + matchType breakdown ──────────
     pipeline.push({
       $facet: {
         // Aggregate counts by layer
@@ -120,10 +130,16 @@ router.get('/:companyId/stats', async (req, res) => {
               layer1:     { $sum: { $cond: [{ $eq: ['$_layer', 'layer1'] }, 1, 0] } },
               layer2:     { $sum: { $cond: [{ $eq: ['$_layer', 'layer2'] }, 1, 0] } },
               unknown:    { $sum: { $cond: [{ $eq: ['$_layer', 'unknown'] }, 1, 0] } },
+              fuzzy:      { $sum: { $cond: [{ $eq: ['$_layer', 'fuzzyRecovery'] }, 1, 0] } },
             },
           },
           { $sort: { capturedAt: -1 } },
           { $limit: 20 },
+        ],
+        // Match type distribution across all non-SKIP entries that have matchType
+        matchTypeBreakdown: [
+          { $match: { '_qaEntry.matchType': { $exists: true, $ne: null } } },
+          { $group: { _id: '$_qaEntry.matchType', count: { $sum: 1 } } },
         ],
       },
     });
@@ -135,10 +151,11 @@ router.get('/:companyId/stats', async (req, res) => {
     for (const row of (result?.summary || [])) {
       summaryMap[row._id] = row.count;
     }
-    const layer1Count  = summaryMap.layer1  || 0;
-    const layer2Count  = summaryMap.layer2  || 0;
-    const unknownCount = summaryMap.unknown || 0;
-    const totalEntries = layer1Count + layer2Count + unknownCount;
+    const layer1Count        = summaryMap.layer1        || 0;
+    const layer2Count        = summaryMap.layer2        || 0;
+    const unknownCount       = summaryMap.unknown       || 0;
+    const fuzzyRecoveryCount = summaryMap.fuzzyRecovery || 0;
+    const totalEntries = layer1Count + layer2Count + unknownCount + fuzzyRecoveryCount;
 
     const pct = (n) => totalEntries > 0 ? Math.round((n / totalEntries) * 100) : 0;
 
@@ -150,15 +167,24 @@ router.get('/:companyId/stats', async (req, res) => {
       layer1:     c.layer1,
       layer2:     c.layer2,
       unknown:    c.unknown,
+      fuzzy:      c.fuzzy,
+    }));
+
+    // ── Format match type breakdown ────────────────────────────────────────
+    const matchTypeBreakdown = (result?.matchTypeBreakdown || []).map(r => ({
+      matchType: r._id || 'UNKNOWN',
+      count:     r.count,
     }));
 
     return res.json({
       success: true,
       stats: {
         totalEntries,
-        layer1:  { count: layer1Count,  pct: pct(layer1Count) },
-        layer2:  { count: layer2Count,  pct: pct(layer2Count) },
-        unknown: { count: unknownCount, pct: pct(unknownCount) },
+        layer1:         { count: layer1Count,        pct: pct(layer1Count) },
+        layer2:         { count: layer2Count,        pct: pct(layer2Count) },
+        unknown:        { count: unknownCount,       pct: pct(unknownCount) },
+        fuzzyRecovery:  { count: fuzzyRecoveryCount, pct: pct(fuzzyRecoveryCount) },
+        matchTypeBreakdown,
         callCount:   recentCalls.length,
         targetCalls: 500,
         recentCalls,

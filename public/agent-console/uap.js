@@ -656,13 +656,15 @@
     const l1El      = document.getElementById('calLayer1Pct');
     const l2El      = document.getElementById('calLayer2Pct');
     const unkEl     = document.getElementById('calUnknownPct');
+    const fuzzyEl   = document.getElementById('calFuzzyPct');
     const bodyEl    = document.getElementById('calBody');
     if (!bodyEl) return;
 
     // Show loading state
-    if (l1El)  l1El.textContent  = '…';
-    if (l2El)  l2El.textContent  = '…';
-    if (unkEl) unkEl.textContent = '…';
+    if (l1El)    l1El.textContent    = '…';
+    if (l2El)    l2El.textContent    = '…';
+    if (unkEl)   unkEl.textContent   = '…';
+    if (fuzzyEl) fuzzyEl.textContent = '…';
     bodyEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.813rem;">Loading calibration data…</div>';
 
     try {
@@ -676,9 +678,10 @@
       const s = data.stats;
 
       // ── Populate stat cards ────────────────────────────────────────────
-      if (l1El)  l1El.textContent  = s.totalEntries > 0 ? `${s.layer1.pct}%`  : '—';
-      if (l2El)  l2El.textContent  = s.totalEntries > 0 ? `${s.layer2.pct}%`  : '—';
-      if (unkEl) unkEl.textContent = s.totalEntries > 0 ? `${s.unknown.pct}%` : '—';
+      if (l1El)    l1El.textContent    = s.totalEntries > 0 ? `${s.layer1.pct}%`  : '—';
+      if (l2El)    l2El.textContent    = s.totalEntries > 0 ? `${s.layer2.pct}%`  : '—';
+      if (unkEl)   unkEl.textContent   = s.totalEntries > 0 ? `${s.unknown.pct}%` : '—';
+      if (fuzzyEl) fuzzyEl.textContent = s.totalEntries > 0 ? `${s.fuzzyRecovery?.pct || 0}%` : '—';
 
       // ── No data yet ────────────────────────────────────────────────────
       if (s.totalEntries === 0) {
@@ -711,7 +714,7 @@
       let callRows = '';
       if (s.recentCalls && s.recentCalls.length > 0) {
         callRows = s.recentCalls.map(c => {
-          const total = c.layer1 + c.layer2 + c.unknown;
+          const total = c.layer1 + c.layer2 + c.unknown + (c.fuzzy || 0);
           const d     = c.capturedAt ? new Date(c.capturedAt) : null;
           const when  = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
           return `<tr>
@@ -721,6 +724,7 @@
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#059669;font-weight:600;">${c.layer1}</td>
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#d97706;font-weight:600;">${c.layer2}</td>
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#dc2626;font-weight:600;">${c.unknown}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#8b5cf6;font-weight:600;">${c.fuzzy || 0}</td>
             <td style="padding:6px 10px;font-size:.75rem;text-align:center;">${total}</td>
           </tr>`;
         }).join('');
@@ -736,6 +740,7 @@
               <th style="padding:6px 10px;font-size:.7rem;color:#059669;text-align:center;font-weight:500;">L1</th>
               <th style="padding:6px 10px;font-size:.7rem;color:#d97706;text-align:center;font-weight:500;">L2</th>
               <th style="padding:6px 10px;font-size:.7rem;color:#dc2626;text-align:center;font-weight:500;">Unk</th>
+              <th style="padding:6px 10px;font-size:.7rem;color:#8b5cf6;text-align:center;font-weight:500;">Fuzzy</th>
               <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Total</th>
             </tr>
           </thead>
@@ -744,11 +749,50 @@
 
       // ── Assemble summary block ─────────────────────────────────────────
       const summaryLine = `
-        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:.8rem;">
+        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:.8rem;flex-wrap:wrap;">
           <span style="color:#059669;font-weight:600;">Layer 1: ${s.layer1.count}</span>
           <span style="color:#d97706;font-weight:600;">LLM Agent: ${s.layer2.count}</span>
           <span style="color:#dc2626;font-weight:600;">Unknown: ${s.unknown.count}</span>
+          <span style="color:#8b5cf6;font-weight:600;">Fuzzy: ${s.fuzzyRecovery?.count || 0}</span>
         </div>`;
+
+      // ── Match type distribution ───────────────────────────────────────
+      const _mtColors = { EXACT: '#059669', PARTIAL: '#0d9488', WORD_OVERLAP: '#d97706', SYNONYM: '#8b5cf6', FUZZY_PHONETIC: '#a855f7' };
+      let matchTypeHTML = '';
+      if (s.matchTypeBreakdown && s.matchTypeBreakdown.length > 0) {
+        const sorted = [...s.matchTypeBreakdown].sort((a, b) => b.count - a.count);
+        const mtTotal = sorted.reduce((sum, r) => sum + r.count, 0);
+        const mtRows = sorted.map(mt => {
+          const pctVal = mtTotal > 0 ? Math.round((mt.count / mtTotal) * 100) : 0;
+          const color  = _mtColors[mt.matchType] || '#64748b';
+          return `<tr>
+            <td style="padding:6px 10px;font-size:.75rem;font-weight:600;color:${color};">${_esc(mt.matchType)}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;font-weight:600;">${mt.count}</td>
+            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#64748b;">${pctVal}%</td>
+            <td style="padding:6px 10px;">
+              <div style="width:100%;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
+                <div style="width:${pctVal}%;height:100%;background:${color};border-radius:3px;"></div>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+
+        matchTypeHTML = `
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">
+            <div style="font-size:.75rem;color:#64748b;margin-bottom:8px;font-weight:500;">Match Type Distribution</div>
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;">Type</th>
+                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Count</th>
+                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">%</th>
+                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;"></th>
+                </tr>
+              </thead>
+              <tbody>${mtRows}</tbody>
+            </table>
+          </div>`;
+      }
 
       bodyEl.innerHTML = `
         ${statusBadge}
@@ -756,6 +800,7 @@
         ${summaryLine}
         <div style="font-size:.75rem;color:#64748b;margin-bottom:8px;font-weight:500;">Recent Calls (${s.recentCalls.length})</div>
         ${table}
+        ${matchTypeHTML}
       `;
 
     } catch (err) {
