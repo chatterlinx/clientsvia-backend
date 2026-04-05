@@ -2320,6 +2320,222 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/knowledge/cross-scan
+// Compare phrases against ALL sections across ALL KCs in the company.
+// Two modes:
+//   With sourceContainerId/sourceSectionIndex → flags current section (Feature A)
+//   Without source → pure discovery mode (Feature B / Phrase Finder)
+//
+// Returns top 3 content matches per phrase + duplicate phrase detection.
+// Body: { phrases[], sourceContainerId?, sourceSectionIndex? }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { phrases, sourceContainerId, sourceSectionIndex } = req.body;
+  if (!Array.isArray(phrases) || !phrases.length) {
+    return res.status(400).json({ success: false, error: 'phrases[] required' });
+  }
+
+  try {
+    const cleanPhrases = phrases.map(p => `${p}`.trim()).filter(Boolean);
+
+    // ── Load ALL containers with embeddings + caller phrases ────────────
+    const allDocs = await CompanyKnowledgeContainer.collection.find(
+      { companyId, isActive: { $ne: false } },
+      { projection: {
+        title: 1,
+        'sections.label': 1,
+        'sections.contentEmbedding': 1,
+        'sections.isActive': 1,
+        'sections.callerPhrases': 1,
+      } }
+    ).toArray();
+
+    // ── Build section index: every scorable section with its embedding ──
+    const sectionIndex = [];
+    for (const doc of allDocs) {
+      const docId = doc._id.toString();
+      (doc.sections || []).forEach((sec, idx) => {
+        if (!sec.contentEmbedding?.length) return;
+        sectionIndex.push({
+          containerId:    docId,
+          containerName:  doc.title || 'Untitled',
+          sectionIndex:   idx,
+          sectionLabel:   sec.label || `Section ${idx + 1}`,
+          contentEmb:     sec.contentEmbedding,
+          callerPhrases:  (sec.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
+          isActive:       sec.isActive !== false,
+          isCurrentSection: sourceContainerId
+            ? (docId === sourceContainerId && idx === sourceSectionIndex)
+            : false,
+        });
+      });
+    }
+
+    // ── Embed input phrases ─────────────────────────────────────────────
+    const phraseEmbeddings = await SemanticMatchService.embedBatch(cleanPhrases);
+
+    // ── Pre-embed all caller phrases for duplicate detection ────────────
+    // Collect unique caller phrases across all sections
+    const allCallerPhrases = [];
+    const callerPhraseMap  = [];     // { sectionIdx in sectionIndex, phraseText }
+    for (let sIdx = 0; sIdx < sectionIndex.length; sIdx++) {
+      for (const cp of sectionIndex[sIdx].callerPhrases) {
+        allCallerPhrases.push(cp);
+        callerPhraseMap.push({ sIdx, text: cp });
+      }
+    }
+    const callerPhraseEmbeddings = allCallerPhrases.length
+      ? await SemanticMatchService.embedBatch(allCallerPhrases)
+      : [];
+
+    // ── Score each input phrase ─────────────────────────────────────────
+    const results = [];
+    for (let i = 0; i < cleanPhrases.length; i++) {
+      const phrase = cleanPhrases[i];
+      const emb    = phraseEmbeddings[i];
+
+      if (!emb?.length) {
+        results.push({ phrase, matches: [], duplicates: [] });
+        continue;
+      }
+
+      // Score vs every section's content embedding
+      const contentScores = sectionIndex.map((sec, sIdx) => ({
+        sIdx,
+        containerId:      sec.containerId,
+        containerName:    sec.containerName,
+        sectionIndex:     sec.sectionIndex,
+        sectionLabel:     sec.sectionLabel,
+        contentScore:     _cosineSimilarity(emb, sec.contentEmb),
+        isCurrentSection: sec.isCurrentSection,
+        isActive:         sec.isActive,
+      }));
+
+      // Sort by score descending, take top 5
+      contentScores.sort((a, b) => b.contentScore - a.contentScore);
+      const topMatches = contentScores.slice(0, 5).map(m => ({
+        containerId:      m.containerId,
+        containerName:    m.containerName,
+        sectionIndex:     m.sectionIndex,
+        sectionLabel:     m.sectionLabel,
+        contentScore:     Math.round(m.contentScore * 1000) / 1000,
+        isCurrentSection: m.isCurrentSection,
+        isActive:         m.isActive,
+      }));
+
+      // Check for duplicate caller phrases (cosine ≥ 0.92)
+      const duplicates = [];
+      for (let cpIdx = 0; cpIdx < callerPhraseEmbeddings.length; cpIdx++) {
+        const cpEmb = callerPhraseEmbeddings[cpIdx];
+        if (!cpEmb?.length) continue;
+        const sim = _cosineSimilarity(emb, cpEmb);
+        if (sim >= 0.92) {
+          const { sIdx, text } = callerPhraseMap[cpIdx];
+          const sec = sectionIndex[sIdx];
+          // Don't flag duplicates in the source section itself
+          if (sec.isCurrentSection) continue;
+          duplicates.push({
+            phrase:         text,
+            similarity:     Math.round(sim * 1000) / 1000,
+            containerId:    sec.containerId,
+            containerName:  sec.containerName,
+            sectionIndex:   sec.sectionIndex,
+            sectionLabel:   sec.sectionLabel,
+          });
+        }
+      }
+
+      // Deduplicate — keep highest similarity per section
+      const dedupMap = new Map();
+      for (const d of duplicates) {
+        const key = `${d.containerId}:${d.sectionIndex}`;
+        const existing = dedupMap.get(key);
+        if (!existing || d.similarity > existing.similarity) dedupMap.set(key, d);
+      }
+
+      results.push({
+        phrase,
+        matches:    topMatches,
+        duplicates: [...dedupMap.values()].sort((a, b) => b.similarity - a.similarity).slice(0, 5),
+      });
+    }
+
+    return res.json({ success: true, results });
+  } catch (err) {
+    logger.error('[companyKnowledge] cross-scan error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Cross-scan failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/knowledge/draft-section
+// Generate a section label + starter content for a caller phrase that has
+// no good home in existing KCs. Uses Groq (Llama 3.3 70B).
+//
+// Body: { phrase }
+// Returns: { label, content }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/draft-section', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const phrase = `${req.body.phrase || ''}`.trim();
+  if (!phrase) return res.status(400).json({ success: false, error: 'phrase required' });
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.status(500).json({ success: false, error: 'GROQ_API_KEY not configured' });
+
+  try {
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   250,
+      temperature: 0.5,
+      jsonMode:    true,
+      system: `You are a knowledge base architect for an AI phone receptionist at a service company.
+
+A caller asked a question that no existing knowledge section covers. Generate a new section to answer it.
+
+Return ONLY a JSON object with exactly these two fields:
+{
+  "label": "Short topic label (2-5 words, title case)",
+  "content": "The answer a phone receptionist would read to the caller. Natural, conversational, informative. Maximum 180 characters."
+}
+
+The label should categorize the topic (e.g. "Tune-Up Frequency", "Emergency Service Hours", "Warranty Coverage").
+The content should directly answer the caller's question in a helpful, professional tone.`,
+      messages: [{ role: 'user', content: `Caller asked: "${phrase}"` }],
+    });
+
+    if (!result.response) throw new Error('No response from LLM');
+
+    let parsed;
+    try {
+      parsed = JSON.parse(result.response);
+    } catch (_) {
+      const match = result.response.match(/\{[\s\S]*?\}/);
+      parsed = match ? JSON.parse(match[0]) : null;
+    }
+
+    if (!parsed?.label || !parsed?.content) {
+      throw new Error('Invalid response format');
+    }
+
+    return res.json({
+      success: true,
+      label:   parsed.label.trim().slice(0, 80),
+      content: parsed.content.trim().slice(0, 300),
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] draft-section error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Draft generation failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/knowledge/phrase-suggestions
 // Return missed utterances from production calls that semantically match
 // this section — sourced from Customer.discoveryNotes[].qaLog[] where
