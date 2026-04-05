@@ -2194,13 +2194,26 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     const targetSection = targetRaw.sections?.[sectionIndex];
     if (!targetSection) return res.status(400).json({ success: false, error: 'Section index out of range' });
 
-    const targetEmb = targetSection.contentEmbedding;
-    if (!targetEmb?.length) {
-      return res.status(400).json({ success: false, error: 'Section has no content embedding — save the section first to generate one' });
-    }
-
     // Section content text for PhraseReducerService (protected phrases extraction)
     const sectionContentText = `${targetSection.label || ''}: ${targetSection.content || ''}`.trim();
+
+    // Auto-generate content embedding if missing (avoids hard 400 on first score)
+    let targetEmb = targetSection.contentEmbedding;
+    if (!targetEmb?.length) {
+      if (!sectionContentText) {
+        return res.status(400).json({ success: false, error: 'Section has no content — add content before scoring phrases' });
+      }
+      const [generated] = await SemanticMatchService.embedBatch([sectionContentText]);
+      if (!generated?.length) {
+        return res.status(500).json({ success: false, error: 'Failed to generate content embedding' });
+      }
+      targetEmb = generated;
+      // Persist so future calls don't re-embed (fire-and-forget)
+      CompanyKnowledgeContainer.collection.updateOne(
+        _resolveRawQuery(containerId, companyId),
+        { $set: { [`sections.${sectionIndex}.contentEmbedding`]: generated, [`sections.${sectionIndex}.contentEmbeddingAt`]: new Date() } }
+      ).catch(e => logger.warn('[companyKnowledge] Failed to persist auto-generated contentEmbedding', { error: e.message }));
+    }
 
     // ── Load all other sections' embeddings (for Tier 2 clarity gap) ─────
     const allRaw = await CompanyKnowledgeContainer.collection.find(
