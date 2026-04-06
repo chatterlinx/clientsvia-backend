@@ -57,8 +57,16 @@ const logger                  = require('../../../utils/logger');
 // ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
 
-// UAP confidence threshold (G12: UAP confidence ≥ 0.8 wins, else keyword scoring)
+// UAP confidence threshold — phrase match must reach this before Logic 2 runs
 const UAP_CONFIDENCE_THRESHOLD = 0.80;
+
+// ── Logic 1 + Logic 2 combined confidence gate ────────────────────────────────
+// When a section has an anchor defined, both gates must pass:
+//   combined = (phraseScore × 0.60) + (coreScore × 0.40) ≥ COMBINED_THRESHOLD
+// Below threshold → fall through to Groq. Anchor-less sections skip this gate.
+const COMBINED_THRESHOLD      = 0.90;
+const PHRASE_WEIGHT           = 0.60;
+const CORE_WEIGHT             = 0.40;
 
 // ============================================================================
 // PATH CONSTANTS
@@ -751,21 +759,100 @@ class KCDiscoveryRunner {
 
         if (fullContainer) {
           const targetSection = fullContainer.sections?.[uapResult.sectionIdx] || null;
-          match = {
-            container:      fullContainer,
-            score:          Math.round(uapResult.confidence * 100),
-            matchSource:    'UAP_LAYER1',
-            uapResult,
-            targetSection,
-            targetSectionIdx: uapResult.sectionIdx,
-          };
+          const anchorTerm    = uapResult.anchorTerm || targetSection?.anchor?.term || null;
 
-          logger.info('[KC_ENGINE] UAP resolved container + section', {
-            companyId, callSid, turn,
-            containerTitle: fullContainer.title,
-            sectionLabel:   targetSection?.label || '(all)',
-            confidence:     uapResult.confidence,
-          });
+          // ══════════════════════════════════════════════════════════════════
+          // ANCHOR GATE + LOGIC 2 — fires only when section has an anchor
+          // Sections without anchor.term route normally (backward compatible)
+          // ══════════════════════════════════════════════════════════════════
+          let anchorGatePassed = true;
+
+          if (anchorTerm) {
+            const normInput = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+            const anchorPresent = normInput.includes(anchorTerm);
+
+            if (!anchorPresent) {
+              // Anchor term not in utterance — this section cannot fire
+              anchorGatePassed = false;
+              logger.info('[KC_ENGINE] ANCHOR GATE — term not in utterance, falling through', {
+                companyId, callSid, turn,
+                anchorTerm,
+                sectionLabel: targetSection?.label,
+              });
+            } else {
+              // Anchor present — run Logic 2 core confirmation
+              try {
+                const SemanticMatchService = require('./SemanticMatchService');
+                const CompanyKnowledgeContainer = require('../../../models/CompanyKnowledgeContainer');
+
+                // Load phraseCoreEmbedding + embed utterance in parallel
+                const [utteranceEmb, secDoc] = await Promise.all([
+                  SemanticMatchService.embed(userInput),
+                  CompanyKnowledgeContainer.findById(uapResult.containerId)
+                    .select(`+sections.phraseCoreEmbedding`)
+                    .lean(),
+                ]);
+
+                const phraseCoreEmb = secDoc?.sections?.[uapResult.sectionIdx]?.phraseCoreEmbedding;
+
+                if (utteranceEmb?.length && phraseCoreEmb?.length) {
+                  // Cosine similarity between utterance and phrase core
+                  let dot = 0, ma = 0, mb = 0;
+                  for (let _i = 0; _i < utteranceEmb.length; _i++) {
+                    dot += utteranceEmb[_i] * phraseCoreEmb[_i];
+                    ma  += utteranceEmb[_i] * utteranceEmb[_i];
+                    mb  += phraseCoreEmb[_i] * phraseCoreEmb[_i];
+                  }
+                  const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
+                  const combined  = (uapResult.confidence * PHRASE_WEIGHT) + (coreScore * CORE_WEIGHT);
+
+                  logger.info('[KC_ENGINE] ANCHOR + LOGIC 2 scored', {
+                    companyId, callSid, turn,
+                    anchorTerm,
+                    phraseScore:  uapResult.confidence,
+                    coreScore:    Math.round(coreScore * 100) / 100,
+                    combined:     Math.round(combined * 100) / 100,
+                    threshold:    COMBINED_THRESHOLD,
+                    pass:         combined >= COMBINED_THRESHOLD,
+                  });
+
+                  if (combined < COMBINED_THRESHOLD) {
+                    anchorGatePassed = false;
+                    logger.info('[KC_ENGINE] LOGIC 2 — combined below threshold, falling through to Groq', {
+                      companyId, callSid, turn,
+                      combined: Math.round(combined * 100) / 100,
+                      threshold: COMBINED_THRESHOLD,
+                    });
+                  }
+                }
+                // If phraseCoreEmbedding not yet scored (admin hasn't run Re-score),
+                // skip Logic 2 and route normally — don't punish unconfigured sections.
+              } catch (_l2Err) {
+                logger.warn('[KC_ENGINE] Logic 2 error — routing normally', {
+                  companyId, callSid, err: _l2Err.message,
+                });
+              }
+            }
+          }
+
+          if (anchorGatePassed) {
+            match = {
+              container:        fullContainer,
+              score:            Math.round(uapResult.confidence * 100),
+              matchSource:      'UAP_LAYER1',
+              uapResult,
+              targetSection,
+              targetSectionIdx: uapResult.sectionIdx,
+            };
+
+            logger.info('[KC_ENGINE] UAP resolved container + section', {
+              companyId, callSid, turn,
+              containerTitle: fullContainer.title,
+              sectionLabel:   targetSection?.label || '(all)',
+              confidence:     uapResult.confidence,
+              anchorGate:     anchorTerm ? 'passed' : 'n/a',
+            });
+          }
         }
 
         // Log to discoveryNotes qaLog (diagnostic, fire-and-forget)

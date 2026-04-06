@@ -27,10 +27,13 @@
  *   Examples: "Price", "What's Included", "Warranty", "Duration",
  *             "Availability", "How It Works", "Who Needs This"
  *
- * MATCHING (3-tier):
- *   Gate 2.5: UAP phrase match — callerPhrases[] per section → BridgeService phraseIndex → <1ms
- *   Gate 2.8: Semantic embedding — section.contentEmbedding vs utterance embedding → ~50ms
- *   Gate 3:   Keyword fallback — section.contentKeywords[] (auto-extracted) → <1ms
+ * MATCHING (anchor + phrase intelligence):
+ *   Gate pre:  Anchor check — section.anchor.term must be present in utterance → <0.1ms
+ *   Logic 1:   Phrase match — direct (UAP phraseIndex) + fuzzy (token/phonetic) → <1ms
+ *   Logic 2:   Core confirmation — cosine(utteranceEmb, phraseCoreEmbedding) → ~30ms
+ *   Fork:      combined(Logic1 × 0.6 + Logic2 × 0.4) ≥ 0.90 → fire | below → Groq
+ *   Gate 2.8:  Semantic fallback for sections without anchor → ~50ms
+ *   Gate 3:    Keyword fallback → <1ms
  *
  * BOOKING ACTION:
  *   offer_to_book    — after answering, Groq offers to schedule (or appends fixed phrase)
@@ -255,19 +258,41 @@ const sectionSchema = new mongoose.Schema(
       comment:   'Short promo title (e.g. "Spring Tune-Up — $49"). Falls back to section label if empty.'
     },
 
-    // ── Anchor Terms — LLM-extracted topic anchors for Tier 3 phrase scoring ──
-    // 3-5 key domain-specific words extracted by Claude Haiku from section content.
-    // Cached here so Tier 3 check (≥2 anchors present in phrase) needs no LLM call.
-    // Regenerated explicitly via the admin "Refresh Anchors" button — not auto.
-    anchorTerms: {
-      type:    [String],
-      default: [],
-      comment: '3-5 topic anchor terms extracted by Claude Haiku. Used by T3 phrase scoring.'
+    // ── Anchor — admin-defined discriminating gate term ─────────────────────
+    // Single term that MUST be present in caller's utterance for this section
+    // to be a candidate. Acts as a hard pre-filter before phrase matching.
+    // Runtime gate order: anchor check (<0.1ms) → phrase match → core match.
+    // Sections without an anchor participate in UAP matching as before.
+    anchor: {
+      term: {
+        type:      String,
+        default:   '',
+        trim:      true,
+        lowercase: true,
+        maxlength: 60,
+        comment:   'Discriminating gate term — must appear in caller utterance. e.g. "amex", "warranty", "emergency"'
+      },
     },
-    anchorTermsUpdatedAt: {
-      type:    Date,
+
+    // ── Phrase Core — run summary of all callerPhrases ───────────────────
+    // PhraseReducerService applied to all phrase texts combined.
+    // Computed on Re-score. Used as Logic 2 target for runtime gate.
+    // Distinct from contentCore (which comes from section content text).
+    phraseCore: {
+      type:    String,
+      default: null,
+      comment: 'Reduced semantic core of all callerPhrases combined. Logic 2 comparison target.'
+    },
+    phraseCoreEmbedding: {
+      type:    [Number],
       default: undefined,
-      comment: 'Timestamp of last anchor extraction. Stale if content changed since.'
+      select:  false,
+      comment: '512-dim embedding of phraseCore. Used by Logic 2 runtime gate. select:false keeps it out of regular queries.'
+    },
+    phraseCoreScoredAt: {
+      type:    Date,
+      default: null,
+      comment: 'Timestamp of last phraseCore computation.'
     },
 
     // ── Pre-qualify question (optional) ───────────────────────────────────

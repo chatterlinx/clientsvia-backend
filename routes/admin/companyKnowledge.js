@@ -2160,25 +2160,24 @@ function _preGenAudioFixed(companyId, container, reason) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/knowledge/phrase-score
-// 3-tier phrase quality scoring for the admin KC section editor.
+// Phrase quality scoring + Logic 2 core summary for the KC section editor.
 //
 // Body: { containerId, sectionIndex, phrases: string[] }
 //
 // Tier 1 — Confidence:  best cosine(phrase_embedding, storedCallerPhrase_embedding) ≥ 0.75
 //                        Symmetric: question space ↔ question space.
 //                        Falls back to cosine(phrase_embedding, contentEmbedding) if no
-//                        callerPhrase embeddings exist yet.
-// Tier 2 — Clarity:     gap between T1 score and best score across ALL other
-//                        sections in the company ≥ 0.20 (Einstein's dual metric).
-//                        Competing sections scored against their callerPhrase embeddings
-//                        (or contentEmbedding if none stored).
-// Tier 3 — Core Match:  Reduce phrase via PhraseReducerService, embed the reduced
-//                        "core", compare to stored callerPhrase embeddings (or content).
-//                        Core cosine ≥ 0.70 → pass (stripped phrase still routes correctly)
+//                        stored phrase embeddings exist.
+// Tier 2 — Clarity:     gap between T1 score and best score across ALL other sections ≥ 0.20.
+// Tier 3 — Core Match:  Reduce phrase → embed core → compare vs stored phrases/content.
+// TC     — Topic Corr:  cosine(phraseCore, contentCore) — phrase space vs content space.
 //
-// Returns: { scores: { [phrase]: { t1, t2, t3, t3Score, core, status, t1Source } } }
-//   status: 'green' | 'yellow' | 'orange' | 'red'
-//   t1Source: 'phrases' | 'content'  (what T1 compared against)
+// phraseCore — run summary of ALL phrases combined (Logic 2 runtime target).
+//   Computed by reducing all phrase texts together via PhraseReducerService.
+//   Embedded → phraseCoreEmbedding persisted to MongoDB (select:false, runtime gate).
+//   Distinct from contentCore (derived from section content, not phrases).
+//
+// Returns: { scores: { [phrase]: { t1, t1Source, t2, t3, t3Score, tc, core, status } }, phraseCore, contentCore }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   const { companyId } = req.params;
@@ -2251,27 +2250,33 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       .map(p => p.text)
       .filter(Boolean);
 
-    // ── T3 prep: reduce all phrases via PhraseReducerService ────────────
-    // ── Reduce phrases + content core in parallel ────────────────────────
-    const [reductions, contentReduction] = await Promise.all([
+    // ── Reduce: individual phrase cores + content core + phraseCore ──────
+    // phraseCore = run summary of ALL phrases combined → Logic 2 runtime target.
+    // contentCore = reduced essence of section content → TC comparison target.
+    const allPhrasesText = cleanPhrases.join(' ');
+    const [reductions, contentReduction, phraseCoreReduction] = await Promise.all([
       PhraseReducerService.reduceBatch(cleanPhrases, sectionContentText),
       PhraseReducerService.reduce(sectionContentText, sectionContentText),
+      PhraseReducerService.reduce(allPhrasesText, allPhrasesText),
     ]);
     const cores       = reductions.map(r => r.core);
-    const contentCore = contentReduction?.core || null;
+    const contentCore = contentReduction?.core   || null;
+    const phraseCore  = phraseCoreReduction?.core || null;
 
     // ── Embed everything in one shot ─────────────────────────────────────
     const coreTexts  = [];
     const coreIdxMap = [];                       // maps coreTexts[j] → original index i
     cores.forEach((c, i) => { if (c) { coreTexts.push(c); coreIdxMap.push(i); } });
 
-    const [rawEmbeddings, coreEmbeddingsRaw, storedPhraseEmbs, contentCoreEmbArr] = await Promise.all([
+    const [rawEmbeddings, coreEmbeddingsRaw, storedPhraseEmbs, contentCoreEmbArr, phraseCoreEmbArr] = await Promise.all([
       SemanticMatchService.embedBatch(cleanPhrases),
       coreTexts.length        ? SemanticMatchService.embedBatch(coreTexts)        : Promise.resolve([]),
       storedPhraseTxts.length ? SemanticMatchService.embedBatch(storedPhraseTxts) : Promise.resolve([]),
       contentCore             ? SemanticMatchService.embedBatch([contentCore])     : Promise.resolve([]),
+      phraseCore              ? SemanticMatchService.embedBatch([phraseCore])      : Promise.resolve([]),
     ]);
     const contentCoreEmb = contentCoreEmbArr[0] || null;
+    const phraseCoreEmb  = phraseCoreEmbArr[0]  || null;
 
     // Spread core embeddings back to original indices
     const coreEmbeddings = new Array(cores.length).fill(null);
@@ -2361,7 +2366,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       };
     }
 
-    // ── Persist scores + contentCore to MongoDB (fire-and-forget) ────────
+    // ── Persist scores + cores + phraseCoreEmbedding (fire-and-forget) ──
     (async () => {
       try {
         const phraseIdxMap = {};
@@ -2374,8 +2379,15 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
           }
         }
         if (contentCore) {
-          setOps[`sections.${sectionIndex}.contentCore`]           = contentCore;
-          setOps[`sections.${sectionIndex}.contentCoreScoredAt`]   = new Date();
+          setOps[`sections.${sectionIndex}.contentCore`]         = contentCore;
+          setOps[`sections.${sectionIndex}.contentCoreScoredAt`] = new Date();
+        }
+        if (phraseCore) {
+          setOps[`sections.${sectionIndex}.phraseCore`]          = phraseCore;
+          setOps[`sections.${sectionIndex}.phraseCoreScoredAt`]  = new Date();
+        }
+        if (phraseCoreEmb?.length) {
+          setOps[`sections.${sectionIndex}.phraseCoreEmbedding`] = phraseCoreEmb;
         }
         if (Object.keys(setOps).length) {
           await CompanyKnowledgeContainer.collection.updateOne(
@@ -2388,7 +2400,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       }
     })();
 
-    return res.json({ success: true, scores, contentCore });
+    return res.json({ success: true, scores, phraseCore, contentCore });
   } catch (err) {
     logger.error('[companyKnowledge] phrase-score error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Phrase scoring failed' });

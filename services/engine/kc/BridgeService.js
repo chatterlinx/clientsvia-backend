@@ -2,16 +2,18 @@
 
 /**
  * ============================================================================
- * BRIDGE SERVICE  (v3.0 — Semantic Section Matching + Phonetic Index)
+ * BRIDGE SERVICE  (v4.0 — Anchor Gate + Phrase Intelligence)
  * ============================================================================
  *
  * PURPOSE:
- *   Pre-computed phrase index: callerPhrase → { containerId, sectionIdx }.
+ *   Pre-computed phrase index: callerPhrase → { containerId, sectionIdx, anchor }.
  *   Allows UtteranceActParser to resolve a caller utterance to the correct
  *   KC section in ~0ms — no scoring, no LLM.
  *
- *   v2 change: Data source moved from UAPArrays (deleted) to
- *   section.callerPhrases[] on CompanyKnowledgeContainer.
+ * ANCHOR GATE:
+ *   Each phraseIndex entry now carries the section's anchor.term.
+ *   KCDiscoveryRunner checks anchor presence in utterance BEFORE routing.
+ *   Sections without an anchor.term skip the gate (backward compatible).
  *
  * STORAGE:
  *   HOT PATH → Redis   key = bridge:{companyId}   NO TTL (event-invalidated)
@@ -19,15 +21,16 @@
  *
  * DATA STRUCTURE (stored as JSON in Redis):
  *   {
- *     builtAt:    ISO string,
- *     version:    2,
- *     companyId:  string,
+ *     builtAt:     ISO string,
+ *     version:     4,
+ *     companyId:   string,
  *     phraseCount: number,
  *     phraseIndex: {
  *       [normalisedPhrase]: {
  *         containerId:  string,
  *         sectionIdx:   number,
  *         sectionLabel: string,
+ *         anchorTerm:   string | null,  ← anchor gate term (normalised)
  *       },
  *       ...
  *     }
@@ -54,7 +57,7 @@ const { doubleMetaphone }      = require('../../../utils/stringDistance');
 
 const CONFIG = {
   KEY_PREFIX: 'bridge',  // Redis key: bridge:{companyId}
-  VERSION:   3,          // v3 — adds phoneticIndex for fuzzy recovery
+  VERSION:   4,          // v4 — adds anchorTerm per phraseIndex entry
 };
 
 // Stop words for phonetic indexing (mirrors UAP CONFIG.STOP_WORDS)
@@ -112,7 +115,7 @@ function _normalise(str) {
 async function _buildBridge(companyId) {
   const containers = await CompanyKnowledgeContainer
     .find({ companyId, isActive: true })
-    .select('_id kcId title sections.label sections.isActive sections.callerPhrases.text sections.order priority')
+    .select('_id kcId title sections.label sections.isActive sections.callerPhrases.text sections.anchor sections.order priority')
     .sort({ priority: 1, createdAt: 1 })
     .lean();
 
@@ -126,6 +129,9 @@ async function _buildBridge(companyId) {
       const section = sections[sIdx];
       // Skip inactive sections — their phrases should not be indexed for UAP matching
       if (section.isActive === false) continue;
+      // Normalise anchor term once per section (empty string = no anchor gate)
+      const anchorTerm = _normalise(section.anchor?.term || '') || null;
+
       for (const phrase of (section.callerPhrases || [])) {
         const norm = _normalise(phrase.text);
         if (!norm) continue;
@@ -136,6 +142,7 @@ async function _buildBridge(companyId) {
             containerId:  cId,
             sectionIdx:   sIdx,
             sectionLabel: section.label || '',
+            anchorTerm,   // null = no anchor gate on this section
           };
         }
       }
