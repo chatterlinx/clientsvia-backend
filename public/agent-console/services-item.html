@@ -2645,6 +2645,9 @@ function _getSections() {
           anchorWords: data.phraseAnchorWords?.[p] || [],
           score:       data.phraseScores?.[p]       || undefined,
         })),
+        // Round-trip computed cores so save never wipes them — only Re-score updates them
+        phraseCore:         data.phraseCore   || undefined,
+        contentCore:        data.contentCore  || undefined,
         negativeKeywords:   data.negativeKeywords || [],
         useFixedResponse:   !!data.useFixedResponse,
         audioUrl:           data.contentAudioUrl   || null,
