@@ -2,18 +2,19 @@
 
 /**
  * ============================================================================
- * BRIDGE SERVICE  (v4.0 — Anchor Gate + Phrase Intelligence)
+ * BRIDGE SERVICE  (v5.0 — Per-Phrase Anchor Words)
  * ============================================================================
  *
  * PURPOSE:
- *   Pre-computed phrase index: callerPhrase → { containerId, sectionIdx, anchor }.
+ *   Pre-computed phrase index: callerPhrase → { containerId, sectionIdx, anchorWords }.
  *   Allows UtteranceActParser to resolve a caller utterance to the correct
  *   KC section in ~0ms — no scoring, no LLM.
  *
- * ANCHOR GATE:
- *   Each phraseIndex entry now carries the section's anchor.term.
- *   KCDiscoveryRunner checks anchor presence in utterance BEFORE routing.
- *   Sections without an anchor.term skip the gate (backward compatible).
+ * ANCHOR GATE (per-phrase):
+ *   Each phraseIndex entry carries that phrase's own anchorWords[].
+ *   KCDiscoveryRunner checks: if anchorWords.length > 0, at least ONE must
+ *   appear in the caller utterance before routing fires.
+ *   Phrases with empty anchorWords[] skip the gate (backward compatible).
  *
  * STORAGE:
  *   HOT PATH → Redis   key = bridge:{companyId}   NO TTL (event-invalidated)
@@ -22,7 +23,7 @@
  * DATA STRUCTURE (stored as JSON in Redis):
  *   {
  *     builtAt:     ISO string,
- *     version:     4,
+ *     version:     5,
  *     companyId:   string,
  *     phraseCount: number,
  *     phraseIndex: {
@@ -30,7 +31,7 @@
  *         containerId:  string,
  *         sectionIdx:   number,
  *         sectionLabel: string,
- *         anchorTerm:   string | null,  ← anchor gate term (normalised)
+ *         anchorWords:  string[],  ← normalised anchor words for this phrase ([] = no gate)
  *       },
  *       ...
  *     }
@@ -57,7 +58,7 @@ const { doubleMetaphone }      = require('../../../utils/stringDistance');
 
 const CONFIG = {
   KEY_PREFIX: 'bridge',  // Redis key: bridge:{companyId}
-  VERSION:   4,          // v4 — adds anchorTerm per phraseIndex entry
+  VERSION:   5,          // v5 — per-phrase anchorWords[] replaces section-level anchorTerm
 };
 
 // Stop words for phonetic indexing (mirrors UAP CONFIG.STOP_WORDS)
@@ -115,7 +116,7 @@ function _normalise(str) {
 async function _buildBridge(companyId) {
   const containers = await CompanyKnowledgeContainer
     .find({ companyId, isActive: true })
-    .select('_id kcId title sections.label sections.isActive sections.callerPhrases.text sections.anchor sections.order priority')
+    .select('_id kcId title sections.label sections.isActive sections.callerPhrases.text sections.callerPhrases.anchorWords sections.order priority')
     .sort({ priority: 1, createdAt: 1 })
     .lean();
 
@@ -129,12 +130,15 @@ async function _buildBridge(companyId) {
       const section = sections[sIdx];
       // Skip inactive sections — their phrases should not be indexed for UAP matching
       if (section.isActive === false) continue;
-      // Normalise anchor term once per section (empty string = no anchor gate)
-      const anchorTerm = _normalise(section.anchor?.term || '') || null;
 
       for (const phrase of (section.callerPhrases || [])) {
         const norm = _normalise(phrase.text);
         if (!norm) continue;
+
+        // Normalise each phrase's own anchorWords ([] = no anchor gate for this phrase)
+        const anchorWords = (phrase.anchorWords || [])
+          .map(w => _normalise(w))
+          .filter(Boolean);
 
         // First phrase wins if duplicates exist across sections
         if (!phraseIndex[norm]) {
@@ -142,7 +146,7 @@ async function _buildBridge(companyId) {
             containerId:  cId,
             sectionIdx:   sIdx,
             sectionLabel: section.label || '',
-            anchorTerm,   // null = no anchor gate on this section
+            anchorWords,  // [] = no anchor gate; non-empty = at least one must match utterance
           };
         }
       }

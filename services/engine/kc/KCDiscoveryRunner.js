@@ -759,48 +759,60 @@ class KCDiscoveryRunner {
 
         if (fullContainer) {
           const targetSection = fullContainer.sections?.[uapResult.sectionIdx] || null;
-          const anchorTerm    = uapResult.anchorTerm || targetSection?.anchor?.term || null;
 
           // ══════════════════════════════════════════════════════════════════
-          // ANCHOR GATE + LOGIC 2 — fires only when section has an anchor
-          // Sections without anchor.term route normally (backward compatible)
+          // ANCHOR GATE — per-phrase anchorWords[] (v5)
+          // Matched phrase carries its own anchorWords[]. If non-empty, at
+          // least ONE must appear as a whole word in the caller's utterance.
+          // Phrases with empty anchorWords[] skip this gate entirely.
           // ══════════════════════════════════════════════════════════════════
+          const anchorWords = uapResult.anchorWords || [];  // already normalised by UAP
           let anchorGatePassed = true;
 
-          if (anchorTerm) {
-            const normInput = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-            const anchorPresent = normInput.includes(anchorTerm);
+          if (anchorWords.length > 0) {
+            const normInputWords = new Set(
+              (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean)
+            );
+            const anchorPresent = anchorWords.some(w => normInputWords.has(w));
 
             if (!anchorPresent) {
-              // Anchor term not in utterance — this section cannot fire
               anchorGatePassed = false;
-              logger.info('[KC_ENGINE] ANCHOR GATE — term not in utterance, falling through', {
+              logger.info('[KC_ENGINE] ANCHOR GATE — no anchor word in utterance, falling through', {
                 companyId, callSid, turn,
-                anchorTerm,
+                anchorWords,
                 sectionLabel: targetSection?.label,
               });
             } else {
-              // Anchor present — run Logic 2 core confirmation
+              // ══════════════════════════════════════════════════════════════
+              // LOGIC 2 — core-to-core confirmation
+              // Caller core = uapResult.topicWords (already stripped of stop
+              // words by UAP — zero extra cost). Embed caller core → cosine vs
+              // section's phraseCoreEmbedding. Symmetric comparison.
+              // If phraseCoreEmbedding not yet computed → skip, route normally.
+              // ══════════════════════════════════════════════════════════════
               try {
-                const SemanticMatchService = require('./SemanticMatchService');
+                const SemanticMatchService      = require('./SemanticMatchService');
                 const CompanyKnowledgeContainer = require('../../../models/CompanyKnowledgeContainer');
 
-                // Load phraseCoreEmbedding + embed utterance in parallel
-                const [utteranceEmb, secDoc] = await Promise.all([
-                  SemanticMatchService.embed(userInput),
+                // Use UAP's topicWords as the caller's semantic core
+                const callerCore = (uapResult.topicWords || []).join(' ') || userInput;
+
+                // Load phraseCoreEmbedding + embed caller core in parallel
+                const [callerCoreEmb, secDoc] = await Promise.all([
+                  SemanticMatchService.embed(callerCore),
                   CompanyKnowledgeContainer.findById(uapResult.containerId)
-                    .select(`+sections.phraseCoreEmbedding`)
+                    .select('+sections.phraseCoreEmbedding')
                     .lean(),
                 ]);
 
                 const phraseCoreEmb = secDoc?.sections?.[uapResult.sectionIdx]?.phraseCoreEmbedding;
 
-                if (utteranceEmb?.length && phraseCoreEmb?.length) {
-                  // Cosine similarity between utterance and phrase core
+                if (callerCoreEmb?.length && phraseCoreEmb?.length) {
+                  // Cosine similarity: caller topic core vs KC phrase core
                   let dot = 0, ma = 0, mb = 0;
-                  for (let _i = 0; _i < utteranceEmb.length; _i++) {
-                    dot += utteranceEmb[_i] * phraseCoreEmb[_i];
-                    ma  += utteranceEmb[_i] * utteranceEmb[_i];
+                  for (let _i = 0; _i < callerCoreEmb.length; _i++) {
+                    dot += callerCoreEmb[_i] * phraseCoreEmb[_i];
+                    ma  += callerCoreEmb[_i] * callerCoreEmb[_i];
                     mb  += phraseCoreEmb[_i] * phraseCoreEmb[_i];
                   }
                   const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
@@ -808,25 +820,25 @@ class KCDiscoveryRunner {
 
                   logger.info('[KC_ENGINE] ANCHOR + LOGIC 2 scored', {
                     companyId, callSid, turn,
-                    anchorTerm,
-                    phraseScore:  uapResult.confidence,
-                    coreScore:    Math.round(coreScore * 100) / 100,
-                    combined:     Math.round(combined * 100) / 100,
-                    threshold:    COMBINED_THRESHOLD,
-                    pass:         combined >= COMBINED_THRESHOLD,
+                    anchorWords,
+                    callerCore: callerCore.slice(0, 60),
+                    phraseScore: uapResult.confidence,
+                    coreScore:   Math.round(coreScore * 100) / 100,
+                    combined:    Math.round(combined * 100) / 100,
+                    threshold:   COMBINED_THRESHOLD,
+                    pass:        combined >= COMBINED_THRESHOLD,
                   });
 
                   if (combined < COMBINED_THRESHOLD) {
                     anchorGatePassed = false;
                     logger.info('[KC_ENGINE] LOGIC 2 — combined below threshold, falling through to Groq', {
                       companyId, callSid, turn,
-                      combined: Math.round(combined * 100) / 100,
+                      combined:  Math.round(combined * 100) / 100,
                       threshold: COMBINED_THRESHOLD,
                     });
                   }
                 }
-                // If phraseCoreEmbedding not yet scored (admin hasn't run Re-score),
-                // skip Logic 2 and route normally — don't punish unconfigured sections.
+                // phraseCoreEmbedding absent (Re-score not yet run) → skip Logic 2
               } catch (_l2Err) {
                 logger.warn('[KC_ENGINE] Logic 2 error — routing normally', {
                   companyId, callSid, err: _l2Err.message,
@@ -850,7 +862,7 @@ class KCDiscoveryRunner {
               containerTitle: fullContainer.title,
               sectionLabel:   targetSection?.label || '(all)',
               confidence:     uapResult.confidence,
-              anchorGate:     anchorTerm ? 'passed' : 'n/a',
+              anchorGate:     anchorWords.length ? 'passed' : 'n/a',
             });
           }
         }

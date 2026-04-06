@@ -27,12 +27,13 @@
  *   Examples: "Price", "What's Included", "Warranty", "Duration",
  *             "Availability", "How It Works", "Who Needs This"
  *
- * MATCHING (anchor + phrase intelligence):
- *   Gate pre:  Anchor check — section.anchor.term must be present in utterance → <0.1ms
+ * MATCHING (anchor-word gate + phrase intelligence):
+ *   Gate pre:  Anchor check — ANY anchorWord from matched phrase's anchorWords[] must appear
+ *              in caller utterance → <0.1ms. Sections/phrases with no anchorWords skip gate.
  *   Logic 1:   Phrase match — direct (UAP phraseIndex) + fuzzy (token/phonetic) → <1ms
- *   Logic 2:   Core confirmation — cosine(utteranceEmb, phraseCoreEmbedding) → ~30ms
+ *   Logic 2:   Core confirmation — cosine(topicWordsEmb, phraseCoreEmbedding) → ~30ms
  *   Fork:      combined(Logic1 × 0.6 + Logic2 × 0.4) ≥ 0.90 → fire | below → Groq
- *   Gate 2.8:  Semantic fallback for sections without anchor → ~50ms
+ *   Gate 2.8:  Semantic fallback → ~50ms
  *   Gate 3:    Keyword fallback → <1ms
  *
  * BOOKING ACTION:
@@ -98,6 +99,18 @@ const callerPhraseSchema = new mongoose.Schema(
     text:      { type: String, required: true, trim: true, maxlength: 200, comment: 'Full caller sentence, e.g. "I want someone to come out"' },
     embedding: { type: [Number], default: undefined, select: false, comment: '512-dim embedding from text-embedding-3-small. Auto-generated on save.' },
     addedAt:   { type: Date, default: Date.now, comment: 'When this phrase was added' },
+    // ── Anchor words — admin-defined discriminating gate terms for this phrase ──
+    // Admin double-clicks individual words inside this phrase to mark them as
+    // anchor words (orange highlight in UI). At runtime, if anchorWords is non-empty,
+    // at least ONE of these words must be present in the caller's utterance for this
+    // phrase to qualify. Multiple anchor words can be set independently per phrase.
+    // Phrases with an empty anchorWords[] skip the anchor gate entirely.
+    anchorWords: {
+      type:    [String],
+      default: [],
+      comment: 'Discriminating words in this phrase. At least one must appear in utterance. [] = no gate.'
+    },
+
     // ── Persisted 3TSM score (written by phrase-score endpoint on Re-score) ──
     score: {
       type: {
@@ -256,22 +269,6 @@ const sectionSchema = new mongoose.Schema(
       trim:      true,
       maxlength: 120,
       comment:   'Short promo title (e.g. "Spring Tune-Up — $49"). Falls back to section label if empty.'
-    },
-
-    // ── Anchor — admin-defined discriminating gate term ─────────────────────
-    // Single term that MUST be present in caller's utterance for this section
-    // to be a candidate. Acts as a hard pre-filter before phrase matching.
-    // Runtime gate order: anchor check (<0.1ms) → phrase match → core match.
-    // Sections without an anchor participate in UAP matching as before.
-    anchor: {
-      term: {
-        type:      String,
-        default:   '',
-        trim:      true,
-        lowercase: true,
-        maxlength: 60,
-        comment:   'Discriminating gate term — must appear in caller utterance. e.g. "amex", "warranty", "emergency"'
-      },
     },
 
     // ── Phrase Core — run summary of all callerPhrases ───────────────────

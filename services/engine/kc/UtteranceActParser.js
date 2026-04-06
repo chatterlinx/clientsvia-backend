@@ -22,7 +22,8 @@
  *     confidence:    number,          // 0.0-1.0
  *     matchedPhrase: string | null,   // the normalised phrase that triggered
  *     matchType:     string,          // 'EXACT' | 'PARTIAL' | 'WORD_OVERLAP' | 'SYNONYM' | 'FUZZY_PHONETIC' | 'NONE'
- *     topicWords:    string[],        // significant words (for Gate 3 fallback)
+ *     anchorWords:   string[],        // normalised anchor words for the matched phrase ([] = no gate)
+ *     topicWords:    string[],        // significant words extracted from utterance (for Gate 3 + Logic 2)
  *     rawInput:      string,
  *     normInput:     string,
  *   }
@@ -350,7 +351,7 @@ async function parse(companyId, utterance) {
       containerId:   entry.containerId  || null,
       sectionIdx:    entry.sectionIdx   ?? null,
       sectionLabel:  entry.sectionLabel || null,
-      anchorTerm:    entry.anchorTerm   || null,
+      anchorWords:   entry.anchorWords   || [],
       confidence:    hit.confidence,
       matchedPhrase: hit.phrase,
       matchType:     hit.matchType,
@@ -375,7 +376,7 @@ async function parse(companyId, utterance) {
             containerId:   entry.containerId  || null,
             sectionIdx:    entry.sectionIdx   ?? null,
             sectionLabel:  entry.sectionLabel || null,
-            anchorTerm:    entry.anchorTerm   || null,
+            anchorWords:   entry.anchorWords   || [],
             confidence:    CONFIG.CONFIDENCE.SYNONYM,
             matchedPhrase: synHit.phrase,
             matchType:     'SYNONYM',
@@ -407,7 +408,7 @@ async function parse(companyId, utterance) {
           containerId:   entry.containerId  || null,
           sectionIdx:    entry.sectionIdx   ?? null,
           sectionLabel:  entry.sectionLabel || null,
-          anchorTerm:    entry.anchorTerm   || null,
+          anchorWords:   entry.anchorWords   || [],
           confidence,
           matchedPhrase: phonHit.phrase,
           matchType:     'FUZZY_PHONETIC',

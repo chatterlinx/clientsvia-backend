@@ -281,13 +281,18 @@ function _sanitiseBody(body) {
           ...(s._id ? { _id: s._id } : {}),
         };
 
-        // Caller phrases — full sentences that callers use when asking about this section
+        // Caller phrases — full sentences that callers use when asking about this section.
+        // Each phrase may carry anchorWords[] — admin-highlighted discriminating words
+        // that must appear in the caller's utterance for this phrase's gate to pass.
         if (Array.isArray(s.callerPhrases)) {
           section.callerPhrases = s.callerPhrases
             .filter(p => (typeof p === 'string' ? p.trim() : p?.text?.trim()))
             .map(p => {
-              const text = (typeof p === 'string' ? p : p.text).trim().slice(0, 200);
-              return { text, addedAt: p?.addedAt || new Date() };
+              const text        = (typeof p === 'string' ? p : p.text).trim().slice(0, 200);
+              const anchorWords = Array.isArray(p?.anchorWords)
+                ? [...new Set(p.anchorWords.map(w => `${w}`.toLowerCase().trim()).filter(Boolean))]
+                : [];
+              return { text, anchorWords, addedAt: p?.addedAt || new Date() };
             });
         }
 

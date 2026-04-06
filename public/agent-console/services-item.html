@@ -435,42 +435,9 @@
     .pq-tc-val.tc-mid  { color: #d97706; }
     .pq-tc-val.tc-low  { color: #dc2626; }
     .pq-tc-val.tc-na   { color: #cbd5e1; }
-    /* ── Anchor Gate field ─────────────────────────────────────────────── */
-    .pq-anchor-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 16px; background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .pq-anchor-meta {
-      display: flex; flex-direction: column; gap: 1px; min-width: 130px;
-    }
-    .pq-anchor-label-text {
-      font-size: 11px; font-weight: 700; color: #374151;
-      text-transform: uppercase; letter-spacing: .05em;
-    }
-    .pq-anchor-hint {
-      font-size: 10.5px; color: #94a3b8; font-weight: 400;
-    }
-    .pq-anchor-input {
-      flex: 1; max-width: 280px; height: 32px; padding: 0 12px;
-      border: 1.5px solid #e2e8f0; border-radius: 6px;
-      font-size: 13px; font-family: inherit; color: #1e293b; background: white;
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .pq-anchor-input:focus {
-      outline: none; border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99,102,241,.10);
-    }
-    .pq-anchor-input.anchor-active {
-      border-color: #6366f1; background: #f5f3ff;
-    }
-    .pq-anchor-status {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; font-weight: 600; color: #6366f1;
-      min-width: 120px;
-    }
-    .pq-anchor-status.empty { color: #94a3b8; }
     /* ── Clickable words inside phrase cells ─────────────────────────── */
+    /* Double-click a word to mark it as an anchor word (orange).        */
+    /* Double-click again to toggle it off. Per-phrase, independent.     */
     .pq-word {
       cursor: pointer; border-radius: 3px; padding: 1px 3px;
       transition: background .12s, color .12s;
@@ -481,11 +448,6 @@
       background: #fed7aa; color: #c2410c;
       font-weight: 700; border-radius: 3px;
     }
-    /* ── Gate column in phrase table ──────────────────────────────────── */
-    .pq-gate-cell { text-align: center; min-width: 44px; width: 44px; }
-    .pq-gate-ok   { color: #16a34a; font-size: 13px; font-weight: 700; }
-    .pq-gate-warn { color: #d97706; font-size: 13px; font-weight: 700; cursor: default; }
-    .pq-gate-na   { color: #e2e8f0; font-size: 13px; }
     /* ── Core strips (phrase core + content core) ─────────────────────── */
     .core-strips-wrap {
       display: flex; flex-direction: column; gap: 0;
@@ -1940,10 +1902,13 @@ function _populateForm(c) {
   if (sorted.length) {
     sorted.forEach(s => addSection(s.label, s.content, {
       callerPhrases:      (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
+      // Build per-phrase anchor words map from DB: { phraseText → [word, ...] }
+      phraseAnchorWords:  Object.fromEntries(
+        (s.callerPhrases || []).filter(p => p?.text).map(p => [p.text, p.anchorWords || []])
+      ),
       phraseScores:       Object.fromEntries(
         (s.callerPhrases || []).filter(p => p?.text && p?.score?.status).map(p => [p.text, p.score])
       ),
-      anchor:             s.anchor?.term || '',
       phraseCore:         s.phraseCore   || null,
       contentCore:        s.contentCore  || null,
       negativeKeywords:   s.negativeKeywords || [],
@@ -1961,9 +1926,8 @@ function _populateForm(c) {
   // Complexity indicator needs sections in DOM — update now that they are rendered
   _updateComplexityIndicator();
 
-  // Restore anchor field + phrase scores + cores for all loaded sections
+  // Restore phrase scores + cores for all loaded sections
   S.sectionData.forEach((data, id) => {
-    if (data.anchor) _renderAnchorField(id, data.anchor);
     if (Object.keys(data.phraseScores || {}).length) _renderPhraseTable(id);
     if (data.phraseCore)  _renderPhraseCore(id, data.phraseCore);
     if (data.contentCore) _renderContentCore(id, data.contentCore);
@@ -2011,10 +1975,13 @@ function addSection(label = '', content = '', sectionMeta = null) {
     isPromotion,
     promotionLabel,
     callerPhrases:    sectionMeta?.callerPhrases || [],
+    // Per-phrase anchor words: { [phraseText]: [word, ...] }
+    // Admin double-clicks words inside each phrase to mark them orange (anchor words).
+    // Independent per phrase — toggling one phrase's words never affects another.
+    phraseAnchorWords: sectionMeta?.phraseAnchorWords || {},
     negativeKeywords: sectionMeta?.negativeKeywords || [],
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
-    anchor:           sectionMeta?.anchor   || '',       // discriminating gate term (admin-defined)
     phraseScores:     sectionMeta?.phraseScores  || {},  // { phrase → { t1, t2, t3, tc, status } }
     phraseCore:       sectionMeta?.phraseCore   || null, // run summary of all phrases — Logic 2 target
     contentCore:      sectionMeta?.contentCore  || null, // reduced topic core of section content
@@ -2110,24 +2077,11 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <div class="pq-header-icon">◆</div>
         <div class="pq-header-text">
           <span class="pq-header-title">Phrase Intelligence</span>
-          <span class="pq-header-sub" id="pq-sub-${id}">Anchor gate · caller phrases · core match</span>
+          <span class="pq-header-sub" id="pq-sub-${id}">Double-click words to mark anchor gates · core match</span>
         </div>
         <div class="pq-header-pills" id="pq-pills-${id}"></div>
       </div>
 
-      <!-- ── Anchor Gate ── -->
-      <div class="pq-anchor-row">
-        <div class="pq-anchor-meta">
-          <span class="pq-anchor-label-text">Anchor Term</span>
-          <span class="pq-anchor-hint">Must appear in caller's phrase</span>
-        </div>
-        <input type="text" id="anchor-input-${id}" class="pq-anchor-input"
-          placeholder="e.g. amex, warranty, emergency…"
-          maxlength="60"
-          oninput="_onAnchorChange(${id})"
-          value="">
-        <span class="pq-anchor-status empty" id="anchor-status-${id}">No gate — open match</span>
-      </div>
 
       <div class="pq-toolbar">
         <div class="pq-add-phrase-wrap">
@@ -2684,8 +2638,11 @@ function _getSections() {
         isActive:           data.isActive !== false,   // default true
         isPromotion:        !!data.isPromotion,
         promotionLabel:     (data.promotionLabel || '').trim().slice(0, 120),
-        anchor:             { term: (data.anchor || '').trim().toLowerCase().slice(0, 60) },
-        callerPhrases:      (data.callerPhrases || []).filter(p => p.trim()),
+        // Send callerPhrases as objects so anchorWords[] are persisted per phrase
+        callerPhrases:      (data.callerPhrases || []).filter(p => p.trim()).map(p => ({
+          text:        p.trim(),
+          anchorWords: data.phraseAnchorWords?.[p] || [],
+        })),
         negativeKeywords:   data.negativeKeywords || [],
         useFixedResponse:   !!data.useFixedResponse,
         audioUrl:           data.contentAudioUrl   || null,
@@ -3735,30 +3692,54 @@ const _statusTitle = {
 
 /**
  * _buildPhraseWords — render phrase text as individually double-clickable word spans.
- * Double-clicking a word sets it as the anchor term (turns orange).
- * Double-clicking the active anchor word clears the anchor.
+ *
+ * Each word in each phrase has its OWN independent orange state stored in:
+ *   sectionData.phraseAnchorWords[phraseText] = [word, word, ...]
+ *
+ * Double-click a word → toggled orange (or off if already orange).
+ * Words are independent per phrase — toggling one phrase never affects another.
+ * Admin goes through each phrase and highlights its discriminating anchor words.
+ *
+ * @param {string} phrase   — plain phrase text
+ * @param {string} phraseKey — normalized key used in phraseAnchorWords map
+ * @param {number} sid       — section id
  */
-function _buildPhraseWords(phrase, sid) {
-  const anchor = (S.sectionData.get(sid)?.anchor || '').trim().toLowerCase();
+function _buildPhraseWords(phrase, phraseKey, sid) {
+  const data        = S.sectionData.get(sid);
+  const activeWords = new Set((data?.phraseAnchorWords?.[phraseKey] || []).map(w => w.toLowerCase()));
+
   return phrase.split(/\s+/).map(word => {
-    const norm    = word.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const isAnchor = anchor && norm === anchor;
-    return `<span class="pq-word${isAnchor ? ' anchor-word-active' : ''}"
-      ondblclick="_setAnchorFromWord(${sid},'${norm}')"
-      title="Double-click to set as anchor">${_esc(word)}</span>`;
+    const norm     = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isActive = norm && activeWords.has(norm);
+    // JSON-safe inline handler — phraseKey passed as index into callerPhrases array
+    return `<span class="pq-word${isActive ? ' anchor-word-active' : ''}"
+      ondblclick="_toggleAnchorWord(${sid},${JSON.stringify(phraseKey)},${JSON.stringify(norm)})"
+      title="Double-click to toggle anchor word">${_esc(word)}</span>`;
   }).join(' ');
 }
 
 /**
- * _setAnchorFromWord — set or clear the anchor when a word in a phrase is double-clicked.
+ * _toggleAnchorWord — toggle a word's anchor status for a specific phrase.
+ * Words are independent: toggling 'weekends' in phrase A never affects phrase B.
+ * State is stored in sectionData.phraseAnchorWords[phraseKey] = [word, ...].
+ * Re-renders the phrase table so orange state updates immediately.
  */
-function _setAnchorFromWord(sid, word) {
-  const input = document.getElementById(`anchor-input-${sid}`);
-  const data  = S.sectionData.get(sid);
-  if (!input || !data) return;
-  // Toggle — double-click the same word again to clear
-  input.value = (data.anchor === word) ? '' : word;
-  _onAnchorChange(sid);
+function _toggleAnchorWord(sid, phraseKey, word) {
+  const data = S.sectionData.get(sid);
+  if (!data || !word) return;
+
+  if (!data.phraseAnchorWords) data.phraseAnchorWords = {};
+  const current = data.phraseAnchorWords[phraseKey] || [];
+  const idx     = current.indexOf(word);
+
+  if (idx === -1) {
+    data.phraseAnchorWords[phraseKey] = [...current, word];
+  } else {
+    data.phraseAnchorWords[phraseKey] = current.filter((_, i) => i !== idx);
+  }
+
+  // Re-render table to reflect new orange state
+  _renderPhraseTable(sid);
 }
 
 /**
@@ -3766,27 +3747,17 @@ function _setAnchorFromWord(sid, word) {
  * sid + idx used for the delete button.
  */
 function _buildPhraseRow(phrase, score, sid, idx, csResult) {
-  const delBtn    = `<td class="pq-del-cell"><button type="button" class="pq-row-delete" onclick="removeCallerPhrase(${sid},${idx})" title="Remove phrase">×</button></td>`;
-  const data      = S.sectionData.get(sid);
-  const hasCS     = !!data?.crossScanResults;
-  const homeCell  = hasCS ? _buildHomeCell(phrase, csResult, sid, idx) : '';
-  const anchorTerm = (data?.anchor || '').trim().toLowerCase();
-  const hasAnchor  = !!anchorTerm;
+  const delBtn   = `<td class="pq-del-cell"><button type="button" class="pq-row-delete" onclick="removeCallerPhrase(${sid},${idx})" title="Remove phrase">×</button></td>`;
+  const data     = S.sectionData.get(sid);
+  const hasCS    = !!data?.crossScanResults;
+  const homeCell = hasCS ? _buildHomeCell(phrase, csResult, sid, idx) : '';
 
-  // Gate column — shows anchor validation per phrase (only when anchor is set)
-  let gateCell = '';
-  if (hasAnchor) {
-    const phraseNorm  = phrase.toLowerCase();
-    const anchorMatch = phraseNorm.includes(anchorTerm);
-    gateCell = anchorMatch
-      ? `<td class="pq-gate-cell"><span class="pq-gate-ok" title="Anchor '${_esc(anchorTerm)}' present">✓</span></td>`
-      : `<td class="pq-gate-cell"><span class="pq-gate-warn" title="Anchor '${_esc(anchorTerm)}' missing — phrase will not pass gate">⚠</span></td>`;
-  }
+  // phraseKey = phrase text used as map key for phraseAnchorWords
+  const phraseWords = _buildPhraseWords(phrase, phrase, sid);
 
   if (!score) {
     return `<tr class="pq-row-pending">
-      <td><span class="pq-phrase-text">${_buildPhraseWords(phrase, sid)}</span></td>
-      ${gateCell}
+      <td><span class="pq-phrase-text">${phraseWords}</span></td>
       <td class="pq-conf-cell">
         <div class="pq-bar-row">
           <div class="pq-bar-track"><div class="pq-bar-fill" style="width:0%"></div></div>
@@ -3814,8 +3785,7 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   const tcCls     = tcPct == null ? 'tc-na' : tcPct >= 70 ? 'tc-high' : tcPct >= 50 ? 'tc-mid' : 'tc-low';
   const tcVal     = tcPct != null ? `${tcPct}%` : '—';
   return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
-    <td><span class="pq-phrase-text">${_buildPhraseWords(phrase, sid)}</span></td>
-    ${gateCell}
+    <td><span class="pq-phrase-text">${phraseWords}</span></td>
     <td class="pq-conf-cell">
       <div class="pq-bar-row">
         <div class="pq-bar-track"><div class="pq-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
@@ -3896,13 +3866,11 @@ function _renderPhraseTable(sid) {
     return;
   }
 
-  // Build table — Gate column shows anchor validation status per phrase
-  const hasCS     = !!data?.crossScanResults;
-  const hasAnchor = !!(data?.anchor?.trim());
+  // Build table
+  const hasCS = !!data?.crossScanResults;
   let html = `<table class="pq-table">
     <thead><tr>
       <th>Phrase</th>
-      ${hasAnchor ? '<th class="pq-th-center" title="Anchor gate — anchor term present in phrase">Gate</th>' : ''}
       <th>Confidence</th>
       <th class="pq-th-center">Clarity</th>
       <th>Core</th>
@@ -3913,7 +3881,7 @@ function _renderPhraseTable(sid) {
     </tr></thead><tbody>`;
 
   const csResults = data?.crossScanResults || {};
-  const colSpan   = (hasCS ? 8 : 7) + (hasAnchor ? 1 : 0);
+  const colSpan   = hasCS ? 8 : 7;
   phrases.forEach((phrase, idx) => {
     const csResult = csResults[phrase] || null;
     html += _buildPhraseRow(phrase, scores[phrase] || null, sid, idx, csResult);
@@ -3994,44 +3962,6 @@ function _renderPhraseCore(sid, core) {
   if (!strip || !txtEl) return;
   if (core) { txtEl.textContent = core; strip.style.display = 'flex'; }
   else        { strip.style.display = 'none'; }
-}
-
-/**
- * _renderAnchorField — restore anchor input value and status badge after page load.
- */
-function _renderAnchorField(sid, term) {
-  const input = document.getElementById(`anchor-input-${sid}`);
-  if (!input) return;
-  input.value = term || '';
-  _onAnchorChange(sid);
-}
-
-/**
- * _onAnchorChange — update state + status badge when admin types in anchor field.
- */
-function _onAnchorChange(sid) {
-  const input  = document.getElementById(`anchor-input-${sid}`);
-  const status = document.getElementById(`anchor-status-${sid}`);
-  const data   = S.sectionData.get(sid);
-  if (!input || !data) return;
-
-  const term = input.value.trim().toLowerCase();
-  data.anchor = term;
-
-  if (status) {
-    if (term) {
-      input.classList.add('anchor-active');
-      status.textContent = `Gate: "${term}"`;
-      status.className   = 'pq-anchor-status';
-    } else {
-      input.classList.remove('anchor-active');
-      status.textContent = 'No gate — open match';
-      status.className   = 'pq-anchor-status empty';
-    }
-  }
-
-  // Re-render phrase table so gate column updates immediately
-  _renderPhraseTable(sid);
 }
 
 /**
