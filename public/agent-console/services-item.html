@@ -3711,9 +3711,9 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
   return phrase.split(/\s+/).map(word => {
     const norm     = word.toLowerCase().replace(/[^a-z0-9]/g, '');
     const isActive = norm && activeWords.has(norm);
-    // JSON-safe inline handler — phraseKey passed as index into callerPhrases array
+    // Single-quoted attribute so JSON.stringify's double quotes don't break HTML parsing
     return `<span class="pq-word${isActive ? ' anchor-word-active' : ''}"
-      ondblclick="_toggleAnchorWord(${sid},${JSON.stringify(phraseKey)},${JSON.stringify(norm)})"
+      ondblclick='_toggleAnchorWord(${sid},${JSON.stringify(phraseKey)},${JSON.stringify(norm)})'
       title="Double-click to toggle anchor word">${_esc(word)}</span>`;
   }).join(' ');
 }
