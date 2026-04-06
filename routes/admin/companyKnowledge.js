@@ -2198,15 +2198,23 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       }
 
       // T1 — Confidence: best cosine vs stored callerPhrase embeddings (phrase ↔ phrase)
-      // Falls back to contentEmbedding if no phrase embeddings stored yet
+      // Leave-one-out: skip the SAME phrase text so we measure fit with siblings,
+      // not a self-match that always returns 1.00.
+      // Falls back to contentEmbedding if no phrase embeddings stored yet.
       let t1Score   = 0;
       let t1Source  = 'content';
       if (storedPhraseEmbs.length) {
-        for (const pEmb of storedPhraseEmbs) {
-          const sim = _cosineSimilarity(emb, pEmb);
+        for (let j = 0; j < storedPhraseEmbs.length; j++) {
+          if (storedPhraseTxts[j] === phrase) continue;  // skip self-match
+          const sim = _cosineSimilarity(emb, storedPhraseEmbs[j]);
           if (sim > t1Score) t1Score = sim;
         }
         t1Source = 'phrases';
+        // If ALL stored phrases were self (only 1 phrase in section), fall back to content
+        if (t1Score === 0 && storedPhraseTxts.length <= 1) {
+          t1Score  = _cosineSimilarity(emb, targetEmb);
+          t1Source = 'content';
+        }
       } else {
         t1Score = _cosineSimilarity(emb, targetEmb);
       }
@@ -2222,13 +2230,19 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       const t2Pass = t2Gap >= 0.20;
 
       // T3 — Core Match: reduced phrase core vs stored callerPhrase embeddings (or content)
+      // Same leave-one-out: skip self-match so core score reflects real alignment.
       let t3Score = 0;
       let t3Pass  = null;
       if (coreEmb?.length && reduction.core) {
         if (storedPhraseEmbs.length) {
-          for (const pEmb of storedPhraseEmbs) {
-            const sim = _cosineSimilarity(coreEmb, pEmb);
+          for (let j = 0; j < storedPhraseEmbs.length; j++) {
+            if (storedPhraseTxts[j] === phrase) continue;  // skip self-match
+            const sim = _cosineSimilarity(coreEmb, storedPhraseEmbs[j]);
             if (sim > t3Score) t3Score = sim;
+          }
+          // Single-phrase fallback
+          if (t3Score === 0 && storedPhraseTxts.length <= 1) {
+            t3Score = _cosineSimilarity(coreEmb, targetEmb);
           }
         } else {
           t3Score = _cosineSimilarity(coreEmb, targetEmb);
