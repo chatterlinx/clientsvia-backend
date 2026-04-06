@@ -2066,11 +2066,10 @@ function _preGenAudioFixed(companyId, container, reason) {
 //
 // Body: { containerId, sectionIndex, phrases: string[] }
 //
-// Tier 1 — Confidence:  cosine(phrase_core_embedding, content_core_embedding) ≥ 0.75
-//                        Both sides reduced by PhraseReducerService — same semantic space.
-//                        Falls back to cosine(phrase_embedding, contentEmbedding) if cores
-//                        not yet computed.
-// Tier 2 — Clarity:     gap between T1 score and best score across ALL other sections ≥ 0.20.
+// Tier 1 — Confidence:  phrase core word coverage in section content ≥ 0.75
+//                        What fraction of the phrase's core words (from PhraseReducerService)
+//                        appear (exact or stemmed) in the section content? Admin diagnostic.
+// Tier 2 — Clarity:     gap between T1 coverage and best competing section coverage ≥ 0.20.
 // Tier 3 — Core Match:  Reduce phrase → embed core → compare vs stored phrases/content.
 // TC     — Topic Corr:  cosine(phraseCore, contentCore) — phrase space vs content space.
 //
@@ -2122,23 +2121,26 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       ).catch(e => logger.warn('[companyKnowledge] Failed to persist auto-generated contentEmbedding', { error: e.message }));
     }
 
-    // ── Load all other sections for Tier 2 clarity gap (contentEmbedding only) ─
+    // ── Load all other sections for Tier 2 clarity gap ──────────────────
+    // T2 checks word coverage in competing sections' content to measure
+    // if the phrase fits better HERE or elsewhere. Also loads embeddings
+    // as fallback for sections without content text.
     const allRaw = await CompanyKnowledgeContainer.collection.find(
       { companyId, isActive: { $ne: false } },
-      { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, _id: 1 } }
+      { projection: { 'sections.contentEmbedding': 1, 'sections.content': 1, 'sections.label': 1, 'sections.isActive': 1, _id: 1 } }
     ).toArray();
 
-    // ── Build T2 competing pool from contentEmbeddings ───────────────────
-    // contentEmbedding is sufficient for T2 (detecting if phrase fits better elsewhere)
     const otherEmbeddings = [];
+    const otherContentTexts = [];
     const targetId = targetRaw._id.toString();
     for (const doc of allRaw) {
       const docId = doc._id.toString();
       (doc.sections || []).forEach((sec, idx) => {
-        if (!sec.contentEmbedding?.length) return;
         if (sec.isActive === false) return;
         if (docId === targetId && idx === sectionIndex) return;
-        otherEmbeddings.push(sec.contentEmbedding);
+        if (sec.contentEmbedding?.length) otherEmbeddings.push(sec.contentEmbedding);
+        const txt = `${sec.label || ''} ${sec.content || ''}`.trim().toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+        if (txt) otherContentTexts.push(txt);
       });
     }
 
@@ -2197,28 +2199,57 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         continue;
       }
 
-      // T1 — Confidence: cosine(phrase_core, content_core)
-      // Both sides reduced by PhraseReducerService to their semantic essence.
-      // Same space (topic words vs topic words), no question-vs-answer mismatch,
-      // no self-match possible. Measures: does this phrase's topic match the
-      // section's topic? Falls back to raw phrase vs contentEmbedding if
-      // either core embedding is unavailable.
+      // T1 — Confidence: phrase core word coverage in section content.
+      // Admin-facing metric — "are my phrase's key words actually in the content?"
+      // Not used at runtime (UAP + anchor gate handle that). Pure diagnostic.
+      //
+      // Takes the phrase's core words (already stop-word-stripped by PhraseReducerService),
+      // checks what fraction appear (exact or stemmed) in the section content text.
+      // Simple, intuitive, no embedding asymmetry — the admin can see exactly
+      // which words match and which don't.
       let t1Score   = 0;
-      let t1Source  = 'content';
-      if (coreEmb?.length && contentCoreEmb?.length) {
-        t1Score  = _cosineSimilarity(coreEmb, contentCoreEmb);
-        t1Source = 'core';
+      let t1Source  = 'words';
+      if (reduction.core) {
+        const coreWords = reduction.core.toLowerCase().split(/\s+/).filter(Boolean);
+        const contentLower = sectionContentText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+        const contentWords = new Set(contentLower.split(/\s+/).filter(Boolean));
+        // Also build stemmed set for inflection matching (weekend/weekends, holiday/holidays)
+        const _t1Stem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
+          .replace(/ers?$/, '').replace(/ed$/, '').replace(/ly$/, '')
+          .replace(/ies$/, 'y').replace(/ves$/, 'f').replace(/s$/, '');
+        const contentStems = new Set([...contentWords].map(_t1Stem));
+        let hits = 0;
+        for (const w of coreWords) {
+          if (contentWords.has(w) || contentStems.has(_t1Stem(w))) hits++;
+        }
+        t1Score = coreWords.length ? hits / coreWords.length : 0;
       } else {
-        // Fallback: raw phrase embedding vs section contentEmbedding
+        // Fallback: raw embedding vs contentEmbedding (core not available)
         t1Score = _cosineSimilarity(emb, targetEmb);
+        t1Source = 'embedding';
       }
       const t1Pass = t1Score >= 0.75;
 
-      // T2 — Clarity: gap to best competing section
+      // T2 — Clarity: gap between word coverage in THIS section vs best competing section.
+      // Same word-based approach as T1 — checks core word coverage in each competing
+      // section's content. Gap = T1 (here) - best competing coverage.
+      // High gap = phrase clearly belongs here. Low/negative = phrase fits elsewhere too.
       let bestCompeting = 0;
-      for (const otherEmb of otherEmbeddings) {
-        const sim = _cosineSimilarity(emb, otherEmb);
-        if (sim > bestCompeting) bestCompeting = sim;
+      if (reduction.core) {
+        const coreWordsT2 = reduction.core.toLowerCase().split(/\s+/).filter(Boolean);
+        const _t2Stem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
+          .replace(/ers?$/, '').replace(/ed$/, '').replace(/ly$/, '')
+          .replace(/ies$/, 'y').replace(/ves$/, 'f').replace(/s$/, '');
+        for (const otherText of otherContentTexts) {
+          const oWords = new Set(otherText.split(/\s+/).filter(Boolean));
+          const oStems = new Set([...oWords].map(_t2Stem));
+          let oHits = 0;
+          for (const w of coreWordsT2) {
+            if (oWords.has(w) || oStems.has(_t2Stem(w))) oHits++;
+          }
+          const oCoverage = coreWordsT2.length ? oHits / coreWordsT2.length : 0;
+          if (oCoverage > bestCompeting) bestCompeting = oCoverage;
+        }
       }
       const t2Gap  = t1Score - bestCompeting;
       const t2Pass = t2Gap >= 0.20;
