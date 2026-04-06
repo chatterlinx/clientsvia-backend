@@ -2638,10 +2638,12 @@ function _getSections() {
         isActive:           data.isActive !== false,   // default true
         isPromotion:        !!data.isPromotion,
         promotionLabel:     (data.promotionLabel || '').trim().slice(0, 120),
-        // Send callerPhrases as objects so anchorWords[] are persisted per phrase
+        // Send callerPhrases as objects — anchorWords + existing score travel together.
+        // Score is preserved across saves so Re-score is the ONLY thing that recalculates.
         callerPhrases:      (data.callerPhrases || []).filter(p => p.trim()).map(p => ({
           text:        p.trim(),
           anchorWords: data.phraseAnchorWords?.[p] || [],
+          score:       data.phraseScores?.[p]       || undefined,
         })),
         negativeKeywords:   data.negativeKeywords || [],
         useFixedResponse:   !!data.useFixedResponse,

@@ -282,8 +282,9 @@ function _sanitiseBody(body) {
         };
 
         // Caller phrases — full sentences that callers use when asking about this section.
-        // Each phrase may carry anchorWords[] — admin-highlighted discriminating words
-        // that must appear in the caller's utterance for this phrase's gate to pass.
+        // Each phrase carries anchorWords[] (gate words) and score (3TSM result).
+        // Score is round-tripped on save so Re-score is the ONLY thing that recalculates it.
+        // Phrase-score endpoint uses targeted $set — it never overwrites anchors.
         if (Array.isArray(s.callerPhrases)) {
           section.callerPhrases = s.callerPhrases
             .filter(p => (typeof p === 'string' ? p.trim() : p?.text?.trim()))
@@ -292,7 +293,9 @@ function _sanitiseBody(body) {
               const anchorWords = Array.isArray(p?.anchorWords)
                 ? [...new Set(p.anchorWords.map(w => `${w}`.toLowerCase().trim()).filter(Boolean))]
                 : [];
-              return { text, anchorWords, addedAt: p?.addedAt || new Date() };
+              // Preserve existing score so save never wipes it — only Re-score may update it
+              const score       = p?.score && typeof p.score === 'object' ? p.score : undefined;
+              return { text, anchorWords, addedAt: p?.addedAt || new Date(), ...(score ? { score } : {}) };
             });
         }
 
