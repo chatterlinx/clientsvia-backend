@@ -2396,6 +2396,12 @@ function cpKeydown(e, sid) {
 function removeCallerPhrase(sid, idx) {
   const data = S.sectionData.get(sid);
   if (!data) return;
+  // Clean up per-phrase state keyed by phrase text before splicing
+  const removedPhrase = data.callerPhrases[idx];
+  if (removedPhrase) {
+    delete data.phraseAnchorWords?.[removedPhrase];
+    delete data.phraseScores?.[removedPhrase];
+  }
   data.callerPhrases.splice(idx, 1);
   _renderCallerPhrases(sid);
 }
@@ -3716,9 +3722,14 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
   return phrase.split(/\s+/).map(word => {
     const norm     = word.toLowerCase().replace(/[^a-z0-9]/g, '');
     const isActive = norm && activeWords.has(norm);
-    // Single-quoted attribute so JSON.stringify's double quotes don't break HTML parsing
+    // Single-quoted attribute so JSON.stringify's double quotes don't break HTML parsing.
+    // Also escape ' → &#39; so apostrophes in phrase text (e.g. "I'd like to...")
+    // don't terminate the single-quoted attribute before the handler closes.
+    // HTML entities in inline handlers are decoded by the browser before JS runs,
+    // so &#39; arrives at _toggleAnchorWord as a real apostrophe character.
+    const safeKey = JSON.stringify(phraseKey).replace(/'/g, '&#39;');
     return `<span class="pq-word${isActive ? ' anchor-word-active' : ''}"
-      ondblclick='_toggleAnchorWord(${sid},${JSON.stringify(phraseKey)},${JSON.stringify(norm)})'
+      ondblclick='_toggleAnchorWord(${sid},${safeKey},${JSON.stringify(norm)})'
       title="Double-click to toggle anchor word">${_esc(word)}</span>`;
   }).join(' ');
 }
