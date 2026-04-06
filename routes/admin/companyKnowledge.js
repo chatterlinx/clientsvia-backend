@@ -2252,19 +2252,26 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       .filter(Boolean);
 
     // ── T3 prep: reduce all phrases via PhraseReducerService ────────────
-    const reductions = await PhraseReducerService.reduceBatch(cleanPhrases, sectionContentText);
-    const cores = reductions.map(r => r.core);
+    // ── Reduce phrases + content core in parallel ────────────────────────
+    const [reductions, contentReduction] = await Promise.all([
+      PhraseReducerService.reduceBatch(cleanPhrases, sectionContentText),
+      PhraseReducerService.reduce(sectionContentText, sectionContentText),
+    ]);
+    const cores       = reductions.map(r => r.core);
+    const contentCore = contentReduction?.core || null;
 
-    // ── Embed test phrases + reduced cores + stored phrase texts in one shot ──
+    // ── Embed everything in one shot ─────────────────────────────────────
     const coreTexts  = [];
     const coreIdxMap = [];                       // maps coreTexts[j] → original index i
     cores.forEach((c, i) => { if (c) { coreTexts.push(c); coreIdxMap.push(i); } });
 
-    const [rawEmbeddings, coreEmbeddingsRaw, storedPhraseEmbs] = await Promise.all([
+    const [rawEmbeddings, coreEmbeddingsRaw, storedPhraseEmbs, contentCoreEmbArr] = await Promise.all([
       SemanticMatchService.embedBatch(cleanPhrases),
-      coreTexts.length       ? SemanticMatchService.embedBatch(coreTexts)       : Promise.resolve([]),
+      coreTexts.length        ? SemanticMatchService.embedBatch(coreTexts)        : Promise.resolve([]),
       storedPhraseTxts.length ? SemanticMatchService.embedBatch(storedPhraseTxts) : Promise.resolve([]),
+      contentCore             ? SemanticMatchService.embedBatch([contentCore])     : Promise.resolve([]),
     ]);
+    const contentCoreEmb = contentCoreEmbArr[0] || null;
 
     // Spread core embeddings back to original indices
     const coreEmbeddings = new Array(cores.length).fill(null);
@@ -2279,7 +2286,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       const reduction = reductions[i];
 
       if (!emb?.length) {
-        scores[phrase] = { t1: 0, t2: 0, t3: false, t3Score: 0, core: reduction.core, status: 'red' };
+        scores[phrase] = { t1: 0, t2: 0, t3: false, t3Score: 0, tc: null, core: reduction.core, status: 'red' };
         continue;
       }
 
@@ -2298,7 +2305,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       }
       const t1Pass = t1Score >= 0.75;
 
-      // T2 — Clarity: gap to best competing section (phrase pool or content fallback)
+      // T2 — Clarity: gap to best competing section
       let bestCompeting = 0;
       for (const otherEmb of otherEmbeddings) {
         const sim = _cosineSimilarity(emb, otherEmb);
@@ -2322,6 +2329,12 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         t3Pass = t3Score >= 0.70;
       }
 
+      // TC — Topic Correlation: phrase core vs content core (both reduced to topic signals)
+      let tcScore = null;
+      if (coreEmb?.length && contentCoreEmb?.length && reduction.core) {
+        tcScore = Math.round(_cosineSimilarity(coreEmb, contentCoreEmb) * 100) / 100;
+      }
+
       // Determine status
       let status;
       if (!t1Pass) {
@@ -2340,6 +2353,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         t2:                 Math.round(t2Gap   * 100) / 100,
         t3:                 t3Pass,
         t3Score:            Math.round(t3Score * 100) / 100,
+        tc:                 tcScore,
         core:               reduction.core,
         protectedEntities:  reduction.protectedEntities,
         normalizedPatterns: reduction.normalizedPatterns,
@@ -2347,7 +2361,34 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       };
     }
 
-    return res.json({ success: true, scores });
+    // ── Persist scores + contentCore to MongoDB (fire-and-forget) ────────
+    (async () => {
+      try {
+        const phraseIdxMap = {};
+        (targetSection.callerPhrases || []).forEach((p, i) => { phraseIdxMap[p.text] = i; });
+        const setOps = {};
+        for (const [phraseText, scoreData] of Object.entries(scores)) {
+          const idx = phraseIdxMap[phraseText];
+          if (idx !== undefined) {
+            setOps[`sections.${sectionIndex}.callerPhrases.${idx}.score`] = { ...scoreData, scoredAt: new Date() };
+          }
+        }
+        if (contentCore) {
+          setOps[`sections.${sectionIndex}.contentCore`]           = contentCore;
+          setOps[`sections.${sectionIndex}.contentCoreScoredAt`]   = new Date();
+        }
+        if (Object.keys(setOps).length) {
+          await CompanyKnowledgeContainer.collection.updateOne(
+            _resolveRawQuery(containerId, companyId),
+            { $set: setOps }
+          );
+        }
+      } catch (e) {
+        logger.warn('[companyKnowledge] Failed to persist phrase scores', { error: e.message });
+      }
+    })();
+
+    return res.json({ success: true, scores, contentCore });
   } catch (err) {
     logger.error('[companyKnowledge] phrase-score error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Phrase scoring failed' });

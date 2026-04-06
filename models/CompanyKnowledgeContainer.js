@@ -95,6 +95,22 @@ const callerPhraseSchema = new mongoose.Schema(
     text:      { type: String, required: true, trim: true, maxlength: 200, comment: 'Full caller sentence, e.g. "I want someone to come out"' },
     embedding: { type: [Number], default: undefined, select: false, comment: '512-dim embedding from text-embedding-3-small. Auto-generated on save.' },
     addedAt:   { type: Date, default: Date.now, comment: 'When this phrase was added' },
+    // ── Persisted 3TSM score (written by phrase-score endpoint on Re-score) ──
+    score: {
+      type: {
+        t1:       { type: Number, default: null },
+        t1Source: { type: String, default: null },  // 'phrases' | 'content'
+        t2:       { type: Number, default: null },
+        t3:       { type: Boolean, default: null },
+        t3Score:  { type: Number, default: null },
+        tc:       { type: Number, default: null },  // topic correlation: phrase core vs content core
+        core:     { type: String, default: null },
+        status:   { type: String, default: null },  // 'green'|'yellow'|'orange'|'red'
+        scoredAt: { type: Date,   default: null },
+      },
+      default: null,
+      comment: 'Last 3TSM score result — persisted so UI shows scores without re-scoring.'
+    },
   },
   { _id: false, versionKey: false }
 );
@@ -181,6 +197,18 @@ const sectionSchema = new mongoose.Schema(
       type:    Date,
       default: undefined,
       comment: 'Timestamp of last content embedding. Stale if older than section updatedAt.'
+    },
+
+    // ── Content Core — PhraseReducer applied to section content ──────────
+    // Computed on Re-score alongside phrase scores. Used as TC comparison target.
+    contentCore: {
+      type:    String,
+      default: null,
+      comment: 'Reduced core of section content — key topic terms stripped of stop words.'
+    },
+    contentCoreScoredAt: {
+      type:    Date,
+      default: null,
     },
 
     // ── Per-section booking action ─────────────────────────────────────────

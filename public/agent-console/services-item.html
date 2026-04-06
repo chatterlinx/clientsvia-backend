@@ -428,6 +428,23 @@
       display: inline-block;
     }
     .pq-core-text.na { color: #cbd5e1; font-style: normal; font-weight: 400; }
+    /* TC — Topic Correlation column */
+    .pq-tc-cell { text-align: center; min-width: 60px; }
+    .pq-tc-val { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .pq-tc-val.tc-high { color: #16a34a; }
+    .pq-tc-val.tc-mid  { color: #d97706; }
+    .pq-tc-val.tc-low  { color: #dc2626; }
+    .pq-tc-val.tc-na   { color: #cbd5e1; }
+    /* Content core strip */
+    .content-core-strip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 16px; background: #f8fafc;
+      border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;
+      font-size: 11px;
+    }
+    .cc-label  { font-weight: 700; color: #64748b; white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
+    .cc-divider{ color: #94a3b8; }
+    .cc-text   { color: #6366f1; font-style: italic; font-weight: 600; }
     /* Status badge */
     .pq-status { text-align: center; }
     .pq-badge {
@@ -1865,6 +1882,10 @@ function _populateForm(c) {
   if (sorted.length) {
     sorted.forEach(s => addSection(s.label, s.content, {
       callerPhrases:      (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
+      phraseScores:       Object.fromEntries(
+        (s.callerPhrases || []).filter(p => p?.text && p?.score?.status).map(p => [p.text, p.score])
+      ),
+      contentCore:        s.contentCore || null,
       negativeKeywords:   s.negativeKeywords || [],
       useFixedResponse:   !!s.useFixedResponse,
       audioUrl:           s.audioUrl || null,
@@ -1879,6 +1900,12 @@ function _populateForm(c) {
   }
   // Complexity indicator needs sections in DOM — update now that they are rendered
   _updateComplexityIndicator();
+
+  // Restore saved phrase scores + content cores for all loaded sections
+  S.sectionData.forEach((data, id) => {
+    if (Object.keys(data.phraseScores || {}).length) _renderPhraseTable(id);
+    if (data.contentCore) _renderContentCore(id, data.contentCore);
+  });
 
 }
 
@@ -1925,7 +1952,8 @@ function addSection(label = '', content = '', sectionMeta = null) {
     negativeKeywords: sectionMeta?.negativeKeywords || [],
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
-    phraseScores:     {},                               // { phrase → { t1, t2, t3, status } }
+    phraseScores:     sectionMeta?.phraseScores  || {},  // { phrase → { t1, t2, t3, tc, status } }
+    contentCore:      sectionMeta?.contentCore  || null, // reduced topic core of section content
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
@@ -2004,6 +2032,13 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </div>
     </div>
     <div id="gap-panel-${id}" class="gap-panel" style="display:none;"></div>
+
+    <!-- ── Content Core strip — shown after Re-score ── -->
+    <div class="content-core-strip" id="content-core-${id}" style="display:none;">
+      <span class="cc-label">Content Core</span>
+      <span class="cc-divider">→</span>
+      <span class="cc-text" id="content-core-txt-${id}"></span>
+    </div>
 
     <!-- ── Phrase Quality Card (single source of truth for phrases) ── -->
     <div class="phrase-quality-card" id="pq-card-${id}">
@@ -3632,6 +3667,7 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
       </td>
       <td style="text-align:center"><span class="pq-gap pq-pending-val">—</span></td>
       <td class="pq-core-cell"><span class="pq-core-text na">—</span></td>
+      <td class="pq-tc-cell"><span class="pq-tc-val tc-na">—</span></td>
       <td class="pq-status"><span class="pq-badge pending">Pending</span></td>
       ${homeCell}
       ${delBtn}
@@ -3646,6 +3682,9 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   const coreTitle = score.core
     ? `Reduced core (T3 score: ${score.t3Score != null ? Math.round(score.t3Score * 100) + '%' : '—'})`
     : '';
+  const tcPct     = score.tc != null ? Math.round(score.tc * 100) : null;
+  const tcCls     = tcPct == null ? 'tc-na' : tcPct >= 70 ? 'tc-high' : tcPct >= 50 ? 'tc-mid' : 'tc-low';
+  const tcVal     = tcPct != null ? `${tcPct}%` : '—';
   return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
     <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
     <td class="pq-conf-cell">
@@ -3656,6 +3695,7 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
     </td>
     <td style="text-align:center"><span class="pq-gap ${gapCls}">${gapVal}</span></td>
     <td class="pq-core-cell"><span class="pq-core-text ${coreCls}" title="${_esc(coreTitle)}">${_esc(coreText)}</span></td>
+    <td class="pq-tc-cell" title="Topic Correlation — phrase core vs content core"><span class="pq-tc-val ${tcCls}">${tcVal}</span></td>
     <td class="pq-status"><span class="pq-badge ${score.status}">${_statusLabel[score.status]}</span></td>
     ${homeCell}
     ${delBtn}
@@ -3735,13 +3775,14 @@ function _renderPhraseTable(sid) {
       <th>Confidence</th>
       <th class="pq-th-center">Clarity</th>
       <th>Core</th>
+      <th class="pq-th-center">Match</th>
       <th class="pq-th-center">Status</th>
       ${hasCS ? '<th class="pq-th-center">Home</th>' : ''}
       <th style="width:36px;"></th>
     </tr></thead><tbody>`;
 
   const csResults = data?.crossScanResults || {};
-  const colSpan   = hasCS ? 7 : 6;
+  const colSpan   = hasCS ? 8 : 7;
   phrases.forEach((phrase, idx) => {
     const csResult = csResults[phrase] || null;
     html += _buildPhraseRow(phrase, scores[phrase] || null, sid, idx, csResult);
@@ -3802,6 +3843,21 @@ function _renderScoreTable(sid, scores) {
 }
 
 /**
+ * _renderContentCore — show or hide the content core strip below the section textarea.
+ */
+function _renderContentCore(sid, core) {
+  const strip  = document.getElementById(`content-core-${sid}`);
+  const txtEl  = document.getElementById(`content-core-txt-${sid}`);
+  if (!strip || !txtEl) return;
+  if (core) {
+    txtEl.textContent    = core;
+    strip.style.display  = 'flex';
+  } else {
+    strip.style.display  = 'none';
+  }
+}
+
+/**
  * _markEvalStale — reset scores + mark buttons yellow when content changes.
  * Table stays visible but rows revert to "Pending" state.
  */
@@ -3839,7 +3895,9 @@ async function _reScorePhrases(sid) {
     if (!result.success) throw new Error(result.error || 'Scoring failed');
 
     data.phraseScores = result.scores || {};
+    data.contentCore  = result.contentCore || null;
     _renderScoreTable(sid, data.phraseScores);
+    _renderContentCore(sid, data.contentCore);
 
     const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
     Object.values(data.phraseScores).forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
