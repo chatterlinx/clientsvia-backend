@@ -2164,15 +2164,21 @@ function _preGenAudioFixed(companyId, container, reason) {
 //
 // Body: { containerId, sectionIndex, phrases: string[] }
 //
-// Tier 1 — Confidence:  cosine(phrase_embedding, section_content_embedding) ≥ 0.75
+// Tier 1 — Confidence:  best cosine(phrase_embedding, storedCallerPhrase_embedding) ≥ 0.75
+//                        Symmetric: question space ↔ question space.
+//                        Falls back to cosine(phrase_embedding, contentEmbedding) if no
+//                        callerPhrase embeddings exist yet.
 // Tier 2 — Clarity:     gap between T1 score and best score across ALL other
-//                        sections in the company ≥ 0.20 (Einstein's dual metric)
-// Tier 3 — Core Match:  Reduce phrase via PhraseReducerService, embed the
-//                        reduced "core", compare to section content embedding.
+//                        sections in the company ≥ 0.20 (Einstein's dual metric).
+//                        Competing sections scored against their callerPhrase embeddings
+//                        (or contentEmbedding if none stored).
+// Tier 3 — Core Match:  Reduce phrase via PhraseReducerService, embed the reduced
+//                        "core", compare to stored callerPhrase embeddings (or content).
 //                        Core cosine ≥ 0.70 → pass (stripped phrase still routes correctly)
 //
-// Returns: { scores: { [phrase]: { t1, t2, t3, t3Score, core, status } } }
+// Returns: { scores: { [phrase]: { t1, t2, t3, t3Score, core, status, t1Source } } }
 //   status: 'green' | 'yellow' | 'orange' | 'red'
+//   t1Source: 'phrases' | 'content'  (what T1 compared against)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   const { companyId } = req.params;
@@ -2184,10 +2190,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   }
 
   try {
-    // ── Load target section ──────────────────────────────────────────────
+    // ── Load target section (include callerPhrases for symmetric T1 scoring) ─
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
       _resolveRawQuery(containerId, companyId),
-      { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, 'sections.label': 1, 'sections.content': 1 } }
+      { projection: { 'sections.contentEmbedding': 1, 'sections.callerPhrases': 1, 'sections.isActive': 1, 'sections.label': 1, 'sections.content': 1 } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
 
@@ -2197,7 +2203,12 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     // Section content text for PhraseReducerService (protected phrases extraction)
     const sectionContentText = `${targetSection.label || ''}: ${targetSection.content || ''}`.trim();
 
-    // Auto-generate content embedding if missing (avoids hard 400 on first score)
+    // Stored callerPhrase embeddings — T1/T3 primary target (phrase space ↔ phrase space)
+    const storedPhraseEmbs = (targetSection.callerPhrases || [])
+      .map(p => p.embedding)
+      .filter(e => Array.isArray(e) && e.length);
+
+    // Auto-generate content embedding if missing (used as T1/T3 fallback + T2)
     let targetEmb = targetSection.contentEmbedding;
     if (!targetEmb?.length) {
       if (!sectionContentText) {
@@ -2215,21 +2226,29 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       ).catch(e => logger.warn('[companyKnowledge] Failed to persist auto-generated contentEmbedding', { error: e.message }));
     }
 
-    // ── Load all other sections' embeddings (for Tier 2 clarity gap) ─────
+    // ── Load all other sections for Tier 2 clarity gap ────────────────────
+    // Include callerPhrases so competing sections are scored in phrase space too
     const allRaw = await CompanyKnowledgeContainer.collection.find(
       { companyId, isActive: { $ne: false } },
-      { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, _id: 1 } }
+      { projection: { 'sections.contentEmbedding': 1, 'sections.callerPhrases.embedding': 1, 'sections.isActive': 1, _id: 1 } }
     ).toArray();
 
+    // Flat pool of competing embeddings — prefer callerPhrase embeddings, fall back to content
     const otherEmbeddings = [];
     const targetId = targetRaw._id.toString();
     for (const doc of allRaw) {
       const docId = doc._id.toString();
       (doc.sections || []).forEach((sec, idx) => {
-        if (!sec.contentEmbedding?.length) return;
         if (sec.isActive === false) return;
         if (docId === targetId && idx === sectionIndex) return;
-        otherEmbeddings.push(sec.contentEmbedding);
+        const secPhraseEmbs = (sec.callerPhrases || [])
+          .map(p => p.embedding)
+          .filter(e => Array.isArray(e) && e.length);
+        if (secPhraseEmbs.length) {
+          secPhraseEmbs.forEach(e => otherEmbeddings.push(e));
+        } else if (sec.contentEmbedding?.length) {
+          otherEmbeddings.push(sec.contentEmbedding);
+        }
       });
     }
 
@@ -2267,11 +2286,22 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         continue;
       }
 
-      // T1 — Confidence: cosine vs target section content
-      const t1Score = _cosineSimilarity(emb, targetEmb);
-      const t1Pass  = t1Score >= 0.75;
+      // T1 — Confidence: best cosine vs stored callerPhrase embeddings (phrase ↔ phrase)
+      // Falls back to contentEmbedding if no phrase embeddings stored yet
+      let t1Score   = 0;
+      let t1Source  = 'content';
+      if (storedPhraseEmbs.length) {
+        for (const pEmb of storedPhraseEmbs) {
+          const sim = _cosineSimilarity(emb, pEmb);
+          if (sim > t1Score) t1Score = sim;
+        }
+        t1Source = 'phrases';
+      } else {
+        t1Score = _cosineSimilarity(emb, targetEmb);
+      }
+      const t1Pass = t1Score >= 0.75;
 
-      // T2 — Clarity: gap to best competing section
+      // T2 — Clarity: gap to best competing section (phrase pool or content fallback)
       let bestCompeting = 0;
       for (const otherEmb of otherEmbeddings) {
         const sim = _cosineSimilarity(emb, otherEmb);
@@ -2280,12 +2310,19 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       const t2Gap  = t1Score - bestCompeting;
       const t2Pass = t2Gap >= 0.20;
 
-      // T3 — Core Match: reduced phrase embedding vs section content
+      // T3 — Core Match: reduced phrase core vs stored callerPhrase embeddings (or content)
       let t3Score = 0;
       let t3Pass  = null;
       if (coreEmb?.length && reduction.core) {
-        t3Score = _cosineSimilarity(coreEmb, targetEmb);
-        t3Pass  = t3Score >= 0.70;
+        if (storedPhraseEmbs.length) {
+          for (const pEmb of storedPhraseEmbs) {
+            const sim = _cosineSimilarity(coreEmb, pEmb);
+            if (sim > t3Score) t3Score = sim;
+          }
+        } else {
+          t3Score = _cosineSimilarity(coreEmb, targetEmb);
+        }
+        t3Pass = t3Score >= 0.70;
       }
 
       // Determine status
@@ -2301,12 +2338,13 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       }
 
       scores[phrase] = {
-        t1: Math.round(t1Score * 100) / 100,
-        t2: Math.round(t2Gap  * 100) / 100,
-        t3: t3Pass,
-        t3Score: Math.round(t3Score * 100) / 100,
-        core: reduction.core,
-        protectedEntities: reduction.protectedEntities,
+        t1:                 Math.round(t1Score * 100) / 100,
+        t1Source,
+        t2:                 Math.round(t2Gap   * 100) / 100,
+        t3:                 t3Pass,
+        t3Score:            Math.round(t3Score * 100) / 100,
+        core:               reduction.core,
+        protectedEntities:  reduction.protectedEntities,
         normalizedPatterns: reduction.normalizedPatterns,
         status,
       };
