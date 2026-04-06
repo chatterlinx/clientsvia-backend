@@ -61,12 +61,20 @@ const UtteranceActParser      = require('./UtteranceActParser');
 const UAP_CONFIDENCE_THRESHOLD = 0.80;
 
 // ── Logic 1 + Logic 2 combined confidence gate ────────────────────────────────
-// When a section has an anchor defined, both gates must pass:
-//   combined = (phraseScore × 0.60) + (coreScore × 0.40) ≥ COMBINED_THRESHOLD
-// Below threshold → fall through to Groq. Anchor-less sections skip this gate.
-const COMBINED_THRESHOLD      = 0.90;
-const PHRASE_WEIGHT           = 0.60;
-const CORE_WEIGHT             = 0.40;
+// When a phrase has anchorWords set, both gates must pass:
+//   combined = (phraseScore × 0.70) + (coreScore × 0.30) ≥ COMBINED_THRESHOLD
+//
+// Threshold rationale:
+//   EXACT match (0.95):         0.665 + coreScore×0.30 → needs coreScore ≥ 0.45  ✓ reachable
+//   PARTIAL match (0.80):       0.560 + coreScore×0.30 → needs coreScore ≥ 0.67  ✓ realistic
+//   WORD_OVERLAP_HIGH (0.70):   0.490 + coreScore×0.30 → needs coreScore ≥ 0.77  ✓ achievable
+//   WORD_OVERLAP_LOW (0.50):    0.350 + coreScore×0.30 → needs coreScore ≥ 1.0   → falls to Groq
+//
+// EXACT matches skip Logic 2 entirely — phrase literally in utterance is proof enough.
+// Sections/phrases with no anchorWords skip both gates (backward compatible).
+const COMBINED_THRESHOLD = 0.80;
+const PHRASE_WEIGHT      = 0.70;
+const CORE_WEIGHT        = 0.30;
 
 // ============================================================================
 // PATH CONSTANTS
@@ -103,6 +111,33 @@ function _gracefulAck() {
 // ============================================================================
 // UTILITIES
 // ============================================================================
+
+/**
+ * _stem — Strip common English suffixes so inflected forms match their root.
+ *
+ * Covers the vast majority of caller speech variation without any library:
+ *   weekends   → weekend   (plural)
+ *   services   → service   (plural)
+ *   scheduled  → schedule  (past tense)
+ *   scheduling → schedule  (gerund)
+ *   installer  → install   (agent noun)
+ *   pricing    → price     (gerund)
+ *
+ * Order matters — longer suffixes stripped first to avoid double-stripping.
+ * Applied to BOTH admin anchor words and caller utterance words before compare.
+ */
+function _stem(word) {
+  return word
+    .replace(/ings?$/,  '')   // scheduling → schedul, bookings → booking — wait, strip 'ings' then check
+    .replace(/ing$/,    '')   // scheduling → schedul
+    .replace(/ations?$/, '')  // installation → install
+    .replace(/ers?$/,   '')   // installer → install, installers → install
+    .replace(/ed$/,     '')   // scheduled → schedul
+    .replace(/ly$/,     '')   // currently → current
+    .replace(/ies$/,    'y')  // warranties → warranty
+    .replace(/ves$/,    'f')  // leaves → leaf (minor, rarely needed)
+    .replace(/s$/,      '');  // weekends → weekend, services → service
+}
 
 /** Clip a string to maxLen characters for safe logging. */
 function _clip(str, maxLen = 80) {
@@ -761,33 +796,47 @@ class KCDiscoveryRunner {
           const targetSection = fullContainer.sections?.[uapResult.sectionIdx] || null;
 
           // ══════════════════════════════════════════════════════════════════
-          // ANCHOR GATE — per-phrase anchorWords[] (v5)
-          // Matched phrase carries its own anchorWords[]. If non-empty, at
-          // least ONE must appear as a whole word in the caller's utterance.
+          // ANCHOR GATE — per-phrase anchorWords[] with stem matching
+          // Each phrase carries its own anchorWords[]. If non-empty, at least
+          // ONE anchor stem must match a stem of a word in the caller's
+          // utterance. Stem matching covers: weekends/weekend, services/service,
+          // scheduling/schedule, installed/install, pricing/price, etc.
           // Phrases with empty anchorWords[] skip this gate entirely.
           // ══════════════════════════════════════════════════════════════════
           const anchorWords = uapResult.anchorWords || [];  // already normalised by UAP
           let anchorGatePassed = true;
 
           if (anchorWords.length > 0) {
-            const normInputWords = new Set(
-              (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean)
-            );
-            const anchorPresent = anchorWords.some(w => normInputWords.has(w));
+            const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+
+            // Build stem sets for both sides — compare roots not surfaces
+            const inputStems   = new Set(rawWords.map(_stem));
+            const inputExact   = new Set(rawWords);
+            const anchorPresent = anchorWords.some(aw => inputExact.has(aw) || inputStems.has(_stem(aw)));
 
             if (!anchorPresent) {
               anchorGatePassed = false;
-              logger.info('[KC_ENGINE] ANCHOR GATE — no anchor word in utterance, falling through', {
+              logger.info('[KC_ENGINE] ANCHOR GATE — no anchor word (or stem) in utterance, falling through', {
+                companyId, callSid, turn,
+                anchorWords,
+                sectionLabel: targetSection?.label,
+              });
+            } else if (uapResult.matchType === 'EXACT') {
+              // ══════════════════════════════════════════════════════════════
+              // EXACT match — utterance literally contains the phrase.
+              // Proof of intent is already absolute — skip Logic 2.
+              // ══════════════════════════════════════════════════════════════
+              logger.info('[KC_ENGINE] ANCHOR GATE passed (EXACT — Logic 2 skipped)', {
                 companyId, callSid, turn,
                 anchorWords,
                 sectionLabel: targetSection?.label,
               });
             } else {
               // ══════════════════════════════════════════════════════════════
-              // LOGIC 2 — core-to-core confirmation
-              // Caller core = uapResult.topicWords (already stripped of stop
-              // words by UAP — zero extra cost). Embed caller core → cosine vs
-              // section's phraseCoreEmbedding. Symmetric comparison.
+              // LOGIC 2 — core-to-core confirmation (PARTIAL / WORD_OVERLAP / FUZZY)
+              // Caller core = uapResult.topicWords (stop-word stripped, zero
+              // extra cost — already computed by UAP). Embed → cosine vs
+              // phraseCoreEmbedding. Symmetric comparison.
               // If phraseCoreEmbedding not yet computed → skip, route normally.
               // ══════════════════════════════════════════════════════════════
               try {
@@ -821,7 +870,8 @@ class KCDiscoveryRunner {
                   logger.info('[KC_ENGINE] ANCHOR + LOGIC 2 scored', {
                     companyId, callSid, turn,
                     anchorWords,
-                    callerCore: callerCore.slice(0, 60),
+                    matchType:   uapResult.matchType,
+                    callerCore:  callerCore.slice(0, 60),
                     phraseScore: uapResult.confidence,
                     coreScore:   Math.round(coreScore * 100) / 100,
                     combined:    Math.round(combined * 100) / 100,
@@ -838,7 +888,7 @@ class KCDiscoveryRunner {
                     });
                   }
                 }
-                // phraseCoreEmbedding absent (Re-score not yet run) → skip Logic 2
+                // phraseCoreEmbedding absent (Re-score not yet run) → skip Logic 2, route normally
               } catch (_l2Err) {
                 logger.warn('[KC_ENGINE] Logic 2 error — routing normally', {
                   companyId, callSid, err: _l2Err.message,
