@@ -204,18 +204,6 @@
       font-family: inherit;
     }
     .section-label-input::placeholder { color: var(--text-xs); font-weight: 400; }
-    .btn-suggest-label {
-      flex-shrink: 0;
-      display: flex; align-items: center; gap: 4px;
-      padding: 4px 9px;
-      font-size: 11px; font-weight: 500;
-      color: #0284c7; background: #f0f9ff;
-      border: 1px solid #bae6fd; border-radius: 6px;
-      cursor: pointer; white-space: nowrap;
-      transition: background 0.15s, opacity 0.15s;
-    }
-    .btn-suggest-label:hover { background: #e0f2fe; border-color: #7dd3fc; }
-    .btn-suggest-label:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-section-delete {
       border: none; background: none; cursor: pointer; padding: 4px;
       color: var(--text-xs); border-radius: 4px; display: flex; align-items: center;
@@ -2028,7 +2016,6 @@ function addSection(label = '', content = '', sectionMeta = null) {
       <span class="section-number">${rowCount + 1}</span>
       <input type="text" class="section-label-input" placeholder="${suggestion || 'Section label…'}"
         maxlength="80" value="${_esc(label)}" onchange="updateSectionNumbers()">
-      <button type="button" class="btn-suggest-label" onclick="suggestPhrases(this)" title="AI-generate caller phrases from content">✨ Suggest phrases</button>
       <span class="section-phrase-count" id="phrase-count-${id}"
         style="display:${(sectionMeta?.callerPhrases?.length) ? 'flex' : 'none'};font-size:11px;color:#059669;font-weight:600;align-items:center;gap:3px;">
         ${(sectionMeta?.callerPhrases?.length) ? '🎯 ' + sectionMeta.callerPhrases.length + ' phrases' : ''}
@@ -2281,82 +2268,6 @@ function addSection(label = '', content = '', sectionMeta = null) {
   // Focus the label input if new empty section
   if (!label) {
     setTimeout(() => row.querySelector('.section-label-input').focus(), 50);
-  }
-}
-
-/**
- * suggestPhrases — AI-generate caller phrases for a section.
- * Calls /generate-phrases endpoint, populates section callerPhrases + updates label.
- */
-async function suggestPhrases(btn) {
-  const row        = btn.closest('.section-row');
-  const textarea   = row.querySelector('textarea');
-  const labelInput = row.querySelector('.section-label-input');
-  const sid        = parseInt(row.dataset.sid, 10);
-  const sData      = (sid && S.sectionData.has(sid)) ? S.sectionData.get(sid) : null;
-
-  const content = textarea?.value?.trim() || '';
-  if (!content) {
-    _toast('Add some content first, then generate phrases', 'error');
-    return;
-  }
-
-  btn.disabled    = true;
-  btn.textContent = '…';
-
-  try {
-    const data = await apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/knowledge/generate-phrases`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content,
-          sectionLabel: labelInput?.value?.trim() || '',
-          containerId:  S.itemId || null,
-        }) }
-    );
-
-    if (!data.success) {
-      _toast(data.error || 'Could not generate phrases', 'error');
-      return;
-    }
-
-    // Set label if empty
-    if (data.suggestion && labelInput && !labelInput.value.trim()) {
-      labelInput.value = data.suggestion;
-    }
-
-    // Merge generated phrases into section state (dedup)
-    if (sData && Array.isArray(data.callerPhrases)) {
-      const existing = new Set(sData.callerPhrases.map(p => p.toLowerCase()));
-      let added = 0;
-      for (const phrase of data.callerPhrases) {
-        if (!existing.has(phrase.toLowerCase())) {
-          sData.callerPhrases.push(phrase);
-          existing.add(phrase.toLowerCase());
-          added++;
-        }
-      }
-      _renderCallerPhrases(sid);
-      _toast(`Added ${added} caller phrase${added !== 1 ? 's' : ''} ✓`, 'success');
-    }
-
-    // Merge negative keywords into section (per-section, not container-level)
-    if (sData && Array.isArray(data.negativeKeywords)) {
-      let negAdded = 0;
-      for (const kw of data.negativeKeywords) {
-        if (!sData.negativeKeywords.includes(kw)) { sData.negativeKeywords.push(kw); negAdded++; }
-      }
-      if (negAdded > 0) {
-        _renderSecNegKeywords(sid);
-        _toast(`Added ${negAdded} exclusion keyword${negAdded !== 1 ? 's' : ''} to section ✓`, 'success');
-      }
-    }
-
-  } catch (_e) {
-    _toast('Could not generate phrases', 'error');
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = '✨ Suggest phrases';
   }
 }
 
