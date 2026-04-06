@@ -2190,10 +2190,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
   }
 
   try {
-    // ── Load target section (include callerPhrases for symmetric T1 scoring) ─
+    // ── Load target section (callerPhrases.text for fresh T1 embedding) ──
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
       _resolveRawQuery(containerId, companyId),
-      { projection: { 'sections.contentEmbedding': 1, 'sections.callerPhrases': 1, 'sections.isActive': 1, 'sections.label': 1, 'sections.content': 1 } }
+      { projection: { 'sections.contentEmbedding': 1, 'sections.callerPhrases.text': 1, 'sections.isActive': 1, 'sections.label': 1, 'sections.content': 1 } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
 
@@ -2202,11 +2202,6 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
 
     // Section content text for PhraseReducerService (protected phrases extraction)
     const sectionContentText = `${targetSection.label || ''}: ${targetSection.content || ''}`.trim();
-
-    // Stored callerPhrase embeddings — T1/T3 primary target (phrase space ↔ phrase space)
-    const storedPhraseEmbs = (targetSection.callerPhrases || [])
-      .map(p => p.embedding)
-      .filter(e => Array.isArray(e) && e.length);
 
     // Auto-generate content embedding if missing (used as T1/T3 fallback + T2)
     let targetEmb = targetSection.contentEmbedding;
@@ -2226,47 +2221,49 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       ).catch(e => logger.warn('[companyKnowledge] Failed to persist auto-generated contentEmbedding', { error: e.message }));
     }
 
-    // ── Load all other sections for Tier 2 clarity gap ────────────────────
-    // Include callerPhrases so competing sections are scored in phrase space too
+    // ── Load all other sections for Tier 2 clarity gap (contentEmbedding only) ─
     const allRaw = await CompanyKnowledgeContainer.collection.find(
       { companyId, isActive: { $ne: false } },
-      { projection: { 'sections.contentEmbedding': 1, 'sections.callerPhrases.embedding': 1, 'sections.isActive': 1, _id: 1 } }
+      { projection: { 'sections.contentEmbedding': 1, 'sections.isActive': 1, _id: 1 } }
     ).toArray();
 
-    // Flat pool of competing embeddings — prefer callerPhrase embeddings, fall back to content
+    // ── Build T2 competing pool from contentEmbeddings ───────────────────
+    // contentEmbedding is sufficient for T2 (detecting if phrase fits better elsewhere)
     const otherEmbeddings = [];
     const targetId = targetRaw._id.toString();
     for (const doc of allRaw) {
       const docId = doc._id.toString();
       (doc.sections || []).forEach((sec, idx) => {
+        if (!sec.contentEmbedding?.length) return;
         if (sec.isActive === false) return;
         if (docId === targetId && idx === sectionIndex) return;
-        const secPhraseEmbs = (sec.callerPhrases || [])
-          .map(p => p.embedding)
-          .filter(e => Array.isArray(e) && e.length);
-        if (secPhraseEmbs.length) {
-          secPhraseEmbs.forEach(e => otherEmbeddings.push(e));
-        } else if (sec.contentEmbedding?.length) {
-          otherEmbeddings.push(sec.contentEmbedding);
-        }
+        otherEmbeddings.push(sec.contentEmbedding);
       });
     }
 
     // ── Clean phrases ────────────────────────────────────────────────────
     const cleanPhrases = phrases.map(p => `${p}`.trim()).filter(Boolean);
 
+    // ── Stored phrase texts for T1/T3 (fresh embed — never trust stored embeddings) ─
+    // Re-embedding from text guarantees phrase-space accuracy regardless of when
+    // or how stored embeddings were originally generated.
+    const storedPhraseTxts = (targetSection.callerPhrases || [])
+      .map(p => p.text)
+      .filter(Boolean);
+
     // ── T3 prep: reduce all phrases via PhraseReducerService ────────────
     const reductions = await PhraseReducerService.reduceBatch(cleanPhrases, sectionContentText);
     const cores = reductions.map(r => r.core);
 
-    // ── Embed raw phrases + non-empty reduced cores in parallel ─────────
+    // ── Embed test phrases + reduced cores + stored phrase texts in one shot ──
     const coreTexts  = [];
     const coreIdxMap = [];                       // maps coreTexts[j] → original index i
     cores.forEach((c, i) => { if (c) { coreTexts.push(c); coreIdxMap.push(i); } });
 
-    const [rawEmbeddings, coreEmbeddingsRaw] = await Promise.all([
+    const [rawEmbeddings, coreEmbeddingsRaw, storedPhraseEmbs] = await Promise.all([
       SemanticMatchService.embedBatch(cleanPhrases),
-      coreTexts.length ? SemanticMatchService.embedBatch(coreTexts) : Promise.resolve([]),
+      coreTexts.length       ? SemanticMatchService.embedBatch(coreTexts)       : Promise.resolve([]),
+      storedPhraseTxts.length ? SemanticMatchService.embedBatch(storedPhraseTxts) : Promise.resolve([]),
     ]);
 
     // Spread core embeddings back to original indices
