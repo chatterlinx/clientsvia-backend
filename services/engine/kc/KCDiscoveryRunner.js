@@ -60,21 +60,22 @@ const UtteranceActParser      = require('./UtteranceActParser');
 // UAP confidence threshold — phrase match must reach this before Logic 2 runs
 const UAP_CONFIDENCE_THRESHOLD = 0.80;
 
-// ── Logic 1 + Logic 2 combined confidence gate ────────────────────────────────
-// When a phrase has anchorWords set, both gates must pass:
-//   combined = (phraseScore × 0.70) + (coreScore × 0.30) ≥ COMBINED_THRESHOLD
+// ── Anchor Gate — Two sequential gates. Both must pass. Either failure → Groq. ─
 //
-// Threshold rationale:
-//   EXACT match (0.95):         0.665 + coreScore×0.30 → needs coreScore ≥ 0.45  ✓ reachable
-//   PARTIAL match (0.80):       0.560 + coreScore×0.30 → needs coreScore ≥ 0.67  ✓ realistic
-//   WORD_OVERLAP_HIGH (0.70):   0.490 + coreScore×0.30 → needs coreScore ≥ 0.77  ✓ achievable
-//   WORD_OVERLAP_LOW (0.50):    0.350 + coreScore×0.30 → needs coreScore ≥ 1.0   → falls to Groq
+// Logic 1 (Anchor Words, <1ms):
+//   ≥90% of admin-curated anchor words must appear (exact or stemmed) in the
+//   caller's utterance. These are the discriminating words that prove the caller
+//   means THIS section, not a competing one with similar vocabulary.
 //
-// EXACT matches skip Logic 2 entirely — phrase literally in utterance is proof enough.
-// Sections/phrases with no anchorWords skip both gates (backward compatible).
-const COMBINED_THRESHOLD = 0.80;
-const PHRASE_WEIGHT      = 0.70;
-const CORE_WEIGHT        = 0.30;
+// Logic 2 (Core Confirmation, ~50ms):
+//   UAP topicWords (free, already computed) → embed → cosine vs section
+//   phraseCoreEmbedding (pre-computed at Re-score). Straight ≥0.80 cosine.
+//   Confirms the caller's semantic intent aligns with the section's topic.
+//
+// Phrases with no anchorWords skip both gates (backward compatible).
+// Wrong answer = worst outcome. Gate failure → Groq fallback = safe.
+const ANCHOR_MATCH_THRESHOLD = 0.90;  // Logic 1: ≥90% of anchor words must match
+const CORE_MATCH_THRESHOLD   = 0.80;  // Logic 2: cosine(callerCore, phraseCore) ≥ 0.80
 
 // ============================================================================
 // PATH CONSTANTS
@@ -796,12 +797,21 @@ class KCDiscoveryRunner {
           const targetSection = fullContainer.sections?.[uapResult.sectionIdx] || null;
 
           // ══════════════════════════════════════════════════════════════════
-          // ANCHOR GATE — per-phrase anchorWords[] with stem matching
-          // Each phrase carries its own anchorWords[]. If non-empty, at least
-          // ONE anchor stem must match a stem of a word in the caller's
-          // utterance. Stem matching covers: weekends/weekend, services/service,
-          // scheduling/schedule, installed/install, pricing/price, etc.
-          // Phrases with empty anchorWords[] skip this gate entirely.
+          // ANCHOR GATE — Two sequential gates. Both must pass.
+          //
+          // Logic 1 (Word Gate, <1ms):
+          //   ≥90% of admin-curated anchor words must appear (exact or stemmed)
+          //   in the caller's utterance. Anchor words are the discriminators —
+          //   the words that PROVE the caller means THIS section, not a
+          //   competing one with similar vocabulary.
+          //
+          // Logic 2 (Core Confirmation, ~50ms):
+          //   UAP's topicWords (already computed, free) → embed → cosine vs
+          //   section phraseCoreEmbedding (pre-computed at Re-score). ≥0.80
+          //   confirms the caller's semantic intent matches the section's topic.
+          //
+          // Phrases with empty anchorWords[] skip both gates (backward compat).
+          // Wrong answer = worst outcome. Gate failure → Groq fallback = safe.
           // ══════════════════════════════════════════════════════════════════
           const anchorWords = uapResult.anchorWords || [];  // already normalised by UAP
           let anchorGatePassed = true;
@@ -809,88 +819,87 @@ class KCDiscoveryRunner {
           if (anchorWords.length > 0) {
             const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
 
-            // Build stem sets for both sides — compare roots not surfaces
+            // ── LOGIC 1 — Word Gate ────────────────────────────────────────
+            // Ratio-based: count how many anchor words are present (exact or stemmed)
             const inputStems   = new Set(rawWords.map(_stem));
             const inputExact   = new Set(rawWords);
-            const anchorPresent = anchorWords.some(aw => inputExact.has(aw) || inputStems.has(_stem(aw)));
+            const anchorHits   = anchorWords.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
+            const anchorRatio  = anchorHits / anchorWords.length;
 
-            if (!anchorPresent) {
+            if (anchorRatio < ANCHOR_MATCH_THRESHOLD) {
+              // ── LOGIC 1 FAIL — discriminating words missing → Groq ──
               anchorGatePassed = false;
-              logger.info('[KC_ENGINE] ANCHOR GATE — no anchor word (or stem) in utterance, falling through', {
+              logger.info('[KC_ENGINE] LOGIC 1 FAIL — anchor words missing, falling through to Groq', {
                 companyId, callSid, turn,
                 anchorWords,
-                sectionLabel: targetSection?.label,
-              });
-            } else if (uapResult.matchType === 'EXACT') {
-              // ══════════════════════════════════════════════════════════════
-              // EXACT match — utterance literally contains the phrase.
-              // Proof of intent is already absolute — skip Logic 2.
-              // ══════════════════════════════════════════════════════════════
-              logger.info('[KC_ENGINE] ANCHOR GATE passed (EXACT — Logic 2 skipped)', {
-                companyId, callSid, turn,
-                anchorWords,
+                anchorHits,
+                anchorRatio: Math.round(anchorRatio * 100) + '%',
+                threshold:   Math.round(ANCHOR_MATCH_THRESHOLD * 100) + '%',
                 sectionLabel: targetSection?.label,
               });
             } else {
-              // ══════════════════════════════════════════════════════════════
-              // LOGIC 2 — core-to-core confirmation (PARTIAL / WORD_OVERLAP / FUZZY)
-              // Caller core = uapResult.topicWords (stop-word stripped, zero
-              // extra cost — already computed by UAP). Embed → cosine vs
-              // phraseCoreEmbedding. Symmetric comparison.
-              // If phraseCoreEmbedding not yet computed → skip, route normally.
-              // ══════════════════════════════════════════════════════════════
+              // ── LOGIC 1 PASS — proceed to Logic 2 ──
+              logger.info('[KC_ENGINE] LOGIC 1 PASS — anchor words confirmed', {
+                companyId, callSid, turn,
+                anchorWords,
+                anchorHits,
+                anchorRatio: Math.round(anchorRatio * 100) + '%',
+                matchType:   uapResult.matchType,
+                sectionLabel: targetSection?.label,
+              });
+
+              // ── LOGIC 2 — Core Confirmation ──────────────────────────────
+              // UAP topicWords (free) → embed → cosine vs phraseCoreEmbedding.
+              // If phraseCoreEmbedding absent (Re-score not yet run) → skip
+              // Logic 2, route on Logic 1 alone (backward compatible).
               try {
                 const SemanticMatchService      = require('./SemanticMatchService');
                 const CompanyKnowledgeContainer = require('../../../models/CompanyKnowledgeContainer');
 
-                // Use UAP's topicWords as the caller's semantic core
-                const callerCore = (uapResult.topicWords || []).join(' ') || userInput;
+                const callerCore = (uapResult.topicWords || []).join(' ');
+                if (callerCore) {
+                  // Embed caller core + load section phraseCoreEmbedding in parallel
+                  const [callerCoreEmb, secDoc] = await Promise.all([
+                    SemanticMatchService.embed(callerCore),
+                    CompanyKnowledgeContainer.findById(uapResult.containerId)
+                      .select('+sections.phraseCoreEmbedding')
+                      .lean(),
+                  ]);
 
-                // Load phraseCoreEmbedding + embed caller core in parallel
-                const [callerCoreEmb, secDoc] = await Promise.all([
-                  SemanticMatchService.embed(callerCore),
-                  CompanyKnowledgeContainer.findById(uapResult.containerId)
-                    .select('+sections.phraseCoreEmbedding')
-                    .lean(),
-                ]);
+                  const phraseCoreEmb = secDoc?.sections?.[uapResult.sectionIdx]?.phraseCoreEmbedding;
 
-                const phraseCoreEmb = secDoc?.sections?.[uapResult.sectionIdx]?.phraseCoreEmbedding;
+                  if (callerCoreEmb?.length && phraseCoreEmb?.length) {
+                    // Cosine similarity
+                    let dot = 0, ma = 0, mb = 0;
+                    for (let _i = 0; _i < callerCoreEmb.length; _i++) {
+                      dot += callerCoreEmb[_i] * phraseCoreEmb[_i];
+                      ma  += callerCoreEmb[_i] * callerCoreEmb[_i];
+                      mb  += phraseCoreEmb[_i] * phraseCoreEmb[_i];
+                    }
+                    const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
 
-                if (callerCoreEmb?.length && phraseCoreEmb?.length) {
-                  // Cosine similarity: caller topic core vs KC phrase core
-                  let dot = 0, ma = 0, mb = 0;
-                  for (let _i = 0; _i < callerCoreEmb.length; _i++) {
-                    dot += callerCoreEmb[_i] * phraseCoreEmb[_i];
-                    ma  += callerCoreEmb[_i] * callerCoreEmb[_i];
-                    mb  += phraseCoreEmb[_i] * phraseCoreEmb[_i];
-                  }
-                  const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
-                  const combined  = (uapResult.confidence * PHRASE_WEIGHT) + (coreScore * CORE_WEIGHT);
-
-                  logger.info('[KC_ENGINE] ANCHOR + LOGIC 2 scored', {
-                    companyId, callSid, turn,
-                    anchorWords,
-                    matchType:   uapResult.matchType,
-                    callerCore:  callerCore.slice(0, 60),
-                    phraseScore: uapResult.confidence,
-                    coreScore:   Math.round(coreScore * 100) / 100,
-                    combined:    Math.round(combined * 100) / 100,
-                    threshold:   COMBINED_THRESHOLD,
-                    pass:        combined >= COMBINED_THRESHOLD,
-                  });
-
-                  if (combined < COMBINED_THRESHOLD) {
-                    anchorGatePassed = false;
-                    logger.info('[KC_ENGINE] LOGIC 2 — combined below threshold, falling through to Groq', {
+                    logger.info('[KC_ENGINE] LOGIC 2 scored', {
                       companyId, callSid, turn,
-                      combined:  Math.round(combined * 100) / 100,
-                      threshold: COMBINED_THRESHOLD,
+                      callerCore:  callerCore.slice(0, 60),
+                      coreScore:   Math.round(coreScore * 100) / 100,
+                      threshold:   CORE_MATCH_THRESHOLD,
+                      pass:        coreScore >= CORE_MATCH_THRESHOLD,
+                      sectionLabel: targetSection?.label,
                     });
+
+                    if (coreScore < CORE_MATCH_THRESHOLD) {
+                      anchorGatePassed = false;
+                      logger.info('[KC_ENGINE] LOGIC 2 FAIL — core mismatch, falling through to Groq', {
+                        companyId, callSid, turn,
+                        coreScore: Math.round(coreScore * 100) / 100,
+                        threshold: CORE_MATCH_THRESHOLD,
+                      });
+                    }
                   }
+                  // phraseCoreEmbedding absent → skip Logic 2, route on Logic 1 alone
                 }
-                // phraseCoreEmbedding absent (Re-score not yet run) → skip Logic 2, route normally
               } catch (_l2Err) {
-                logger.warn('[KC_ENGINE] Logic 2 error — routing normally', {
+                logger.warn('[KC_ENGINE] Logic 2 error — routing on Logic 1 alone', {
                   companyId, callSid, err: _l2Err.message,
                 });
               }
@@ -907,12 +916,12 @@ class KCDiscoveryRunner {
               targetSectionIdx: uapResult.sectionIdx,
             };
 
-            logger.info('[KC_ENGINE] UAP resolved container + section', {
+            logger.info('[KC_ENGINE] UAP resolved container + section (anchor gate confirmed)', {
               companyId, callSid, turn,
               containerTitle: fullContainer.title,
               sectionLabel:   targetSection?.label || '(all)',
               confidence:     uapResult.confidence,
-              anchorGate:     anchorWords.length ? 'passed' : 'n/a',
+              anchorGate:     anchorWords.length ? 'L1+L2 passed' : 'n/a',
             });
           }
         }

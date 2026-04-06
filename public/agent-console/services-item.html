@@ -436,6 +436,10 @@
       background: #fed7aa; color: #c2410c;
       font-weight: 700; border-radius: 3px;
     }
+    .pq-word.pq-word-stop {
+      color: #9ca3af; cursor: default; opacity: 0.6;
+    }
+    .pq-word.pq-word-stop:hover { background: none; color: #9ca3af; }
     /* ── Core strips (phrase core + content core) ─────────────────────── */
     .core-strips-wrap {
       display: flex; flex-direction: column; gap: 0;
@@ -3633,27 +3637,72 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
   return phrase.split(/\s+/).map(word => {
     const norm     = word.toLowerCase().replace(/[^a-z0-9]/g, '');
     const isActive = norm && activeWords.has(norm);
+    const isStop   = norm && STOP_WORDS.has(norm);
     // Single-quoted attribute so JSON.stringify's double quotes don't break HTML parsing.
     // Also escape ' → &#39; so apostrophes in phrase text (e.g. "I'd like to...")
     // don't terminate the single-quoted attribute before the handler closes.
     // HTML entities in inline handlers are decoded by the browser before JS runs,
     // so &#39; arrives at _toggleAnchorWord as a real apostrophe character.
     const safeKey = JSON.stringify(phraseKey).replace(/'/g, '&#39;');
-    return `<span class="pq-word${isActive ? ' anchor-word-active' : ''}"
+    const cls     = isActive ? ' anchor-word-active' : (isStop ? ' pq-word-stop' : '');
+    const tip     = isStop ? 'Common word — can\'t be anchored' : 'Double-click to toggle anchor word';
+    return `<span class="pq-word${cls}"
       ondblclick='_toggleAnchorWord(${sid},${safeKey},${JSON.stringify(norm)})'
-      title="Double-click to toggle anchor word">${_esc(word)}</span>`;
+      title="${tip}">${_esc(word)}</span>`;
   }).join(' ');
 }
+
+/**
+ * STOP_WORDS — words that must never be anchored.
+ * With ratio-based matching (≥90% of anchors must be present), a stop word in
+ * the anchor set causes false negatives: callers who rephrase naturally will
+ * miss the stop word and fail the gate, sending them to Groq unnecessarily.
+ * Stop words carry zero discriminating power — they appear in every utterance.
+ */
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'am', 'be', 'been', 'being',
+  'do', 'does', 'did', 'can', 'could', 'will', 'would', 'shall', 'should',
+  'may', 'might', 'must', 'have', 'has', 'had', 'i', 'you', 'he', 'she',
+  'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your',
+  'his', 'its', 'our', 'their', 'mine', 'yours', 'this', 'that', 'these',
+  'those', 'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
+  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up',
+  'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
+  'between', 'and', 'but', 'or', 'nor', 'not', 'no', 'so', 'if', 'then',
+  'than', 'too', 'very', 'just', 'also', 'some', 'any', 'all', 'each',
+  'every', 'both', 'few', 'more', 'most', 'other', 'such', 'only', 'own',
+  'same', 'here', 'there', 'again', 'once', 'much', 'many',
+  'gonna', 'wanna', 'gotta', 'yeah', 'yes', 'no', 'ok', 'okay',
+]);
 
 /**
  * _toggleAnchorWord — toggle a word's anchor status for a specific phrase.
  * Words are independent: toggling 'weekends' in phrase A never affects phrase B.
  * State is stored in sectionData.phraseAnchorWords[phraseKey] = [word, ...].
+ * Stop words are blocked — they flash red briefly and are not activated.
  * Re-renders the phrase table so orange state updates immediately.
  */
 function _toggleAnchorWord(sid, phraseKey, word) {
   const data = S.sectionData.get(sid);
   if (!data || !word) return;
+
+  // ── Stop-word block ──────────────────────────────────────────────
+  if (STOP_WORDS.has(word.toLowerCase())) {
+    // Flash the word red briefly to indicate it can't be anchored
+    const el = event?.target;
+    if (el) {
+      el.style.transition = 'background 0.15s';
+      el.style.background = '#fecaca';
+      el.style.color      = '#dc2626';
+      el.title            = 'Common word — won\'t help discriminate';
+      setTimeout(() => {
+        el.style.background = '';
+        el.style.color      = '';
+        el.title            = 'Double-click to toggle anchor word';
+      }, 1200);
+    }
+    return;
+  }
 
   if (!data.phraseAnchorWords) data.phraseAnchorWords = {};
   const current = data.phraseAnchorWords[phraseKey] || [];
@@ -3931,6 +3980,22 @@ async function _reScorePhrases(sid) {
     data.phraseScores = result.scores      || {};
     data.phraseCore   = result.phraseCore  || null;
     data.contentCore  = result.contentCore || null;
+
+    // ── Auto-populate anchor words from CORE column ──────────────────
+    // Each phrase's core words become its default anchors. Admin can
+    // double-click to refine before saving. Stop words are filtered out
+    // so only discriminating words become anchors.
+    if (!data.phraseAnchorWords) data.phraseAnchorWords = {};
+    for (const [phrase, scoreData] of Object.entries(data.phraseScores)) {
+      if (scoreData.core) {
+        const coreWords = scoreData.core
+          .toLowerCase()
+          .split(/\s+/)
+          .map(w => w.replace(/[^a-z0-9]/g, ''))
+          .filter(w => w && !STOP_WORDS.has(w));
+        data.phraseAnchorWords[phrase] = coreWords;
+      }
+    }
 
     _renderScoreTable(sid, data.phraseScores);
     _renderPhraseCore(sid, data.phraseCore);
