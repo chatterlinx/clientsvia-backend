@@ -470,6 +470,17 @@
       min-width: 120px;
     }
     .pq-anchor-status.empty { color: #94a3b8; }
+    /* ── Clickable words inside phrase cells ─────────────────────────── */
+    .pq-word {
+      cursor: pointer; border-radius: 3px; padding: 1px 3px;
+      transition: background .12s, color .12s;
+      display: inline-block;
+    }
+    .pq-word:hover { background: #fff3e0; color: #d97706; }
+    .pq-word.anchor-word-active {
+      background: #fed7aa; color: #c2410c;
+      font-weight: 700; border-radius: 3px;
+    }
     /* ── Gate column in phrase table ──────────────────────────────────── */
     .pq-gate-cell { text-align: center; min-width: 44px; width: 44px; }
     .pq-gate-ok   { color: #16a34a; font-size: 13px; font-weight: 700; }
@@ -3723,6 +3734,34 @@ const _statusTitle = {
 };
 
 /**
+ * _buildPhraseWords — render phrase text as individually double-clickable word spans.
+ * Double-clicking a word sets it as the anchor term (turns orange).
+ * Double-clicking the active anchor word clears the anchor.
+ */
+function _buildPhraseWords(phrase, sid) {
+  const anchor = (S.sectionData.get(sid)?.anchor || '').trim().toLowerCase();
+  return phrase.split(/\s+/).map(word => {
+    const norm    = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isAnchor = anchor && norm === anchor;
+    return `<span class="pq-word${isAnchor ? ' anchor-word-active' : ''}"
+      ondblclick="_setAnchorFromWord(${sid},'${norm}')"
+      title="Double-click to set as anchor">${_esc(word)}</span>`;
+  }).join(' ');
+}
+
+/**
+ * _setAnchorFromWord — set or clear the anchor when a word in a phrase is double-clicked.
+ */
+function _setAnchorFromWord(sid, word) {
+  const input = document.getElementById(`anchor-input-${sid}`);
+  const data  = S.sectionData.get(sid);
+  if (!input || !data) return;
+  // Toggle — double-click the same word again to clear
+  input.value = (data.anchor === word) ? '' : word;
+  _onAnchorChange(sid);
+}
+
+/**
  * _buildPhraseRow — render a single <tr> for a phrase (scored or pending).
  * sid + idx used for the delete button.
  */
@@ -3746,7 +3785,7 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
 
   if (!score) {
     return `<tr class="pq-row-pending">
-      <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
+      <td><span class="pq-phrase-text">${_buildPhraseWords(phrase, sid)}</span></td>
       ${gateCell}
       <td class="pq-conf-cell">
         <div class="pq-bar-row">
@@ -3775,7 +3814,7 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   const tcCls     = tcPct == null ? 'tc-na' : tcPct >= 70 ? 'tc-high' : tcPct >= 50 ? 'tc-mid' : 'tc-low';
   const tcVal     = tcPct != null ? `${tcPct}%` : '—';
   return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
-    <td><span class="pq-phrase-text">${_esc(phrase)}</span></td>
+    <td><span class="pq-phrase-text">${_buildPhraseWords(phrase, sid)}</span></td>
     ${gateCell}
     <td class="pq-conf-cell">
       <div class="pq-bar-row">
