@@ -1707,6 +1707,9 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
     BridgeService.invalidate(companyId).catch(() => {});
 
     // Fire-and-forget: embed callerPhrases + section content + keyword health
+    // ⚠️ CRITICAL: use targeted dot-notation $set for embeddings ONLY.
+    // Never replace the full sections array here — that would race against atomic
+    // Re-score updates (phraseCore, contentCore, phraseCoreEmbedding) and wipe them.
     if (updates.title !== undefined || updates.sections !== undefined) {
       setImmediate(async () => {
         try {
@@ -1714,10 +1717,25 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
           const phraseCount  = await SemanticMatchService.embedCallerPhrases(sections);
           const contentCount = await SemanticMatchService.embedSectionContent(sections);
           if (phraseCount > 0 || contentCount > 0) {
-            await CompanyKnowledgeContainer.updateOne(
-              { _id: container._id },
-              { $set: { sections } }
-            );
+            // Build dot-notation $set — only touch embedding fields, never phraseCore/contentCore
+            const embeddingSet = {};
+            sections.forEach((sec, sIdx) => {
+              if (sec.contentEmbedding?.length) {
+                embeddingSet[`sections.${sIdx}.contentEmbedding`]   = sec.contentEmbedding;
+                embeddingSet[`sections.${sIdx}.contentEmbeddingAt`] = sec.contentEmbeddingAt || new Date();
+              }
+              (sec.callerPhrases || []).forEach((phrase, pIdx) => {
+                if (phrase.embedding?.length) {
+                  embeddingSet[`sections.${sIdx}.callerPhrases.${pIdx}.embedding`] = phrase.embedding;
+                }
+              });
+            });
+            if (Object.keys(embeddingSet).length) {
+              await CompanyKnowledgeContainer.updateOne(
+                { _id: container._id },
+                { $set: embeddingSet }
+              );
+            }
           }
         } catch (_e) { /* non-fatal */ }
         KCKeywordHealthService.generateAndStoreEmbedding(id).catch(() => {});
