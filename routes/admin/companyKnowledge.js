@@ -2340,9 +2340,29 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     // ── Core Alignment: phraseCore word coverage in contentCore ────────
     // Section-level metric — do the combined phrase topics align with the
     // content topics? Both reduced by PhraseReducerService, same space.
+    // Stop words + duplicates stripped — if a word doesn't count, it doesn't count.
+    const CA_STOP = new Set([
+      'i','me','my','myself','we','our','ours','ourselves','you','your','yours','yourself',
+      'yourselves','he','him','his','himself','she','her','hers','herself','it','its','itself',
+      'they','them','their','theirs','themselves','what','which','who','whom','this','that',
+      'these','those','am','is','are','was','were','be','been','being','have','has','had',
+      'having','do','does','did','doing','a','an','the','and','but','if','or','because','as',
+      'until','while','of','at','by','for','with','about','against','between','through',
+      'during','before','after','above','below','to','from','up','down','in','out','on','off',
+      'over','under','again','further','then','once','here','there','when','where','why','how',
+      'all','both','each','few','more','most','other','some','such','no','nor','not','only',
+      'own','same','so','than','too','very','can','will','just','don','should','now','also',
+      'get','got','like','would','could','may','might','shall','let','much','many','guys',
+      'really','please','okay','ok','yeah','yes','hey','hi','hello','gonna','wanna','gotta',
+      'someone','something','anything','anyone','everybody','everyone','need','want','know',
+    ]);
     let coreAlignment = null;
     if (phraseCore && contentCore) {
-      const pcWords = phraseCore.toLowerCase().split(/\s+/).filter(Boolean);
+      const pcWords = [...new Set(
+        phraseCore.toLowerCase().split(/\s+/)
+          .map(w => w.replace(/[^a-z0-9]/g, ''))
+          .filter(w => w && !CA_STOP.has(w))
+      )];
       const ccText  = contentCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
       const ccWords = new Set(ccText.split(/\s+/).filter(Boolean));
       const _caStem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
