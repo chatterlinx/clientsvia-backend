@@ -477,6 +477,14 @@
     .pq-badge.orange { background: #ffedd5; color: #7c2d12; }
     .pq-badge.red    { background: #fee2e2; color: #991b1b; }
     .pq-badge.pending { background: #f1f5f9; color: #94a3b8; }
+    /* Intent token badges */
+    .pq-intent-cell { white-space: nowrap; }
+    .pq-intent-badge {
+      display: inline-block; background: #ede9fe; color: #6d28d9;
+      border-radius: 10px; padding: 1px 8px; font-size: 11px;
+      font-weight: 600; margin: 1px 2px;
+    }
+    .pq-intent-none { color: #cbd5e1; font-size: 11px; }
     /* Row delete button */
     .pq-row-delete {
       width: 22px; height: 22px; border: none; background: transparent;
@@ -3728,6 +3736,7 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   if (!score) {
     return `<tr class="pq-row-pending">
       <td><span class="pq-phrase-text">${phraseWords}</span></td>
+      <td class="pq-intent-cell"><span class="pq-intent-none">—</span></td>
       <td class="pq-conf-cell">
         <div class="pq-bar-row">
           <div class="pq-bar-track"><div class="pq-bar-fill" style="width:0%"></div></div>
@@ -3754,8 +3763,12 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   const tcPct     = score.tc != null ? Math.round(score.tc * 100) : null;
   const tcCls     = tcPct == null ? 'tc-na' : tcPct >= 70 ? 'tc-high' : tcPct >= 50 ? 'tc-mid' : 'tc-low';
   const tcVal     = tcPct != null ? `${tcPct}%` : '—';
+  const intentHtml = (score.normalizedPatterns || []).length
+    ? score.normalizedPatterns.map(p => `<span class="pq-intent-badge" title="${_esc(p.pattern)}">${_esc(p.token)}</span>`).join('')
+    : '<span class="pq-intent-none">—</span>';
   return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
     <td><span class="pq-phrase-text">${phraseWords}</span></td>
+    <td class="pq-intent-cell">${intentHtml}</td>
     <td class="pq-conf-cell">
       <div class="pq-bar-row">
         <div class="pq-bar-track"><div class="pq-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
@@ -3841,6 +3854,7 @@ function _renderPhraseTable(sid) {
   let html = `<table class="pq-table">
     <thead><tr>
       <th>Phrase</th>
+      <th>Intent</th>
       <th>Confidence</th>
       <th class="pq-th-center">Clarity</th>
       <th>Core</th>
@@ -3851,7 +3865,7 @@ function _renderPhraseTable(sid) {
     </tr></thead><tbody>`;
 
   const csResults = data?.crossScanResults || {};
-  const colSpan   = hasCS ? 8 : 7;
+  const colSpan   = hasCS ? 9 : 8;
   phrases.forEach((phrase, idx) => {
     const csResult = csResults[phrase] || null;
     html += _buildPhraseRow(phrase, scores[phrase] || null, sid, idx, csResult);
@@ -4014,12 +4028,12 @@ async function _reScorePhrases(sid) {
     data.phraseCore   = result.phraseCore  || null;
     data.contentCore  = result.contentCore || null;
 
-    // ── Auto-populate anchor words from CORE column ──────────────────
-    // Each phrase's core words become its DEFAULT anchors. Stop words
-    // are skipped in the auto-populate so only content words are chosen.
-    // BUT: if the admin already set anchors manually (including stop
-    // words they deliberately chose), those are preserved — Re-score
-    // only auto-fills phrases with NO existing anchors.
+    // ── Auto-populate anchor words from CORE column + intent tokens ──
+    // Each phrase's core words + intent normalizer tokens become its
+    // DEFAULT anchors.  Stop words are skipped for core words but NOT
+    // for intent tokens (they are semantic intent markers, not filler).
+    // Admin-set anchors are preserved — Re-score only auto-fills
+    // phrases with NO existing anchors.
     if (!data.phraseAnchorWords) data.phraseAnchorWords = {};
     for (const [phrase, scoreData] of Object.entries(data.phraseScores)) {
       if (scoreData.core) {
@@ -4031,7 +4045,11 @@ async function _reScorePhrases(sid) {
           .split(/\s+/)
           .map(w => w.replace(/[^a-z0-9]/g, ''))
           .filter(w => w && !STOP_WORDS.has(w));
-        data.phraseAnchorWords[phrase] = coreWords;
+        // Intent tokens bypass stop-word filter — they are routing keys
+        const intentTokens = (scoreData.normalizedPatterns || [])
+          .map(p => (p.token || '').toLowerCase().trim())
+          .filter(Boolean);
+        data.phraseAnchorWords[phrase] = [...new Set([...coreWords, ...intentTokens])];
       }
     }
 
