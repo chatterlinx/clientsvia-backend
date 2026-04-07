@@ -31,17 +31,17 @@ const AUTHORIZED_WRITERS = [
   'v2twilio.slotMerge'
 ];
 
-// Stopwords that should NEVER be accepted as names
-const NAME_STOPWORDS = [
+// Shared stop words + trade/domain words that should NEVER be accepted as names
+const StopWords = require('./stopWords');
+const NAME_STOPWORDS = [...StopWords.getStopWordsPlus([
   'air conditioning', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
   'currently', 'somebody', 'someone', 'nobody', 'anyone', 'everybody',
-  'hello', 'hi', 'hey', 'yes', 'no', 'yeah', 'yep', 'nope', 'ok', 'okay',
-  'the', 'a', 'an', 'this', 'that', 'it', 'they', 'we', 'you', 'i',
+  'hello', 'hi', 'hey', 'nope', 'yep',
   'need', 'want', 'help', 'service', 'repair', 'fix', 'install', 'replace',
   'appointment', 'booking', 'schedule', 'call', 'phone', 'address',
   'thermostat', 'furnace', 'water heater', 'toilet', 'sink', 'faucet',
-  'air', 'conditioning', 'unit', 'system', 'equipment'
-];
+  'air', 'conditioning', 'unit', 'system', 'equipment',
+])];
 
 // Phone patterns that look like phones (not names)
 const PHONE_PATTERN = /^[\d\s\-\(\)\+\.]{7,}$/;

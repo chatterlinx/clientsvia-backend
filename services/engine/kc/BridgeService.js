@@ -61,17 +61,9 @@ const CONFIG = {
   VERSION:   5,          // v5 — per-phrase anchorWords[] replaces section-level anchorTerm
 };
 
-// Stop words for phonetic indexing (mirrors UAP CONFIG.STOP_WORDS)
-const STOP_WORDS = new Set([
-  'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'that', 'this',
-  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'could',
-  'should', 'may', 'might', 'can', 'to', 'for', 'of', 'on', 'in', 'at',
-  'by', 'with', 'about', 'and', 'or', 'but', 'so', 'if', 'when', 'what',
-  'how', 'why', 'who', 'where', 'tell', 'know', 'get', 'want', 'need',
-  'help', 'more', 'just', 'please', 'yes', 'no', 'okay', 'yeah', 'hi',
-  'hello', 'there', 'here',
-]);
+// Shared stop words — single source of truth (utils/stopWords.js)
+const StopWords = require('../../../utils/stopWords');
+const STOP_WORDS = StopWords.getStopWords();
 const MIN_WORD_LEN = 3;
 
 // ============================================================================

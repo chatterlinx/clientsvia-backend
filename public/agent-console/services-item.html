@@ -3658,23 +3658,30 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
  * With ratio-based matching (≥90% of anchors must be present), a stop word in
  * the anchor set causes false negatives: callers who rephrase naturally will
  * miss the stop word and fail the gate, sending them to Groq unnecessarily.
- * Stop words carry zero discriminating power — they appear in every utterance.
+ *
+ * Loaded from GlobalShare (single source of truth) on page init.
+ * Inline fallback used until API responds — covers instant renders.
  */
-const STOP_WORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'am', 'be', 'been', 'being',
-  'do', 'does', 'did', 'can', 'could', 'will', 'would', 'shall', 'should',
-  'may', 'might', 'must', 'have', 'has', 'had', 'i', 'you', 'he', 'she',
-  'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your',
-  'his', 'its', 'our', 'their', 'mine', 'yours', 'this', 'that', 'these',
-  'those', 'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
-  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up',
-  'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
-  'between', 'and', 'but', 'or', 'nor', 'not', 'no', 'so', 'if', 'then',
-  'than', 'too', 'very', 'just', 'also', 'some', 'any', 'all', 'each',
-  'every', 'both', 'few', 'more', 'most', 'other', 'such', 'only', 'own',
-  'same', 'here', 'there', 'again', 'once', 'much', 'many',
-  'gonna', 'wanna', 'gotta', 'yeah', 'yes', 'no', 'ok', 'okay',
+let STOP_WORDS = new Set([
+  'a','an','the','is','are','was','were','am','be','been','being',
+  'do','does','did','can','could','will','would','shall','should',
+  'may','might','must','have','has','had','i','you','he','she',
+  'it','we','they','me','him','her','us','them','my','your',
+  'his','its','our','their','this','that','these','those',
+  'what','which','who','whom','how','when','where','why',
+  'in','on','at','to','for','of','with','by','from','up',
+  'and','but','or','nor','not','no','so','if','than',
+  'just','very','too','also','here','there',
 ]);
+// Fetch canonical list from GlobalShare on page load
+(async function _loadStopWords() {
+  try {
+    const data = await apiFetch('/api/admin/globalshare/phrase-intelligence');
+    if (data?.stopWords?.length) {
+      STOP_WORDS = new Set(data.stopWords.map(w => w.toLowerCase()));
+    }
+  } catch (e) { /* fallback is fine */ }
+})();
 
 /**
  * _toggleAnchorWord — toggle a word's anchor status for a specific phrase.

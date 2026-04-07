@@ -315,11 +315,12 @@ function getTransferHint(input) {
     'put me through to', 'patch me through to'
   ];
 
-  const STOP_WORDS = new Set([
-    'a', 'an', 'the', 'my', 'your', 'our', 'their', 'his', 'her', 'its',
+  // Shared stop words + transfer-specific role words
+  const StopWords = require('../../../utils/stopWords');
+  const STOP_WORDS = StopWords.getStopWordsPlus([
     'someone', 'anyone', 'person', 'agent', 'human', 'representative', 'rep',
     'manager', 'supervisor', 'operator', 'staff', 'team', 'member',
-    'please', 'now', 'immediately', 'asap'
+    'immediately', 'asap',
   ]);
 
   for (const prefix of connectPrefixes) {

@@ -105,30 +105,9 @@ const DEFAULT_SYNONYM_GROUPS = [
   { token: 'cancel',   synonyms: ['stop', 'end', 'terminate', 'discontinue'] },
 ];
 
-const DEFAULT_STOP_WORDS = [
-  // Pronouns
-  'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'you', 'your', 'yours',
-  'he', 'she', 'it', 'they', 'them', 'his', 'her', 'its', 'their',
-  // Articles / determiners
-  'a', 'an', 'the', 'this', 'that', 'these', 'those', 'some', 'any',
-  // Prepositions
-  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'about',
-  'into', 'through', 'during', 'before', 'after', 'above', 'below',
-  'between', 'under', 'over',
-  // Conjunctions
-  'and', 'but', 'or', 'so', 'yet', 'both', 'either', 'neither',
-  // Auxiliary / copula
-  'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
-  'do', 'does', 'did', 'have', 'has', 'had', 'having',
-  'will', 'would', 'shall', 'should', 'may', 'might', 'can', 'could',
-  // Filler
-  'just', 'really', 'very', 'also', 'too', 'please', 'thanks',
-  'like', 'well', 'right', 'okay', 'ok', 'um', 'uh', 'yeah',
-  'gonna', 'wanna', 'gotta', 'kinda', 'sorta',
-  // Misc glue
-  'get', 'got', 'go', 'going', 'come', 'thing', 'things',
-  'there', 'here', 'then', 'now', 'still', 'even', 'already',
-];
+// Shared stop words — single source of truth for the entire platform
+const StopWords = require('../../utils/stopWords');
+const DEFAULT_STOP_WORDS = StopWords.BASE_STOP_WORDS;
 
 const DEFAULT_DANGER_WORDS = [
   'not', 'no', 'never', 'none', 'nor', "don't", "doesn't", "didn't",

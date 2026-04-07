@@ -604,6 +604,12 @@ router.patch('/phrase-intelligence/:section', async (req, res) => {
         // Invalidate the in-memory cache so next reduce() picks up changes
         PhraseReducerService.invalidateCache();
 
+        // If stop words changed, also invalidate the shared StopWords module
+        if (section === 'stopWords') {
+            const StopWords = require('../../utils/stopWords');
+            StopWords.invalidateCache().catch(() => {});
+        }
+
         res.json({ success: true, section, count: data.length });
     } catch (error) {
         logger.error('[GlobalShare API] Save phrase intelligence error:', error);

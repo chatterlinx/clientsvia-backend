@@ -95,13 +95,14 @@ const ENGINE_VERSION = 'V115-TRIAGE-NUKE';  // <-- CHANGE THIS EACH DEPLOY
 // ═══════════════════════════════════════════════════════════════════════════
 // V92: NAME STOP WORDS - Words that are NEVER valid names (for acknowledgment check)
 // ═══════════════════════════════════════════════════════════════════════════
-const NAME_STOP_WORDS_ENGINE = new Set([
+// Shared stop words + name-validation domain words
+const StopWords = require('../utils/stopWords');
+const NAME_STOP_WORDS_ENGINE = StopWords.getStopWordsPlus([
     'issues', 'issue', 'problem', 'problems', 'trouble', 'having', 'calling',
-    'is', 'are', 'was', 'were', 'be', 'been', 'am', 'the', 'a', 'an',
-    'yes', 'yeah', 'no', 'nope', 'okay', 'ok', 'sure', 'thanks', 'thank',
-    'ready', 'done', 'right', 'correct', 'wrong', 'good', 'great', 'fine',
+    'sure', 'nope',
+    'ready', 'done', 'correct', 'wrong', 'good', 'great', 'fine',
     'morning', 'afternoon', 'evening', 'night', 'today', 'tomorrow',
-    'customer', 'client', 'homeowner', 'resident', 'tenant', 'owner'
+    'customer', 'client', 'homeowner', 'resident', 'tenant', 'owner',
 ]);
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [

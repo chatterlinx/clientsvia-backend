@@ -20,45 +20,34 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     return null;
   }
 
-  // STOP WORDS: tokens that should never be treated as name parts
-  // This list is intentionally generic and not trade-specific.
-  const PLATFORM_STOP_WORDS = [
-    // Greetings & fillers
+  // Shared stop words + name-extraction-specific domain words + per-company custom
+  const StopWordsModule = require('./stopWords');
+  const STOP_WORDS = StopWordsModule.getStopWordsPlus([
+    // Greetings
     'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
-    'uh', 'um', 'erm', 'hmm', 'ah', 'oh', 'well', 'so', 'like', 'just',
+    // Speech fillers
+    'erm', 'hmm', 'ah', 'oh',
     // Confirmations
-    'yeah', 'yes', 'sure', 'okay', 'ok', 'alright', 'right', 'yep', 'yup',
-    'go', 'ahead', 'absolutely', 'definitely', 'certainly', 'perfect', 'sounds',
-    // Common words & auxiliary verbs
-    'the', 'that', 'this', 'what', 'please', 'thanks', 'thank', 'you',
-    'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had',
-    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might',
-    'it', 'its', 'my', 'your', 'our', 'their', 'his', 'her', 'a', 'an', 'and', 'or', 'but',
-    'to', 'see', 'if', 'we', 'get', 'somebody', 'someone', 'here', 'there', 'today', 'now',
-    // Common verbs
+    'sure', 'alright', 'yep', 'yup', 'go', 'ahead',
+    'absolutely', 'definitely', 'certainly', 'perfect', 'sounds',
+    // Common verbs (gerunds from human rambling)
     'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
     'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
     'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
-    // Generic "noise" adjectives often present in human rambling
-    'pretty', 'long', 'short', 'kinda', 'kind', 'sorta', 'sort',
-    // Problem-related words (generic)
+    // Noise adjectives
+    'pretty', 'long', 'short', 'kind', 'sort',
+    // Problem-related words
     'problem', 'problems', 'issue', 'issues', 'trouble', 'wrong', 'weird', 'strange',
-    // Question words
-    'any', 'some', 'with',
-    // Meta-words that appear in rambling but are NOT name parts
-    // (prevents false extraction like "Last Name" from "my last name is")
+    // Meta-words (prevents "Last Name" from "my last name is")
     'name', 'last', 'surname',
-    // V37 FIX: Common words that sound like names but aren't
-    // "I'm probably going to..." was being extracted as name "Probably"
+    // Words that sound like names but aren't
     'probably', 'maybe', 'perhaps', 'possibly', 'apparently', 'actually',
     'basically', 'literally', 'honestly', 'seriously', 'obviously',
-    // Filler words that STT might capitalize
-    'along', 'customer', 'res', 'chance'
-  ];
-
-  const STOP_WORDS = new Set([
-    ...PLATFORM_STOP_WORDS,
-    ...(customStopWords || []).map(w => String(w).toLowerCase().trim()).filter(Boolean)
+    // Misc filler STT might capitalize
+    'along', 'customer', 'res', 'chance',
+    'see', 'get', 'somebody', 'someone', 'today', 'nope',
+    // Per-company custom stop words
+    ...(customStopWords || []).map(w => String(w).toLowerCase().trim()).filter(Boolean),
   ]);
 
   // Contextual stop-word: prevent "a little ..." from being interpreted as a surname in last-name collection.

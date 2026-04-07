@@ -1067,6 +1067,16 @@ async function startServer() {
             console.error('[Server] ❌ Global Hub initialization failed:', hubError.message);
             console.warn('[Server] ⚠️ First names lookups will use fallback (empty until seeded)');
         }
+
+        // Step 3.6c: Initialize shared stop words (base + admin-managed from GlobalShare)
+        console.log('[Server] Step 3.6c/7: Initializing shared stop words...');
+        try {
+            const StopWords = require('./utils/stopWords');
+            await StopWords.initialize();
+            console.log('[Server] ✅ Step 3.6c COMPLETE: Shared stop words loaded');
+        } catch (swErr) {
+            console.warn('[Server] ⚠️ StopWords init failed, BASE defaults active:', swErr.message);
+        }
         console.log('════════════════════════════════════════════════════════════════════');
         
         // 🔧 FIX: Ensure v2TradeCategory indexes are correct for multi-tenancy

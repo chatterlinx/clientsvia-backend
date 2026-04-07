@@ -186,27 +186,9 @@ function buildScenarioListForGPT(template) {
 // ============================================================================
 // STOPWORDS - Common words to remove for better matching
 // ============================================================================
-const STOPWORDS = new Set([
-    // Articles
-    'a', 'an', 'the',
-    // Pronouns
-    'i', 'my', 'me', 'we', 'our', 'you', 'your', 'it', 'its',
-    // Prepositions
-    'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'out',
-    // Conjunctions
-    'and', 'or', 'but', 'so',
-    // Common verbs (low semantic value in triggers)
-    'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did',
-    'can', 'could', 'will', 'would', 'should', 'may', 'might',
-    'get', 'got', 'getting',
-    // Common filler
-    'just', 'also', 'very', 'really', 'please', 'thanks', 'thank',
-    // Question words (keep some context)
-    'what', 'when', 'where', 'why', 'how',
-    // Negations (important but handled separately)
-    // 'not', "n't", 'no' - keep these for semantic meaning
-]);
+// Shared stop words — single source of truth (utils/stopWords.js)
+const StopWords = require('../../utils/stopWords');
+const STOPWORDS = StopWords.getStopWords();
 
 // ============================================================================
 // HELPER: Extract meaningful tokens from text (stopwords removed)

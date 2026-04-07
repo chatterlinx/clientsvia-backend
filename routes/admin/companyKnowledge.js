@@ -222,16 +222,9 @@ const SETTINGS_FIELDS = [
  * @returns {string[]}
  */
 function _extractContentKeywords(label, content) {
-  const STOP = new Set([
-    'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'that', 'this',
-    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'could',
-    'should', 'may', 'might', 'can', 'to', 'for', 'of', 'on', 'in', 'at',
-    'by', 'with', 'about', 'and', 'or', 'but', 'so', 'if', 'when', 'what',
-    'how', 'why', 'who', 'where', 'not', 'no', 'yes', 'all', 'any', 'each',
-    'from', 'they', 'them', 'their', 'than', 'then', 'also', 'just', 'more',
-    'most', 'some', 'such', 'only', 'very', 'into', 'over', 'after', 'before',
-  ]);
+  // Shared stop words — single source of truth (utils/stopWords.js)
+  const StopWords = require('../../utils/stopWords');
+  const STOP = StopWords.getStopWords();
 
   const text = `${label || ''} ${content || ''}`.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
   const words = text.split(/\s+/).filter(w => w.length >= 3 && !STOP.has(w));
@@ -2340,20 +2333,8 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     // ── Core Alignment: phraseCore word coverage in contentCore ────────
     // Section-level metric — do the combined phrase topics align with the
     // content topics? Both reduced by PhraseReducerService, same space.
-    // Stop words + duplicates stripped — pure grammar glue only.
-    // No nouns, no verbs, no words that could be meaningful content.
-    const CA_STOP = new Set([
-      'i','me','my','myself','we','our','ours','ourselves','you','your','yours','yourself',
-      'yourselves','he','him','his','himself','she','her','hers','herself','it','its','itself',
-      'they','them','their','theirs','themselves','what','which','who','whom','this','that',
-      'these','those','am','is','are','was','were','be','been','being','have','has','had',
-      'having','do','does','did','doing','a','an','the','and','but','if','or','because','as',
-      'until','while','of','at','by','for','with','about','against','between','through',
-      'during','before','after','above','below','to','from','up','down','in','on','off',
-      'over','under','then','here','there','when','where','how',
-      'no','nor','not','so','than','too','very','just','also',
-      'can','will','would','could','may','might','shall','should',
-    ]);
+    // Shared stop words — single source of truth (utils/stopWords.js)
+    const CA_STOP = require('../../utils/stopWords').getStopWords();
     let coreAlignment = null;
     if (phraseCore && contentCore) {
       const pcWords = [...new Set(

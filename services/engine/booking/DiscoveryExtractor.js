@@ -92,25 +92,19 @@ const COMMON_TECH_NAMES = new Set([
 // BUG: "would like somebody to come out" was extracting "Somebody" as tech name.
 // These are common words that match the pattern but aren't actual names.
 // ════════════════════════════════════════════════════════════════════════════════
-const TECH_NAME_STOP_WORDS = new Set([
-    // Pronouns and common words
+// Shared stop words + tech-name-specific domain words
+const StopWords = require('../../../utils/stopWords');
+const TECH_NAME_STOP_WORDS = StopWords.getStopWordsPlus([
+    // Generic references
     'somebody', 'someone', 'anybody', 'anyone', 'everybody', 'everyone', 'nobody',
     'something', 'anything', 'everything', 'nothing',
-    'they', 'them', 'their', 'theirs', 'themselves',
-    'you', 'your', 'yours', 'yourself', 'yourselves',
-    'she', 'her', 'hers', 'herself',
-    'him', 'himself',
-    'myself', 'ourselves', 'itself',
-    // Generic references
     'guy', 'man', 'woman', 'person', 'people', 'tech', 'technician', 'worker',
     'employee', 'staff', 'team', 'crew', 'service', 'professional',
     // Scheduling words
-    'today', 'tomorrow', 'morning', 'afternoon', 'evening', 'soon', 'asap', 'now',
+    'today', 'tomorrow', 'morning', 'afternoon', 'evening', 'soon', 'asap',
     // Actions
-    'help', 'come', 'came', 'check', 'look', 'fix', 'repair', 'service', 'install',
-    // Filler words
-    'the', 'and', 'that', 'this', 'there', 'here', 'where', 'when', 'what', 'who',
-    'how', 'why', 'just', 'only', 'also', 'really', 'very', 'much', 'more', 'less'
+    'help', 'come', 'came', 'check', 'look', 'fix', 'repair', 'install',
+    'less',
 ]);
 
 // ════════════════════════════════════════════════════════════════════════════════

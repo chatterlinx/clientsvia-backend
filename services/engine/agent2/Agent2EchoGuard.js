@@ -58,15 +58,9 @@ const ECHO_PATTERN_PREFIXES = [
  * Words that are too common to count as meaningful overlap.
  * These won't trigger echo detection on their own.
  */
-const STOP_WORDS = new Set([
-  'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'the', 'a', 'an',
-  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
-  'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
-  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into',
-  'and', 'or', 'but', 'if', 'then', 'so', 'than', 'that', 'this', 'these',
-  'not', 'no', 'yes', 'can', 'just', 'like', 'um', 'uh', 'oh', 'hi', 'hello',
-  'okay', 'ok', 'yeah', 'yep', 'nope', 'well', 'right', 'got', 'get'
-]);
+// Shared stop words — single source of truth (utils/stopWords.js)
+const StopWords = require('../../../utils/stopWords');
+const STOP_WORDS = StopWords.getStopWords();
 
 /**
  * Extract words from text (lowercase, alphanumeric only).
