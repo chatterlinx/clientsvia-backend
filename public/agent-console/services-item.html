@@ -2102,6 +2102,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <span class="cc-label" style="color:#7c3aed;">Phrase Core</span>
         <span class="cc-divider">→</span>
         <span class="cc-text phrase-core-text" id="phrase-core-txt-${id}"></span>
+        <span id="core-alignment-${id}" style="display:none; margin-left:auto; font-weight:700; font-size:13px; white-space:nowrap;"></span>
       </div>
       <div class="pq-section-divider"></div>
       <div class="pq-sugg-section" id="sugg-panel-${id}"></div>
@@ -3932,12 +3933,25 @@ function _renderContentCore(sid, core) {
  * _renderPhraseCore — show or hide the phrase core strip inside the phrase card.
  * phraseCore = run summary of all callerPhrases combined (Logic 2 target).
  */
-function _renderPhraseCore(sid, core) {
+function _renderPhraseCore(sid, core, coreAlignment) {
   const strip = document.getElementById(`phrase-core-${sid}`);
   const txtEl = document.getElementById(`phrase-core-txt-${sid}`);
   if (!strip || !txtEl) return;
   if (core) { txtEl.textContent = core; strip.style.display = 'flex'; }
   else        { strip.style.display = 'none'; }
+
+  // ── Core Alignment badge — phraseCore word coverage in contentCore ──
+  const badge = document.getElementById(`core-alignment-${sid}`);
+  if (!badge) return;
+  if (coreAlignment != null) {
+    const pct   = Math.round(coreAlignment);
+    const color = pct >= 80 ? '#16a34a' : pct >= 60 ? '#d97706' : '#dc2626';
+    badge.textContent  = `Core Alignment: ${pct}%`;
+    badge.style.color  = color;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 /**
@@ -3998,7 +4012,7 @@ async function _reScorePhrases(sid) {
     }
 
     _renderScoreTable(sid, data.phraseScores);
-    _renderPhraseCore(sid, data.phraseCore);
+    _renderPhraseCore(sid, data.phraseCore, result.coreAlignment);
     _renderContentCore(sid, data.contentCore);
 
     const counts = { green: 0, yellow: 0, orange: 0, red: 0 };

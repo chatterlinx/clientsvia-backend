@@ -2337,7 +2337,26 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       }
     })();
 
-    return res.json({ success: true, scores, phraseCore, contentCore });
+    // ── Core Alignment: phraseCore word coverage in contentCore ────────
+    // Section-level metric — do the combined phrase topics align with the
+    // content topics? Both reduced by PhraseReducerService, same space.
+    let coreAlignment = null;
+    if (phraseCore && contentCore) {
+      const pcWords = phraseCore.toLowerCase().split(/\s+/).filter(Boolean);
+      const ccText  = contentCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+      const ccWords = new Set(ccText.split(/\s+/).filter(Boolean));
+      const _caStem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
+        .replace(/ers?$/, '').replace(/ed$/, '').replace(/ly$/, '')
+        .replace(/ies$/, 'y').replace(/ves$/, 'f').replace(/s$/, '');
+      const ccStems = new Set([...ccWords].map(_caStem));
+      let caHits = 0;
+      for (const w of pcWords) {
+        if (ccWords.has(w) || ccStems.has(_caStem(w))) caHits++;
+      }
+      coreAlignment = pcWords.length ? Math.round((caHits / pcWords.length) * 100) : null;
+    }
+
+    return res.json({ success: true, scores, phraseCore, contentCore, coreAlignment });
   } catch (err) {
     logger.error('[companyKnowledge] phrase-score error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Phrase scoring failed' });
