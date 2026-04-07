@@ -813,6 +813,7 @@
       _renderPiStopWords();
       _renderPiDangerWords();
       _renderPiCuePhrases();
+      _dedupCuePhrases(); // auto-clean duplicates on load
       _updatePiStat();
       _updatePiTabCounts();
       _bindPiTabs();
@@ -1005,6 +1006,42 @@
       </tr>`
     ).join('');
     _refreshCueTypeDropdown();
+    _updateCueSummary();
+  }
+
+  /** Per-type count summary strip. */
+  function _updateCueSummary() {
+    const el = document.getElementById('pi-cue-summary');
+    if (!el) return;
+    const counts = {};
+    for (const c of piState.cuePhrases) {
+      const t = c.token || 'unknown';
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    el.innerHTML = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, n]) => `<span style="padding:2px 10px;border-radius:10px;font-weight:600;${_cueTypeStyle(t)}">${escapeHtml(t)}: ${n}</span>`)
+      .join('');
+  }
+
+  /** Remove duplicate patterns (keep first occurrence). Returns count removed. */
+  function _dedupCuePhrases() {
+    const seen = new Set();
+    const clean = [];
+    for (const c of piState.cuePhrases) {
+      const key = c.pattern.toLowerCase().trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      clean.push(c);
+    }
+    const removed = piState.cuePhrases.length - clean.length;
+    if (removed > 0) {
+      piState.cuePhrases = clean;
+      _renderPiCuePhrases(); _updatePiTabCounts();
+      _autoSave('pi', 'cuePhrases');
+      console.log(`[CuePhrases] Removed ${removed} duplicates`);
+    }
+    return removed;
   }
 
   /** Rebuild the cue type <select> — 4 canonical types always present + any custom. */
