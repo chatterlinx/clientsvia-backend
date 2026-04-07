@@ -2067,7 +2067,10 @@ function addSection(label = '', content = '', sectionMeta = null) {
         maxlength="2000">${_esc(content)}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
         <button type="button" class="gap-analyze-btn" onclick="analyzeGaps(${id})" title="AI checks what caller questions this section cannot answer">🔍 What's missing?</button>
-        <span class="char-count${_cd.cls}" style="font-size:11px;">${_cd.label}</span>
+        <span style="font-size:11px;display:flex;align-items:center;gap:8px;">
+          <span class="char-count${_cd.cls}">${_cd.label}</span>
+          <span class="density-sweet" id="density-sweet-${id}" style="color:#94a3b8;">Sweet spot: ${useFixedResponse ? '35–42 words · 180 chars' : '25–150 words'}</span>
+        </span>
       </div>
       <!-- Audio row — shown only when ⚡ Fixed mode is ON for this section -->
       <div class="kc-audio-row" id="kc-ar-${id}--content" style="display:${useFixedResponse ? 'flex' : 'none'}">
@@ -3508,6 +3511,9 @@ function _onSectionFixedChange(sid) {
       : 'Write as much as you need — Groq reads this and synthesises within the word limit…';
     charCount(ta, 2000, null);
   }
+  // Update sweet spot hint
+  const sweet = document.getElementById(`density-sweet-${sid}`);
+  if (sweet) sweet.textContent = 'Sweet spot: ' + (checked ? '35–42 words · 180 chars' : '25–150 words');
 }
 
 function _onSectionPromotionChange(sid) {
