@@ -25,41 +25,30 @@ const logger = require('./logger');
 // ── BASE SET: pure grammar glue (sync, always available) ─────────────
 // Pronouns, articles, determiners, prepositions, conjunctions,
 // auxiliaries, modals, adverbs, question words, conversational filler.
-// NO nouns.  NO verbs that could carry content meaning.
+// NO nouns.  NO verbs.  NO words that could carry content meaning.
+// Kept lean on purpose — admin adds more via GlobalShare if needed.
 const BASE_STOP_WORDS = [
-  // Pronouns
-  'i', 'me', 'my', 'mine', 'myself',
-  'we', 'us', 'our', 'ours', 'ourselves',
-  'you', 'your', 'yours', 'yourself', 'yourselves',
-  'he', 'him', 'his', 'himself',
-  'she', 'her', 'hers', 'herself',
-  'it', 'its', 'itself',
-  'they', 'them', 'their', 'theirs', 'themselves',
-  // Articles / determiners
+  // Pronouns (core forms only)
+  'i', 'me', 'my', 'we', 'us', 'our',
+  'you', 'your', 'he', 'him', 'his',
+  'she', 'her', 'it', 'its',
+  'they', 'them', 'their',
+  // Articles
   'a', 'an', 'the',
+  // Demonstratives
   'this', 'that', 'these', 'those',
-  'some', 'any', 'all', 'each', 'every', 'both',
-  'few', 'more', 'most', 'other', 'such',
-  'only', 'own', 'same', 'much', 'many',
-  // Prepositions
-  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'about',
-  'into', 'through', 'during', 'before', 'after', 'above', 'below',
-  'between', 'under', 'over', 'up', 'down', 'off', 'against',
+  // Core prepositions
+  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by',
   // Conjunctions
-  'and', 'but', 'or', 'nor', 'so', 'if', 'as', 'because', 'until', 'while', 'than',
+  'and', 'but', 'or', 'so', 'if', 'as', 'than',
   // Auxiliary / copula / modals
   'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
-  'do', 'does', 'did', 'have', 'has', 'had', 'having',
-  'will', 'would', 'shall', 'should', 'may', 'might', 'can', 'could', 'must',
-  // Adverbs / filler
-  'not', 'no', 'yes', 'just', 'very', 'too', 'also',
-  'here', 'there', 'then', 'now', 'again', 'once',
-  'still', 'even', 'already',
-  'really', 'please', 'thanks', 'like', 'well', 'right',
-  'okay', 'ok', 'um', 'uh', 'yeah',
-  'gonna', 'wanna', 'gotta', 'kinda', 'sorta',
+  'do', 'does', 'did', 'have', 'has', 'had',
+  'will', 'would', 'shall', 'should', 'may', 'might', 'can', 'could',
   // Question words
-  'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
+  'what', 'which', 'who', 'how', 'when', 'where', 'why',
+  // Speech fillers (zero meaning)
+  'um', 'uh', 'ok', 'okay', 'yeah',
 ];
 
 // ── Runtime state ────────────────────────────────────────────────────
