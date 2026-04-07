@@ -560,6 +560,7 @@ router.get('/phrase-intelligence', async (req, res) => {
             dangerWords: pi.dangerWords?.length > 0
                 ? pi.dangerWords
                 : PhraseReducerService.DEFAULT_DANGER_WORDS,
+            cuePhrases: pi.cuePhrases || [],
             updatedAt: pi.updatedAt || settings?.globalHub?.phraseIntelligenceUpdatedAt || null,
             updatedBy: pi.updatedBy || settings?.globalHub?.phraseIntelligenceUpdatedBy || null,
         });
