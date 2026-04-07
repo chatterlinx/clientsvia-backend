@@ -1004,6 +1004,20 @@
         <td><span class="pi-tag-remove" onclick="piRemoveCuePhrase(${i})">×</span></td>
       </tr>`
     ).join('');
+    _refreshCueTypeDropdown();
+  }
+
+  /** Rebuild the cue type <select> from distinct tokens already in piState. */
+  function _refreshCueTypeDropdown() {
+    const sel = document.getElementById('pi-cue-token');
+    if (!sel) return;
+    const prev = sel.value; // preserve selection
+    const types = [...new Set(piState.cuePhrases.map(c => c.token).filter(Boolean))];
+    sel.innerHTML = '<option value="" disabled>Select cue type…</option>'
+      + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
+      + '<option value="__new__">＋ Add new type…</option>';
+    // Restore previous selection if still valid
+    if (prev && types.includes(prev)) sel.value = prev;
   }
 
   /** Color-code cue type badges (case-insensitive). */
@@ -1019,9 +1033,16 @@
 
   function piAddCuePhrase() {
     const pEl = document.getElementById('pi-cue-patterns');
-    const tEl = document.getElementById('pi-cue-token');
+    const sel = document.getElementById('pi-cue-token');
     const rawPatterns = (pEl?.value || '').trim();
-    const token       = (tEl?.value || '').trim();
+    let token = (sel?.value || '').trim();
+
+    // "Add new type" — prompt for custom name
+    if (token === '__new__') {
+      token = (prompt('Enter new cue type name (e.g. urgencyCue):') || '').trim();
+      if (!token) return;
+    }
+
     if (!rawPatterns || !token) return;
     // Comma-separated patterns all share the same cue type
     const patterns = rawPatterns.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 1);
@@ -1034,6 +1055,8 @@
     }
     if (added) { _renderPiCuePhrases(); _updatePiTabCounts(); _autoSave('pi', 'cuePhrases'); }
     if (pEl) pEl.value = '';
+    // Keep the dropdown on the same type for quick bulk entry
+    if (sel && token !== '__new__') sel.value = token;
     pEl?.focus();
   }
 
