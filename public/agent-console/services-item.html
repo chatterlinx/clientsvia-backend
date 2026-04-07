@@ -3673,21 +3673,11 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
  * Admin CAN anchor these (double-click works) — no hard block.
  * Re-score auto-populate skips them by default, but admin overrides are preserved.
  *
- * Loaded from GlobalShare (single source of truth) on page init.
- * Inline fallback used until API responds — covers instant renders.
+ * ZERO hardcoded words — loaded entirely from GlobalShare on page init.
+ * Empty until API responds. GlobalShare is the only source of truth.
  */
-let STOP_WORDS = new Set([
-  'a','an','the','is','are','was','were','am','be','been','being',
-  'do','does','did','can','could','will','would','shall','should',
-  'may','might','must','have','has','had','i','you','he','she',
-  'it','we','they','me','him','her','us','them','my','your',
-  'his','its','our','their','this','that','these','those',
-  'what','which','who','whom','how','when','where','why',
-  'in','on','at','to','for','of','with','by','from','up',
-  'and','but','or','nor','not','no','so','if','than',
-  'just','very','too','also','here','there',
-]);
-// Fetch canonical list from GlobalShare on page load
+let STOP_WORDS = new Set();
+// Fetch from GlobalShare on page load — this IS the list, no fallback
 (async function _loadStopWords() {
   try {
     const data = await apiFetch('/api/admin/globalshare/phrase-intelligence');

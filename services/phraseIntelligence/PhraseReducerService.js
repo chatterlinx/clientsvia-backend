@@ -105,9 +105,9 @@ const DEFAULT_SYNONYM_GROUPS = [
   { token: 'cancel',   synonyms: ['stop', 'end', 'terminate', 'discontinue'] },
 ];
 
-// Shared stop words — single source of truth for the entire platform
-const StopWords = require('../../utils/stopWords');
-const DEFAULT_STOP_WORDS = StopWords.BASE_STOP_WORDS;
+// Stop words — zero hardcoded, loaded from GlobalShare via AdminSettings.
+// Empty fallback is intentional: if admin clears the list, system has none.
+const DEFAULT_STOP_WORDS = [];
 
 const DEFAULT_DANGER_WORDS = [
   'not', 'no', 'never', 'none', 'nor', "don't", "doesn't", "didn't",
