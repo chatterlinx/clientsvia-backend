@@ -3948,6 +3948,11 @@ function _renderPhraseCore(sid, core, coreAlignment) {
   else        { strip.style.display = 'none'; }
 
   // ── Core Alignment badge — phraseCore word coverage in contentCore ──
+  // If coreAlignment wasn't passed (page load), compute client-side from saved strings.
+  if (coreAlignment == null && core) {
+    const data = S.sectionData.get(sid);
+    if (data?.contentCore) coreAlignment = _computeCoreAlignment(core, data.contentCore);
+  }
   const badge = document.getElementById(`core-alignment-${sid}`);
   if (!badge) return;
   if (coreAlignment != null) {
@@ -3959,6 +3964,27 @@ function _renderPhraseCore(sid, core, coreAlignment) {
   } else {
     badge.style.display = 'none';
   }
+}
+
+/** Compute coreAlignment client-side: phraseCore word coverage in contentCore with stemming. */
+function _computeCoreAlignment(phraseCore, contentCore) {
+  const _stem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
+    .replace(/ers?$/, '').replace(/ed$/, '').replace(/ly$/, '')
+    .replace(/ies$/, 'y').replace(/ves$/, 'f').replace(/s$/, '');
+  const pcWords = [...new Set(
+    phraseCore.toLowerCase().split(/\s+/)
+      .map(w => w.replace(/[^a-z0-9]/g, ''))
+      .filter(w => w && !STOP_WORDS.has(w))
+  )];
+  if (!pcWords.length) return null;
+  const ccText  = contentCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const ccWords = new Set(ccText.split(/\s+/).filter(Boolean));
+  const ccStems = new Set([...ccWords].map(_stem));
+  let hits = 0;
+  for (const w of pcWords) {
+    if (ccWords.has(w) || ccStems.has(_stem(w))) hits++;
+  }
+  return Math.round((hits / pcWords.length) * 100);
 }
 
 /**
