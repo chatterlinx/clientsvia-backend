@@ -737,6 +737,7 @@
       _renderPiStopWords();
       _renderPiDangerWords();
       _updatePiStat();
+      _updatePiTabCounts();
       _bindPiTabs();
     } catch (err) {
       console.error('[GlobalShare] Failed to load phrase intelligence:', err);
@@ -761,6 +762,28 @@
     if (el) el.textContent = String(piState.intentNormalizers.length + piState.synonymGroups.length);
   }
 
+  /** Update count badges on each Phrase Intelligence tab button. */
+  function _updatePiTabCounts() {
+    const counts = {
+      normalizers: piState.intentNormalizers.length,
+      synonyms:    piState.synonymGroups.length,
+      stopwords:   piState.stopWords.length,
+      dangerwords: piState.dangerWords.length,
+    };
+    document.querySelectorAll('#pi-tabs .pi-tab').forEach(tab => {
+      const key = tab.dataset.piTab;
+      const n   = counts[key];
+      if (n == null) return;
+      let badge = tab.querySelector('.pi-tab-count');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'pi-tab-count';
+        tab.appendChild(badge);
+      }
+      badge.textContent = String(n);
+    });
+  }
+
   // ── Intent Normalizers ─────────────────────────────────────────────────
 
   function _renderPiNormalizers() {
@@ -782,7 +805,7 @@
     if (!pattern) return;
     const token = (tokEl?.value || '').trim().toLowerCase();
     piState.intentNormalizers.push({ pattern, token });
-    _renderPiNormalizers();
+    _renderPiNormalizers(); _updatePiTabCounts();
     if (patEl) patEl.value = '';
     if (tokEl) tokEl.value = '';
     patEl?.focus();
@@ -790,7 +813,7 @@
 
   function piRemoveNormalizer(idx) {
     piState.intentNormalizers.splice(idx, 1);
-    _renderPiNormalizers();
+    _renderPiNormalizers(); _updatePiTabCounts();
   }
 
   // ── Synonym Groups ────────────────────────────────────────────────────
@@ -814,7 +837,7 @@
     const synonyms = (synEl?.value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     if (!token || !synonyms.length) return;
     piState.synonymGroups.push({ token, synonyms });
-    _renderPiSynonyms();
+    _renderPiSynonyms(); _updatePiTabCounts();
     if (tokEl) tokEl.value = '';
     if (synEl) synEl.value = '';
     tokEl?.focus();
@@ -822,7 +845,7 @@
 
   function piRemoveSynonym(idx) {
     piState.synonymGroups.splice(idx, 1);
-    _renderPiSynonyms();
+    _renderPiSynonyms(); _updatePiTabCounts();
   }
 
   // ── Stop Words ────────────────────────────────────────────────────────
@@ -840,14 +863,14 @@
     const word = (el?.value || '').trim().toLowerCase();
     if (!word || piState.stopWords.includes(word)) return;
     piState.stopWords.push(word);
-    _renderPiStopWords();
+    _renderPiStopWords(); _updatePiTabCounts();
     if (el) el.value = '';
     el?.focus();
   }
 
   function piRemoveStopWord(idx) {
     piState.stopWords.splice(idx, 1);
-    _renderPiStopWords();
+    _renderPiStopWords(); _updatePiTabCounts();
   }
 
   // ── Danger Words ──────────────────────────────────────────────────────
@@ -865,14 +888,14 @@
     const word = (el?.value || '').trim().toLowerCase();
     if (!word || piState.dangerWords.includes(word)) return;
     piState.dangerWords.push(word);
-    _renderPiDangerWords();
+    _renderPiDangerWords(); _updatePiTabCounts();
     if (el) el.value = '';
     el?.focus();
   }
 
   function piRemoveDangerWord(idx) {
     piState.dangerWords.splice(idx, 1);
-    _renderPiDangerWords();
+    _renderPiDangerWords(); _updatePiTabCounts();
   }
 
   // ── Save Section ──────────────────────────────────────────────────────
