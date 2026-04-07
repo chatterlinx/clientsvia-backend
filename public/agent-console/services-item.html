@@ -443,10 +443,11 @@
       background: #fed7aa; color: #c2410c;
       font-weight: 700; border-radius: 3px;
     }
-    .pq-word.pq-word-stop {
-      color: #9ca3af; cursor: default; opacity: 0.6;
+    .pq-word.pq-word-common {
+      color: #6b7280; cursor: pointer;
+      border-bottom: 1px dashed #d1d5db;
     }
-    .pq-word.pq-word-stop:hover { background: none; color: #9ca3af; }
+    .pq-word.pq-word-common:hover { background: #fff3e0; color: #d97706; }
     /* ── Core strips (phrase core + content core) ─────────────────────── */
     .core-strips-wrap {
       display: flex; flex-direction: column; gap: 0;
@@ -3656,8 +3657,11 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
     // HTML entities in inline handlers are decoded by the browser before JS runs,
     // so &#39; arrives at _toggleAnchorWord as a real apostrophe character.
     const safeKey = JSON.stringify(phraseKey).replace(/'/g, '&#39;');
-    const cls     = isActive ? ' anchor-word-active' : (isStop ? ' pq-word-stop' : '');
-    const tip     = isStop ? 'Common word — can\'t be anchored' : 'Double-click to toggle anchor word';
+    // Active (orange) always wins. Stop words get a subtle hint but remain fully clickable.
+    const cls     = isActive ? ' anchor-word-active' : (isStop ? ' pq-word-common' : '');
+    const tip     = isStop
+      ? 'Common word — callers may rephrase. Double-click to anchor anyway'
+      : 'Double-click to toggle anchor word';
     return `<span class="pq-word${cls}"
       ondblclick='_toggleAnchorWord(${sid},${safeKey},${JSON.stringify(norm)})'
       title="${tip}">${_esc(word)}</span>`;
@@ -3665,10 +3669,9 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
 }
 
 /**
- * STOP_WORDS — words that must never be anchored.
- * With ratio-based matching (≥90% of anchors must be present), a stop word in
- * the anchor set causes false negatives: callers who rephrase naturally will
- * miss the stop word and fail the gate, sending them to Groq unnecessarily.
+ * STOP_WORDS — common words shown with a subtle dashed underline hint.
+ * Admin CAN anchor these (double-click works) — no hard block.
+ * Re-score auto-populate skips them by default, but admin overrides are preserved.
  *
  * Loaded from GlobalShare (single source of truth) on page init.
  * Inline fallback used until API responds — covers instant renders.
@@ -3704,24 +3707,6 @@ let STOP_WORDS = new Set([
 function _toggleAnchorWord(sid, phraseKey, word) {
   const data = S.sectionData.get(sid);
   if (!data || !word) return;
-
-  // ── Stop-word block ──────────────────────────────────────────────
-  if (STOP_WORDS.has(word.toLowerCase())) {
-    // Flash the word red briefly to indicate it can't be anchored
-    const el = event?.target;
-    if (el) {
-      el.style.transition = 'background 0.15s';
-      el.style.background = '#fecaca';
-      el.style.color      = '#dc2626';
-      el.title            = 'Common word — won\'t help discriminate';
-      setTimeout(() => {
-        el.style.background = '';
-        el.style.color      = '';
-        el.title            = 'Double-click to toggle anchor word';
-      }, 1200);
-    }
-    return;
-  }
 
   if (!data.phraseAnchorWords) data.phraseAnchorWords = {};
   const current = data.phraseAnchorWords[phraseKey] || [];
@@ -4040,12 +4025,17 @@ async function _reScorePhrases(sid) {
     data.contentCore  = result.contentCore || null;
 
     // ── Auto-populate anchor words from CORE column ──────────────────
-    // Each phrase's core words become its default anchors. Admin can
-    // double-click to refine before saving. Stop words are filtered out
-    // so only discriminating words become anchors.
+    // Each phrase's core words become its DEFAULT anchors. Stop words
+    // are skipped in the auto-populate so only content words are chosen.
+    // BUT: if the admin already set anchors manually (including stop
+    // words they deliberately chose), those are preserved — Re-score
+    // only auto-fills phrases with NO existing anchors.
     if (!data.phraseAnchorWords) data.phraseAnchorWords = {};
     for (const [phrase, scoreData] of Object.entries(data.phraseScores)) {
       if (scoreData.core) {
+        // Preserve admin-set anchors — only auto-fill empty phrases
+        const existing = data.phraseAnchorWords[phrase];
+        if (existing && existing.length > 0) continue;
         const coreWords = scoreData.core
           .toLowerCase()
           .split(/\s+/)
