@@ -1007,17 +1007,19 @@
     _refreshCueTypeDropdown();
   }
 
-  /** Rebuild the cue type <select> from distinct tokens already in piState. */
+  /** Rebuild the cue type <select> — 4 canonical types always present + any custom. */
+  const _CANONICAL_CUE_TYPES = ['requestCue', 'permissionCue', 'infoCue', 'directiveCue'];
   function _refreshCueTypeDropdown() {
     const sel = document.getElementById('pi-cue-token');
     if (!sel) return;
-    const prev = sel.value; // preserve selection
-    const types = [...new Set(piState.cuePhrases.map(c => c.token).filter(Boolean))];
+    const prev = sel.value;
+    // Merge canonical + any custom types the admin has created
+    const dataTypes = piState.cuePhrases.map(c => c.token).filter(Boolean);
+    const allTypes  = [...new Set([..._CANONICAL_CUE_TYPES, ...dataTypes])];
     sel.innerHTML = '<option value="" disabled>Select cue type…</option>'
-      + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
+      + allTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
       + '<option value="__new__">＋ Add new type…</option>';
-    // Restore previous selection if still valid
-    if (prev && types.includes(prev)) sel.value = prev;
+    if (prev && allTypes.includes(prev)) sel.value = prev;
   }
 
   /** Color-code cue type badges (case-insensitive). */
