@@ -153,13 +153,7 @@
       cursor: pointer; white-space: nowrap;
     }
     .signal-add-btn:hover { background: #4f46e5; }
-    .signal-save-btn {
-      padding: 6px 14px; font-size: 12px; font-weight: 600;
-      background: #10b981; color: #fff; border: none; border-radius: 8px;
-      cursor: pointer; margin-top: 8px;
-    }
-    .signal-save-btn:hover { background: #059669; }
-    .signal-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .signal-save-btn { display: none; } /* auto-save replaces manual buttons */
 
     /* Test phrase tool */
     .signals-test-zone {
@@ -252,13 +246,7 @@
       cursor: pointer; white-space: nowrap;
     }
     .pi-add-btn:hover { background: #4f46e5; }
-    .pi-save-btn {
-      padding: 6px 14px; font-size: 12px; font-weight: 600;
-      background: #10b981; color: #fff; border: none; border-radius: 8px;
-      cursor: pointer; margin-top: 8px;
-    }
-    .pi-save-btn:hover { background: #059669; }
-    .pi-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .pi-save-btn { display: none; } /* auto-save replaces manual buttons */
     .pi-row-remove {
       cursor: pointer; color: #94a3b8; font-size: 14px; line-height: 1; padding: 0 4px;
     }
@@ -369,13 +357,7 @@
       cursor: pointer; white-space: nowrap;
     }
     .lap-add-btn:hover { background: #d97706; }
-    .lap-save-btn {
-      padding: 6px 14px; font-size: 12px; font-weight: 600;
-      background: #10b981; color: #fff; border: none; border-radius: 8px;
-      cursor: pointer; margin-top: 8px;
-    }
-    .lap-save-btn:hover { background: #059669; }
-    .lap-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .lap-save-btn { display: none; } /* auto-save replaces manual buttons */
     .lap-inherited-note {
       font-size: 11px; color: #94a3b8; margin-top: 10px; font-style: italic;
     }
@@ -404,6 +386,7 @@
       </div>
       <div class="header-right">
         <button class="btn btn-secondary" id="btn-save-all">💾 Save All Changes</button>
+        <span id="autosave-status" style="font-size:12px;color:#10b981;margin-left:8px;opacity:0;transition:opacity .3s;"></span>
       </div>
     </header>
 

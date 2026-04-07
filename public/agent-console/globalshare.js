@@ -54,6 +54,36 @@
 
   let DOM = {};
 
+  // ── Auto-save: debounced save per section ──────────────────────────────
+  // Each section gets its own debounce timer so rapid edits batch into one
+  // API call.  800ms after the last change, the section saves silently.
+  const _autoSaveTimers = {};
+  let _autoSaveFlashTimer = null;
+  function _autoSave(sectionType, sectionKey) {
+    const timerKey = `${sectionType}:${sectionKey}`;
+    clearTimeout(_autoSaveTimers[timerKey]);
+    _autoSaveTimers[timerKey] = setTimeout(async () => {
+      try {
+        if (sectionType === 'pi')     await piSaveSection(sectionKey);
+        if (sectionType === 'signal') await _saveSignalGroup(sectionKey);
+        if (sectionType === 'lap')    await _saveLapGroup(sectionKey);
+        _flashAutoSaveStatus('✓ Saved');
+      } catch (e) {
+        console.warn('[GlobalShare] Auto-save failed:', timerKey, e.message);
+        _flashAutoSaveStatus('✗ Save failed', true);
+      }
+    }, 800);
+  }
+  function _flashAutoSaveStatus(text, isError) {
+    const el = document.getElementById('autosave-status');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = isError ? '#ef4444' : '#10b981';
+    el.style.opacity = '1';
+    clearTimeout(_autoSaveFlashTimer);
+    _autoSaveFlashTimer = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // INITIALIZATION
   // ══════════════════════════════════════════════════════════════════════════
@@ -189,6 +219,36 @@
     if (DOM.modalLastNames) {
       DOM.modalLastNames.addEventListener('click', (e) => {
         if (e.target === DOM.modalLastNames) closeModal('last');
+      });
+    }
+
+    // ── Save All Changes — manual fallback ──────────────────────────────
+    if (DOM.btnSaveAll) {
+      DOM.btnSaveAll.addEventListener('click', async () => {
+        DOM.btnSaveAll.disabled = true;
+        DOM.btnSaveAll.textContent = 'Saving…';
+        try {
+          // PI sections
+          await Promise.allSettled([
+            piSaveSection('intentNormalizers'),
+            piSaveSection('synonymGroups'),
+            piSaveSection('stopWords'),
+            piSaveSection('dangerWords'),
+          ]);
+          // Signal groups
+          const signalKeys = Object.keys(state.signals);
+          await Promise.allSettled(signalKeys.map(k => _saveSignalGroup(k)));
+          // LAP groups
+          const lapIds = Object.keys(_lapState);
+          await Promise.allSettled(lapIds.map(id => _saveLapGroup(id)));
+
+          DOM.btnSaveAll.textContent = '✓ All Saved';
+          _flashAutoSaveStatus('✓ All saved');
+          setTimeout(() => { DOM.btnSaveAll.textContent = '💾 Save All Changes'; DOM.btnSaveAll.disabled = false; }, 2000);
+        } catch (e) {
+          DOM.btnSaveAll.textContent = '✗ Failed';
+          setTimeout(() => { DOM.btnSaveAll.textContent = '💾 Save All Changes'; DOM.btnSaveAll.disabled = false; }, 2000);
+        }
       });
     }
   }
@@ -484,6 +544,7 @@
     input.value = '';
     _refreshSignalGroup(groupKey);
     _updateSignalsStat();
+    _autoSave('signal', groupKey);
   }
 
   function _removeSignalTag(groupKey, index) {
@@ -491,6 +552,7 @@
     state.signalsChanged[groupKey] = true;
     _refreshSignalGroup(groupKey);
     _updateSignalsStat();
+    _autoSave('signal', groupKey);
   }
 
   function _refreshSignalGroup(groupKey) {
@@ -663,12 +725,14 @@
     _lapState[groupId].push(val);
     input.value = '';
     _refreshLapGroup(groupId);
+    _autoSave('lap', groupId);
   }
 
   function _removeLapKeyword(groupId, index) {
     if (!_lapState[groupId]) return;
     _lapState[groupId].splice(index, 1);
     _refreshLapGroup(groupId);
+    _autoSave('lap', groupId);
   }
 
   function _refreshLapGroup(groupId) {
@@ -806,6 +870,7 @@
     const token = (tokEl?.value || '').trim().toLowerCase();
     piState.intentNormalizers.push({ pattern, token });
     _renderPiNormalizers(); _updatePiTabCounts();
+    _autoSave('pi', 'intentNormalizers');
     if (patEl) patEl.value = '';
     if (tokEl) tokEl.value = '';
     patEl?.focus();
@@ -814,6 +879,7 @@
   function piRemoveNormalizer(idx) {
     piState.intentNormalizers.splice(idx, 1);
     _renderPiNormalizers(); _updatePiTabCounts();
+    _autoSave('pi', 'intentNormalizers');
   }
 
   // ── Synonym Groups ────────────────────────────────────────────────────
@@ -838,6 +904,7 @@
     if (!token || !synonyms.length) return;
     piState.synonymGroups.push({ token, synonyms });
     _renderPiSynonyms(); _updatePiTabCounts();
+    _autoSave('pi', 'synonymGroups');
     if (tokEl) tokEl.value = '';
     if (synEl) synEl.value = '';
     tokEl?.focus();
@@ -846,6 +913,7 @@
   function piRemoveSynonym(idx) {
     piState.synonymGroups.splice(idx, 1);
     _renderPiSynonyms(); _updatePiTabCounts();
+    _autoSave('pi', 'synonymGroups');
   }
 
   // ── Stop Words ────────────────────────────────────────────────────────
@@ -864,6 +932,7 @@
     if (!word || piState.stopWords.includes(word)) return;
     piState.stopWords.push(word);
     _renderPiStopWords(); _updatePiTabCounts();
+    _autoSave('pi', 'stopWords');
     if (el) el.value = '';
     el?.focus();
   }
@@ -871,6 +940,7 @@
   function piRemoveStopWord(idx) {
     piState.stopWords.splice(idx, 1);
     _renderPiStopWords(); _updatePiTabCounts();
+    _autoSave('pi', 'stopWords');
   }
 
   // ── Danger Words ──────────────────────────────────────────────────────
@@ -889,6 +959,7 @@
     if (!word || piState.dangerWords.includes(word)) return;
     piState.dangerWords.push(word);
     _renderPiDangerWords(); _updatePiTabCounts();
+    _autoSave('pi', 'dangerWords');
     if (el) el.value = '';
     el?.focus();
   }
@@ -896,6 +967,7 @@
   function piRemoveDangerWord(idx) {
     piState.dangerWords.splice(idx, 1);
     _renderPiDangerWords(); _updatePiTabCounts();
+    _autoSave('pi', 'dangerWords');
   }
 
   // ── Save Section ──────────────────────────────────────────────────────
