@@ -620,6 +620,7 @@
               <button class="pi-tab" data-pi-tab="synonyms">Synonym Groups</button>
               <button class="pi-tab" data-pi-tab="stopwords">Stop Words</button>
               <button class="pi-tab" data-pi-tab="dangerwords">Danger Words</button>
+              <button class="pi-tab" data-pi-tab="cuephrases">Cue Phrases</button>
             </div>
 
             <!-- Intent Normalizers -->
@@ -687,6 +688,26 @@
                 <button class="pi-add-btn" onclick="piAddDangerWord()">+ Add</button>
               </div>
               <button class="pi-save-btn" onclick="piSaveSection('dangerWords')">Save Danger Words</button>
+            </div>
+
+            <!-- Cue Phrases -->
+            <div class="pi-panel" id="pi-panel-cuephrases">
+              <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">
+                Caller request cue phrases grouped by type. Comma-separated patterns map to one cue type.
+                Types: <strong>requestCue</strong>, <strong>permissionCue</strong>, <strong>infoCue</strong>, <strong>directiveCue</strong>.
+              </p>
+              <div class="pi-table-wrap">
+                <table class="pi-table" id="pi-cuephrases-table">
+                  <thead><tr><th>Pattern</th><th>Cue Type</th><th style="width:36px;"></th></tr></thead>
+                  <tbody id="pi-cuephrases-body"></tbody>
+                </table>
+              </div>
+              <div class="pi-add-row">
+                <input type="text" class="pi-add-input" id="pi-cue-patterns" placeholder="Patterns, comma-separated (e.g. can you, could you, would you)" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
+                <input type="text" class="pi-add-input" id="pi-cue-token" placeholder="requestCue" style="max-width:160px;" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
+                <button class="pi-add-btn" onclick="piAddCuePhrase()">+ Add</button>
+              </div>
+              <button class="pi-save-btn" onclick="piSaveSection('cuePhrases')">Save Cue Phrases</button>
             </div>
 
             <!-- Test Reducer Tool -->

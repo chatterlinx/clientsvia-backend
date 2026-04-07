@@ -574,7 +574,7 @@ router.get('/phrase-intelligence', async (req, res) => {
  * Save one section of the phrase intelligence config.
  * section: 'intentNormalizers' | 'synonymGroups' | 'stopWords' | 'dangerWords'
  */
-const VALID_PI_SECTIONS = ['intentNormalizers', 'synonymGroups', 'stopWords', 'dangerWords'];
+const VALID_PI_SECTIONS = ['intentNormalizers', 'synonymGroups', 'stopWords', 'dangerWords', 'cuePhrases'];
 
 router.patch('/phrase-intelligence/:section', async (req, res) => {
     try {

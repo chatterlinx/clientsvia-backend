@@ -485,6 +485,13 @@
       font-weight: 600; margin: 1px 2px;
     }
     .pq-intent-none { color: #cbd5e1; font-size: 11px; }
+    /* Cue type columns */
+    .pq-cue-cell { text-align: center; white-space: nowrap; min-width: 50px; }
+    .pq-cue-badge {
+      display: inline-block; font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .pq-cue-none { color: #cbd5e1; font-size: 11px; }
     /* Row delete button */
     .pq-row-delete {
       width: 22px; height: 22px; border: none; background: transparent;
@@ -3743,15 +3750,37 @@ function _buildPhraseWords(phrase, phraseKey, sid) {
  * Empty until API responds. GlobalShare is the only source of truth.
  */
 let STOP_WORDS = new Set();
-// Fetch from GlobalShare on page load — this IS the list, no fallback
-(async function _loadStopWords() {
+let CUE_PHRASES = []; // [{ pattern: "can you", token: "requestCue" }, ...] sorted longest-first
+// Fetch from GlobalShare on page load — stop words + cue phrases in one call
+(async function _loadGlobalSharePI() {
   try {
     const data = await apiFetch('/api/admin/globalshare/phrase-intelligence');
     if (data?.stopWords?.length) {
       STOP_WORDS = new Set(data.stopWords.map(w => w.toLowerCase()));
     }
+    if (data?.cuePhrases?.length) {
+      CUE_PHRASES = data.cuePhrases
+        .map(c => ({ pattern: c.pattern.toLowerCase().trim(), token: c.token }))
+        .sort((a, b) => b.pattern.length - a.pattern.length); // longest match first
+    }
   } catch (e) { /* fallback is fine */ }
 })();
+
+/**
+ * _detectCues — scan a caller phrase for cue patterns from GlobalShare.
+ * Returns { requestCue: "can you"|null, permissionCue: null, infoCue: null, directiveCue: null }
+ */
+function _detectCues(phrase) {
+  const lower = phrase.toLowerCase();
+  const result = { requestCue: null, permissionCue: null, infoCue: null, directiveCue: null };
+  for (const cp of CUE_PHRASES) {
+    if (result[cp.token]) continue; // already found one for this type
+    if (lower.includes(cp.pattern)) {
+      result[cp.token] = cp.pattern;
+    }
+  }
+  return result;
+}
 
 /**
  * _toggleAnchorWord — toggle a word's anchor status for a specific phrase.
@@ -3792,28 +3821,30 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   // phraseKey = phrase text used as map key for phraseAnchorWords
   const phraseWords = _buildPhraseWords(phrase, phrase, sid);
 
+  // ── Cue detection — runs for both pending and scored rows ──
+  const cues = _detectCues(phrase);
+  const _cueCell = (type, bg, fg) => {
+    const val = cues[type];
+    return val
+      ? `<td class="pq-cue-cell"><span class="pq-cue-badge" style="background:${bg};color:${fg}">${_esc(val)}</span></td>`
+      : '<td class="pq-cue-cell"><span class="pq-cue-none">—</span></td>';
+  };
+  const cueCells = _cueCell('requestCue', '#dbeafe', '#1e40af')
+    + _cueCell('permissionCue', '#fef9c3', '#854d0e')
+    + _cueCell('infoCue', '#d1fae5', '#065f46')
+    + _cueCell('directiveCue', '#fee2e2', '#991b1b');
+
   if (!score) {
     return `<tr class="pq-row-pending">
       <td><span class="pq-phrase-text">${phraseWords}</span></td>
       <td class="pq-intent-cell"><span class="pq-intent-none">—</span></td>
-      <td class="pq-conf-cell">
-        <div class="pq-bar-row">
-          <div class="pq-bar-track"><div class="pq-bar-fill" style="width:0%"></div></div>
-          <span class="pq-bar-pct pq-pending-val">—</span>
-        </div>
-      </td>
-      <td style="text-align:center"><span class="pq-gap pq-pending-val">—</span></td>
+      ${cueCells}
       <td class="pq-core-cell"><span class="pq-core-text na">—</span></td>
       <td class="pq-tc-cell"><span class="pq-tc-val tc-na">—</span></td>
-      <td class="pq-status"><span class="pq-badge pending">Pending</span></td>
       ${homeCell}
       ${delBtn}
     </tr>`;
   }
-  const t1Pct     = Math.round((score.t1 || 0) * 100);
-  const barCls    = t1Pct >= 75 ? 'high' : t1Pct >= 65 ? 'mid' : 'low';
-  const gapVal    = score.t2 != null ? (score.t2 >= 0 ? `+${score.t2.toFixed(2)}` : score.t2.toFixed(2)) : '—';
-  const gapCls    = score.t2 >= 0.20 ? 'pass' : 'fail';
   const coreText  = score.core || '—';
   const coreCls   = score.t3 === true ? '' : score.t3 === false ? '' : 'na';
   const coreTitle = score.core
@@ -3828,16 +3859,9 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
   return `<tr class="st-${score.status}" title="${_statusTitle[score.status] || ''}">
     <td><span class="pq-phrase-text">${phraseWords}</span></td>
     <td class="pq-intent-cell">${intentHtml}</td>
-    <td class="pq-conf-cell">
-      <div class="pq-bar-row">
-        <div class="pq-bar-track"><div class="pq-bar-fill ${barCls}" style="width:${t1Pct}%"></div></div>
-        <span class="pq-bar-pct">${t1Pct}%</span>
-      </div>
-    </td>
-    <td style="text-align:center"><span class="pq-gap ${gapCls}">${gapVal}</span></td>
+    ${cueCells}
     <td class="pq-core-cell"><span class="pq-core-text ${coreCls}" title="${_esc(coreTitle)}">${_esc(coreText)}</span></td>
     <td class="pq-tc-cell" title="Topic Correlation — phrase core vs content core"><span class="pq-tc-val ${tcCls}">${tcVal}</span></td>
-    <td class="pq-status"><span class="pq-badge ${score.status}">${_statusLabel[score.status]}</span></td>
     ${homeCell}
     ${delBtn}
   </tr>`;
@@ -3914,17 +3938,18 @@ function _renderPhraseTable(sid) {
     <thead><tr>
       <th>Phrase</th>
       <th>Intent</th>
-      <th>Confidence</th>
-      <th class="pq-th-center">Clarity</th>
+      <th class="pq-th-center">Request</th>
+      <th class="pq-th-center">Permission</th>
+      <th class="pq-th-center">Info</th>
+      <th class="pq-th-center">Directive</th>
       <th>Core</th>
       <th class="pq-th-center">Match</th>
-      <th class="pq-th-center">Status</th>
       ${hasCS ? '<th class="pq-th-center">Home</th>' : ''}
       <th style="width:36px;"></th>
     </tr></thead><tbody>`;
 
   const csResults = data?.crossScanResults || {};
-  const colSpan   = hasCS ? 9 : 8;
+  const colSpan   = hasCS ? 10 : 9;
   phrases.forEach((phrase, idx) => {
     const csResult = csResults[phrase] || null;
     html += _buildPhraseRow(phrase, scores[phrase] || null, sid, idx, csResult);

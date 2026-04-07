@@ -794,6 +794,7 @@
     synonymGroups:     [],
     stopWords:         [],
     dangerWords:       [],
+    cuePhrases:        [],
   };
 
   async function loadPhraseIntelligence() {
@@ -804,11 +805,13 @@
       piState.synonymGroups    = data.synonymGroups    || [];
       piState.stopWords        = data.stopWords        || [];
       piState.dangerWords      = data.dangerWords      || [];
+      piState.cuePhrases       = data.cuePhrases       || [];
 
       _renderPiNormalizers();
       _renderPiSynonyms();
       _renderPiStopWords();
       _renderPiDangerWords();
+      _renderPiCuePhrases();
       _updatePiStat();
       _updatePiTabCounts();
       _bindPiTabs();
@@ -842,6 +845,7 @@
       synonyms:    piState.synonymGroups.length,
       stopwords:   piState.stopWords.length,
       dangerwords: piState.dangerWords.length,
+      cuephrases:  piState.cuePhrases.length,
     };
     document.querySelectorAll('#pi-tabs .pi-tab').forEach(tab => {
       const key = tab.dataset.piTab;
@@ -987,6 +991,57 @@
     _autoSave('pi', 'dangerWords');
   }
 
+  // ── Cue Phrases ─────────────────────────────────────────────────────
+
+  function _renderPiCuePhrases() {
+    const tbody = document.getElementById('pi-cuephrases-body');
+    if (!tbody) return;
+    tbody.innerHTML = piState.cuePhrases.map((c, i) =>
+      `<tr>
+        <td>${escapeHtml(c.pattern)}</td>
+        <td><span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;${_cueTypeStyle(c.token)}">${escapeHtml(c.token)}</span></td>
+        <td><span class="pi-tag-remove" onclick="piRemoveCuePhrase(${i})">×</span></td>
+      </tr>`
+    ).join('');
+  }
+
+  /** Color-code cue type badges. */
+  function _cueTypeStyle(token) {
+    switch (token) {
+      case 'requestCue':    return 'background:#dbeafe;color:#1e40af;';
+      case 'permissionCue': return 'background:#fef9c3;color:#854d0e;';
+      case 'infoCue':       return 'background:#d1fae5;color:#065f46;';
+      case 'directiveCue':  return 'background:#fee2e2;color:#991b1b;';
+      default:              return 'background:#f1f5f9;color:#475569;';
+    }
+  }
+
+  function piAddCuePhrase() {
+    const pEl = document.getElementById('pi-cue-patterns');
+    const tEl = document.getElementById('pi-cue-token');
+    const rawPatterns = (pEl?.value || '').trim();
+    const token       = (tEl?.value || '').trim();
+    if (!rawPatterns || !token) return;
+    // Comma-separated patterns all share the same cue type
+    const patterns = rawPatterns.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 1);
+    let added = 0;
+    for (const p of patterns) {
+      if (!piState.cuePhrases.some(c => c.pattern === p)) {
+        piState.cuePhrases.push({ pattern: p, token });
+        added++;
+      }
+    }
+    if (added) { _renderPiCuePhrases(); _updatePiTabCounts(); _autoSave('pi', 'cuePhrases'); }
+    if (pEl) pEl.value = '';
+    pEl?.focus();
+  }
+
+  function piRemoveCuePhrase(idx) {
+    piState.cuePhrases.splice(idx, 1);
+    _renderPiCuePhrases(); _updatePiTabCounts();
+    _autoSave('pi', 'cuePhrases');
+  }
+
   // ── Save Section ──────────────────────────────────────────────────────
 
   async function piSaveSection(section) {
@@ -995,6 +1050,7 @@
       synonymGroups:     piState.synonymGroups,
       stopWords:         piState.stopWords,
       dangerWords:       piState.dangerWords,
+      cuePhrases:        piState.cuePhrases,
     };
     // Find the save button that triggered this call for visual feedback
     const panel = document.querySelector(`.pi-panel:not([style*="display: none"]):not([style*="display:none"])`);
@@ -1062,6 +1118,8 @@
   window.piRemoveStopWord    = piRemoveStopWord;
   window.piAddDangerWord     = piAddDangerWord;
   window.piRemoveDangerWord  = piRemoveDangerWord;
+  window.piAddCuePhrase      = piAddCuePhrase;
+  window.piRemoveCuePhrase   = piRemoveCuePhrase;
   window.piSaveSection       = piSaveSection;
   window.piTestPhrase        = piTestPhrase;
 

@@ -1067,6 +1067,7 @@ const adminSettingsSchema = new mongoose.Schema({
                 synonymGroups:     [],   // [{ token: "cost", synonyms: ["price","fee","charge"] }]
                 stopWords:         [],   // ["i","you","we","the","a","an","my","your",…]
                 dangerWords:       [],   // ["not","no","emergency","cancel","urgent"]
+                cuePhrases:        [],   // [{ pattern: "can you", token: "requestCue" }]
             },
             description: 'Phrase Intelligence — global English rules for phrase reduction (T3 scoring)'
         },
