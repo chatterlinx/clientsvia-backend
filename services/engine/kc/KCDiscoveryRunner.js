@@ -53,6 +53,7 @@ const { callLLMAgentForFollowUp } = require('../agent2/Agent2DiscoveryRunner');
 const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesService');
 const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');
+const { buildSectionId }      = require('../../../utils/kcHelpers');
 
 // ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
@@ -192,7 +193,12 @@ function _buildContextBrief(dnotes, dest, urgency) {
  * the engine; kcTrace carries the KC-specific per-turn context.
  */
 function _buildKcTrace(path, extra = {}) {
-  return { path, ...extra };
+  const trace = { path, ...extra };
+  // Auto-compute sectionId when kcId + sectionIdx are both present
+  if (trace.kcId && trace.sectionIdx != null && !trace.sectionId) {
+    trace.sectionId = buildSectionId(trace.kcId, trace.sectionIdx);
+  }
+  return trace;
 }
 
 /** Deep-clone state safely to avoid mutating the live state object. */
@@ -931,7 +937,9 @@ class KCDiscoveryRunner {
           qaLog: [{
             type:       'UAP_LAYER1',
             containerId: uapResult.containerId,
+            kcId:        uapResult.kcId || null,
             sectionIdx:  uapResult.sectionIdx,
+            sectionId:   buildSectionId(uapResult.kcId, uapResult.sectionIdx),
             confidence:  uapResult.confidence,
             matchType:   uapResult.matchType,
             phrase:      uapResult.matchedPhrase,
@@ -955,7 +963,9 @@ class KCDiscoveryRunner {
             qaLog: [{
               type:          'UAP_LAYER1',
               containerId:   uapResult.containerId,
+              kcId:          uapResult.kcId || null,
               sectionIdx:    uapResult.sectionIdx,
+              sectionId:     buildSectionId(uapResult.kcId, uapResult.sectionIdx),
               confidence:    uapResult.confidence,
               matchType:     uapResult.matchType,
               phrase:        uapResult.matchedPhrase,
@@ -1345,6 +1355,9 @@ async function _handleKCMatch({
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
   const containerId    = String(container._id || containerTitle);
+  const _kcId          = container.kcId || null;
+  const _secIdx        = match.targetSectionIdx ?? null;
+  const _secId         = buildSectionId(_kcId, _secIdx);   // e.g. "700c4-29-01"
 
   // ── Resolve targetSection from match ──────────────────────────────────────
   // UAP (Gate 2.5) and Semantic (Gate 2.8) set match.targetSection directly.
@@ -1426,7 +1439,7 @@ async function _handleKCMatch({
             matchSource: 'KC_ENGINE',
             state:       nextState,
             kcTrace:     _buildKcTrace(PATH.KC_PREQUAL_PENDING, {
-              containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null,
+              containerId, sectionId: sectionId || null, containerTitle, kcId: _kcId, sectionIdx: _secIdx,
               intent: 'PREQUAL_ASKED', latencyMs: Date.now() - startMs,
             }),
           };
@@ -1541,7 +1554,7 @@ async function _handleKCMatch({
               matchSource: 'KC_ENGINE',
               state:       nextState,
               kcTrace:     _buildKcTrace(PATH.KC_UPSELL_PENDING, {
-                containerId, sectionId: sectionId || null, containerTitle, kcId: container.kcId || null,
+                containerId, sectionId: sectionId || null, containerTitle, kcId: _kcId, sectionIdx: _secIdx,
                 intent: 'UPSELL_ASKED', idx: 0, latencyMs: Date.now() - startMs,
               }),
             };
@@ -1582,7 +1595,7 @@ async function _handleKCMatch({
       matchSource:   'KC_ENGINE',
       state:         nextState,
       kcTrace:       _buildKcTrace(PATH.KC_BOOKING_INTENT, {
-        containerId, containerTitle, kcId: container.kcId || null,
+        containerId, containerTitle, kcId: _kcId, sectionIdx: _secIdx,
         intent: kcResult.intent, latencyMs: Date.now() - startMs,
       }),
     };
@@ -1598,10 +1611,14 @@ async function _handleKCMatch({
     lastMeaningfulInput: userInput?.slice(0, 200) || null,
     ...(callerName ? { entities: { firstName: callerName } } : {}),
     qaLog: [{
-      turn:      turn ?? 0,
-      question:  userInput,
-      answer:    kcResult.response?.slice(0, 200) || null,
-      timestamp: new Date().toISOString(),
+      turn:        turn ?? 0,
+      containerId,
+      kcId:        _kcId,
+      sectionIdx:  _secIdx,
+      sectionId:   _secId,
+      question:    userInput,
+      answer:      kcResult.response?.slice(0, 200) || null,
+      timestamp:   new Date().toISOString(),
     }],
   }).catch(() => {});
 
@@ -1666,7 +1683,7 @@ async function _handleKCMatch({
     matchSource:   'KC_ENGINE',
     state:         nextState,
     kcTrace:       _buildKcTrace(finalPath, {
-      containerId, containerTitle, kcId: container.kcId || null,
+      containerId, containerTitle, kcId: _kcId, sectionIdx: _secIdx,
       intent:      kcResult.intent,
       latencyMs:   Date.now() - startMs,
     }),

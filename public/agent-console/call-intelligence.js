@@ -644,10 +644,10 @@ function renderTurnBlock(t, companyId) {
     const pathLabel = t.provenancePath || '—';
     // KC card link — shown inline in pipeline trace for instant click-through
     const kcEditUrl  = t.kcCard ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(t.kcCard._id)}` : null;
-    const kcIdLabel  = t.kcCard ? (t.kcCard.kcId || t.kcCard._id) : null;
+    const kcIdLabel  = t.kcCard ? (t.kcCard.sectionId || t.kcCard.kcId || t.kcCard._id) : null;
     const kcCardRow  = kcEditUrl
       ? `<div class="pipe-row">
-           <span class="pr-stage">KC Card</span>
+           <span class="pr-stage">KC Section</span>
            <span class="pr-icon">→</span>
            <span class="pr-detail">
              <a href="${esc(kcEditUrl)}" target="_blank"
@@ -683,9 +683,10 @@ function renderTurnBlock(t, companyId) {
       <div class="td-section">
         <div class="td-sec-title">KC Card Matched</div>
         <div class="kc-block">
-          <div class="kb-id">${esc(t.kcCard.kcId || t.kcCard._id)}</div>
+          <div class="kb-id">${esc(t.kcCard.sectionId || t.kcCard.kcId || t.kcCard._id)}</div>
           <div class="kb-title">${esc(t.kcCard.title || 'Untitled')}</div>
           <div class="kb-meta">
+            ${t.kcCard.sectionId ? `<span style="font-family:monospace;font-size:10px;background:#f3f4f6;color:#6b7280;padding:1px 5px;border-radius:3px;">Section ${(t.kcCard.sectionIdx ?? -1) + 1}</span>` : ''}
             ${t.kcCard.category ? `<span>Category: ${esc(t.kcCard.category)}</span>` : ''}
             ${t.kcCard.bookingAction ? `<span>bookingAction: <strong>${esc(t.kcCard.bookingAction)}</strong></span>` : ''}
             ${t.score ? `<span>Score: ${t.score.toFixed(2)}</span>` : ''}
@@ -761,7 +762,7 @@ function renderSectionKC(kcAudit, companyId) {
     const editUrl = `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(m.mongoId)}`;
     return `
       <tr>
-        <td><span class="kc-id-chip">${esc(m.kcId || m.mongoId)}</span></td>
+        <td><span class="kc-id-chip">${esc(m.sectionId || m.kcId || m.mongoId)}</span></td>
         <td>${esc(m.title || '—')}</td>
         <td>Turn ${m.turnNumber}${m.elapsed ? ` <span class="text-muted text-xs">${m.elapsed}</span>` : ''}</td>
         <td>

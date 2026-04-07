@@ -17,6 +17,7 @@
  * PARSED UTTERANCE SCHEMA:
  *   {
  *     containerId:   string | null,  // KC container ObjectId
+ *     kcId:          string | null,  // human-readable container ID (e.g. "700c4-29")
  *     sectionIdx:    number | null,   // index into container.sections[]
  *     sectionLabel:  string | null,   // section label for logging
  *     confidence:    number,          // 0.0-1.0
@@ -317,6 +318,7 @@ async function parse(companyId, utterance) {
 
   const empty = {
     containerId:   null,
+    kcId:          null,
     sectionIdx:    null,
     sectionLabel:  null,
     confidence:    CONFIG.CONFIDENCE.NONE,
@@ -349,6 +351,7 @@ async function parse(companyId, utterance) {
     const entry = phraseIndex[hit.phrase] || {};
     return {
       containerId:   entry.containerId  || null,
+      kcId:          entry.kcId         || null,
       sectionIdx:    entry.sectionIdx   ?? null,
       sectionLabel:  entry.sectionLabel || null,
       anchorWords:   entry.anchorWords   || [],
@@ -374,6 +377,7 @@ async function parse(companyId, utterance) {
           const entry = phraseIndex[synHit.phrase] || {};
           return {
             containerId:   entry.containerId  || null,
+            kcId:          entry.kcId         || null,
             sectionIdx:    entry.sectionIdx   ?? null,
             sectionLabel:  entry.sectionLabel || null,
             anchorWords:   entry.anchorWords   || [],
@@ -406,6 +410,7 @@ async function parse(companyId, utterance) {
           : CONFIG.CONFIDENCE.PHONETIC_LOW;
         return {
           containerId:   entry.containerId  || null,
+          kcId:          entry.kcId         || null,
           sectionIdx:    entry.sectionIdx   ?? null,
           sectionLabel:  entry.sectionLabel || null,
           anchorWords:   entry.anchorWords   || [],

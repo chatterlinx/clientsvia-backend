@@ -198,6 +198,13 @@
       background: #e0f2fe; border-radius: 4px;
       padding: 1px 7px; min-width: 26px; text-align: center;
     }
+    .section-id-tag {
+      font-size: 10px; font-weight: 600; color: #6b7280;
+      background: #f3f4f6; border-radius: 3px;
+      padding: 1px 6px; font-family: monospace; letter-spacing: 0.3px;
+      cursor: default; user-select: all;
+    }
+    .section-row.section-inactive .section-id-tag { opacity: 0.5; }
     .section-label-input {
       flex: 1; border: none; outline: none; background: transparent;
       font-size: 13px; font-weight: 600; color: var(--text-primary);
@@ -1830,6 +1837,7 @@ async function loadContainer() {
 function _populateForm(c) {
   // KC ID — immutable tag shown in edit mode only
   if (c.kcId) {
+    S.kcId = c.kcId;
     document.getElementById('fKcId').textContent     = `🏷 ${c.kcId}`;
     document.getElementById('kcIdSection').style.display = 'flex';
   }
@@ -2018,6 +2026,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6a2 2 0 110-4 2 2 0 010 4zM16 6a2 2 0 110-4 2 2 0 010 4zM8 14a2 2 0 110-4 2 2 0 010 4zM16 14a2 2 0 110-4 2 2 0 010 4zM8 22a2 2 0 110-4 2 2 0 010 4zM16 22a2 2 0 110-4 2 2 0 010 4z"/></svg>
       </span>
       <span class="section-number">${rowCount + 1}</span>
+      ${S.kcId ? `<span class="section-id-tag" title="Section ID — use this to find responses in Call Intelligence">${S.kcId}-${String(rowCount + 1).padStart(2, '0')}</span>` : ''}
       <input type="text" class="section-label-input" placeholder="${suggestion || 'Section label…'}"
         maxlength="80" value="${_esc(label)}" onchange="updateSectionNumbers()">
       <span class="section-phrase-count" id="phrase-count-${id}"
@@ -2383,6 +2392,8 @@ function updateSectionNumbers() {
   document.querySelectorAll('#sectionsList .section-row').forEach((row, idx) => {
     const num = row.querySelector('.section-number');
     if (num) num.textContent = idx + 1;
+    const tag = row.querySelector('.section-id-tag');
+    if (tag && S.kcId) tag.textContent = `${S.kcId}-${String(idx + 1).padStart(2, '0')}`;
   });
 }
 

@@ -136,6 +136,7 @@ async function _buildBridge(companyId) {
         if (!phraseIndex[norm]) {
           phraseIndex[norm] = {
             containerId:  cId,
+            kcId:         c.kcId || null,
             sectionIdx:   sIdx,
             sectionLabel: section.label || '',
             anchorWords,  // [] = no anchor gate; non-empty = at least one must match utterance
@@ -151,7 +152,7 @@ async function _buildBridge(companyId) {
     const words = phrase.split(/\s+/).filter(w => w.length >= MIN_WORD_LEN && !STOP_WORDS.has(w));
     for (const word of words) {
       const [primary, alternate] = doubleMetaphone(word);
-      const record = { word, phrase, containerId: entry.containerId, sectionIdx: entry.sectionIdx, sectionLabel: entry.sectionLabel };
+      const record = { word, phrase, containerId: entry.containerId, kcId: entry.kcId, sectionIdx: entry.sectionIdx, sectionLabel: entry.sectionLabel };
       if (primary) {
         if (!phoneticIndex[primary]) phoneticIndex[primary] = [];
         phoneticIndex[primary].push(record);
