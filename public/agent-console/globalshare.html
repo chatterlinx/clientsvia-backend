@@ -9,8 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/agent-console/styles.css">
   <style>
-    .globalshare-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
-    .globalshare-sidebar { display: flex; flex-direction: column; gap: 16px; }
+    .globalshare-layout { display: flex; flex-direction: column; gap: 24px; }
+    .globalshare-sidebar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     .globalshare-main { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 24px; }
     
     .resource-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px; transition: all 0.2s; }
@@ -83,7 +83,7 @@
     .performance-note strong { font-weight: 700; }
     
     @media (max-width: 1200px) {
-      .globalshare-layout { grid-template-columns: 1fr; }
+      .globalshare-sidebar { grid-template-columns: 1fr; }
       .globalshare-main { grid-template-columns: 1fr; }
     }
 
@@ -392,8 +392,8 @@
 
     <main class="main-content">
       <div class="globalshare-layout">
-        <!-- SIDEBAR: Stats & Performance -->
-        <aside class="globalshare-sidebar">
+        <!-- Stats Strip -->
+        <div class="globalshare-sidebar">
           <div class="sidebar-card">
             <h3 class="sidebar-title">📊 Gateway Stats</h3>
             <div class="sidebar-stat">
@@ -441,7 +441,7 @@
               Names shared globally, but access is controlled.
             </p>
           </div>
-        </aside>
+        </div>
 
         <!-- MAIN: Resource Cards -->
         <div class="globalshare-main">
