@@ -2095,7 +2095,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
       <div class="pq-toolbar">
         <div class="pq-add-phrase-wrap">
           <input type="text" id="cpInner-${id}" class="pq-add-input"
-            placeholder="Type a caller phrase and press Enter…"
+            placeholder="Type a phrase or paste bulk separated by commas…"
             onkeydown="cpKeydown(event, ${id})">
         </div>
         <span class="pq-toolbar-sep"></span>
@@ -2318,11 +2318,20 @@ function cpKeydown(e, sid) {
   if (!data) return;
   if (e.key === 'Enter') {
     e.preventDefault();
-    const val = e.target.value.trim().toLowerCase();
-    if (val && val.length > 2 && !data.callerPhrases.some(p => p.toLowerCase() === val)) {
-      data.callerPhrases.push(val);
-      _renderCallerPhrases(sid);
+    const raw = e.target.value.trim();
+    if (!raw) return;
+    // Split by comma — supports bulk paste: "phrase one, phrase two, phrase three"
+    const parts = raw.includes(',')
+      ? raw.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 2)
+      : [raw.toLowerCase()];
+    let added = 0;
+    for (const val of parts) {
+      if (val && val.length > 2 && !data.callerPhrases.some(p => p.toLowerCase() === val)) {
+        data.callerPhrases.push(val);
+        added++;
+      }
     }
+    if (added) _renderCallerPhrases(sid);
     e.target.value = '';
   }
 }
@@ -2364,11 +2373,18 @@ function secNegKwKeydown(e, sid) {
   if (!data) return;
   if (e.key === 'Enter' || e.key === ',') {
     e.preventDefault();
-    const val = e.target.value.trim().replace(/,/g, '').toLowerCase();
-    if (val && !data.negativeKeywords.includes(val)) {
-      data.negativeKeywords.push(val);
-      _renderSecNegKeywords(sid);
+    const raw = e.target.value.trim();
+    if (!raw) return;
+    // Split by comma — supports bulk paste
+    const parts = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const val of parts) {
+      if (val && !data.negativeKeywords.includes(val)) {
+        data.negativeKeywords.push(val);
+        added++;
+      }
     }
+    if (added) _renderSecNegKeywords(sid);
     e.target.value = '';
   } else if (e.key === 'Backspace' && !e.target.value && data.negativeKeywords.length) {
     data.negativeKeywords.pop();

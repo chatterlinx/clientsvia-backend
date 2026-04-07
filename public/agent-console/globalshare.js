@@ -533,18 +533,24 @@
   function _addSignalTag(groupKey) {
     const input = document.getElementById(`signal-input-${groupKey}`);
     if (!input) return;
-    const val = input.value.trim().toLowerCase();
-    if (!val) return;
-    if (state.signals[groupKey].includes(val)) {
-      input.value = '';
-      return; // already exists
+    const raw = input.value.trim();
+    if (!raw) return;
+    // Comma-separated bulk: "yes, yep, sure thing, absolutely"
+    const parts = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const val of parts) {
+      if (val && !state.signals[groupKey].includes(val)) {
+        state.signals[groupKey].push(val);
+        added++;
+      }
     }
-    state.signals[groupKey].push(val);
-    state.signalsChanged[groupKey] = true;
+    if (added) {
+      state.signalsChanged[groupKey] = true;
+      _refreshSignalGroup(groupKey);
+      _updateSignalsStat();
+      _autoSave('signal', groupKey);
+    }
     input.value = '';
-    _refreshSignalGroup(groupKey);
-    _updateSignalsStat();
-    _autoSave('signal', groupKey);
   }
 
   function _removeSignalTag(groupKey, index) {
@@ -718,14 +724,17 @@
   function _addLapKeyword(groupId) {
     const input = document.getElementById(`lap-input-${groupId}`);
     if (!input) return;
-    const val = input.value.trim().toLowerCase();
-    if (!val) return;
+    const raw = input.value.trim();
+    if (!raw) return;
     if (!_lapState[groupId]) _lapState[groupId] = [];
-    if (_lapState[groupId].includes(val)) { input.value = ''; return; }
-    _lapState[groupId].push(val);
+    // Comma-separated bulk: "hold on, one moment, just a second"
+    const parts = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const val of parts) {
+      if (val && !_lapState[groupId].includes(val)) { _lapState[groupId].push(val); added++; }
+    }
     input.value = '';
-    _refreshLapGroup(groupId);
-    _autoSave('lap', groupId);
+    if (added) { _refreshLapGroup(groupId); _autoSave('lap', groupId); }
   }
 
   function _removeLapKeyword(groupId, index) {
@@ -928,11 +937,15 @@
 
   function piAddStopWord() {
     const el = document.getElementById('pi-stop-input');
-    const word = (el?.value || '').trim().toLowerCase();
-    if (!word || piState.stopWords.includes(word)) return;
-    piState.stopWords.push(word);
-    _renderPiStopWords(); _updatePiTabCounts();
-    _autoSave('pi', 'stopWords');
+    const raw = (el?.value || '').trim();
+    if (!raw) return;
+    // Comma-separated bulk: "word1, word2, word3"
+    const parts = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const w of parts) {
+      if (w && !piState.stopWords.includes(w)) { piState.stopWords.push(w); added++; }
+    }
+    if (added) { _renderPiStopWords(); _updatePiTabCounts(); _autoSave('pi', 'stopWords'); }
     if (el) el.value = '';
     el?.focus();
   }
@@ -955,11 +968,15 @@
 
   function piAddDangerWord() {
     const el = document.getElementById('pi-danger-input');
-    const word = (el?.value || '').trim().toLowerCase();
-    if (!word || piState.dangerWords.includes(word)) return;
-    piState.dangerWords.push(word);
-    _renderPiDangerWords(); _updatePiTabCounts();
-    _autoSave('pi', 'dangerWords');
+    const raw = (el?.value || '').trim();
+    if (!raw) return;
+    // Comma-separated bulk: "word1, word2, word3"
+    const parts = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const w of parts) {
+      if (w && !piState.dangerWords.includes(w)) { piState.dangerWords.push(w); added++; }
+    }
+    if (added) { _renderPiDangerWords(); _updatePiTabCounts(); _autoSave('pi', 'dangerWords'); }
     if (el) el.value = '';
     el?.focus();
   }
