@@ -701,12 +701,6 @@
                 Types: <strong>requestCue</strong>, <strong>permissionCue</strong>, <strong>infoCue</strong>, <strong>directiveCue</strong>.
               </p>
               <div id="pi-cue-summary" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;"></div>
-              <div class="pi-table-wrap">
-                <table class="pi-table" id="pi-cuephrases-table">
-                  <thead><tr><th>Pattern</th><th>Cue Type</th><th style="width:36px;"></th></tr></thead>
-                  <tbody id="pi-cuephrases-body"></tbody>
-                </table>
-              </div>
               <div class="pi-add-row">
                 <input type="text" class="pi-add-input" id="pi-cue-patterns" placeholder="Patterns, comma-separated (e.g. can you, could you, would you)" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
                 <select class="pi-add-input" id="pi-cue-token" style="max-width:180px;" onchange="piCueTypeChanged()">
@@ -714,11 +708,15 @@
                 </select>
                 <input type="text" class="pi-add-input" id="pi-cue-newtype" placeholder="e.g. urgencyCue" style="max-width:150px;display:none;" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
                 <button class="pi-add-btn" onclick="piAddCuePhrase()">+ Add</button>
+                <button class="pi-save-btn" onclick="piDownloadCuePdf()" style="background:#f8fafc;color:#475569;border:1px solid #cbd5e1;margin-left:auto;">⬇ PDF</button>
               </div>
-              <div style="display:flex;gap:10px;align-items:center;">
-                <button class="pi-save-btn" onclick="piSaveSection('cuePhrases')">Save Cue Phrases</button>
-                <button class="pi-save-btn" onclick="piDownloadCuePdf()" style="background:#f8fafc;color:#475569;border:1px solid #cbd5e1;">⬇ Download PDF</button>
+              <div class="pi-table-wrap">
+                <table class="pi-table" id="pi-cuephrases-table">
+                  <thead><tr><th>Pattern</th><th>Cue Type</th><th style="width:36px;"></th></tr></thead>
+                  <tbody id="pi-cuephrases-body"></tbody>
+                </table>
               </div>
+              <button class="pi-save-btn" onclick="piSaveSection('cuePhrases')">Save Cue Phrases</button>
             </div>
 
             <!-- Test Reducer Tool -->
