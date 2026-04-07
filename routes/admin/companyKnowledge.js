@@ -2340,7 +2340,8 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
     // ── Core Alignment: phraseCore word coverage in contentCore ────────
     // Section-level metric — do the combined phrase topics align with the
     // content topics? Both reduced by PhraseReducerService, same space.
-    // Stop words + duplicates stripped — if a word doesn't count, it doesn't count.
+    // Stop words + duplicates stripped — pure grammar glue only.
+    // No nouns, no verbs, no words that could be meaningful content.
     const CA_STOP = new Set([
       'i','me','my','myself','we','our','ours','ourselves','you','your','yours','yourself',
       'yourselves','he','him','his','himself','she','her','hers','herself','it','its','itself',
@@ -2348,13 +2349,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       'these','those','am','is','are','was','were','be','been','being','have','has','had',
       'having','do','does','did','doing','a','an','the','and','but','if','or','because','as',
       'until','while','of','at','by','for','with','about','against','between','through',
-      'during','before','after','above','below','to','from','up','down','in','out','on','off',
-      'over','under','again','further','then','once','here','there','when','where','why','how',
-      'all','both','each','few','more','most','other','some','such','no','nor','not','only',
-      'own','same','so','than','too','very','can','will','just','don','should','now','also',
-      'get','got','like','would','could','may','might','shall','let','much','many','guys',
-      'really','please','okay','ok','yeah','yes','hey','hi','hello','gonna','wanna','gotta',
-      'someone','something','anything','anyone','everybody','everyone','need','want','know',
+      'during','before','after','above','below','to','from','up','down','in','on','off',
+      'over','under','then','here','there','when','where','how',
+      'no','nor','not','so','than','too','very','just','also',
+      'can','will','would','could','may','might','shall','should',
     ]);
     let coreAlignment = null;
     if (phraseCore && contentCore) {
