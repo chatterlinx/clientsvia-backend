@@ -1016,7 +1016,7 @@
     // Merge canonical + any custom types the admin has created
     const dataTypes = piState.cuePhrases.map(c => c.token).filter(Boolean);
     const allTypes  = [...new Set([..._CANONICAL_CUE_TYPES, ...dataTypes])];
-    sel.innerHTML = '<option value="" disabled>Select cue type…</option>'
+    sel.innerHTML = '<option value="" disabled selected>Select cue type…</option>'
       + allTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
       + '<option value="__new__">＋ Add new type…</option>';
     if (prev && allTypes.includes(prev)) sel.value = prev;
@@ -1033,16 +1033,31 @@
     }
   }
 
+  /** Show/hide the inline new-type input when dropdown changes. */
+  function piCueTypeChanged() {
+    const sel    = document.getElementById('pi-cue-token');
+    const newInp = document.getElementById('pi-cue-newtype');
+    if (!sel || !newInp) return;
+    if (sel.value === '__new__') {
+      newInp.style.display = '';
+      newInp.focus();
+    } else {
+      newInp.style.display = 'none';
+      newInp.value = '';
+    }
+  }
+
   function piAddCuePhrase() {
-    const pEl = document.getElementById('pi-cue-patterns');
-    const sel = document.getElementById('pi-cue-token');
+    const pEl    = document.getElementById('pi-cue-patterns');
+    const sel    = document.getElementById('pi-cue-token');
+    const newInp = document.getElementById('pi-cue-newtype');
     const rawPatterns = (pEl?.value || '').trim();
     let token = (sel?.value || '').trim();
 
-    // "Add new type" — prompt for custom name
+    // "Add new type" — read from the inline text input
     if (token === '__new__') {
-      token = (prompt('Enter new cue type name (e.g. urgencyCue):') || '').trim();
-      if (!token) return;
+      token = (newInp?.value || '').trim();
+      if (!token) { newInp?.focus(); return; }
     }
 
     if (!rawPatterns || !token) return;
@@ -1057,8 +1072,9 @@
     }
     if (added) { _renderPiCuePhrases(); _updatePiTabCounts(); _autoSave('pi', 'cuePhrases'); }
     if (pEl) pEl.value = '';
-    // Keep the dropdown on the same type for quick bulk entry
-    if (sel && token !== '__new__') sel.value = token;
+    if (newInp) { newInp.value = ''; newInp.style.display = 'none'; }
+    // Set dropdown to the type just used so next batch is quick
+    if (sel) sel.value = token;
     pEl?.focus();
   }
 
@@ -1144,6 +1160,7 @@
   window.piRemoveStopWord    = piRemoveStopWord;
   window.piAddDangerWord     = piAddDangerWord;
   window.piRemoveDangerWord  = piRemoveDangerWord;
+  window.piCueTypeChanged    = piCueTypeChanged;
   window.piAddCuePhrase      = piAddCuePhrase;
   window.piRemoveCuePhrase   = piRemoveCuePhrase;
   window.piSaveSection       = piSaveSection;

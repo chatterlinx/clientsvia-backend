@@ -704,9 +704,10 @@
               </div>
               <div class="pi-add-row">
                 <input type="text" class="pi-add-input" id="pi-cue-patterns" placeholder="Patterns, comma-separated (e.g. can you, could you, would you)" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
-                <select class="pi-add-input" id="pi-cue-token" style="max-width:180px;" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
+                <select class="pi-add-input" id="pi-cue-token" style="max-width:180px;" onchange="piCueTypeChanged()">
                   <option value="" disabled selected>Select cue type…</option>
                 </select>
+                <input type="text" class="pi-add-input" id="pi-cue-newtype" placeholder="e.g. urgencyCue" style="max-width:150px;display:none;" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
                 <button class="pi-add-btn" onclick="piAddCuePhrase()">+ Add</button>
               </div>
               <button class="pi-save-btn" onclick="piSaveSection('cuePhrases')">Save Cue Phrases</button>
