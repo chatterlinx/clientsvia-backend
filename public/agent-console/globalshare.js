@@ -1121,6 +1121,65 @@
     _autoSave('pi', 'cuePhrases');
   }
 
+  /** Generate a print-friendly PDF of all cue phrases grouped by type. */
+  function piDownloadCuePdf() {
+    if (!piState.cuePhrases.length) return;
+
+    // Group by cue type
+    const groups = {};
+    for (const c of piState.cuePhrases) {
+      const t = c.token || 'unknown';
+      if (!groups[t]) groups[t] = [];
+      groups[t].push(c.pattern);
+    }
+
+    const typeColors = {
+      requestcue:    { bg: '#dbeafe', fg: '#1e40af' },
+      permissioncue: { bg: '#fef9c3', fg: '#854d0e' },
+      infocue:       { bg: '#d1fae5', fg: '#065f46' },
+      directivecue:  { bg: '#fee2e2', fg: '#991b1b' },
+    };
+
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>Cue Phrases — ClientsVia GlobalShare</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding:40px; color:#1e293b; }
+        h1 { font-size:22px; margin-bottom:4px; }
+        .subtitle { font-size:12px; color:#64748b; margin-bottom:24px; }
+        .group { margin-bottom:24px; break-inside:avoid; }
+        .group-header { font-size:14px; font-weight:700; padding:6px 14px; border-radius:8px; display:inline-block; margin-bottom:8px; }
+        .group-count { font-size:11px; font-weight:400; opacity:0.7; margin-left:6px; }
+        table { width:100%; border-collapse:collapse; font-size:12px; }
+        th { text-align:left; padding:4px 10px; background:#f1f5f9; font-weight:600; font-size:10px; text-transform:uppercase; color:#64748b; }
+        td { padding:4px 10px; border-bottom:1px solid #f1f5f9; }
+        tr:nth-child(even) td { background:#fafbfc; }
+        .footer { margin-top:30px; font-size:10px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:10px; }
+        @media print { body { padding:20px; } }
+      </style></head><body>
+      <h1>Cue Phrases</h1>
+      <p class="subtitle">ClientsVia GlobalShare — Phrase Intelligence &middot; ${piState.cuePhrases.length} total patterns &middot; Generated ${new Date().toLocaleDateString()}</p>`;
+
+    for (const [type, patterns] of Object.entries(groups).sort((a, b) => b[1].length - a[1].length)) {
+      const colors = typeColors[type.toLowerCase()] || { bg: '#f1f5f9', fg: '#475569' };
+      html += `<div class="group">
+        <div class="group-header" style="background:${colors.bg};color:${colors.fg};">${escapeHtml(type)}<span class="group-count">(${patterns.length})</span></div>
+        <table><thead><tr><th>#</th><th>Pattern</th></tr></thead><tbody>`;
+      patterns.sort().forEach((p, i) => {
+        html += `<tr><td style="width:40px;color:#94a3b8;">${i + 1}</td><td>${escapeHtml(p)}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    html += `<div class="footer">Use browser Print → Save as PDF. Patterns sorted alphabetically within each cue type.</div>
+      </body></html>`;
+
+    const w = window.open('', '_blank');
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 400);
+  }
+
   // ── Save Section ──────────────────────────────────────────────────────
 
   async function piSaveSection(section) {
@@ -1200,6 +1259,7 @@
   window.piCueTypeChanged    = piCueTypeChanged;
   window.piAddCuePhrase      = piAddCuePhrase;
   window.piRemoveCuePhrase   = piRemoveCuePhrase;
+  window.piDownloadCuePdf    = piDownloadCuePdf;
   window.piSaveSection       = piSaveSection;
   window.piTestPhrase        = piTestPhrase;
 
