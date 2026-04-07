@@ -3769,14 +3769,17 @@ let CUE_PHRASES = []; // [{ pattern: "can you", token: "requestCue" }, ...] sort
 /**
  * _detectCues — scan a caller phrase for cue patterns from GlobalShare.
  * Returns { requestCue: "can you"|null, permissionCue: null, infoCue: null, directiveCue: null }
+ * Token matching is case-insensitive (requestcue, requestCue, REQUESTCUE all work).
  */
+const _CUE_TOKEN_MAP = { requestcue: 'requestCue', permissioncue: 'permissionCue', infocue: 'infoCue', directivecue: 'directiveCue' };
 function _detectCues(phrase) {
   const lower = phrase.toLowerCase();
   const result = { requestCue: null, permissionCue: null, infoCue: null, directiveCue: null };
   for (const cp of CUE_PHRASES) {
-    if (result[cp.token]) continue; // already found one for this type
+    const normToken = _CUE_TOKEN_MAP[(cp.token || '').toLowerCase()];
+    if (!normToken || result[normToken]) continue; // unknown type or already found
     if (lower.includes(cp.pattern)) {
-      result[cp.token] = cp.pattern;
+      result[normToken] = cp.pattern;
     }
   }
   return result;

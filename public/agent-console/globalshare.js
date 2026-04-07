@@ -234,6 +234,7 @@
             piSaveSection('synonymGroups'),
             piSaveSection('stopWords'),
             piSaveSection('dangerWords'),
+            piSaveSection('cuePhrases'),
           ]);
           // Signal groups
           const signalKeys = Object.keys(state.signals);
@@ -1005,13 +1006,13 @@
     ).join('');
   }
 
-  /** Color-code cue type badges. */
+  /** Color-code cue type badges (case-insensitive). */
   function _cueTypeStyle(token) {
-    switch (token) {
-      case 'requestCue':    return 'background:#dbeafe;color:#1e40af;';
-      case 'permissionCue': return 'background:#fef9c3;color:#854d0e;';
-      case 'infoCue':       return 'background:#d1fae5;color:#065f46;';
-      case 'directiveCue':  return 'background:#fee2e2;color:#991b1b;';
+    switch ((token || '').toLowerCase()) {
+      case 'requestcue':    return 'background:#dbeafe;color:#1e40af;';
+      case 'permissioncue': return 'background:#fef9c3;color:#854d0e;';
+      case 'infocue':       return 'background:#d1fae5;color:#065f46;';
+      case 'directivecue':  return 'background:#fee2e2;color:#991b1b;';
       default:              return 'background:#f1f5f9;color:#475569;';
     }
   }
