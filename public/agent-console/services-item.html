@@ -2123,6 +2123,11 @@ function addSection(label = '', content = '', sectionMeta = null) {
           onclick="_crossScanPhrases(${id})" title="Scan all KCs — find better homes and duplicate phrases">
           <span class="pq-btn-icon">⊘</span> Cross-Scan
         </button>
+        <span class="pq-toolbar-sep"></span>
+        <button type="button" class="pq-toolbar-btn" id="btn-pdf-${id}"
+          onclick="_downloadSectionPdf(${id})" title="Download section as PDF for review">
+          <span class="pq-btn-icon">⬇</span> PDF
+        </button>
       </div>
       <div class="pq-table-wrap" id="score-table-${id}"></div>
       <!-- Phrase Core strip — computed from all phrases combined on Re-score -->
@@ -4165,6 +4170,93 @@ async function _reScorePhrases(sid) {
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">↻</span> Re-score'; btn.classList.remove('stale'); }
   }
+}
+
+/**
+ * _downloadSectionPdf — export section content + phrase table as print-ready PDF.
+ */
+function _downloadSectionPdf(sid) {
+  const data    = S.sectionData.get(sid);
+  if (!data) return;
+  const row     = document.querySelector(`.section-row[data-sid="${sid}"]`);
+  const label   = row?.querySelector('.section-label-input')?.value || `Section ${sid}`;
+  const content = document.getElementById(`sec-content-${sid}`)?.value || '';
+  const phrases = data.callerPhrases || [];
+  const cCore   = data.contentCore || '';
+  const pCore   = data.phraseCore  || '';
+  const kcTitle = document.getElementById('fTitle')?.value || 'Knowledge Container';
+  const secId   = row?.querySelector('.section-id-tag')?.textContent || '';
+
+  const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  const cueColors = {
+    requestCue:    { bg: '#dbeafe', fg: '#1e40af' },
+    permissionCue: { bg: '#fef9c3', fg: '#854d0e' },
+    infoCue:       { bg: '#d1fae5', fg: '#065f46' },
+    directiveCue:  { bg: '#fee2e2', fg: '#991b1b' },
+  };
+
+  let phraseRows = '';
+  for (const p of phrases) {
+    const cues = _detectCues(p);
+    const cueCells = ['requestCue','permissionCue','infoCue','directiveCue'].map(type => {
+      const val = cues[type];
+      if (!val) return '<td style="text-align:center;color:#cbd5e1;">—</td>';
+      const c = cueColors[type];
+      return `<td style="text-align:center;"><span style="background:${c.bg};color:${c.fg};padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;">${esc(val)}</span></td>`;
+    }).join('');
+
+    const score  = data.phraseScores?.[p];
+    const core   = score?.phraseCore || '';
+    const anchor = (data.phraseAnchorWords?.[p] || []).join(', ');
+
+    phraseRows += `<tr>
+      <td>${esc(p)}</td>
+      ${cueCells}
+      <td style="color:#6366f1;font-size:10px;">${esc(core)}</td>
+      <td style="color:#94a3b8;font-size:10px;">${esc(anchor)}</td>
+    </tr>`;
+  }
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${esc(kcTitle)} — ${esc(label)}</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding:40px; color:#1e293b; font-size:13px; }
+      h1 { font-size:20px; margin-bottom:2px; }
+      h2 { font-size:15px; color:#475569; font-weight:600; margin:20px 0 8px; }
+      .meta { font-size:11px; color:#64748b; margin-bottom:20px; }
+      .content-box { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; line-height:1.6; margin-bottom:6px; white-space:pre-wrap; }
+      .core-strip { font-size:11px; color:#6366f1; margin-bottom:20px; }
+      .core-label { font-weight:700; color:#7c3aed; }
+      table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+      th { text-align:left; padding:6px 8px; background:#f1f5f9; font-size:10px; text-transform:uppercase; color:#64748b; font-weight:600; }
+      td { padding:5px 8px; border-bottom:1px solid #f1f5f9; }
+      tr:nth-child(even) td { background:#fafbfc; }
+      .footer { margin-top:24px; font-size:10px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:8px; }
+      @media print { body { padding:20px; } }
+    </style></head><body>
+    <h1>${esc(kcTitle)}</h1>
+    <div class="meta">${esc(secId)} · ${esc(label)} · ${phrases.length} phrases · Generated ${new Date().toLocaleDateString()}</div>
+
+    <h2>Section Content</h2>
+    <div class="content-box">${esc(content)}</div>
+    ${cCore ? `<div class="core-strip"><span class="core-label">Content Core →</span> ${esc(cCore)}</div>` : ''}
+
+    <h2>Phrase Table</h2>
+    <table>
+      <thead><tr><th>Phrase</th><th style="text-align:center;">Request</th><th style="text-align:center;">Permission</th><th style="text-align:center;">Info</th><th style="text-align:center;">Directive</th><th>Core</th><th>Anchors</th></tr></thead>
+      <tbody>${phraseRows || '<tr><td colspan="7" style="color:#94a3b8;text-align:center;">No phrases</td></tr>'}</tbody>
+    </table>
+    ${pCore ? `<div class="core-strip" style="margin-top:10px;"><span class="core-label">Phrase Core →</span> ${esc(pCore)}</div>` : ''}
+
+    <div class="footer">Use browser Print → Save as PDF</div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
 }
 
 /**
