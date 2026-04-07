@@ -123,6 +123,14 @@ const callerPhraseSchema = new mongoose.Schema(
         core:     { type: String, default: null },
         status:   { type: String, default: null },  // 'green'|'yellow'|'orange'|'red'
         scoredAt: { type: Date,   default: null },
+        normalizedPatterns: {
+          type: [{
+            pattern: { type: String },
+            token:   { type: String },
+          }],
+          default: undefined,
+          comment: 'Intent normalizer matches — e.g. [{pattern:"can you",token:"requestCue"}]. Persisted for UI display.'
+        },
       },
       default: null,
       comment: 'Last 3TSM score result — persisted so UI shows scores without re-scoring.'
