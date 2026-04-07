@@ -3773,6 +3773,10 @@ let CUE_PHRASES = []; // [{ pattern: "can you", token: "requestCue" }, ...] sort
       CUE_PHRASES = data.cuePhrases
         .map(c => ({ pattern: c.pattern.toLowerCase().trim(), token: c.token }))
         .sort((a, b) => b.pattern.length - a.pattern.length); // longest match first
+      // Re-render phrase tables now that cue data is available (may have rendered before fetch completed)
+      for (const [sid] of S.sectionData) {
+        try { _renderPhraseTable(sid); } catch (_) {}
+      }
     }
   } catch (e) { /* fallback is fine */ }
 })();
