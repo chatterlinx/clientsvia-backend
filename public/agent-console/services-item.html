@@ -2331,7 +2331,10 @@ function cpKeydown(e, sid) {
         added++;
       }
     }
-    if (added) _renderCallerPhrases(sid);
+    if (added) {
+      _renderCallerPhrases(sid);
+      _debouncedAutoSave();          // persist phrases to DB
+    }
     e.target.value = '';
   }
 }
@@ -2347,6 +2350,7 @@ function removeCallerPhrase(sid, idx) {
   }
   data.callerPhrases.splice(idx, 1);
   _renderCallerPhrases(sid);
+  _debouncedAutoSave();              // persist phrases to DB
 }
 
 // ── Per-section exclusion keywords ─────────────────────────────────────────
@@ -2384,11 +2388,12 @@ function secNegKwKeydown(e, sid) {
         added++;
       }
     }
-    if (added) _renderSecNegKeywords(sid);
+    if (added) { _renderSecNegKeywords(sid); _debouncedAutoSave(); }
     e.target.value = '';
   } else if (e.key === 'Backspace' && !e.target.value && data.negativeKeywords.length) {
     data.negativeKeywords.pop();
     _renderSecNegKeywords(sid);
+    _debouncedAutoSave();
   }
 }
 
@@ -2397,6 +2402,7 @@ function removeSecNegKeyword(sid, idx) {
   if (!data) return;
   data.negativeKeywords.splice(idx, 1);
   _renderSecNegKeywords(sid);
+  _debouncedAutoSave();
 }
 
 function deleteSection(btn) {
@@ -2927,11 +2933,47 @@ async function generateSampleResponse() {
 // ─────────────────────────────────────────────────────────────────────────────
 // SAVE
 // ─────────────────────────────────────────────────────────────────────────────
-async function saveContainer() {
-  // Validate
+
+// Debounced auto-save — batches rapid phrase add/remove into one API call.
+let _kcAutoSaveTimer = null;
+function _debouncedAutoSave() {
+  clearTimeout(_kcAutoSaveTimer);
+  _kcAutoSaveTimer = setTimeout(() => saveContainer({ quiet: true }), 800);
+}
+
+async function saveContainer({ quiet = false } = {}) {
   const title    = document.getElementById('fTitle').value?.trim() || '';
   const sections = _getSections();
 
+  // ── Quiet mode: silent background save (no UI effects, no navigation) ──
+  // Used after Re-score, phrase add/remove to persist phrases automatically.
+  if (quiet) {
+    if (!S.isEdit || !title || !sections.length) return;
+    const wlv = parseInt(document.getElementById('fWordLimit').value, 10);
+    try {
+      await apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/${S.mongoId || S.itemId}`,
+        { method: 'PATCH', body: JSON.stringify({
+          title,
+          category:           document.getElementById('fCategory').value?.trim() || '',
+          sections,
+          sampleQuestions:    S.sampleQuestions,
+          wordLimit:          (!isNaN(wlv) && wlv >= 5) ? wlv : null,
+          wordLimitEnabled:   document.getElementById('fWordLimitEnabled')?.checked !== false,
+          sampleResponse:     (document.getElementById('fSampleResponse')?.value || '').trim() || null,
+          bookingAction:      document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
+          closingPrompt:      (document.getElementById('fClosingPrompt')?.value || '').trim(),
+          isActive:           document.getElementById('fActive').checked,
+          priority:           parseInt(document.getElementById('fPriority').value, 10) || 100,
+          preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
+          upsellChain:        [],
+        })}
+      );
+    } catch (e) { console.warn('[KC] Auto-save failed:', e.message); }
+    return;
+  }
+
+  // ── Normal save: validate, loading overlay, navigate back on success ──
   let valid = true;
   if (!title) {
     document.getElementById('grpTitle').classList.add('has-error');
@@ -3734,6 +3776,7 @@ function _toggleAnchorWord(sid, phraseKey, word) {
 
   // Re-render table to reflect new orange state
   _renderPhraseTable(sid);
+  _debouncedAutoSave();              // persist anchor change to DB
 }
 
 /**
@@ -4078,6 +4121,11 @@ async function _reScorePhrases(sid) {
     const total    = Object.keys(data.phraseScores).length;
     const passRate = total ? Math.round((counts.green / total) * 100) : 0;
     _toast(`${total} phrases scored · ${passRate}% bulletproof`, 'success');
+
+    // ── Auto-save: persist phrases + scores + anchors + cores to DB ──
+    // Without this, Re-score only writes phraseCore/contentCore via
+    // fire-and-forget.  CallerPhrases would be lost on page refresh.
+    saveContainer({ quiet: true });
   } catch (err) {
     _toast(err.message || 'Scoring failed', 'error');
   } finally {
