@@ -701,6 +701,17 @@
                 Types: <strong>requestCue</strong>, <strong>permissionCue</strong>, <strong>infoCue</strong>, <strong>directiveCue</strong>.
               </p>
               <div id="pi-cue-summary" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;"></div>
+
+              <!-- Cue Tester -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">🧪 Test Cue Detection</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="text" id="pi-cue-test-input" class="pi-add-input" placeholder="Type a caller phrase, e.g. &quot;can you schedule my ac maintenance&quot;" style="flex:1;" onkeydown="if(event.key==='Enter'){piTestCueDetection();event.preventDefault();}">
+                  <button class="pi-test-btn" onclick="piTestCueDetection()" style="white-space:nowrap;">Test</button>
+                </div>
+                <div id="pi-cue-test-result" style="display:none;margin-top:10px;"></div>
+              </div>
+
               <div class="pi-add-row">
                 <input type="text" class="pi-add-input" id="pi-cue-patterns" placeholder="Patterns, comma-separated (e.g. can you, could you, would you)" onkeydown="if(event.key==='Enter'){piAddCuePhrase();event.preventDefault();}">
                 <select class="pi-add-input" id="pi-cue-token" style="max-width:180px;" onchange="piCueTypeChanged()">

@@ -1180,6 +1180,70 @@
     setTimeout(() => w.print(), 400);
   }
 
+  // ── Cue Tester ─────────────────────────────────────────────────────────
+
+  const _CUE_TOKEN_MAP = { requestcue: 'requestCue', permissioncue: 'permissionCue', infocue: 'infoCue', directivecue: 'directiveCue' };
+  const _CUE_COLORS = {
+    requestCue:    { bg: '#dbeafe', fg: '#1e40af', label: 'REQUEST' },
+    permissionCue: { bg: '#fef9c3', fg: '#854d0e', label: 'PERMISSION' },
+    infoCue:       { bg: '#d1fae5', fg: '#065f46', label: 'INFO' },
+    directiveCue:  { bg: '#fee2e2', fg: '#991b1b', label: 'DIRECTIVE' },
+  };
+
+  function piTestCueDetection() {
+    const input = document.getElementById('pi-cue-test-input');
+    const resultEl = document.getElementById('pi-cue-test-result');
+    if (!input || !resultEl) return;
+    const phrase = (input.value || '').trim();
+    if (!phrase) { resultEl.style.display = 'none'; return; }
+
+    const lower = phrase.toLowerCase();
+    const sorted = [...piState.cuePhrases]
+      .map(c => ({ pattern: c.pattern.toLowerCase().trim(), token: c.token }))
+      .sort((a, b) => b.pattern.length - a.pattern.length); // longest first
+
+    // Detect: first match per cue type (mirrors KC _detectCues exactly)
+    const result = { requestCue: null, permissionCue: null, infoCue: null, directiveCue: null };
+    const allMatches = { requestCue: [], permissionCue: [], infoCue: [], directiveCue: [] };
+    for (const cp of sorted) {
+      const normToken = _CUE_TOKEN_MAP[(cp.token || '').toLowerCase()];
+      if (!normToken) continue;
+      if (lower.includes(cp.pattern)) {
+        allMatches[normToken].push(cp.pattern);
+        if (!result[normToken]) result[normToken] = cp.pattern;
+      }
+    }
+
+    // Render result — 4 columns like the KC phrase table
+    const matchCount = Object.values(result).filter(Boolean).length;
+    let html = `<div style="display:flex;gap:6px;margin-bottom:8px;font-size:11px;color:#64748b;">
+      <span>Phrase: <strong style="color:#1e293b;">"${escapeHtml(phrase)}"</strong></span>
+      <span style="margin-left:auto;">${matchCount} of 4 cue types matched · ${piState.cuePhrases.length} patterns checked</span>
+    </div>`;
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
+    for (const [type, info] of Object.entries(_CUE_COLORS)) {
+      const val = result[type];
+      const extras = allMatches[type].filter(p => p !== val);
+      if (val) {
+        html += `<div style="background:${info.bg};border:1px solid ${info.bg};border-radius:8px;padding:8px 10px;text-align:center;">
+          <div style="font-size:10px;font-weight:700;color:${info.fg};text-transform:uppercase;margin-bottom:3px;">${info.label}</div>
+          <div style="font-size:13px;font-weight:600;color:${info.fg};">"${escapeHtml(val)}"</div>
+          ${extras.length ? `<div style="font-size:10px;color:${info.fg};opacity:0.65;margin-top:2px;">also: ${extras.map(e => '"'+escapeHtml(e)+'"').join(', ')}</div>` : ''}
+        </div>`;
+      } else {
+        html += `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;text-align:center;">
+          <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:3px;">${info.label}</div>
+          <div style="font-size:13px;color:#cbd5e1;">—</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">no pattern matched</div>
+        </div>`;
+      }
+    }
+    html += '</div>';
+
+    resultEl.innerHTML = html;
+    resultEl.style.display = '';
+  }
+
   // ── Save Section ──────────────────────────────────────────────────────
 
   async function piSaveSection(section) {
@@ -1260,6 +1324,7 @@
   window.piAddCuePhrase      = piAddCuePhrase;
   window.piRemoveCuePhrase   = piRemoveCuePhrase;
   window.piDownloadCuePdf    = piDownloadCuePdf;
+  window.piTestCueDetection  = piTestCueDetection;
   window.piSaveSection       = piSaveSection;
   window.piTestPhrase        = piTestPhrase;
 
