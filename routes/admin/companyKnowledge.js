@@ -2345,29 +2345,34 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       }
     })();
 
-    // ── Core Alignment: phraseCore word coverage in contentCore ────────
-    // Section-level metric — do the combined phrase topics align with the
-    // content topics? Both reduced by PhraseReducerService, same space.
+    // ── Core Alignment: what % of contentCore words are covered by phraseCore?
+    // Direction: content → phrases. High score = callers' phrases cover the
+    // answer topics well. Low score = answer has words no phrase mentions.
     // Shared stop words — single source of truth (utils/stopWords.js)
     const CA_STOP = require('../../utils/stopWords').getStopWords();
     let coreAlignment = null;
     if (phraseCore && contentCore) {
-      const pcWords = [...new Set(
-        phraseCore.toLowerCase().split(/\s+/)
-          .map(w => w.replace(/[^a-z0-9]/g, ''))
-          .filter(w => w && !CA_STOP.has(w))
-      )];
-      const ccText  = contentCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-      const ccWords = new Set(ccText.split(/\s+/).filter(Boolean));
       const _caStem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
         .replace(/ers?$/, '').replace(/ed$/, '').replace(/ly$/, '')
         .replace(/ies$/, 'y').replace(/ves$/, 'f').replace(/s$/, '');
-      const ccStems = new Set([...ccWords].map(_caStem));
+
+      // Content words = denominator (what we're checking coverage OF)
+      const ccWords = [...new Set(
+        contentCore.toLowerCase().split(/\s+/)
+          .map(w => w.replace(/[^a-z0-9]/g, ''))
+          .filter(w => w && !CA_STOP.has(w))
+      )];
+
+      // Phrase words = the pool we check against (callers' vocabulary)
+      const pcText  = phraseCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+      const pcSet   = new Set(pcText.split(/\s+/).filter(Boolean));
+      const pcStems = new Set([...pcSet].map(_caStem));
+
       let caHits = 0;
-      for (const w of pcWords) {
-        if (ccWords.has(w) || ccStems.has(_caStem(w))) caHits++;
+      for (const w of ccWords) {
+        if (pcSet.has(w) || pcStems.has(_caStem(w))) caHits++;
       }
-      coreAlignment = pcWords.length ? Math.round((caHits / pcWords.length) * 100) : null;
+      coreAlignment = ccWords.length ? Math.round((caHits / ccWords.length) * 100) : null;
     }
 
     return res.json({ success: true, scores, phraseCore, contentCore, coreAlignment });

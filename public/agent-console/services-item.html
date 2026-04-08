@@ -4281,25 +4281,34 @@ function _renderPhraseCore(sid, core, coreAlignment) {
   }
 }
 
-/** Compute coreAlignment client-side: phraseCore word coverage in contentCore with stemming. */
+/**
+ * Compute coreAlignment client-side: what % of contentCore words are covered by phraseCore?
+ * Direction: content → phrases (does the response have words that callers also say?)
+ * High score = phrases cover the answer well. Low score = answer has topics no phrase mentions.
+ */
 function _computeCoreAlignment(phraseCore, contentCore) {
   const _stem = w => w.replace(/ings?$/, '').replace(/ing$/, '').replace(/ations?$/, '')
     .replace(/ers?$/, '').replace(/ed$/, '').replace(/ly$/, '')
     .replace(/ies$/, 'y').replace(/ves$/, 'f').replace(/s$/, '');
-  const pcWords = [...new Set(
-    phraseCore.toLowerCase().split(/\s+/)
+
+  // Content words = the denominator (what we're checking coverage OF)
+  const ccWords = [...new Set(
+    contentCore.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^a-z0-9]/g, ''))
       .filter(w => w && !STOP_WORDS.has(w))
   )];
-  if (!pcWords.length) return null;
-  const ccText  = contentCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-  const ccWords = new Set(ccText.split(/\s+/).filter(Boolean));
-  const ccStems = new Set([...ccWords].map(_stem));
+  if (!ccWords.length) return null;
+
+  // Phrase words = the pool we check against (callers' vocabulary)
+  const pcText  = phraseCore.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const pcSet   = new Set(pcText.split(/\s+/).filter(Boolean));
+  const pcStems = new Set([...pcSet].map(_stem));
+
   let hits = 0;
-  for (const w of pcWords) {
-    if (ccWords.has(w) || ccStems.has(_stem(w))) hits++;
+  for (const w of ccWords) {
+    if (pcSet.has(w) || pcStems.has(_stem(w))) hits++;
   }
-  return Math.round((hits / pcWords.length) * 100);
+  return Math.round((hits / ccWords.length) * 100);
 }
 
 /**
