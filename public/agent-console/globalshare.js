@@ -1004,13 +1004,25 @@
   function _renderPiCuePhrases() {
     const tbody = document.getElementById('pi-cuephrases-body');
     if (!tbody) return;
-    tbody.innerHTML = piState.cuePhrases.map((c, i) =>
-      `<tr>
+    // Build sorted display: group by cue type (alpha), then pattern (alpha) within each group
+    const indexed = piState.cuePhrases.map((c, i) => ({ ...c, _idx: i }));
+    indexed.sort((a, b) => {
+      const typeCmp = (a.token || '').localeCompare(b.token || '');
+      if (typeCmp !== 0) return typeCmp;
+      return (a.pattern || '').localeCompare(b.pattern || '');
+    });
+    let lastType = null;
+    tbody.innerHTML = indexed.map(c => {
+      const divider = c.token !== lastType
+        ? `<tr><td colspan="3" style="padding:8px 0 4px;font-size:11px;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;">${escapeHtml(c.token)} (${indexed.filter(x => x.token === c.token).length})</td></tr>`
+        : '';
+      lastType = c.token;
+      return divider + `<tr>
         <td>${escapeHtml(c.pattern)}</td>
         <td><span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;${_cueTypeStyle(c.token)}">${escapeHtml(c.token)}</span></td>
-        <td><span class="pi-tag-remove" onclick="piRemoveCuePhrase(${i})">×</span></td>
-      </tr>`
-    ).join('');
+        <td><span class="pi-tag-remove" onclick="piRemoveCuePhrase(${c._idx})">×</span></td>
+      </tr>`;
+    }).join('');
     _refreshCueTypeDropdown();
     _updateCueSummary();
   }
