@@ -118,8 +118,10 @@ async function _getTradeIndex(companyId) {
 }
 
 /**
- * Build trade index from MongoDB.
- * Queries all active KC containers, iterates sections' tradeTerms[].
+ * Build trade index from two sources:
+ *   1. Global vocabularies (via container.tradeVocabularyKey → GlobalShare)
+ *      Maps terms to container level (sectionIdx = -1, no section targeting).
+ *   2. Per-section tradeTerms[] (custom overrides, maps to specific section).
  *
  * @param {string} companyId
  * @returns {Promise<Object>}
@@ -130,14 +132,42 @@ async function _buildTradeIndex(companyId) {
   try {
     const containers = await CompanyKnowledgeContainer
       .find({ companyId, isActive: true })
-      .select('_id title sections.label sections.isActive sections.tradeTerms sections.order')
+      .select('_id title tradeVocabularyKey sections.label sections.isActive sections.tradeTerms sections.order')
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
+    // ── Source 1: Global vocabularies (container-level) ──────────────────
+    // Build a map of tradeKey → terms[] from GlobalShare (cached, <1ms)
+    let vocabMap = null;
+    const hasLinkedContainers = containers.some(c => c.tradeVocabularyKey);
+    if (hasLinkedContainers) {
+      const vocabs = await PhraseReducerService.getTradeVocabularies();
+      vocabMap = {};
+      for (const v of vocabs) {
+        vocabMap[v.tradeKey] = v.terms || [];
+      }
+    }
+
     for (const c of containers) {
       const cId = String(c._id);
-      const sections = c.sections || [];
 
+      // Global vocabulary terms → container-level (no section targeting)
+      if (c.tradeVocabularyKey && vocabMap?.[c.tradeVocabularyKey]) {
+        for (const term of vocabMap[c.tradeVocabularyKey]) {
+          const norm = term.toLowerCase().trim();
+          if (!norm) continue;
+          if (!index[norm]) index[norm] = [];
+          index[norm].push({
+            term,
+            containerId:  cId,
+            sectionIdx:   -1,          // container-level — no section targeting
+            sectionLabel: '',
+          });
+        }
+      }
+
+      // ── Source 2: Per-section tradeTerms[] (custom overrides) ──────────
+      const sections = c.sections || [];
       for (let sIdx = 0; sIdx < sections.length; sIdx++) {
         const section = sections[sIdx];
         if (section.isActive === false) continue;
@@ -145,7 +175,6 @@ async function _buildTradeIndex(companyId) {
         for (const term of (section.tradeTerms || [])) {
           const norm = term.toLowerCase().trim();
           if (!norm) continue;
-
           if (!index[norm]) index[norm] = [];
           index[norm].push({
             term,

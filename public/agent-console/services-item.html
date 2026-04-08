@@ -1320,6 +1320,13 @@
           <input type="number" id="fPriority" class="form-input" min="1" max="9999" value="100">
           <div class="form-hint">Lower = higher priority when multiple containers could match</div>
         </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label" for="fTradeVocab">🏷️ Trade Vocabulary</label>
+          <select id="fTradeVocab" class="form-input" style="max-width:320px;">
+            <option value="">None — no trade vocabulary linked</option>
+          </select>
+          <div class="form-hint">Links this container to a GlobalShare trade vocabulary. CueExtractor routes callers using these terms — no need to copy terms into sections.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1818,6 +1825,21 @@ async function _loadCategoryOptions() {
   } catch (_e) {}
 }
 
+async function _loadTradeVocabDropdown(currentKey) {
+  const sel = document.getElementById('fTradeVocab');
+  if (!sel) return;
+  try {
+    const pi = await apiFetch('/api/admin/globalshare/phrase-intelligence');
+    const vocabs = pi.tradeVocabularies || [];
+    sel.innerHTML = '<option value="">None — no trade vocabulary linked</option>' +
+      vocabs.map(v =>
+        `<option value="${_esc(v.tradeKey)}"${v.tradeKey === currentKey ? ' selected' : ''}>${_esc(v.label)} (${v.terms.length} terms)</option>`
+      ).join('');
+  } catch (_e) {
+    // Graceful degrade — dropdown stays with "None" option
+  }
+}
+
 // Load conflictMap from keyword-health — fire-and-forget, silently ignored if unavailable
 async function _loadConflictMap() {
   try {
@@ -1865,6 +1887,9 @@ function _populateForm(c) {
   document.getElementById('fActive').checked = c.isActive !== false;
   charCount(document.getElementById('fTitle'), 120, 'ccTitle');
   charCount(document.getElementById('fCategory'), 80, 'ccCategory');
+
+  // Trade vocabulary link
+  _loadTradeVocabDropdown(c.tradeVocabularyKey || '');
 
   // Fixed Response Mode — load state and sync UI immediately
   const fixedEl = document.getElementById('fUseFixedResponse');
@@ -3219,6 +3244,7 @@ async function saveContainer({ quiet = false } = {}) {
           closingPrompt:      (document.getElementById('fClosingPrompt')?.value || '').trim(),
           isActive:           document.getElementById('fActive').checked,
           priority:           parseInt(document.getElementById('fPriority').value, 10) || 100,
+          tradeVocabularyKey: document.getElementById('fTradeVocab')?.value || null,
           preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
           upsellChain:        [],
         })}
@@ -3260,6 +3286,7 @@ async function saveContainer({ quiet = false } = {}) {
     closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
     isActive:         document.getElementById('fActive').checked,
     priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
+    tradeVocabularyKey: document.getElementById('fTradeVocab')?.value || null,
     // preQualifyQuestion and upsellChain are now per-section (inside sections[])
     // NOT at container level — explicitly cleared so legacy data is not re-saved
     preQualifyQuestion: { text: '', fieldKey: 'preQualifyAnswer', options: [] },
@@ -3310,6 +3337,7 @@ function downloadJSON() {
     closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
     isActive:         document.getElementById('fActive').checked,
     priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
+    tradeVocabularyKey: document.getElementById('fTradeVocab')?.value || null,
   };
 
   // Inspection extras — beyond the save payload, useful for debugging routing issues

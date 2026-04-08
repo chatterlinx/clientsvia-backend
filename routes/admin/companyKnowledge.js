@@ -203,6 +203,7 @@ const ALLOWED_FIELDS = [
   'closingPrompt',
   'isActive',
   'priority',
+  'tradeVocabularyKey', // GlobalShare trade vocabulary link — CueExtractor reads global terms for this container
 ];
 
 // Allowed fields for settings PATCH

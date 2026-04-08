@@ -515,6 +515,16 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       default: 100,
       min:     1,
       comment: 'Sort order when multiple containers are loaded — lower = higher priority in tie-breaking'
+    },
+
+    // ── Trade Vocabulary Link — reference to GlobalShare trade vocabulary ──
+    // Links this container to a shared industry vocabulary (e.g. "HVAC", "PLUMBING").
+    // CueExtractor reads terms from the global library at runtime — no copying.
+    // Null = no link, falls back to per-section tradeTerms[] only.
+    tradeVocabularyKey: {
+      type:    String,
+      default: null,
+      comment: 'Key linking to GlobalShare trade vocabulary. CueExtractor reads global terms for this container.'
     }
   },
   {

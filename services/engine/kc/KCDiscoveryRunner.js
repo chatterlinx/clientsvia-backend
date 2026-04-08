@@ -800,15 +800,19 @@ class KCDiscoveryRunner {
         );
 
         if (fullContainer) {
-          const targetSection = fullContainer.sections?.[bestTrade.sectionIdx] || null;
+          // sectionIdx = -1 means container-level vocab link (no section targeting)
+          const isContainerLevel = bestTrade.sectionIdx === -1;
+          const targetSection = isContainerLevel
+            ? null
+            : (fullContainer.sections?.[bestTrade.sectionIdx] || null);
 
           // ── Anchor confirmation (GATE 2.4b) ──────────────────────────
-          // Check if ≥90% of any matching phrase's anchorWords appear in
-          // the utterance. This prevents routing on a trade term that
-          // happens to appear in a different conversational context.
+          // For container-level trade matches (global vocab): skip anchor
+          // check — the field count + trade match is sufficient signal.
+          // Groq reads all sections and synthesizes the answer.
           //
-          // If section has no anchorWords at all → skip confirmation (trust
-          // the cue field count + trade match as sufficient signal).
+          // For section-level trade matches (custom tradeTerms): check if
+          // ≥90% of any matching phrase's anchorWords appear in utterance.
           let anchorConfirmed = true;  // default: trust cue extraction
           if (targetSection) {
             const sectionPhrases = targetSection.callerPhrases || [];
@@ -817,7 +821,6 @@ class KCDiscoveryRunner {
             );
 
             if (phrasesWithAnchors.length > 0) {
-              // Check if ANY phrase's anchor words match the utterance
               const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
               const inputStems = new Set(rawWords.map(_stem));
               const inputExact = new Set(rawWords);
@@ -838,7 +841,7 @@ class KCDiscoveryRunner {
               tradeTerm:       bestTrade.term,
               containerId:     bestTrade.containerId,
               sectionIdx:      bestTrade.sectionIdx,
-              sectionLabel:    bestTrade.sectionLabel,
+              sectionLabel:    bestTrade.sectionLabel || '(container-level)',
               requestCue:      cueFrame.requestCue || null,
               actionCore:      cueFrame.actionCore || null,
               urgencyCore:     cueFrame.urgencyCore || null,
@@ -856,8 +859,8 @@ class KCDiscoveryRunner {
               score:            Math.round((cueFrame.fieldCount / 8) * 100),
               matchSource:      'CUE_EXTRACT',
               cueFrame,
-              targetSection,
-              targetSectionIdx: bestTrade.sectionIdx,
+              targetSection,                                      // null for container-level → Groq reads all sections
+              targetSectionIdx: isContainerLevel ? null : bestTrade.sectionIdx,
             };
           } else {
             logger.info('[KC_ENGINE] CUE EXTRACT — GATE 2.4b anchor fail, falling through', {

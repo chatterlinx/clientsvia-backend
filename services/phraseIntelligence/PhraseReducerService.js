@@ -135,21 +135,23 @@ async function _loadConfig() {
     const pi = settings?.globalHub?.phraseIntelligence;
 
     _cachedConfig = {
-      intentNormalizers: (pi?.intentNormalizers?.length > 0) ? pi.intentNormalizers : DEFAULT_INTENT_NORMALIZERS,
-      synonymGroups:     (pi?.synonymGroups?.length > 0)     ? pi.synonymGroups     : DEFAULT_SYNONYM_GROUPS,
-      stopWords:         (pi?.stopWords?.length > 0)         ? pi.stopWords         : DEFAULT_STOP_WORDS,
-      dangerWords:       (pi?.dangerWords?.length > 0)       ? pi.dangerWords       : DEFAULT_DANGER_WORDS,
-      cuePhrases:        (pi?.cuePhrases?.length > 0)        ? pi.cuePhrases        : [],
+      intentNormalizers:  (pi?.intentNormalizers?.length > 0) ? pi.intentNormalizers : DEFAULT_INTENT_NORMALIZERS,
+      synonymGroups:      (pi?.synonymGroups?.length > 0)     ? pi.synonymGroups     : DEFAULT_SYNONYM_GROUPS,
+      stopWords:          (pi?.stopWords?.length > 0)         ? pi.stopWords         : DEFAULT_STOP_WORDS,
+      dangerWords:        (pi?.dangerWords?.length > 0)       ? pi.dangerWords       : DEFAULT_DANGER_WORDS,
+      cuePhrases:         (pi?.cuePhrases?.length > 0)        ? pi.cuePhrases        : [],
+      tradeVocabularies:  Array.isArray(pi?.tradeVocabularies) ? pi.tradeVocabularies : [],
     };
     _cacheLoadedAt = now;
   } catch (err) {
     logger.warn('[PhraseReducer] Config load failed, using defaults', { error: err.message });
     _cachedConfig = {
-      intentNormalizers: DEFAULT_INTENT_NORMALIZERS,
-      synonymGroups:     DEFAULT_SYNONYM_GROUPS,
-      stopWords:         DEFAULT_STOP_WORDS,
-      dangerWords:       DEFAULT_DANGER_WORDS,
-      cuePhrases:        [],
+      intentNormalizers:  DEFAULT_INTENT_NORMALIZERS,
+      synonymGroups:      DEFAULT_SYNONYM_GROUPS,
+      stopWords:          DEFAULT_STOP_WORDS,
+      dangerWords:        DEFAULT_DANGER_WORDS,
+      cuePhrases:         [],
+      tradeVocabularies:  [],
     };
     _cacheLoadedAt = now;
   }
@@ -392,6 +394,16 @@ async function getCuePatterns() {
   return config.cuePhrases || [];
 }
 
+/**
+ * Public accessor for trade vocabularies (5-min cached from AdminSettings).
+ * Returns [{ tradeKey, label, terms[] }].
+ * Consumed by CueExtractorService for container-level trade matching.
+ */
+async function getTradeVocabularies() {
+  const config = await _loadConfig();
+  return config.tradeVocabularies || [];
+}
+
 module.exports = {
   reduce,
   reduceBatch,
@@ -399,6 +411,7 @@ module.exports = {
   invalidateCache,
   getSynonymGroups,
   getCuePatterns,
+  getTradeVocabularies,
   // Exposed for seeding/admin
   DEFAULT_INTENT_NORMALIZERS,
   DEFAULT_SYNONYM_GROUPS,
