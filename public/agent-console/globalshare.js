@@ -796,7 +796,9 @@
     stopWords:         [],
     dangerWords:       [],
     cuePhrases:        [],
+    tradeVocabularies: [],
   };
+  let _selectedTradeKey = null; // currently selected trade in TV tab
 
   async function loadPhraseIntelligence() {
     try {
@@ -807,13 +809,16 @@
       piState.stopWords        = data.stopWords        || [];
       piState.dangerWords      = data.dangerWords      || [];
       piState.cuePhrases       = data.cuePhrases       || [];
+      piState.tradeVocabularies = data.tradeVocabularies || [];
 
       _renderPiNormalizers();
       _renderPiSynonyms();
       _renderPiStopWords();
       _renderPiDangerWords();
       _renderPiCuePhrases();
+      _renderTradeList();
       _dedupCuePhrases(); // auto-clean duplicates on load
+      _updateStarterSetVisibility();
       _updatePiStat();
       _updatePiTabCounts();
       _bindPiTabs();
@@ -848,6 +853,7 @@
       stopwords:   piState.stopWords.length,
       dangerwords: piState.dangerWords.length,
       cuephrases:  piState.cuePhrases.length,
+      tradevocab:  piState.tradeVocabularies.length,
     };
     document.querySelectorAll('#pi-tabs .pi-tab').forEach(tab => {
       const key = tab.dataset.piTab;
@@ -1258,11 +1264,12 @@
 
   async function piSaveSection(section) {
     const dataMap = {
-      intentNormalizers: piState.intentNormalizers,
-      synonymGroups:     piState.synonymGroups,
-      stopWords:         piState.stopWords,
-      dangerWords:       piState.dangerWords,
-      cuePhrases:        piState.cuePhrases,
+      intentNormalizers:  piState.intentNormalizers,
+      synonymGroups:      piState.synonymGroups,
+      stopWords:          piState.stopWords,
+      dangerWords:        piState.dangerWords,
+      cuePhrases:         piState.cuePhrases,
+      tradeVocabularies:  piState.tradeVocabularies,
     };
     // Find the save button that triggered this call for visual feedback
     const panel = document.querySelector(`.pi-panel:not([style*="display: none"]):not([style*="display:none"])`);
@@ -1321,6 +1328,152 @@
     }
   }
 
+  // ── Load Starter Set ────────────────────────────────────────────────
+
+  /** Hide the starter set banner once actionCore/urgencyCore/modifierCore exist. */
+  function _updateStarterSetVisibility() {
+    const wrap = document.getElementById('pi-cue-starter-wrap');
+    if (!wrap) return;
+    const hasCore = piState.cuePhrases.some(c =>
+      c.token === 'actionCore' || c.token === 'urgencyCore' || c.token === 'modifierCore'
+    );
+    wrap.style.display = hasCore ? 'none' : 'flex';
+  }
+
+  async function piLoadStarterSet() {
+    if (!confirm('Load 54 universal patterns for actionCore, urgencyCore, and modifierCore?\n\nExisting patterns are preserved — duplicates are skipped.')) return;
+    try {
+      const result = await AgentConsoleAuth.apiFetch('/api/admin/globalshare/phrase-intelligence/cuePhrases/starter-set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const statusEl = document.getElementById('pi-cue-starter-status');
+      if (statusEl) {
+        statusEl.textContent = result.added > 0
+          ? `Added ${result.added} patterns (${result.total} total)`
+          : 'All patterns already loaded';
+        statusEl.style.display = '';
+      }
+      // Reload the full PI data to refresh the table
+      await loadPhraseIntelligence();
+    } catch (err) {
+      console.error('[GlobalShare] Starter set load failed:', err);
+      alert('Failed to load starter set: ' + err.message);
+    }
+  }
+
+  // ── Trade Vocabularies ─────────────────────────────────────────────
+
+  function _renderTradeList() {
+    const listEl = document.getElementById('pi-trade-list');
+    if (!listEl) return;
+    if (piState.tradeVocabularies.length === 0) {
+      listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:12px;">No trades defined yet.</div>';
+      _renderTradeDetail(null);
+      return;
+    }
+    listEl.innerHTML = piState.tradeVocabularies.map(tv => {
+      const isActive = tv.tradeKey === _selectedTradeKey;
+      return `<div class="pi-trade-item${isActive ? ' active' : ''}" data-trade-key="${escapeHtml(tv.tradeKey)}" onclick="piSelectTrade('${escapeHtml(tv.tradeKey)}')" style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;${isActive ? 'background:#eef2ff;' : ''}">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#1e293b;">${escapeHtml(tv.label)}</div>
+          <div style="font-size:11px;color:#94a3b8;">${tv.terms.length} term${tv.terms.length !== 1 ? 's' : ''}</div>
+        </div>
+        <span onclick="event.stopPropagation();piRemoveTrade('${escapeHtml(tv.tradeKey)}')" style="color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 4px;" title="Delete trade">&times;</span>
+      </div>`;
+    }).join('');
+    // If selected trade still exists, re-render detail
+    const found = piState.tradeVocabularies.find(tv => tv.tradeKey === _selectedTradeKey);
+    _renderTradeDetail(found || null);
+  }
+
+  function _renderTradeDetail(trade) {
+    const emptyEl = document.getElementById('pi-trade-empty');
+    const termsWrap = document.getElementById('pi-trade-terms-wrap');
+    const headerEl = document.getElementById('pi-trade-detail-header');
+    if (!trade) {
+      if (emptyEl) emptyEl.style.display = '';
+      if (termsWrap) termsWrap.style.display = 'none';
+      if (headerEl) headerEl.innerHTML = '<span style="font-size:12px;font-weight:700;color:#334155;">Select a trade to manage terms</span>';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (termsWrap) termsWrap.style.display = '';
+    if (headerEl) headerEl.innerHTML = `<span style="font-size:12px;font-weight:700;color:#334155;">${escapeHtml(trade.label)}</span><span style="font-size:11px;color:#94a3b8;">${trade.terms.length} terms</span>`;
+
+    const tagsEl = document.getElementById('pi-trade-terms-tags');
+    if (tagsEl) {
+      tagsEl.innerHTML = trade.terms.map((term, i) =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#eef2ff;color:#3730a3;border-radius:999px;font-size:12px;font-weight:500;">
+          ${escapeHtml(term)}
+          <span onclick="piRemoveTradeTerm(${i})" style="cursor:pointer;color:#6366f1;font-size:14px;line-height:1;">&times;</span>
+        </span>`
+      ).join('');
+    }
+  }
+
+  function piSelectTrade(tradeKey) {
+    _selectedTradeKey = tradeKey;
+    _renderTradeList();
+  }
+
+  function piAddTrade() {
+    const label = prompt('Trade name (e.g. HVAC, Plumbing, Dental):');
+    if (!label || !label.trim()) return;
+    const tradeKey = label.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    if (piState.tradeVocabularies.some(tv => tv.tradeKey === tradeKey)) {
+      alert(`Trade "${tradeKey}" already exists.`);
+      return;
+    }
+    piState.tradeVocabularies.push({ tradeKey, label: label.trim(), terms: [] });
+    _selectedTradeKey = tradeKey;
+    _renderTradeList();
+    _updatePiTabCounts();
+    _autoSave('pi', 'tradeVocabularies');
+  }
+
+  function piRemoveTrade(tradeKey) {
+    const tv = piState.tradeVocabularies.find(t => t.tradeKey === tradeKey);
+    if (!tv) return;
+    if (!confirm(`Delete trade "${tv.label}" and all its terms?`)) return;
+    piState.tradeVocabularies = piState.tradeVocabularies.filter(t => t.tradeKey !== tradeKey);
+    if (_selectedTradeKey === tradeKey) _selectedTradeKey = null;
+    _renderTradeList();
+    _updatePiTabCounts();
+    _autoSave('pi', 'tradeVocabularies');
+  }
+
+  function piAddTradeTerm() {
+    const tv = piState.tradeVocabularies.find(t => t.tradeKey === _selectedTradeKey);
+    if (!tv) return;
+    const input = document.getElementById('pi-trade-term-input');
+    if (!input) return;
+    const parts = input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const term of parts) {
+      if (!tv.terms.includes(term)) {
+        tv.terms.push(term);
+        added++;
+      }
+    }
+    input.value = '';
+    if (added > 0) {
+      tv.terms.sort();
+      _renderTradeDetail(tv);
+      _renderTradeList();
+      _autoSave('pi', 'tradeVocabularies');
+    }
+  }
+
+  function piRemoveTradeTerm(idx) {
+    const tv = piState.tradeVocabularies.find(t => t.tradeKey === _selectedTradeKey);
+    if (!tv) return;
+    tv.terms.splice(idx, 1);
+    _renderTradeDetail(tv);
+    _renderTradeList();
+    _autoSave('pi', 'tradeVocabularies');
+  }
+
   // Expose PI functions for inline onclick handlers
   window.piAddNormalizer     = piAddNormalizer;
   window.piRemoveNormalizer  = piRemoveNormalizer;
@@ -1337,6 +1490,12 @@
   window.piTestCueDetection  = piTestCueDetection;
   window.piSaveSection       = piSaveSection;
   window.piTestPhrase        = piTestPhrase;
+  window.piLoadStarterSet    = piLoadStarterSet;
+  window.piSelectTrade       = piSelectTrade;
+  window.piAddTrade          = piAddTrade;
+  window.piRemoveTrade       = piRemoveTrade;
+  window.piAddTradeTerm      = piAddTradeTerm;
+  window.piRemoveTradeTerm   = piRemoveTradeTerm;
 
   // ══════════════════════════════════════════════════════════════════════════
   // UTILITIES

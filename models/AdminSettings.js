@@ -1068,6 +1068,7 @@ const adminSettingsSchema = new mongoose.Schema({
                 stopWords:         [],   // ["i","you","we","the","a","an","my","your",…]
                 dangerWords:       [],   // ["not","no","emergency","cancel","urgent"]
                 cuePhrases:        [],   // [{ pattern: "can you", token: "requestCue" }]
+                tradeVocabularies: [],   // [{ tradeKey: "HVAC", label: "HVAC", terms: ["ac maintenance",…] }]
             },
             description: 'Phrase Intelligence — global English rules for phrase reduction (T3 scoring)'
         },

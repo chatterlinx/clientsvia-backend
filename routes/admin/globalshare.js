@@ -561,6 +561,7 @@ router.get('/phrase-intelligence', async (req, res) => {
                 ? pi.dangerWords
                 : PhraseReducerService.DEFAULT_DANGER_WORDS,
             cuePhrases: pi.cuePhrases || [],
+            tradeVocabularies: pi.tradeVocabularies || [],
             updatedAt: pi.updatedAt || settings?.globalHub?.phraseIntelligenceUpdatedAt || null,
             updatedBy: pi.updatedBy || settings?.globalHub?.phraseIntelligenceUpdatedBy || null,
         });
@@ -575,7 +576,7 @@ router.get('/phrase-intelligence', async (req, res) => {
  * Save one section of the phrase intelligence config.
  * section: 'intentNormalizers' | 'synonymGroups' | 'stopWords' | 'dangerWords'
  */
-const VALID_PI_SECTIONS = ['intentNormalizers', 'synonymGroups', 'stopWords', 'dangerWords', 'cuePhrases'];
+const VALID_PI_SECTIONS = ['intentNormalizers', 'synonymGroups', 'stopWords', 'dangerWords', 'cuePhrases', 'tradeVocabularies'];
 
 router.patch('/phrase-intelligence/:section', async (req, res) => {
     try {
@@ -614,6 +615,120 @@ router.patch('/phrase-intelligence/:section', async (req, res) => {
         res.json({ success: true, section, count: data.length });
     } catch (error) {
         logger.error('[GlobalShare API] Save phrase intelligence error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// CUE PHRASES — STARTER SET
+// 54 universal patterns (actionCore, urgencyCore, modifierCore).
+// Template data for one-time bulk load via UI. NOT runtime code.
+// ════════════════════════════════════════════════════════════════════════════
+const CUE_STARTER_PATTERNS = [
+    // ── actionCore — universal action verbs ─────────────────────────────
+    { pattern: 'schedule', token: 'actionCore' },
+    { pattern: 'book', token: 'actionCore' },
+    { pattern: 'fix', token: 'actionCore' },
+    { pattern: 'repair', token: 'actionCore' },
+    { pattern: 'clean', token: 'actionCore' },
+    { pattern: 'replace', token: 'actionCore' },
+    { pattern: 'check', token: 'actionCore' },
+    { pattern: 'inspect', token: 'actionCore' },
+    { pattern: 'install', token: 'actionCore' },
+    { pattern: 'service', token: 'actionCore' },
+    { pattern: 'diagnose', token: 'actionCore' },
+    { pattern: 'set up', token: 'actionCore' },
+    { pattern: 'send someone', token: 'actionCore' },
+    { pattern: 'come out', token: 'actionCore' },
+    { pattern: 'look at', token: 'actionCore' },
+    { pattern: 'get checked', token: 'actionCore' },
+    { pattern: 'get fixed', token: 'actionCore' },
+    { pattern: 'tune up', token: 'actionCore' },
+    { pattern: 'flush', token: 'actionCore' },
+    { pattern: 'maintain', token: 'actionCore' },
+    { pattern: 'remove', token: 'actionCore' },
+    { pattern: 'upgrade', token: 'actionCore' },
+    { pattern: 'hook up', token: 'actionCore' },
+    { pattern: 'unclog', token: 'actionCore' },
+    { pattern: 'estimate', token: 'actionCore' },
+    // ── urgencyCore — universal urgency signals ─────────────────────────
+    { pattern: 'today', token: 'urgencyCore' },
+    { pattern: 'right now', token: 'urgencyCore' },
+    { pattern: 'right away', token: 'urgencyCore' },
+    { pattern: 'as soon as possible', token: 'urgencyCore' },
+    { pattern: 'asap', token: 'urgencyCore' },
+    { pattern: 'immediately', token: 'urgencyCore' },
+    { pattern: 'urgent', token: 'urgencyCore' },
+    { pattern: 'emergency', token: 'urgencyCore' },
+    { pattern: 'this morning', token: 'urgencyCore' },
+    { pattern: 'this afternoon', token: 'urgencyCore' },
+    { pattern: 'tonight', token: 'urgencyCore' },
+    { pattern: 'first thing', token: 'urgencyCore' },
+    { pattern: 'before the weekend', token: 'urgencyCore' },
+    { pattern: 'end of day', token: 'urgencyCore' },
+    { pattern: 'same day', token: 'urgencyCore' },
+    // ── modifierCore — universal time/scheduling patterns ───────────────
+    { pattern: 'next week', token: 'modifierCore' },
+    { pattern: 'tomorrow', token: 'modifierCore' },
+    { pattern: 'tomorrow morning', token: 'modifierCore' },
+    { pattern: 'tomorrow afternoon', token: 'modifierCore' },
+    { pattern: 'this week', token: 'modifierCore' },
+    { pattern: 'this weekend', token: 'modifierCore' },
+    { pattern: 'next month', token: 'modifierCore' },
+    { pattern: 'after hours', token: 'modifierCore' },
+    { pattern: 'in the morning', token: 'modifierCore' },
+    { pattern: 'in the afternoon', token: 'modifierCore' },
+    { pattern: 'in the evening', token: 'modifierCore' },
+    { pattern: 'early morning', token: 'modifierCore' },
+    { pattern: 'end of the month', token: 'modifierCore' },
+    { pattern: 'within the hour', token: 'modifierCore' },
+    { pattern: 'next friday', token: 'modifierCore' },
+];
+
+/**
+ * POST /api/admin/globalshare/phrase-intelligence/cuePhrases/starter-set
+ * Bulk-load universal starter patterns into cuePhrases.
+ * Merges without duplicates. Safe to call multiple times.
+ */
+router.post('/phrase-intelligence/cuePhrases/starter-set', async (req, res) => {
+    try {
+        logger.info('[GlobalShare API] Loading cue phrase starter set');
+
+        const settings = await AdminSettings.getSettings();
+        const pi = settings?.globalHub?.phraseIntelligence || {};
+        const existing = pi.cuePhrases || [];
+
+        // Build set of existing keys for dedup
+        const existingSet = new Set(existing.map(c => `${c.pattern.toLowerCase().trim()}|${c.token}`));
+
+        let added = 0;
+        const merged = [...existing];
+        for (const p of CUE_STARTER_PATTERNS) {
+            const key = `${p.pattern.toLowerCase().trim()}|${p.token}`;
+            if (!existingSet.has(key)) {
+                merged.push(p);
+                existingSet.add(key);
+                added++;
+            }
+        }
+
+        if (added > 0) {
+            const now = new Date();
+            await AdminSettings.findOneAndUpdate(
+                {},
+                { $set: {
+                    'globalHub.phraseIntelligence.cuePhrases': merged,
+                    'globalHub.phraseIntelligenceUpdatedAt': now,
+                    'globalHub.phraseIntelligenceUpdatedBy': req.user?.email || 'api'
+                }},
+                { upsert: true }
+            );
+            PhraseReducerService.invalidateCache();
+        }
+
+        res.json({ success: true, added, total: merged.length });
+    } catch (error) {
+        logger.error('[GlobalShare API] Starter set error:', error);
         res.status(500).json({ error: error.message });
     }
 });
