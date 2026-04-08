@@ -139,6 +139,7 @@ async function _loadConfig() {
       synonymGroups:     (pi?.synonymGroups?.length > 0)     ? pi.synonymGroups     : DEFAULT_SYNONYM_GROUPS,
       stopWords:         (pi?.stopWords?.length > 0)         ? pi.stopWords         : DEFAULT_STOP_WORDS,
       dangerWords:       (pi?.dangerWords?.length > 0)       ? pi.dangerWords       : DEFAULT_DANGER_WORDS,
+      cuePhrases:        (pi?.cuePhrases?.length > 0)        ? pi.cuePhrases        : [],
     };
     _cacheLoadedAt = now;
   } catch (err) {
@@ -148,6 +149,7 @@ async function _loadConfig() {
       synonymGroups:     DEFAULT_SYNONYM_GROUPS,
       stopWords:         DEFAULT_STOP_WORDS,
       dangerWords:       DEFAULT_DANGER_WORDS,
+      cuePhrases:        [],
     };
     _cacheLoadedAt = now;
   }
@@ -380,12 +382,23 @@ async function getSynonymGroups() {
   return config.synonymGroups || [];
 }
 
+/**
+ * Public accessor for cue phrases (5-min cached from AdminSettings).
+ * Returns [{ pattern, token }] — all 7 canonical cue types.
+ * Consumed by CueExtractorService for runtime 8-field extraction.
+ */
+async function getCuePatterns() {
+  const config = await _loadConfig();
+  return config.cuePhrases || [];
+}
+
 module.exports = {
   reduce,
   reduceBatch,
   extractProtectedPhrases,
   invalidateCache,
   getSynonymGroups,
+  getCuePatterns,
   // Exposed for seeding/admin
   DEFAULT_INTENT_NORMALIZERS,
   DEFAULT_SYNONYM_GROUPS,

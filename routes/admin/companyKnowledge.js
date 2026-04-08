@@ -54,6 +54,7 @@ const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
 const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthService');
 const BridgeService                = require('../../services/engine/kc/BridgeService');
+const CueExtractorService          = require('../../services/cueExtractor/CueExtractorService');
 const SemanticMatchService         = require('../../services/engine/kc/SemanticMatchService');
 const Customer                     = require('../../models/Customer');
 const InstantAudioService          = require('../../services/instantAudio/InstantAudioService');
@@ -524,6 +525,7 @@ router.post('/:companyId/knowledge', async (req, res) => {
       logger.warn('[companyKnowledge] cache invalidation failed on POST', { companyId, e: e.message })
     );
     BridgeService.invalidate(companyId).catch(() => {});
+    CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
     // Fire-and-forget: embed callerPhrases + section content via SemanticMatchService
     setImmediate(async () => {
@@ -1633,6 +1635,7 @@ router.post('/:companyId/knowledge/enable-all-fixed', async (req, res) => {
     // Invalidate runtime caches
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
     BridgeService.invalidate(companyId).catch(() => {});
+    CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
     logger.info('[companyKnowledge] enable-all-fixed complete', {
       companyId, containersUpdated, sectionsEnabled, alreadyEnabled,
@@ -1698,6 +1701,7 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
       logger.warn('[companyKnowledge] cache invalidation failed on PATCH', { companyId, e: e.message })
     );
     BridgeService.invalidate(companyId).catch(() => {});
+    CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
     // Fire-and-forget: embed callerPhrases + section content + keyword health
     // ⚠️ CRITICAL: use targeted dot-notation $set for embeddings ONLY.
@@ -1777,6 +1781,7 @@ router.delete('/:companyId/knowledge/:id', async (req, res) => {
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
     BridgeService.invalidate(companyId).catch(() => {});
+    CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
     logger.info('[companyKnowledge] Soft-deleted container', { companyId, id });
     return res.json({ success: true, message: 'Knowledge container deactivated' });
@@ -1799,6 +1804,7 @@ router.delete('/:companyId/knowledge/:id/hard', async (req, res) => {
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
     BridgeService.invalidate(companyId).catch(() => {});
+    CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
     logger.info('[companyKnowledge] Hard-deleted container', { companyId, id });
     return res.json({ success: true, message: 'Knowledge container permanently deleted' });

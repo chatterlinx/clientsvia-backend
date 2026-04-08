@@ -57,6 +57,7 @@ const { buildSectionId }      = require('../../../utils/kcHelpers');
 
 // ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
+const CueExtractorService     = require('../../cueExtractor/CueExtractorService');
 
 // UAP confidence threshold — phrase match must reach this before Logic 2 runs
 const UAP_CONFIDENCE_THRESHOLD = 0.80;
@@ -78,6 +79,11 @@ const UAP_CONFIDENCE_THRESHOLD = 0.80;
 const ANCHOR_MATCH_THRESHOLD = 0.90;  // Logic 1: ≥90% of anchor words must match
 const CORE_MATCH_THRESHOLD   = 0.80;  // Logic 2: cosine(callerCore, phraseCore) ≥ 0.80
 
+// ── CueExtractor — GATE 2.4 thresholds ──────────────────────────────────────
+// fieldCount ≥ this AND tradeMatch present → proceed to GATE 2.4b anchor confirm
+const CUE_MIN_FIELD_COUNT   = 3;  // At least 3 of 8 cue fields must be populated
+// Anchor confirmation reuses ANCHOR_MATCH_THRESHOLD above
+
 // ============================================================================
 // PATH CONSTANTS
 // ============================================================================
@@ -94,6 +100,8 @@ const PATH = {
   // ── Sales funnel paths ────────────────────────────────────────────────────
   KC_PREQUAL_PENDING: 'KC_PREQUAL_PENDING',  // Pre-qualify question asked, waiting for caller answer
   KC_UPSELL_PENDING:  'KC_UPSELL_PENDING',   // Upsell offer sent, waiting for YES / NO
+  // ── CueExtractor paths ─────────────────────────────────────────────────────
+  KC_CUE_EXTRACT_HIT: 'KC_CUE_EXTRACT_HIT',  // CueExtractor match → routed to KC section
 };
 
 // ============================================================================
@@ -759,6 +767,120 @@ class KCDiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // GATE 2.4 — CUE EXTRACTOR — 8-field pattern match (<1ms)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Extracts 8 structured cue fields from the caller utterance using pure
+    // string matching: requestCue, permissionCue, infoCue, directiveCue,
+    // actionCore, urgencyCore, modifierCore, tradeCore (via section tradeTerms).
+    //
+    // Always writes cueFrame to discoveryNotes (enrichment for downstream + Groq).
+    //
+    // GATE 2.4b routing condition:
+    //   fieldCount >= CUE_MIN_FIELD_COUNT (3) AND tradeMatches has at least one
+    //   hit → hydrate container + section → route directly.
+    //
+    // GRACEFUL DEGRADE: Any error → fall through to GATE 2.5 (UAP unchanged).
+    // ══════════════════════════════════════════════════════════════════════════
+
+    let match = null;
+    let cueFrame = null;
+
+    try {
+      cueFrame = await CueExtractorService.extract(companyId, userInput);
+
+      // Always write cueFrame to discoveryNotes (fire-and-forget enrichment)
+      _writeDiscoveryNotes(companyId, callSid, { cueFrame }).catch(() => {});
+
+      if (cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT && cueFrame.tradeMatches.length > 0) {
+        // ── GATE 2.4b — Route via best trade match ───────────────────────
+        // First trade match wins (CueExtractor sorts longest-first).
+        const bestTrade = cueFrame.tradeMatches[0];
+        const fullContainer = scorableContainers.find(c =>
+          String(c._id || '') === bestTrade.containerId
+        );
+
+        if (fullContainer) {
+          const targetSection = fullContainer.sections?.[bestTrade.sectionIdx] || null;
+
+          // ── Anchor confirmation (GATE 2.4b) ──────────────────────────
+          // Check if ≥90% of any matching phrase's anchorWords appear in
+          // the utterance. This prevents routing on a trade term that
+          // happens to appear in a different conversational context.
+          //
+          // If section has no anchorWords at all → skip confirmation (trust
+          // the cue field count + trade match as sufficient signal).
+          let anchorConfirmed = true;  // default: trust cue extraction
+          if (targetSection) {
+            const sectionPhrases = targetSection.callerPhrases || [];
+            const phrasesWithAnchors = sectionPhrases.filter(p =>
+              p.anchorWords && p.anchorWords.length > 0
+            );
+
+            if (phrasesWithAnchors.length > 0) {
+              // Check if ANY phrase's anchor words match the utterance
+              const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+              const inputStems = new Set(rawWords.map(_stem));
+              const inputExact = new Set(rawWords);
+
+              anchorConfirmed = phrasesWithAnchors.some(phrase => {
+                const anchors = (phrase.anchorWords || []).map(w => (w || '').toLowerCase().trim()).filter(Boolean);
+                if (anchors.length === 0) return false;
+                const hits = anchors.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
+                return (hits / anchors.length) >= ANCHOR_MATCH_THRESHOLD;
+              });
+            }
+          }
+
+          if (anchorConfirmed) {
+            logger.info('[KC_ENGINE] CUE EXTRACT HIT — GATE 2.4b confirmed', {
+              companyId, callSid, turn,
+              fieldCount:      cueFrame.fieldCount,
+              tradeTerm:       bestTrade.term,
+              containerId:     bestTrade.containerId,
+              sectionIdx:      bestTrade.sectionIdx,
+              sectionLabel:    bestTrade.sectionLabel,
+              requestCue:      cueFrame.requestCue || null,
+              actionCore:      cueFrame.actionCore || null,
+              urgencyCore:     cueFrame.urgencyCore || null,
+            });
+            emit('KC_CUE_EXTRACT_HIT', {
+              companyId, callSid, turn,
+              fieldCount:   cueFrame.fieldCount,
+              tradeTerm:    bestTrade.term,
+              containerId:  bestTrade.containerId,
+              sectionIdx:   bestTrade.sectionIdx,
+            });
+
+            match = {
+              container:        fullContainer,
+              score:            Math.round((cueFrame.fieldCount / 8) * 100),
+              matchSource:      'CUE_EXTRACT',
+              cueFrame,
+              targetSection,
+              targetSectionIdx: bestTrade.sectionIdx,
+            };
+          } else {
+            logger.info('[KC_ENGINE] CUE EXTRACT — GATE 2.4b anchor fail, falling through', {
+              companyId, callSid, turn,
+              fieldCount:   cueFrame.fieldCount,
+              tradeTerm:    bestTrade.term,
+              sectionLabel: bestTrade.sectionLabel,
+            });
+          }
+        }
+      } else if (cueFrame.fieldCount > 0) {
+        logger.debug('[KC_ENGINE] CUE EXTRACT — enrichment only (fieldCount=%d, tradeMatches=%d)',
+          cueFrame.fieldCount, cueFrame.tradeMatches.length, {
+            companyId, callSid, turn,
+        });
+      }
+    } catch (_cueErr) {
+      logger.warn('[KC_ENGINE] CUE EXTRACT error — falling through to GATE 2.5', {
+        companyId, callSid, err: _cueErr.message,
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // GATE 2.5 — UAP LAYER 1 — Zero-latency phrase match  (<1ms)
     // ══════════════════════════════════════════════════════════════════════════
     // UtteranceActParser matches caller utterance against section.callerPhrases
@@ -770,10 +892,10 @@ class KCDiscoveryRunner {
     // GRACEFUL DEGRADE: Any UAP error returns NONE (confidence=0) → next gate.
     // ══════════════════════════════════════════════════════════════════════════
 
-    let match = null;
     let uapResult = null;
 
-    try {
+    // Only fire UAP if CueExtractor (GATE 2.4) didn't already resolve a match
+    if (!match) try {
       uapResult = await UtteranceActParser.parse(companyId, userInput);
 
       if (uapResult.containerId && uapResult.confidence >= UAP_CONFIDENCE_THRESHOLD) {

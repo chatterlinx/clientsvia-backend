@@ -160,6 +160,12 @@ function _buildEmptyNotes(companyId, callSid, customerId = null) {
                                // this container so the call stays on topic.
                                // Only displaced when a competitor scores 3× higher.
 
+    cueFrame:          null,   // CueExtractor 8-field extraction result per turn.
+                               // Written by GATE 2.4, consumed by downstream gates + Groq prompt.
+                               // Shape: { requestCue, permissionCue, infoCue, directiveCue,
+                               //          actionCore, urgencyCore, modifierCore,
+                               //          tradeMatches[], fieldCount, extractedAt }
+
     // ── Timestamps ──────────────────────────────────────────────────────────
     startedAt: now,
     updatedAt: now
@@ -373,6 +379,7 @@ async function persist(companyId, callSid, customerId) {
           'discoveryNotes.$[elem].objective':  notes.objective || 'INTAKE',
           'discoveryNotes.$[elem].turnCount':  notes.turnNumber || 0,
           'discoveryNotes.$[elem].qaLog':      notes.qaLog || [],
+          'discoveryNotes.$[elem].cueFrame':   notes.cueFrame || null,
           'discoveryNotes.$[elem].updatedAt':  new Date()
         }
       },
@@ -396,6 +403,7 @@ async function persist(companyId, callSid, customerId) {
               objective:   notes.objective || 'INTAKE',
               turnCount:   notes.turnNumber || 0,
               qaLog:       notes.qaLog || [],
+              cueFrame:    notes.cueFrame || null,
               startedAt:   notes.startedAt || null,
               updatedAt:   new Date()
             }
@@ -469,6 +477,23 @@ function formatForLLM(notes) {
   }
 
   if (notes.callReason) lines.push(`\ncallReason   : ${notes.callReason}`);
+
+  // ── Cue extraction summary (latest turn) ──────────────────────────────
+  const cf = notes.cueFrame;
+  if (cf && cf.fieldCount > 0) {
+    const cueHits = [];
+    if (cf.requestCue)    cueHits.push(`request="${cf.requestCue}"`);
+    if (cf.permissionCue) cueHits.push(`permission="${cf.permissionCue}"`);
+    if (cf.infoCue)       cueHits.push(`info="${cf.infoCue}"`);
+    if (cf.directiveCue)  cueHits.push(`directive="${cf.directiveCue}"`);
+    if (cf.actionCore)    cueHits.push(`action="${cf.actionCore}"`);
+    if (cf.urgencyCore)   cueHits.push(`urgency="${cf.urgencyCore}"`);
+    if (cf.modifierCore)  cueHits.push(`modifier="${cf.modifierCore}"`);
+    if (cf.tradeMatches?.length > 0) {
+      cueHits.push(`trade="${cf.tradeMatches.map(t => t.term).join(', ')}"`);
+    }
+    lines.push(`cueFrame     : [${cf.fieldCount}/8] ${cueHits.join(' | ')}`);
+  }
 
   // ── Anti-amnesia core ────────────────────────────────────────────────────
   if (notes.doNotReask && notes.doNotReask.length > 0) {
@@ -550,7 +575,7 @@ function _mergePatch(current, patch) {
   // ── Scalar fields ────────────────────────────────────────────────────────
   const SCALAR_FIELDS = [
     'callReason', 'urgency', 'priorVisit', 'employeeMentioned',
-    'objective', 'turnNumber', 'lastMeaningfulInput'
+    'objective', 'turnNumber', 'lastMeaningfulInput', 'cueFrame'
   ];
   for (const field of SCALAR_FIELDS) {
     if (patch[field] !== undefined && patch[field] !== null) {
@@ -685,6 +710,7 @@ function _initMongoStubFireAndForget(notes) {
           objective:  'INTAKE',
           turnCount:  0,
           qaLog:      [],
+          cueFrame:   null,
           startedAt:  notes.startedAt || null,
           updatedAt:  new Date()
         }
@@ -719,6 +745,7 @@ function _persistToMongoFireAndForget(notes) {
         'discoveryNotes.$[elem].urgency':   notes.urgency,
         'discoveryNotes.$[elem].objective': notes.objective,
         'discoveryNotes.$[elem].turnCount': notes.turnNumber,
+        'discoveryNotes.$[elem].cueFrame':  notes.cueFrame,
         'discoveryNotes.$[elem].updatedAt': new Date()
       }
     },
