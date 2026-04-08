@@ -485,13 +485,14 @@
       font-weight: 600; margin: 1px 2px;
     }
     .pq-intent-none { color: #cbd5e1; font-size: 11px; }
-    /* Cue type columns */
-    .pq-cue-cell { text-align: center; white-space: nowrap; min-width: 50px; }
-    .pq-cue-badge {
-      display: inline-block; font-size: 10px; font-weight: 600;
-      padding: 2px 8px; border-radius: 10px;
+    /* Cue type columns — compact checkmarks */
+    .pq-cue-cell { text-align: center; white-space: nowrap; width: 34px; min-width: 34px; max-width: 40px; padding: 4px 2px; }
+    .pq-cue-check {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; border-radius: 50%;
+      font-size: 11px; font-weight: 700; cursor: default;
     }
-    .pq-cue-none { color: #cbd5e1; font-size: 11px; }
+    .pq-th-cue { width: 34px; min-width: 34px; max-width: 40px; font-size: 9px; letter-spacing: 0; }
     /* Row delete button */
     .pq-row-delete {
       width: 22px; height: 22px; border: none; background: transparent;
@@ -1928,6 +1929,7 @@ function _populateForm(c) {
       phraseCore:         s.phraseCore   || null,
       contentCore:        s.contentCore  || null,
       negativeKeywords:   s.negativeKeywords || [],
+      tradeTerms:         s.tradeTerms || [],
       useFixedResponse:   !!s.useFixedResponse,
       audioUrl:           s.audioUrl || null,
       preQualifyQuestion: s.preQualifyQuestion || null,
@@ -1996,6 +1998,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
     // Independent per phrase — toggling one phrase's words never affects another.
     phraseAnchorWords: sectionMeta?.phraseAnchorWords || {},
     negativeKeywords: sectionMeta?.negativeKeywords || [],
+    tradeTerms:      sectionMeta?.tradeTerms || [],
     useFixedResponse,
     contentAudioUrl:  sectionMeta?.audioUrl || null,
     phraseScores:     sectionMeta?.phraseScores  || {},  // { phrase → { t1, t2, t3, tc, status } }
@@ -2156,6 +2159,21 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </div>
     </div>
 
+    <!-- 🏷️ Trade Terms — CueExtractor tradeCore matching ────────────── -->
+    <div class="section-tradeterms-wrap" id="tradeterms-wrap-${id}" style="padding:4px 14px 10px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:11px;font-weight:700;color:#3730a3;">🏷️ Trade Terms</span>
+        <span style="font-size:10px;color:#9ca3af;">— trade-specific words callers use for this topic (routing)</span>
+      </div>
+      <div class="keyword-input-wrap" id="secTradeWrap-${id}" onclick="document.getElementById('secTradeInner-${id}').focus()"
+        style="min-height:32px;padding:4px 6px;border-color:#c7d2fe;">
+        <input type="text" id="secTradeInner-${id}" class="kw-input-inner"
+          placeholder="e.g. 'ac maintenance', 'tune-up', 'duct cleaning'… Enter to add"
+          onkeydown="secTradeTermKeydown(event, ${id})"
+          style="font-size:12px;">
+      </div>
+    </div>
+
     <!-- ⚡ Per-section Fixed Response Mode strip ─────────────────────── -->
     <!-- OFF: neutral stone bar. ON: amber — Groq skipped, audio pre-cached. -->
     <div class="section-fixed-strip${useFixedResponse ? ' is-active' : ''}" id="sec-fixed-bar-${id}">
@@ -2289,6 +2307,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
   renderSectionUpsellItems(id);
   _renderCallerPhrases(id);
   _renderSecNegKeywords(id);
+  _renderSecTradeTerms(id);
 
   // Restore audio UI state from saved URLs (survive page refresh)
   if (sectionMeta?.audioUrl && useFixedResponse) {
@@ -2417,6 +2436,57 @@ function removeSecNegKeyword(sid, idx) {
   if (!data) return;
   data.negativeKeywords.splice(idx, 1);
   _renderSecNegKeywords(sid);
+  _debouncedAutoSave();
+}
+
+// ── Per-section trade terms (CueExtractor tradeCore) ────────────────────────
+function _renderSecTradeTerms(sid) {
+  const wrap  = document.getElementById(`secTradeWrap-${sid}`);
+  const input = document.getElementById(`secTradeInner-${sid}`);
+  if (!wrap || !input) return;
+
+  const data  = S.sectionData.get(sid);
+  const terms = data?.tradeTerms || [];
+
+  wrap.querySelectorAll('.kw-tag').forEach(t => t.remove());
+  terms.forEach((term, idx) => {
+    const tag       = document.createElement('span');
+    tag.className   = 'kw-tag';
+    tag.style.cssText = 'background:#eef2ff;color:#3730a3;border-color:#c7d2fe;';
+    tag.innerHTML   = `🏷️ ${_esc(term)} <button type="button" onclick="removeSecTradeTerm(${sid}, ${idx})">×</button>`;
+    wrap.insertBefore(tag, input);
+  });
+}
+
+function secTradeTermKeydown(e, sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const raw = e.target.value.trim();
+    if (!raw) return;
+    const parts = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let added = 0;
+    for (const val of parts) {
+      if (val && !data.tradeTerms.includes(val)) {
+        data.tradeTerms.push(val);
+        added++;
+      }
+    }
+    if (added) { _renderSecTradeTerms(sid); _debouncedAutoSave(); }
+    e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && data.tradeTerms.length) {
+    data.tradeTerms.pop();
+    _renderSecTradeTerms(sid);
+    _debouncedAutoSave();
+  }
+}
+
+function removeSecTradeTerm(sid, idx) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  data.tradeTerms.splice(idx, 1);
+  _renderSecTradeTerms(sid);
   _debouncedAutoSave();
 }
 
@@ -2628,6 +2698,7 @@ function _getSections() {
         phraseCore:         data.phraseCore   || undefined,
         contentCore:        data.contentCore  || undefined,
         negativeKeywords:   data.negativeKeywords || [],
+        tradeTerms:         data.tradeTerms || [],
         useFixedResponse:   !!data.useFixedResponse,
         audioUrl:           data.contentAudioUrl   || null,
         preQualifyQuestion: preQualifyQuestion     || null,
@@ -3783,13 +3854,19 @@ let CUE_PHRASES = []; // [{ pattern: "can you", token: "requestCue" }, ...] sort
 
 /**
  * _detectCues — scan a caller phrase for cue patterns from GlobalShare.
- * Returns { requestCue: "can you"|null, permissionCue: null, infoCue: null, directiveCue: null }
+ * Returns { requestCue, permissionCue, infoCue, directiveCue, actionCore, urgencyCore, modifierCore }
+ * Each value is the matched pattern string or null.
  * Token matching is case-insensitive (requestcue, requestCue, REQUESTCUE all work).
  */
-const _CUE_TOKEN_MAP = { requestcue: 'requestCue', permissioncue: 'permissionCue', infocue: 'infoCue', directivecue: 'directiveCue' };
+const _CUE_TOKEN_MAP = {
+  requestcue: 'requestCue', permissioncue: 'permissionCue', infocue: 'infoCue', directivecue: 'directiveCue',
+  actioncore: 'actionCore', urgencycore: 'urgencyCore', modifiercore: 'modifierCore',
+};
+const _CUE_FIELDS = ['requestCue', 'permissionCue', 'infoCue', 'directiveCue', 'actionCore', 'urgencyCore', 'modifierCore'];
 function _detectCues(phrase) {
   const lower = phrase.toLowerCase();
-  const result = { requestCue: null, permissionCue: null, infoCue: null, directiveCue: null };
+  const result = {};
+  for (const f of _CUE_FIELDS) result[f] = null;
   for (const cp of CUE_PHRASES) {
     const normToken = _CUE_TOKEN_MAP[(cp.token || '').toLowerCase()];
     if (!normToken || result[normToken]) continue; // unknown type or already found
@@ -3841,16 +3918,19 @@ function _buildPhraseRow(phrase, score, sid, idx, csResult) {
 
   // ── Cue detection — runs for both pending and scored rows ──
   const cues = _detectCues(phrase);
-  const _cueCell = (type, bg, fg) => {
+  const _cueCheck = (type, bg, fg) => {
     const val = cues[type];
     return val
-      ? `<td class="pq-cue-cell"><span class="pq-cue-badge" style="background:${bg};color:${fg}">${_esc(val)}</span></td>`
-      : '<td class="pq-cue-cell"><span class="pq-cue-none">—</span></td>';
+      ? `<td class="pq-cue-cell"><span class="pq-cue-check" style="background:${bg};color:${fg}" title="${_esc(val)}">✓</span></td>`
+      : '<td class="pq-cue-cell"></td>';
   };
-  const cueCells = _cueCell('requestCue', '#dbeafe', '#1e40af')
-    + _cueCell('permissionCue', '#fef9c3', '#854d0e')
-    + _cueCell('infoCue', '#d1fae5', '#065f46')
-    + _cueCell('directiveCue', '#fee2e2', '#991b1b');
+  const cueCells = _cueCheck('requestCue', '#dbeafe', '#1e40af')
+    + _cueCheck('permissionCue', '#fef9c3', '#854d0e')
+    + _cueCheck('infoCue', '#d1fae5', '#065f46')
+    + _cueCheck('directiveCue', '#fee2e2', '#991b1b')
+    + _cueCheck('actionCore', '#e0e7ff', '#3730a3')
+    + _cueCheck('urgencyCore', '#fce7f3', '#9d174d')
+    + _cueCheck('modifierCore', '#f0fdf4', '#166534');
 
   if (!score) {
     return `<tr class="pq-row-pending">
@@ -3956,10 +4036,13 @@ function _renderPhraseTable(sid) {
     <thead><tr>
       <th>Phrase</th>
       <th>Intent</th>
-      <th class="pq-th-center">Request</th>
-      <th class="pq-th-center">Permission</th>
-      <th class="pq-th-center">Info</th>
-      <th class="pq-th-center">Directive</th>
+      <th class="pq-th-center pq-th-cue">REQ</th>
+      <th class="pq-th-center pq-th-cue">PERM</th>
+      <th class="pq-th-center pq-th-cue">INFO</th>
+      <th class="pq-th-center pq-th-cue">DIR</th>
+      <th class="pq-th-center pq-th-cue">ACT</th>
+      <th class="pq-th-center pq-th-cue">URG</th>
+      <th class="pq-th-center pq-th-cue">MOD</th>
       <th>Core</th>
       <th class="pq-th-center">Match</th>
       ${hasCS ? '<th class="pq-th-center">Home</th>' : ''}
@@ -3967,7 +4050,7 @@ function _renderPhraseTable(sid) {
     </tr></thead><tbody>`;
 
   const csResults = data?.crossScanResults || {};
-  const colSpan   = hasCS ? 10 : 9;
+  const colSpan   = hasCS ? 13 : 12;
   phrases.forEach((phrase, idx) => {
     const csResult = csResults[phrase] || null;
     html += _buildPhraseRow(phrase, scores[phrase] || null, sid, idx, csResult);
@@ -4193,21 +4276,23 @@ function _downloadSectionPdf(sid) {
 
   const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-  const cueColors = {
-    requestCue:    { bg: '#dbeafe', fg: '#1e40af' },
-    permissionCue: { bg: '#fef9c3', fg: '#854d0e' },
-    infoCue:       { bg: '#d1fae5', fg: '#065f46' },
-    directiveCue:  { bg: '#fee2e2', fg: '#991b1b' },
-  };
+  const cueFields = [
+    { key: 'requestCue',    bg: '#dbeafe', fg: '#1e40af', label: 'REQ' },
+    { key: 'permissionCue', bg: '#fef9c3', fg: '#854d0e', label: 'PERM' },
+    { key: 'infoCue',       bg: '#d1fae5', fg: '#065f46', label: 'INFO' },
+    { key: 'directiveCue',  bg: '#fee2e2', fg: '#991b1b', label: 'DIR' },
+    { key: 'actionCore',    bg: '#e0e7ff', fg: '#3730a3', label: 'ACT' },
+    { key: 'urgencyCore',   bg: '#fce7f3', fg: '#9d174d', label: 'URG' },
+    { key: 'modifierCore',  bg: '#f0fdf4', fg: '#166534', label: 'MOD' },
+  ];
 
   let phraseRows = '';
   for (const p of phrases) {
     const cues = _detectCues(p);
-    const cueCells = ['requestCue','permissionCue','infoCue','directiveCue'].map(type => {
-      const val = cues[type];
-      if (!val) return '<td style="text-align:center;color:#cbd5e1;">—</td>';
-      const c = cueColors[type];
-      return `<td style="text-align:center;"><span style="background:${c.bg};color:${c.fg};padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;">${esc(val)}</span></td>`;
+    const cueCells = cueFields.map(({ key, bg, fg }) => {
+      const val = cues[key];
+      if (!val) return '<td style="text-align:center;"></td>';
+      return `<td style="text-align:center;"><span style="background:${bg};color:${fg};display:inline-block;width:18px;height:18px;line-height:18px;border-radius:50%;font-size:10px;font-weight:700;" title="${esc(val)}">✓</span></td>`;
     }).join('');
 
     const score  = data.phraseScores?.[p];
@@ -4249,8 +4334,8 @@ function _downloadSectionPdf(sid) {
 
     <h2>Phrase Table</h2>
     <table>
-      <thead><tr><th>Phrase</th><th style="text-align:center;">Request</th><th style="text-align:center;">Permission</th><th style="text-align:center;">Info</th><th style="text-align:center;">Directive</th><th>Core</th><th>Anchors</th></tr></thead>
-      <tbody>${phraseRows || '<tr><td colspan="7" style="color:#94a3b8;text-align:center;">No phrases</td></tr>'}</tbody>
+      <thead><tr><th>Phrase</th><th style="text-align:center;width:30px;font-size:9px;">REQ</th><th style="text-align:center;width:30px;font-size:9px;">PERM</th><th style="text-align:center;width:30px;font-size:9px;">INFO</th><th style="text-align:center;width:30px;font-size:9px;">DIR</th><th style="text-align:center;width:30px;font-size:9px;">ACT</th><th style="text-align:center;width:30px;font-size:9px;">URG</th><th style="text-align:center;width:30px;font-size:9px;">MOD</th><th>Core</th><th>Anchors</th></tr></thead>
+      <tbody>${phraseRows || '<tr><td colspan="10" style="color:#94a3b8;text-align:center;">No phrases</td></tr>'}</tbody>
     </table>
     ${pCore ? `<div class="core-strip" style="margin-top:10px;"><span class="core-label">Phrase Core →</span> ${esc(pCore)}</div>` : ''}
 

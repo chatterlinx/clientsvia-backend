@@ -1044,8 +1044,8 @@
     return removed;
   }
 
-  /** Rebuild the cue type <select> — 4 canonical types always present + any custom. */
-  const _CANONICAL_CUE_TYPES = ['requestCue', 'permissionCue', 'infoCue', 'directiveCue'];
+  /** Rebuild the cue type <select> — 7 canonical types always present + any custom. */
+  const _CANONICAL_CUE_TYPES = ['requestCue', 'permissionCue', 'infoCue', 'directiveCue', 'actionCore', 'urgencyCore', 'modifierCore'];
   function _refreshCueTypeDropdown() {
     const sel = document.getElementById('pi-cue-token');
     if (!sel) return;
@@ -1066,6 +1066,9 @@
       case 'permissioncue': return 'background:#fef9c3;color:#854d0e;';
       case 'infocue':       return 'background:#d1fae5;color:#065f46;';
       case 'directivecue':  return 'background:#fee2e2;color:#991b1b;';
+      case 'actioncore':    return 'background:#e0e7ff;color:#3730a3;';
+      case 'urgencycore':   return 'background:#fce7f3;color:#9d174d;';
+      case 'modifiercore':  return 'background:#f0fdf4;color:#166534;';
       default:              return 'background:#f1f5f9;color:#475569;';
     }
   }
@@ -1182,13 +1185,20 @@
 
   // ── Cue Tester ─────────────────────────────────────────────────────────
 
-  const _CUE_TOKEN_MAP = { requestcue: 'requestCue', permissioncue: 'permissionCue', infocue: 'infoCue', directivecue: 'directiveCue' };
-  const _CUE_COLORS = {
-    requestCue:    { bg: '#dbeafe', fg: '#1e40af', label: 'REQUEST' },
-    permissionCue: { bg: '#fef9c3', fg: '#854d0e', label: 'PERMISSION' },
-    infoCue:       { bg: '#d1fae5', fg: '#065f46', label: 'INFO' },
-    directiveCue:  { bg: '#fee2e2', fg: '#991b1b', label: 'DIRECTIVE' },
+  const _CUE_TOKEN_MAP = {
+    requestcue: 'requestCue', permissioncue: 'permissionCue', infocue: 'infoCue', directivecue: 'directiveCue',
+    actioncore: 'actionCore', urgencycore: 'urgencyCore', modifiercore: 'modifierCore',
   };
+  const _CUE_COLORS = {
+    requestCue:    { bg: '#dbeafe', fg: '#1e40af', label: 'REQ' },
+    permissionCue: { bg: '#fef9c3', fg: '#854d0e', label: 'PERM' },
+    infoCue:       { bg: '#d1fae5', fg: '#065f46', label: 'INFO' },
+    directiveCue:  { bg: '#fee2e2', fg: '#991b1b', label: 'DIR' },
+    actionCore:    { bg: '#e0e7ff', fg: '#3730a3', label: 'ACT' },
+    urgencyCore:   { bg: '#fce7f3', fg: '#9d174d', label: 'URG' },
+    modifierCore:  { bg: '#f0fdf4', fg: '#166534', label: 'MOD' },
+  };
+  const _CUE_FIELD_COUNT = Object.keys(_CUE_COLORS).length; // 7
 
   function piTestCueDetection() {
     const input = document.getElementById('pi-cue-test-input');
@@ -1203,38 +1213,38 @@
       .sort((a, b) => b.pattern.length - a.pattern.length); // longest first
 
     // Detect: first match per cue type (mirrors KC _detectCues exactly)
-    const result = { requestCue: null, permissionCue: null, infoCue: null, directiveCue: null };
-    const allMatches = { requestCue: [], permissionCue: [], infoCue: [], directiveCue: [] };
+    const result = {};
+    const allMatches = {};
+    for (const key of Object.keys(_CUE_COLORS)) { result[key] = null; allMatches[key] = []; }
     for (const cp of sorted) {
       const normToken = _CUE_TOKEN_MAP[(cp.token || '').toLowerCase()];
-      if (!normToken) continue;
+      if (!normToken || !_CUE_COLORS[normToken]) continue;
       if (lower.includes(cp.pattern)) {
         allMatches[normToken].push(cp.pattern);
         if (!result[normToken]) result[normToken] = cp.pattern;
       }
     }
 
-    // Render result — 4 columns like the KC phrase table
+    // Render result — 7 columns
     const matchCount = Object.values(result).filter(Boolean).length;
     let html = `<div style="display:flex;gap:6px;margin-bottom:8px;font-size:11px;color:#64748b;">
       <span>Phrase: <strong style="color:#1e293b;">"${escapeHtml(phrase)}"</strong></span>
-      <span style="margin-left:auto;">${matchCount} of 4 cue types matched · ${piState.cuePhrases.length} patterns checked</span>
+      <span style="margin-left:auto;">${matchCount} of ${_CUE_FIELD_COUNT} fields matched · ${piState.cuePhrases.length} patterns checked</span>
     </div>`;
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
+    html += `<div style="display:grid;grid-template-columns:repeat(${_CUE_FIELD_COUNT},1fr);gap:6px;">`;
     for (const [type, info] of Object.entries(_CUE_COLORS)) {
       const val = result[type];
       const extras = allMatches[type].filter(p => p !== val);
       if (val) {
-        html += `<div style="background:${info.bg};border:1px solid ${info.bg};border-radius:8px;padding:8px 10px;text-align:center;">
-          <div style="font-size:10px;font-weight:700;color:${info.fg};text-transform:uppercase;margin-bottom:3px;">${info.label}</div>
-          <div style="font-size:13px;font-weight:600;color:${info.fg};">"${escapeHtml(val)}"</div>
-          ${extras.length ? `<div style="font-size:10px;color:${info.fg};opacity:0.65;margin-top:2px;">also: ${extras.map(e => '"'+escapeHtml(e)+'"').join(', ')}</div>` : ''}
+        html += `<div style="background:${info.bg};border:1px solid ${info.bg};border-radius:8px;padding:6px 8px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;color:${info.fg};text-transform:uppercase;margin-bottom:2px;">${info.label}</div>
+          <div style="font-size:11px;font-weight:600;color:${info.fg};">"${escapeHtml(val)}"</div>
+          ${extras.length ? `<div style="font-size:9px;color:${info.fg};opacity:0.65;margin-top:2px;">+${extras.length} more</div>` : ''}
         </div>`;
       } else {
-        html += `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;text-align:center;">
-          <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:3px;">${info.label}</div>
-          <div style="font-size:13px;color:#cbd5e1;">—</div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">no pattern matched</div>
+        html += `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:2px;">${info.label}</div>
+          <div style="font-size:12px;color:#cbd5e1;">—</div>
         </div>`;
       }
     }
