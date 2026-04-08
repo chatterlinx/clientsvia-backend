@@ -1042,12 +1042,20 @@
       .join('');
   }
 
+  /** Normalize curly/smart quotes to straight apostrophes for consistent matching. */
+  function _normalizeCuePattern(s) {
+    return s.toLowerCase().trim()
+      .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")   // curly single quotes → straight
+      .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"');  // curly double quotes → straight
+  }
+
   /** Remove duplicate patterns (keep first occurrence). Returns count removed. */
   function _dedupCuePhrases() {
     const seen = new Set();
     const clean = [];
     for (const c of piState.cuePhrases) {
-      const key = c.pattern.toLowerCase().trim();
+      c.pattern = _normalizeCuePattern(c.pattern); // normalize in-place
+      const key = `${c.pattern}|${c.token}`;
       if (seen.has(key)) continue;
       seen.add(key);
       clean.push(c);
@@ -1120,10 +1128,10 @@
 
     if (!rawPatterns || !token) return;
     // Comma-separated patterns all share the same cue type
-    const patterns = rawPatterns.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 1);
+    const patterns = rawPatterns.split(',').map(s => _normalizeCuePattern(s)).filter(s => s.length > 1);
     let added = 0;
     for (const p of patterns) {
-      if (!piState.cuePhrases.some(c => c.pattern === p)) {
+      if (!piState.cuePhrases.some(c => _normalizeCuePattern(c.pattern) === p && c.token === token)) {
         piState.cuePhrases.push({ pattern: p, token });
         added++;
       }
