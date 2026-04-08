@@ -829,6 +829,20 @@ button { cursor: pointer; font-family: inherit; }
 .ob-in_progress{ background: var(--surface-2); color: var(--tx-muted); border: 1px solid var(--border); }
 .ob-callback_requested { background: var(--c-llm-bg); color: var(--c-llm); }
 
+/* Pipeline outcome badges — color-coded by engine path */
+.outcome-turn1   { background: var(--c-llm-bg);  color: var(--c-llm);  border: 1px solid var(--c-llm-border); }
+.outcome-kc      { background: var(--c-info-bg); color: var(--c-info); border: 1px solid var(--c-info-border); }
+.outcome-fallback{ background: var(--c-warn-bg); color: var(--c-warn); border: 1px solid var(--c-warn-border); }
+.outcome-booking { background: var(--c-ok-bg);   color: var(--c-ok);   border: 1px solid var(--c-ok-border); }
+.outcome-other   { background: var(--surface-2); color: var(--tx-muted); border: 1px solid var(--border); }
+
+/* Pipeline trace: code tags inside detail */
+.pipe-row code {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  background: var(--surface-2); color: var(--tx-secondary);
+  padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+}
+
 .divider { height: 1px; background: var(--border); margin: 16px 0; }
 .text-muted   { color: var(--tx-muted); }
 .text-sm      { font-size: 12px; }

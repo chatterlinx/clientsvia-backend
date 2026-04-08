@@ -2760,6 +2760,9 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
 
   const healthScore = calcHealthScore(summary, convTurns, discoveryNotes);
 
+  // Rich per-turn pipeline trace — Turn1Engine, UAP, Semantic, Groq, section IDs
+  const turnByTurnFlow = buildTurnByTurnFlow(rawTurns, _traceEvts);
+
   return {
     header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence, convTurns),
     engineHub: ehSummary,      // Engine Hub mode for this company — shown in sticky header
@@ -2775,6 +2778,7 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
     recommendations: intelligence?.recommendations?.length
       ? intelligence.recommendations
       : buildAutoRecommendations(summary, convTurns, discoveryNotes, kcMap),
+    turnByTurnFlow,                      // Rich per-turn pipeline trace (Turn1, UAP, Semantic, Groq)
     hasGpt4Analysis: !!intelligence,
     gpt4Meta: intelligence?.gpt4Analysis || null,
     engineeringScore: intelligence?.engineeringScore || null,

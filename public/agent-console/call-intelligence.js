@@ -349,7 +349,15 @@ async function openReport(callSid) {
 function renderReport(r) {
   const { header, story, vitals, protocolAudit, costBreakdown,
           turns, kcAudit, latencyProfile, entityTimeline,
-          issues, recommendations, hasGpt4Analysis, gpt4Meta } = r;
+          issues, recommendations, hasGpt4Analysis, gpt4Meta,
+          turnByTurnFlow } = r;
+
+  // Build turnFlowMap — indexed by turnNumber for O(1) lookup in renderTurnBlock
+  const turnFlowMap = {};
+  for (const step of (turnByTurnFlow || [])) {
+    if (step.turnNumber != null) turnFlowMap[step.turnNumber] = step;
+  }
+  state.turnFlowMap = turnFlowMap;
 
   // ── Sticky header ──────────────────────────────────────────────────────
   $('h-caller-name').textContent = header.callerName || header.phone || 'Unknown Caller';
@@ -374,7 +382,7 @@ function renderReport(r) {
     renderSectionStory(story, hasGpt4Analysis, header.callSid),
     renderSectionVitals(vitals, header.recordingUrl),
     renderSectionProtocol(protocolAudit),
-    renderSectionTurns(turns, header.companyId),
+    renderSectionTurns(turns, header.companyId, turnFlowMap),
     renderSectionKC(kcAudit, header.companyId),
     renderSectionLatency(latencyProfile),
     renderSectionEntities(entityTimeline),
@@ -515,7 +523,7 @@ function renderSectionProtocol(audit) {
 
 // ── S4: Turn-by-Turn Log ──────────────────────────────────────────────────────
 
-function renderSectionTurns(turns, companyId) {
+function renderSectionTurns(turns, companyId, turnFlowMap = {}) {
   const dlActions = `
     <button class="btn-dl btn-dl-json" title="Download turn log as JSON"
       onclick="downloadTurnsJson()">⬇ JSON</button>
@@ -528,7 +536,7 @@ function renderSectionTurns(turns, companyId) {
       false, dlActions);
   }
 
-  const turnBlocks = turns.map(t => renderTurnBlock(t, companyId)).join('');
+  const turnBlocks = turns.map(t => renderTurnBlock(t, companyId, turnFlowMap)).join('');
 
   return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log',
     `${turns.length} turns`, `<div class="turns-list">${turnBlocks}</div>`,
@@ -602,7 +610,42 @@ function downloadTurnsPdf() {
   win.document.close();
 }
 
-function renderTurnBlock(t, companyId) {
+// ── Pipeline outcome → human-readable label ───────────────────────────────
+function outcomeLabel(outcome) {
+  const map = {
+    'TURN1_SIMPLE_GREETING':    'Turn 1 · Greeting',
+    'TURN1_RETURNING_CALLER':   'Turn 1 · Returning',
+    'TURN1_CALLER_WITH_INTENT': 'Turn 1 · KC Answer',
+    'TURN1_DIDNT_UNDERSTAND':   'Turn 1 · Unclear',
+    'TURN1_ENGINE':             'Turn 1 Engine',
+    'KC_ANSWERED':              'KC Direct',
+    'KC_DIRECT_ANSWER':         'KC Direct',
+    'KC_BOOKING_INTENT':        'KC → Booking',
+    'KC_LLM_FALLBACK':          'LLM Fallback',
+    'KC_GRACEFUL_ACK':          'No KC Match',
+    'BOOKING_STEP':             'Booking Step',
+    'BOOKING_COMPLETE':         'Booking Done',
+    'BOOKING_HANDOFF':          'Booking Handoff',
+    'BOOKING_KC_DIGRESSION':    'KC (Booking)',
+    'TRIGGER_ANSWERED':         'Trigger',
+    'INTAKE':                   'Intake',
+    'LLM_ANSWERED':             'LLM Answer',
+    'STT_EMPTY':                'Silence',
+    'GHOST_SKIPPED':            'Ghost Turn',
+  };
+  return map[outcome] || outcome;
+}
+
+function outcomeClass(outcome) {
+  if (!outcome) return '';
+  if (outcome.startsWith('TURN1_'))   return 'outcome-turn1';
+  if (outcome.startsWith('BOOKING_')) return 'outcome-booking';
+  if (outcome === 'KC_LLM_FALLBACK' || outcome === 'KC_GRACEFUL_ACK') return 'outcome-fallback';
+  if (outcome.startsWith('KC_'))      return 'outcome-kc';
+  return 'outcome-other';
+}
+
+function renderTurnBlock(t, companyId, turnFlowMap = {}) {
   const isCaller = t.speaker === 'caller';
   const isAgent  = t.speaker === 'agent';
   const hasFlags  = t.flags?.length > 0;
@@ -641,6 +684,7 @@ function renderTurnBlock(t, companyId) {
   // 2) Pipeline trace (agent turns only — caller turns have no pipeline)
   let pipelineHtml = '';
   if (isAgent) {
+    const flow = turnFlowMap[t.turnNumber] || null;
     const pathLabel = t.provenancePath || '—';
     // KC card link — shown inline in pipeline trace for instant click-through
     const kcEditUrl  = t.kcCard ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(t.kcCard._id)}` : null;
@@ -657,17 +701,124 @@ function renderTurnBlock(t, companyId) {
            </span>
          </div>`
       : '';
-    const pipeRows = `
-      <div class="pipe-row"><span class="pr-stage">Provenance type</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
-      <div class="pipe-row"><span class="pr-stage">Path / handler</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
-      ${kcCardRow}
-      ${t.kind ? `<div class="pipe-row"><span class="pr-stage">Kind</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.kind)}</span></div>` : ''}
-      ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
-      ${t.score  ? `<div class="pipe-row"><span class="pr-stage">KC match score</span><span class="pr-icon">→</span><span class="pr-detail">${t.score.toFixed(2)}</span></div>` : ''}
-      ${t.latencyMs ? `<div class="pipe-row"><span class="pr-stage">Response latency</span><span class="pr-icon">→</span><span class="pr-detail">${t.latencyMs}ms</span></div>` : ''}
-      ${t.sourceKey  ? `<div class="pipe-row"><span class="pr-stage">Source key</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.sourceKey)}</span></div>` : ''}
-      <div class="pipe-row"><span class="pr-stage">DB turn #</span><span class="pr-icon">→</span><span class="pr-detail">${t.turnNumber ?? '—'}</span></div>
-    `;
+
+    // ── Build enhanced pipeline rows ─────────────────────────────────────
+    let pipeRows = '';
+
+    // Turn outcome badge (top of trace)
+    if (flow?.turnOutcome) {
+      pipeRows += `<div class="pipe-row"><span class="pr-stage" style="font-weight:700;">Outcome</span><span class="pr-icon">→</span>
+        <span class="pr-detail"><span class="outcome-badge ${outcomeClass(flow.turnOutcome)}">${esc(outcomeLabel(flow.turnOutcome))}</span></span></div>`;
+    }
+
+    // Turn1Engine details (turn 1 only)
+    if (flow?.turn1Engine) {
+      const t1 = flow.turn1Engine;
+      pipeRows += `<div class="pipe-row"><span class="pr-stage">T1 Lane</span><span class="pr-icon">→</span>
+        <span class="pr-detail"><code>${esc(t1.lane || '—')}</code></span></div>`;
+      if (t1.callerName) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Caller Name</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${esc(t1.callerName)}</span></div>`;
+      }
+      if (t1.prefix) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">T1 Prefix</span><span class="pr-icon">→</span>
+          <span class="pr-detail" style="font-style:italic;">"${esc(t1.prefix)}"</span></div>`;
+      }
+      if (t1.uapConfidence != null) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">UAP Confidence</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${(t1.uapConfidence * 100).toFixed(0)}%</span></div>`;
+      }
+      if (t1.isKnown) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Known Caller</span><span class="pr-icon">→</span>
+          <span class="pr-detail">✓ Yes</span></div>`;
+      }
+    }
+
+    // Discovery Wire path
+    if (flow?.discoveryWirePath) {
+      pipeRows += `<div class="pipe-row"><span class="pr-stage">Wire Path</span><span class="pr-icon">→</span>
+        <span class="pr-detail"><code>${esc(flow.discoveryWirePath)}</code></span></div>`;
+    }
+
+    // KC Engine details (container + section + path)
+    if (flow?.kcEngine) {
+      const kce = flow.kcEngine;
+      if (kce.path) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">KC Path</span><span class="pr-icon">→</span>
+          <span class="pr-detail"><code>${esc(kce.path)}</code></span></div>`;
+      }
+      if (kce.containerTitle) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Container</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${kce.kcId ? `<code>${esc(kce.kcId)}</code> · ` : ''}${esc(kce.containerTitle)}</span></div>`;
+      }
+      if (kce.sectionIdx != null) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Section</span><span class="pr-icon">→</span>
+          <span class="pr-detail">#${kce.sectionIdx}${kce.sectionId ? ` · <code>${esc(kce.sectionId)}</code>` : ''}</span></div>`;
+      }
+      if (kce.matchScore != null) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Match Score</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${typeof kce.matchScore === 'number' ? kce.matchScore.toFixed(2) : kce.matchScore}</span></div>`;
+      }
+      if (kce.groqIntent) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Groq Intent</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${esc(kce.groqIntent)}</span></div>`;
+      }
+      if (kce.groqLatencyMs) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Groq Latency</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${kce.groqLatencyMs}ms</span></div>`;
+      }
+      // LLM fallback diagnostics
+      if (kce.llmFallback) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage" style="color:#b45309;">Fallback Reason</span><span class="pr-icon">→</span>
+          <span class="pr-detail" style="color:#b45309;">${esc(kce.llmFallbackReason || '—')}</span></div>`;
+        if (kce.containerCount != null) {
+          pipeRows += `<div class="pipe-row"><span class="pr-stage">Containers Searched</span><span class="pr-icon">→</span>
+            <span class="pr-detail">${kce.containerCount}${kce.containerTitles?.length ? ' (' + kce.containerTitles.map(t2 => esc(t2)).join(', ') + ')' : ''}</span></div>`;
+        }
+      }
+      // Graceful ACK flag
+      if (kce.gracefulAck) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage" style="color:#dc2626;">Graceful ACK</span><span class="pr-icon">→</span>
+          <span class="pr-detail" style="color:#dc2626;">All AI paths exhausted — canned response</span></div>`;
+      }
+    }
+
+    // Agent response (what the agent actually said)
+    if (flow?.agentResponse?.text) {
+      const respText = flow.agentResponse.text.length > 200
+        ? flow.agentResponse.text.substring(0, 200) + '…'
+        : flow.agentResponse.text;
+      pipeRows += `<div class="pipe-row"><span class="pr-stage" style="font-weight:600;">Agent Said</span><span class="pr-icon">→</span>
+        <span class="pr-detail" style="font-style:italic;color:#1e293b;">"${esc(respText)}"</span></div>`;
+      if (flow.agentResponse.source) {
+        pipeRows += `<div class="pipe-row"><span class="pr-stage">Response Source</span><span class="pr-icon">→</span>
+          <span class="pr-detail">${esc(flow.agentResponse.source)}</span></div>`;
+      }
+    }
+
+    // Section trail
+    if (flow?.sectionTrail) {
+      pipeRows += `<div class="pipe-row"><span class="pr-stage">Section Trail</span><span class="pr-icon">→</span>
+        <span class="pr-detail">${esc(flow.sectionTrail)}</span></div>`;
+    }
+
+    // Fallback: legacy fields from convTurns (for old calls without rich trace)
+    if (!flow) {
+      pipeRows += `
+        <div class="pipe-row"><span class="pr-stage">Provenance</span><span class="pr-icon">→</span><span class="pr-detail">${esc(provLabel)}</span></div>
+        <div class="pipe-row"><span class="pr-stage">Path</span><span class="pr-icon">→</span><span class="pr-detail">${esc(pathLabel)}</span></div>
+        ${kcCardRow}
+        ${t.kind ? `<div class="pipe-row"><span class="pr-stage">Kind</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.kind)}</span></div>` : ''}
+        ${t.intent ? `<div class="pipe-row"><span class="pr-stage">Detected intent</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.intent)}</span></div>` : ''}
+        ${t.score  ? `<div class="pipe-row"><span class="pr-stage">KC match score</span><span class="pr-icon">→</span><span class="pr-detail">${t.score.toFixed(2)}</span></div>` : ''}
+        ${t.latencyMs ? `<div class="pipe-row"><span class="pr-stage">Response latency</span><span class="pr-icon">→</span><span class="pr-detail">${t.latencyMs}ms</span></div>` : ''}
+        ${t.sourceKey  ? `<div class="pipe-row"><span class="pr-stage">Source key</span><span class="pr-icon">→</span><span class="pr-detail">${esc(t.sourceKey)}</span></div>` : ''}
+      `;
+    }
+
+    // Always show turn number
+    pipeRows += `<div class="pipe-row"><span class="pr-stage">DB turn #</span><span class="pr-icon">→</span><span class="pr-detail">${t.turnNumber ?? '—'}</span></div>`;
+
     pipelineHtml = `
       <div class="td-section">
         <div class="td-sec-title">Pipeline Trace</div>
