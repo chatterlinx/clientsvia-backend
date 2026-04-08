@@ -28,7 +28,7 @@
  *   POST   /:companyId/knowledge/generate-keywords      — Groq keyword generation (pre-save)
  *   POST   /:companyId/knowledge/generate-phrases       — Groq caller phrase generation (per section)
  *   POST   /:companyId/knowledge/analyze-gaps           — Content Coach gap analysis (per section)
- *   POST   /:companyId/knowledge/generate-sample        — Groq-generated ideal response example
+ *   POST   /:companyId/knowledge/generate-sample        — Groq-generated response style guide
  *   POST   /:companyId/knowledge/preview-fixed-audio    — 🎙️ Generate + return URL for ⚡ Fixed section audio
  *   POST   /:companyId/knowledge/regenerate-audio       — Batch-regenerate all missing KC section audio
  *   POST   /:companyId/knowledge/enable-all-fixed       — Bulk-enable useFixedResponse on all sections
@@ -1397,7 +1397,7 @@ router.post('/:companyId/knowledge/preview-fixed-audio', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /:companyId/knowledge/generate-sample — ✨ Generate Ideal Response Example
+// POST /:companyId/knowledge/generate-sample — ✨ Generate Response Style Guide
 //
 // Groq reads the KC section content and writes a ~30-word spoken-word sample
 // answer in the company's trade/service context. Owner reviews before saving.
@@ -1424,13 +1424,21 @@ router.post('/:companyId/knowledge/generate-sample', async (req, res) => {
     const trade   = company?.trade || (company?.tradeCategories || [])[0] || 'home services';
     const name    = company?.companyName || 'the company';
 
-    const system = `You are a script writer for ${name}, a ${trade} company.
-Write ONE ideal spoken-phone-call answer (25–35 words) for a caller asking about the topic below.
+    const system = `You are a coaching assistant for ${name}, a ${trade} company.
+Your job is to write a RESPONSE STYLE GUIDE that tells an AI phone agent HOW to answer questions about the topic below. This is NOT the answer itself — it is coaching instructions for the agent.
+
+Write 2-4 concise directive sentences covering:
+- TONE: How should the agent sound? (warm, confident, reassuring, etc.)
+- KEY FACTS: Which specific details (prices, timeframes, features) MUST be mentioned?
+- OFFER: What should the agent naturally suggest? (booking, follow-up, upgrade, etc.)
+- AVOID: Anything the agent should NOT say or assume?
+
 Rules:
-- Sound like a real, warm human on the phone — not a webpage or chatbot
-- Include one specific detail from the content (price, feature, timeframe, etc.)
-- End with a natural offer to schedule or help further if appropriate
-- Return ONLY the answer text — no quotes, no labels, no explanation`;
+- Write as directives: "Mention the $89 price point", "Keep it reassuring", "Offer to schedule"
+- Be specific — reference actual numbers, features, and terms from the content
+- Keep it under 60 words total — punchy coaching, not a paragraph
+- Do NOT write the actual phone response — write the style instructions
+- Return ONLY the directive text — no quotes, no labels, no bullet markers, no numbering`;
 
     const userMsg = `Topic: ${title || category || 'general service question'}
 ${category ? `Category: ${category}` : ''}
@@ -1443,8 +1451,8 @@ ${sectionText.trim().slice(0, 1200)}`;
       model:       'llama-3.3-70b-versatile',
       system,
       messages:    [{ role: 'user', content: userMsg }],
-      maxTokens:   120,
-      temperature: 0.6,
+      maxTokens:   180,
+      temperature: 0.5,
     });
 
     const sample = (result.response || '').trim().replace(/^["']|["']$/g, '');

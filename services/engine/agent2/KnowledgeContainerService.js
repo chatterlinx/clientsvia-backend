@@ -409,7 +409,7 @@ function _buildContainerBlock(container, targetSection = null) {
  * @param {string}  opts.containerBlock    — formatted LABEL: content sections
  * @param {number}  opts.wordLimit         — resolved effective word limit
  * @param {boolean} opts.wordLimitEnabled  — false = omit the hard word cap from the prompt
- * @param {string}  [opts.sampleResponse]  — ideal example answer; injected as a guardrail so Groq matches length + tone
+ * @param {string}  [opts.sampleResponse]  — coaching directives (tone, key facts, offers, avoidances) injected as a style guide for Groq
  * @param {string}  opts.bookingOfferMode  — 'groq' | 'fixed'
  * @param {string}  opts.bookingOfferPhrase — used when mode is 'fixed'
  * @param {string}  opts.bookingAction     — container-level booking action
@@ -490,9 +490,9 @@ function _buildSystemPrompt({
   const wordCapRule        = wordLimitEnabled
     ? `Keep your response under ${effectiveWordLimit} words — this is a spoken phone answer, not a text message.`
     : 'Keep your response concise and spoken-word natural — phone call, not a text message.';
-  // Sample response guardrail — teaches Groq length and tone without prescribing exact words
+  // Response Style Guide — coaching directives that tell Groq HOW to answer (tone, key facts, offers, avoidances)
   const sampleBlock        = sampleResponse?.trim()
-    ? `\nIDEAL RESPONSE EXAMPLE (match this length and tone — do NOT copy verbatim, generate a fresh natural response):\n"${sampleResponse.trim()}"\n`
+    ? `\nRESPONSE STYLE GUIDE (follow these coaching directives for tone, key facts, and approach):\n${sampleResponse.trim()}\n`
     : '';
 
   // ── PERSONALIZATION ────────────────────────────────────────────────────────

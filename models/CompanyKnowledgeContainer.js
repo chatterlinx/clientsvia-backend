@@ -460,7 +460,7 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       default:   null,
       trim:      true,
       maxlength: 600,
-      comment:   'Ideal example answer for this container. Injected into Groq prompt as a length/tone guardrail — shows Groq exactly what a perfect response looks like.'
+      comment:   'Response style guide — coaching directives (tone, key facts, offers, avoidances) injected into Groq prompt as a guardrail for how to answer.'
     },
 
     bookingAction: {

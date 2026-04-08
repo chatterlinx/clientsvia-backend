@@ -1486,22 +1486,22 @@
           </div>
         </div>
 
-        <!-- Sample ideal response -->
+        <!-- Response Style Guide -->
         <div class="form-group full" style="margin-top:4px;">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
             <label class="form-label" for="fSampleResponse" style="margin:0;">
-              Ideal Response Example
-              <span class="form-label-badge" style="background:#e0f2fe;color:#0369a1;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Guardrail</span>
+              Response Style Guide
+              <span class="form-label-badge" style="background:#fef3c7;color:#92400e;font-size:.65rem;padding:1px 6px;border-radius:4px;margin-left:6px;">Groq Coaching</span>
             </label>
             <button type="button" id="btnGenSample" onclick="generateSampleResponse()"
               style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;">
-              ✨ Generate Example
+              ✨ Generate Guide
             </button>
           </div>
           <textarea id="fSampleResponse" class="form-input" rows="3" maxlength="600"
-            placeholder="Paste one perfect answer for this topic. Groq uses it to calibrate length and tone — it will never copy it word for word, just match the style.&#10;&#10;Example: &quot;Our annual maintenance plan is $149 and covers two tune-ups a year, plus priority scheduling. Would you like to get that set up today?&quot;"
+            placeholder="Tell the agent HOW to answer — tone, key facts to mention, what to offer, what to avoid.&#10;&#10;Example: Keep it warm and confident. Mention the $89 price and that it includes a full inspection. Offer to schedule. Don't quote repair costs — say you'd need to confirm."
             style="resize:vertical;font-size:.82rem;line-height:1.5;"></textarea>
-          <div class="form-hint">Optional but powerful. A 30-word example teaches Groq more about your preferred answer style than any instruction. Leave blank to rely on the word cap alone.</div>
+          <div class="form-hint">Coaching directives for Groq — not the answer itself. Tell it what tone, which facts to highlight, and what to offer. Click Generate to auto-create from your section content.</div>
         </div>
 
       </div><!-- /.groq-only-section -->
@@ -3168,7 +3168,7 @@ function _applyWordLimit(n) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GENERATE SAMPLE RESPONSE — ✨ button next to Ideal Response Example
+// GENERATE STYLE GUIDE — ✨ button next to Response Style Guide
 // ─────────────────────────────────────────────────────────────────────────────
 async function generateSampleResponse() {
   const btn = document.getElementById('btnGenSample');
@@ -3182,7 +3182,7 @@ async function generateSampleResponse() {
   ).filter(Boolean).join('\n\n');
 
   if (!sectionText.trim()) {
-    _toast('Add some section content first so Groq knows what to generate an example for', 'info');
+    _toast('Add some section content first so we can generate coaching directives', 'info');
     return;
   }
 
@@ -3200,12 +3200,12 @@ async function generateSampleResponse() {
     if (!data.success || !data.sample) throw new Error(data.error || 'No sample returned');
     ta.value = data.sample;
     charCount(ta, 600, null);
-    _toast('Sample generated — review and edit before saving', 'success');
+    _toast('Style guide generated — review and edit before saving', 'success');
   } catch (err) {
-    _toast('Could not generate sample: ' + err.message, 'error');
+    _toast('Could not generate guide: ' + err.message, 'error');
   } finally {
     btn.disabled    = false;
-    btn.textContent = '✨ Generate Example';
+    btn.textContent = '✨ Generate Guide';
   }
 }
 
