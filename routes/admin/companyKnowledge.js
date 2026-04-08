@@ -2534,6 +2534,139 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/knowledge/suggest-negatives
+// LLM-powered exclusion keyword suggestions. Analyzes sibling sections in
+// the same KC to find words that belong elsewhere and could cause misroutes.
+//
+// Body: { containerId, sectionIndex }
+// Returns: { suggestions: [{ word, reason, fromSection }] }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/suggest-negatives', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { containerId, sectionIndex } = req.body;
+  if (!containerId || sectionIndex == null) {
+    return res.status(400).json({ success: false, error: 'containerId and sectionIndex required' });
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.status(500).json({ success: false, error: 'GROQ_API_KEY not configured' });
+
+  try {
+    // ── Load the KC document ────────────────────────────────────────────
+    const doc = await CompanyKnowledgeContainer.findById(containerId).lean();
+    if (!doc) return res.status(404).json({ success: false, error: 'Container not found' });
+
+    const sections = doc.sections || [];
+    const idx = parseInt(sectionIndex, 10);
+    if (idx < 0 || idx >= sections.length) {
+      return res.status(400).json({ success: false, error: 'Invalid sectionIndex' });
+    }
+
+    const target = sections[idx];
+    const existingNegs = (target.negativeKeywords || []).map(w => w.toLowerCase().trim());
+
+    // ── Build sibling context ───────────────────────────────────────────
+    const siblings = sections
+      .map((s, i) => ({ ...s, _idx: i }))
+      .filter((s, i) => i !== idx && s.isActive !== false);
+
+    if (!siblings.length) {
+      return res.json({ success: true, suggestions: [], note: 'No sibling sections to compare' });
+    }
+
+    const _fmtSection = (s) => {
+      const phrases = (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text).join(', ');
+      const terms   = (s.tradeTerms || []).join(', ');
+      return `[${s.label || 'Untitled'}] Content: ${(s.content || '').substring(0, 300)}${phrases ? ` | Phrases: ${phrases}` : ''}${terms ? ` | Trade terms: ${terms}` : ''}`;
+    };
+
+    const targetPhrases = (target.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text).join(', ');
+    const targetTerms   = (target.tradeTerms || []).join(', ');
+
+    const systemPrompt = `You are a routing disambiguation expert for an AI phone receptionist system.
+
+A Knowledge Container has multiple sections. Each section answers a different topic. When a caller speaks, the system routes their question to the best-matching section using keyword scoring.
+
+PROBLEM: Sometimes a caller's words match the WRONG section because sections share vocabulary.
+SOLUTION: Exclusion keywords — if a word appears in a section's exclusion list, that section is skipped.
+
+Your job: Given a TARGET section and its SIBLING sections, identify words or short phrases (1-3 words) that:
+1. Strongly belong to a SIBLING section's topic
+2. Could accidentally match the TARGET section
+3. Would help the routing engine skip the TARGET when those words appear
+
+Rules:
+- Return 3-8 suggestions maximum
+- Each suggestion must be a single word or short phrase (1-3 words, lowercase)
+- Only suggest words that genuinely appear in sibling section topics
+- Don't suggest words that are core to the TARGET section itself
+- Focus on the most impactful disambiguation words
+
+Return ONLY a JSON object:
+{
+  "suggestions": [
+    { "word": "duct cleaning", "reason": "Belongs to the Duct Cleaning section", "fromSection": "Duct Cleaning Service" },
+    { "word": "emergency", "reason": "Routes to Emergency AC Service instead", "fromSection": "Emergency AC Service" }
+  ]
+}`;
+
+    const userPrompt = `TARGET SECTION (#${idx}):
+Label: ${target.label || 'Untitled'}
+Content: ${(target.content || '').substring(0, 400)}
+${targetPhrases ? `Caller phrases: ${targetPhrases}` : ''}
+${targetTerms ? `Trade terms: ${targetTerms}` : ''}
+${existingNegs.length ? `Already excluded: ${existingNegs.join(', ')}` : ''}
+
+SIBLING SECTIONS:
+${siblings.map(s => _fmtSection(s)).join('\n')}`;
+
+    // ── Call Groq ───────────────────────────────────────────────────────
+    const result = await GroqStreamAdapter.streamFull({
+      apiKey,
+      model:       'llama-3.3-70b-versatile',
+      maxTokens:   400,
+      temperature: 0.3,
+      jsonMode:    true,
+      system:      systemPrompt,
+      messages:    [{ role: 'user', content: userPrompt }],
+    });
+
+    if (!result.response) throw new Error('No response from LLM');
+
+    let parsed;
+    try {
+      parsed = JSON.parse(result.response);
+    } catch (_) {
+      const match = result.response.match(/\{[\s\S]*?\}/);
+      parsed = match ? JSON.parse(match[0]) : null;
+    }
+
+    const rawSuggestions = parsed?.suggestions || [];
+
+    // ── Filter out already-existing negatives ───────────────────────────
+    const suggestions = rawSuggestions
+      .filter(s => s?.word && !existingNegs.includes(s.word.toLowerCase().trim()))
+      .map(s => ({
+        word:        s.word.toLowerCase().trim(),
+        reason:      s.reason || '',
+        fromSection: s.fromSection || '',
+      }));
+
+    logger.info('[companyKnowledge] suggest-negatives', {
+      companyId, containerId, sectionIndex: idx,
+      sectionLabel: target.label, count: suggestions.length,
+    });
+
+    return res.json({ success: true, suggestions });
+  } catch (err) {
+    logger.error('[companyKnowledge] suggest-negatives error', { companyId, error: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to generate suggestions' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/knowledge/draft-section
 // Generate a section label + starter content for a caller phrase that has
 // no good home in existing KCs. Uses Groq (Llama 3.3 70B).

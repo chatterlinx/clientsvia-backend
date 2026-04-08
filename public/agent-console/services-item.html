@@ -2276,7 +2276,11 @@ function addSection(label = '', content = '', sectionMeta = null) {
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
         <span style="font-size:11px;font-weight:700;color:#b91c1c;">🚫 Exclusion Keywords</span>
         <span style="font-size:10px;color:#9ca3af;">— skip this section if these words or phrases appear</span>
+        <button type="button" id="btn-suggest-neg-${id}" onclick="_suggestNegatives(${id})"
+          style="margin-left:auto;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid #d1d5db;background:#fefce8;color:#854d0e;cursor:pointer;font-weight:600;"
+          title="LLM analyzes sibling sections and suggests exclusion keywords">✨ Suggest</button>
       </div>
+      <div id="negkw-suggestions-${id}" style="display:none;"></div>
       <div class="keyword-input-wrap neg-wrap" id="secNegKwWrap-${id}" onclick="document.getElementById('secNegKwInner-${id}').focus()"
         style="min-height:32px;padding:4px 6px;">
         <input type="text" id="secNegKwInner-${id}" class="kw-input-inner"
@@ -2564,6 +2568,111 @@ function removeSecNegKeyword(sid, idx) {
   data.negativeKeywords.splice(idx, 1);
   _renderSecNegKeywords(sid);
   _debouncedAutoSave();
+}
+
+// ── Suggest Negatives (LLM-powered) ─────────────────────────────────────────
+async function _suggestNegatives(sid) {
+  const btn = document.getElementById(`btn-suggest-neg-${sid}`);
+  const panel = document.getElementById(`negkw-suggestions-${sid}`);
+  if (!btn || !panel) return;
+
+  if (!S.mongoId) { _toast('Save the KC first before suggesting negatives', 'warn'); return; }
+
+  const sectionIndex = _getSectionIndex(sid);
+  if (sectionIndex == null) { _toast('Section not found', 'warn'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing…';
+  panel.style.display = 'none';
+
+  try {
+    const result = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/suggest-negatives`,
+      { method: 'POST', body: { containerId: S.mongoId, sectionIndex } }
+    );
+
+    if (!result.success || !result.suggestions?.length) {
+      panel.style.display = 'none';
+      _toast(result.note || 'No suggestions — sections are well-separated', 'success');
+      return;
+    }
+
+    // Render suggestion chips
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <span style="font-size:10px;font-weight:600;color:#854d0e;">Suggested exclusions:</span>
+        <button type="button" onclick="_acceptAllNegSuggestions(${sid})"
+          style="font-size:10px;padding:1px 6px;border-radius:3px;border:1px solid #bbf7d0;background:#f0fdf4;color:#16a34a;cursor:pointer;font-weight:600;">+ Add All</button>
+      </div>
+      <div id="negkw-chips-${sid}" style="display:flex;flex-wrap:wrap;gap:4px;">
+        ${result.suggestions.map((s, i) => `
+          <span class="negkw-suggestion-chip" data-word="${_esc(s.word)}" data-idx="${i}"
+            style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;
+              background:#fffbeb;border:1px solid #fde68a;color:#92400e;cursor:pointer;"
+            onclick="_acceptNegSuggestion(${sid}, '${_esc(s.word).replace(/'/g, "\\'")}')"
+            title="${_esc(s.reason)}">
+            <span style="color:#16a34a;font-weight:700;">+</span>
+            ${_esc(s.word)}
+            <span style="color:#b45309;font-size:10px;opacity:0.8;">← ${_esc(s.fromSection)}</span>
+          </span>
+        `).join('')}
+      </div>`;
+  } catch (err) {
+    _toast('Suggest failed: ' + (err.message || err), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Suggest';
+  }
+}
+
+function _acceptNegSuggestion(sid, word) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  const val = word.toLowerCase().trim();
+  if (!val || data.negativeKeywords.includes(val)) return;
+
+  data.negativeKeywords.push(val);
+  _renderSecNegKeywords(sid);
+  _debouncedAutoSave();
+
+  // Remove the chip from suggestions panel
+  const panel = document.getElementById(`negkw-chips-${sid}`);
+  if (panel) {
+    const chip = panel.querySelector(`[data-word="${CSS.escape(val)}"]`);
+    if (chip) chip.remove();
+    // Hide panel if no chips left
+    if (!panel.querySelectorAll('.negkw-suggestion-chip').length) {
+      document.getElementById(`negkw-suggestions-${sid}`).style.display = 'none';
+    }
+  }
+  _toast(`Added "${val}" to exclusions`, 'success');
+}
+
+function _acceptAllNegSuggestions(sid) {
+  const panel = document.getElementById(`negkw-chips-${sid}`);
+  if (!panel) return;
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+
+  const chips = panel.querySelectorAll('.negkw-suggestion-chip');
+  let added = 0;
+  chips.forEach(chip => {
+    const val = chip.dataset.word?.toLowerCase().trim();
+    if (val && !data.negativeKeywords.includes(val)) {
+      data.negativeKeywords.push(val);
+      added++;
+    }
+  });
+
+  if (added) {
+    _renderSecNegKeywords(sid);
+    _debouncedAutoSave();
+    _toast(`Added ${added} exclusion keyword${added > 1 ? 's' : ''}`, 'success');
+  }
+
+  // Clear suggestions panel
+  document.getElementById(`negkw-suggestions-${sid}`).style.display = 'none';
 }
 
 // ── Per-section trade terms (CueExtractor tradeCore) ────────────────────────
