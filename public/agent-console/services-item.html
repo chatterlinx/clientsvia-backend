@@ -1321,11 +1321,34 @@
           <div class="form-hint">Lower = higher priority when multiple containers could match</div>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
-          <label class="form-label" for="fTradeVocab">🏷️ Trade Vocabulary</label>
-          <select id="fTradeVocab" class="form-input" style="max-width:320px;">
+          <label class="form-label">🏷️ Trade Vocabulary</label>
+
+          <!-- Hidden select (actual form value) -->
+          <select id="fTradeVocab" style="display:none;">
             <option value="">None — no trade vocabulary linked</option>
           </select>
-          <div class="form-hint">Links this container to a GlobalShare trade vocabulary. CueExtractor routes callers using these terms — no need to copy terms into sections.</div>
+
+          <!-- Locked display (shown when a vocab is set) -->
+          <div id="tradeVocabLocked" style="display:none;align-items:center;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px 14px;max-width:320px;">
+              <span style="font-size:1.1rem;">🔒</span>
+              <span id="tradeVocabLockedLabel" style="font-weight:600;color:#15803d;font-size:.88rem;"></span>
+            </div>
+            <button type="button" onclick="unlockTradeVocab()"
+              style="background:none;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:.75rem;color:#6b7280;cursor:pointer;">
+              Change
+            </button>
+          </div>
+
+          <!-- Unlocked selector (shown on new containers or after confirmation) -->
+          <div id="tradeVocabUnlocked" style="display:none;">
+            <select id="fTradeVocabPicker" class="form-input" style="max-width:320px;"
+              onchange="onTradeVocabPicked()">
+              <option value="">None — no trade vocabulary linked</option>
+            </select>
+          </div>
+
+          <div class="form-hint">Links this container to a GlobalShare trade vocabulary. CueExtractor routes callers using these terms. Changing this affects all routing for this container.</div>
         </div>
       </div>
     </div>
@@ -1805,6 +1828,7 @@ async function _saveItemVar(varName, value) {
     document.getElementById('btnEvaluate').style.display = '';
     _showForm();
     addSection(); // Start with one empty section
+    _loadTradeVocabDropdown(''); // Populate picker options (unlocked for new containers)
   }
 
   // Populate category datalist from existing containers
@@ -1825,18 +1849,96 @@ async function _loadCategoryOptions() {
   } catch (_e) {}
 }
 
+// ── Trade Vocabulary — locked dropdown with confirmation gate ────────────────
+let _tradeVocabOptions = []; // cached for lock/unlock transitions
+
 async function _loadTradeVocabDropdown(currentKey) {
-  const sel = document.getElementById('fTradeVocab');
-  if (!sel) return;
+  const hiddenSel = document.getElementById('fTradeVocab');
+  const picker    = document.getElementById('fTradeVocabPicker');
+  if (!hiddenSel) return;
+
   try {
     const pi = await apiFetch('/api/admin/globalshare/phrase-intelligence');
-    const vocabs = pi.tradeVocabularies || [];
-    sel.innerHTML = '<option value="">None — no trade vocabulary linked</option>' +
-      vocabs.map(v =>
-        `<option value="${_esc(v.tradeKey)}"${v.tradeKey === currentKey ? ' selected' : ''}>${_esc(v.label)} (${v.terms.length} terms)</option>`
-      ).join('');
+    _tradeVocabOptions = pi.tradeVocabularies || [];
   } catch (_e) {
-    // Graceful degrade — dropdown stays with "None" option
+    _tradeVocabOptions = [];
+  }
+
+  // Build option HTML for both selects
+  const optsHtml = '<option value="">None — no trade vocabulary linked</option>' +
+    _tradeVocabOptions.map(v =>
+      `<option value="${_esc(v.tradeKey)}"${v.tradeKey === currentKey ? ' selected' : ''}>${_esc(v.label)} (${v.terms.length} terms)</option>`
+    ).join('');
+
+  hiddenSel.innerHTML = optsHtml;
+  hiddenSel.value = currentKey || '';
+  if (picker) {
+    picker.innerHTML = optsHtml;
+    picker.value = currentKey || '';
+  }
+
+  _syncTradeVocabUI(currentKey);
+}
+
+/** Show locked or unlocked state based on whether a vocab is set */
+function _syncTradeVocabUI(currentKey) {
+  const lockedDiv   = document.getElementById('tradeVocabLocked');
+  const unlockedDiv = document.getElementById('tradeVocabUnlocked');
+  const lockedLabel = document.getElementById('tradeVocabLockedLabel');
+  if (!lockedDiv || !unlockedDiv) return;
+
+  if (currentKey) {
+    // Find display label
+    const match = _tradeVocabOptions.find(v => v.tradeKey === currentKey);
+    lockedLabel.textContent = match
+      ? `${match.label} (${match.terms.length} terms)`
+      : currentKey;
+    lockedDiv.style.display   = 'flex';
+    unlockedDiv.style.display = 'none';
+  } else {
+    // No vocab set — show the picker
+    lockedDiv.style.display   = 'none';
+    unlockedDiv.style.display = 'block';
+  }
+}
+
+/** Change button — requires typing "yes" to confirm */
+function unlockTradeVocab() {
+  const input = prompt(
+    'Changing the trade vocabulary affects ALL routing for this container.\n\n' +
+    'Type "yes" to confirm you want to change it:'
+  );
+  if (!input || input.trim().toLowerCase() !== 'yes') {
+    _toast('Trade vocabulary change cancelled', 'info');
+    return;
+  }
+
+  // Unlock — show the picker
+  const lockedDiv   = document.getElementById('tradeVocabLocked');
+  const unlockedDiv = document.getElementById('tradeVocabUnlocked');
+  const picker      = document.getElementById('fTradeVocabPicker');
+  const hiddenSel   = document.getElementById('fTradeVocab');
+
+  lockedDiv.style.display   = 'none';
+  unlockedDiv.style.display = 'block';
+
+  // Sync picker to current value
+  if (picker && hiddenSel) picker.value = hiddenSel.value;
+}
+
+/** When admin picks a new vocab from the unlocked dropdown */
+function onTradeVocabPicked() {
+  const picker    = document.getElementById('fTradeVocabPicker');
+  const hiddenSel = document.getElementById('fTradeVocab');
+  if (!picker || !hiddenSel) return;
+
+  const newKey = picker.value || '';
+  hiddenSel.value = newKey;
+
+  // If they picked a vocab, lock it immediately
+  if (newKey) {
+    _syncTradeVocabUI(newKey);
+    _toast('Trade vocabulary set — save the container to apply', 'success');
   }
 }
 
