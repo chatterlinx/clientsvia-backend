@@ -31,8 +31,8 @@ const _GREETING_RE = /^(hi+|hey+|hello+|howdy|yo+|good\s+(morning|afternoon|even
 
 // ── Problem-signal keywords for acknowledgment composition ───────────────────
 const _PRIOR_VISIT_RE = /\b(was\s+here|came\s+out|already\s+(came|been\s+out|sent\s+someone|repaired|fixed)|still\s+not\s+(working|cooling|fixed|running|heating|cold|warm|blowing)|didn[''']?t\s+fix|hasn[''']?t\s+(been\s+)?fixed|back\s+again|last\s+time\s+(you|the\s+tech|your|he|she|they)\s+came)\b/i;
-const _PROBLEM_RE     = /\b(trouble|issue|problem|broken|not\s+work|fail|wrong|error|leak|flood|no\s+(heat|ac|cool|hot\s+water)|still|again)\b/i;
-const _BOOKING_RE     = /\b(schedul|book|appoint|come\s+out|send\s+someone|service\s+call|set\s+up)\b/i;
+const _PROBLEM_RE     = /\b(troubl|issue|problem|broken|not\s+(work|cool|heat|blow)|fail|wrong|error|leak|flood|no\s+(heat|ac|cool|hot\s+water)|still|again)/i;
+const _BOOKING_RE     = /\b(schedul|book|appoint|come\s+out|send\s+someone|service\s+call|set\s+up)/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
