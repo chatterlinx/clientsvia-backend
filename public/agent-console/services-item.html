@@ -1209,6 +1209,61 @@
     }
     @keyframes gap-spin { to { transform: rotate(360deg); } }
 
+    /* ── Bulk Operations Admin Bar ─────────────────────────────────────── */
+    .bulk-ops-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 18px; margin-bottom: 18px; margin-top: 20px;
+      background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 10px;
+      cursor: pointer; user-select: none;
+      transition: background .2s, border-color .2s, opacity .2s;
+      opacity: 0.45;
+    }
+    .bulk-ops-bar:hover { opacity: 0.7; }
+    .bulk-ops-bar.is-active {
+      background: #fff7ed; border-color: #fdba74;
+      cursor: default; opacity: 1;
+    }
+    .bulk-ops-icon {
+      font-size: 15px; line-height: 1;
+      transition: opacity .2s;
+    }
+    .bulk-ops-bar.is-active .bulk-ops-icon { opacity: 1; }
+    .bulk-ops-label {
+      font-size: 11.5px; font-weight: 700; color: #9ca3af;
+      letter-spacing: .04em; transition: color .2s;
+    }
+    .bulk-ops-bar.is-active .bulk-ops-label { color: #ea580c; }
+    .bulk-ops-actions {
+      display: none; align-items: center; gap: 8px;
+      margin-left: auto;
+    }
+    .bulk-ops-bar.is-active .bulk-ops-actions { display: flex; }
+    .bulk-ops-btn {
+      font-size: 11.5px; font-weight: 600;
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px solid #e5e7eb; background: #fff; color: #374151;
+      cursor: pointer; white-space: nowrap;
+      transition: background .15s, border-color .15s;
+    }
+    .bulk-ops-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+    .bulk-ops-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .bulk-ops-btn.btn-warn {
+      background: #fef3c7; border-color: #fbbf24; color: #92400e;
+    }
+    .bulk-ops-btn.btn-warn:hover { background: #fde68a; }
+    .bulk-ops-sep {
+      width: 1px; height: 18px; background: #e5e7eb; flex-shrink: 0;
+    }
+    .bulk-ops-progress {
+      font-size: 11px; color: #6b7280; font-weight: 500;
+      white-space: nowrap; min-width: 0;
+    }
+    .bulk-ops-close {
+      background: none; border: none; font-size: 18px;
+      cursor: pointer; color: #9ca3af; padding: 0 4px; line-height: 1;
+    }
+    .bulk-ops-close:hover { color: #374151; }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .form-row { grid-template-columns: 1fr; }
@@ -1254,6 +1309,28 @@
 
   <!-- Actual form (hidden while loading) -->
   <div id="formBody" style="display:none;flex-direction:column;gap:0;">
+
+  <!-- ── Bulk Operations Admin Bar (edit mode only) ───────────────────────── -->
+  <div class="bulk-ops-bar" id="bulkOpsBar" style="display:none;"
+       onclick="_bulkOpsGate(event)">
+    <span class="bulk-ops-icon">🔒</span>
+    <span class="bulk-ops-label" id="bulkOpsLabel">BULK OPS</span>
+    <div class="bulk-ops-actions" id="bulkOpsActions">
+      <button type="button" class="bulk-ops-btn" id="bulkBtnRescore"
+              onclick="_bulkRescoreAll(event)">↻ Re-score All</button>
+      <div class="bulk-ops-sep"></div>
+      <button type="button" class="bulk-ops-btn" id="bulkBtnFixAll"
+              onclick="_bulkFixAll(true, event)">⚡ Fix All</button>
+      <button type="button" class="bulk-ops-btn" id="bulkBtnUnfixAll"
+              onclick="_bulkFixAll(false, event)">Unfix All</button>
+      <div class="bulk-ops-sep"></div>
+      <button type="button" class="bulk-ops-btn btn-warn" id="bulkBtnGenAudio"
+              onclick="_bulkGenAudio(event)">🎙️ Generate Missing Audio</button>
+      <span class="bulk-ops-progress" id="bulkOpsProgress"></span>
+      <button type="button" class="bulk-ops-close" onclick="_bulkOpsLock(event)"
+              title="Lock bulk operations">&times;</button>
+    </div>
+  </div>
 
   <!-- ── 0. AI Evaluation Panel (hidden until triggered) ───────────────────── -->
   <div id="evalPanel" class="eval-panel" style="display:none;margin-top:28px;">
@@ -1967,6 +2044,9 @@ async function loadContainer() {
     // Store the real MongoDB _id separately — S.itemId may be a kcId (e.g. "700c4-25")
     // All API mutation routes (PATCH, DELETE, etc.) require the MongoDB _id, not kcId.
     S.mongoId = String(data.container._id);
+    // Show bulk ops bar in edit mode (existing container only)
+    const _bulkBar = document.getElementById('bulkOpsBar');
+    if (_bulkBar) _bulkBar.style.display = '';
     _populateForm(data.container);
     _showForm();
   } catch (err) {
@@ -4006,6 +4086,23 @@ function _kcMarkStale(sid, key, currentText) {
   if ((currentText?.trim() ?? '') !== state.generatedText) {
     if (hintEl) { hintEl.textContent = '⚠️ Text changed — regenerate audio'; hintEl.className = 'kc-audio-hint stale'; }
     if (genBtn) genBtn.textContent = '🔄 Regenerate';
+    // ── Clear stale audioUrl from sectionData ────────────────────────────
+    // Without this, save persists the old audio URL → callers hear stale audio.
+    // Also lets bulk "Generate Missing Audio" pick up changed sections.
+    const sData = S.sectionData.get(sid);
+    if (sData) {
+      if (key === 'content') {
+        sData.contentAudioUrl = null;
+      } else if (key === 'pq' && sData.pq) {
+        sData.pq.audioUrl = null;
+      } else {
+        const m = key.match(/^upsell-(\d+)-(offer|yes|no)$/);
+        if (m && sData.upsellChain?.[+m[1]]) {
+          const fmap = { offer: 'offerAudioUrl', yes: 'yesAudioUrl', no: 'noAudioUrl' };
+          sData.upsellChain[+m[1]][fmap[m[2]]] = null;
+        }
+      }
+    }
   }
   // Eval buttons stale when section content changes
   if (key === 'content') _markEvalStale(sid);
@@ -4831,6 +4928,152 @@ function _setLoading(on) {
   document.getElementById('loadingOverlay').classList.toggle('visible', on);
   document.getElementById('btnSave').disabled       = on;
   document.getElementById('btnSaveBottom').disabled = on;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK OPERATIONS — admin onboarding toolbar
+// Hidden bar that expands into 4 bulk action buttons after security confirmation.
+// All operations loop S.sectionData and call existing per-section functions.
+// ─────────────────────────────────────────────────────────────────────────────
+let _bulkOpsUnlocked = false;
+
+/** Gate click — first click shows confirmation, second unlocks. */
+function _bulkOpsGate(e) {
+  if (_bulkOpsUnlocked) return; // Already active — clicks on bar itself are no-ops.
+  if (!confirm('This will make BULK changes across ALL sections in this container.\n\nDo you understand?')) return;
+  _bulkOpsUnlocked = true;
+  const bar = document.getElementById('bulkOpsBar');
+  if (bar) bar.classList.add('is-active');
+  const icon = bar?.querySelector('.bulk-ops-icon');
+  if (icon) icon.textContent = '🔓';
+  const lbl = document.getElementById('bulkOpsLabel');
+  if (lbl) lbl.textContent = 'BULK OPS — ACTIVE';
+  _toast('Bulk operations unlocked', 'success');
+}
+
+/** Lock (close) — re-collapse the bar. */
+function _bulkOpsLock(e) {
+  e?.stopPropagation();
+  _bulkOpsUnlocked = false;
+  const bar = document.getElementById('bulkOpsBar');
+  if (bar) bar.classList.remove('is-active');
+  const icon = bar?.querySelector('.bulk-ops-icon');
+  if (icon) icon.textContent = '🔒';
+  const lbl = document.getElementById('bulkOpsLabel');
+  if (lbl) lbl.textContent = 'BULK OPS';
+  const prog = document.getElementById('bulkOpsProgress');
+  if (prog) prog.textContent = '';
+}
+
+/** Disable/enable all bulk buttons during a long operation. */
+function _bulkDisableAll(disabled) {
+  ['bulkBtnRescore', 'bulkBtnFixAll', 'bulkBtnUnfixAll', 'bulkBtnGenAudio'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  });
+}
+
+/** Bulk Re-score: loop all sections, call _reScorePhrases(sid) sequentially. */
+async function _bulkRescoreAll(e) {
+  e?.stopPropagation();
+  if (!_bulkOpsUnlocked) return;
+  if (!S.mongoId && !S.itemId) { _toast('Save container first', 'error'); return; }
+
+  const sids = [...S.sectionData.keys()];
+  const total = sids.length;
+  if (!total) { _toast('No sections to re-score', 'info'); return; }
+
+  const progress = document.getElementById('bulkOpsProgress');
+  _bulkDisableAll(true);
+  let done = 0, scored = 0, skipped = 0;
+
+  for (const sid of sids) {
+    const data = S.sectionData.get(sid);
+    const phrases = (data?.callerPhrases || []).filter(p => p.trim());
+    done++;
+    if (!phrases.length) {
+      skipped++;
+      if (progress) progress.textContent = `${done}/${total} (skipped — no phrases)`;
+      continue;
+    }
+    if (progress) progress.textContent = `Scoring ${done}/${total}…`;
+    try {
+      await _reScorePhrases(sid);
+      scored++;
+    } catch (err) {
+      console.warn(`[BulkOps] Re-score failed for sid ${sid}:`, err);
+    }
+  }
+
+  if (progress) progress.textContent = `Done — ${scored} scored, ${skipped} skipped`;
+  _bulkDisableAll(false);
+  _toast(`Bulk re-score complete: ${scored} sections scored, ${skipped} skipped`, 'success');
+}
+
+/** Bulk Fix/Unfix: set useFixedResponse on all sections + trigger UI update. */
+function _bulkFixAll(enable, e) {
+  e?.stopPropagation();
+  if (!_bulkOpsUnlocked) return;
+
+  const sids = [...S.sectionData.keys()];
+  let changed = 0, already = 0;
+
+  for (const sid of sids) {
+    const data = S.sectionData.get(sid);
+    if (!data) continue;
+    const checkbox = document.getElementById(`sec-fixed-${sid}`);
+    if (!checkbox) continue;
+    if (checkbox.checked === enable) { already++; continue; }
+    checkbox.checked = enable;
+    _onSectionFixedChange(sid);
+    changed++;
+  }
+
+  const label = enable ? 'Fixed' : 'Unfixed';
+  _toast(`${label} ${changed} section${changed !== 1 ? 's' : ''} (${already} already ${enable ? 'fixed' : 'unfixed'})`, 'success');
+}
+
+/** Bulk Generate Audio: only fixed sections WITHOUT existing audio. */
+async function _bulkGenAudio(e) {
+  e?.stopPropagation();
+  if (!_bulkOpsUnlocked) return;
+
+  // Build work list: fixed sections with content but no audio
+  const work = [];
+  for (const [sid, data] of S.sectionData) {
+    if (!data?.useFixedResponse) continue;
+    const textEl = document.getElementById(`sec-content-${sid}`);
+    const text = textEl?.value?.trim();
+    if (!text) continue;
+    // Skip if audio already exists and is not stale
+    if (data.contentAudioUrl) continue;
+    work.push(sid);
+  }
+
+  if (!work.length) {
+    _toast('All fixed sections already have audio — nothing to generate', 'success');
+    return;
+  }
+
+  const progress = document.getElementById('bulkOpsProgress');
+  _bulkDisableAll(true);
+  let done = 0, generated = 0, errors = 0;
+
+  for (const sid of work) {
+    done++;
+    if (progress) progress.textContent = `Generating ${done}/${work.length}…`;
+    try {
+      await _kcGenAudio(sid, 'content', `sec-content-${sid}`);
+      generated++;
+    } catch (err) {
+      errors++;
+      console.warn(`[BulkOps] Audio gen failed for sid ${sid}:`, err);
+    }
+  }
+
+  if (progress) progress.textContent = `Done — ${generated} generated${errors ? `, ${errors} errors` : ''}`;
+  _bulkDisableAll(false);
+  _toast(`Generated audio for ${generated} section${generated !== 1 ? 's' : ''}${errors ? ` (${errors} errors)` : ''}`, 'success');
 }
 
 function _toast(msg, type = 'info') {
