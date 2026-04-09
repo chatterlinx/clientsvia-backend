@@ -7034,6 +7034,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           }
         }
 
+        // ── Stamp lastResponse for LAP repeat_last ────────────────────────────
+        // Every agent response — Turn1, KC, Booking, Groq — must update
+        // CallSummary.liveProgress.lastResponse so LAP repeat_last can replay it.
+        // ConversationEngine does this internally but Turn1Engine/KC bypass it.
+        if (responseText && responseText.trim()) {
+          try {
+            const _CSforLR = require('../models/CallSummary');
+            await _CSforLR.updateLiveProgress(callSid, {
+              lastResponse: responseText.trim().substring(0, 500),
+            });
+          } catch (_lrErr) {
+            // Non-fatal: LAP repeat will use fallback if this fails
+          }
+        }
+
         // Canonical Mongo: persist turns DURING the call (CallTranscriptV2).
         try {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
