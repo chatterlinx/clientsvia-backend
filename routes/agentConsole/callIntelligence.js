@@ -2761,7 +2761,12 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
   const healthScore = calcHealthScore(summary, convTurns, discoveryNotes);
 
   // Rich per-turn pipeline trace — Turn1Engine, UAP, Semantic, Groq, section IDs
-  const turnByTurnFlow = buildTurnByTurnFlow(rawTurns, _traceEvts);
+  let turnByTurnFlow = [];
+  try {
+    turnByTurnFlow = buildTurnByTurnFlow(rawTurns, _traceEvts);
+  } catch (flowErr) {
+    console.warn('[buildFullReport] turnByTurnFlow failed (non-fatal):', flowErr.message);
+  }
 
   return {
     header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence, convTurns),
