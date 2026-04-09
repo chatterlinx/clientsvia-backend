@@ -693,7 +693,7 @@ const NEW_SECTIONS = [
   try {
     await client.connect();
     const db  = client.db('clientsvia');
-    const col = db.collection('companyknowledgecontainers');
+    const col = db.collection('companyKnowledgeContainers');
 
     // Find existing container
     const existing = await col.findOne({
