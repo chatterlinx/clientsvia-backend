@@ -1295,7 +1295,7 @@
     <button id="btnEvaluate" class="btn-evaluate" onclick="runEvaluation()" title="AI quality check — catch mistakes before they hurt live calls" style="display:none;">⚡ Evaluate</button>
     <button class="btn-download-json" onclick="downloadJSON()" title="Download clean review JSON for analysis">⬇ JSON</button>
     <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="_handleImportFile(event)">
-    <button class="btn-import-json" id="btnImportJson" onclick="document.getElementById('importFileInput').click()" title="Upload a modified review JSON to apply changes" style="display:none;">⬆ Import</button>
+    <button class="btn-import-json" id="btnImportJson" onclick="document.getElementById('importFileInput').click()" title="Upload a review JSON — works for new KCs and cross-company templates">⬆ Import</button>
     <button class="btn-secondary" id="btnCancel" onclick="goBack()">Cancel</button>
     <button id="btnDeleteHeader" class="btn-danger" style="display:none;" onclick="softDelete()">Deactivate</button>
     <button class="btn-primary" id="btnSave" onclick="saveContainer()">Save Container</button>
@@ -2048,11 +2048,9 @@ async function loadContainer() {
     // Store the real MongoDB _id separately — S.itemId may be a kcId (e.g. "700c4-25")
     // All API mutation routes (PATCH, DELETE, etc.) require the MongoDB _id, not kcId.
     S.mongoId = String(data.container._id);
-    // Show bulk ops bar + import button in edit mode (existing container only)
+    // Show bulk ops bar in edit mode (existing container only)
     const _bulkBar = document.getElementById('bulkOpsBar');
     if (_bulkBar) _bulkBar.style.display = '';
-    const _importBtn = document.getElementById('btnImportJson');
-    if (_importBtn) _importBtn.style.display = '';
     _populateForm(data.container);
     _showForm();
   } catch (err) {
