@@ -135,8 +135,10 @@
     .btn-evaluate.has-issues { border-color:#f59e0b; color:#b45309; background:#fffbeb; }
     .btn-evaluate.all-pass   { border-color:#16a34a; color:#15803d; background:#f0fdf4; }
     /* ── Download JSON button ────────────────────────────────────────────── */
-    .btn-download-json { background:white; border:1px solid #d1d5db; color:#6b7280; border-radius:8px; padding:8px 12px; font-size:12px; font-weight:500; cursor:pointer; transition:all .15s; white-space:nowrap; }
-    .btn-download-json:hover { background:#f9fafb; border-color:#9ca3af; color:#374151; }
+    .btn-download-json, .btn-import-json { background:white; border:1px solid #d1d5db; color:#6b7280; border-radius:8px; padding:8px 12px; font-size:12px; font-weight:500; cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .btn-download-json:hover, .btn-import-json:hover { background:#f9fafb; border-color:#9ca3af; color:#374151; }
+    .btn-import-json { border-color:#fbbf24; color:#92400e; background:#fffbeb; }
+    .btn-import-json:hover { background:#fef3c7; border-color:#f59e0b; }
 
     /* ── Evaluation panel ────────────────────────────────────────────────── */
     .eval-panel { background:white; border-radius:12px; border:1.5px solid #e0e7ff; box-shadow:0 2px 16px rgba(99,102,241,.08); padding:20px; }
@@ -1291,7 +1293,9 @@
   <div class="header-spacer"></div>
   <div class="header-actions">
     <button id="btnEvaluate" class="btn-evaluate" onclick="runEvaluation()" title="AI quality check — catch mistakes before they hurt live calls" style="display:none;">⚡ Evaluate</button>
-    <button class="btn-download-json" onclick="downloadJSON()" title="Download full KC state as JSON for inspection">⬇ JSON</button>
+    <button class="btn-download-json" onclick="downloadJSON()" title="Download clean review JSON for analysis">⬇ JSON</button>
+    <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="_handleImportFile(event)">
+    <button class="btn-import-json" id="btnImportJson" onclick="document.getElementById('importFileInput').click()" title="Upload a modified review JSON to apply changes" style="display:none;">⬆ Import</button>
     <button class="btn-secondary" id="btnCancel" onclick="goBack()">Cancel</button>
     <button id="btnDeleteHeader" class="btn-danger" style="display:none;" onclick="softDelete()">Deactivate</button>
     <button class="btn-primary" id="btnSave" onclick="saveContainer()">Save Container</button>
@@ -2044,9 +2048,11 @@ async function loadContainer() {
     // Store the real MongoDB _id separately — S.itemId may be a kcId (e.g. "700c4-25")
     // All API mutation routes (PATCH, DELETE, etc.) require the MongoDB _id, not kcId.
     S.mongoId = String(data.container._id);
-    // Show bulk ops bar in edit mode (existing container only)
+    // Show bulk ops bar + import button in edit mode (existing container only)
     const _bulkBar = document.getElementById('bulkOpsBar');
     if (_bulkBar) _bulkBar.style.display = '';
+    const _importBtn = document.getElementById('btnImportJson');
+    if (_importBtn) _importBtn.style.display = '';
     _populateForm(data.container);
     _showForm();
   } catch (err) {
@@ -3442,52 +3448,210 @@ async function saveContainer({ quiet = false } = {}) {
 // DOWNLOAD JSON — full KC state snapshot for inspection
 // ─────────────────────────────────────────────────────────────────────────────
 function downloadJSON() {
-  const title    = document.getElementById('fTitle').value?.trim() || 'untitled';
-  const sections = _getSections();
+  const title = document.getElementById('fTitle').value?.trim() || 'untitled';
+  const rows  = document.querySelectorAll('#sectionsList .section-row');
 
-  const wordLimitVal      = parseInt(document.getElementById('fWordLimit').value, 10);
+  // ── Clean review-focused export ──────────────────────────────────────────
+  // Only fields needed to evaluate content quality.
+  // Excludes: audioUrl paths, embeddings, scores, phraseCore, contentCore,
+  //           anchorWords, preQualify, upsell, tradeTerms, promotionLabel.
+  // All excluded fields are preserved on reimport (merge, not replace).
+  const sections = [];
+  rows.forEach((row, idx) => {
+    const label   = row.querySelector('.section-label-input')?.value?.trim() || '';
+    const content = row.querySelector('textarea')?.value?.trim() || '';
+    if (!label && !content) return;
 
-  // Same payload shape as saveContainer — no validation, just snapshot current state
-  const payload = {
-    title,
-    category:         document.getElementById('fCategory').value?.trim() || '',
+    const sid  = parseInt(row.dataset.sid, 10);
+    const data = S.sectionData.get(sid) || {};
+    sections.push({
+      index:            idx,
+      label,
+      content,
+      callerPhrases:    (data.callerPhrases || []).filter(p => p.trim()),
+      negativeKeywords: data.negativeKeywords || [],
+      isFixed:          !!data.useFixedResponse,
+      hasAudio:         !!(data.contentAudioUrl),
+      isActive:         data.isActive !== false,
+    });
+  });
+
+  const review = {
+    kcTitle:      title,
+    kcId:         S.kcId || null,
+    exportedAt:   new Date().toISOString(),
+    sectionCount: sections.length,
     sections,
-    sampleQuestions:  S.sampleQuestions,
-    wordLimit:        (!isNaN(wordLimitVal) && wordLimitVal >= 5) ? wordLimitVal : null,
-    wordLimitEnabled: document.getElementById('fWordLimitEnabled')?.checked !== false,
-    sampleResponse:   (document.getElementById('fSampleResponse')?.value || '').trim() || null,
-    bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
-    closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
-    isActive:         document.getElementById('fActive').checked,
-    priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
-    tradeVocabularyKey: document.getElementById('fTradeVocab')?.value || null,
   };
 
-  // Inspection extras — beyond the save payload, useful for debugging routing issues
-  const snapshot = {
-    _meta: {
-      downloadedAt: new Date().toISOString(),
-      companyId:    S.companyId,
-      mongoId:      S.mongoId || null,
-      isEdit:       S.isEdit  || false,
-      pageUrl:      window.location.href,
-    },
-    _sectionDataMap: Object.fromEntries(
-      [...(S.sectionData || new Map()).entries()].map(([sid, data]) => [sid, data])
-    ),
-    _payload: payload,
-  };
-
-  const json     = JSON.stringify(snapshot, null, 2);
+  const json     = JSON.stringify(review, null, 2);
   const blob     = new Blob([json], { type: 'application/json' });
   const url      = URL.createObjectURL(blob);
   const a        = document.createElement('a');
   const safeName = title.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40);
   a.href         = url;
-  a.download     = `kc-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download     = `kc-review-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  _toast('JSON downloaded ✓', 'success');
+  _toast('Review JSON downloaded ✓', 'success');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON IMPORT — merge review JSON back into the editor
+// ─────────────────────────────────────────────────────────────────────────────
+// Reads a review JSON (same format as downloadJSON output), merges changes
+// into existing sections by index. Preserves all fields not in the import
+// (scores, anchors, audioUrl, preQualify, upsell, etc.).
+// Does NOT auto-save — admin reviews visually then clicks Save Container.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _handleImportFile(e) {
+  const file = e.target?.files?.[0];
+  if (!file) return;
+  e.target.value = ''; // Reset so same file can be re-selected
+
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    try {
+      const json = JSON.parse(ev.target.result);
+      _applyImportJSON(json);
+    } catch (err) {
+      _toast(`Import failed: ${err.message}`, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function _applyImportJSON(json) {
+  // Validate structure
+  if (!json.sections || !Array.isArray(json.sections)) {
+    _toast('Invalid JSON — missing "sections" array', 'error');
+    return;
+  }
+
+  if (!json.sections.length) {
+    _toast('JSON has 0 sections — nothing to import', 'error');
+    return;
+  }
+
+  // Get existing sections in DOM order
+  const rows = [...document.querySelectorAll('#sectionsList .section-row')];
+  const stats = { labels: 0, content: 0, phrases: 0, negatives: 0, added: 0, fixed: 0, active: 0 };
+
+  for (const imported of json.sections) {
+    const idx = imported.index;
+
+    if (typeof idx === 'number' && idx < rows.length) {
+      // ── Update existing section at this index ──────────────────────────
+      const row = rows[idx];
+      const sid = parseInt(row.dataset.sid, 10);
+      const data = S.sectionData.get(sid);
+      if (!data) continue;
+
+      // Label
+      if (imported.label !== undefined) {
+        const labelEl = row.querySelector('.section-label-input');
+        if (labelEl && labelEl.value.trim() !== imported.label.trim()) {
+          labelEl.value = imported.label.trim();
+          stats.labels++;
+        }
+      }
+
+      // Content
+      if (imported.content !== undefined) {
+        const contentEl = row.querySelector('textarea');
+        if (contentEl && contentEl.value.trim() !== imported.content.trim()) {
+          contentEl.value = imported.content.trim();
+          charCount(contentEl, 2000, null);
+          // Mark audio stale if text changed
+          _kcMarkStale(sid, 'content', imported.content.trim());
+          stats.content++;
+        }
+      }
+
+      // Caller phrases
+      if (Array.isArray(imported.callerPhrases)) {
+        const newPhrases = imported.callerPhrases.filter(p => typeof p === 'string' && p.trim());
+        const oldPhrases = (data.callerPhrases || []).filter(p => p.trim());
+        if (JSON.stringify(newPhrases) !== JSON.stringify(oldPhrases)) {
+          data.callerPhrases = newPhrases;
+          // Clear stale scores for changed phrases (new phrases have no scores)
+          // Preserve scores for phrases that didn't change
+          const newScores = {};
+          const newAnchors = {};
+          for (const p of newPhrases) {
+            if (data.phraseScores?.[p]) newScores[p] = data.phraseScores[p];
+            if (data.phraseAnchorWords?.[p]) newAnchors[p] = data.phraseAnchorWords[p];
+          }
+          data.phraseScores = newScores;
+          data.phraseAnchorWords = newAnchors;
+          // Re-render phrase chips + score table + count badge
+          _renderCallerPhrases(sid);
+          stats.phrases++;
+        }
+      }
+
+      // Negative keywords
+      if (Array.isArray(imported.negativeKeywords)) {
+        const newNeg = imported.negativeKeywords.filter(k => typeof k === 'string' && k.trim());
+        if (JSON.stringify(newNeg) !== JSON.stringify(data.negativeKeywords || [])) {
+          data.negativeKeywords = newNeg;
+          _renderSecNegKeywords(sid);
+          stats.negatives++;
+        }
+      }
+
+      // isFixed toggle
+      if (imported.isFixed !== undefined && !!imported.isFixed !== !!data.useFixedResponse) {
+        const checkbox = document.getElementById(`sec-fixed-${sid}`);
+        if (checkbox) {
+          checkbox.checked = !!imported.isFixed;
+          _onSectionFixedChange(sid);
+          stats.fixed++;
+        }
+      }
+
+      // isActive toggle
+      if (imported.isActive !== undefined && (imported.isActive !== false) !== (data.isActive !== false)) {
+        const checkbox = document.getElementById(`sec-active-${sid}`);
+        if (checkbox) {
+          checkbox.checked = imported.isActive !== false;
+          _onSectionActiveChange(sid);
+          stats.active++;
+        }
+      }
+
+    } else {
+      // ── New section beyond current count — add it ─────────────────────
+      const label   = (imported.label   || '').trim();
+      const content = (imported.content || '').trim();
+      if (!label && !content) continue;
+
+      addSection(label, content, {
+        callerPhrases:    (imported.callerPhrases || []).filter(p => typeof p === 'string' && p.trim()),
+        negativeKeywords: (imported.negativeKeywords || []).filter(k => typeof k === 'string' && k.trim()),
+        useFixedResponse: !!imported.isFixed,
+        isActive:         imported.isActive !== false,
+      });
+      stats.added++;
+    }
+  }
+
+  // Build summary
+  const parts = [];
+  if (stats.labels)    parts.push(`${stats.labels} labels`);
+  if (stats.content)   parts.push(`${stats.content} responses`);
+  if (stats.phrases)   parts.push(`${stats.phrases} phrase lists`);
+  if (stats.negatives) parts.push(`${stats.negatives} negative keywords`);
+  if (stats.fixed)     parts.push(`${stats.fixed} fixed toggles`);
+  if (stats.active)    parts.push(`${stats.active} active toggles`);
+  if (stats.added)     parts.push(`${stats.added} new sections`);
+
+  if (parts.length) {
+    _toast(`Imported: ${parts.join(', ')}. Review then Save.`, 'success');
+  } else {
+    _toast('No changes detected — JSON matches current state', 'info');
+  }
 }
 
 
