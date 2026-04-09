@@ -2142,6 +2142,7 @@ function _populateForm(c) {
       negativeKeywords:   s.negativeKeywords || [],
       tradeTerms:         s.tradeTerms || [],
       useFixedResponse:   !!s.useFixedResponse,
+      groqContent:        s.groqContent || '',
       audioUrl:           s.audioUrl || null,
       preQualifyQuestion: s.preQualifyQuestion || null,
       upsellChain:        s.upsellChain        || [],
@@ -2211,6 +2212,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
     negativeKeywords: sectionMeta?.negativeKeywords || [],
     tradeTerms:      sectionMeta?.tradeTerms || [],
     useFixedResponse,
+    groqContent:      sectionMeta?.groqContent || '',
     contentAudioUrl:  sectionMeta?.audioUrl || null,
     phraseScores:     sectionMeta?.phraseScores  || {},  // { phrase → { t1, t2, t3, tc, status } }
     phraseCore:       sectionMeta?.phraseCore   || null, // run summary of all phrases — Logic 2 target
@@ -2246,6 +2248,8 @@ function addSection(label = '', content = '', sectionMeta = null) {
 
   // Pre-compute content density for initial template render
   const _cd = _contentDensity(content, useFixedResponse);
+  const groqContent = sectionMeta?.groqContent || '';
+  const _gd = _groqContentDensity(groqContent);
 
   const row = document.createElement('div');
   row.className = 'section-row' + (sectionIsActive ? '' : ' section-inactive');
@@ -2275,6 +2279,33 @@ function addSection(label = '', content = '', sectionMeta = null) {
       </button>
     </div>
     <div class="section-row-body">
+      <!-- Deep Content — what Groq reads to give a full answer (optional) -->
+      <div class="groq-content-wrap" id="groq-wrap-${id}">
+        <label class="form-label" style="margin-bottom:4px;font-size:12px;">
+          <span style="letter-spacing:0.5px;">DEEP CONTENT</span>
+          <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#6b7280;font-size:11px;">
+            — what Groq reads to the caller (optional)
+          </span>
+        </label>
+        <textarea class="form-textarea tall${_gd.isOver ? ' content-over' : (_gd.isShort || _gd.isWarn) ? ' content-short' : ''}" id="sec-groq-${id}"
+          placeholder="Write detailed knowledge here — Groq reads this to give the caller a genuine, complete answer. Leave empty to use the response text below."
+          maxlength="4000" rows="5"
+          oninput="charCount(this, 4000, null); S.sectionData.get(${id}).groqContent=this.value; _updateGroqDensity(${id})"
+        >${_esc(groqContent)}</textarea>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+          <span style="font-size:11px;display:flex;gap:8px;align-items:center;">
+            <span class="char-count${_gd.cls}" id="groq-density-${id}">${_gd.label}</span>
+            <span class="density-sweet" id="density-sweet-groq-${id}" style="color:#94a3b8;">Sweet spot: 50–400 words</span>
+          </span>
+        </div>
+      </div>
+      <!-- Response Text — spoken as audio in Fixed mode, or Groq fallback if no deep content -->
+      <label class="form-label" style="margin-bottom:4px;font-size:12px;">
+        <span style="letter-spacing:0.5px;">RESPONSE TEXT</span>
+        <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#6b7280;font-size:11px;">
+          — spoken as audio in Fixed mode, or Groq's fallback if no deep content
+        </span>
+      </label>
       <textarea class="form-textarea tall${_cd.isOver ? ' content-over' : (_cd.isShort || _cd.isWarn) ? ' content-short' : ''}" id="sec-content-${id}"
         placeholder="${useFixedResponse ? 'Write the exact spoken response (35-42 words ideal)…' : 'Write as much as you need — Groq reads this and synthesises within the word limit…'}"
         oninput="charCount(this, 2000, null); _queueVarScan(); _kcMarkStale(${id},'content',this.value)"
@@ -2965,10 +2996,10 @@ function _getSections() {
   const rows = document.querySelectorAll('#sectionsList .section-row');
   const result = [];
   rows.forEach((row, idx) => {
+    const sid    = parseInt(row.dataset.sid, 10);
     const label   = row.querySelector('.section-label-input')?.value?.trim() || '';
-    const content = row.querySelector('textarea')?.value?.trim() || '';
+    const content = document.getElementById(`sec-content-${sid}`)?.value?.trim() || '';
     if (label && content) {
-      const sid  = parseInt(row.dataset.sid, 10);
       const data = S.sectionData.get(sid) || {};
 
       // Build per-section preQualifyQuestion
@@ -3003,6 +3034,7 @@ function _getSections() {
       result.push({
         label,
         content,
+        groqContent:        (document.getElementById(`sec-groq-${sid}`)?.value || data.groqContent || '').trim() || undefined,
         order:              idx,
         isActive:           data.isActive !== false,   // default true
         isPromotion:        !!data.isPromotion,
@@ -3456,16 +3488,17 @@ function downloadJSON() {
   // All excluded fields are preserved on reimport (merge, not replace).
   const sections = [];
   rows.forEach((row, idx) => {
+    const sid    = parseInt(row.dataset.sid, 10);
     const label   = row.querySelector('.section-label-input')?.value?.trim() || '';
-    const content = row.querySelector('textarea')?.value?.trim() || '';
+    const content = document.getElementById(`sec-content-${sid}`)?.value?.trim() || '';
     if (!label && !content) return;
 
-    const sid  = parseInt(row.dataset.sid, 10);
     const data = S.sectionData.get(sid) || {};
     sections.push({
       index:            idx,
       label,
       content,
+      groqContent:      (data.groqContent || '').trim() || null,
       callerPhrases:    (data.callerPhrases || []).filter(p => p.trim()),
       negativeKeywords: data.negativeKeywords || [],
       isFixed:          !!data.useFixedResponse,
@@ -3557,13 +3590,28 @@ function _applyImportJSON(json) {
 
       // Content
       if (imported.content !== undefined) {
-        const contentEl = row.querySelector('textarea');
+        const contentEl = document.getElementById(`sec-content-${sid}`);
         if (contentEl && contentEl.value.trim() !== imported.content.trim()) {
           contentEl.value = imported.content.trim();
           charCount(contentEl, 2000, null);
           // Mark audio stale if text changed
           _kcMarkStale(sid, 'content', imported.content.trim());
           stats.content++;
+        }
+      }
+
+      // Groq Deep Content
+      if (imported.groqContent !== undefined) {
+        const groqVal = (imported.groqContent || '').trim();
+        if (groqVal !== (data.groqContent || '').trim()) {
+          data.groqContent = groqVal;
+          const groqEl = document.getElementById(`sec-groq-${sid}`);
+          if (groqEl) {
+            groqEl.value = groqVal;
+            charCount(groqEl, 4000, null);
+          }
+          _updateGroqDensity(sid);
+          stats.groqContent = (stats.groqContent || 0) + 1;
         }
       }
 
@@ -3629,6 +3677,7 @@ function _applyImportJSON(json) {
         callerPhrases:    (imported.callerPhrases || []).filter(p => typeof p === 'string' && p.trim()),
         negativeKeywords: (imported.negativeKeywords || []).filter(k => typeof k === 'string' && k.trim()),
         useFixedResponse: !!imported.isFixed,
+        groqContent:      (imported.groqContent || '').trim(),
         isActive:         imported.isActive !== false,
       });
       stats.added++;
@@ -3637,13 +3686,14 @@ function _applyImportJSON(json) {
 
   // Build summary
   const parts = [];
-  if (stats.labels)    parts.push(`${stats.labels} labels`);
-  if (stats.content)   parts.push(`${stats.content} responses`);
-  if (stats.phrases)   parts.push(`${stats.phrases} phrase lists`);
-  if (stats.negatives) parts.push(`${stats.negatives} negative keywords`);
-  if (stats.fixed)     parts.push(`${stats.fixed} fixed toggles`);
-  if (stats.active)    parts.push(`${stats.active} active toggles`);
-  if (stats.added)     parts.push(`${stats.added} new sections`);
+  if (stats.labels)      parts.push(`${stats.labels} labels`);
+  if (stats.content)     parts.push(`${stats.content} responses`);
+  if (stats.groqContent) parts.push(`${stats.groqContent} deep content`);
+  if (stats.phrases)     parts.push(`${stats.phrases} phrase lists`);
+  if (stats.negatives)   parts.push(`${stats.negatives} negative keywords`);
+  if (stats.fixed)       parts.push(`${stats.fixed} fixed toggles`);
+  if (stats.active)      parts.push(`${stats.active} active toggles`);
+  if (stats.added)       parts.push(`${stats.added} new sections`);
 
   if (parts.length) {
     _toast(`Imported: ${parts.join(', ')}. Review then Save.`, 'success');
@@ -4020,6 +4070,39 @@ function _contentDensity(text, isFixed) {
     cls:   isOver ? ' over' : (isWarn || isShort) ? ' warn' : '',
     label: `${ws}${hint}`,
   };
+}
+
+/**
+ * Density thresholds for groqContent (Deep Content) textarea.
+ * Wider sweet spot than normal content — this is a knowledge dump for Groq.
+ */
+function _groqContentDensity(text) {
+  const words = _wordCount(text);
+  const ws    = `${words} word${words !== 1 ? 's' : ''}`;
+
+  if (!words) return { isOver: false, isShort: false, isWarn: false, cls: '', label: '' };
+
+  const isOver  = words > 800;
+  const isWarn  = words > 400 && !isOver;
+  const isShort = words < 50;
+  const hint    = isOver ? ' · consider splitting' : isWarn ? ' · getting long' : isShort ? ' · add more detail' : '';
+  return {
+    isOver, isShort, isWarn,
+    cls:   isOver ? ' over' : (isWarn || isShort) ? ' warn' : '',
+    label: `${ws}${hint}`,
+  };
+}
+
+/** Live-update groqContent density indicator on input */
+function _updateGroqDensity(sid) {
+  const el = document.getElementById(`sec-groq-${sid}`);
+  if (!el) return;
+  const d = _groqContentDensity(el.value);
+  const span = document.getElementById(`groq-density-${sid}`);
+  if (span) {
+    span.textContent = d.label;
+    span.className   = 'char-count' + d.cls;
+  }
 }
 
 // ── Container-level Fixed Response Mode toggle ───────────────────────────────
@@ -5063,8 +5146,9 @@ function _updateComplexityIndicator() {
   const rows = document.querySelectorAll('#sectionsList .section-row');
   const sections = [];
   rows.forEach(row => {
+    const sid     = parseInt(row.dataset.sid, 10);
     const label   = row.querySelector('.section-label-input')?.value?.trim() || '(unlabelled)';
-    const content = row.querySelector('textarea')?.value || '';
+    const content = document.getElementById(`sec-content-${sid}`)?.value || '';
     sections.push({ label, words: _wordCount(content) });
   });
   const hasContent = sections.some(s => s.words > 0);

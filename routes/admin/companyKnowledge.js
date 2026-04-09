@@ -269,6 +269,7 @@ function _sanitiseBody(body) {
         const section = {
           label:   s.label.trim().slice(0, 80),
           content: s.content.trim().slice(0, 2000),
+          groqContent: (typeof s.groqContent === 'string' ? s.groqContent.trim() : '').slice(0, 4000),
           order:   typeof s.order === 'number' ? s.order : idx,
           // Per-section active toggle — false = skipped at runtime, content preserved
           isActive: s.isActive !== false,   // default true; only false when explicitly set
@@ -294,8 +295,11 @@ function _sanitiseBody(body) {
             });
         }
 
-        // Auto-extract contentKeywords from section label + content
-        section.contentKeywords = _extractContentKeywords(section.label, section.content);
+        // Auto-extract contentKeywords from section label + content (+ groqContent when available)
+        const keywordSource = section.groqContent
+          ? `${section.content} ${section.groqContent}`
+          : section.content;
+        section.contentKeywords = _extractContentKeywords(section.label, keywordSource);
 
         // Per-section exclusion keywords — trim, lowercase, deduplicate
         if (Array.isArray(s.negativeKeywords)) {

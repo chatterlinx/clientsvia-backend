@@ -168,6 +168,13 @@ const sectionSchema = new mongoose.Schema(
       maxlength: 2000,
       comment:   'Knowledge content — Groq reads this and synthesises within word limit.'
     },
+    groqContent: {
+      type:      String,
+      trim:      true,
+      maxlength: 4000,
+      default:   '',
+      comment:   'Rich detailed source material for Groq (up to 4000 chars). When non-empty, Groq reads this instead of content. Fixed mode always uses content.'
+    },
     order: {
       type:    Number,
       default: 0,

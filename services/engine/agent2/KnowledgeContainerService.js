@@ -394,7 +394,10 @@ function _buildContainerBlock(container, targetSection = null) {
 
   const lines = source
     .filter(s => s.isActive !== false && s.label?.trim() && s.content?.trim())
-    .map(s => `${s.label.trim().toUpperCase()}: ${s.content.trim()}`);
+    .map(s => {
+      const text = (s.groqContent?.trim()) || s.content.trim();
+      return `${s.label.trim().toUpperCase()}: ${text}`;
+    });
 
   return lines.join('\n\n');
 }
