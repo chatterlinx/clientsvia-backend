@@ -534,17 +534,13 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   });
 
   try {
-    // Load containers and discoveryNotes anchor in parallel — zero added latency.
-    // The anchor container gets a 3× score multiplier in findContainer() so
-    // mid-booking questions stay routed to the correct KC (e.g. Service Call pricing
-    // stays in Service Call, not Maintenance, even if "maintenance" appears in the input).
-    const [containers, _dnDigress] = await Promise.all([
-      KCS.getActiveForCompany(companyId),
-      DiscoveryNotesService.load(companyId, ctx.callSid).catch(() => null),
-    ]);
-    const _anchorCtx = _dnDigress?.anchorContainerId
-      ? { anchorContainerId: _dnDigress.anchorContainerId }
-      : null;
+    // Load containers — NO anchor context for booking digressions.
+    // The caller is explicitly going off-topic; anchor 3× boost and
+    // ANCHOR_FLOOR would bias keyword scoring toward the booking container
+    // even when the question has ZERO keyword overlap (e.g. "service call fee"
+    // forced to tune-up pricing because anchor floor returned score 24 on a
+    // raw score of 0).  Let keywords stand on their own merit.
+    const containers = await KCS.getActiveForCompany(companyId);
 
     if (containers.length) {
       // Prefer UAP match — it scores against user-configured callerPhrases
@@ -570,11 +566,12 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
       }
 
       // Fall back to contentKeywords scoring if UAP had no match.
+      // No anchor context — keywords must meet MIN_THRESHOLD on their own.
       // Pass through bestSection so KCS.answer() targets the correct section —
       // without this, useFixedResponse containers default to the first section
       // regardless of what the caller actually asked.
       if (!match) {
-        match = KCS.findContainer(containers, userInput, _anchorCtx);
+        match = KCS.findContainer(containers, userInput);
         if (match) targetSection = match.bestSection || null;
       }
 
@@ -586,7 +583,11 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           kbSettings:    { ...(config.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
           company:       { _id: companyId, companyName: config.companyName },
         });
-        if (kcResult?.response) {
+
+        // Two gates: (1) response must exist, (2) Groq must not say NO_DATA.
+        // For fixed responses intent is always ANSWERED — the keyword threshold
+        // is their only gate (which is correct: they matched on real keywords).
+        if (kcResult?.response && kcResult.intent !== 'NO_DATA') {
           // Deliver KC answer + soft follow-up (NOT hard re-anchor).
           // Old behavior appended the booking step prompt ("What is your name?")
           // after every KC answer — callers felt steamrolled when asking
@@ -620,7 +621,9 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     events.push({ type: 'BK_KC_DIGRESSION_ERROR', error: kcErr.message, timestamp: Date.now() });
   }
 
-  // No KC container matched — re-anchor cleanly to the current booking step.
+  // No KC container matched — acknowledge the question gracefully and
+  // soft-follow-up.  Old behavior silently re-anchored to the booking step
+  // prompt ("What is your name?"), ignoring the caller's question entirely.
   events.push({
     type:      'BK_KC_DIGRESSION_NO_MATCH',
     step:      ctx.step,
@@ -628,8 +631,10 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     timestamp: Date.now()
   });
   ctx.lastPath = 'BK_KC_DIGRESSION_NO_MATCH';
+  const noMatchAck = "That's a great question. I don't have that specific information available, but I can make sure our team follows up with you on that.";
+  const softFollowUp = 'Is there anything else I can help you with, or are you ready to get started?';
   return {
-    nextPrompt: _getStepReAnchor(ctx.step, config),
+    nextPrompt: `${noMatchAck} ${softFollowUp}`,
     bookingCtx: ctx,
     completed:  false,
   };
@@ -817,9 +822,16 @@ function _getStepReAnchor(step, config) {
  * KC containers are the ONLY knowledge source. If no container matches, returns null
  * and the step handler falls back to a generic acknowledgment.
  *
- * Uses discoveryNotes.anchorContainerId for 3× scoring multiplier so mid-booking
- * questions stay routed to the same KC (e.g. Service Call pricing stays in
- * Service Call, not Maintenance).
+ * NO anchor context — booking digressions are inherently off-topic.
+ * Anchor 3× boost and ANCHOR_FLOOR would bias keyword scoring toward the
+ * booking container even when the caller is asking about something else
+ * (e.g. "service call fee" forced to tune-up pricing because anchor floor
+ * returned score 24 on a raw score of 0).
+ * Keywords must meet MIN_THRESHOLD on their own merit.
+ *
+ * Also rejects Groq NO_DATA intent — even if keywords match a section, if
+ * Groq determines the content doesn't answer the question, return null so
+ * the caller gets a graceful acknowledgment instead of wrong information.
  *
  * @param {string} companyId  - Tenant scoping
  * @param {string} question   - Caller's question text
@@ -829,19 +841,11 @@ function _getStepReAnchor(step, config) {
  */
 async function _kcQuickAnswer(companyId, question, ctx, config) {
   try {
-    const [containers, dn] = await Promise.all([
-      KCS.getActiveForCompany(companyId),
-      ctx?.callSid
-        ? DiscoveryNotesService.load(companyId, ctx.callSid).catch(() => null)
-        : Promise.resolve(null),
-    ]);
+    const containers = await KCS.getActiveForCompany(companyId);
     if (!containers.length) return null;
 
-    const anchorCtx = dn?.anchorContainerId
-      ? { anchorContainerId: dn.anchorContainerId }
-      : null;
-
-    const match = KCS.findContainer(containers, question, anchorCtx);
+    // No anchor context — keywords must meet MIN_THRESHOLD on their own
+    const match = KCS.findContainer(containers, question);
     if (!match) return null;
 
     const kcResult = await KCS.answer({
@@ -851,6 +855,8 @@ async function _kcQuickAnswer(companyId, question, ctx, config) {
       kbSettings: { ...(config?.knowledgeBaseSettings || {}), bookingOfferMode: 'none' },
       company:    { _id: companyId, companyName: config?.companyName },
     });
+    // Reject NO_DATA — Groq confirmed the section content doesn't cover this question
+    if (kcResult?.intent === 'NO_DATA') return null;
     return kcResult?.response || null;
   } catch (err) {
     logger.warn(`[${ENGINE_ID}] _kcQuickAnswer failed`, { companyId, err: err.message });
