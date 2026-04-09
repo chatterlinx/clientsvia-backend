@@ -4194,7 +4194,7 @@ function _getSectionIndex(sid) {
 
 // Generate (or regenerate) audio for a specific field.
 // textElId — DOM id of the textarea/input to read text from.
-async function _kcGenAudio(sid, key, textElId) {
+async function _kcGenAudio(sid, key, textElId, { bulk = false } = {}) {
   const textEl  = document.getElementById(textElId);
   const text    = textEl?.value?.trim() || '';
   const mapKey  = `${sid}--${key}`;
@@ -4259,6 +4259,7 @@ async function _kcGenAudio(sid, key, textElId) {
     genBtn.textContent = '🎙️ Generate Audio';
     genBtn.disabled    = false;
     if (hintEl) { hintEl.textContent = `❌ ${err.message || 'Generation failed'}`; hintEl.className = 'kc-audio-hint err'; }
+    if (bulk) throw err;  // re-throw so bulk circuit breaker can detect failures
   }
 }
 
@@ -4783,13 +4784,13 @@ function _markEvalStale(sid) {
 /**
  * _reScorePhrases — batch-score all caller phrases for a section via /phrase-score.
  */
-async function _reScorePhrases(sid) {
+async function _reScorePhrases(sid, { bulk = false } = {}) {
   const data = S.sectionData.get(sid);
   if (!data) return;
   if (!S.mongoId && !S.itemId) { _toast('Save the container first, then score phrases', 'error'); return; }
 
   const phrases = (data.callerPhrases || []).filter(p => p.trim());
-  if (!phrases.length) { _toast('Add caller phrases first', 'error'); return; }
+  if (!phrases.length) { if (!bulk) _toast('Add caller phrases first', 'error'); return; }
 
   const sectionIdx = _getSectionIndexBySid(sid);
   if (sectionIdx < 0) { _toast('Section not found in DOM', 'error'); return; }
@@ -4848,7 +4849,8 @@ async function _reScorePhrases(sid) {
     // fire-and-forget.  CallerPhrases would be lost on page refresh.
     saveContainer({ quiet: true });
   } catch (err) {
-    _toast(err.message || 'Scoring failed', 'error');
+    if (!bulk) _toast(err.message || 'Scoring failed', 'error');
+    if (bulk) throw err;  // re-throw so bulk circuit breaker can detect failures
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pq-btn-icon">↻</span> Re-score'; btn.classList.remove('stale'); }
   }
@@ -5249,7 +5251,7 @@ async function _bulkRescoreAll(e) {
     }
     if (progress) progress.textContent = `Scoring ${done}/${total}…`;
     try {
-      await _reScorePhrases(sid);
+      await _reScorePhrases(sid, { bulk: true });
       scored++;
       consecutiveFails = 0;  // reset on success
     } catch (err) {
@@ -5320,7 +5322,7 @@ async function _bulkGenAudio(e) {
     done++;
     if (progress) progress.textContent = `Generating ${done}/${work.length}…`;
     try {
-      await _kcGenAudio(sid, 'content', `sec-content-${sid}`);
+      await _kcGenAudio(sid, 'content', `sec-content-${sid}`, { bulk: true });
       generated++;
       consecutiveFails = 0;
     } catch (err) {
