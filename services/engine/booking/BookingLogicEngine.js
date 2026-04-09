@@ -587,13 +587,14 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           company:       { _id: companyId, companyName: config.companyName },
         });
         if (kcResult?.response) {
-          // Deliver KC answer + step re-anchor in ONE response.
-          // ctx.step is the current booking step (rolled back if the step handler
-          // incorrectly advanced on a question input).
-          const reAnchor = _getStepReAnchor(ctx.step, config);
-          const combined = reAnchor
-            ? `${kcResult.response} ${reAnchor}`
-            : kcResult.response;
+          // Deliver KC answer + soft follow-up (NOT hard re-anchor).
+          // Old behavior appended the booking step prompt ("What is your name?")
+          // after every KC answer — callers felt steamrolled when asking
+          // multiple questions. Soft follow-up lets the caller decide when
+          // they're ready to book. When they respond with booking info (name,
+          // "yes", "let's book"), the step handler catches it naturally.
+          const softFollowUp = 'Is there anything else I can help you with, or are you ready to get started?';
+          const combined = `${kcResult.response} ${softFollowUp}`;
 
           events.push({
             type:           'BK_KC_DIGRESSION_ANSWERED',
