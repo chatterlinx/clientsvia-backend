@@ -269,19 +269,61 @@
     .kw-more { font-size: 11px; color: var(--text-xs); align-self: center; }
     .kc-no-keywords { font-size: 12px; color: var(--text-xs); font-style: italic; }
 
-    /* Sections preview */
-    .kc-sections { margin-bottom: 8px; }
-    .kc-section-row {
-      display: flex; align-items: flex-start; gap: 8px;
-      padding: 4px 0; border-bottom: 1px dashed #f1f5f9;
+    /* ── Enterprise section breakdown bar ─────────────────────────────── */
+    .kc-stat-bar {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid var(--border); margin-bottom: 10px;
     }
-    .kc-section-row:last-child { border-bottom: none; }
-    .kc-section-label {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .4px; color: var(--color-primary);
-      min-width: 70px; padding-top: 1px;
+    .kc-stat-item {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      letter-spacing: .2px;
     }
-    .kc-section-preview { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+    .kc-stat-item:first-child {
+      color: var(--text-primary); font-weight: 700; font-size: 12px;
+      padding-right: 4px; border-right: 1px solid var(--border); margin-right: 2px;
+    }
+    .kc-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      display: inline-block; flex-shrink: 0;
+    }
+    .dot-green  { background: #10b981; }
+    .dot-amber  { background: #f59e0b; }
+    .dot-blue   { background: #3b82f6; }
+    .dot-purple { background: #8b5cf6; }
+    .dot-gray   { background: #94a3b8; }
+
+    /* ── Performance metrics row ──────────────────────────────────────── */
+    .kc-metrics {
+      display: flex; align-items: flex-end; gap: 20px; padding: 6px 0 2px;
+    }
+    .kc-metric { display: flex; flex-direction: column; gap: 1px; }
+    .kc-metric-value {
+      font-size: 20px; font-weight: 700; color: var(--text-primary);
+      line-height: 1.1; font-variant-numeric: tabular-nums;
+    }
+    .kc-metric-time { font-size: 13px; font-weight: 600; }
+    .kc-metric-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: #94a3b8;
+    }
+    .kc-health {
+      margin-left: auto; flex-direction: row; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 20px; background: #f8fafc;
+      border: 1px solid var(--border);
+    }
+    .kc-health .kc-metric-label { font-size: 10px; letter-spacing: .3px; }
+
+    /* ── Trade badge ──────────────────────────────────────────────────── */
+    .badge-trade { background: #faf5ff; border-color: #c084fc; color: #6b21a8; }
+
+    /* ── Company-wide improvement banner ──────────────────────────────── */
+    .kc-improvement-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d;
+      border-radius: 8px; margin-bottom: 14px; font-size: 12px; color: #92400e;
+    }
+    .kc-improvement-banner strong { font-weight: 700; }
 
     .kc-card-footer {
       display: flex; align-items: center; gap: 8px;
@@ -1182,6 +1224,9 @@
   <span style="font-size:13px;color:var(--text-muted);" id="resultCount"></span>
 </div>
 
+<!-- ── Improvement banner (populated by loadCardAnalytics) ────────────────── -->
+<div id="improvementBanner"></div>
+
 <!-- ── Container cards ────────────────────────────────────────────────────── -->
 <div class="cards-grid" id="cardsGrid">
   <div class="skeleton-card"></div>
@@ -1313,6 +1358,9 @@ const S = {
   diagCoverage:     null,       // computed coverage gap data
   diagSimResults:   null,       // batch simulation results
   diagSimRunning:   false,
+  // Enterprise card analytics
+  cardAnalytics:    null,       // { containerStats, fallbackCount, missCount, totalEntries }
+  trade:            null,       // company trade from v2Company.settings.trade
 };
 
 // Category dot colour palette — cycles through for variety
@@ -1359,8 +1407,10 @@ async function apiFetch(path, opts = {}) {
   // Wire Add button
   document.getElementById('btnAdd').href = `/agent-console/services-item.html?companyId=${S.companyId}`;
 
-  // Load in parallel
+  // Load in parallel — analytics is non-blocking (cards render with '--' then refresh)
   await Promise.all([loadContainers(), loadSettings()]);
+  // Fire analytics after containers so _renderCards() can be called on completion
+  loadCardAnalytics();
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1372,6 +1422,7 @@ async function loadContainers() {
 
     S.containers       = data.containers || [];
     S.companyVariables = new Map(Object.entries(data.companyVariables || {}));
+    S.trade            = data.trade || null;
     // Invalidate diagnostic caches when containers reload
     S.diagCache.clear();
     S.diagCoverage  = null;
@@ -1393,6 +1444,21 @@ async function loadSettings() {
     S.kbSettings = data.knowledgeBaseSettings || {};
     _renderSettings();
   } catch (_e) { /* Non-fatal — settings load fails gracefully */ }
+}
+
+async function loadCardAnalytics() {
+  try {
+    const data = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/card-analytics`);
+    if (data.success) {
+      S.cardAnalytics = data;
+      // Two-phase render: re-render cards now that analytics are available
+      _renderCards();
+      _renderImprovementBanner();
+    }
+  } catch (err) {
+    console.warn('[services.html] loadCardAnalytics error:', err);
+    // Non-fatal — cards still show section stats, just no hit counts
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1782,14 +1848,70 @@ function _renderCards() {
   grid.innerHTML = parts.join('');
 }
 
-function _cardHTML(c) {
-  const kws     = c.keywords || [];
-  const shown   = kws.slice(0, 5);
-  const more    = kws.length - shown.length;
-  const sections = (c.sections || []).sort((a, b) => (a.order || 0) - (b.order || 0)).slice(0, 3);
-  const sCount  = (c.sections || []).length;
+// ── Helper: relative time display ───────────────────────────────────────────
+function _relativeTime(isoStr) {
+  if (!isoStr) return 'Never';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  if (mins < 1)    return 'Just now';
+  if (mins < 60)   return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24)  return `${hours}h ago`;
+  const days  = Math.floor(hours / 24);
+  if (days < 30)   return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
 
-  // Badges
+// ── Company-wide improvement banner ─────────────────────────────────────────
+function _renderImprovementBanner() {
+  const el = document.getElementById('improvementBanner');
+  if (!el || !S.cardAnalytics) { if (el) el.innerHTML = ''; return; }
+
+  const { fallbackCount, missCount, totalEntries } = S.cardAnalytics;
+  if (!totalEntries) { el.innerHTML = ''; return; }
+
+  const unmatchedPct = Math.round(((fallbackCount + missCount) / totalEntries) * 100);
+  if (unmatchedPct < 15) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="kc-improvement-banner">
+      <span style="font-size:16px">📊</span>
+      <span>
+        <strong>${fallbackCount}</strong> LLM fallback${fallbackCount !== 1 ? 's' : ''}
+        and <strong>${missCount}</strong> miss${missCount !== 1 ? 'es' : ''}
+        out of <strong>${totalEntries}</strong> total queries
+        (<strong>${unmatchedPct}%</strong> unmatched).
+        Add more sections and caller phrases to improve coverage.
+      </span>
+    </div>`;
+}
+
+function _cardHTML(c) {
+  const allSections = c.sections || [];
+  const sCount      = allSections.length;
+
+  // ── Section type breakdown (client-side) ──────────────────────────────
+  const fixedWithAudio = allSections.filter(s => s.useFixedResponse && s.audioUrl).length;
+  const fixedNoAudio   = allSections.filter(s => s.useFixedResponse && !s.audioUrl).length;
+  const groqCount      = allSections.filter(s => !s.useFixedResponse && s.isActive !== false).length;
+  const promoCount     = allSections.filter(s => s.isPromotion).length;
+  const offCount       = allSections.filter(s => s.isActive === false).length;
+
+  // ── Analytics (may be null during initial load) ───────────────────────
+  const stats     = S.cardAnalytics?.containerStats?.[String(c._id)];
+  const hitCount  = stats?.hitCount ?? null;
+  const lastHitAt = stats?.lastHitAt;
+  const hitLabel  = hitCount !== null ? hitCount : '--';
+  const lastLabel = lastHitAt ? _relativeTime(lastHitAt) : (hitCount !== null ? 'Never' : '--');
+
+  // ── Health signal ─────────────────────────────────────────────────────
+  let healthDot, healthLabel;
+  if (hitCount === null)  { healthDot = '#94a3b8'; healthLabel = 'Loading'; }
+  else if (hitCount > 5)  { healthDot = '#10b981'; healthLabel = 'Performing'; }
+  else if (hitCount > 0)  { healthDot = '#f59e0b'; healthLabel = 'Low activity'; }
+  else                    { healthDot = '#ef4444'; healthLabel = 'No matches'; }
+
+  // ── Badges ────────────────────────────────────────────────────────────
   const catDot   = c.category ? `<span class="kc-cat-dot" style="background:${_catColour(c.category)}"></span>` : '';
   const catBadge = c.category ? `<span class="badge badge-cat">${_esc(c.category)}</span>` : '';
   const offBadge = !c.isActive ? '<span class="badge badge-off">Inactive</span>' : '';
@@ -1804,7 +1926,11 @@ function _cardHTML(c) {
     ? `<span class="badge badge-limit">${c.wordLimit}w limit</span>`
     : '';
 
-  // Conflict badge — populated from S.healthData if available
+  const tradeBadge = S.trade
+    ? `<span class="badge badge-trade">${_esc(S.trade)}</span>`
+    : '';
+
+  // Conflict badge
   const conflictCount = S.healthData?.containerConflictCounts?.[String(c._id)] || 0;
   const conflictHighest = (() => {
     if (!S.healthData || !conflictCount) return null;
@@ -1823,19 +1949,45 @@ function _cardHTML(c) {
        </span>`
     : '';
 
-  // Keyword chips
+  // ── Keyword chips ─────────────────────────────────────────────────────
+  const kws   = c.keywords || [];
+  const shown = kws.slice(0, 5);
+  const more  = kws.length - shown.length;
   const kwHtml = kws.length
     ? shown.map(k => `<span class="kw-chip">${_esc(k)}</span>`).join('') +
       (more > 0 ? `<span class="kw-more">+${more} more</span>` : '')
     : '<span class="kc-no-keywords">No keywords yet — add via edit page</span>';
 
-  // Section previews
-  const sectionsHtml = sections.map(s =>
-    `<div class="kc-section-row">
-       <span class="kc-section-label">${_esc(s.label)}</span>
-       <span class="kc-section-preview">${_esc(s.content.slice(0, 80))}${s.content.length > 80 ? '…' : ''}</span>
-     </div>`
-  ).join('');
+  // ── Section breakdown bar ─────────────────────────────────────────────
+  const statItems = [];
+  if (fixedWithAudio) statItems.push(`<span class="kc-stat-item"><span class="kc-dot dot-green"></span>${fixedWithAudio} audio</span>`);
+  if (fixedNoAudio)   statItems.push(`<span class="kc-stat-item"><span class="kc-dot dot-amber"></span>${fixedNoAudio} fixed</span>`);
+  if (groqCount)      statItems.push(`<span class="kc-stat-item"><span class="kc-dot dot-blue"></span>${groqCount} groq</span>`);
+  if (promoCount)     statItems.push(`<span class="kc-stat-item"><span class="kc-dot dot-purple"></span>${promoCount} promo</span>`);
+  if (offCount)       statItems.push(`<span class="kc-stat-item"><span class="kc-dot dot-gray"></span>${offCount} off</span>`);
+
+  const sectionBar = `
+    <div class="kc-stat-bar">
+      <span class="kc-stat-item">${sCount} section${sCount !== 1 ? 's' : ''}</span>
+      ${statItems.join('')}
+    </div>`;
+
+  // ── Performance metrics ───────────────────────────────────────────────
+  const metricsRow = `
+    <div class="kc-metrics">
+      <div class="kc-metric">
+        <span class="kc-metric-value">${hitLabel}</span>
+        <span class="kc-metric-label">hits</span>
+      </div>
+      <div class="kc-metric">
+        <span class="kc-metric-value kc-metric-time">${_esc(String(lastLabel))}</span>
+        <span class="kc-metric-label">last hit</span>
+      </div>
+      <div class="kc-health" style="border-color:${healthDot}22;">
+        <span class="kc-dot" style="background:${healthDot}"></span>
+        <span class="kc-metric-label" style="color:${healthDot};opacity:1">${healthLabel}</span>
+      </div>
+    </div>`;
 
   return `
   <div class="kc-card${c.isActive ? '' : ' inactive'}" id="card-${c._id}">
@@ -1845,14 +1997,14 @@ function _cardHTML(c) {
         <div class="kc-title">${_esc(c.title)}</div>
         ${c.kcId ? `<div class="kc-id" title="Knowledge Container ID — immutable, never reused">🏷 ${_esc(c.kcId)}</div>` : ''}
         <div class="kc-badges">
-          ${catBadge}${offBadge}${actionBadge}${limitBadge}${conflictBadge}
-          <span class="badge" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b;">${sCount} section${sCount !== 1 ? 's' : ''}</span>
+          ${catBadge}${offBadge}${tradeBadge}${actionBadge}${limitBadge}${conflictBadge}
         </div>
       </div>
     </div>
     <div class="kc-card-body">
       <div class="kc-keywords">${kwHtml}</div>
-      <div class="kc-sections">${sectionsHtml}</div>
+      ${sectionBar}
+      ${metricsRow}
     </div>
     <div class="kc-card-footer">
       <div class="toggle-wrap">

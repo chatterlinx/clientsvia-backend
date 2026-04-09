@@ -464,10 +464,93 @@ router.get('/:companyId/knowledge', async (req, res) => {
     const companyVariables = triggerSettings?.companyVariables instanceof Map
       ? Object.fromEntries(triggerSettings.companyVariables)
       : (triggerSettings?.companyVariables || {});
-    return res.json({ success: true, containers, total: containers.length, companyVariables });
+    // Also fetch company trade for card badges
+    const company = await v2Company.findById(companyId).select('settings.trade').lean().catch(() => null);
+    const trade = company?.settings?.trade || null;
+
+    return res.json({ success: true, containers, total: containers.length, companyVariables, trade });
   } catch (err) {
     logger.error('[companyKnowledge] GET list error', { companyId, err: err.message });
     return res.status(500).json({ success: false, error: 'Failed to load knowledge containers' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/card-analytics — Per-container hit counts + misses
+// Aggregates Customer.discoveryNotes[].qaLog[] to power enterprise KC cards.
+// ⚠️ MUST be registered BEFORE /:id
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/card-analytics', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const pipeline = [
+      { $match: { companyId } },
+      { $unwind: { path: '$discoveryNotes', preserveNullAndEmptyArrays: false } },
+      { $unwind: { path: '$discoveryNotes.qaLog', preserveNullAndEmptyArrays: false } },
+      // Skip UAP_LAYER1 diagnostic-only entries (same as calibration.js)
+      {
+        $match: {
+          $or: [
+            { 'discoveryNotes.qaLog.type': { $exists: false } },  // standard KC match
+            { 'discoveryNotes.qaLog.type': 'KC_LLM_FALLBACK' },
+            { 'discoveryNotes.qaLog.type': 'KC_GRACEFUL_ACK' },
+          ],
+        },
+      },
+      {
+        $facet: {
+          // Per-container hit counts (successful KC matches have containerId)
+          byContainer: [
+            { $match: { 'discoveryNotes.qaLog.containerId': { $exists: true, $ne: null } } },
+            {
+              $group: {
+                _id: '$discoveryNotes.qaLog.containerId',
+                hitCount:  { $sum: 1 },
+                lastHitAt: { $max: '$discoveryNotes.qaLog.timestamp' },
+              },
+            },
+          ],
+          // LLM fallback count — Groq took over (near-miss, needs better sections)
+          fallbacks: [
+            { $match: { 'discoveryNotes.qaLog.type': 'KC_LLM_FALLBACK' } },
+            { $count: 'total' },
+          ],
+          // Graceful ACK — total misses (no KC + no LLM)
+          misses: [
+            { $match: { 'discoveryNotes.qaLog.type': 'KC_GRACEFUL_ACK' } },
+            { $count: 'total' },
+          ],
+          // Total actionable entries
+          totals: [
+            { $count: 'total' },
+          ],
+        },
+      },
+    ];
+
+    const [result] = await Customer.aggregate(pipeline);
+
+    // Shape: containerId string → { hitCount, lastHitAt }
+    const containerStats = {};
+    for (const row of (result?.byContainer || [])) {
+      containerStats[String(row._id)] = {
+        hitCount:  row.hitCount,
+        lastHitAt: row.lastHitAt,
+      };
+    }
+
+    return res.json({
+      success:        true,
+      containerStats,
+      fallbackCount:  result?.fallbacks?.[0]?.total || 0,
+      missCount:      result?.misses?.[0]?.total || 0,
+      totalEntries:   result?.totals?.[0]?.total || 0,
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] card-analytics error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to load analytics' });
   }
 });
 
