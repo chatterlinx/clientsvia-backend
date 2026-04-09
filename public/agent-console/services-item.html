@@ -5231,7 +5231,7 @@ async function _bulkRescoreAll(e) {
 
   const progress = document.getElementById('bulkOpsProgress');
   _bulkDisableAll(true);
-  let done = 0, scored = 0, skipped = 0;
+  let done = 0, scored = 0, skipped = 0, consecutiveFails = 0;
 
   for (const sid of sids) {
     const data = S.sectionData.get(sid);
@@ -5246,14 +5246,20 @@ async function _bulkRescoreAll(e) {
     try {
       await _reScorePhrases(sid);
       scored++;
+      consecutiveFails = 0;  // reset on success
     } catch (err) {
+      consecutiveFails++;
       console.warn(`[BulkOps] Re-score failed for sid ${sid}:`, err);
+      if (consecutiveFails >= 3) {
+        _toast('Server unreachable — aborting bulk re-score. Try again in a minute.', 'error');
+        break;
+      }
     }
   }
 
   if (progress) progress.textContent = `Done — ${scored} scored, ${skipped} skipped`;
   _bulkDisableAll(false);
-  _toast(`Bulk re-score complete: ${scored} sections scored, ${skipped} skipped`, 'success');
+  if (consecutiveFails < 3) _toast(`Bulk re-score complete: ${scored} sections scored, ${skipped} skipped`, 'success');
 }
 
 /** Bulk Fix/Unfix: set useFixedResponse on all sections + trigger UI update. */
@@ -5303,7 +5309,7 @@ async function _bulkGenAudio(e) {
 
   const progress = document.getElementById('bulkOpsProgress');
   _bulkDisableAll(true);
-  let done = 0, generated = 0, errors = 0;
+  let done = 0, generated = 0, errors = 0, consecutiveFails = 0;
 
   for (const sid of work) {
     done++;
@@ -5311,15 +5317,21 @@ async function _bulkGenAudio(e) {
     try {
       await _kcGenAudio(sid, 'content', `sec-content-${sid}`);
       generated++;
+      consecutiveFails = 0;
     } catch (err) {
       errors++;
+      consecutiveFails++;
       console.warn(`[BulkOps] Audio gen failed for sid ${sid}:`, err);
+      if (consecutiveFails >= 3) {
+        _toast('Server unreachable — aborting bulk audio. Try again in a minute.', 'error');
+        break;
+      }
     }
   }
 
   if (progress) progress.textContent = `Done — ${generated} generated${errors ? `, ${errors} errors` : ''}`;
   _bulkDisableAll(false);
-  _toast(`Generated audio for ${generated} section${generated !== 1 ? 's' : ''}${errors ? ` (${errors} errors)` : ''}`, 'success');
+  if (consecutiveFails < 3) _toast(`Generated audio for ${generated} section${generated !== 1 ? 's' : ''}${errors ? ` (${errors} errors)` : ''}`, 'success');
 }
 
 function _toast(msg, type = 'info') {
