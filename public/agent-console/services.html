@@ -690,13 +690,17 @@
     .pf-scan-btn:hover { background: #4f46e5; }
     .pf-scan-btn:disabled { opacity: .5; cursor: not-allowed; }
     .pf-results { display: flex; flex-direction: column; gap: 6px; }
+    .pf-result-card {
+      border-radius: 8px; background: #f8fafc;
+      border: 1px solid #f1f5f9; transition: background .12s;
+      overflow: hidden;
+    }
+    .pf-result-card:hover { background: #f1f5f9; }
+    .pf-result-card.top { background: #f0fdf4; border-color: #86efac; }
     .pf-result-row {
       display: flex; align-items: center; gap: 10px;
-      padding: 8px 12px; border-radius: 8px; background: #f8fafc;
-      border: 1px solid #f1f5f9; transition: background .12s;
+      padding: 8px 12px; cursor: pointer;
     }
-    .pf-result-row:hover { background: #f1f5f9; }
-    .pf-result-row.top { background: #f0fdf4; border-color: #86efac; }
     .pf-score-bar-wrap { width: 60px; }
     .pf-score-bar { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
     .pf-score-fill { height: 100%; border-radius: 3px; }
@@ -707,6 +711,11 @@
     .pf-pct.high { color: #16a34a; }
     .pf-pct.mid  { color: #d97706; }
     .pf-pct.low  { color: #dc2626; }
+    .pf-sect-idx {
+      font-size: 10px; font-weight: 700; color: #6366f1; background: #eef2ff;
+      padding: 1px 6px; border-radius: 4px; border: 1px solid #c7d2fe;
+      font-variant-numeric: tabular-nums; min-width: 28px; text-align: center;
+    }
     .pf-section-name { flex: 1; font-size: 12px; font-weight: 500; color: #1e293b; }
     .pf-container-name { font-size: 11px; color: #94a3b8; min-width: 100px; }
     .pf-home-tag {
@@ -717,6 +726,25 @@
       font-size: 11px; color: #6366f1; text-decoration: none; font-weight: 600;
     }
     .pf-link:hover { text-decoration: underline; }
+    .pf-result-content {
+      display: none; padding: 0 12px 10px 12px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .pf-result-card.expanded .pf-result-content { display: block; }
+    .pf-result-response {
+      font-size: 12px; color: #475569; line-height: 1.5;
+      padding: 8px 10px; background: white; border-radius: 6px;
+      border: 1px solid #e2e8f0; margin-top: 8px;
+    }
+    .pf-result-response-label {
+      font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
+      letter-spacing: 0.3px; margin-top: 8px;
+    }
+    .pf-expand-icon {
+      font-size: 10px; color: #94a3b8; transition: transform .15s;
+      min-width: 14px; text-align: center;
+    }
+    .pf-result-card.expanded .pf-expand-icon { transform: rotate(90deg); }
     .pf-actions {
       display: flex; align-items: center; gap: 10px;
       margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9;
@@ -3038,16 +3066,26 @@ async function pfScan() {
       const pctCls = pct >= 90 ? 'high' : pct >= 70 ? 'mid' : 'low';
       const isTop  = rank === 0 && pct >= 90;
       const link   = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${m.containerId}`;
+      const cardId = `pfCard${rank}`;
+      const contentPreview = m.content || 'No response content';
 
-      html += `<div class="pf-result-row${isTop ? ' top' : ''}">
-        <span class="pf-pct ${pctCls}">${pct}%</span>
-        <div class="pf-score-bar-wrap">
-          <div class="pf-score-bar"><div class="pf-score-fill ${pctCls}" style="width:${pct}%"></div></div>
+      html += `<div class="pf-result-card${isTop ? ' top' : ''}" id="${cardId}">
+        <div class="pf-result-row" onclick="document.getElementById('${cardId}').classList.toggle('expanded')">
+          <span class="pf-expand-icon">▶</span>
+          <span class="pf-pct ${pctCls}">${pct}%</span>
+          <div class="pf-score-bar-wrap">
+            <div class="pf-score-bar"><div class="pf-score-fill ${pctCls}" style="width:${pct}%"></div></div>
+          </div>
+          <span class="pf-sect-idx">§${m.sectionIndex}</span>
+          <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
+          <span class="pf-container-name">${_esc(m.containerName)}</span>
+          ${isTop ? '<span class="pf-home-tag">✓ Home</span>' : ''}
+          <a class="pf-link" href="${link}" target="_blank" onclick="event.stopPropagation()">Open →</a>
         </div>
-        <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
-        <span class="pf-container-name">${_esc(m.containerName)}</span>
-        ${isTop ? '<span class="pf-home-tag">✓ Home</span>' : ''}
-        <a class="pf-link" href="${link}" target="_blank">Open →</a>
+        <div class="pf-result-content">
+          <div class="pf-result-response-label">Agent Response</div>
+          <div class="pf-result-response">${_esc(contentPreview)}</div>
+        </div>
       </div>`;
     });
 
@@ -3092,6 +3130,12 @@ async function pfScan() {
                 ? '<span class="pf-anchor-pills">' + anchors.map(w => `<span class="pf-anchor-pill">${_esc(w)}</span>`).join('') + '</span>'
                 : '<span class="pf-no-anchors">No anchor words — open gate</span>'
               }</span>
+            </div>
+            <div class="pf-route-row">
+              <span class="pf-route-label">Response</span>
+              <span class="pf-route-value">
+                <div class="pf-result-response">${_esc(d.content || 'No response content')}</div>
+              </span>
             </div>
           </div>
         </div>`;

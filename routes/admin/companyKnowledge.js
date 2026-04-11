@@ -2497,6 +2497,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
       { projection: {
         title: 1,
         'sections.label': 1,
+        'sections.content': 1,
         'sections.contentEmbedding': 1,
         'sections.isActive': 1,
         'sections.callerPhrases': 1,
@@ -2514,6 +2515,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
           containerName:  doc.title || 'Untitled',
           sectionIndex:   idx,
           sectionLabel:   sec.label || `Section ${idx + 1}`,
+          content:        (sec.content || '').substring(0, 300),
           contentEmb:     sec.contentEmbedding,
           callerPhrases:  (sec.callerPhrases || []).map(p => {
             if (typeof p === 'string') return { text: p, anchorWords: [] };
@@ -2562,6 +2564,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         containerName:    sec.containerName,
         sectionIndex:     sec.sectionIndex,
         sectionLabel:     sec.sectionLabel,
+        content:          sec.content,
         contentScore:     _cosineSimilarity(emb, sec.contentEmb),
         isCurrentSection: sec.isCurrentSection,
         isActive:         sec.isActive,
@@ -2574,6 +2577,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         containerName:    m.containerName,
         sectionIndex:     m.sectionIndex,
         sectionLabel:     m.sectionLabel,
+        content:          m.content,
         contentScore:     Math.round(m.contentScore * 1000) / 1000,
         isCurrentSection: m.isCurrentSection,
         isActive:         m.isActive,
@@ -2597,6 +2601,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
             containerName:  sec.containerName,
             sectionIndex:   sec.sectionIndex,
             sectionLabel:   sec.sectionLabel,
+            content:        sec.content,
             anchorWords:    anchorWords || [],
           });
         }
