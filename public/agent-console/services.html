@@ -743,9 +743,56 @@
       padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;
       border: 1px dashed #e2e8f0; border-radius: 8px;
     }
-    .pf-dup-warn {
-      margin-top: 8px; padding: 8px 12px; background: #fff8f8; border: 1px solid #fecaca;
-      border-radius: 6px; font-size: 11px; color: #991b1b;
+    /* ── Phrase Finder — Route Diagnostic Panel ───────────────────────── */
+    .pf-route-panel {
+      margin-top: 12px; padding: 0; background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 10px; overflow: hidden;
+    }
+    .pf-route-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; background: #dcfce7; border-bottom: 1px solid #bbf7d0;
+    }
+    .pf-route-icon { font-size: 16px; }
+    .pf-route-title { font-size: 12px; font-weight: 700; color: #166534; flex: 1; }
+    .pf-route-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pf-route-badge.exact    { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .pf-route-badge.partial  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .pf-route-badge.overlap  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .pf-route-badge.semantic { background: #f3e8ff; color: #6b21a8; border: 1px solid #c4b5fd; }
+    .pf-route-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+    .pf-route-row {
+      display: flex; align-items: flex-start; gap: 8px; font-size: 12px;
+    }
+    .pf-route-label {
+      min-width: 80px; font-weight: 600; color: #64748b; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.3px; padding-top: 1px;
+    }
+    .pf-route-value { color: #1e293b; flex: 1; line-height: 1.5; }
+    .pf-route-link {
+      color: #6366f1; text-decoration: none; font-weight: 600;
+    }
+    .pf-route-link:hover { text-decoration: underline; }
+    .pf-route-conf {
+      font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .pf-route-conf.high { color: #16a34a; }
+    .pf-route-conf.mid  { color: #d97706; }
+    .pf-anchor-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pf-anchor-pill {
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+      background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
+    }
+    .pf-no-anchors {
+      font-size: 11px; color: #94a3b8; font-style: italic;
+    }
+    .pf-route-phrase-text {
+      font-size: 12px; color: #475569; font-style: italic;
+    }
+    .pf-route-sep {
+      height: 1px; background: #bbf7d0; margin: 2px 0;
     }
 
     /* ── Delete confirm dialog ───────────────────────────────────────────── */
@@ -2944,6 +2991,21 @@ function closePhraseFinder() {
   document.getElementById('pfOverlay').classList.remove('open');
 }
 
+// ── UAP match-type simulation (mirrors UtteranceActParser passes 1-3) ──
+function _pfSimulateMatch(input, phrase) {
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  const ni = norm(input);
+  const np = norm(phrase);
+  if (ni === np) return { type: 'EXACT', confidence: 0.95 };
+  const phraseWords = np.split(/\s+/);
+  const inputWords  = new Set(ni.split(/\s+/));
+  if (phraseWords.length > 0 && phraseWords.every(w => inputWords.has(w))) return { type: 'PARTIAL', confidence: 0.80 };
+  const overlap  = phraseWords.filter(w => inputWords.has(w)).length;
+  const coverage = phraseWords.length ? overlap / phraseWords.length : 0;
+  if (coverage >= 0.5) return { type: 'WORD_OVERLAP', confidence: Math.round(coverage * 100) / 100 };
+  return { type: 'SEMANTIC', confidence: 0.65 };
+}
+
 async function pfScan() {
   const phrase = document.getElementById('pfInput').value.trim();
   if (!phrase) return;
@@ -2989,13 +3051,51 @@ async function pfScan() {
       </div>`;
     });
 
-    // Duplicate warnings
+    // ── Route Diagnostic Panel — rich data for each existing phrase match ──
     if (scanResult.duplicates?.length) {
-      html += '<div class="pf-dup-warn"><strong>⚡ Already exists as a phrase in:</strong>';
       scanResult.duplicates.forEach(d => {
-        html += `<br>• ${_esc(d.sectionLabel)} (${_esc(d.containerName)}) — "${_esc(d.phrase)}" (${Math.round(d.similarity * 100)}%)`;
+        const sim       = _pfSimulateMatch(phrase, d.phrase);
+        const confPct   = Math.round(sim.confidence * 100);
+        const confCls   = confPct >= 90 ? 'high' : confPct >= 70 ? 'mid' : 'low';
+        const badgeCls  = sim.type === 'EXACT' ? 'exact' : sim.type === 'PARTIAL' ? 'partial' : sim.type === 'WORD_OVERLAP' ? 'overlap' : 'semantic';
+        const link      = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${d.containerId}`;
+        const anchors   = d.anchorWords || [];
+
+        html += `<div class="pf-route-panel">
+          <div class="pf-route-header">
+            <span class="pf-route-icon">✅</span>
+            <span class="pf-route-title">ROUTED — This phrase has a home</span>
+            <span class="pf-route-badge ${badgeCls}">${_esc(sim.type)}</span>
+          </div>
+          <div class="pf-route-body">
+            <div class="pf-route-row">
+              <span class="pf-route-label">Section</span>
+              <span class="pf-route-value">
+                <a class="pf-route-link" href="${link}" target="_blank">${_esc(d.sectionLabel)} →</a>
+                <span style="color:#94a3b8;font-size:11px;margin-left:6px;">${_esc(d.containerName)} · §${d.sectionIndex}</span>
+              </span>
+            </div>
+            <div class="pf-route-row">
+              <span class="pf-route-label">Phrase</span>
+              <span class="pf-route-value pf-route-phrase-text">"${_esc(d.phrase)}"</span>
+            </div>
+            <div class="pf-route-row">
+              <span class="pf-route-label">Match</span>
+              <span class="pf-route-value">
+                <span class="pf-route-conf ${confCls}">${confPct}%</span>
+                <span style="color:#94a3b8;font-size:11px;margin-left:6px;">UAP ${_esc(sim.type)} · Embedding ${Math.round(d.similarity * 100)}%</span>
+              </span>
+            </div>
+            <div class="pf-route-row">
+              <span class="pf-route-label">Anchors</span>
+              <span class="pf-route-value">${anchors.length
+                ? '<span class="pf-anchor-pills">' + anchors.map(w => `<span class="pf-anchor-pill">${_esc(w)}</span>`).join('') + '</span>'
+                : '<span class="pf-no-anchors">No anchor words — open gate</span>'
+              }</span>
+            </div>
+          </div>
+        </div>`;
       });
-      html += '</div>';
     }
 
     html += '</div>';

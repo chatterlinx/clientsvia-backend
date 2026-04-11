@@ -2515,7 +2515,10 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
           sectionIndex:   idx,
           sectionLabel:   sec.label || `Section ${idx + 1}`,
           contentEmb:     sec.contentEmbedding,
-          callerPhrases:  (sec.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
+          callerPhrases:  (sec.callerPhrases || []).map(p => {
+            if (typeof p === 'string') return { text: p, anchorWords: [] };
+            return { text: p.text || '', anchorWords: (p.anchorWords || []).map(w => `${w}`.trim()).filter(Boolean) };
+          }).filter(cp => cp.text),
           isActive:       sec.isActive !== false,
           isCurrentSection: sourceContainerId
             ? (docId === sourceContainerId && idx === sourceSectionIndex)
@@ -2530,11 +2533,11 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
     // ── Pre-embed all caller phrases for duplicate detection ────────────
     // Collect unique caller phrases across all sections
     const allCallerPhrases = [];
-    const callerPhraseMap  = [];     // { sectionIdx in sectionIndex, phraseText }
+    const callerPhraseMap  = [];     // { sIdx, text, anchorWords }
     for (let sIdx = 0; sIdx < sectionIndex.length; sIdx++) {
       for (const cp of sectionIndex[sIdx].callerPhrases) {
-        allCallerPhrases.push(cp);
-        callerPhraseMap.push({ sIdx, text: cp });
+        allCallerPhrases.push(cp.text);
+        callerPhraseMap.push({ sIdx, text: cp.text, anchorWords: cp.anchorWords });
       }
     }
     const callerPhraseEmbeddings = allCallerPhrases.length
@@ -2583,7 +2586,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         if (!cpEmb?.length) continue;
         const sim = _cosineSimilarity(emb, cpEmb);
         if (sim >= 0.92) {
-          const { sIdx, text } = callerPhraseMap[cpIdx];
+          const { sIdx, text, anchorWords } = callerPhraseMap[cpIdx];
           const sec = sectionIndex[sIdx];
           // Don't flag duplicates in the source section itself
           if (sec.isCurrentSection) continue;
@@ -2594,6 +2597,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
             containerName:  sec.containerName,
             sectionIndex:   sec.sectionIndex,
             sectionLabel:   sec.sectionLabel,
+            anchorWords:    anchorWords || [],
           });
         }
       }
