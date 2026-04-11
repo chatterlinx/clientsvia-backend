@@ -30,6 +30,15 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; background: var(--bg-page); color: var(--text-primary); min-height: 100vh; }
 
+    /* ── Embed mode — iframe inside Phrase Finder workstation ──────────── */
+    body.embed-mode .page-header { padding: 0 16px; height: 42px; }
+    body.embed-mode .btn-back { display: none; }
+    body.embed-mode .page-header .header-divider:first-of-type { display: none; }
+    body.embed-mode #btnDeleteHeader { display: none !important; }
+    body.embed-mode #btnCancel { display: none; }
+    body.embed-mode #hardDeleteSection { display: none !important; }
+    body.embed-mode .form-page { padding: 0 16px 60px; max-width: 100%; }
+
     /* ── Sticky header ────────────────────────────────────────────────────── */
     .page-header {
       background: var(--bg-header); border-bottom: 1px solid var(--border);
@@ -1938,6 +1947,8 @@ async function _saveItemVar(varName, value) {
   S.companyId    = params.get('companyId');
   S.itemId       = params.get('itemId') || null;
   S.isEdit       = !!S.itemId;
+  S.embedMode    = params.get('embed') === '1';
+  if (S.embedMode) document.body.classList.add('embed-mode');
 
   if (!S.companyId) {
     document.getElementById('formLoading').innerHTML =
@@ -1972,6 +1983,24 @@ async function _saveItemVar(varName, value) {
 
   // Load variable values + scan section content for {placeholders}
   _loadItemVars();
+
+  // ── Embed mode: listen for scroll-to messages from parent (Phrase Finder workstation) ──
+  if (S.embedMode) {
+    window.addEventListener('message', e => {
+      if (e.data?.type === 'pf-scroll-to' && typeof e.data.sectionIdx === 'number') {
+        const rows = document.querySelectorAll('#sectionsList .section-row');
+        const idx = e.data.sectionIdx;
+        if (idx >= 0 && idx < rows.length) {
+          const target = rows[idx];
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          target.style.transition = 'box-shadow 0.3s, border-color 0.3s';
+          target.style.boxShadow  = '0 0 0 3px rgba(99,102,241,.35)';
+          target.style.borderColor = '#818cf8';
+          setTimeout(() => { target.style.boxShadow = ''; target.style.borderColor = ''; }, 2500);
+        }
+      }
+    });
+  }
 })();
 
 async function _loadCategoryOptions() {
@@ -3546,7 +3575,13 @@ async function saveContainer({ quiet = false } = {}) {
     if (!data.success) throw new Error(data.error || 'Save failed');
 
     _toast(S.isEdit ? 'Container updated ✓' : 'Container created ✓', 'success');
-    setTimeout(() => goBack(), 800);
+    if (S.embedMode) {
+      // In workstation mode — stay in iframe, notify parent to re-scan
+      _setLoading(false);
+      try { window.parent.postMessage({ type: 'pf-section-saved', containerId: S.itemId }, '*'); } catch (_) {}
+    } else {
+      setTimeout(() => goBack(), 800);
+    }
   } catch (err) {
     _toast(err.message || 'Failed to save', 'error');
     _setLoading(false);
@@ -4077,6 +4112,7 @@ async function hardDelete() {
 // UI HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 function goBack() {
+  if (S.embedMode) return; // In embed mode, don't navigate away from iframe
   location.href = `/agent-console/services.html?companyId=${S.companyId}`;
 }
 

@@ -650,22 +650,46 @@
     }
     .btn-export:hover { background: #dcfce7; border-color: #86efac; }
 
-    /* ── Phrase Finder modal ──────────────────────────────────────────────── */
+    /* ── Phrase Finder Workstation ──────────────────────────────────────── */
     .pf-overlay {
       display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,.45); z-index: 1000;
-      align-items: flex-start; justify-content: center; padding-top: 10vh;
+      background: #f1f5f9; z-index: 1000;
     }
     .pf-overlay.open { display: flex; }
-    .pf-box {
-      background: white; border-radius: 14px;
-      max-width: 720px; width: 95%;
-      box-shadow: 0 20px 60px rgba(0,0,0,.2);
-      max-height: 75vh; display: flex; flex-direction: column;
+    .pf-workstation {
+      display: flex; flex-direction: column;
+      width: 100%; height: 100%;
     }
+    .pf-top-pane {
+      flex: 0 0 42%; min-height: 180px;
+      display: flex; flex-direction: column;
+      background: white; border-bottom: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+    .pf-drag-handle {
+      flex-shrink: 0; height: 8px; background: #e2e8f0;
+      cursor: row-resize; display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .pf-drag-handle:hover { background: #cbd5e1; }
+    .pf-drag-grip { width: 40px; height: 3px; background: #94a3b8; border-radius: 2px; }
+    .pf-bottom-pane {
+      flex: 1; min-height: 180px;
+      display: flex; flex-direction: column;
+      background: #f8fafc; overflow: hidden;
+    }
+    .pf-iframe-placeholder {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #94a3b8; gap: 12px;
+    }
+    .pf-placeholder-icon { font-size: 40px; opacity: 0.5; }
+    .pf-placeholder-text { font-size: 14px; font-weight: 500; }
+    .pf-editor-frame { width: 100%; flex: 1; border: none; background: white; }
     .pf-header {
       display: flex; align-items: center; gap: 12px;
-      padding: 18px 22px; border-bottom: 1px solid #e2e8f0;
+      padding: 14px 22px; border-bottom: 1px solid #e2e8f0;
+      flex-shrink: 0; background: white;
     }
     .pf-header-icon { font-size: 22px; }
     .pf-title { font-size: 17px; font-weight: 700; flex: 1; }
@@ -675,7 +699,7 @@
       display: flex; align-items: center; justify-content: center;
     }
     .pf-close:hover { background: #e2e8f0; color: #0f172a; }
-    .pf-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+    .pf-body { padding: 14px 22px; overflow-y: auto; flex: 1; min-height: 0; }
     .pf-input-row { display: flex; gap: 10px; margin-bottom: 16px; }
     .pf-input {
       flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px;
@@ -723,9 +747,21 @@
       padding: 2px 8px; border-radius: 4px;
     }
     .pf-link {
-      font-size: 11px; color: #6366f1; text-decoration: none; font-weight: 600;
+      font-size: 11px; color: #6366f1; text-decoration: none; font-weight: 600; cursor: pointer;
     }
     .pf-link:hover { text-decoration: underline; }
+    .pf-result-card.pf-active {
+      border-color: #6366f1; background: #eef2ff;
+      box-shadow: 0 0 0 2px rgba(99,102,241,.2);
+    }
+    .pf-rescan-hint {
+      padding: 8px 14px; margin-bottom: 10px;
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+      font-size: 12px; color: #166534; font-weight: 500;
+      animation: pfFadeIn .3s;
+    }
+    .pf-rescan-link { color: #6366f1; font-weight: 700; cursor: pointer; text-decoration: underline; }
+    @keyframes pfFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
     .pf-result-content {
       display: none; padding: 0 12px 10px 12px;
       border-top: 1px solid #e2e8f0;
@@ -1311,20 +1347,33 @@
 
 <!-- ── Phrase Finder modal ─────────────────────────────────────────────── -->
 <div class="pf-overlay" id="pfOverlay">
-  <div class="pf-box">
-    <div class="pf-header">
-      <span class="pf-header-icon">🔍</span>
-      <div class="pf-title">Phrase Finder</div>
-      <button class="pf-close" onclick="closePhraseFinder()">✕</button>
-    </div>
-    <div class="pf-body">
-      <div class="pf-input-row">
-        <input type="text" class="pf-input" id="pfInput"
-          placeholder="Type a caller phrase, e.g. &quot;how often should I get my hvac tuned up&quot;"
-          onkeydown="if(event.key==='Enter'){pfScan();event.preventDefault();}">
-        <button class="pf-scan-btn" id="pfScanBtn" onclick="pfScan()">Scan</button>
+  <div class="pf-workstation">
+    <!-- TOP PANE: Search + Results -->
+    <div class="pf-top-pane" id="pfTopPane">
+      <div class="pf-header">
+        <span class="pf-header-icon">🔍</span>
+        <div class="pf-title">Phrase Finder Workstation</div>
+        <button class="pf-close" onclick="closePhraseFinder()">✕</button>
       </div>
-      <div id="pfResults"></div>
+      <div class="pf-body">
+        <div class="pf-input-row">
+          <input type="text" class="pf-input" id="pfInput"
+            placeholder="Type a caller phrase, e.g. &quot;how often should I get my hvac tuned up&quot;"
+            onkeydown="if(event.key==='Enter'){pfScan();event.preventDefault();}">
+          <button class="pf-scan-btn" id="pfScanBtn" onclick="pfScan()">Scan</button>
+        </div>
+        <div id="pfResults"></div>
+      </div>
+    </div>
+    <!-- DRAG HANDLE -->
+    <div class="pf-drag-handle" id="pfDragHandle"><div class="pf-drag-grip"></div></div>
+    <!-- BOTTOM PANE: Section Editor (iframe) -->
+    <div class="pf-bottom-pane" id="pfBottomPane">
+      <div class="pf-iframe-placeholder" id="pfIframePlaceholder">
+        <div class="pf-placeholder-icon">📝</div>
+        <div class="pf-placeholder-text">Click a section above to load its editor</div>
+      </div>
+      <iframe id="pfEditorFrame" class="pf-editor-frame" style="display:none;"></iframe>
     </div>
   </div>
 </div>
@@ -3012,12 +3061,84 @@ function _renderSimResults(filter) {
 
 function openPhraseFinder() {
   document.getElementById('pfOverlay').classList.add('open');
+  _pfResetEditor();
   setTimeout(() => document.getElementById('pfInput').focus(), 100);
 }
 
 function closePhraseFinder() {
   document.getElementById('pfOverlay').classList.remove('open');
+  // Clear iframe to free memory
+  const frame = document.getElementById('pfEditorFrame');
+  frame.src = 'about:blank';
+  frame.style.display = 'none';
+  document.getElementById('pfIframePlaceholder').style.display = '';
 }
+
+// ── Load a KC section into the bottom-pane iframe ──────────────────────
+function _pfLoadEditor(containerId, sectionIndex, cardElement) {
+  const frame       = document.getElementById('pfEditorFrame');
+  const placeholder = document.getElementById('pfIframePlaceholder');
+
+  // Highlight active result card
+  document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
+  if (cardElement) cardElement.classList.add('pf-active');
+
+  const url = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${containerId}&sectionIdx=${sectionIndex}&embed=1`;
+
+  placeholder.style.display = 'none';
+  frame.style.display = '';
+  frame.src = url;
+}
+
+function _pfResetEditor() {
+  const frame = document.getElementById('pfEditorFrame');
+  frame.src = 'about:blank';
+  frame.style.display = 'none';
+  document.getElementById('pfIframePlaceholder').style.display = '';
+  document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
+}
+
+// ── Drag handle resize ──────────────────────────────────────────────────
+(function _pfDragInit() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const handle = document.getElementById('pfDragHandle');
+    if (!handle) return;
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const topPane = document.getElementById('pfTopPane');
+      const startY  = e.clientY;
+      const startH  = topPane.getBoundingClientRect().height;
+      const onMove = ev => {
+        const newH = Math.max(180, Math.min(window.innerHeight - 180, startH + (ev.clientY - startY)));
+        topPane.style.flex = `0 0 ${newH}px`;
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+})();
+
+// ── Listen for save events from iframe editor ──────────────────────────
+window.addEventListener('message', e => {
+  if (e.data?.type === 'pf-section-saved') {
+    const existing = document.querySelector('.pf-rescan-hint');
+    if (existing) existing.remove();
+    const hint = document.createElement('div');
+    hint.className = 'pf-rescan-hint';
+    hint.innerHTML = '✓ Section saved — <span class="pf-rescan-link" onclick="pfScan()">Re-scan to verify</span>';
+    const resultsEl = document.getElementById('pfResults');
+    if (resultsEl) resultsEl.insertBefore(hint, resultsEl.firstChild);
+    setTimeout(() => { if (hint.parentNode) hint.remove(); }, 8000);
+  }
+});
 
 // ── UAP match-type simulation (mirrors UtteranceActParser passes 1-3) ──
 function _pfSimulateMatch(input, phrase) {
@@ -3065,13 +3186,12 @@ async function pfScan() {
       const pct    = Math.round(m.contentScore * 100);
       const pctCls = pct >= 90 ? 'high' : pct >= 70 ? 'mid' : 'low';
       const isTop  = rank === 0 && pct >= 90;
-      const link   = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${m.containerId}&sectionIdx=${m.sectionIndex}`;
       const cardId = `pfCard${rank}`;
       const contentPreview = m.content || 'No response content';
 
       html += `<div class="pf-result-card${isTop ? ' top' : ''}" id="${cardId}">
-        <div class="pf-result-row" onclick="document.getElementById('${cardId}').classList.toggle('expanded')">
-          <span class="pf-expand-icon">▶</span>
+        <div class="pf-result-row" onclick="_pfLoadEditor('${m.containerId}', ${m.sectionIndex}, document.getElementById('${cardId}'))">
+          <span class="pf-expand-icon" onclick="event.stopPropagation();document.getElementById('${cardId}').classList.toggle('expanded')">▶</span>
           <span class="pf-pct ${pctCls}">${pct}%</span>
           <div class="pf-score-bar-wrap">
             <div class="pf-score-bar"><div class="pf-score-fill ${pctCls}" style="width:${pct}%"></div></div>
@@ -3080,7 +3200,7 @@ async function pfScan() {
           <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
           <span class="pf-container-name">${_esc(m.containerName)}</span>
           ${isTop ? '<span class="pf-home-tag">✓ Home</span>' : ''}
-          <a class="pf-link" href="${link}" target="_blank" onclick="event.stopPropagation()">Open →</a>
+          <span class="pf-link" onclick="event.stopPropagation();_pfLoadEditor('${m.containerId}', ${m.sectionIndex}, document.getElementById('${cardId}'))">Edit →</span>
         </div>
         <div class="pf-result-content">
           <div class="pf-result-response-label">Agent Response</div>
@@ -3096,7 +3216,6 @@ async function pfScan() {
         const confPct   = Math.round(sim.confidence * 100);
         const confCls   = confPct >= 90 ? 'high' : confPct >= 70 ? 'mid' : 'low';
         const badgeCls  = sim.type === 'EXACT' ? 'exact' : sim.type === 'PARTIAL' ? 'partial' : sim.type === 'WORD_OVERLAP' ? 'overlap' : 'semantic';
-        const link      = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${d.containerId}&sectionIdx=${d.sectionIndex}`;
         const anchors   = d.anchorWords || [];
 
         html += `<div class="pf-route-panel">
@@ -3109,7 +3228,7 @@ async function pfScan() {
             <div class="pf-route-row">
               <span class="pf-route-label">Section</span>
               <span class="pf-route-value">
-                <a class="pf-route-link" href="${link}" target="_blank">${_esc(d.sectionLabel)} →</a>
+                <span class="pf-route-link" style="cursor:pointer;" onclick="_pfLoadEditor('${d.containerId}', ${d.sectionIndex})">${_esc(d.sectionLabel)} →</span>
                 <span class="pf-sect-idx" style="margin-left:8px;">${d.sectionKcId || ('§' + d.sectionIndex)}</span>
                 <span style="color:#94a3b8;font-size:11px;margin-left:6px;">${_esc(d.containerName)}</span>
               </span>
