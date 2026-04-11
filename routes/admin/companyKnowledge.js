@@ -2590,17 +2590,29 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         };
       });
 
-      // Check for duplicate caller phrases (cosine ≥ 0.92)
+      // ── Score input vs ALL callerPhrase embeddings ───────────────────
+      // Track best phrase match per section + duplicates (≥0.92)
       const duplicates = [];
+      const bestPhrasePerSection = new Map();  // key: "containerId:sectionIndex" → { score, text, anchorWords, sec }
+
       for (let cpIdx = 0; cpIdx < callerPhraseEmbeddings.length; cpIdx++) {
         const cpEmb = callerPhraseEmbeddings[cpIdx];
         if (!cpEmb?.length) continue;
         const sim = _cosineSimilarity(emb, cpEmb);
-        if (sim >= 0.92) {
-          const { sIdx, text } = callerPhraseMap[cpIdx];
-          const sec = sectionIndex[sIdx];
-          // Don't flag duplicates in the source section itself
-          if (sec.isCurrentSection) continue;
+        const { sIdx, text, anchorWords: aw } = callerPhraseMap[cpIdx];
+        const sec = sectionIndex[sIdx];
+        const key = `${sec.containerId}:${sec.sectionIndex}`;
+
+        // Track best phrase per section (for phrase scoring)
+        const prev = bestPhrasePerSection.get(key);
+        if (!prev || sim > prev.score) {
+          bestPhrasePerSection.set(key, {
+            score: sim, text, anchorWords: aw || [], sec,
+          });
+        }
+
+        // Duplicate detection (≥0.92)
+        if (sim >= 0.92 && !sec.isCurrentSection) {
           duplicates.push({
             phrase:         text,
             similarity:     Math.round(sim * 1000) / 1000,
@@ -2609,12 +2621,12 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
             sectionIndex:   sec.sectionIndex,
             sectionLabel:   sec.sectionLabel,
             sectionKcId:    sec.sectionKcId || null,
-            anchorWords:    callerPhraseMap[cpIdx]?.anchorWords || [],
+            anchorWords:    aw || [],
           });
         }
       }
 
-      // Deduplicate — keep highest similarity per section
+      // Deduplicate duplicates — keep highest similarity per section
       const dedupMap = new Map();
       for (const d of duplicates) {
         const key = `${d.containerId}:${d.sectionIndex}`;
@@ -2622,10 +2634,36 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         if (!existing || d.similarity > existing.similarity) dedupMap.set(key, d);
       }
 
+      // Enrich content matches with best phrase score
+      for (const m of topMatches) {
+        const key = `${m.containerId}:${m.sectionIndex}`;
+        const bp = bestPhrasePerSection.get(key);
+        m.bestPhraseScore = bp ? Math.round(bp.score * 1000) / 1000 : null;
+        m.bestPhraseText  = bp?.text || null;
+      }
+
+      // Build phrase-ranked matches (top 5 sections by best callerPhrase similarity ≥0.50)
+      const phraseMatches = [...bestPhrasePerSection.values()]
+        .filter(p => p.score >= 0.50 && !p.sec.isCurrentSection)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(p => ({
+          containerId:    p.sec.containerId,
+          containerName:  p.sec.containerName,
+          sectionIndex:   p.sec.sectionIndex,
+          sectionLabel:   p.sec.sectionLabel,
+          sectionKcId:    p.sec.sectionKcId || null,
+          content:        p.sec.content || '',
+          phraseScore:    Math.round(p.score * 1000) / 1000,
+          phraseText:     p.text,
+          anchorWords:    p.anchorWords,
+        }));
+
       results.push({
         phrase,
-        matches:    topMatches,
-        duplicates: [...dedupMap.values()].sort((a, b) => b.similarity - a.similarity).slice(0, 5),
+        matches:      topMatches,
+        phraseMatches,
+        duplicates:   [...dedupMap.values()].sort((a, b) => b.similarity - a.similarity).slice(0, 5),
       });
     }
 
