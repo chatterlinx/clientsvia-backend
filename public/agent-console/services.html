@@ -3076,7 +3076,7 @@ async function pfScan() {
           <div class="pf-score-bar-wrap">
             <div class="pf-score-bar"><div class="pf-score-fill ${pctCls}" style="width:${pct}%"></div></div>
           </div>
-          <span class="pf-sect-idx">§${m.sectionIndex}</span>
+          <span class="pf-sect-idx">${m.sectionKcId || ('§' + m.sectionIndex)}</span>
           <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
           <span class="pf-container-name">${_esc(m.containerName)}</span>
           ${isTop ? '<span class="pf-home-tag">✓ Home</span>' : ''}
@@ -3110,7 +3110,8 @@ async function pfScan() {
               <span class="pf-route-label">Section</span>
               <span class="pf-route-value">
                 <a class="pf-route-link" href="${link}" target="_blank">${_esc(d.sectionLabel)} →</a>
-                <span style="color:#94a3b8;font-size:11px;margin-left:6px;">${_esc(d.containerName)} · §${d.sectionIndex}</span>
+                <span class="pf-sect-idx" style="margin-left:8px;">${d.sectionKcId || ('§' + d.sectionIndex)}</span>
+                <span style="color:#94a3b8;font-size:11px;margin-left:6px;">${_esc(d.containerName)}</span>
               </span>
             </div>
             <div class="pf-route-row">

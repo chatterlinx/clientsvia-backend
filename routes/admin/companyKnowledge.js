@@ -2496,6 +2496,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
       { companyId, isActive: { $ne: false } },
       { projection: {
         title: 1,
+        kcId: 1,
         'sections.label': 1,
         'sections.content': 1,
         'sections.contentEmbedding': 1,
@@ -2510,9 +2511,12 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
       const docId = doc._id.toString();
       (doc.sections || []).forEach((sec, idx) => {
         if (!sec.contentEmbedding?.length) return;
+        const containerKcId = doc.kcId || null;
         sectionIndex.push({
           containerId:    docId,
           containerName:  doc.title || 'Untitled',
+          kcId:           containerKcId,
+          sectionKcId:    containerKcId ? `${containerKcId}-${String(idx + 1).padStart(2, '0')}` : null,
           sectionIndex:   idx,
           sectionLabel:   sec.label || `Section ${idx + 1}`,
           content:        (sec.content || '').substring(0, 300),
@@ -2562,6 +2566,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         sIdx,
         containerId:      sec.containerId,
         containerName:    sec.containerName,
+        sectionKcId:      sec.sectionKcId,
         sectionIndex:     sec.sectionIndex,
         sectionLabel:     sec.sectionLabel,
         content:          sec.content,
@@ -2575,6 +2580,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
       const topMatches = contentScores.slice(0, 5).map(m => ({
         containerId:      m.containerId,
         containerName:    m.containerName,
+        sectionKcId:      m.sectionKcId,
         sectionIndex:     m.sectionIndex,
         sectionLabel:     m.sectionLabel,
         content:          m.content,
@@ -2599,6 +2605,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
             similarity:     Math.round(sim * 1000) / 1000,
             containerId:    sec.containerId,
             containerName:  sec.containerName,
+            sectionKcId:    sec.sectionKcId,
             sectionIndex:   sec.sectionIndex,
             sectionLabel:   sec.sectionLabel,
             content:        sec.content,
