@@ -817,7 +817,9 @@
     .pf-cue-value { font-size: 9px; margin-top: 1px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-cue-cell.miss .pf-cue-label { color: #94a3b8; }
     .pf-cue-cell.miss .pf-cue-value { color: #cbd5e1; }
-    .pf-cue-suggest { font-size: 8px; color: #64748b; margin-top: 3px; line-height: 1.3; font-style: italic; font-weight: 500; }
+    .pf-cue-suggest { font-size: 9px; color: #475569; margin-top: 3px; line-height: 1.3; font-weight: 500; }
+    .pf-cue-cell.miss { cursor: pointer; transition: all 0.15s; }
+    .pf-cue-cell.miss:hover { opacity: 0.9; background: #eef2ff; border-color: #a5b4fc; }
     .pf-section-id { font-size: 9px; font-weight: 600; font-family: monospace; color: #64748b; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     .pf-cue-status {
       font-size: 10px; font-weight: 600; padding: 4px 0 6px;
@@ -855,6 +857,41 @@
       margin-top: 6px; font-size: 11px; color: #334155; line-height: 1.4;
       padding: 6px 8px; background: white; border-radius: 5px; border: 1px solid #e2e8f0;
       font-style: italic;
+    }
+
+    /* Inline cue editor (bottom pane) */
+    .pf-cue-editor { padding: 20px 24px; height: 100%; overflow-y: auto; }
+    .pf-cue-editor-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .pf-cue-editor-title .pf-cue-type-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;
+    }
+    .pf-cue-editor-add {
+      display: flex; gap: 8px; margin-bottom: 16px; align-items: center;
+    }
+    .pf-cue-editor-add input {
+      flex: 1; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;
+    }
+    .pf-cue-editor-add button {
+      padding: 7px 16px; border-radius: 6px; border: none; font-weight: 700; font-size: 12px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .pf-cue-editor-add .pf-cue-add-btn { background: #4f46e5; color: white; }
+    .pf-cue-editor-add .pf-cue-add-btn:hover { background: #4338ca; }
+    .pf-cue-editor-add .pf-cue-save-btn { background: #16a34a; color: white; }
+    .pf-cue-editor-add .pf-cue-save-btn:hover { background: #15803d; }
+    .pf-cue-pattern-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-cue-pattern-tag {
+      font-size: 11px; padding: 4px 10px; border-radius: 5px; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .pf-cue-pattern-tag .pf-cue-del {
+      cursor: pointer; font-weight: 700; opacity: 0.5; font-size: 13px;
+    }
+    .pf-cue-pattern-tag .pf-cue-del:hover { opacity: 1; color: #dc2626; }
+    .pf-cue-pattern-tag.new { border: 1px dashed #a5b4fc; background: #eef2ff; }
+    .pf-cue-editor-hint {
+      font-size: 11px; color: #64748b; margin-top: 12px; font-style: italic;
     }
 
     /* Re-scan hint banner */
@@ -3145,6 +3182,10 @@ function _pfLoadEditor(containerId, sectionIndex, cardElement) {
   document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
   if (cardElement) cardElement.classList.add('pf-active');
 
+  // Hide cue editor if open
+  const cueEd = document.getElementById('pfCueEditor');
+  if (cueEd) cueEd.style.display = 'none';
+
   const url = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${containerId}&sectionIdx=${sectionIndex}&embed=1`;
   placeholder.style.display = 'none';
   frame.style.display = '';
@@ -3161,7 +3202,153 @@ function _pfResetEditor() {
   frame.src = '';
   placeholder.style.display = '';
   document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
+  const cueEd = document.getElementById('pfCueEditor');
+  if (cueEd) cueEd.style.display = 'none';
 }
+
+/* ── Inline Cue Pattern Editor (bottom pane) ────────────────────────── */
+let _pfCueAllPatterns = null;  // full cuePhrases array from GlobalShare
+let _pfCueEditorToken = null;  // which cue type is being edited
+
+async function _pfLoadCueEditor(token, label, bg, fg) {
+  _pfCueEditorToken = token;
+  const frame = document.getElementById('pfEditorFrame');
+  const placeholder = document.getElementById('pfIframePlaceholder');
+  frame.style.display = 'none';
+  frame.src = '';
+  placeholder.style.display = 'none';
+
+  // Create or reuse cue editor container in bottom pane
+  const bottomPane = document.querySelector('.pf-bottom-pane');
+  let editorEl = document.getElementById('pfCueEditor');
+  if (!editorEl) {
+    editorEl = document.createElement('div');
+    editorEl.id = 'pfCueEditor';
+    editorEl.className = 'pf-cue-editor';
+    bottomPane.appendChild(editorEl);
+  }
+  editorEl.style.display = '';
+  editorEl.innerHTML = '<div style="color:#64748b;font-size:12px;">Loading patterns\u2026</div>';
+
+  // Fetch all cue patterns from GlobalShare
+  try {
+    const resp = await fetch(`/api/admin/globalshare/phrase-intelligence`);
+    const data = await resp.json();
+    _pfCueAllPatterns = data.cuePhrases || [];
+  } catch (err) {
+    editorEl.innerHTML = `<div style="color:#dc2626;">Failed to load: ${_esc(err.message)}</div>`;
+    return;
+  }
+
+  _pfRenderCueEditor(editorEl, token, label, bg, fg);
+}
+
+function _pfRenderCueEditor(el, token, label, bg, fg) {
+  const mine = _pfCueAllPatterns.filter(p => p.token === token);
+  const total = _pfCueAllPatterns.length;
+
+  el.innerHTML = `
+    <div class="pf-cue-editor-title">
+      <span class="pf-cue-type-badge" style="background:${bg};color:${fg};">${label}</span>
+      <span>${token}</span>
+      <span style="color:#94a3b8;font-size:11px;font-weight:400;">${mine.length} pattern${mine.length !== 1 ? 's' : ''} / ${total} total</span>
+    </div>
+    <div class="pf-cue-editor-add">
+      <input type="text" id="pfCueNewPattern" placeholder="Add patterns (comma-separated)\u2026" onkeydown="if(event.key==='Enter')_pfCueAdd()">
+      <button class="pf-cue-add-btn" onclick="_pfCueAdd()">+ Add</button>
+      <button class="pf-cue-save-btn" onclick="_pfCueSave()" id="pfCueSaveBtn" disabled>Save to GlobalShare</button>
+    </div>
+    <div class="pf-cue-pattern-list" id="pfCuePatternList">
+      ${mine.map((p, i) => `<span class="pf-cue-pattern-tag" style="background:${bg};color:${fg};">
+        ${_esc(p.pattern)}
+        <span class="pf-cue-del" onclick="_pfCueRemove('${_esc(p.pattern)}')">&times;</span>
+      </span>`).join('')}
+    </div>
+    <div class="pf-cue-editor-hint">
+      Patterns are matched against caller utterances. Add common phrases callers use (e.g., "can you", "how much"). Changes apply globally after saving.
+    </div>`;
+}
+
+function _pfCueAdd() {
+  const input = document.getElementById('pfCueNewPattern');
+  const raw = input.value.trim();
+  if (!raw) return;
+
+  const patterns = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const token = _pfCueEditorToken;
+  let added = 0;
+
+  for (const pattern of patterns) {
+    const exists = _pfCueAllPatterns.some(p => p.pattern === pattern && p.token === token);
+    if (!exists) {
+      _pfCueAllPatterns.push({ pattern, token });
+      added++;
+    }
+  }
+
+  input.value = '';
+  if (added > 0) {
+    document.getElementById('pfCueSaveBtn').disabled = false;
+    // Re-render the pattern list
+    const el = document.getElementById('pfCueEditor');
+    const f = _CUE_EDITOR_FIELDS[token];
+    _pfRenderCueEditor(el, token, f.label, f.bg, f.fg);
+    document.getElementById('pfCueSaveBtn').disabled = false;
+  }
+}
+
+function _pfCueRemove(pattern) {
+  const token = _pfCueEditorToken;
+  _pfCueAllPatterns = _pfCueAllPatterns.filter(p => !(p.pattern === pattern && p.token === token));
+  const el = document.getElementById('pfCueEditor');
+  const f = _CUE_EDITOR_FIELDS[token];
+  _pfRenderCueEditor(el, token, f.label, f.bg, f.fg);
+  document.getElementById('pfCueSaveBtn').disabled = false;
+}
+
+async function _pfCueSave() {
+  const btn = document.getElementById('pfCueSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+
+  try {
+    const resp = await fetch('/api/admin/globalshare/phrase-intelligence/cuePhrases', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: _pfCueAllPatterns }),
+    });
+    const result = await resp.json();
+    if (result.success) {
+      btn.textContent = 'Saved!';
+      btn.style.background = '#16a34a';
+      setTimeout(() => {
+        btn.textContent = 'Save to GlobalShare';
+        btn.style.background = '';
+      }, 2000);
+    } else {
+      throw new Error(result.error || 'Save failed');
+    }
+  } catch (err) {
+    btn.textContent = 'Error: ' + err.message;
+    btn.style.background = '#dc2626';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = 'Save to GlobalShare';
+      btn.style.background = '';
+    }, 3000);
+  }
+}
+
+// Lookup table for cue editor styling
+const _CUE_EDITOR_FIELDS = {
+  requestCue:    { label: 'REQ',  bg: '#dbeafe', fg: '#1e40af' },
+  permissionCue: { label: 'PERM', bg: '#fef9c3', fg: '#854d0e' },
+  infoCue:       { label: 'INFO', bg: '#d1fae5', fg: '#065f46' },
+  directiveCue:  { label: 'DIR',  bg: '#fee2e2', fg: '#991b1b' },
+  actionCore:    { label: 'ACT',  bg: '#e0e7ff', fg: '#3730a3' },
+  urgencyCore:   { label: 'URG',  bg: '#fce7f3', fg: '#9d174d' },
+  modifierCore:  { label: 'MOD',  bg: '#f0fdf4', fg: '#166534' },
+};
 
 /* ── UAP simulation: classify match type for a phrase ───────────────── */
 function _pfSimulateMatch(phrase, callerPhrases) {
@@ -3310,13 +3497,14 @@ function _pfBuildCueStrip(cueFrame, tmResult) {
   let html = '<div class="pf-cue-strip">';
   for (const f of CUE_FIELDS) {
     const val = cueFrame[f.key];
+    const clickAttr = `onclick="_pfLoadCueEditor('${f.key}','${f.label}','${f.bg}','${f.fg}')"`;
     if (val) {
-      html += `<div class="pf-cue-cell hit" style="background:${f.bg};border-color:${f.border};">
+      html += `<div class="pf-cue-cell hit" style="background:${f.bg};border-color:${f.border};cursor:pointer;" ${clickAttr}>
         <div class="pf-cue-label" style="color:${f.fg}">${f.label}</div>
         <div class="pf-cue-value" style="color:${f.fg}" title="${_esc(val)}">"${_esc(val)}"</div>
       </div>`;
     } else {
-      html += `<div class="pf-cue-cell miss">
+      html += `<div class="pf-cue-cell miss" ${clickAttr} title="Click to add ${f.label} patterns">
         <div class="pf-cue-label">${f.label}</div>
         <div class="pf-cue-value">—</div>
         <div class="pf-cue-suggest">${f.hint}</div>
