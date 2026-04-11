@@ -817,6 +817,8 @@
     .pf-cue-value { font-size: 9px; margin-top: 1px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-cue-cell.miss .pf-cue-label { color: #94a3b8; }
     .pf-cue-cell.miss .pf-cue-value { color: #cbd5e1; }
+    .pf-cue-suggest { font-size: 7px; color: #94a3b8; margin-top: 2px; line-height: 1.2; font-style: italic; }
+    .pf-section-id { font-size: 9px; font-weight: 600; font-family: monospace; color: #64748b; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     .pf-cue-status {
       font-size: 10px; font-weight: 600; padding: 4px 0 6px;
       display: flex; align-items: center; gap: 6px;
@@ -3276,13 +3278,13 @@ function _pfBuildCueStrip(cueFrame) {
   if (!cueFrame) return '';
 
   const CUE_FIELDS = [
-    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd' },
-    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a' },
-    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7' },
-    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5' },
-    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc' },
-    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4' },
-    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac' },
+    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd', hint: 'can you, could you, would you, I need, I want' },
+    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a', hint: 'is it ok, am I able, do you allow' },
+    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7', hint: 'how much, what is, do you, how long' },
+    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5', hint: 'please, go ahead, just, make sure' },
+    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc', hint: 'fix, repair, install, replace, check' },
+    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4', hint: 'today, asap, urgent, emergency, now' },
+    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac', hint: 'new, old, broken, leaking, noisy' },
   ];
 
   let html = '<div class="pf-cue-strip">';
@@ -3297,6 +3299,7 @@ function _pfBuildCueStrip(cueFrame) {
       html += `<div class="pf-cue-cell miss">
         <div class="pf-cue-label">${f.label}</div>
         <div class="pf-cue-value">—</div>
+        <div class="pf-cue-suggest">${f.hint}</div>
       </div>`;
     }
   }
@@ -3311,6 +3314,7 @@ function _pfBuildCueStrip(cueFrame) {
     html += `<div class="pf-cue-cell miss">
       <div class="pf-cue-label">TRADE</div>
       <div class="pf-cue-value">—</div>
+      <div class="pf-cue-suggest">add tradeTerms[] to sections</div>
     </div>`;
   }
   html += '</div>';
@@ -3346,12 +3350,11 @@ function _pfBuildCueStrip(cueFrame) {
   if (trades.length) {
     html += '<div class="pf-cue-trade-links">';
     for (const t of trades) {
-      const label = t.sectionLabel || t.term;
-      const tag = t.sectionIdx === -1 ? ' (container)' : '';
+      const termTag = `<b>"${_esc(t.term)}"</b>`;
       if (t.sectionIdx >= 0) {
-        html += `<span onclick="_pfLoadEditor('${t.containerId}',${t.sectionIdx},null)">${_esc(label)}${tag}</span>`;
+        html += `<span onclick="_pfLoadEditor('${t.containerId}',${t.sectionIdx},null)">${termTag} → ${_esc(t.sectionLabel || 'Section ' + t.sectionIdx)}</span>`;
       } else {
-        html += `<span style="cursor:default;text-decoration:none;color:#94a3b8;">${_esc(t.term)}${tag}</span>`;
+        html += `<span style="cursor:default;text-decoration:none;color:#94a3b8;">${termTag} (container-level vocab)</span>`;
       }
     }
     html += '</div>';
@@ -3372,16 +3375,18 @@ function _pfBuildRuntimePanel(tm) {
       Runtime Analysis
       <span class="pf-runtime-winner">${routed ? 'ROUTED' : 'NO ROUTE'}</span>
       ${w ? `<span style="font-weight:400;font-size:11px;margin-left:4px;">via ${w.via}</span>` : ''}
+      ${w?.sectionKcId ? `<span class="pf-section-id" style="margin-left:6px;">${_esc(w.sectionKcId)}</span>` : ''}
     </div>
     <div class="pf-runtime-paths">`;
 
   // UAP path
   if (p.uap) {
     const pass = p.uap.confidence >= 0.80;
+    const uapId = p.uap.sectionKcId ? `<span class="pf-section-id">${_esc(p.uap.sectionKcId)}</span>` : '';
     html += `<div class="pf-path-row">
       <span class="pf-path-label uap">UAP</span>
       <span class="pf-path-badge ${pass ? 'pass' : 'fail'}">${p.uap.matchType}</span>
-      <span class="${pass ? 'pf-path-hit' : 'pf-path-miss'}">"${_esc(p.uap.matchedPhrase || '')}" → ${_esc(p.uap.sectionLabel || '')} (${Math.round(p.uap.confidence * 100)}%${pass ? '' : ' < 80% threshold'})</span>
+      <span class="${pass ? 'pf-path-hit' : 'pf-path-miss'}">"${_esc(p.uap.matchedPhrase || '')}" → ${_esc(p.uap.sectionLabel || '')} (${Math.round(p.uap.confidence * 100)}%${pass ? '' : ' < 80% threshold'})${uapId}</span>
     </div>`;
   } else {
     html += `<div class="pf-path-row"><span class="pf-path-label uap">UAP</span><span class="pf-path-miss">No phrase match</span></div>`;
@@ -3389,10 +3394,11 @@ function _pfBuildRuntimePanel(tm) {
 
   // Semantic path
   if (p.semantic) {
+    const semId = p.semantic.sectionKcId ? `<span class="pf-section-id">${_esc(p.semantic.sectionKcId)}</span>` : '';
     html += `<div class="pf-path-row">
       <span class="pf-path-label semantic">Semantic</span>
       <span class="pf-path-badge pass">${p.semantic.matchSource || 'MATCH'}</span>
-      <span class="pf-path-hit">${_esc(p.semantic.sectionLabel || '')} (${_esc(p.semantic.containerTitle || '')}) — ${Math.round((p.semantic.similarity || 0) * 100)}%</span>
+      <span class="pf-path-hit">${_esc(p.semantic.sectionLabel || '')} (${_esc(p.semantic.containerTitle || '')}) — ${Math.round((p.semantic.similarity || 0) * 100)}%${semId}</span>
     </div>`;
   } else {
     html += `<div class="pf-path-row"><span class="pf-path-label semantic">Semantic</span><span class="pf-path-miss">No embedding match</span></div>`;
@@ -3400,10 +3406,11 @@ function _pfBuildRuntimePanel(tm) {
 
   // Keyword path
   if (p.keyword) {
+    const kwId = p.keyword.sectionKcId ? `<span class="pf-section-id">${_esc(p.keyword.sectionKcId)}</span>` : '';
     html += `<div class="pf-path-row">
       <span class="pf-path-label keyword">Keyword</span>
       <span class="pf-path-badge neutral">score ${p.keyword.score}</span>
-      <span class="pf-path-hit">${_esc(p.keyword.bestSection || p.keyword.containerTitle || '')}</span>
+      <span class="pf-path-hit">${_esc(p.keyword.bestSection || p.keyword.containerTitle || '')}${kwId}</span>
     </div>`;
   } else {
     html += `<div class="pf-path-row"><span class="pf-path-label keyword">Keyword</span><span class="pf-path-miss">No keyword match</span></div>`;
