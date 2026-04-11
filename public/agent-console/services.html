@@ -746,19 +746,56 @@
     }
     .pf-result-content.open { display: block; }
 
-    /* Route diagnostic panel */
-    .pf-route-panel {
-      margin: 8px 0 4px; padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac;
-      border-radius: 8px; font-size: 11px; color: #166534;
+    /* Runtime Analysis panel */
+    .pf-runtime {
+      margin-bottom: 10px; padding: 10px 14px; border-radius: 8px;
+      font-size: 11px; border: 1px solid;
     }
-    .pf-route-panel .pf-route-title { font-weight: 700; margin-bottom: 4px; font-size: 12px; }
-    .pf-route-panel .pf-route-row { display: flex; gap: 8px; margin: 2px 0; align-items: center; }
-    .pf-route-panel .pf-route-label { font-weight: 600; min-width: 80px; color: #15803d; }
-    .pf-route-panel .pf-route-value { color: #166534; }
-    .pf-route-badge {
-      font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
-      background: #dcfce7; color: #166534; text-transform: uppercase;
+    .pf-runtime.routed { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .pf-runtime.no-route { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .pf-runtime-title {
+      font-weight: 700; font-size: 12px; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 6px;
     }
+    .pf-runtime-winner {
+      font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .pf-runtime.routed .pf-runtime-winner { background: #dcfce7; color: #166534; }
+    .pf-runtime.no-route .pf-runtime-winner { background: #fee2e2; color: #991b1b; }
+    .pf-runtime-paths { display: flex; flex-direction: column; gap: 3px; }
+    .pf-path-row {
+      display: flex; align-items: center; gap: 6px; font-size: 11px;
+      padding: 2px 0;
+    }
+    .pf-path-label {
+      font-weight: 700; min-width: 64px; font-size: 10px; text-transform: uppercase;
+    }
+    .pf-path-label.uap { color: #7c3aed; }
+    .pf-path-label.semantic { color: #2563eb; }
+    .pf-path-label.keyword { color: #d97706; }
+    .pf-path-hit { color: #166534; }
+    .pf-path-miss { color: #9ca3af; font-style: italic; }
+    .pf-path-badge {
+      font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .pf-path-badge.pass { background: #dcfce7; color: #166534; }
+    .pf-path-badge.fail { background: #fee2e2; color: #991b1b; }
+    .pf-path-badge.neutral { background: #f1f5f9; color: #64748b; }
+
+    /* Dual score display */
+    .pf-dual-scores {
+      display: flex; align-items: center; gap: 3px; flex-shrink: 0;
+    }
+    .pf-score-label {
+      font-size: 8px; font-weight: 700; text-transform: uppercase; color: #94a3b8;
+      letter-spacing: 0.3px;
+    }
+    .pf-phrase-match-info {
+      font-size: 10px; color: #6366f1; padding: 0 12px 4px;
+    }
+
     .pf-anchor-chip {
       display: inline-block; font-size: 9px; font-weight: 600; padding: 1px 5px;
       border-radius: 3px; background: #dbeafe; color: #1d4ed8; margin: 1px 2px;
@@ -3113,66 +3150,61 @@ async function pfScan() {
   resultsEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">Scanning all knowledge containers…</div>';
 
   try {
-    const result = await AgentConsoleAuth.apiFetch(
-      `/api/admin/agent2/company/${S.companyId}/knowledge/cross-scan`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phrases: [phrase] }) }
-    );
+    // Fire cross-scan + test-match in parallel
+    const [result, tmResult] = await Promise.all([
+      AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/cross-scan`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phrases: [phrase] }) }
+      ),
+      AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/test-match`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ utterance: phrase }) }
+      ).catch(() => null),
+    ]);
     if (!result.success) throw new Error(result.error || 'Scan failed');
 
     const scanResult = result.results?.[0];
-    if (!scanResult?.matches?.length) {
-      resultsEl.innerHTML = '<div class="pf-no-match">No matches found across any KC.</div>';
+
+    // ── Runtime Analysis Panel ──
+    let html = _pfBuildRuntimePanel(tmResult);
+
+    if (!scanResult?.matches?.length && !scanResult?.phraseMatches?.length) {
+      html += '<div class="pf-no-match">No matches found across any KC.</div>';
+      resultsEl.innerHTML = html;
       _pfShowDraftButton(resultsEl, phrase);
       return;
     }
 
-    // ── Build route diagnostic panel if phrase is routed ──
-    let routeHtml = '';
-    if (scanResult.duplicates?.length) {
-      const d = scanResult.duplicates[0]; // best match
-      const match = _pfSimulateMatch(phrase, [{ text: d.phrase }]);
-      routeHtml = `<div class="pf-route-panel">
-        <div class="pf-route-title">ROUTED — This phrase will reach a section</div>
-        <div class="pf-route-row">
-          <span class="pf-route-label">Section</span>
-          <span class="pf-route-value">
-            ${d.sectionKcId ? `<span class="pf-sect-id">${_esc(d.sectionKcId)}</span> ` : ''}
-            <span onclick="_pfLoadEditor('${d.containerId}',${d.sectionIndex},null)" style="cursor:pointer;text-decoration:underline;color:#166534;">${_esc(d.sectionLabel)}</span>
-            <span style="color:#6b7280;font-size:10px;margin-left:4px;">(${_esc(d.containerName)})</span>
-          </span>
-        </div>
-        <div class="pf-route-row">
-          <span class="pf-route-label">Matched</span>
-          <span class="pf-route-value">"${_esc(d.phrase)}" (${Math.round(d.similarity * 100)}%)</span>
-        </div>
-        ${match ? `<div class="pf-route-row">
-          <span class="pf-route-label">Match Type</span>
-          <span class="pf-route-badge">${match.type}</span>
-        </div>` : ''}
-        ${d.anchorWords?.length ? `<div class="pf-route-row">
-          <span class="pf-route-label">Anchors</span>
-          <span>${d.anchorWords.map(w => `<span class="pf-anchor-chip">${_esc(w)}</span>`).join('')}</span>
-        </div>` : ''}
-      </div>`;
-    }
+    // ── Merge content matches + phrase matches into unified list ──
+    const merged = _pfMergeResults(scanResult.matches || [], scanResult.phraseMatches || []);
 
     // ── Build result cards ──
-    let html = routeHtml + '<div class="pf-results">';
-    const topScore = scanResult.matches[0].contentScore;
+    html += '<div class="pf-results">';
+    merged.forEach((m, rank) => {
+      const cPct   = m.contentScore ? Math.round(m.contentScore * 100) : 0;
+      const pPct   = m.phraseScore  ? Math.round(m.phraseScore * 100)  : 0;
+      const bestPct = Math.max(cPct, pPct);
+      const bestCls = bestPct >= 90 ? 'high' : bestPct >= 70 ? 'mid' : 'low';
+      const cCls   = cPct >= 90 ? 'high' : cPct >= 70 ? 'mid' : 'low';
+      const pCls   = pPct >= 90 ? 'high' : pPct >= 70 ? 'mid' : 'low';
+      const isTop  = rank === 0 && bestPct >= 85;
 
-    scanResult.matches.forEach((m, rank) => {
-      const pct    = Math.round(m.contentScore * 100);
-      const pctCls = pct >= 90 ? 'high' : pct >= 70 ? 'mid' : 'low';
-      const isTop  = rank === 0 && pct >= 90;
-      const cardId = `pfCard${rank}`;
-
-      html += `<div class="pf-result-card${isTop ? ' top' : ''}" id="${cardId}"
+      html += `<div class="pf-result-card${isTop ? ' top' : ''}"
         onclick="_pfLoadEditor('${m.containerId}',${m.sectionIndex},this)">
         <div class="pf-result-row">
-          <span class="pf-pct ${pctCls}">${pct}%</span>
-          <div class="pf-score-bar-wrap">
-            <div class="pf-score-bar"><div class="pf-score-fill ${pctCls}" style="width:${pct}%"></div></div>
+          <div class="pf-dual-scores">
+            <span class="pf-score-label">C</span>
+            <span class="pf-pct ${cCls}" style="min-width:28px">${cPct}%</span>
+            <div class="pf-score-bar-wrap" style="width:36px">
+              <div class="pf-score-bar"><div class="pf-score-fill ${cCls}" style="width:${cPct}%"></div></div>
+            </div>
+            <span class="pf-score-label" style="margin-left:4px">P</span>
+            <span class="pf-pct ${pCls}" style="min-width:28px">${pPct || '—'}%</span>
+            <div class="pf-score-bar-wrap" style="width:36px">
+              <div class="pf-score-bar"><div class="pf-score-fill ${pCls}" style="width:${pPct}%"></div></div>
+            </div>
           </div>
           ${m.sectionKcId ? `<span class="pf-sect-id">${_esc(m.sectionKcId)}</span>` : ''}
           <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
@@ -3180,21 +3212,20 @@ async function pfScan() {
           ${isTop ? '<span class="pf-home-tag">Home</span>' : ''}
           <span class="pf-expand-icon" onclick="event.stopPropagation();_pfToggleExpand(this)">&#9654;</span>
         </div>
+        ${m.phraseText ? `<div class="pf-phrase-match-info">Phrase: "${_esc(m.phraseText)}"</div>` : ''}
         <div class="pf-result-content">${_esc(m.content || 'No content preview')}</div>
       </div>`;
     });
 
     html += '</div>';
-
-    // Actions bar
     html += `<div class="pf-actions">
       <button class="pf-copy-btn" onclick="pfCopyPhrase()">Copy Phrase</button>
     </div>`;
-
     resultsEl.innerHTML = html;
 
-    // If top score is weak, show draft generator
-    if (topScore < 0.60) {
+    // If best score is weak, show draft generator
+    const bestOverall = merged.length ? Math.max(merged[0].contentScore || 0, merged[0].phraseScore || 0) : 0;
+    if (bestOverall < 0.60) {
       _pfShowDraftButton(resultsEl, phrase);
     }
 
@@ -3203,6 +3234,110 @@ async function pfScan() {
   } finally {
     btn.disabled = false; btn.textContent = 'Scan';
   }
+}
+
+/* ── Build Runtime Analysis panel from test-match response ──────────── */
+function _pfBuildRuntimePanel(tm) {
+  if (!tm?.ok) return '';
+  const w = tm.winner;
+  const p = tm.paths || {};
+  const routed = !!w;
+
+  let html = `<div class="pf-runtime ${routed ? 'routed' : 'no-route'}">
+    <div class="pf-runtime-title">
+      Runtime Analysis
+      <span class="pf-runtime-winner">${routed ? 'ROUTED' : 'NO ROUTE'}</span>
+      ${w ? `<span style="font-weight:400;font-size:11px;margin-left:4px;">via ${w.via}</span>` : ''}
+    </div>
+    <div class="pf-runtime-paths">`;
+
+  // UAP path
+  if (p.uap) {
+    const pass = p.uap.confidence >= 0.80;
+    html += `<div class="pf-path-row">
+      <span class="pf-path-label uap">UAP</span>
+      <span class="pf-path-badge ${pass ? 'pass' : 'fail'}">${p.uap.matchType}</span>
+      <span class="${pass ? 'pf-path-hit' : 'pf-path-miss'}">"${_esc(p.uap.matchedPhrase || '')}" → ${_esc(p.uap.sectionLabel || '')} (${Math.round(p.uap.confidence * 100)}%${pass ? '' : ' < 80% threshold'})</span>
+    </div>`;
+  } else {
+    html += `<div class="pf-path-row"><span class="pf-path-label uap">UAP</span><span class="pf-path-miss">No phrase match</span></div>`;
+  }
+
+  // Semantic path
+  if (p.semantic) {
+    html += `<div class="pf-path-row">
+      <span class="pf-path-label semantic">Semantic</span>
+      <span class="pf-path-badge pass">${p.semantic.matchSource || 'MATCH'}</span>
+      <span class="pf-path-hit">${_esc(p.semantic.sectionLabel || '')} (${_esc(p.semantic.containerTitle || '')}) — ${Math.round((p.semantic.similarity || 0) * 100)}%</span>
+    </div>`;
+  } else {
+    html += `<div class="pf-path-row"><span class="pf-path-label semantic">Semantic</span><span class="pf-path-miss">No embedding match</span></div>`;
+  }
+
+  // Keyword path
+  if (p.keyword) {
+    html += `<div class="pf-path-row">
+      <span class="pf-path-label keyword">Keyword</span>
+      <span class="pf-path-badge neutral">score ${p.keyword.score}</span>
+      <span class="pf-path-hit">${_esc(p.keyword.bestSection || p.keyword.containerTitle || '')}</span>
+    </div>`;
+  } else {
+    html += `<div class="pf-path-row"><span class="pf-path-label keyword">Keyword</span><span class="pf-path-miss">No keyword match</span></div>`;
+  }
+
+  html += '</div></div>';
+  return html;
+}
+
+/* ── Merge content matches + phrase matches, deduplicate, sort ───────── */
+function _pfMergeResults(contentMatches, phraseMatches) {
+  const map = new Map(); // key: containerId:sectionIndex
+
+  for (const m of contentMatches) {
+    const key = `${m.containerId}:${m.sectionIndex}`;
+    map.set(key, {
+      containerId:   m.containerId,
+      containerName: m.containerName,
+      sectionIndex:  m.sectionIndex,
+      sectionLabel:  m.sectionLabel,
+      sectionKcId:   m.sectionKcId,
+      content:       m.content,
+      contentScore:  m.contentScore || 0,
+      phraseScore:   m.bestPhraseScore || 0,
+      phraseText:    m.bestPhraseText || null,
+    });
+  }
+
+  for (const pm of phraseMatches) {
+    const key = `${pm.containerId}:${pm.sectionIndex}`;
+    const existing = map.get(key);
+    if (existing) {
+      // Merge: take higher phrase score
+      if (pm.phraseScore > existing.phraseScore) {
+        existing.phraseScore = pm.phraseScore;
+        existing.phraseText  = pm.phraseText;
+      }
+    } else {
+      map.set(key, {
+        containerId:   pm.containerId,
+        containerName: pm.containerName,
+        sectionIndex:  pm.sectionIndex,
+        sectionLabel:  pm.sectionLabel,
+        sectionKcId:   pm.sectionKcId,
+        content:       pm.content,
+        contentScore:  0,
+        phraseScore:   pm.phraseScore || 0,
+        phraseText:    pm.phraseText || null,
+      });
+    }
+  }
+
+  // Sort by max(contentScore, phraseScore) descending
+  return [...map.values()].sort((a, b) => {
+    const aMax = Math.max(a.contentScore, a.phraseScore);
+    const bMax = Math.max(b.contentScore, b.phraseScore);
+    return bMax - aMax;
+  }).slice(0, 8);
 }
 
 /* ── Toggle expand arrow on result cards ────────────────────────────── */
