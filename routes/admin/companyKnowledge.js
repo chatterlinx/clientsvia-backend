@@ -1006,10 +1006,12 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
       const uapResult = await UAP.parse(companyId, utterance);
       if (uapResult.containerId) {
         const c = containers.find(ct => String(ct._id) === uapResult.containerId);
+        const kcId = c?.kcId || null;
         results.uap = {
           containerId:  uapResult.containerId,
           sectionIdx:   uapResult.sectionIdx,
           sectionLabel: uapResult.sectionLabel || c?.sections?.[uapResult.sectionIdx]?.label || null,
+          sectionKcId:  kcId && uapResult.sectionIdx != null ? `${kcId}-${String(uapResult.sectionIdx + 1).padStart(2, '0')}` : null,
           containerTitle: c?.title || null,
           confidence:   uapResult.confidence,
           matchType:    uapResult.matchType,
@@ -1026,11 +1028,13 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
         .lean();
       const semResult = await SemanticMatchService.findBestSection(companyId, utterance, embContainers);
       if (semResult) {
+        const semKcId = semResult.container.kcId || null;
         results.semantic = {
           containerId:    String(semResult.container._id),
           containerTitle: semResult.container.title,
           sectionIdx:     semResult.sectionIdx,
           sectionLabel:   semResult.section?.label || null,
+          sectionKcId:    semKcId && semResult.sectionIdx != null ? `${semKcId}-${String(semResult.sectionIdx + 1).padStart(2, '0')}` : null,
           similarity:     semResult.similarity,
           matchSource:    semResult.matchSource,
         };
@@ -1041,11 +1045,13 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
     const context = callReason ? { callReason } : null;
     const kwMatch = KCS.findContainer(containers, utterance, context);
     if (kwMatch) {
+      const kwKcId = kwMatch.container.kcId || null;
       results.keyword = {
         containerId:    String(kwMatch.container._id),
         containerTitle: kwMatch.container.title,
         score:          kwMatch.score,
         bestSection:    kwMatch.bestSection?.label || null,
+        sectionKcId:    kwKcId && kwMatch.bestSectionIdx != null ? `${kwKcId}-${String(kwMatch.bestSectionIdx + 1).padStart(2, '0')}` : null,
         contextAssisted: kwMatch.contextAssisted || false,
       };
     }
