@@ -3393,8 +3393,8 @@ async function pfScan() {
   resultsEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">Scanning all knowledge containers…</div>';
 
   try {
-    // Fire cross-scan + test-match in parallel
-    const [result, tmResult] = await Promise.all([
+    // Fire cross-scan + test-match + cuePhrases in parallel
+    const [result, tmResult, piResult] = await Promise.all([
       AgentConsoleAuth.apiFetch(
         `/api/admin/agent2/company/${S.companyId}/knowledge/cross-scan`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3405,13 +3405,16 @@ async function pfScan() {
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ utterance: phrase }) }
       ).catch(() => null),
+      AgentConsoleAuth.apiFetch('/api/admin/globalshare/phrase-intelligence').catch(() => null),
     ]);
+    // Cache cuePhrases for cue editor too
+    _pfCueAllPatterns = piResult?.cuePhrases || [];
     if (!result.success) throw new Error(result.error || 'Scan failed');
 
     const scanResult = result.results?.[0];
 
     // ── CueExtractor Strip + Runtime Analysis Panel ──
-    let html = _pfBuildCueStrip(tmResult?.cueFrame, tmResult);
+    let html = _pfBuildCueStrip(tmResult?.cueFrame, tmResult, _pfCueAllPatterns);
     html += _pfBuildRuntimePanel(tmResult);
 
     if (!scanResult?.matches?.length && !scanResult?.phraseMatches?.length) {
@@ -3481,33 +3484,49 @@ async function pfScan() {
 }
 
 /* ── Build CueExtractor analysis strip ───────────────────────────────── */
-function _pfBuildCueStrip(cueFrame, tmResult) {
+function _pfBuildCueStrip(cueFrame, tmResult, allCuePatterns) {
   if (!cueFrame) return '';
 
   const CUE_FIELDS = [
-    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd', hint: 'can you, could you, I need, I\u2019d like' },
-    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a', hint: 'is it ok if, can I, am I allowed' },
-    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7', hint: 'how much, what is, do you offer' },
-    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5', hint: 'I need you to, go ahead, please' },
-    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc', hint: 'schedule, fix, repair, install, check' },
-    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4', hint: 'today, asap, right now, emergency' },
-    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac', hint: 'next week, tomorrow, this weekend' },
+    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd' },
+    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a' },
+    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7' },
+    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5' },
+    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc' },
+    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4' },
+    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac' },
   ];
+
+  // Build live hints from actual GlobalShare patterns
+  const patternsByToken = {};
+  if (allCuePatterns?.length) {
+    for (const p of allCuePatterns) {
+      const tok = (p.token || '').toLowerCase();
+      if (!patternsByToken[tok]) patternsByToken[tok] = [];
+      patternsByToken[tok].push(p.pattern);
+    }
+  }
 
   let html = '<div class="pf-cue-strip">';
   for (const f of CUE_FIELDS) {
     const val = cueFrame[f.key];
     const clickAttr = `onclick="_pfLoadCueEditor('${f.key}','${f.label}','${f.bg}','${f.fg}')"`;
+    // Live hint: show first few actual patterns, or "click to add" if none
+    const tokenPatterns = patternsByToken[f.key.toLowerCase()] || [];
+    const hintText = tokenPatterns.length
+      ? tokenPatterns.slice(0, 4).join(', ') + (tokenPatterns.length > 4 ? ` +${tokenPatterns.length - 4}` : '')
+      : 'no patterns — click to add';
+    const countTag = tokenPatterns.length ? `<span style="font-size:7px;opacity:0.7;">(${tokenPatterns.length})</span>` : '';
     if (val) {
       html += `<div class="pf-cue-cell hit" style="background:${f.bg};border-color:${f.border};cursor:pointer;" ${clickAttr}>
-        <div class="pf-cue-label" style="color:${f.fg}">${f.label}</div>
+        <div class="pf-cue-label" style="color:${f.fg}">${f.label} ${countTag}</div>
         <div class="pf-cue-value" style="color:${f.fg}" title="${_esc(val)}">"${_esc(val)}"</div>
       </div>`;
     } else {
       html += `<div class="pf-cue-cell miss" ${clickAttr} title="Click to add ${f.label} patterns">
-        <div class="pf-cue-label">${f.label}</div>
+        <div class="pf-cue-label">${f.label} ${countTag}</div>
         <div class="pf-cue-value">—</div>
-        <div class="pf-cue-suggest">${f.hint}</div>
+        <div class="pf-cue-suggest">${_esc(hintText)}</div>
       </div>`;
     }
   }
