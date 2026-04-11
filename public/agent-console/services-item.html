@@ -1955,6 +1955,8 @@ async function _saveItemVar(varName, value) {
     document.getElementById('btnEvaluate').style.display = '';
     document.getElementById('hardDeleteSection').style.display = '';
     await loadContainer();
+    // Auto-scroll to a specific section if ?sectionIdx= is in the URL (from Phrase Finder)
+    _scrollToTargetSection(params);
     // Load keyword health conflict map in background — chips update when ready
     _loadConflictMap();
   } else {
@@ -2223,6 +2225,30 @@ function _showForm() {
   const fb = document.getElementById('formBody');
   fb.style.display = 'flex';
   fb.style.flexDirection = 'column';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCROLL-TO-SECTION — auto-scroll + highlight when opened from Phrase Finder
+// URL param: ?sectionIdx=N (0-based array index)
+// ─────────────────────────────────────────────────────────────────────────────
+function _scrollToTargetSection(params) {
+  const idx = parseInt(params.get('sectionIdx'), 10);
+  if (isNaN(idx) || idx < 0) return;
+  const rows = document.querySelectorAll('#sectionsList .section-row');
+  if (idx >= rows.length) return;
+  const target = rows[idx];
+  // Short delay to let DOM settle after _populateForm
+  setTimeout(() => {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Flash highlight — brief green glow then fade
+    target.style.transition = 'box-shadow 0.3s, border-color 0.3s';
+    target.style.boxShadow  = '0 0 0 3px rgba(34,197,94,.35)';
+    target.style.borderColor = '#86efac';
+    setTimeout(() => {
+      target.style.boxShadow  = '';
+      target.style.borderColor = '';
+    }, 2500);
+  }, 200);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

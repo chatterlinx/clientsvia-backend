@@ -3065,7 +3065,7 @@ async function pfScan() {
       const pct    = Math.round(m.contentScore * 100);
       const pctCls = pct >= 90 ? 'high' : pct >= 70 ? 'mid' : 'low';
       const isTop  = rank === 0 && pct >= 90;
-      const link   = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${m.containerId}`;
+      const link   = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${m.containerId}&sectionIdx=${m.sectionIndex}`;
       const cardId = `pfCard${rank}`;
       const contentPreview = m.content || 'No response content';
 
@@ -3096,7 +3096,7 @@ async function pfScan() {
         const confPct   = Math.round(sim.confidence * 100);
         const confCls   = confPct >= 90 ? 'high' : confPct >= 70 ? 'mid' : 'low';
         const badgeCls  = sim.type === 'EXACT' ? 'exact' : sim.type === 'PARTIAL' ? 'partial' : sim.type === 'WORD_OVERLAP' ? 'overlap' : 'semantic';
-        const link      = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${d.containerId}`;
+        const link      = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${d.containerId}&sectionIdx=${d.sectionIndex}`;
         const anchors   = d.anchorWords || [];
 
         html += `<div class="pf-route-panel">
