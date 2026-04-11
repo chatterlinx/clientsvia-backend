@@ -33,7 +33,7 @@
  *   Pass 1: EXACT         -> 0.95  (substring match of entire callerPhrase)
  *   Pass 2: PARTIAL       -> 0.80  (all phrase words found in input)
  *   Pass 3: WORD_OVERLAP  -> 0.70/0.50  (weighted word coverage)
- *   Pass 4A: SYNONYM      -> 0.75  (expand input via GlobalShare synonyms, re-run 1-3)
+ *   Pass 4A: SYNONYM      -> 0.75  (expand input via GlobalShare synonyms incl. multi-word, re-run 1-3)
  *   Pass 4B: FUZZY_PHONETIC -> 0.65/0.70  (Double Metaphone phonetic matching)
  *
  * DATA SOURCE: section.callerPhrases via BridgeService (v3 — includes phoneticIndex).
@@ -187,22 +187,51 @@ function _runPasses(normInput, phrases, phraseIndex) {
 // ============================================================================
 
 /**
- * Expand input words using synonym groups (synonym -> canonical token).
+ * Expand input using synonym groups (synonym -> canonical token).
+ * Supports both single-word and multi-word synonyms.
+ * Multi-word synonyms are matched longest-first with word boundaries.
  * Returns the expanded string, or the same string if no synonyms matched.
  */
 function _applySynonyms(normInput, synonymGroups) {
   // Build reverse lookup: synonym -> canonical token
-  const lookup = {};
+  // Separate single-word and multi-word for efficient matching
+  const singleLookup = {};
+  const multiPhrases = [];  // [{ syn, canonical }] sorted longest-first
+
   for (const { token, synonyms } of synonymGroups) {
     const canonical = (token || '').toLowerCase();
+    if (!canonical) continue;
     for (const syn of (synonyms || [])) {
-      lookup[syn.toLowerCase()] = canonical;
+      const normSyn = syn.toLowerCase().trim();
+      if (!normSyn) continue;
+      if (normSyn.includes(' ')) {
+        multiPhrases.push({ syn: normSyn, canonical });
+      } else {
+        singleLookup[normSyn] = canonical;
+      }
     }
   }
 
-  const words = normInput.split(/\s+/);
-  const expanded = words.map(w => lookup[w] || w);
-  return expanded.join(' ');
+  let result = normInput;
+
+  // Phase 1: Multi-word phrases (longest-first, word-boundary safe)
+  if (multiPhrases.length > 0) {
+    multiPhrases.sort((a, b) => b.syn.length - a.syn.length);
+    for (const { syn, canonical } of multiPhrases) {
+      // Word-boundary regex: match whole phrase, not mid-word
+      const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`\\b${escaped}\\b`, 'g');
+      result = result.replace(re, canonical);
+    }
+  }
+
+  // Phase 2: Single-word replacement on remaining words
+  if (Object.keys(singleLookup).length > 0) {
+    const words = result.split(/\s+/);
+    result = words.map(w => singleLookup[w] || w).join(' ');
+  }
+
+  return result;
 }
 
 // ============================================================================
