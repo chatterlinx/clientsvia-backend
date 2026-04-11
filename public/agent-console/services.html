@@ -817,7 +817,7 @@
     .pf-cue-value { font-size: 9px; margin-top: 1px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-cue-cell.miss .pf-cue-label { color: #94a3b8; }
     .pf-cue-cell.miss .pf-cue-value { color: #cbd5e1; }
-    .pf-cue-suggest { font-size: 7px; color: #94a3b8; margin-top: 2px; line-height: 1.2; font-style: italic; }
+    .pf-cue-suggest { font-size: 8px; color: #64748b; margin-top: 3px; line-height: 1.3; font-style: italic; font-weight: 500; }
     .pf-section-id { font-size: 9px; font-weight: 600; font-family: monospace; color: #64748b; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     .pf-cue-status {
       font-size: 10px; font-weight: 600; padding: 4px 0 6px;
@@ -836,6 +836,26 @@
     .pf-cue-status.gate-none .pf-cue-badge { background: #fee2e2; color: #991b1b; }
     .pf-cue-trade-links { font-size: 10px; color: #6d28d9; padding-bottom: 4px; }
     .pf-cue-trade-links span { cursor: pointer; text-decoration: underline; margin-right: 8px; }
+
+    /* Verdict panel */
+    .pf-verdict {
+      margin: 6px 0 10px; padding: 8px 12px; border-radius: 8px; border: 1px solid #86efac;
+      background: #f0fdf4;
+    }
+    .pf-verdict.no-route { background: #fef2f2; border-color: #fecaca; }
+    .pf-verdict-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pf-verdict-badge {
+      font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+      background: #dcfce7; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pf-verdict-conf { font-size: 14px; font-weight: 800; color: #166534; }
+    .pf-verdict-section { font-size: 12px; font-weight: 700; color: #1e293b; }
+    .pf-verdict-container { font-size: 11px; color: #64748b; }
+    .pf-verdict-response {
+      margin-top: 6px; font-size: 11px; color: #334155; line-height: 1.4;
+      padding: 6px 8px; background: white; border-radius: 5px; border: 1px solid #e2e8f0;
+      font-style: italic;
+    }
 
     /* Re-scan hint banner */
     .pf-rescan-hint {
@@ -3204,7 +3224,7 @@ async function pfScan() {
     const scanResult = result.results?.[0];
 
     // ── CueExtractor Strip + Runtime Analysis Panel ──
-    let html = _pfBuildCueStrip(tmResult?.cueFrame);
+    let html = _pfBuildCueStrip(tmResult?.cueFrame, tmResult);
     html += _pfBuildRuntimePanel(tmResult);
 
     if (!scanResult?.matches?.length && !scanResult?.phraseMatches?.length) {
@@ -3274,7 +3294,7 @@ async function pfScan() {
 }
 
 /* ── Build CueExtractor analysis strip ───────────────────────────────── */
-function _pfBuildCueStrip(cueFrame) {
+function _pfBuildCueStrip(cueFrame, tmResult) {
   if (!cueFrame) return '';
 
   const CUE_FIELDS = [
@@ -3322,6 +3342,7 @@ function _pfBuildCueStrip(cueFrame) {
   // Status line with actionable guidance
   const fc = cueFrame.fieldCount || 0;
   const hasTrade = trades.length > 0;
+  const w = tmResult?.winner;
   let statusCls, badgeText, guidance;
 
   if (fc >= 3 && hasTrade) {
@@ -3345,6 +3366,35 @@ function _pfBuildCueStrip(cueFrame) {
     <span class="pf-cue-badge">${badgeText}</span>
     <span>${guidance}</span>
   </div>`;
+
+  // Winner verdict — show what will actually fire: section, confidence, response content
+  if (w) {
+    const confPct = w.confidence ? Math.round(w.confidence * 100) : w.similarity ? Math.round(w.similarity * 100) : w.score || '—';
+    const confLabel = typeof confPct === 'number' ? `${confPct}%` : confPct;
+    const idTag = w.sectionKcId ? `<span class="pf-section-id" style="margin-left:4px;">${_esc(w.sectionKcId)}</span>` : '';
+    const sLabel = w.sectionLabel || w.bestSection || 'Unknown';
+    const cTitle = w.containerTitle || '';
+    const clickAttr = w.containerId && w.sectionIdx != null
+      ? `onclick="_pfLoadEditor('${w.containerId}',${w.sectionIdx},null)" style="cursor:pointer;"`
+      : '';
+    html += `<div class="pf-verdict" ${clickAttr}>
+      <div class="pf-verdict-header">
+        <span class="pf-verdict-badge">${_esc(w.via)}</span>
+        <span class="pf-verdict-conf">${confLabel}</span>
+        ${idTag}
+        <span class="pf-verdict-section">${_esc(sLabel)}</span>
+        <span class="pf-verdict-container">${_esc(cTitle)}</span>
+      </div>
+      ${w.sectionContent ? `<div class="pf-verdict-response">"${_esc(w.sectionContent)}"</div>` : ''}
+    </div>`;
+  } else {
+    html += `<div class="pf-verdict no-route">
+      <div class="pf-verdict-header">
+        <span class="pf-verdict-badge" style="background:#fee2e2;color:#991b1b;">NO ROUTE</span>
+        <span style="color:#991b1b;">No path matched — phrase will fall through to LLM fallback (GATE 4)</span>
+      </div>
+    </div>`;
+  }
 
   // Trade match links
   if (trades.length) {

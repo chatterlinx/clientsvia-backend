@@ -1007,11 +1007,13 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
       if (uapResult.containerId) {
         const c = containers.find(ct => String(ct._id) === uapResult.containerId);
         const kcId = c?.kcId || null;
+        const uapSection = c?.sections?.[uapResult.sectionIdx];
         results.uap = {
           containerId:  uapResult.containerId,
           sectionIdx:   uapResult.sectionIdx,
-          sectionLabel: uapResult.sectionLabel || c?.sections?.[uapResult.sectionIdx]?.label || null,
+          sectionLabel: uapResult.sectionLabel || uapSection?.label || null,
           sectionKcId:  kcId && uapResult.sectionIdx != null ? `${kcId}-${String(uapResult.sectionIdx + 1).padStart(2, '0')}` : null,
+          sectionContent: uapSection?.content || null,
           containerTitle: c?.title || null,
           confidence:   uapResult.confidence,
           matchType:    uapResult.matchType,
@@ -1035,6 +1037,7 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
           sectionIdx:     semResult.sectionIdx,
           sectionLabel:   semResult.section?.label || null,
           sectionKcId:    semKcId && semResult.sectionIdx != null ? `${semKcId}-${String(semResult.sectionIdx + 1).padStart(2, '0')}` : null,
+          sectionContent: semResult.section?.content || null,
           similarity:     semResult.similarity,
           matchSource:    semResult.matchSource,
         };
@@ -1051,6 +1054,7 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
         containerTitle: kwMatch.container.title,
         score:          kwMatch.score,
         bestSection:    kwMatch.bestSection?.label || null,
+        sectionContent: kwMatch.bestSection?.content || null,
         sectionKcId:    kwKcId && kwMatch.bestSectionIdx != null ? `${kwKcId}-${String(kwMatch.bestSectionIdx + 1).padStart(2, '0')}` : null,
         contextAssisted: kwMatch.contextAssisted || false,
       };
