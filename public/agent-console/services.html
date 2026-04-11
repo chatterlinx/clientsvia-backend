@@ -653,211 +653,179 @@
     /* ── Phrase Finder Workstation ──────────────────────────────────────── */
     .pf-overlay {
       display: none; position: fixed; inset: 0;
-      background: #f1f5f9; z-index: 1000;
+      background: rgba(0,0,0,.45); z-index: 1000;
     }
     .pf-overlay.open { display: flex; }
     .pf-workstation {
       display: flex; flex-direction: column;
-      width: 100%; height: 100%;
+      width: 100%; height: 100%; background: #f8fafc;
     }
+
+    /* Top pane — search + results */
     .pf-top-pane {
       flex: 0 0 42%; min-height: 180px;
-      display: flex; flex-direction: column;
-      background: white; border-bottom: 1px solid #e2e8f0;
-      overflow: hidden;
+      display: flex; flex-direction: column; background: white;
+      border-bottom: 1px solid #e2e8f0;
     }
-    .pf-drag-handle {
-      flex-shrink: 0; height: 8px; background: #e2e8f0;
-      cursor: row-resize; display: flex; align-items: center; justify-content: center;
-      transition: background .15s;
-    }
-    .pf-drag-handle:hover { background: #cbd5e1; }
-    .pf-drag-grip { width: 40px; height: 3px; background: #94a3b8; border-radius: 2px; }
-    .pf-bottom-pane {
-      flex: 1; min-height: 180px;
-      display: flex; flex-direction: column;
-      background: #f8fafc; overflow: hidden;
-    }
-    .pf-iframe-placeholder {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      color: #94a3b8; gap: 12px;
-    }
-    .pf-placeholder-icon { font-size: 40px; opacity: 0.5; }
-    .pf-placeholder-text { font-size: 14px; font-weight: 500; }
-    .pf-editor-frame { width: 100%; flex: 1; border: none; background: white; }
     .pf-header {
       display: flex; align-items: center; gap: 12px;
       padding: 14px 22px; border-bottom: 1px solid #e2e8f0;
-      flex-shrink: 0; background: white;
+      flex-shrink: 0;
     }
-    .pf-header-icon { font-size: 22px; }
-    .pf-title { font-size: 17px; font-weight: 700; flex: 1; }
+    .pf-header-icon { font-size: 20px; }
+    .pf-title { font-size: 16px; font-weight: 700; flex: 1; }
     .pf-close {
       width: 30px; height: 30px; border: none; background: #f1f5f9;
       border-radius: 8px; font-size: 14px; cursor: pointer; color: #64748b;
       display: flex; align-items: center; justify-content: center;
     }
     .pf-close:hover { background: #e2e8f0; color: #0f172a; }
-    .pf-body { padding: 14px 22px; overflow-y: auto; flex: 1; min-height: 0; }
-    .pf-input-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .pf-body { padding: 14px 22px; overflow-y: auto; flex: 1; }
+    .pf-input-row { display: flex; gap: 10px; margin-bottom: 12px; }
     .pf-input {
-      flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px;
+      flex: 1; padding: 9px 14px; border: 1px solid #e2e8f0; border-radius: 8px;
       font-size: 13px; font-family: inherit; color: #1e293b;
     }
     .pf-input:focus { outline: none; border-color: #6366f1; }
     .pf-scan-btn {
-      padding: 10px 20px; border-radius: 8px; border: none;
+      padding: 9px 20px; border-radius: 8px; border: none;
       background: #6366f1; color: white; font-size: 13px; font-weight: 600;
       cursor: pointer; white-space: nowrap;
     }
     .pf-scan-btn:hover { background: #4f46e5; }
     .pf-scan-btn:disabled { opacity: .5; cursor: not-allowed; }
-    .pf-results { display: flex; flex-direction: column; gap: 6px; }
+
+    /* Results */
+    .pf-results { display: flex; flex-direction: column; gap: 4px; }
     .pf-result-card {
-      border-radius: 8px; background: #f8fafc;
-      border: 1px solid #f1f5f9; transition: background .12s;
-      overflow: hidden;
+      border-radius: 8px; border: 1px solid #f1f5f9;
+      background: #f8fafc; transition: all .15s; cursor: pointer;
     }
-    .pf-result-card:hover { background: #f1f5f9; }
+    .pf-result-card:hover { background: #f1f5f9; border-color: #e2e8f0; }
+    .pf-result-card.pf-active { background: #eef2ff; border-color: #6366f1; }
     .pf-result-card.top { background: #f0fdf4; border-color: #86efac; }
+    .pf-result-card.top.pf-active { background: #e8fdf0; border-color: #6366f1; }
     .pf-result-row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px;
     }
-    .pf-score-bar-wrap { width: 60px; }
-    .pf-score-bar { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
+    .pf-score-bar-wrap { width: 50px; flex-shrink: 0; }
+    .pf-score-bar { height: 5px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
     .pf-score-fill { height: 100%; border-radius: 3px; }
     .pf-score-fill.high { background: #22c55e; }
     .pf-score-fill.mid  { background: #f59e0b; }
     .pf-score-fill.low  { background: #ef4444; }
-    .pf-pct { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; }
+    .pf-pct { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
     .pf-pct.high { color: #16a34a; }
     .pf-pct.mid  { color: #d97706; }
     .pf-pct.low  { color: #dc2626; }
-    .pf-sect-idx {
-      font-size: 10px; font-weight: 700; color: #6366f1; background: #eef2ff;
-      padding: 1px 6px; border-radius: 4px; border: 1px solid #c7d2fe;
-      font-variant-numeric: tabular-nums; min-width: 28px; text-align: center;
+    .pf-sect-id {
+      font-size: 9px; font-weight: 700; color: #6d28d9; background: #f5f3ff;
+      padding: 2px 6px; border-radius: 4px; font-family: monospace; flex-shrink: 0;
     }
-    .pf-section-name { flex: 1; font-size: 12px; font-weight: 500; color: #1e293b; }
-    .pf-container-name { font-size: 11px; color: #94a3b8; min-width: 100px; }
+    .pf-section-name { flex: 1; font-size: 12px; font-weight: 500; color: #1e293b; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-container-name { font-size: 10px; color: #94a3b8; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
     .pf-home-tag {
       font-size: 9px; font-weight: 700; color: #166534; background: #dcfce7;
-      padding: 2px 8px; border-radius: 4px;
+      padding: 2px 7px; border-radius: 4px; flex-shrink: 0;
     }
-    .pf-link {
-      font-size: 11px; color: #6366f1; text-decoration: none; font-weight: 600; cursor: pointer;
+    .pf-edit-btn {
+      font-size: 11px; color: #6366f1; font-weight: 600; cursor: pointer;
+      background: none; border: none; padding: 2px 6px; flex-shrink: 0;
     }
-    .pf-link:hover { text-decoration: underline; }
-    .pf-result-card.pf-active {
-      border-color: #6366f1; background: #eef2ff;
-      box-shadow: 0 0 0 2px rgba(99,102,241,.2);
-    }
-    .pf-rescan-hint {
-      padding: 8px 14px; margin-bottom: 10px;
-      background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
-      font-size: 12px; color: #166534; font-weight: 500;
-      animation: pfFadeIn .3s;
-    }
-    .pf-rescan-link { color: #6366f1; font-weight: 700; cursor: pointer; text-decoration: underline; }
-    @keyframes pfFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-    .pf-result-content {
-      display: none; padding: 0 12px 10px 12px;
-      border-top: 1px solid #e2e8f0;
-    }
-    .pf-result-card.expanded .pf-result-content { display: block; }
-    .pf-result-response {
-      font-size: 12px; color: #475569; line-height: 1.5;
-      padding: 8px 10px; background: white; border-radius: 6px;
-      border: 1px solid #e2e8f0; margin-top: 8px;
-    }
-    .pf-result-response-label {
-      font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
-      letter-spacing: 0.3px; margin-top: 8px;
-    }
+    .pf-edit-btn:hover { text-decoration: underline; }
     .pf-expand-icon {
-      font-size: 10px; color: #94a3b8; transition: transform .15s;
-      min-width: 14px; text-align: center;
+      font-size: 10px; color: #94a3b8; cursor: pointer; padding: 2px 4px;
+      transition: transform .2s; flex-shrink: 0; user-select: none;
     }
-    .pf-result-card.expanded .pf-expand-icon { transform: rotate(90deg); }
+    .pf-expand-icon.open { transform: rotate(90deg); }
+    .pf-result-content {
+      display: none; padding: 0 12px 8px 12px;
+      font-size: 12px; color: #475569; line-height: 1.5;
+      border-top: 1px solid #f1f5f9; margin-top: 0; padding-top: 6px;
+    }
+    .pf-result-content.open { display: block; }
+
+    /* Route diagnostic panel */
+    .pf-route-panel {
+      margin: 8px 0 4px; padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 8px; font-size: 11px; color: #166534;
+    }
+    .pf-route-panel .pf-route-title { font-weight: 700; margin-bottom: 4px; font-size: 12px; }
+    .pf-route-panel .pf-route-row { display: flex; gap: 8px; margin: 2px 0; align-items: center; }
+    .pf-route-panel .pf-route-label { font-weight: 600; min-width: 80px; color: #15803d; }
+    .pf-route-panel .pf-route-value { color: #166534; }
+    .pf-route-badge {
+      font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+      background: #dcfce7; color: #166534; text-transform: uppercase;
+    }
+    .pf-anchor-chip {
+      display: inline-block; font-size: 9px; font-weight: 600; padding: 1px 5px;
+      border-radius: 3px; background: #dbeafe; color: #1d4ed8; margin: 1px 2px;
+    }
+
+    /* Re-scan hint banner */
+    .pf-rescan-hint {
+      padding: 8px 16px; background: #f0fdf4; border-bottom: 1px solid #86efac;
+      font-size: 12px; color: #166534; font-weight: 600; text-align: center;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      flex-shrink: 0;
+    }
+    .pf-rescan-hint button {
+      padding: 3px 10px; border-radius: 5px; border: 1px solid #86efac;
+      background: white; color: #166534; font-size: 11px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-rescan-hint button:hover { background: #dcfce7; }
+
     .pf-actions {
       display: flex; align-items: center; gap: 10px;
-      margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9;
     }
     .pf-copy-btn {
-      padding: 7px 14px; border-radius: 6px; border: 1px solid #c7d2fe;
-      background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 600;
+      padding: 6px 12px; border-radius: 6px; border: 1px solid #c7d2fe;
+      background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;
       cursor: pointer; transition: all .12s;
     }
     .pf-copy-btn:hover { background: #e0e7ff; }
     .pf-draft-section {
-      margin-top: 14px; padding: 14px; background: #fffbeb; border: 1px solid #fde68a;
+      margin-top: 10px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a;
       border-radius: 8px;
     }
-    .pf-draft-label { font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase; margin-bottom: 6px; }
-    .pf-draft-content { font-size: 13px; color: #1e293b; line-height: 1.5; }
+    .pf-draft-label { font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase; margin-bottom: 4px; }
+    .pf-draft-content { font-size: 12px; color: #1e293b; line-height: 1.5; }
     .pf-generate-btn {
-      padding: 8px 16px; border-radius: 8px; border: 1px solid #fde68a;
-      background: #fffbeb; color: #92400e; font-size: 12px; font-weight: 600;
+      padding: 6px 14px; border-radius: 8px; border: 1px solid #fde68a;
+      background: #fffbeb; color: #92400e; font-size: 11px; font-weight: 600;
       cursor: pointer; transition: all .12s;
     }
     .pf-generate-btn:hover { background: #fef3c7; }
     .pf-no-match {
-      padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;
+      padding: 14px; text-align: center; color: #94a3b8; font-size: 12px;
       border: 1px dashed #e2e8f0; border-radius: 8px;
     }
-    /* ── Phrase Finder — Route Diagnostic Panel ───────────────────────── */
-    .pf-route-panel {
-      margin-top: 12px; padding: 0; background: #f0fdf4; border: 1px solid #86efac;
-      border-radius: 10px; overflow: hidden;
+
+    /* Drag handle between panes */
+    .pf-drag-handle {
+      flex-shrink: 0; height: 8px; background: #e2e8f0;
+      cursor: row-resize; display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
     }
-    .pf-route-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px; background: #dcfce7; border-bottom: 1px solid #bbf7d0;
+    .pf-drag-handle:hover { background: #cbd5e1; }
+    .pf-drag-grip {
+      width: 40px; height: 3px; border-radius: 2px; background: #94a3b8;
     }
-    .pf-route-icon { font-size: 16px; }
-    .pf-route-title { font-size: 12px; font-weight: 700; color: #166534; flex: 1; }
-    .pf-route-badge {
-      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
-      text-transform: uppercase; letter-spacing: 0.5px;
+
+    /* Bottom pane — editor iframe */
+    .pf-bottom-pane {
+      flex: 1; min-height: 180px;
+      display: flex; flex-direction: column; background: white;
     }
-    .pf-route-badge.exact    { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .pf-route-badge.partial  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
-    .pf-route-badge.overlap  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-    .pf-route-badge.semantic { background: #f3e8ff; color: #6b21a8; border: 1px solid #c4b5fd; }
-    .pf-route-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-    .pf-route-row {
-      display: flex; align-items: flex-start; gap: 8px; font-size: 12px;
+    .pf-iframe-placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      color: #94a3b8; font-size: 14px; text-align: center; padding: 20px;
     }
-    .pf-route-label {
-      min-width: 80px; font-weight: 600; color: #64748b; font-size: 11px;
-      text-transform: uppercase; letter-spacing: 0.3px; padding-top: 1px;
-    }
-    .pf-route-value { color: #1e293b; flex: 1; line-height: 1.5; }
-    .pf-route-link {
-      color: #6366f1; text-decoration: none; font-weight: 600;
-    }
-    .pf-route-link:hover { text-decoration: underline; }
-    .pf-route-conf {
-      font-weight: 700; font-variant-numeric: tabular-nums;
-    }
-    .pf-route-conf.high { color: #16a34a; }
-    .pf-route-conf.mid  { color: #d97706; }
-    .pf-anchor-pills { display: flex; flex-wrap: wrap; gap: 4px; }
-    .pf-anchor-pill {
-      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
-      background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
-    }
-    .pf-no-anchors {
-      font-size: 11px; color: #94a3b8; font-style: italic;
-    }
-    .pf-route-phrase-text {
-      font-size: 12px; color: #475569; font-style: italic;
-    }
-    .pf-route-sep {
-      height: 1px; background: #bbf7d0; margin: 2px 0;
-    }
+    .pf-editor-frame { width: 100%; flex: 1; border: none; background: white; }
 
     /* ── Delete confirm dialog ───────────────────────────────────────────── */
     .dialog-overlay {
@@ -1345,15 +1313,19 @@
   <div class="skeleton-card"></div>
 </div>
 
-<!-- ── Phrase Finder modal ─────────────────────────────────────────────── -->
+<!-- ── Phrase Finder Workstation ───────────────────────────────────────── -->
 <div class="pf-overlay" id="pfOverlay">
   <div class="pf-workstation">
-    <!-- TOP PANE: Search + Results -->
+    <!-- Top pane: search + results -->
     <div class="pf-top-pane" id="pfTopPane">
       <div class="pf-header">
         <span class="pf-header-icon">🔍</span>
         <div class="pf-title">Phrase Finder Workstation</div>
         <button class="pf-close" onclick="closePhraseFinder()">✕</button>
+      </div>
+      <div id="pfRescanHint" class="pf-rescan-hint" style="display:none;">
+        Section saved — re-scan to verify your changes
+        <button onclick="pfScan()">Re-scan</button>
       </div>
       <div class="pf-body">
         <div class="pf-input-row">
@@ -1365,13 +1337,14 @@
         <div id="pfResults"></div>
       </div>
     </div>
-    <!-- DRAG HANDLE -->
+
+    <!-- Drag handle -->
     <div class="pf-drag-handle" id="pfDragHandle"><div class="pf-drag-grip"></div></div>
-    <!-- BOTTOM PANE: Section Editor (iframe) -->
+
+    <!-- Bottom pane: editor iframe -->
     <div class="pf-bottom-pane" id="pfBottomPane">
       <div class="pf-iframe-placeholder" id="pfIframePlaceholder">
-        <div class="pf-placeholder-icon">📝</div>
-        <div class="pf-placeholder-text">Click a section above to load its editor</div>
+        Click a section above to load its editor below
       </div>
       <iframe id="pfEditorFrame" class="pf-editor-frame" style="display:none;"></iframe>
     </div>
@@ -3061,100 +3034,75 @@ function _renderSimResults(filter) {
 
 function openPhraseFinder() {
   document.getElementById('pfOverlay').classList.add('open');
-  _pfResetEditor();
+  document.getElementById('pfRescanHint').style.display = 'none';
   setTimeout(() => document.getElementById('pfInput').focus(), 100);
 }
 
 function closePhraseFinder() {
   document.getElementById('pfOverlay').classList.remove('open');
-  // Clear iframe to free memory
-  const frame = document.getElementById('pfEditorFrame');
-  frame.src = 'about:blank';
-  frame.style.display = 'none';
-  document.getElementById('pfIframePlaceholder').style.display = '';
+  _pfResetEditor();
 }
 
-// ── Load a KC section into the bottom-pane iframe ──────────────────────
+/* ── Load section editor into bottom-pane iframe ────────────────────── */
 function _pfLoadEditor(containerId, sectionIndex, cardElement) {
-  const frame       = document.getElementById('pfEditorFrame');
+  const frame = document.getElementById('pfEditorFrame');
   const placeholder = document.getElementById('pfIframePlaceholder');
 
-  // Highlight active result card
+  // Highlight active card
   document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
   if (cardElement) cardElement.classList.add('pf-active');
 
   const url = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${containerId}&sectionIdx=${sectionIndex}&embed=1`;
-
   placeholder.style.display = 'none';
   frame.style.display = '';
   frame.src = url;
+
+  // Hide re-scan hint when loading new editor
+  document.getElementById('pfRescanHint').style.display = 'none';
 }
 
 function _pfResetEditor() {
   const frame = document.getElementById('pfEditorFrame');
-  frame.src = 'about:blank';
+  const placeholder = document.getElementById('pfIframePlaceholder');
   frame.style.display = 'none';
-  document.getElementById('pfIframePlaceholder').style.display = '';
+  frame.src = '';
+  placeholder.style.display = '';
   document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
 }
 
-// ── Drag handle resize ──────────────────────────────────────────────────
-(function _pfDragInit() {
-  document.addEventListener('DOMContentLoaded', () => {
-    const handle = document.getElementById('pfDragHandle');
-    if (!handle) return;
-    handle.addEventListener('mousedown', e => {
-      e.preventDefault();
-      const topPane = document.getElementById('pfTopPane');
-      const startY  = e.clientY;
-      const startH  = topPane.getBoundingClientRect().height;
-      const onMove = ev => {
-        const newH = Math.max(180, Math.min(window.innerHeight - 180, startH + (ev.clientY - startY)));
-        topPane.style.flex = `0 0 ${newH}px`;
-      };
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
-})();
+/* ── UAP simulation: classify match type for a phrase ───────────────── */
+function _pfSimulateMatch(phrase, callerPhrases) {
+  if (!phrase || !callerPhrases?.length) return null;
+  const input = phrase.toLowerCase().trim();
+  const inputWords = input.split(/\s+/);
 
-// ── Listen for save events from iframe editor ──────────────────────────
-window.addEventListener('message', e => {
-  if (e.data?.type === 'pf-section-saved') {
-    const existing = document.querySelector('.pf-rescan-hint');
-    if (existing) existing.remove();
-    const hint = document.createElement('div');
-    hint.className = 'pf-rescan-hint';
-    hint.innerHTML = '✓ Section saved — <span class="pf-rescan-link" onclick="pfScan()">Re-scan to verify</span>';
-    const resultsEl = document.getElementById('pfResults');
-    if (resultsEl) resultsEl.insertBefore(hint, resultsEl.firstChild);
-    setTimeout(() => { if (hint.parentNode) hint.remove(); }, 8000);
+  for (const cp of callerPhrases) {
+    const cpText = (typeof cp === 'string' ? cp : cp.text || '').toLowerCase().trim();
+    if (!cpText) continue;
+    // EXACT
+    if (input === cpText) return { type: 'EXACT', phrase: cpText, confidence: 1.0 };
+    // PARTIAL — input contains the phrase or vice versa
+    if (input.includes(cpText) || cpText.includes(input)) return { type: 'PARTIAL', phrase: cpText, confidence: 0.90 };
   }
-});
 
-// ── UAP match-type simulation (mirrors UtteranceActParser passes 1-3) ──
-function _pfSimulateMatch(input, phrase) {
-  const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-  const ni = norm(input);
-  const np = norm(phrase);
-  if (ni === np) return { type: 'EXACT', confidence: 0.95 };
-  const phraseWords = np.split(/\s+/);
-  const inputWords  = new Set(ni.split(/\s+/));
-  if (phraseWords.length > 0 && phraseWords.every(w => inputWords.has(w))) return { type: 'PARTIAL', confidence: 0.80 };
-  const overlap  = phraseWords.filter(w => inputWords.has(w)).length;
-  const coverage = phraseWords.length ? overlap / phraseWords.length : 0;
-  if (coverage >= 0.5) return { type: 'WORD_OVERLAP', confidence: Math.round(coverage * 100) / 100 };
-  return { type: 'SEMANTIC', confidence: 0.65 };
+  // WORD_OVERLAP — significant shared words
+  for (const cp of callerPhrases) {
+    const cpText = (typeof cp === 'string' ? cp : cp.text || '').toLowerCase().trim();
+    if (!cpText) continue;
+    const cpWords = cpText.split(/\s+/);
+    const stop = new Set(['a','an','the','is','are','was','were','to','of','for','in','on','at','and','or','i','my','me','it','do','does','can','how','what','much','your','you','that','this']);
+    const sig1 = inputWords.filter(w => !stop.has(w));
+    const sig2 = cpWords.filter(w => !stop.has(w));
+    if (!sig1.length || !sig2.length) continue;
+    const overlap = sig1.filter(w => sig2.includes(w)).length;
+    const ratio = overlap / Math.max(sig1.length, sig2.length);
+    if (ratio >= 0.5) return { type: 'WORD_OVERLAP', phrase: cpText, confidence: Math.round(ratio * 100) / 100 };
+  }
+
+  return null;
 }
 
+/* ── Main scan function ─────────────────────────────────────────────── */
 async function pfScan() {
   const phrase = document.getElementById('pfInput').value.trim();
   if (!phrase) return;
@@ -3162,7 +3110,7 @@ async function pfScan() {
   const btn = document.getElementById('pfScanBtn');
   const resultsEl = document.getElementById('pfResults');
   btn.disabled = true; btn.textContent = 'Scanning…';
-  resultsEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px;">Scanning all knowledge containers…</div>';
+  resultsEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">Scanning all knowledge containers…</div>';
 
   try {
     const result = await AgentConsoleAuth.apiFetch(
@@ -3179,7 +3127,38 @@ async function pfScan() {
       return;
     }
 
-    let html = '<div class="pf-results">';
+    // ── Build route diagnostic panel if phrase is routed ──
+    let routeHtml = '';
+    if (scanResult.duplicates?.length) {
+      const d = scanResult.duplicates[0]; // best match
+      const match = _pfSimulateMatch(phrase, [{ text: d.phrase }]);
+      routeHtml = `<div class="pf-route-panel">
+        <div class="pf-route-title">ROUTED — This phrase will reach a section</div>
+        <div class="pf-route-row">
+          <span class="pf-route-label">Section</span>
+          <span class="pf-route-value">
+            ${d.sectionKcId ? `<span class="pf-sect-id">${_esc(d.sectionKcId)}</span> ` : ''}
+            <span onclick="_pfLoadEditor('${d.containerId}',${d.sectionIndex},null)" style="cursor:pointer;text-decoration:underline;color:#166534;">${_esc(d.sectionLabel)}</span>
+            <span style="color:#6b7280;font-size:10px;margin-left:4px;">(${_esc(d.containerName)})</span>
+          </span>
+        </div>
+        <div class="pf-route-row">
+          <span class="pf-route-label">Matched</span>
+          <span class="pf-route-value">"${_esc(d.phrase)}" (${Math.round(d.similarity * 100)}%)</span>
+        </div>
+        ${match ? `<div class="pf-route-row">
+          <span class="pf-route-label">Match Type</span>
+          <span class="pf-route-badge">${match.type}</span>
+        </div>` : ''}
+        ${d.anchorWords?.length ? `<div class="pf-route-row">
+          <span class="pf-route-label">Anchors</span>
+          <span>${d.anchorWords.map(w => `<span class="pf-anchor-chip">${_esc(w)}</span>`).join('')}</span>
+        </div>` : ''}
+      </div>`;
+    }
+
+    // ── Build result cards ──
+    let html = routeHtml + '<div class="pf-results">';
     const topScore = scanResult.matches[0].contentScore;
 
     scanResult.matches.forEach((m, rank) => {
@@ -3187,86 +3166,29 @@ async function pfScan() {
       const pctCls = pct >= 90 ? 'high' : pct >= 70 ? 'mid' : 'low';
       const isTop  = rank === 0 && pct >= 90;
       const cardId = `pfCard${rank}`;
-      const contentPreview = m.content || 'No response content';
 
-      html += `<div class="pf-result-card${isTop ? ' top' : ''}" id="${cardId}">
-        <div class="pf-result-row" onclick="_pfLoadEditor('${m.containerId}', ${m.sectionIndex}, document.getElementById('${cardId}'))">
-          <span class="pf-expand-icon" onclick="event.stopPropagation();document.getElementById('${cardId}').classList.toggle('expanded')">▶</span>
+      html += `<div class="pf-result-card${isTop ? ' top' : ''}" id="${cardId}"
+        onclick="_pfLoadEditor('${m.containerId}',${m.sectionIndex},this)">
+        <div class="pf-result-row">
           <span class="pf-pct ${pctCls}">${pct}%</span>
           <div class="pf-score-bar-wrap">
             <div class="pf-score-bar"><div class="pf-score-fill ${pctCls}" style="width:${pct}%"></div></div>
           </div>
-          <span class="pf-sect-idx">${m.sectionKcId || ('§' + m.sectionIndex)}</span>
+          ${m.sectionKcId ? `<span class="pf-sect-id">${_esc(m.sectionKcId)}</span>` : ''}
           <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
           <span class="pf-container-name">${_esc(m.containerName)}</span>
-          ${isTop ? '<span class="pf-home-tag">✓ Home</span>' : ''}
-          <span class="pf-link" onclick="event.stopPropagation();_pfLoadEditor('${m.containerId}', ${m.sectionIndex}, document.getElementById('${cardId}'))">Edit →</span>
+          ${isTop ? '<span class="pf-home-tag">Home</span>' : ''}
+          <span class="pf-expand-icon" onclick="event.stopPropagation();_pfToggleExpand(this)">&#9654;</span>
         </div>
-        <div class="pf-result-content">
-          <div class="pf-result-response-label">Agent Response</div>
-          <div class="pf-result-response">${_esc(contentPreview)}</div>
-        </div>
+        <div class="pf-result-content">${_esc(m.content || 'No content preview')}</div>
       </div>`;
     });
-
-    // ── Route Diagnostic Panel — rich data for each existing phrase match ──
-    if (scanResult.duplicates?.length) {
-      scanResult.duplicates.forEach(d => {
-        const sim       = _pfSimulateMatch(phrase, d.phrase);
-        const confPct   = Math.round(sim.confidence * 100);
-        const confCls   = confPct >= 90 ? 'high' : confPct >= 70 ? 'mid' : 'low';
-        const badgeCls  = sim.type === 'EXACT' ? 'exact' : sim.type === 'PARTIAL' ? 'partial' : sim.type === 'WORD_OVERLAP' ? 'overlap' : 'semantic';
-        const anchors   = d.anchorWords || [];
-
-        html += `<div class="pf-route-panel">
-          <div class="pf-route-header">
-            <span class="pf-route-icon">✅</span>
-            <span class="pf-route-title">ROUTED — This phrase has a home</span>
-            <span class="pf-route-badge ${badgeCls}">${_esc(sim.type)}</span>
-          </div>
-          <div class="pf-route-body">
-            <div class="pf-route-row">
-              <span class="pf-route-label">Section</span>
-              <span class="pf-route-value">
-                <span class="pf-route-link" style="cursor:pointer;" onclick="_pfLoadEditor('${d.containerId}', ${d.sectionIndex})">${_esc(d.sectionLabel)} →</span>
-                <span class="pf-sect-idx" style="margin-left:8px;">${d.sectionKcId || ('§' + d.sectionIndex)}</span>
-                <span style="color:#94a3b8;font-size:11px;margin-left:6px;">${_esc(d.containerName)}</span>
-              </span>
-            </div>
-            <div class="pf-route-row">
-              <span class="pf-route-label">Phrase</span>
-              <span class="pf-route-value pf-route-phrase-text">"${_esc(d.phrase)}"</span>
-            </div>
-            <div class="pf-route-row">
-              <span class="pf-route-label">Match</span>
-              <span class="pf-route-value">
-                <span class="pf-route-conf ${confCls}">${confPct}%</span>
-                <span style="color:#94a3b8;font-size:11px;margin-left:6px;">UAP ${_esc(sim.type)} · Embedding ${Math.round(d.similarity * 100)}%</span>
-              </span>
-            </div>
-            <div class="pf-route-row">
-              <span class="pf-route-label">Anchors</span>
-              <span class="pf-route-value">${anchors.length
-                ? '<span class="pf-anchor-pills">' + anchors.map(w => `<span class="pf-anchor-pill">${_esc(w)}</span>`).join('') + '</span>'
-                : '<span class="pf-no-anchors">No anchor words — open gate</span>'
-              }</span>
-            </div>
-            <div class="pf-route-row">
-              <span class="pf-route-label">Response</span>
-              <span class="pf-route-value">
-                <div class="pf-result-response">${_esc(d.content || 'No response content')}</div>
-              </span>
-            </div>
-          </div>
-        </div>`;
-      });
-    }
 
     html += '</div>';
 
     // Actions bar
     html += `<div class="pf-actions">
-      <button class="pf-copy-btn" onclick="pfCopyPhrase()">📋 Copy Phrase</button>
+      <button class="pf-copy-btn" onclick="pfCopyPhrase()">Copy Phrase</button>
     </div>`;
 
     resultsEl.innerHTML = html;
@@ -3283,11 +3205,18 @@ async function pfScan() {
   }
 }
 
+/* ── Toggle expand arrow on result cards ────────────────────────────── */
+function _pfToggleExpand(icon) {
+  icon.classList.toggle('open');
+  const content = icon.closest('.pf-result-card').querySelector('.pf-result-content');
+  if (content) content.classList.toggle('open');
+}
+
 function _pfShowDraftButton(container, phrase) {
   const div = document.createElement('div');
-  div.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid #f1f5f9;';
-  div.innerHTML = `<div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">No strong match — consider building a new section.</div>
-    <button class="pf-generate-btn" id="pfDraftBtn" onclick="pfGenerateDraft('${_esc(phrase).replace(/'/g, "\\'")}')">✨ Generate Draft Response</button>
+  div.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9;';
+  div.innerHTML = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">No strong match — consider building a new section.</div>
+    <button class="pf-generate-btn" id="pfDraftBtn" onclick="pfGenerateDraft('${_esc(phrase).replace(/'/g, "\\'")}')">Generate Draft</button>
     <div id="pfDraftResult"></div>`;
   container.appendChild(div);
 }
@@ -3295,7 +3224,7 @@ function _pfShowDraftButton(container, phrase) {
 async function pfGenerateDraft(phrase) {
   const btn = document.getElementById('pfDraftBtn');
   const resultEl = document.getElementById('pfDraftResult');
-  btn.disabled = true; btn.textContent = '⏳ Generating…';
+  btn.disabled = true; btn.textContent = 'Generating…';
 
   try {
     const result = await AgentConsoleAuth.apiFetch(
@@ -3307,14 +3236,14 @@ async function pfGenerateDraft(phrase) {
 
     resultEl.innerHTML = `<div class="pf-draft-section">
       <div class="pf-draft-label">Suggested Section</div>
-      <div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:6px;">${_esc(result.label)}</div>
+      <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:4px;">${_esc(result.label)}</div>
       <div class="pf-draft-content">${_esc(result.content)}</div>
     </div>`;
-    btn.textContent = '✨ Regenerate';
+    btn.textContent = 'Regenerate';
     btn.disabled = false;
   } catch (err) {
-    resultEl.innerHTML = `<div style="color:#dc2626;font-size:12px;margin-top:8px;">${_esc(err.message)}</div>`;
-    btn.textContent = '✨ Generate Draft Response';
+    resultEl.innerHTML = `<div style="color:#dc2626;font-size:11px;margin-top:6px;">${_esc(err.message)}</div>`;
+    btn.textContent = 'Generate Draft';
     btn.disabled = false;
   }
 }
@@ -3324,9 +3253,55 @@ function pfCopyPhrase() {
   if (!phrase) return;
   navigator.clipboard.writeText(phrase).then(() => {
     const btn = document.querySelector('.pf-copy-btn');
-    if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = '📋 Copy Phrase'; }, 1500); }
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy Phrase'; }, 1500); }
   });
 }
+
+/* ── Drag handle: resize top/bottom panes ───────────────────────────── */
+(function initPfDragHandle() {
+  const handle = document.getElementById('pfDragHandle');
+  if (!handle) return;
+  let dragging = false, startY = 0, startTopH = 0;
+  const topPane = document.getElementById('pfTopPane');
+  const bottomPane = document.getElementById('pfBottomPane');
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    startY = e.clientY;
+    startTopH = topPane.getBoundingClientRect().height;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const overlay = document.getElementById('pfOverlay');
+    if (!overlay.classList.contains('open')) { dragging = false; return; }
+    const totalH = overlay.getBoundingClientRect().height - handle.getBoundingClientRect().height;
+    const delta = e.clientY - startY;
+    let newTopH = startTopH + delta;
+    newTopH = Math.max(180, Math.min(newTopH, totalH - 180));
+    const pct = (newTopH / overlay.getBoundingClientRect().height) * 100;
+    topPane.style.flex = `0 0 ${pct}%`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (dragging) {
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+})();
+
+/* ── Listen for messages from embedded editor iframe ─────────────────── */
+window.addEventListener('message', e => {
+  if (e.data?.type === 'pf-section-saved') {
+    // Show re-scan hint
+    document.getElementById('pfRescanHint').style.display = '';
+  }
+});
 </script>
 </body>
 </html>

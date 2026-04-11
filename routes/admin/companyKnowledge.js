@@ -2509,9 +2509,9 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
     const sectionIndex = [];
     for (const doc of allDocs) {
       const docId = doc._id.toString();
+      const containerKcId = doc.kcId || null;
       (doc.sections || []).forEach((sec, idx) => {
         if (!sec.contentEmbedding?.length) return;
-        const containerKcId = doc.kcId || null;
         sectionIndex.push({
           containerId:    docId,
           containerName:  doc.title || 'Untitled',
@@ -2539,7 +2539,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
     // ── Pre-embed all caller phrases for duplicate detection ────────────
     // Collect unique caller phrases across all sections
     const allCallerPhrases = [];
-    const callerPhraseMap  = [];     // { sIdx, text, anchorWords }
+    const callerPhraseMap  = [];     // { sectionIdx in sectionIndex, phraseText }
     for (let sIdx = 0; sIdx < sectionIndex.length; sIdx++) {
       for (const cp of sectionIndex[sIdx].callerPhrases) {
         allCallerPhrases.push(cp.text);
@@ -2566,10 +2566,8 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         sIdx,
         containerId:      sec.containerId,
         containerName:    sec.containerName,
-        sectionKcId:      sec.sectionKcId,
         sectionIndex:     sec.sectionIndex,
         sectionLabel:     sec.sectionLabel,
-        content:          sec.content,
         contentScore:     _cosineSimilarity(emb, sec.contentEmb),
         isCurrentSection: sec.isCurrentSection,
         isActive:         sec.isActive,
@@ -2577,17 +2575,20 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
 
       // Sort by score descending, take top 5
       contentScores.sort((a, b) => b.contentScore - a.contentScore);
-      const topMatches = contentScores.slice(0, 5).map(m => ({
-        containerId:      m.containerId,
-        containerName:    m.containerName,
-        sectionKcId:      m.sectionKcId,
-        sectionIndex:     m.sectionIndex,
-        sectionLabel:     m.sectionLabel,
-        content:          m.content,
-        contentScore:     Math.round(m.contentScore * 1000) / 1000,
-        isCurrentSection: m.isCurrentSection,
-        isActive:         m.isActive,
-      }));
+      const topMatches = contentScores.slice(0, 5).map(m => {
+        const sec = sectionIndex[m.sIdx];
+        return {
+          containerId:      m.containerId,
+          containerName:    m.containerName,
+          sectionIndex:     m.sectionIndex,
+          sectionLabel:     m.sectionLabel,
+          sectionKcId:      sec?.sectionKcId || null,
+          content:          sec?.content || '',
+          contentScore:     Math.round(m.contentScore * 1000) / 1000,
+          isCurrentSection: m.isCurrentSection,
+          isActive:         m.isActive,
+        };
+      });
 
       // Check for duplicate caller phrases (cosine ≥ 0.92)
       const duplicates = [];
@@ -2596,7 +2597,7 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         if (!cpEmb?.length) continue;
         const sim = _cosineSimilarity(emb, cpEmb);
         if (sim >= 0.92) {
-          const { sIdx, text, anchorWords } = callerPhraseMap[cpIdx];
+          const { sIdx, text } = callerPhraseMap[cpIdx];
           const sec = sectionIndex[sIdx];
           // Don't flag duplicates in the source section itself
           if (sec.isCurrentSection) continue;
@@ -2605,11 +2606,10 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
             similarity:     Math.round(sim * 1000) / 1000,
             containerId:    sec.containerId,
             containerName:  sec.containerName,
-            sectionKcId:    sec.sectionKcId,
             sectionIndex:   sec.sectionIndex,
             sectionLabel:   sec.sectionLabel,
-            content:        sec.content,
-            anchorWords:    anchorWords || [],
+            sectionKcId:    sec.sectionKcId || null,
+            anchorWords:    callerPhraseMap[cpIdx]?.anchorWords || [],
           });
         }
       }
