@@ -2496,7 +2496,9 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
       { companyId, isActive: { $ne: false } },
       { projection: {
         title: 1,
+        kcId: 1,
         'sections.label': 1,
+        'sections.content': 1,
         'sections.contentEmbedding': 1,
         'sections.isActive': 1,
         'sections.callerPhrases': 1,
@@ -2507,15 +2509,22 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
     const sectionIndex = [];
     for (const doc of allDocs) {
       const docId = doc._id.toString();
+      const containerKcId = doc.kcId || null;
       (doc.sections || []).forEach((sec, idx) => {
         if (!sec.contentEmbedding?.length) return;
         sectionIndex.push({
           containerId:    docId,
           containerName:  doc.title || 'Untitled',
+          kcId:           containerKcId,
+          sectionKcId:    containerKcId ? `${containerKcId}-${String(idx + 1).padStart(2, '0')}` : null,
           sectionIndex:   idx,
           sectionLabel:   sec.label || `Section ${idx + 1}`,
+          content:        (sec.content || '').substring(0, 300),
           contentEmb:     sec.contentEmbedding,
-          callerPhrases:  (sec.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
+          callerPhrases:  (sec.callerPhrases || []).map(p => {
+            if (typeof p === 'string') return { text: p, anchorWords: [] };
+            return { text: p.text || '', anchorWords: (p.anchorWords || []).map(w => `${w}`.trim()).filter(Boolean) };
+          }).filter(cp => cp.text),
           isActive:       sec.isActive !== false,
           isCurrentSection: sourceContainerId
             ? (docId === sourceContainerId && idx === sourceSectionIndex)
@@ -2533,8 +2542,8 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
     const callerPhraseMap  = [];     // { sectionIdx in sectionIndex, phraseText }
     for (let sIdx = 0; sIdx < sectionIndex.length; sIdx++) {
       for (const cp of sectionIndex[sIdx].callerPhrases) {
-        allCallerPhrases.push(cp);
-        callerPhraseMap.push({ sIdx, text: cp });
+        allCallerPhrases.push(cp.text);
+        callerPhraseMap.push({ sIdx, text: cp.text, anchorWords: cp.anchorWords });
       }
     }
     const callerPhraseEmbeddings = allCallerPhrases.length
@@ -2566,15 +2575,20 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
 
       // Sort by score descending, take top 5
       contentScores.sort((a, b) => b.contentScore - a.contentScore);
-      const topMatches = contentScores.slice(0, 5).map(m => ({
-        containerId:      m.containerId,
-        containerName:    m.containerName,
-        sectionIndex:     m.sectionIndex,
-        sectionLabel:     m.sectionLabel,
-        contentScore:     Math.round(m.contentScore * 1000) / 1000,
-        isCurrentSection: m.isCurrentSection,
-        isActive:         m.isActive,
-      }));
+      const topMatches = contentScores.slice(0, 5).map(m => {
+        const sec = sectionIndex[m.sIdx];
+        return {
+          containerId:      m.containerId,
+          containerName:    m.containerName,
+          sectionIndex:     m.sectionIndex,
+          sectionLabel:     m.sectionLabel,
+          sectionKcId:      sec?.sectionKcId || null,
+          content:          sec?.content || '',
+          contentScore:     Math.round(m.contentScore * 1000) / 1000,
+          isCurrentSection: m.isCurrentSection,
+          isActive:         m.isActive,
+        };
+      });
 
       // Check for duplicate caller phrases (cosine ≥ 0.92)
       const duplicates = [];
@@ -2594,6 +2608,8 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
             containerName:  sec.containerName,
             sectionIndex:   sec.sectionIndex,
             sectionLabel:   sec.sectionLabel,
+            sectionKcId:    sec.sectionKcId || null,
+            anchorWords:    callerPhraseMap[cpIdx]?.anchorWords || [],
           });
         }
       }

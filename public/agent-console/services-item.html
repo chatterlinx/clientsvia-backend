@@ -1265,6 +1265,49 @@
     }
     .bulk-ops-close:hover { color: #374151; }
 
+    /* ── Bulk Progress Overlay ──────────────────────────────────────────── */
+    #bulkProgressOverlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .bulk-progress-card {
+      background: #fff; border-radius: 12px; padding: 28px 36px;
+      min-width: 360px; max-width: 440px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      text-align: center;
+    }
+    .bulk-progress-title {
+      font-size: 15px; font-weight: 600; color: #1e1e2e; margin-bottom: 18px;
+    }
+    .bulk-progress-track {
+      height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .bulk-progress-fill {
+      height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1);
+      border-radius: 5px; transition: width 0.3s ease;
+    }
+    .bulk-progress-fill.done { background: linear-gradient(90deg, #22c55e, #16a34a); }
+    .bulk-progress-fill.error { background: linear-gradient(90deg, #ef4444, #dc2626); }
+    .bulk-progress-stats {
+      display: flex; justify-content: space-between; font-size: 13px;
+      color: #6b7280; font-weight: 500; margin-bottom: 4px;
+    }
+    .bulk-progress-detail {
+      font-size: 11px; color: #9ca3af; min-height: 16px; margin-top: 4px;
+    }
+
+    /* ── Embed Mode (iframe inside Phrase Finder Workstation) ──────────── */
+    body.embed-mode .page-header { padding: 0 16px; height: 42px; }
+    body.embed-mode .btn-back { display: none; }
+    body.embed-mode .page-header .header-divider:first-of-type { display: none; }
+    body.embed-mode #btnDeleteHeader { display: none !important; }
+    body.embed-mode #btnCancel { display: none; }
+    body.embed-mode #hardDeleteSection { display: none !important; }
+    body.embed-mode .form-page { padding: 0 16px 60px; max-width: 100%; }
+    body.embed-mode .bulk-ops-bar { display: none !important; }
+
     /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .form-row { grid-template-columns: 1fr; }
@@ -1338,6 +1381,21 @@
       <span class="bulk-ops-progress" id="bulkOpsProgress"></span>
       <button type="button" class="bulk-ops-close" onclick="_bulkOpsLock(event)"
               title="Lock bulk operations">&times;</button>
+    </div>
+  </div>
+
+  <!-- ── Bulk Progress Overlay ─────────────────────────────────────────────── -->
+  <div id="bulkProgressOverlay" style="display:none;">
+    <div class="bulk-progress-card">
+      <div class="bulk-progress-title" id="bulkProgressTitle">Processing…</div>
+      <div class="bulk-progress-track">
+        <div class="bulk-progress-fill" id="bulkProgressFill" style="width:0%"></div>
+      </div>
+      <div class="bulk-progress-stats">
+        <span id="bulkProgressCount">0 / 0</span>
+        <span id="bulkProgressPct">0%</span>
+      </div>
+      <div class="bulk-progress-detail" id="bulkProgressDetail"></div>
     </div>
   </div>
 
@@ -1890,6 +1948,8 @@ async function _saveItemVar(varName, value) {
   S.companyId    = params.get('companyId');
   S.itemId       = params.get('itemId') || null;
   S.isEdit       = !!S.itemId;
+  S.embedMode    = params.get('embed') === '1';
+  if (S.embedMode) document.body.classList.add('embed-mode');
 
   if (!S.companyId) {
     document.getElementById('formLoading').innerHTML =
@@ -1922,7 +1982,36 @@ async function _saveItemVar(varName, value) {
 
   // Load variable values + scan section content for {placeholders}
   _loadItemVars();
+
+  // ── Embed mode: scroll to target section & listen for parent messages ──
+  if (S.embedMode) {
+    const sectionIdx = parseInt(params.get('sectionIdx'), 10);
+    if (!isNaN(sectionIdx) && sectionIdx >= 0) {
+      // Wait for sections to render, then scroll
+      setTimeout(() => _scrollToTargetSection(sectionIdx), 400);
+    }
+    window.addEventListener('message', e => {
+      if (e.data?.type === 'pf-scroll-to' && typeof e.data.sectionIdx === 'number') {
+        _scrollToTargetSection(e.data.sectionIdx);
+      }
+    });
+  }
 })();
+
+/** Scroll to a section by index and flash-highlight it */
+function _scrollToTargetSection(idx) {
+  const rows = document.querySelectorAll('#sectionsList .section-row');
+  if (idx < 0 || idx >= rows.length) return;
+  const target = rows[idx];
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target.style.transition = 'box-shadow .3s, outline .3s';
+  target.style.outline = '2px solid #22c55e';
+  target.style.boxShadow = '0 0 0 4px rgba(34,197,94,.15)';
+  setTimeout(() => {
+    target.style.outline = '';
+    target.style.boxShadow = '';
+  }, 2500);
+}
 
 async function _loadCategoryOptions() {
   try {
@@ -3472,7 +3561,12 @@ async function saveContainer({ quiet = false } = {}) {
     if (!data.success) throw new Error(data.error || 'Save failed');
 
     _toast(S.isEdit ? 'Container updated ✓' : 'Container created ✓', 'success');
-    setTimeout(() => goBack(), 800);
+    if (S.embedMode) {
+      _setLoading(false);
+      try { window.parent.postMessage({ type: 'pf-section-saved', containerId: S.itemId }, '*'); } catch (_) {}
+    } else {
+      setTimeout(() => goBack(), 800);
+    }
   } catch (err) {
     _toast(err.message || 'Failed to save', 'error');
     _setLoading(false);
@@ -4003,6 +4097,7 @@ async function hardDelete() {
 // UI HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 function goBack() {
+  if (S.embedMode) return;  // Don't navigate away when embedded in Phrase Finder
   location.href = `/agent-console/services.html?companyId=${S.companyId}`;
 }
 
@@ -4256,9 +4351,12 @@ async function _kcGenAudio(sid, key, textElId, { bulk = false } = {}) {
     if (hintEl)  { hintEl.textContent = data.generated ? '✅ Generated' : '✅ Cached'; hintEl.className = 'kc-audio-hint ok'; }
 
   } catch (err) {
+    const msg = err.message || 'Generation failed';
+    const isQuota = /quota_exceeded|0 credits remaining/i.test(msg);
+    const displayMsg = isQuota ? 'ElevenLabs out of credits — top up or wait for reset' : msg;
     genBtn.textContent = '🎙️ Generate Audio';
     genBtn.disabled    = false;
-    if (hintEl) { hintEl.textContent = `❌ ${err.message || 'Generation failed'}`; hintEl.className = 'kc-audio-hint err'; }
+    if (hintEl) { hintEl.textContent = `❌ ${displayMsg}`; hintEl.className = 'kc-audio-hint err'; }
     if (bulk) throw err;  // re-throw so bulk circuit breaker can detect failures
   }
 }
@@ -5226,6 +5324,39 @@ function _bulkDisableAll(disabled) {
   });
 }
 
+/* ── Bulk Progress Overlay helpers ────────────────────────────────────── */
+function _bulkProgressShow(title, total) {
+  const overlay = document.getElementById('bulkProgressOverlay');
+  const fill = document.getElementById('bulkProgressFill');
+  fill.style.width = '0%';
+  fill.className = 'bulk-progress-fill';
+  document.getElementById('bulkProgressTitle').textContent = title;
+  document.getElementById('bulkProgressCount').textContent = `0 / ${total}`;
+  document.getElementById('bulkProgressPct').textContent = '0%';
+  document.getElementById('bulkProgressDetail').textContent = '';
+  overlay.style.display = 'flex';
+}
+
+function _bulkProgressUpdate(done, total, detail) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById('bulkProgressFill').style.width = pct + '%';
+  document.getElementById('bulkProgressCount').textContent = `${done} / ${total}`;
+  document.getElementById('bulkProgressPct').textContent = pct + '%';
+  if (detail) document.getElementById('bulkProgressDetail').textContent = detail;
+}
+
+function _bulkProgressDone(summary, isError) {
+  const fill = document.getElementById('bulkProgressFill');
+  fill.style.width = '100%';
+  fill.classList.add(isError ? 'error' : 'done');
+  document.getElementById('bulkProgressTitle').textContent = isError ? 'Aborted' : 'Complete';
+  document.getElementById('bulkProgressDetail').textContent = summary;
+  document.getElementById('bulkProgressPct').textContent = '';
+  setTimeout(() => {
+    document.getElementById('bulkProgressOverlay').style.display = 'none';
+  }, isError ? 3000 : 2000);
+}
+
 /** Bulk Re-score: loop all sections, call _reScorePhrases(sid) sequentially. */
 async function _bulkRescoreAll(e) {
   e?.stopPropagation();
@@ -5238,6 +5369,7 @@ async function _bulkRescoreAll(e) {
 
   const progress = document.getElementById('bulkOpsProgress');
   _bulkDisableAll(true);
+  _bulkProgressShow('Re-scoring All Sections', total);
   let done = 0, scored = 0, skipped = 0, consecutiveFails = 0;
 
   for (const sid of sids) {
@@ -5246,27 +5378,33 @@ async function _bulkRescoreAll(e) {
     done++;
     if (!phrases.length) {
       skipped++;
+      _bulkProgressUpdate(done, total, `Skipped — no phrases`);
       if (progress) progress.textContent = `${done}/${total} (skipped — no phrases)`;
       continue;
     }
+    _bulkProgressUpdate(done, total, `Scoring section ${done}…`);
     if (progress) progress.textContent = `Scoring ${done}/${total}…`;
     try {
       await _reScorePhrases(sid, { bulk: true });
       scored++;
-      consecutiveFails = 0;  // reset on success
+      consecutiveFails = 0;
     } catch (err) {
       consecutiveFails++;
       console.warn(`[BulkOps] Re-score failed for sid ${sid}:`, err);
       if (consecutiveFails >= 3) {
+        _bulkProgressDone(`Aborted — server unreachable after ${done} sections`, true);
         _toast('Server unreachable — aborting bulk re-score. Try again in a minute.', 'error');
         break;
       }
     }
   }
 
+  if (consecutiveFails < 3) {
+    _bulkProgressDone(`${scored} scored, ${skipped} skipped`);
+    _toast(`Bulk re-score complete: ${scored} sections scored, ${skipped} skipped`, 'success');
+  }
   if (progress) progress.textContent = `Done — ${scored} scored, ${skipped} skipped`;
   _bulkDisableAll(false);
-  if (consecutiveFails < 3) _toast(`Bulk re-score complete: ${scored} sections scored, ${skipped} skipped`, 'success');
 }
 
 /** Bulk Fix/Unfix: set useFixedResponse on all sections + trigger UI update. */
@@ -5304,7 +5442,6 @@ async function _bulkGenAudio(e) {
     const textEl = document.getElementById(`sec-content-${sid}`);
     const text = textEl?.value?.trim();
     if (!text) continue;
-    // Skip if audio already exists and is not stale
     if (data.contentAudioUrl) continue;
     work.push(sid);
   }
@@ -5316,10 +5453,12 @@ async function _bulkGenAudio(e) {
 
   const progress = document.getElementById('bulkOpsProgress');
   _bulkDisableAll(true);
+  _bulkProgressShow('Generating Missing Audio', work.length);
   let done = 0, generated = 0, errors = 0, consecutiveFails = 0;
 
   for (const sid of work) {
     done++;
+    _bulkProgressUpdate(done, work.length, `Generating audio ${done} of ${work.length}…`);
     if (progress) progress.textContent = `Generating ${done}/${work.length}…`;
     try {
       await _kcGenAudio(sid, 'content', `sec-content-${sid}`, { bulk: true });
@@ -5330,15 +5469,20 @@ async function _bulkGenAudio(e) {
       consecutiveFails++;
       console.warn(`[BulkOps] Audio gen failed for sid ${sid}:`, err);
       if (consecutiveFails >= 3) {
+        _bulkProgressDone(`Aborted — server unreachable after ${done} sections`, true);
         _toast('Server unreachable — aborting bulk audio. Try again in a minute.', 'error');
         break;
       }
     }
   }
 
+  if (consecutiveFails < 3) {
+    const summary = `${generated} generated${errors ? `, ${errors} errors` : ''}`;
+    _bulkProgressDone(summary, false);
+    _toast(`Generated audio for ${generated} section${generated !== 1 ? 's' : ''}${errors ? ` (${errors} errors)` : ''}`, 'success');
+  }
   if (progress) progress.textContent = `Done — ${generated} generated${errors ? `, ${errors} errors` : ''}`;
   _bulkDisableAll(false);
-  if (consecutiveFails < 3) _toast(`Generated audio for ${generated} section${generated !== 1 ? 's' : ''}${errors ? ` (${errors} errors)` : ''}`, 'success');
 }
 
 function _toast(msg, type = 'info') {
