@@ -3182,9 +3182,10 @@ function _pfLoadEditor(containerId, sectionIndex, cardElement) {
   document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
   if (cardElement) cardElement.classList.add('pf-active');
 
-  // Hide cue editor if open
-  const cueEd = document.getElementById('pfCueEditor');
-  if (cueEd) cueEd.style.display = 'none';
+  // Hide all pane editors
+  for (const id of ['pfCueEditor', 'pfTradeViewer', 'pfSynonymEditor']) {
+    const e = document.getElementById(id); if (e) e.style.display = 'none';
+  }
 
   const url = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${containerId}&sectionIdx=${sectionIndex}&embed=1`;
   placeholder.style.display = 'none';
@@ -3202,8 +3203,9 @@ function _pfResetEditor() {
   frame.src = '';
   placeholder.style.display = '';
   document.querySelectorAll('.pf-result-card.pf-active').forEach(el => el.classList.remove('pf-active'));
-  const cueEd = document.getElementById('pfCueEditor');
-  if (cueEd) cueEd.style.display = 'none';
+  for (const id of ['pfCueEditor', 'pfTradeViewer', 'pfSynonymEditor']) {
+    const e = document.getElementById(id); if (e) e.style.display = 'none';
+  }
 }
 
 /* ── Inline Cue Pattern Editor (bottom pane) ────────────────────────── */
@@ -3214,9 +3216,11 @@ async function _pfLoadCueEditor(token, label, bg, fg) {
   _pfCueEditorToken = token;
   const frame = document.getElementById('pfEditorFrame');
   const placeholder = document.getElementById('pfIframePlaceholder');
-  frame.style.display = 'none';
-  frame.src = '';
+  frame.style.display = 'none'; frame.src = '';
   placeholder.style.display = 'none';
+  for (const id of ['pfTradeViewer', 'pfSynonymEditor']) {
+    const e = document.getElementById(id); if (e) e.style.display = 'none';
+  }
 
   // Create or reuse cue editor container in bottom pane
   const bottomPane = document.querySelector('.pf-bottom-pane');
@@ -3350,6 +3354,230 @@ const _CUE_EDITOR_FIELDS = {
   modifierCore:  { label: 'MOD',  bg: '#f0fdf4', fg: '#166534' },
 };
 
+/* ── Trade Match Viewer (bottom pane) ────────────────────────────────── */
+let _pfLastTradeMatches = [];
+
+function _pfLoadTradeViewer() {
+  const frame = document.getElementById('pfEditorFrame');
+  const placeholder = document.getElementById('pfIframePlaceholder');
+  const cueEd = document.getElementById('pfCueEditor');
+  frame.style.display = 'none'; frame.src = '';
+  placeholder.style.display = 'none';
+  if (cueEd) cueEd.style.display = 'none';
+
+  const bottomPane = document.querySelector('.pf-bottom-pane');
+  let el = document.getElementById('pfTradeViewer');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'pfTradeViewer';
+    el.className = 'pf-cue-editor';
+    bottomPane.appendChild(el);
+  }
+  el.style.display = '';
+
+  const trades = _pfLastTradeMatches;
+  if (!trades.length) {
+    el.innerHTML = `<div class="pf-cue-editor-title">
+      <span class="pf-cue-type-badge" style="background:#f5f3ff;color:#6d28d9;">TRADE</span>
+      <span>No trade matches</span>
+    </div>
+    <div class="pf-cue-editor-hint">
+      Trade terms are defined in each section's tradeTerms[] array or via container-level trade vocabularies in GlobalShare.
+      Add terms like "ac repair", "service call", "maintenance plan" to sections so the CueExtractor can route to them.
+    </div>`;
+    return;
+  }
+
+  let html = `<div class="pf-cue-editor-title">
+    <span class="pf-cue-type-badge" style="background:#f5f3ff;color:#6d28d9;">TRADE</span>
+    <span>${trades.length} match${trades.length > 1 ? 'es' : ''} found</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px;">`;
+
+  for (const t of trades) {
+    const isContainer = t.sectionIdx === -1;
+    const typeBadge = isContainer
+      ? '<span style="font-size:9px;background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:3px;font-weight:600;">VOCAB</span>'
+      : '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px;font-weight:600;">SECTION</span>';
+    const clickAttr = !isContainer
+      ? `onclick="_pfLoadEditor('${t.containerId}',${t.sectionIdx},null)" style="cursor:pointer;"`
+      : '';
+    html += `<div style="padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;background:white;display:flex;align-items:center;gap:10px;" ${clickAttr}>
+      ${typeBadge}
+      <span style="font-weight:700;color:#1e293b;">"${_esc(t.term)}"</span>
+      <span style="color:#64748b;font-size:11px;">${isContainer ? 'Container-level vocabulary' : _esc(t.sectionLabel || 'Section ' + t.sectionIdx)}</span>
+      ${!isContainer ? '<span style="color:#6d28d9;font-size:10px;margin-left:auto;">click to edit →</span>' : ''}
+    </div>`;
+  }
+
+  html += `</div>
+  <div class="pf-cue-editor-hint">
+    <b>VOCAB</b> = container-level trade vocabulary (defined in GlobalShare, matches broadly).
+    <b>SECTION</b> = section-level tradeTerms[] (click to edit the section and refine terms).
+  </div>`;
+  el.innerHTML = html;
+}
+
+/* ── Synonym Editor (bottom pane) ───────────────────────────────────── */
+let _pfSynonymGroups = null;
+
+async function _pfLoadSynonymEditor() {
+  const frame = document.getElementById('pfEditorFrame');
+  const placeholder = document.getElementById('pfIframePlaceholder');
+  const cueEd = document.getElementById('pfCueEditor');
+  const tradeV = document.getElementById('pfTradeViewer');
+  frame.style.display = 'none'; frame.src = '';
+  placeholder.style.display = 'none';
+  if (cueEd) cueEd.style.display = 'none';
+  if (tradeV) tradeV.style.display = 'none';
+
+  const bottomPane = document.querySelector('.pf-bottom-pane');
+  let el = document.getElementById('pfSynonymEditor');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'pfSynonymEditor';
+    el.className = 'pf-cue-editor';
+    bottomPane.appendChild(el);
+  }
+  el.style.display = '';
+  el.innerHTML = '<div style="color:#64748b;font-size:12px;">Loading synonyms\u2026</div>';
+
+  try {
+    if (!_pfSynonymGroups) {
+      const resp = await AgentConsoleAuth.apiFetch('/api/admin/globalshare/phrase-intelligence');
+      _pfSynonymGroups = resp.synonymGroups || [];
+    }
+  } catch (err) {
+    el.innerHTML = `<div style="color:#dc2626;">Failed to load: ${_esc(err.message)}</div>`;
+    return;
+  }
+
+  _pfRenderSynonymEditor(el);
+}
+
+function _pfRenderSynonymEditor(el) {
+  const groups = _pfSynonymGroups;
+
+  let html = `<div class="pf-cue-editor-title">
+    <span class="pf-cue-type-badge" style="background:#fef3c7;color:#92400e;">SYN</span>
+    <span>Synonym Groups</span>
+    <span style="color:#94a3b8;font-size:11px;font-weight:400;">${groups.length} group${groups.length !== 1 ? 's' : ''}</span>
+  </div>
+  <div class="pf-cue-editor-add">
+    <input type="text" id="pfSynCanonical" placeholder="Canonical word (e.g. maintenance)" style="max-width:180px;">
+    <input type="text" id="pfSynWords" placeholder="Synonyms, comma-separated (e.g. tune-up, annual service, preventive care)" style="flex:1;" onkeydown="if(event.key==='Enter')_pfSynAdd()">
+    <button class="pf-cue-add-btn" onclick="_pfSynAdd()">+ Add Group</button>
+    <button class="pf-cue-save-btn" onclick="_pfSynSave()" id="pfSynSaveBtn" disabled>Save</button>
+  </div>`;
+
+  if (groups.length) {
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i];
+      const syns = (g.synonyms || []);
+      html += `<div style="padding:6px 10px;border-radius:6px;border:1px solid #e2e8f0;background:white;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-weight:700;color:#1e293b;min-width:80px;font-size:12px;">${_esc(g.token)}</span>
+        <span style="color:#64748b;font-size:11px;">=</span>
+        ${syns.map(s => `<span class="pf-cue-pattern-tag" style="background:#fef3c7;color:#92400e;font-size:10px;padding:2px 6px;">
+          ${_esc(s)}
+          <span class="pf-cue-del" onclick="_pfSynRemoveWord(${i},'${_esc(s)}')">&times;</span>
+        </span>`).join('')}
+        <input type="text" placeholder="+ add synonym" style="border:none;outline:none;font-size:11px;color:#64748b;width:120px;padding:2px 4px;"
+          onkeydown="if(event.key==='Enter'){_pfSynAddWord(${i},this.value);this.value='';}">
+        <span class="pf-cue-del" style="margin-left:auto;font-size:14px;" onclick="_pfSynRemoveGroup(${i})" title="Delete group">&times;</span>
+      </div>`;
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="color:#94a3b8;font-size:12px;padding:12px 0;">No synonym groups defined. Add one above.</div>';
+  }
+
+  html += `<div class="pf-cue-editor-hint">
+    <b>How it works:</b> When a caller says a synonym (e.g. "tune-up"), UAP Pass 4A replaces it with the canonical word ("maintenance")
+    and re-matches against callerPhrases. This means you write ONE phrase and the system understands all variations.
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+function _pfSynAdd() {
+  const canonical = document.getElementById('pfSynCanonical').value.trim().toLowerCase();
+  const wordsRaw = document.getElementById('pfSynWords').value.trim();
+  if (!canonical || !wordsRaw) return;
+
+  const synonyms = wordsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!synonyms.length) return;
+
+  // Check if canonical already exists
+  const existing = _pfSynonymGroups.find(g => g.token === canonical);
+  if (existing) {
+    for (const s of synonyms) {
+      if (!existing.synonyms.includes(s)) existing.synonyms.push(s);
+    }
+  } else {
+    _pfSynonymGroups.push({ token: canonical, synonyms });
+  }
+
+  document.getElementById('pfSynCanonical').value = '';
+  document.getElementById('pfSynWords').value = '';
+  document.getElementById('pfSynSaveBtn').disabled = false;
+  _pfRenderSynonymEditor(document.getElementById('pfSynonymEditor'));
+  document.getElementById('pfSynSaveBtn').disabled = false;
+}
+
+function _pfSynAddWord(groupIdx, word) {
+  const w = (word || '').trim().toLowerCase();
+  if (!w) return;
+  const g = _pfSynonymGroups[groupIdx];
+  if (!g || g.synonyms.includes(w)) return;
+  g.synonyms.push(w);
+  document.getElementById('pfSynSaveBtn').disabled = false;
+  _pfRenderSynonymEditor(document.getElementById('pfSynonymEditor'));
+  document.getElementById('pfSynSaveBtn').disabled = false;
+}
+
+function _pfSynRemoveWord(groupIdx, word) {
+  const g = _pfSynonymGroups[groupIdx];
+  if (!g) return;
+  g.synonyms = g.synonyms.filter(s => s !== word);
+  document.getElementById('pfSynSaveBtn').disabled = false;
+  _pfRenderSynonymEditor(document.getElementById('pfSynonymEditor'));
+  document.getElementById('pfSynSaveBtn').disabled = false;
+}
+
+function _pfSynRemoveGroup(groupIdx) {
+  _pfSynonymGroups.splice(groupIdx, 1);
+  document.getElementById('pfSynSaveBtn').disabled = false;
+  _pfRenderSynonymEditor(document.getElementById('pfSynonymEditor'));
+  document.getElementById('pfSynSaveBtn').disabled = false;
+}
+
+async function _pfSynSave() {
+  const btn = document.getElementById('pfSynSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+
+  try {
+    const resp = await fetch('/api/admin/globalshare/phrase-intelligence/synonymGroups', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: _pfSynonymGroups }),
+    });
+    const result = await resp.json();
+    if (result.success) {
+      btn.textContent = 'Saved!';
+      btn.style.background = '#16a34a';
+      setTimeout(() => { btn.textContent = 'Save'; btn.style.background = ''; }, 2000);
+    } else {
+      throw new Error(result.error || 'Save failed');
+    }
+  } catch (err) {
+    btn.textContent = 'Error';
+    btn.style.background = '#dc2626';
+    setTimeout(() => { btn.disabled = false; btn.textContent = 'Save'; btn.style.background = ''; }, 3000);
+  }
+}
+
 /* ── UAP simulation: classify match type for a phrase ───────────────── */
 function _pfSimulateMatch(phrase, callerPhrases) {
   if (!phrase || !callerPhrases?.length) return null;
@@ -3409,6 +3637,7 @@ async function pfScan() {
     ]);
     // Cache cuePhrases for cue editor too
     _pfCueAllPatterns = piResult?.cuePhrases || [];
+    _pfSynonymGroups = piResult?.synonymGroups || [];
     if (!result.success) throw new Error(result.error || 'Scan failed');
 
     const scanResult = result.results?.[0];
@@ -3530,15 +3759,16 @@ function _pfBuildCueStrip(cueFrame, tmResult, allCuePatterns) {
       </div>`;
     }
   }
-  // Trade column
+  // Trade column — clickable
   const trades = cueFrame.tradeMatches || [];
+  _pfLastTradeMatches = trades;
   if (trades.length) {
-    html += `<div class="pf-cue-cell hit" style="background:#f5f3ff;border-color:#c4b5fd;">
+    html += `<div class="pf-cue-cell hit" style="background:#f5f3ff;border-color:#c4b5fd;cursor:pointer;" onclick="_pfLoadTradeViewer()">
       <div class="pf-cue-label" style="color:#6d28d9">TRADE</div>
       <div class="pf-cue-value" style="color:#6d28d9" title="${_esc(trades.map(t=>t.term).join(', '))}">${trades.length} hit${trades.length > 1 ? 's' : ''}</div>
     </div>`;
   } else {
-    html += `<div class="pf-cue-cell miss">
+    html += `<div class="pf-cue-cell miss" onclick="_pfLoadTradeViewer()" style="cursor:pointer;" title="Click to see trade term details">
       <div class="pf-cue-label">TRADE</div>
       <div class="pf-cue-value">—</div>
       <div class="pf-cue-suggest">add tradeTerms[] to sections</div>
@@ -3616,6 +3846,15 @@ function _pfBuildCueStrip(cueFrame, tmResult, allCuePatterns) {
     }
     html += '</div>';
   }
+
+  // Synonym editor link
+  const synCount = allCuePatterns ? (_pfSynonymGroups?.length || 0) : 0;
+  html += `<div style="font-size:10px;padding:2px 0;">
+    <span onclick="_pfLoadSynonymEditor()" style="cursor:pointer;color:#92400e;text-decoration:underline;font-weight:600;">
+      Synonyms (${synCount} groups)
+    </span>
+    <span style="color:#94a3b8;margin-left:6px;">— reduce callerPhrases by mapping word variations</span>
+  </div>`;
 
   return html;
 }
