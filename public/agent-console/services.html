@@ -801,6 +801,40 @@
       border-radius: 3px; background: #dbeafe; color: #1d4ed8; margin: 1px 2px;
     }
 
+    /* CueExtractor analysis strip */
+    .pf-cue-strip {
+      display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;
+      margin-bottom: 8px;
+    }
+    .pf-cue-cell {
+      padding: 4px 5px; border-radius: 5px; text-align: center;
+      border: 1px solid; min-height: 36px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .pf-cue-cell.hit { opacity: 1; }
+    .pf-cue-cell.miss { background: #f8fafc; border-color: #e2e8f0; opacity: 0.6; }
+    .pf-cue-label { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pf-cue-value { font-size: 9px; margin-top: 1px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-cue-cell.miss .pf-cue-label { color: #94a3b8; }
+    .pf-cue-cell.miss .pf-cue-value { color: #cbd5e1; }
+    .pf-cue-status {
+      font-size: 10px; font-weight: 600; padding: 4px 0 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .pf-cue-status .pf-cue-badge {
+      font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+    }
+    .pf-cue-status.gate-active { color: #166534; }
+    .pf-cue-status.gate-active .pf-cue-badge { background: #dcfce7; color: #166534; }
+    .pf-cue-status.gate-partial { color: #92400e; }
+    .pf-cue-status.gate-partial .pf-cue-badge { background: #fef3c7; color: #92400e; }
+    .pf-cue-status.gate-weak { color: #64748b; }
+    .pf-cue-status.gate-weak .pf-cue-badge { background: #f1f5f9; color: #64748b; }
+    .pf-cue-status.gate-none { color: #991b1b; }
+    .pf-cue-status.gate-none .pf-cue-badge { background: #fee2e2; color: #991b1b; }
+    .pf-cue-trade-links { font-size: 10px; color: #6d28d9; padding-bottom: 4px; }
+    .pf-cue-trade-links span { cursor: pointer; text-decoration: underline; margin-right: 8px; }
+
     /* Re-scan hint banner */
     .pf-rescan-hint {
       padding: 8px 16px; background: #f0fdf4; border-bottom: 1px solid #86efac;
@@ -3167,8 +3201,9 @@ async function pfScan() {
 
     const scanResult = result.results?.[0];
 
-    // ── Runtime Analysis Panel ──
-    let html = _pfBuildRuntimePanel(tmResult);
+    // ── CueExtractor Strip + Runtime Analysis Panel ──
+    let html = _pfBuildCueStrip(tmResult?.cueFrame);
+    html += _pfBuildRuntimePanel(tmResult);
 
     if (!scanResult?.matches?.length && !scanResult?.phraseMatches?.length) {
       html += '<div class="pf-no-match">No matches found across any KC.</div>';
@@ -3234,6 +3269,95 @@ async function pfScan() {
   } finally {
     btn.disabled = false; btn.textContent = 'Scan';
   }
+}
+
+/* ── Build CueExtractor analysis strip ───────────────────────────────── */
+function _pfBuildCueStrip(cueFrame) {
+  if (!cueFrame) return '';
+
+  const CUE_FIELDS = [
+    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd' },
+    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a' },
+    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7' },
+    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5' },
+    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc' },
+    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4' },
+    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac' },
+  ];
+
+  let html = '<div class="pf-cue-strip">';
+  for (const f of CUE_FIELDS) {
+    const val = cueFrame[f.key];
+    if (val) {
+      html += `<div class="pf-cue-cell hit" style="background:${f.bg};border-color:${f.border};">
+        <div class="pf-cue-label" style="color:${f.fg}">${f.label}</div>
+        <div class="pf-cue-value" style="color:${f.fg}" title="${_esc(val)}">"${_esc(val)}"</div>
+      </div>`;
+    } else {
+      html += `<div class="pf-cue-cell miss">
+        <div class="pf-cue-label">${f.label}</div>
+        <div class="pf-cue-value">—</div>
+      </div>`;
+    }
+  }
+  // Trade column
+  const trades = cueFrame.tradeMatches || [];
+  if (trades.length) {
+    html += `<div class="pf-cue-cell hit" style="background:#f5f3ff;border-color:#c4b5fd;">
+      <div class="pf-cue-label" style="color:#6d28d9">TRADE</div>
+      <div class="pf-cue-value" style="color:#6d28d9" title="${_esc(trades.map(t=>t.term).join(', '))}">${trades.length} hit${trades.length > 1 ? 's' : ''}</div>
+    </div>`;
+  } else {
+    html += `<div class="pf-cue-cell miss">
+      <div class="pf-cue-label">TRADE</div>
+      <div class="pf-cue-value">—</div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Status line with actionable guidance
+  const fc = cueFrame.fieldCount || 0;
+  const hasTrade = trades.length > 0;
+  let statusCls, badgeText, guidance;
+
+  if (fc >= 3 && hasTrade) {
+    statusCls = 'gate-active';
+    badgeText = `${fc}/8 FIELDS`;
+    guidance = 'Gate 2.4 active — CueExtractor will route this phrase';
+  } else if (fc >= 3 && !hasTrade) {
+    statusCls = 'gate-partial';
+    badgeText = `${fc}/8 FIELDS`;
+    guidance = 'Cues detected but no trade term — add tradeTerms[] to target section';
+  } else if (fc > 0) {
+    statusCls = 'gate-weak';
+    badgeText = `${fc}/8 FIELDS`;
+    guidance = `Only ${fc} cue(s) — routing depends on phrase index or semantic match`;
+  } else {
+    statusCls = 'gate-none';
+    badgeText = '0/8';
+    guidance = 'No cues detected — relies entirely on callerPhrases or semantic match';
+  }
+  html += `<div class="pf-cue-status ${statusCls}">
+    <span class="pf-cue-badge">${badgeText}</span>
+    <span>${guidance}</span>
+  </div>`;
+
+  // Trade match links
+  if (trades.length) {
+    html += '<div class="pf-cue-trade-links">';
+    for (const t of trades) {
+      const label = t.sectionLabel || t.term;
+      const tag = t.sectionIdx === -1 ? ' (container)' : '';
+      if (t.sectionIdx >= 0) {
+        html += `<span onclick="_pfLoadEditor('${t.containerId}',${t.sectionIdx},null)">${_esc(label)}${tag}</span>`;
+      } else {
+        html += `<span style="cursor:default;text-decoration:none;color:#94a3b8;">${_esc(t.term)}${tag}</span>`;
+      }
+    }
+    html += '</div>';
+  }
+
+  return html;
 }
 
 /* ── Build Runtime Analysis panel from test-match response ──────────── */
