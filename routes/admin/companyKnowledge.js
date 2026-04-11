@@ -1050,6 +1050,13 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
       };
     }
 
+    // ── Path 4: CueExtractor (GATE 2.4) ────────────────────────────────
+    let cueFrame = null;
+    try {
+      const CueExtractorService = require('../../services/cueExtractor/CueExtractorService');
+      cueFrame = await CueExtractorService.extract(companyId, utterance);
+    } catch (_) { /* non-fatal */ }
+
     // Determine overall winner (same priority as runtime: UAP > Semantic > Keyword)
     const winner = results.uap?.confidence >= 0.80
       ? { ...results.uap, via: 'UAP' }
@@ -1065,6 +1072,7 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
       callReason:      callReason || null,
       winner,
       paths:           results,
+      cueFrame,
       totalContainers: containers.length,
       note: winner
         ? `Matched via ${winner.via}: "${winner.containerTitle}"${winner.sectionLabel ? ` → ${winner.sectionLabel}` : ''}`
