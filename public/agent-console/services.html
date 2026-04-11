@@ -3485,13 +3485,13 @@ function _pfBuildCueStrip(cueFrame, tmResult) {
   if (!cueFrame) return '';
 
   const CUE_FIELDS = [
-    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd', hint: 'can you, could you, would you, I need, I want' },
-    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a', hint: 'is it ok, am I able, do you allow' },
-    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7', hint: 'how much, what is, do you, how long' },
-    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5', hint: 'please, go ahead, just, make sure' },
-    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc', hint: 'fix, repair, install, replace, check' },
-    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4', hint: 'today, asap, urgent, emergency, now' },
-    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac', hint: 'new, old, broken, leaking, noisy' },
+    { key: 'requestCue',    label: 'REQ',   bg: '#dbeafe', fg: '#1e40af', border: '#93c5fd', hint: 'can you, could you, I need, I\u2019d like' },
+    { key: 'permissionCue', label: 'PERM',  bg: '#fef9c3', fg: '#854d0e', border: '#fde68a', hint: 'is it ok if, can I, am I allowed' },
+    { key: 'infoCue',       label: 'INFO',  bg: '#d1fae5', fg: '#065f46', border: '#6ee7b7', hint: 'how much, what is, do you offer' },
+    { key: 'directiveCue',  label: 'DIR',   bg: '#fee2e2', fg: '#991b1b', border: '#fca5a5', hint: 'I need you to, go ahead, please' },
+    { key: 'actionCore',    label: 'ACT',   bg: '#e0e7ff', fg: '#3730a3', border: '#a5b4fc', hint: 'schedule, fix, repair, install, check' },
+    { key: 'urgencyCore',   label: 'URG',   bg: '#fce7f3', fg: '#9d174d', border: '#f9a8d4', hint: 'today, asap, right now, emergency' },
+    { key: 'modifierCore',  label: 'MOD',   bg: '#f0fdf4', fg: '#166534', border: '#86efac', hint: 'next week, tomorrow, this weekend' },
   ];
 
   let html = '<div class="pf-cue-strip">';
