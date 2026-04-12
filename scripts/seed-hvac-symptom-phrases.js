@@ -508,7 +508,7 @@ async function main() {
   const client = new MongoClient(uri);
   await client.connect();
   const db = client.db('clientsvia');
-  const col = db.collection('companyknowledgecontainers');
+  const col = db.collection('companyKnowledgeContainers');
 
   let totalTradeTerms = 0;
   let totalCallerPhrases = 0;
