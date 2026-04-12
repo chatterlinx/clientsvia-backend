@@ -7,6 +7,40 @@ const path = require('path');
 
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CIRCUIT BREAKER: Skip ElevenLabs entirely when quota is exhausted.
+// When quota_exceeded fires, we cache that fact in Redis for 1 hour.
+// All subsequent calls skip the ElevenLabs API and fall back to Twilio <Say>
+// instantly — no wasted time, no "application error" from webhook timeout.
+// ═══════════════════════════════════════════════════════════════════════════
+const CIRCUIT_BREAKER_TTL = 3600; // 1 hour
+let _redis = null;
+
+function _getRedis() {
+  if (_redis) return _redis;
+  try { _redis = require('../config/redis'); } catch (e) { /* no redis */ }
+  return _redis;
+}
+
+async function isCircuitOpen(apiKey) {
+  const redis = _getRedis();
+  if (!redis) return false;
+  try {
+    const key = `elevenlabs:circuit:${(apiKey || 'global').slice(-8)}`;
+    return Boolean(await redis.get(key));
+  } catch (e) { return false; }
+}
+
+async function openCircuit(apiKey, reason) {
+  const redis = _getRedis();
+  if (!redis) return;
+  try {
+    const key = `elevenlabs:circuit:${(apiKey || 'global').slice(-8)}`;
+    await redis.set(key, reason || 'quota_exceeded', 'EX', CIRCUIT_BREAKER_TTL);
+    logger.warn(`🔌 [ELEVENLABS CIRCUIT BREAKER] OPEN — skipping ElevenLabs for ${CIRCUIT_BREAKER_TTL}s`, { reason });
+  } catch (e) { /* best effort */ }
+}
+
 function getElevenLabsApiKey(company) {
   logger.debug(`🔍 [API KEY CHECK] Starting API key detection for company: ${company?._id || 'unknown'}`);
   
@@ -231,6 +265,12 @@ async function synthesizeSpeech({
     throw new Error('text and voiceId are required');
   }
 
+  // ── CIRCUIT BREAKER: skip ElevenLabs entirely when quota is blown ──
+  const resolvedApiKey = apiKey || getElevenLabsApiKey(company);
+  if (await isCircuitOpen(resolvedApiKey)) {
+    throw new Error('ElevenLabs circuit breaker OPEN — quota exhausted, falling back to Twilio <Say>');
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   // FORMAT TEXT FOR NATURAL PRONUNCIATION
   // ════════════════════════════════════════════════════════════════════════════
@@ -286,9 +326,9 @@ async function synthesizeSpeech({
     const companyId = company?._id?.toString() || null;
     const companyName = company?.companyName || company?.businessName || 'Unknown';
     
-    // Timeout errors
+    // Timeout errors — fire-and-forget (never block the call response)
     if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
-      await AdminNotificationService.sendAlert({
+      AdminNotificationService.sendAlert({
         code: 'ELEVENLABS_TIMEOUT',
         severity: 'WARNING',
         companyId,
@@ -308,9 +348,11 @@ async function synthesizeSpeech({
       }).catch(err => logger.error('Failed to send ElevenLabs timeout alert:', err));
     }
     
-    // Quota exceeded errors
-    else if (error.statusCode === 429 || error.message?.includes('quota') || error.message?.includes('limit') || error.message?.includes('rate')) {
-      await AdminNotificationService.sendAlert({
+    // Quota exceeded errors — fire-and-forget (never block the call response)
+    // Also OPEN the circuit breaker so all subsequent calls skip ElevenLabs instantly.
+    else if (error.statusCode === 429 || error.statusCode === 401 && error.message?.includes('quota') || error.message?.includes('quota') || error.message?.includes('limit') || error.message?.includes('rate')) {
+      openCircuit(resolvedApiKey, error.message?.substring(0, 200)).catch(() => {});
+      AdminNotificationService.sendAlert({
         code: 'ELEVENLABS_QUOTA_EXCEEDED',
         severity: 'CRITICAL',
         companyId,
@@ -330,9 +372,9 @@ async function synthesizeSpeech({
       }).catch(err => logger.error('Failed to send ElevenLabs quota alert:', err));
     }
     
-    // Voice not found errors
+    // Voice not found errors — fire-and-forget (never block the call response)
     else if (error.statusCode === 404 || error.message?.includes('voice') || error.message?.includes('not found')) {
-      await AdminNotificationService.sendAlert({
+      AdminNotificationService.sendAlert({
         code: 'ELEVENLABS_VOICE_NOT_FOUND',
         severity: 'CRITICAL',
         companyId,
@@ -351,9 +393,9 @@ async function synthesizeSpeech({
       }).catch(err => logger.error('Failed to send ElevenLabs voice not found alert:', err));
     }
     
-    // Generic API errors
+    // Generic API errors — fire-and-forget (never block the call response)
     else {
-      await AdminNotificationService.sendAlert({
+      AdminNotificationService.sendAlert({
         code: 'ELEVENLABS_API_ERROR',
         severity: 'CRITICAL',
         companyId,
@@ -585,13 +627,14 @@ function getMockVoices() {
   ];
 }
 
-module.exports = { 
-  getAvailableVoices, 
+module.exports = {
+  getAvailableVoices,
   getAvailableModels,
-  synthesizeSpeech, 
+  synthesizeSpeech,
   streamSpeech,
   analyzeVoice,
   generateStaticPrompt,
   getUserInfo,
-  getMockVoices
+  getMockVoices,
+  isCircuitOpen
 };
