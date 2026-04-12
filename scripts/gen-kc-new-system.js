@@ -1,0 +1,1330 @@
+#!/usr/bin/env node
+/**
+ * gen-kc-new-system.js
+ * Generates kc-new-system.json for Penguin Air "New System / Replacement" card.
+ *
+ * WORKFLOW:
+ *   1. Create empty container titled "New System / Replacement" in services.html
+ *   2. Run: node scripts/gen-kc-new-system.js
+ *   3. Import kc-new-system.json into the container via services.html
+ *   4. Re-score All → Fix All → Generate Missing Audio
+ *
+ * 34 sections covering:
+ *   - Core questions (0-7)
+ *   - Efficiency & features (8-12)
+ *   - When to replace (13-17)
+ *   - Financial (18-23)
+ *   - Situation-specific (24-28)
+ *   - Process & logistics (29-33)
+ */
+const fs = require('fs');
+const path = require('path');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GROQ CONTENT CATEGORIES — reusable deep content templates (~350-400 words)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const groqCat = {
+
+  system_pricing: `The cost of a new HVAC system depends on several factors including the size of the home, the type of equipment selected, the complexity of the installation, and whether any ductwork modifications are needed. A straight equipment swap where the new system matches the existing configuration is the most affordable scenario. More complex installations involving ductwork changes, electrical upgrades, or transitioning from one system type to another add to the total.
+
+For a standard residential replacement, pricing typically starts around several thousand dollars for a basic efficiency system and can go up significantly for high-efficiency or premium equipment with advanced features. The equipment itself is only part of the cost. Labor, materials, permits, refrigerant line sets, a new thermostat, the condensate drain, and the pad or platform all factor into the installed price. A reputable company includes all of this in a single quoted price with no hidden charges after the fact.
+
+Financing options make the investment more manageable. Many homeowners choose monthly payment plans that spread the cost over several years, often with promotional interest rates. Some financing programs offer same-as-cash periods where no interest accrues if the balance is paid within the promotional window. The monthly payment on a financed system is often comparable to or less than the monthly energy savings the new equipment provides, especially when replacing an older low-efficiency unit.
+
+Manufacturer rebates and federal energy tax credits can also reduce the effective cost. High-efficiency systems that meet specific SEER2 and AFUE thresholds may qualify for federal tax credits worth several hundred dollars. Manufacturer promotions run seasonally and can include instant rebates or upgraded warranty coverage at no additional cost.
+
+The best way to get an accurate price is through an in-home consultation where a comfort advisor evaluates the home, measures the space, inspects the existing ductwork, and recommends equipment options at different price points and efficiency levels. The consultation is free, there is no obligation, and the homeowner gets a written quote they can compare against other bids. If the caller is ready to schedule that consultation, the next step is collecting their name, phone number, and address.`,
+
+  system_sizing: `Proper system sizing is the single most important factor in a successful HVAC installation. An oversized system short-cycles, turning on and off frequently without running long enough to remove humidity from the air. The house may reach temperature but feels clammy and uncomfortable because the system never runs long enough to dehumidify. Short-cycling also puts excessive wear on the compressor, the most expensive component, dramatically shortening the system's lifespan. An undersized system runs constantly without ever reaching the set temperature, wasting energy and wearing out components prematurely.
+
+The correct size is determined through a Manual J load calculation, which is the industry standard method for calculating how much heating and cooling capacity a home actually needs. The calculation accounts for the home's square footage, ceiling height, insulation levels in the walls and attic, number and type of windows including their orientation, the number of exterior doors, the home's geographic orientation relative to the sun, the local climate zone, and the number of occupants. Every one of these variables affects the heat gain and heat loss of the structure.
+
+For older homes, ductwork evaluation is a critical part of the sizing process. Existing ductwork may have been designed for a different capacity system, or it may have developed leaks, crushed sections, or disconnected joints over the years. Duct leakage alone can reduce system efficiency by 20 to 30 percent. If the ducts cannot deliver the airflow the new equipment needs, the system will underperform regardless of how well it was sized. A qualified installer evaluates the duct system as part of the consultation and recommends modifications if needed.
+
+The sizing calculation produces a result measured in tons for cooling and BTUs per hour for heating. Residential systems typically range from one and a half to five tons depending on the home. Each ton of cooling capacity equals 12,000 BTUs per hour. A three-ton system, for example, provides 36,000 BTUs of cooling capacity per hour.
+
+A comfort advisor performs this calculation during the in-home consultation and recommends the right size based on the actual characteristics of the home rather than using rules of thumb that frequently lead to over or undersized installations. If the caller is ready to schedule that consultation, the next step is collecting their name, phone number, and address.`,
+
+  ac_replacement: `An air conditioning replacement involves removing the existing outdoor condensing unit and often the indoor evaporator coil, then installing new matched equipment. Modern AC systems are rated using the SEER2 standard, which replaced the original SEER rating system in January 2023. SEER2 uses updated testing procedures that more accurately reflect real-world operating conditions. The minimum efficiency allowed by federal regulation for residential systems in the southern United States is 15 SEER2 as of 2023.
+
+Higher SEER2 ratings translate directly into lower electricity consumption. A system rated at 16 SEER2 uses roughly 20 percent less electricity than a 13 SEER system from ten years ago to produce the same cooling output. A 20 SEER2 system can cut cooling costs by 35 to 40 percent compared to an older unit. In a climate with long, hot summers, the energy savings add up quickly and can offset a meaningful portion of the cost difference between a standard and premium efficiency system over time.
+
+The refrigerant used in modern systems is R-410A or the newer R-454B, both of which are significantly more environmentally friendly than the R-22 refrigerant used in systems manufactured before 2010. R-22 was phased out of production in 2020 and is no longer available for recharging older systems at reasonable cost. Any system still running on R-22 is a strong candidate for replacement because future refrigerant leaks cannot be economically repaired.
+
+Modern condensing units also feature variable-speed or two-stage compressor technology in mid-range and premium models. Variable-speed compressors adjust their output to match the actual cooling demand rather than cycling on and off at full capacity. This produces more consistent temperatures, lower humidity, quieter operation, and significantly reduced energy consumption during partial-load conditions, which is most of the cooling season. Two-stage units offer a similar benefit with a high and low setting.
+
+A proper AC replacement includes matching the outdoor condenser with a compatible indoor evaporator coil. Mismatched components reduce efficiency, void manufacturer warranties, and can cause premature compressor failure. The installer verifies that the evaporator coil's expansion valve type and capacity match the condenser's specifications. A thermostatic expansion valve, or TXV, is standard on most modern coils and meters refrigerant flow precisely for optimal performance across a wide range of operating conditions.
+
+After installation, the technician verifies the refrigerant charge by measuring superheat and subcooling values, confirms airflow across the evaporator, and tests the temperature split between supply and return air to ensure proper operation.`,
+
+  furnace_replacement: `A furnace replacement involves removing the existing gas or electric furnace and installing a new unit that is properly sized and matched to the home's heating requirements and ductwork configuration. Modern gas furnaces are rated by their Annual Fuel Utilization Efficiency, or AFUE, which measures what percentage of the fuel consumed is converted into usable heat. The federal minimum for new gas furnaces is 80 percent AFUE, meaning 80 cents of every dollar spent on gas produces heat while 20 cents goes up the flue as exhaust.
+
+High-efficiency condensing furnaces operate at 95 to 98 percent AFUE. They achieve this by extracting additional heat from the combustion gases through a secondary heat exchanger that condenses the water vapor in the exhaust. This recovered heat would otherwise be lost up the flue pipe. The result is significantly lower gas bills, especially in climates with long heating seasons. A homeowner upgrading from an 80 percent furnace to a 96 percent furnace reduces their heating fuel consumption by roughly 20 percent.
+
+The installation involves more than swapping boxes. The technician verifies proper gas line sizing, installs a new flue pipe appropriate for the furnace type, connects the condensate drain that high-efficiency furnaces produce, verifies electrical connections and control board wiring, tests the ignition sequence through multiple cycles, measures gas pressure at the manifold, checks the heat exchanger for proper combustion, and calibrates the blower speed for the home's duct system. The blower speed setting is critical because it determines the airflow delivered to every room. Incorrect airflow causes comfort complaints, efficiency losses, and can damage the equipment.
+
+Variable-speed blower motors, standard on most mid-range and premium furnaces, deliver consistent airflow at lower noise levels compared to single-speed motors. They also improve cooling performance when paired with a new AC system because they can ramp airflow to match the cooling demand more precisely. An electronically commutated motor, or ECM, uses significantly less electricity than a traditional permanent split capacitor motor, which adds to the overall efficiency gains.
+
+A new furnace includes a manufacturer parts warranty that typically covers the heat exchanger for up to 20 years and other components for 5 to 10 years. Labor warranty coverage varies by installer. Registration within the required timeframe ensures the homeowner receives the full warranty period rather than the reduced base coverage.`,
+
+  full_system: `A full system replacement means replacing both the outdoor unit and the indoor unit at the same time. For a traditional split system, that is the condensing unit outside and the air handler or furnace inside. For a heat pump system, it is the heat pump outside and the air handler inside. Replacing both units together is strongly recommended because matched equipment is designed to work together as a system.
+
+When only one component is replaced, the new and old components may not communicate properly, especially with modern communicating systems that use digital controls. Efficiency ratings on new equipment are only valid when the system is installed as a matched pair. A new 17 SEER2 condenser paired with an old evaporator coil does not deliver 17 SEER2 performance. The mismatched combination may only achieve 13 or 14 SEER, meaning the homeowner paid for efficiency they are not receiving. Manufacturers will also limit or void warranty coverage when their equipment is paired with incompatible components.
+
+Heat pump systems are an increasingly popular option, especially in moderate climates. A heat pump provides both heating and cooling from a single outdoor unit by reversing the refrigerant cycle. In cooling mode it operates identically to an air conditioner. In heating mode it extracts heat from the outdoor air and transfers it inside. Modern heat pumps with variable-speed inverter compressors can heat efficiently even when outdoor temperatures drop into the low 30s. In colder climates, a dual-fuel system pairs a heat pump with a gas furnace as backup, switching automatically to gas heat when temperatures drop below the heat pump's efficient operating range.
+
+The full system approach also allows the installer to optimize every connection point: new refrigerant line sets sized for the specific equipment, new electrical wiring with proper circuit protection, a new communicating thermostat, a new condensate drain system, and verified duct connections at every boot and plenum joint. This eliminates the weak links that cause performance problems when old components are left in place.
+
+The result is a system that operates at its rated efficiency from day one with full manufacturer warranty coverage on every component. The homeowner benefits from a single project timeline, one installation crew, and one warranty start date rather than staggering replacements over multiple years and dealing with compatibility questions along the way.`,
+
+  replace_vs_repair: `The repair versus replace decision is one of the most important financial decisions a homeowner faces with their HVAC system. There is no universal cutoff point, but several factors consistently point toward replacement being the smarter long-term investment.
+
+System age is the first indicator. Most HVAC equipment has a useful lifespan of 15 to 20 years with proper maintenance. Once a system passes the 15-year mark, component failures become more frequent because multiple parts are reaching the end of their service life simultaneously. Repairing a 16-year-old system fixes one component while every other aging component continues to degrade. The risk of a second failure within months of an expensive repair increases significantly with age.
+
+The 50 percent rule is a widely used guideline. If a single repair costs more than 50 percent of the value of a new system, replacement is generally the better investment. Similarly, if the total repair costs over the past two years approach or exceed half the replacement cost, the system is signaling that it is in its decline phase.
+
+Efficiency degradation compounds the repair cost argument. An older system operating at 10 SEER or below uses 40 to 60 percent more electricity than a modern 16 SEER2 system. That efficiency gap translates into hundreds of dollars per year in excess energy costs that continue every month regardless of whether a repair is made. A new system eliminates that ongoing waste.
+
+R-22 refrigerant is another decisive factor. Systems manufactured before 2010 use R-22, which was phased out of production in 2020. The remaining supply is limited and expensive. A refrigerant leak on an R-22 system cannot be economically repaired long-term because the refrigerant itself may cost several hundred dollars per pound. Converting an R-22 system to modern refrigerant is not practical. Replacement is the only sustainable path.
+
+Comfort problems are another indicator. An older system that can no longer maintain consistent temperatures, produces excessive noise, or fails to control humidity may be past the point where individual repairs address the underlying decline in overall system performance.
+
+A comfort advisor can evaluate the specific system, factor in repair history, age, efficiency, and refrigerant type, and present the options with clear cost comparisons. The goal is to give the homeowner the information they need to make the best decision for their situation.`,
+
+  installation_process: `The installation process for a new HVAC system typically takes one full day for a standard replacement and may extend to two days for more complex installations involving ductwork modifications, electrical upgrades, or system type changes. The installation crew arrives in the morning and works through the day to complete the project.
+
+The first step is protecting the home. The crew lays drop cloths and protective coverings along the path between the outdoor equipment location and the indoor equipment location. Furniture near the work area is covered or moved to prevent dust or debris contact.
+
+Removal of the old equipment comes next. The existing refrigerant is recovered according to EPA regulations. The old outdoor unit is disconnected from electrical and refrigerant lines and removed. The old indoor unit is disconnected and removed. If the furnace or air handler is in an attic, garage, or utility closet, the crew manages the logistics of moving equipment through tight spaces safely.
+
+New equipment installation follows a specific sequence. The outdoor unit is placed on a level pad and secured. New refrigerant lines are run between the outdoor and indoor units. The indoor unit is positioned, leveled, and connected to the ductwork. Electrical connections are made at both units and verified against the manufacturer wiring diagrams. The condensate drain is installed and tested. A new thermostat is mounted and configured.
+
+After physical installation, the system goes through a commissioning process. The technician evacuates the refrigerant lines with a vacuum pump to remove moisture and contaminants, then releases the factory refrigerant charge. They verify refrigerant pressures against manufacturer specifications, measure airflow across the system, check the temperature split between supply and return air, test all modes of operation including heating and cooling, verify the thermostat communicates properly with both units, and test all safety controls.
+
+The crew cleans up all installation debris, removes the old equipment for proper disposal or recycling, and walks the homeowner through the new system including thermostat operation, filter location and size, and maintenance recommendations. The homeowner receives documentation covering warranty information, equipment model and serial numbers, and registration instructions.
+
+Permit inspections, if required by the local jurisdiction, are scheduled as part of the installation process. The installer handles the permit application and coordinates the inspection appointment so the homeowner does not have to navigate the permitting process on their own.`,
+
+  consultation: `The consultation process begins with an in-home visit from a comfort advisor who evaluates the home's specific characteristics to recommend the right equipment. This is not a high-pressure sales call. It is a technical assessment that gives the homeowner the information they need to make an informed decision on their own timeline.
+
+The advisor starts by inspecting the existing equipment to determine its age, condition, efficiency rating, and refrigerant type. They note the current system's capacity and configuration. They evaluate the ductwork for condition, sizing, and any visible issues like disconnected joints, damaged insulation, or crushed sections. They walk through the home to observe the layout, window count and orientation, insulation access points, and any comfort issues the homeowner has noticed like rooms that are always too hot or too cold.
+
+Using this information, the advisor performs a load calculation to determine the right system size. They then present equipment options at different efficiency levels and price points, explaining the tradeoffs between upfront cost and long-term operating cost. Each option includes the equipment, installation labor, materials, permits, and any necessary modifications in a single all-inclusive price. There are no hidden charges or surprise add-ons.
+
+The advisor explains available financing options, current manufacturer rebates, and applicable tax credits. They answer every question the homeowner has and leave a written proposal that the homeowner can review at their own pace. There is no expiration deadline designed to create pressure, and there is no obligation to proceed.
+
+For homeowners who have already received a quote from another company, the consultation provides a second perspective and a comparison point. Different companies may recommend different equipment, different installation approaches, or different efficiency levels. Having two professional opinions helps the homeowner make a confident decision. The advisor is happy to review the other quote and explain any differences in equipment, scope, or pricing.
+
+The entire consultation typically takes about an hour. The advisor needs access to the existing indoor and outdoor equipment and may need to check the attic or crawlspace if that is where the air handler or ductwork is located. Someone 18 or older should be present during the visit.
+
+If the homeowner decides to move forward, the installation is scheduled at a time that works for them. If they need more time to decide, the proposal remains available whenever they are ready. There is no follow-up pressure and no expiration on the quote.`,
+
+  features_upgrades: `A new system installation is the ideal time to add comfort upgrades because the equipment is already being installed and the technician is already on site. Adding these features during installation is significantly less expensive than retrofitting them later as separate projects.
+
+A smart thermostat is one of the most impactful upgrades. Modern communicating thermostats integrate directly with variable-speed equipment to optimize temperature control, humidity management, and energy usage. They provide remote access through a smartphone app so the homeowner can monitor and adjust the system from anywhere. Built-in scheduling, geofencing that detects when the home is occupied, and energy usage reports help reduce operating costs beyond what the new equipment alone achieves. During installation, the thermostat is wired and configured to communicate with the specific equipment being installed, ensuring full compatibility and feature access.
+
+Zoning systems divide the home into independent temperature zones, each controlled by its own thermostat. Motorized dampers in the ductwork direct conditioned air to the zones that need it and restrict airflow to zones that are already at temperature. A two-story home where the upstairs is always warmer than the downstairs is a classic zoning candidate. Zoning eliminates the compromise of setting one temperature for the whole house and provides room-by-room comfort control.
+
+Indoor air quality equipment installed during the system replacement includes UV germicidal lights mounted inside the air handler to neutralize biological contaminants as air passes over the evaporator coil. Whole-house air purifiers with electronic filtration capture particles that standard filters miss, including fine dust, pollen, pet dander, and smoke particles. Whole-house humidifiers add moisture during the dry heating season to prevent dry skin, static electricity, and cracking wood. Whole-house dehumidifiers remove excess moisture during cooling season in humid climates where the AC alone cannot maintain comfortable humidity levels.
+
+Media air cleaners with deep-pleated filters rated at MERV 13 or higher capture significantly more airborne particles than the standard one-inch filters most systems use. Installing a media cabinet during the system replacement allows the homeowner to upgrade filtration without restricting airflow.
+
+These upgrades are presented as options during the consultation with pricing included in the proposal. There is no pressure to add anything beyond the base system.`,
+
+  emergency_replace: `When a system fails completely and cannot be repaired, the replacement process shifts to an accelerated timeline. The goal is to restore heating or cooling as quickly as possible while still ensuring the new system is properly sized, installed, and commissioned.
+
+The first step is a rapid assessment. A comfort advisor or senior technician visits the home to evaluate the failed system, determine why it cannot be repaired, inspect the ductwork, and take the measurements needed for a load calculation. This assessment can often be completed the same day the homeowner calls.
+
+Equipment availability determines the installation timeline. Common residential system configurations in popular sizes are typically available from local distributors within one to two business days. Less common configurations, very large systems, or specialty equipment may require additional time. The installer communicates the realistic timeline upfront so the homeowner knows exactly when to expect relief.
+
+While waiting for installation, the homeowner can take steps to manage the temperature. In summer, closing blinds on sun-facing windows, using ceiling fans, and avoiding heat-generating appliances during the hottest hours helps keep the house more tolerable. In winter, space heaters in occupied rooms and extra blankets can bridge the gap. The installer may provide portable equipment if available.
+
+The installation itself follows the same professional process as a planned replacement. Equipment is installed correctly, refrigerant lines are evacuated and charged to specification, electrical connections are verified, and the system is tested through all operating modes. Rushing the installation by skipping commissioning steps leads to problems that outlast the emergency. A properly commissioned system on day one prevents callbacks and performance issues.
+
+Financing is available for emergency replacements just as it is for planned ones. The financial urgency of a failed system does not change the payment options. Monthly financing with promotional rates allows the homeowner to restore comfort without a large upfront payment.
+
+For homeowners concerned about safety, a gas furnace condemned due to a cracked heat exchanger should not be operated. A cracked heat exchanger can allow carbon monoxide into the living space and the furnace should remain off until the replacement is installed.
+
+If the caller has a system that has failed, the next step is scheduling the assessment visit as soon as possible. Providing a name, phone number, and address allows the scheduling team to arrange the visit at the earliest available opening.`,
+
+  warranty_coverage: `A new HVAC system comes with warranty coverage from both the equipment manufacturer and the installing contractor. Understanding what is covered and for how long helps the homeowner protect their investment and avoid unexpected expenses.
+
+Manufacturer warranty coverage on a new system typically includes a parts warranty and a separate compressor or heat exchanger warranty. The standard parts warranty covers all factory components for 5 to 10 years depending on the manufacturer and whether the system is registered within the required timeframe. Registration is usually done online within 60 to 90 days of installation and extends the warranty from the base coverage period to the full coverage period. Failing to register can reduce the parts warranty from 10 years to 5 years on some brands. The compressor warranty on premium systems may extend to 12 years or longer. The heat exchanger on a gas furnace is typically warranted for 20 years or the lifetime of the original owner.
+
+The installing contractor provides a labor warranty that covers the cost of the technician's time to diagnose and replace any component that fails under the manufacturer parts warranty. Parts warranties only cover the replacement part itself. Without a labor warranty, the homeowner pays the full labor cost for any warranty repair. Labor warranty terms vary by installer and typically range from one to five years for standard coverage, with extended labor warranty options available.
+
+For new construction and rental properties, warranty registration and documentation are especially important. New construction installations should be registered under the property owner's name with the installation date clearly documented. For rental properties, the warranty typically follows the property, not the tenant, so the landlord should maintain all warranty documentation.
+
+Maintaining the warranty requires annual professional maintenance. Most manufacturers include a maintenance requirement in their warranty terms. Skipping annual maintenance gives the manufacturer grounds to deny a warranty claim if they determine that lack of maintenance contributed to the component failure. Keeping a documented service history protects the homeowner's warranty coverage for the full term.
+
+The installer reviews all warranty coverage during the installation walkthrough and provides the homeowner with documentation for their records.`,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const sections = [
+
+  // ════════════════════════════════════════════════════════════════════════
+  // CORE QUESTIONS (0-7)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 0
+    label: 'How Much Is A New System',
+    content: 'The price depends on the size of your home and the type of equipment, so it ranges quite a bit. We offer a free in-home consultation where a comfort advisor measures everything and gives you a written quote with options at different price points. No obligation at all.',
+    groqKey: 'system_pricing',
+    callerPhrases: [
+      'how much is a new ac system',
+      'what does a new hvac system cost',
+      'how much to replace my ac',
+      'what is the price for a new air conditioner',
+      'how much for a new heating and cooling system',
+      'can you give me a price on a new system',
+      'I need a quote for a new ac unit',
+      'how much does it cost to replace an hvac system',
+      'what do you charge for a new system installation',
+      'how much is a new central air system',
+      'what is the cost to replace my furnace and ac',
+      'can you tell me the price range for a new system',
+      'how much would a new unit run me',
+      'what am I looking at cost wise for a new system',
+      'I need a price estimate for a new air conditioner',
+    ],
+    negativeKeywords: [
+      'repair cost',
+      'diagnostic fee',
+      'tune-up pricing',
+      'duct cleaning pricing',
+      'thermostat cost only',
+      'refrigerant recharge cost',
+    ],
+  },
+
+  { // 1
+    label: 'What Size System Do I Need',
+    content: 'The right size depends on your home — square footage, insulation, windows, all of that factors in. Our comfort advisor does a load calculation during the free consultation to make sure you get a system that is sized exactly right, not too big and not too small.',
+    groqKey: 'system_sizing',
+    callerPhrases: [
+      'what size ac do I need for my house',
+      'how do you determine the right size system',
+      'what tonnage do I need for my home',
+      'how many tons of ac do I need',
+      'what size unit do I need for a 2000 square foot home',
+      'do you do a load calculation to size the system',
+      'how do I know what size system I need',
+      'can you help me figure out the right size unit',
+      'I need to know what size hvac system my house needs',
+      'is a 3 ton system big enough for my home',
+      'what size system should I get',
+      'how many btu do I need for my house',
+      'do I need a bigger system than what I have',
+      'what happens if I get a system that is too big',
+      'how is the system size calculated',
+    ],
+    negativeKeywords: [
+      'filter size',
+      'thermostat size',
+      'duct size question',
+      'window unit sizing',
+      'repair estimate',
+      'tune-up question',
+    ],
+  },
+
+  { // 2
+    label: 'How Long Does Installation Take',
+    content: 'A standard replacement typically takes one full day. If there are ductwork changes or a more complex setup it can stretch to two days. The crew handles everything from removal to commissioning so the system is up and running before they leave.',
+    groqKey: 'installation_process',
+    callerPhrases: [
+      'how long does it take to install a new system',
+      'how many days to replace an ac system',
+      'how long is the installation process',
+      'will the installation take all day',
+      'how long does an hvac replacement take',
+      'can you install a new system in one day',
+      'how long does it take to put in a new ac',
+      'how many hours to install a new furnace',
+      'is the installation a one day job',
+      'how long until my new system is running',
+      'what is the timeline for a new system installation',
+      'do I need to take a day off work for the install',
+      'how long does the whole replacement process take',
+      'can you do same day installation',
+      'how many days should I plan for the installation',
+    ],
+    negativeKeywords: [
+      'repair time estimate',
+      'tune-up duration',
+      'diagnostic visit length',
+      'duct cleaning timeline',
+      'thermostat install only',
+      'maintenance appointment time',
+    ],
+  },
+
+  { // 3
+    label: 'What Brands Do You Carry',
+    content: 'We carry several major equipment lines so we can match the right system to your home and budget. We are not locked into one brand, which means the recommendation is based on what fits your situation rather than what we are required to sell.',
+    groqKey: 'consultation',
+    callerPhrases: [
+      'what brands of ac do you carry',
+      'do you install Carrier systems',
+      'what brand do you recommend',
+      'do you sell Trane equipment',
+      'what hvac brands do you work with',
+      'which manufacturers do you install',
+      'do you carry Lennox',
+      'what equipment lines do you offer',
+      'are you a dealer for a specific brand',
+      'what brands are available for new systems',
+      'can I choose the brand I want',
+      'do you install Rheem systems',
+      'what brand is best for my area',
+      'do you carry Goodman',
+      'which brand do you recommend for reliability',
+    ],
+    negativeKeywords: [
+      'repair parts brand',
+      'thermostat brand only',
+      'filter brand recommendation',
+      'duct brand question',
+      'tune-up question',
+      'diagnostic question',
+    ],
+  },
+
+  { // 4
+    label: 'AC Replacement Specifically',
+    content: 'Absolutely, we can replace just the AC. We will make sure the new condenser and evaporator coil are a matched set so you get the full efficiency rating. The comfort advisor checks everything during the free consultation and gives you options based on what your home needs.',
+    groqKey: 'ac_replacement',
+    callerPhrases: [
+      'I need to replace my air conditioner',
+      'how much to replace just the ac',
+      'my ac is dead I need a new one',
+      'can you replace my air conditioning unit',
+      'I need a new ac system installed',
+      'how much for a new air conditioner',
+      'I need to get my ac unit replaced',
+      'my central air needs to be replaced',
+      'can you install a new ac for me',
+      'I want to replace my old air conditioner',
+      'how much does an ac replacement cost',
+      'I need a new cooling system',
+      'my ac is shot I need a replacement',
+      'can I just replace the outdoor ac unit',
+      'I need a new condenser unit installed',
+    ],
+    negativeKeywords: [
+      'ac repair only',
+      'ac tune-up',
+      'ac not cooling diagnostic',
+      'furnace replacement only',
+      'thermostat replacement',
+      'refrigerant recharge',
+    ],
+  },
+
+  { // 5
+    label: 'Furnace Replacement Specifically',
+    content: 'We can definitely handle a furnace replacement. The technician will make sure the new furnace is sized right and matched to your duct system. High-efficiency options can cut your heating bills significantly. The free consultation covers all the details and options.',
+    groqKey: 'furnace_replacement',
+    callerPhrases: [
+      'I need a new furnace',
+      'how much to replace my furnace',
+      'my furnace needs to be replaced',
+      'can you install a new furnace',
+      'how much does a furnace replacement cost',
+      'I need to get my heater replaced',
+      'my furnace is old and I need a new one',
+      'can you replace my gas furnace',
+      'I want a new heating system',
+      'how much for a new furnace installation',
+      'my furnace is failing I need a replacement',
+      'can you put in a high efficiency furnace',
+      'I need to replace my heating unit',
+      'how much for a new heater',
+      'I want to upgrade my furnace',
+    ],
+    negativeKeywords: [
+      'furnace repair only',
+      'furnace tune-up',
+      'furnace not working diagnostic',
+      'ac replacement only',
+      'thermostat issue',
+      'duct cleaning question',
+    ],
+  },
+
+  { // 6
+    label: 'Full System Replacement',
+    content: 'Replacing both units together is actually the best way to go. Matched equipment runs at full rated efficiency and keeps your warranty intact. Doing it all at once also means one installation, one project, and one warranty start date instead of dealing with it in pieces.',
+    groqKey: 'full_system',
+    callerPhrases: [
+      'I need to replace both my ac and furnace',
+      'how much to replace the whole system',
+      'I want to replace everything at once',
+      'can you do a full system replacement',
+      'how much for both heating and cooling new',
+      'I need a complete hvac replacement',
+      'what does it cost to replace the entire system',
+      'I want to replace my ac and my furnace together',
+      'can you install a whole new hvac system',
+      'my whole system needs to be replaced',
+      'I need all new equipment',
+      'how much to do a full changeover',
+      'can I replace the ac and furnace at the same time',
+      'I want a complete new heating and cooling system',
+      'what is the cost for a full system swap',
+    ],
+    negativeKeywords: [
+      'replace one unit only',
+      'repair both units',
+      'tune-up both units',
+      'diagnostic both units',
+      'duct replacement only',
+      'thermostat only',
+    ],
+  },
+
+  { // 7
+    label: 'Heat Pump System Question',
+    content: 'A heat pump handles both heating and cooling from one outdoor unit. Modern heat pumps are incredibly efficient even in cooler weather. The comfort advisor can compare a heat pump versus a traditional split system during the consultation.',
+    groqKey: 'full_system',
+    callerPhrases: [
+      'what about a heat pump system',
+      'should I get a heat pump instead of an ac',
+      'how much is a heat pump system',
+      'do you install heat pumps',
+      'is a heat pump better than a regular ac',
+      'can I switch to a heat pump',
+      'what is the difference between a heat pump and an ac',
+      'would a heat pump work for my home',
+      'I am interested in a heat pump',
+      'do heat pumps work in cold weather',
+      'how much does a heat pump replacement cost',
+      'should I get a heat pump or a furnace and ac',
+      'can you install a dual fuel heat pump system',
+      'I want to know more about heat pump options',
+      'what are the benefits of a heat pump over a split system',
+    ],
+    negativeKeywords: [
+      'heat pump repair',
+      'heat pump tune-up',
+      'heat pump not heating diagnostic',
+      'water heater heat pump',
+      'pool heat pump',
+      'geothermal system',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // EFFICIENCY & FEATURES (8-12)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 8
+    label: 'SEER Rating Explained',
+    content: 'SEER2 is the efficiency rating for air conditioners. The higher the number, the less electricity it uses. A 16 SEER2 system uses around 20 percent less energy than an older 13 SEER unit. The comfort advisor can break down the savings at different efficiency levels during the consultation.',
+    groqKey: 'ac_replacement',
+    callerPhrases: [
+      'what is a SEER rating',
+      'what SEER rating should I get',
+      'what does SEER mean on an ac',
+      'how important is the SEER rating',
+      'what is the difference between 14 SEER and 16 SEER',
+      'what is SEER2',
+      'does a higher SEER really save money',
+      'what is the minimum SEER rating required',
+      'is a higher SEER worth the extra cost',
+      'what SEER rating do you recommend',
+      'how does SEER affect my electric bill',
+      'what is a good SEER rating for a new ac',
+      'should I get the highest SEER available',
+      'can you explain the efficiency ratings',
+      'what is the difference between SEER and SEER2',
+    ],
+    negativeKeywords: [
+      'AFUE rating question',
+      'energy audit request',
+      'solar panel question',
+      'electric bill dispute',
+      'thermostat efficiency',
+      'duct sealing efficiency',
+    ],
+  },
+
+  { // 9
+    label: 'Energy Savings With New System',
+    content: 'A new system can cut your energy bills significantly. If your current equipment is over 10 years old, you could see a 20 to 40 percent reduction in heating and cooling costs. The savings really add up over the life of the system.',
+    groqKey: 'ac_replacement',
+    callerPhrases: [
+      'how much will I save on my electric bill with a new system',
+      'will a new ac lower my energy bills',
+      'how much money does a new system save',
+      'what kind of energy savings can I expect',
+      'will a new system reduce my utility costs',
+      'how much more efficient is a new system',
+      'is a new system really going to save me money',
+      'what will my electric bill look like with a new ac',
+      'how much less will I spend on energy with a new unit',
+      'do new systems really use that much less electricity',
+      'can you tell me the energy savings on a new system',
+      'how much will my gas bill go down with a new furnace',
+      'what is the roi on a new hvac system',
+      'will upgrading save me money long term',
+      'how long does it take for a new system to pay for itself',
+    ],
+    negativeKeywords: [
+      'solar panel savings',
+      'insulation upgrade savings',
+      'window replacement savings',
+      'duct sealing savings',
+      'thermostat savings only',
+      'energy audit request',
+    ],
+  },
+
+  { // 10
+    label: 'Smart Thermostat With New System',
+    content: 'A smart thermostat is a great addition during installation. It gives you remote access from your phone, learns your schedule, and helps the system run more efficiently. Installing it at the same time as the new equipment is the easiest and most affordable way to add it.',
+    groqKey: 'features_upgrades',
+    callerPhrases: [
+      'can I get a smart thermostat with my new system',
+      'do you install smart thermostats',
+      'does the new system come with a thermostat',
+      'can you add a Nest or Ecobee during installation',
+      'what thermostat comes with the new system',
+      'should I upgrade to a smart thermostat',
+      'can I get a wifi thermostat with the new unit',
+      'do you include a thermostat in the installation',
+      'what kind of thermostat do you recommend with a new system',
+      'can the new system work with my existing thermostat',
+      'I want a programmable thermostat with my new system',
+      'how much extra for a smart thermostat during install',
+      'is a smart thermostat included in the price',
+      'do I need a new thermostat with a new system',
+      'can you set up the smart thermostat during installation',
+    ],
+    negativeKeywords: [
+      'thermostat repair only',
+      'thermostat battery issue',
+      'thermostat wiring problem',
+      'thermostat replacement only',
+      'tune-up question',
+      'smart home general',
+    ],
+  },
+
+  { // 11
+    label: 'Zoning System Question',
+    content: 'A zoning system lets you control the temperature in different areas of your home independently. If you have rooms that are always too hot or too cold, zoning solves that. It is easiest and most cost-effective to add during a new system installation.',
+    groqKey: 'features_upgrades',
+    callerPhrases: [
+      'can I get zones with my new system',
+      'what is a zoning system',
+      'how does hvac zoning work',
+      'can different rooms be different temperatures',
+      'I want separate temperature control for upstairs and downstairs',
+      'how much does a zoning system cost',
+      'can you install dampers in my ductwork',
+      'my upstairs is always hotter can zoning fix that',
+      'do you offer multi-zone systems',
+      'can I add zoning during the installation',
+      'how many zones can I have',
+      'is zoning worth the extra cost',
+      'can I control each room separately',
+      'I need different temperatures in different rooms',
+      'what is the benefit of a zoned system',
+    ],
+    negativeKeywords: [
+      'mini split zone question',
+      'commercial zoning',
+      'zone valve repair',
+      'thermostat programming help',
+      'duct cleaning question',
+      'tune-up question',
+    ],
+  },
+
+  { // 12
+    label: 'Indoor Air Quality Add-Ons',
+    content: 'When we install the new system, that is the perfect time to add air quality upgrades like UV lights, a whole-house purifier, or a humidifier. They integrate right into the air handler, so adding them during installation keeps the cost down and the setup clean.',
+    groqKey: 'features_upgrades',
+    callerPhrases: [
+      'can I add a UV light with my new system',
+      'do you install air purifiers during installation',
+      'can you add a humidifier with the new system',
+      'what indoor air quality options do you have',
+      'I want cleaner air with my new system',
+      'can you install an air scrubber during the replacement',
+      'do you offer whole house air purification',
+      'can a dehumidifier be added during install',
+      'what air quality upgrades can I get with a new system',
+      'I have allergies can you add air filtration',
+      'do you install electronic air cleaners',
+      'can I get better filtration with my new system',
+      'what can be added to improve air quality',
+      'I want a humidifier and purifier with the new unit',
+      'can you install a HEPA filter with the new system',
+    ],
+    negativeKeywords: [
+      'duct cleaning question',
+      'filter replacement only',
+      'mold inspection request',
+      'air quality testing',
+      'standalone purifier question',
+      'tune-up question',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // WHEN TO REPLACE (13-17) — THE GOLD SECTIONS
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 13
+    label: 'Repair Vs Replace Decision',
+    content: 'That is one of the biggest questions homeowners face. If the system is over 15 years old, uses R-22, or the repair exceeds half the cost of new equipment, replacement usually makes more sense. A consultation gives you a clear comparison.',
+    groqKey: 'replace_vs_repair',
+    callerPhrases: [
+      'should I repair or replace my system',
+      'is it worth fixing my old ac',
+      'should I put money into my old system or get a new one',
+      'is it better to repair or replace at this point',
+      'how do I know if I should replace instead of repair',
+      'my repair is expensive should I just get a new system',
+      'when does it make more sense to replace than repair',
+      'is my system worth repairing',
+      'should I fix my old furnace or replace it',
+      'at what point should I stop repairing and replace',
+      'the repair estimate is high should I replace instead',
+      'is it time to replace my hvac system',
+      'can you help me decide between repair and replacement',
+      'do I need a new system or just a repair',
+      'how do I know when it is time for a new system',
+    ],
+    negativeKeywords: [
+      'tune-up question',
+      'diagnostic fee question',
+      'maintenance plan question',
+      'duct repair vs replace',
+      'thermostat repair',
+      'filter replacement',
+    ],
+  },
+
+  { // 14
+    label: 'System Age And Replacement',
+    content: 'Most systems last about 15 to 20 years. Past that range, parts get harder to find, efficiency drops, and breakdowns tend to cluster. If your system is in that territory and giving you trouble, investing in new equipment usually makes more sense than more repairs.',
+    groqKey: 'replace_vs_repair',
+    callerPhrases: [
+      'my system is 15 years old should I replace it',
+      'how long do hvac systems last',
+      'my ac is 20 years old is it time to replace',
+      'when is a system too old to keep repairing',
+      'how old is too old for an ac system',
+      'my furnace is 18 years old should I replace it',
+      'what is the lifespan of an hvac system',
+      'is my system too old to be worth fixing',
+      'at what age should I plan on replacing my system',
+      'my system is original to the house should I replace it',
+      'how many years does a furnace typically last',
+      'is a 15 year old system still good',
+      'my ac was installed in 2008 is it time for a new one',
+      'how do I know if my system is past its lifespan',
+      'when should I start thinking about a new system',
+    ],
+    negativeKeywords: [
+      'new system age question',
+      'warranty expiration date',
+      'filter age question',
+      'thermostat age question',
+      'tune-up for older system',
+      'maintenance plan question',
+    ],
+  },
+
+  { // 15
+    label: 'System Keeps Breaking Down',
+    content: 'When a system needs repairs every season or two, that is a pretty clear signal. Each individual repair might seem manageable, but the total adds up fast. At a certain point you are renting your old system one breakdown at a time instead of investing in reliable equipment.',
+    groqKey: 'replace_vs_repair',
+    callerPhrases: [
+      'my system keeps breaking down',
+      'I am tired of repairing this system',
+      'my ac breaks every summer',
+      'I keep having to call for repairs',
+      'this is the third repair this year',
+      'my system is always breaking',
+      'I just had it fixed and it broke again',
+      'how many repairs before I should just replace it',
+      'my furnace keeps needing repairs',
+      'I have spent too much on repairs already',
+      'my system needs constant repairs',
+      'every time I fix one thing another breaks',
+      'my ac has needed three repairs in two years',
+      'I am done sinking money into this system',
+      'at what point do the repairs make replacement cheaper',
+    ],
+    negativeKeywords: [
+      'first time repair',
+      'tune-up question',
+      'maintenance to prevent breakdowns',
+      'diagnostic for first issue',
+      'duct repair question',
+      'thermostat keeps resetting',
+    ],
+  },
+
+  { // 16
+    label: 'R-22 Refrigerant Phaseout',
+    content: 'R-22 was phased out in 2020, so the supply is very limited and the cost keeps climbing. If your system develops a leak, recharging R-22 is expensive and only a temporary fix. Replacing with modern equipment on current refrigerant is the sustainable path.',
+    groqKey: 'replace_vs_repair',
+    callerPhrases: [
+      'my system uses R-22 what should I do',
+      'is R-22 refrigerant still available',
+      'my ac uses freon and it is leaking',
+      'how much does R-22 cost now',
+      'should I replace my R-22 system',
+      'can you convert my system from R-22 to R-410A',
+      'my technician said I need R-22 and it is expensive',
+      'is it worth recharging an R-22 system',
+      'can I still get freon for my old ac',
+      'my system uses the old refrigerant should I replace it',
+      'what happens when R-22 runs out completely',
+      'is R-22 being discontinued',
+      'how much does it cost to recharge R-22',
+      'should I replace my system because of the R-22 phaseout',
+      'can my old system be retrofitted to use new refrigerant',
+    ],
+    negativeKeywords: [
+      'R-410A leak repair',
+      'refrigerant recharge only',
+      'new system refrigerant type',
+      'refrigerant noise question',
+      'tune-up refrigerant check',
+      'environmental regulation question',
+    ],
+  },
+
+  { // 17
+    label: 'Emergency Replacement System Died',
+    content: 'I understand how stressful that is, especially in this weather. When a system fails completely, we move fast. We can get a comfort advisor out quickly to assess the situation and get replacement options in front of you. Most installations can happen within a day or two of the decision.',
+    groqKey: 'emergency_replace',
+    callerPhrases: [
+      'my system just died I need a new one',
+      'my ac stopped working and it cannot be fixed',
+      'I need an emergency replacement',
+      'my furnace died and I need a new one immediately',
+      'my system failed and I need a replacement fast',
+      'how quickly can you install a new system mine is dead',
+      'my ac is completely gone I need a new unit now',
+      'my heater stopped working and needs to be replaced',
+      'I need a new system as soon as possible',
+      'my system is not repairable I need a new one',
+      'can you do an emergency installation',
+      'my system completely failed how soon can you replace it',
+      'I have no heat and need a new furnace right away',
+      'my ac compressor died I need a whole new system',
+      'my system is done I need to replace it urgently',
+    ],
+    negativeKeywords: [
+      'emergency repair question',
+      'diagnostic before replacement',
+      'tune-up request',
+      'system running but poorly',
+      'maintenance question',
+      'second opinion on repair',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // FINANCIAL (18-23)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 18
+    label: 'Financing Options Available',
+    content: 'We have financing options that spread the cost into monthly payments. Many plans include promotional rates, and the monthly payment often ends up close to what you save on energy bills. The comfort advisor covers all the options during the consultation.',
+    groqKey: 'system_pricing',
+    callerPhrases: [
+      'do you offer financing for a new system',
+      'can I make payments on a new ac',
+      'what financing options do you have',
+      'do you have payment plans for new equipment',
+      'can I finance a new hvac system',
+      'what are the monthly payments on a new system',
+      'do you offer zero interest financing',
+      'how does financing work for a new system',
+      'can I pay monthly for a new unit',
+      'what are the financing terms',
+      'do I need good credit to finance a system',
+      'is there a no money down option',
+      'can I get a payment plan',
+      'how much would the monthly payment be on a new system',
+      'do you have same as cash financing',
+    ],
+    negativeKeywords: [
+      'repair financing',
+      'maintenance plan payment',
+      'tune-up payment',
+      'insurance claim question',
+      'home warranty claim',
+      'refund request',
+    ],
+  },
+
+  { // 19
+    label: 'Free Estimate Or Consultation',
+    content: 'The consultation is completely free with no obligation. A comfort advisor comes to your home, evaluates your current setup, does the measurements, and gives you a written proposal with options at different price points. You can take your time to think it over without any pressure.',
+    groqKey: 'consultation',
+    callerPhrases: [
+      'do you offer free estimates on new systems',
+      'can I get a free quote for a replacement',
+      'is the consultation free',
+      'how do I get a quote on a new system',
+      'can someone come out and give me a price',
+      'do you charge for an estimate',
+      'I want a free estimate on a new ac',
+      'can I schedule a free consultation',
+      'how does the quoting process work',
+      'I need someone to come look at what I need',
+      'is there a fee for the in-home estimate',
+      'can you give me a quote over the phone',
+      'I want to schedule an estimate for a new system',
+      'do I have to pay for someone to come out and give a price',
+      'can I get a no obligation estimate',
+    ],
+    negativeKeywords: [
+      'repair estimate fee',
+      'diagnostic fee question',
+      'tune-up pricing',
+      'second opinion on repair',
+      'duct inspection cost',
+      'maintenance pricing',
+    ],
+  },
+
+  { // 20
+    label: 'Rebates And Tax Credits',
+    content: 'There may be manufacturer rebates and federal energy tax credits available depending on the equipment you choose. High-efficiency systems can qualify for credits worth several hundred dollars. The comfort advisor covers what applies during the consultation.',
+    groqKey: 'system_pricing',
+    callerPhrases: [
+      'are there any rebates on a new system',
+      'do I get a tax credit for a new ac',
+      'are there any incentives for a new hvac system',
+      'what rebates are available right now',
+      'can I get an energy tax credit for a new system',
+      'do you have any manufacturer rebates',
+      'are there government rebates for new systems',
+      'what tax credits are available for a new furnace',
+      'do high efficiency systems qualify for rebates',
+      'can I save money with tax credits on a new system',
+      'are there any promotions on new equipment right now',
+      'what energy credits are available',
+      'do I qualify for a tax credit if I get a new system',
+      'are there any utility company rebates available',
+      'what incentives are there for upgrading my system',
+    ],
+    negativeKeywords: [
+      'solar rebates',
+      'insulation rebates',
+      'window rebates',
+      'electric vehicle credit',
+      'appliance rebates',
+      'tune-up discount',
+    ],
+  },
+
+  { // 21
+    label: 'Is A New System Worth The Investment',
+    content: 'It is a significant investment, no question. But between monthly energy savings, available rebates, and eliminating ongoing repair costs, most homeowners see real value over the life of the system. The comfort advisor puts actual numbers to it during the consultation.',
+    groqKey: 'system_pricing',
+    callerPhrases: [
+      'is a new system worth it',
+      'is it worth investing in a new hvac system',
+      'will I really save money with a new system',
+      'is it a good investment to replace my system',
+      'does it make financial sense to replace',
+      'what is the return on investment for a new system',
+      'is a new system going to pay for itself',
+      'is upgrading my system worth the money',
+      'will the energy savings make up for the cost',
+      'is it better to invest in a new system now',
+      'do new systems really save that much',
+      'is it smarter to get a new system or keep patching mine',
+      'what is the long term value of a new system',
+      'is the cost of a new system justified',
+      'how long until the new system pays for itself in savings',
+    ],
+    negativeKeywords: [
+      'repair worth it question',
+      'tune-up worth it',
+      'maintenance plan worth it',
+      'insulation investment',
+      'solar panel investment',
+      'duct sealing investment',
+    ],
+  },
+
+  { // 22
+    label: 'Can I Just Replace One Unit',
+    content: 'You can, but matching matters. If you replace the outdoor unit but keep the old indoor equipment, the mismatch reduces efficiency and may limit warranty coverage. The comfort advisor can walk you through the pros and cons based on your specific setup.',
+    groqKey: 'full_system',
+    callerPhrases: [
+      'can I just replace the outside unit',
+      'do I have to replace both units',
+      'can I keep my furnace and just replace the ac',
+      'do I need to replace the air handler too',
+      'can I replace the condenser but keep the evaporator coil',
+      'what happens if I only replace one unit',
+      'is it okay to only replace the outdoor unit',
+      'can I just replace the ac and keep my furnace',
+      'do both units have to be replaced at the same time',
+      'can I replace one now and the other later',
+      'is it bad to mismatch old and new equipment',
+      'will it hurt efficiency to only replace the outside unit',
+      'what if I can only afford to replace one unit',
+      'should I replace both or just the one that is broken',
+      'can I replace the furnace now and the ac next year',
+    ],
+    negativeKeywords: [
+      'replace thermostat only',
+      'replace filter question',
+      'replace ductwork only',
+      'repair one unit',
+      'tune-up one unit',
+      'diagnostic one unit',
+    ],
+  },
+
+  { // 23
+    label: 'Warranty On New System',
+    content: 'New systems come with a manufacturer parts warranty covering major components for 5 to 10 years, plus a labor warranty on the installation. Registering the equipment within 60 to 90 days is important to get the full coverage. The installer walks you through everything.',
+    groqKey: 'warranty_coverage',
+    callerPhrases: [
+      'what warranty comes with a new system',
+      'how long is the warranty on a new ac',
+      'what does the warranty cover on a new unit',
+      'do new systems come with a warranty',
+      'what is the warranty on a new furnace',
+      'how many years is the manufacturer warranty',
+      'is there a labor warranty on the installation',
+      'what happens if something breaks under warranty',
+      'do I need to register the warranty',
+      'how long is the parts warranty',
+      'what is covered under the new system warranty',
+      'is the compressor warranty different from the parts warranty',
+      'do you offer an extended warranty',
+      'what does the warranty not cover',
+      'how long am I covered after installation',
+    ],
+    negativeKeywords: [
+      'existing warranty question',
+      'warranty on repair',
+      'home warranty claim',
+      'extended warranty sales call',
+      'tune-up warranty requirement',
+      'appliance warranty',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // SITUATION-SPECIFIC (24-28)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 24
+    label: 'New System For Older Home',
+    content: 'Older homes are definitely doable, but there are extra things to consider like ductwork condition, insulation levels, and whether the existing electrical service can support the new equipment. The comfort advisor checks all of that during the consultation and factors it into the recommendation.',
+    groqKey: 'system_sizing',
+    callerPhrases: [
+      'I have an older home and need a new system',
+      'can you install a new ac in an old house',
+      'my house is from the 1970s do I need new ductwork',
+      'will a new system work in my older home',
+      'my house is old can you still install a new system',
+      'I have an older home what do I need to know about replacement',
+      'does the ductwork need to be replaced in an older home',
+      'what about insulation in an older house',
+      'can you put a modern system in an older home',
+      'my home is 40 years old what does that mean for a new system',
+      'I need a new system but my house is old',
+      'do older homes have issues with new hvac systems',
+      'will my old ductwork work with a new system',
+      'can you do a new installation in a house built in the 1960s',
+      'what extra work is needed for a new system in an old home',
+    ],
+    negativeKeywords: [
+      'new construction install',
+      'rental property question',
+      'commercial building',
+      'mobile home system',
+      'tune-up for older home',
+      'duct cleaning for older home',
+    ],
+  },
+
+  { // 25
+    label: 'New System For New Construction',
+    content: 'For new construction, we can work directly with you or your builder to design and install the right system for the space. The advantage is that everything is sized and installed from scratch, so there are no compromises from working around existing equipment or ductwork.',
+    groqKey: 'warranty_coverage',
+    callerPhrases: [
+      'I am building a new house and need an hvac system',
+      'can you install a system in new construction',
+      'I need hvac for my new build',
+      'we are building a home and need heating and cooling',
+      'do you do new construction installs',
+      'I am building a house what hvac system should I get',
+      'can you work with my builder on the hvac',
+      'the builder did not include hvac I need it installed',
+      'I need a system designed for my new home',
+      'can you do a first time hvac installation',
+      'I need ductwork and a system for new construction',
+      'what do you recommend for a new build',
+      'can you design the hvac system for my new home',
+      'I am building and want to choose my own hvac company',
+      'how much is a new system for new construction',
+    ],
+    negativeKeywords: [
+      'replacing existing system',
+      'older home question',
+      'rental property question',
+      'adding to existing system',
+      'tune-up question',
+      'repair question',
+    ],
+  },
+
+  { // 26
+    label: 'Replacing System In Rental Property',
+    content: 'We work with landlords and property managers on rental property installations regularly. The system needs to meet current code requirements, and we can help coordinate access and scheduling around tenant occupancy. The consultation is the same free process with a written proposal.',
+    groqKey: 'warranty_coverage',
+    callerPhrases: [
+      'I need a new system for my rental property',
+      'can you install a system at a rental I own',
+      'I am a landlord and need a new ac for a rental',
+      'how much to replace the system at my rental',
+      'can you work with my property manager on the install',
+      'I need a system replaced at my investment property',
+      'what do I need for a rental property replacement',
+      'the system at my rental needs to be replaced',
+      'do you install new systems at rental properties',
+      'I have a tenant and the system died at my rental',
+      'can I schedule a replacement at a property I manage',
+      'what code requirements apply to rental property hvac',
+      'I own rental units and need systems replaced',
+      'can you coordinate the install with my tenant',
+      'the system at my rental is old and needs replacing',
+    ],
+    negativeKeywords: [
+      'tenant calling for repair',
+      'rental assistance program',
+      'commercial property question',
+      'home warranty for rental',
+      'tune-up at rental',
+      'homeowner not landlord',
+    ],
+  },
+
+  { // 27
+    label: 'Second Opinion On Replacement Quote',
+    content: 'We are happy to come out and give you a second opinion. Sometimes a different set of eyes sees different options or approaches. Our consultation is free, there is no obligation, and you will have two professional opinions to compare so you can make the most informed decision.',
+    groqKey: 'consultation',
+    callerPhrases: [
+      'I want a second opinion on a replacement quote',
+      'another company said I need a new system',
+      'I got a quote from another company can you give me one too',
+      'I want to compare replacement quotes',
+      'someone told me my system needs to be replaced',
+      'can you give me a second opinion on whether I need a new system',
+      'I was told I need a new system is that true',
+      'another hvac company quoted me a new system',
+      'I want to compare your price with another quote',
+      'can you come look at my system before I replace it',
+      'I want another opinion before I commit to a new system',
+      'the other company says I need to replace should I',
+      'I got a high quote can you come give me a second look',
+      'can you verify that my system really needs to be replaced',
+      'I want a professional second opinion before spending that much',
+    ],
+    negativeKeywords: [
+      'second opinion on repair',
+      'second opinion on diagnostic',
+      'complaint about other company',
+      'tune-up question',
+      'warranty dispute with other company',
+      'maintenance plan comparison',
+    ],
+  },
+
+  { // 28
+    label: 'Upgrading From Window Units Or Space Heaters',
+    content: 'Switching from window units or space heaters to a central system is a huge comfort upgrade. Central HVAC distributes air evenly, controls humidity, and is safer than space heaters. The consultation covers what is needed for ductwork and equipment to get your home set up properly.',
+    groqKey: 'features_upgrades',
+    callerPhrases: [
+      'I want to switch from window units to central air',
+      'can I upgrade from window ac to a whole house system',
+      'I have window units and want central air conditioning',
+      'how much to install central air in a home with no ductwork',
+      'I use space heaters and want a real heating system',
+      'can you install central hvac where there is none',
+      'I want to get rid of my window units',
+      'what does it cost to go from window ac to central air',
+      'I have no central air can you install it',
+      'how do I upgrade from window units to a full system',
+      'can you add central air to a house that has never had it',
+      'I want to stop using space heaters and get a furnace',
+      'can I get central air installed in my home',
+      'how much to add ductwork and a new system',
+      'I need to go from no hvac to a full system',
+    ],
+    negativeKeywords: [
+      'window unit repair',
+      'space heater recommendation',
+      'portable ac question',
+      'mini split question',
+      'replacing existing central system',
+      'tune-up question',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PROCESS & LOGISTICS (29-33)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 29
+    label: 'What Happens During Installation',
+    content: 'The crew protects your home, removes the old equipment, installs everything new including the line set and thermostat, charges the system with refrigerant, tests every mode of operation, and cleans up before they leave. They walk you through how everything works at the end.',
+    groqKey: 'installation_process',
+    callerPhrases: [
+      'what happens during the installation',
+      'can you walk me through the installation process',
+      'what does the installation day look like',
+      'what should I expect on installation day',
+      'how does the installation process work',
+      'what do the installers do when they get here',
+      'can you explain the installation steps',
+      'what does the crew do during installation',
+      'what is involved in installing a new system',
+      'do they test the system after installing it',
+      'what happens when the new system is put in',
+      'do they remove the old system and install the new one same day',
+      'what is the step by step installation process',
+      'will they clean up after the installation',
+      'do they show me how to use the new system',
+    ],
+    negativeKeywords: [
+      'repair process question',
+      'tune-up process',
+      'diagnostic process',
+      'duct installation only',
+      'thermostat installation process',
+      'maintenance visit process',
+    ],
+  },
+
+  { // 30
+    label: 'Do I Need Permits For Installation',
+    content: 'Most jurisdictions require a permit for a new HVAC installation. We handle the permit process as part of the project so you do not have to worry about it. The cost is included in the proposal and any inspections are scheduled after installation is complete.',
+    groqKey: 'installation_process',
+    callerPhrases: [
+      'do I need a permit for a new system',
+      'is a permit required for hvac replacement',
+      'do you pull the permit for the installation',
+      'who handles the permits for the install',
+      'are permits included in the price',
+      'what permits are needed for a new ac',
+      'do I need a building permit to replace my furnace',
+      'does a new system require a code inspection',
+      'is there a city inspection after installation',
+      'who pays for the permit',
+      'do I need to get the permit myself',
+      'what is the permit process for a new system',
+      'does the county require a permit for hvac replacement',
+      'is the permit handled by you or do I get it',
+      'are inspection fees included',
+    ],
+    negativeKeywords: [
+      'repair permit question',
+      'building addition permit',
+      'electrical permit only',
+      'plumbing permit',
+      'duct permit only',
+      'contractor license question',
+    ],
+  },
+
+  { // 31
+    label: 'What Happens To My Old System',
+    content: 'The installation crew removes the old equipment as part of the project. The refrigerant is recovered following EPA regulations and the old units are hauled away for proper recycling or disposal. You do not have to deal with any of that.',
+    groqKey: 'installation_process',
+    callerPhrases: [
+      'what happens to my old system after replacement',
+      'do you haul away the old equipment',
+      'is old system removal included',
+      'do you take the old unit when you install the new one',
+      'what do you do with the old ac',
+      'do I need to dispose of the old furnace myself',
+      'is removal of the old equipment part of the installation',
+      'who takes away the old system',
+      'do you recycle the old equipment',
+      'is the old system hauled off or do I have to deal with it',
+      'does the price include removing the old unit',
+      'what happens to the refrigerant in my old system',
+      'do you dispose of the old furnace and ac',
+      'is there a charge to remove the old equipment',
+      'will the crew take the old stuff with them',
+    ],
+    negativeKeywords: [
+      'selling old equipment',
+      'scrapping old unit myself',
+      'donating old system',
+      'old system value question',
+      'tune-up question',
+      'repair question',
+    ],
+  },
+
+  { // 32
+    label: 'How Soon Can You Install',
+    content: 'For a standard installation, we can usually get you on the schedule within a few days to a week after the consultation. Emergency replacements move faster. The comfort advisor gives you a realistic timeline during the visit.',
+    groqKey: 'installation_process',
+    callerPhrases: [
+      'how soon can you install a new system',
+      'what is the lead time on a new installation',
+      'how quickly can I get a new system installed',
+      'how far out are you scheduling installations',
+      'can you install this week',
+      'how long do I have to wait for an installation',
+      'when is the soonest you can install',
+      'what is your availability for new installations',
+      'how backed up are you on installations',
+      'can I get a new system installed this week',
+      'how long between the consultation and the install',
+      'what is the wait time for a new system',
+      'can you do a quick turnaround on the install',
+      'how far in advance do I need to schedule installation',
+      'when can you start the installation',
+    ],
+    negativeKeywords: [
+      'repair scheduling',
+      'tune-up scheduling',
+      'diagnostic scheduling',
+      'emergency repair same day',
+      'duct work scheduling',
+      'maintenance scheduling',
+    ],
+  },
+
+  { // 33
+    label: 'Preparing My Home For Installation',
+    content: 'There is not too much you need to do. Just clear a path to the indoor and outdoor equipment areas, move anything fragile near the work zones, and make sure someone 18 or older is home for the installation. The crew handles the protective coverings and cleanup.',
+    groqKey: 'installation_process',
+    callerPhrases: [
+      'what do I need to do to prepare for installation',
+      'how should I get my home ready for the install',
+      'is there anything I need to do before installation day',
+      'do I need to clear any space for the installers',
+      'what should I move before the installation',
+      'do I need to be home for the entire installation',
+      'should I clear the area around the ac unit',
+      'do I need to move furniture for the installation',
+      'what do I need to do before the crew arrives',
+      'is there any prep work on my end',
+      'does someone need to be home all day for the install',
+      'should I clear a path to the attic for the installers',
+      'do I need to prepare the garage for the new furnace',
+      'what should I expect to do as the homeowner on install day',
+      'can the installers move things or should I do that first',
+    ],
+    negativeKeywords: [
+      'preparing for tune-up',
+      'preparing for repair visit',
+      'preparing for diagnostic',
+      'preparing to sell home',
+      'preparing for inspection',
+      'moving to new home',
+    ],
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILD & VALIDATE JSON
+// ═══════════════════════════════════════════════════════════════════════════
+
+const output = {
+  kcTitle: 'New System / Replacement',
+  kcId: null,
+  exportedAt: new Date().toISOString(),
+  sectionCount: sections.length,
+  sections: sections.map((s, i) => ({
+    index: i,
+    label: s.label,
+    content: s.content,
+    groqContent: groqCat[s.groqKey] || null,
+    callerPhrases: s.callerPhrases,
+    negativeKeywords: s.negativeKeywords,
+    isFixed: true,
+    hasAudio: false,
+    isActive: true,
+  })),
+};
+
+// ── Validation ───────────────────────────────────────────────────────────
+let errors = 0;
+for (const s of output.sections) {
+  const wc = s.content.split(/\s+/).length;
+  if (wc < 25 || wc > 50) {
+    console.warn(`⚠ Section ${s.index} "${s.label}" content: ${wc} words (target 35-42)`);
+  }
+  if (!s.groqContent) {
+    console.error(`✗ Section ${s.index} "${s.label}" missing groqContent`);
+    errors++;
+  } else {
+    const gwc = s.groqContent.split(/\s+/).length;
+    if (gwc < 300 || gwc > 450) {
+      console.warn(`⚠ Section ${s.index} "${s.label}" groqContent: ${gwc} words (target 350-400)`);
+    }
+  }
+  if (s.callerPhrases.length !== 15) {
+    console.error(`✗ Section ${s.index} "${s.label}" has ${s.callerPhrases.length} phrases (need exactly 15)`);
+    errors++;
+  }
+  if (s.negativeKeywords.length !== 6) {
+    console.warn(`⚠ Section ${s.index} "${s.label}" has ${s.negativeKeywords.length} negativeKeywords (target 6)`);
+  }
+  // Check for empty phrases
+  const emptyPhrases = s.callerPhrases.filter(p => !p.trim());
+  if (emptyPhrases.length) {
+    console.error(`✗ Section ${s.index} "${s.label}" has ${emptyPhrases.length} empty phrases`);
+    errors++;
+  }
+  // Check for placeholder patterns
+  if (s.content.includes('{') || (s.groqContent && s.groqContent.includes('{'))) {
+    console.error(`✗ Section ${s.index} "${s.label}" contains {placeholder} pattern — write actual text`);
+    errors++;
+  }
+}
+
+if (errors > 0) {
+  console.error(`\n✗ ${errors} error(s) found. Fix before importing.`);
+  process.exit(1);
+}
+
+// ── Write output ─────────────────────────────────────────────────────────
+const outPath = path.join(__dirname, 'kc-new-system.json');
+fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
+
+console.log(`\n✅ Generated ${outPath}`);
+console.log(`   ${output.sectionCount} sections`);
+console.log(`   ${output.sections.reduce((n, s) => n + s.callerPhrases.length, 0)} total callerPhrases`);
+console.log(`   ${new Set(output.sections.map(s => s.groqContent)).size} unique groqContent templates`);
+
+// Stats
+const contentWords = output.sections.map(s => s.content.split(/\s+/).length);
+const groqWords = output.sections.filter(s => s.groqContent).map(s => s.groqContent.split(/\s+/).length);
+console.log(`   Content words: min=${Math.min(...contentWords)} max=${Math.max(...contentWords)} avg=${Math.round(contentWords.reduce((a,b)=>a+b,0)/contentWords.length)}`);
+console.log(`   GroqContent words: min=${Math.min(...groqWords)} max=${Math.max(...groqWords)} avg=${Math.round(groqWords.reduce((a,b)=>a+b,0)/groqWords.length)}`);
+
+console.log('\nNEXT STEPS:');
+console.log('  1. Create empty "New System / Replacement" container in services.html');
+console.log('  2. Import kc-new-system.json into the container');
+console.log('  3. Re-score All → Fix All → Generate Missing Audio');
