@@ -19,14 +19,15 @@ const { MongoClient, ObjectId } = require('mongodb');
 const COMPANY_ID = '68e3f77a9d623b8058c700c4';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PHRASE MAPPINGS: kcId → sectionIndex → { tradeTerms, callerPhrases }
+// PHRASE MAPPINGS: title → sectionIndex → { tradeTerms, callerPhrases }
+// (Containers created via seed scripts have no kcId — lookup by title)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const MAPPINGS = [
 
-  // ── 700c4-01: AC & Cooling Repair ─────────────────────────────────────
+  // ── AC & Cooling Repair ─────────────────────────────────────
   {
-    kcId: '700c4-01',
+    title: 'AC & Cooling Repair',
     sections: {
       0: { // Our AC Repair Service
         tradeTerms: [
@@ -95,9 +96,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-02: Heating & Furnace Repair ────────────────────────────────
+  // ── Heating & Furnace Repair ────────────────────────────────
   {
-    kcId: '700c4-02',
+    title: 'Heating & Furnace Repair',
     sections: {
       0: { // Our Heating Repair Service
         tradeTerms: [
@@ -143,9 +144,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-03: Annual HVAC Tune-Up ────────────────────────────────────
+  // ── Annual HVAC Tune-Up ────────────────────────────────────
   {
-    kcId: '700c4-03',
+    title: 'Annual HVAC Tune-Up',
     sections: {
       0: { // What Is a Tune-Up
         tradeTerms: [
@@ -174,9 +175,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-04: Comfort Club Maintenance Plan ──────────────────────────
+  // ── Comfort Club Maintenance Plan ──────────────────────────
   {
-    kcId: '700c4-04',
+    title: 'Comfort Club Maintenance Plan',
     sections: {
       0: { // What Is the Comfort Club
         tradeTerms: [
@@ -200,9 +201,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-05: New AC System Installation ─────────────────────────────
+  // ── New AC System Installation ─────────────────────────────
   {
-    kcId: '700c4-05',
+    title: 'New AC System Installation',
     sections: {
       0: { // New AC Systems We Install
         tradeTerms: [
@@ -245,9 +246,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-06: New Heating System Installation ────────────────────────
+  // ── New Heating System Installation ────────────────────────
   {
-    kcId: '700c4-06',
+    title: 'New Heating System Installation',
     sections: {
       0: { // Heating Systems We Install
         tradeTerms: [
@@ -270,9 +271,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-07: Emergency HVAC Service ─────────────────────────────────
+  // ── Emergency HVAC Service ─────────────────────────────────
   {
-    kcId: '700c4-07',
+    title: 'Emergency HVAC Service',
     sections: {
       0: { // Emergency Response
         tradeTerms: [
@@ -301,9 +302,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-08: Indoor Air Quality Solutions ───────────────────────────
+  // ── Indoor Air Quality Solutions ───────────────────────────
   {
-    kcId: '700c4-08',
+    title: 'Indoor Air Quality Solutions',
     sections: {
       0: { // IAQ Products We Install
         tradeTerms: [
@@ -352,9 +353,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-09: Duct Cleaning & Sealing ────────────────────────────────
+  // ── Duct Cleaning & Sealing ────────────────────────────────
   {
-    kcId: '700c4-09',
+    title: 'Duct Cleaning & Sealing',
     sections: {
       0: { // Our Duct Cleaning Service
         tradeTerms: [
@@ -395,9 +396,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-10: Financing & Payment Options ────────────────────────────
+  // ── Financing & Payment Options ────────────────────────────
   {
-    kcId: '700c4-10',
+    title: 'Financing & Payment Options',
     sections: {
       0: { // Financing Available
         tradeTerms: [
@@ -432,9 +433,9 @@ const MAPPINGS = [
     },
   },
 
-  // ── 700c4-12: Service Area & Business Hours ──────────────────────────
+  // ── Service Area & Business Hours ──────────────────────────
   {
-    kcId: '700c4-12',
+    title: 'Service Area & Business Hours',
     sections: {
       0: { // Business Hours
         tradeTerms: [
@@ -468,7 +469,7 @@ const MAPPINGS = [
   // ── Noise & Symptom phrases → AC Repair (section 0) ──────────────────
   // These are general symptoms that route to the main repair container
   {
-    kcId: '700c4-01',
+    title: 'AC & Cooling Repair',
     sections: {
       0: { // Our AC Repair Service (additional symptom tradeTerms)
         tradeTerms: [
@@ -514,14 +515,14 @@ async function main() {
   let containersUpdated = 0;
 
   for (const mapping of MAPPINGS) {
-    // Find container by kcId + companyId
+    // Find container by title + companyId (seed-created containers have no kcId)
     const container = await col.findOne({
       companyId: COMPANY_ID,
-      kcId: mapping.kcId,
+      title: mapping.title,
     });
 
     if (!container) {
-      console.warn(`⚠ Container ${mapping.kcId} not found — skipping`);
+      console.warn(`⚠ Container "${mapping.title}" not found — skipping`);
       continue;
     }
 
@@ -531,7 +532,7 @@ async function main() {
     for (const [sIdxStr, data] of Object.entries(mapping.sections)) {
       const sIdx = parseInt(sIdxStr, 10);
       if (sIdx >= sections.length) {
-        console.warn(`⚠ ${mapping.kcId} section ${sIdx} out of range (${sections.length} sections) — skipping`);
+        console.warn(`⚠ ${mapping.title} section ${sIdx} out of range (${sections.length} sections) — skipping`);
         continue;
       }
 
@@ -554,7 +555,7 @@ async function main() {
         if (added > 0) {
           totalTradeTerms += added;
           updated = true;
-          console.log(`  ✓ ${mapping.kcId} [${label}] +${added} tradeTerms (total: ${section.tradeTerms.length})`);
+          console.log(`  ✓ ${mapping.title} [${label}] +${added} tradeTerms (total: ${section.tradeTerms.length})`);
         }
       }
 
@@ -578,7 +579,7 @@ async function main() {
         if (added > 0) {
           totalCallerPhrases += added;
           updated = true;
-          console.log(`  ✓ ${mapping.kcId} [${label}] +${added} callerPhrases (total: ${section.callerPhrases.length})`);
+          console.log(`  ✓ ${mapping.title} [${label}] +${added} callerPhrases (total: ${section.callerPhrases.length})`);
         }
       }
     }
@@ -598,7 +599,7 @@ async function main() {
         { $set: setOps }
       );
       containersUpdated++;
-      console.log(`  ✅ ${mapping.kcId} (${container.title}) saved`);
+      console.log(`  ✅ ${mapping.title} (${container.title}) saved`);
     }
   }
 
