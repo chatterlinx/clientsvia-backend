@@ -1266,7 +1266,7 @@ const sections = [
 
 const output = {
   kcTitle: 'AC Maintenance & Tune-Up',
-  kcId: null,  // assigned by services.html when container is created
+  kcId: '700c4-36',
   exportedAt: new Date().toISOString(),
   sectionCount: sections.length,
   sections: sections.map((s, i) => ({
