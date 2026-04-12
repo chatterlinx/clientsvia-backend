@@ -17,7 +17,7 @@
  *   - Resolution (21-23)
  *
  * Handles ONE specific argument: callers with a broken AC (not cooling) who
- * try to mentally downgrade a $89 diagnostic visit into a cheaper maintenance
+ * try to mentally downgrade a {reg_diagnostic_fee} diagnostic visit into a cheaper maintenance
  * visit. Each section is a tiny reusable audio brick — the agent responds
  * with the RIGHT small module for the EXACT moment in the conversation.
  */
@@ -30,15 +30,15 @@ const path = require('path');
 
 const groqCat = {
 
-  price_comparison: `The diagnostic service call is $89 and the maintenance visit is $179 for a 20-point checkup. These two services exist at different price points because they serve completely different purposes and are dispatched, staffed, and scoped differently.
+  price_comparison: `The diagnostic service call is {reg_diagnostic_fee} and the maintenance visit is {reg_maintenance_fee} for a 20-point checkup. These two services exist at different price points because they serve completely different purposes and are dispatched, staffed, and scoped differently.
 
-The $89 diagnostic service call is for a system that has an active problem. The caller has described a symptom — no cooling, warm air from vents, system not turning on, unusual noises, or some other indication that something is not working correctly. The technician arrives specifically to evaluate the system, identify the root cause of the problem, and present the findings along with repair options and pricing before any work is done. The $89 covers the technician coming out, performing the evaluation, and going over everything with the homeowner. If the homeowner approves a repair, the work begins. If not, there is no obligation beyond the diagnostic fee. This visit is reactive and focused on solving the specific issue the caller reported.
+The {reg_diagnostic_fee} diagnostic service call is for a system that has an active problem. The caller has described a symptom — no cooling, warm air from vents, system not turning on, unusual noises, or some other indication that something is not working correctly. The technician arrives specifically to evaluate the system, identify the root cause of the problem, and present the findings along with repair options and pricing before any work is done. The {reg_diagnostic_fee} covers the technician coming out, performing the evaluation, and going over everything with the homeowner. If the homeowner approves a repair, the work begins. If not, there is no obligation beyond the diagnostic fee. This visit is reactive and focused on solving the specific issue the caller reported.
 
-The $179 maintenance visit is a 20-point preventive checkup for a system that is currently operating. It is scheduled in advance, typically every six months, and the technician works through a structured inspection checklist covering electrical, mechanical, refrigerant, airflow, and safety components. The goal is to keep a working system working — to catch small issues before they become expensive failures, maintain efficiency, and protect the manufacturer warranty. Maintenance technicians follow the preventive checklist and document findings. They are not dispatched to troubleshoot an active breakdown.
+The {reg_maintenance_fee} maintenance visit is a 20-point preventive checkup for a system that is currently operating. It is scheduled in advance, typically every six months, and the technician works through a structured inspection checklist covering electrical, mechanical, refrigerant, airflow, and safety components. The goal is to keep a working system working — to catch small issues before they become expensive failures, maintain efficiency, and protect the manufacturer warranty. Maintenance technicians follow the preventive checklist and document findings. They are not dispatched to troubleshoot an active breakdown.
 
-The pricing difference reflects the difference in purpose. The diagnostic is lower in cost because it is a focused evaluation visit. The maintenance is higher because it is a comprehensive preventive service covering every major component. One is not a substitute for the other. A caller whose system is not cooling needs the diagnostic visit because that is what identifies the cause and leads to the repair. Booking maintenance on a system that is not working does not address the active problem and can delay getting the caller fixed. The correct path for a system that is not cooling is the $89 diagnostic service call, where the technician evaluates the system and goes over findings and repair options with the homeowner before any work begins.`,
+The pricing difference reflects the difference in purpose. The diagnostic is lower in cost because it is a focused evaluation visit. The maintenance is higher because it is a comprehensive preventive service covering every major component. One is not a substitute for the other. A caller whose system is not cooling needs the diagnostic visit because that is what identifies the cause and leads to the repair. Booking maintenance on a system that is not working does not address the active problem and can delay getting the caller fixed. The correct path for a system that is not cooling is the {reg_diagnostic_fee} diagnostic service call, where the technician evaluates the system and goes over findings and repair options with the homeowner before any work begins.`,
 
-  downgrade_redirect: `When a caller hears the $89 diagnostic fee and then asks about maintenance pricing, they are often trying to find a less expensive path to getting their system looked at. This is a natural reaction — nobody wants to spend more than they have to. But booking a maintenance visit for a system that is not cooling does not save money. It costs more and does not address the problem.
+  downgrade_redirect: `When a caller hears the {reg_diagnostic_fee} diagnostic fee and then asks about maintenance pricing, they are often trying to find a less expensive path to getting their system looked at. This is a natural reaction — nobody wants to spend more than they have to. But booking a maintenance visit for a system that is not cooling does not save money. It costs more and does not address the problem.
 
 A maintenance visit is a preventive service for a system that is currently working. The technician follows a structured 20-point inspection checklist designed to keep a healthy system running well. They clean coils, check refrigerant pressures, test capacitors, verify airflow, and inspect electrical connections — all under the assumption that the system is operating and the goal is to keep it that way. A maintenance technician is not dispatched to troubleshoot why a system stopped cooling. They are scheduled differently, routed differently, and their visit is scoped for routine preventive work, not active problem diagnosis.
 
@@ -46,7 +46,7 @@ When a system is not cooling, the problem could be a failed capacitor, a seized 
 
 The analogy works like this: if a car will not start, taking it in for an oil change does not get it started. The oil change mechanic may notice the engine has a problem, but they are not there to diagnose it, they do not have the diagnostic equipment, and they are not allocated the time. The car owner would still need a separate diagnostic visit, having lost time and potentially allowed the problem to worsen.
 
-Booking a maintenance visit when the system is not cooling means the caller pays $179 for a service that does not diagnose or fix their problem. They would still need a diagnostic visit afterward. The fastest and most cost-effective path to getting a non-cooling system evaluated and repaired is the $89 diagnostic service call, where the technician identifies the cause and goes over repair options before any additional work is done.`,
+Booking a maintenance visit when the system is not cooling means the caller pays {reg_maintenance_fee} for a service that does not diagnose or fix their problem. They would still need a diagnostic visit afterward. The fastest and most cost-effective path to getting a non-cooling system evaluated and repaired is the {reg_diagnostic_fee} diagnostic service call, where the technician identifies the cause and goes over repair options before any additional work is done.`,
 
   scope_creep: `Callers sometimes ask whether the maintenance technician can just look at their problem while performing the tune-up, or they assume that because they have not serviced the system in a long time, maybe all it needs is cleaning or a filter change. These are reasonable assumptions, but they misunderstand how maintenance visits are structured and what causes a system to stop cooling.
 
@@ -60,21 +60,21 @@ The proper sequence is diagnostic first, then maintenance once the system is ope
 
   objection_handling: `When a caller pushes back on the diagnostic fee or the policy of not booking maintenance for an active breakdown, the response should validate their concern while clearly explaining why the process exists to protect them, not restrict them.
 
-The $89 diagnostic fee covers a licensed technician coming to the property, evaluating the system, identifying the root cause of the problem, and going over findings and repair options with the homeowner before any additional work is done. There is no obligation to approve any repairs. The caller gets a clear picture of what is wrong and what it costs to fix before making any decisions. This is not a trip charge with no value — it is a professional evaluation that tells the caller exactly what they are dealing with.
+The {reg_diagnostic_fee} diagnostic fee covers a licensed technician coming to the property, evaluating the system, identifying the root cause of the problem, and going over findings and repair options with the homeowner before any additional work is done. There is no obligation to approve any repairs. The caller gets a clear picture of what is wrong and what it costs to fix before making any decisions. This is not a trip charge with no value — it is a professional evaluation that tells the caller exactly what they are dealing with.
 
 When a caller says the company is trying to upsell them, the answer is straightforward: a maintenance visit and a diagnostic visit are two different services scheduled differently, routed differently, and often assigned to different technicians. Recommending the diagnostic for an active breakdown is not an upsell — it is routing the caller to the correct service for their situation. Booking maintenance would actually cost the caller more and would not address the active problem.
 
-When a caller insists on booking maintenance anyway because they are willing to pay the higher price, the answer remains the same. The issue is not about willingness to pay — it is about the type of appointment. Maintenance appointments are scoped for preventive service on a working system. Even at the higher price, the maintenance technician is not dispatched to diagnose an active breakdown. The caller would still need a separate diagnostic visit afterward, having spent $179 on a service that did not address their problem.
+When a caller insists on booking maintenance anyway because they are willing to pay the higher price, the answer remains the same. The issue is not about willingness to pay — it is about the type of appointment. Maintenance appointments are scoped for preventive service on a working system. Even at the higher price, the maintenance technician is not dispatched to diagnose an active breakdown. The caller would still need a separate diagnostic visit afterward, having spent {reg_maintenance_fee} on a service that did not address their problem.
 
 When a caller asks why they cannot just book whatever they want, the framing should always be about helping them avoid the wrong visit. The company does not book maintenance as a substitute for an active breakdown because it delays getting the caller fixed. The fastest path to a working system is the diagnostic visit, where the technician evaluates the specific issue and presents repair options. After the system is repaired, the company can absolutely help the caller set up a maintenance schedule going forward to prevent future problems.`,
 
   service_definitions: `A maintenance visit and a diagnostic service call are two fundamentally different services with different purposes, different scheduling, different technician preparation, and different outcomes. Understanding the distinction helps the caller get the right service for their situation without wasting time or money.
 
-Maintenance is preventive service for a system that is currently operating. It is a 20-point checkup performed every six months at $179 per visit. During maintenance, the technician works through a structured inspection checklist covering the condenser coil, evaporator coil, refrigerant pressures, capacitor values, contactor condition, electrical connections, condensate drain, blower motor and wheel, air filter, thermostat calibration, temperature split, and safety controls. For heating systems, the checklist also covers the heat exchanger, ignition sequence, flame sensor, gas pressure, inducer motor, and flue venting. The purpose is to keep every component clean, calibrated, and operating within specification so the system runs efficiently and avoids unexpected breakdowns. Maintenance is scheduled in advance during regular business hours and is planned for routine servicing.
+Maintenance is preventive service for a system that is currently operating. It is a 20-point checkup performed every six months at {reg_maintenance_fee} per visit. During maintenance, the technician works through a structured inspection checklist covering the condenser coil, evaporator coil, refrigerant pressures, capacitor values, contactor condition, electrical connections, condensate drain, blower motor and wheel, air filter, thermostat calibration, temperature split, and safety controls. For heating systems, the checklist also covers the heat exchanger, ignition sequence, flame sensor, gas pressure, inducer motor, and flue venting. The purpose is to keep every component clean, calibrated, and operating within specification so the system runs efficiently and avoids unexpected breakdowns. Maintenance is scheduled in advance during regular business hours and is planned for routine servicing.
 
-A diagnostic service call is reactive. It is scheduled because the system has a specific problem — not cooling, blowing warm air, making unusual noises, leaking water, cycling on and off, or not turning on at all. The technician arrives specifically to evaluate the system and identify the root cause of the reported symptom. The diagnostic fee is $89 and covers the technician coming out, performing the evaluation, and going over findings and repair options with the homeowner before any work is done.
+A diagnostic service call is reactive. It is scheduled because the system has a specific problem — not cooling, blowing warm air, making unusual noises, leaking water, cycling on and off, or not turning on at all. The technician arrives specifically to evaluate the system and identify the root cause of the reported symptom. The diagnostic fee is {reg_diagnostic_fee} and covers the technician coming out, performing the evaluation, and going over findings and repair options with the homeowner before any work is done.
 
-Maintenance keeps a working system working. Diagnostic identifies why a system stopped working. A system that is not cooling right now has an active problem that requires diagnosis, not preventive maintenance. Booking a maintenance visit for an active breakdown does not address the problem, costs more than the diagnostic, and delays getting the system repaired. The correct appointment for a system that is not cooling is the $89 diagnostic service call.
+Maintenance keeps a working system working. Diagnostic identifies why a system stopped working. A system that is not cooling right now has an active problem that requires diagnosis, not preventive maintenance. Booking a maintenance visit for an active breakdown does not address the problem, costs more than the diagnostic, and delays getting the system repaired. The correct appointment for a system that is not cooling is the {reg_diagnostic_fee} diagnostic service call.
 
 Once the current issue is diagnosed and repaired, maintenance can be scheduled going forward to help prevent future problems and keep the system running at peak performance.`,
 
@@ -86,15 +86,15 @@ Diagnostic repair visits are dispatched based on urgency and symptom. When a cal
 
 When a maintenance appointment is booked for a system that is not cooling, the scheduling system treats it as a routine preventive visit. The technician arrives expecting a working system. If they discover an active breakdown, they are not positioned to diagnose and repair it within the maintenance appointment window. They may not have the specific parts needed, their schedule may not allow the additional troubleshooting time, and the visit is scoped for a preventive checklist, not open-ended diagnosis.
 
-The result is a wasted visit. The caller pays $179 for maintenance that cannot address their active problem, then still needs to schedule and pay for a separate diagnostic visit. Meanwhile, the system remains down and the caller has lost a day waiting for a visit that was never going to fix the issue.
+The result is a wasted visit. The caller pays {reg_maintenance_fee} for maintenance that cannot address their active problem, then still needs to schedule and pay for a separate diagnostic visit. Meanwhile, the system remains down and the caller has lost a day waiting for a visit that was never going to fix the issue.
 
-Booking the right appointment type from the start — the $89 diagnostic service call for a system that is not cooling — sends the right technician with the right tools and the right schedule allocation to get the problem identified and repaired as efficiently as possible.`,
+Booking the right appointment type from the start — the {reg_diagnostic_fee} diagnostic service call for a system that is not cooling — sends the right technician with the right tools and the right schedule allocation to get the problem identified and repaired as efficiently as possible.`,
 
   resolution: `When the caller agrees to book the diagnostic service call, the transition should be warm and efficient. The goal is to acknowledge their decision positively and move directly into collecting the booking information without unnecessary explanation or continued selling. The caller has already been through a conversation about the difference between maintenance and diagnostic services. They understand the distinction and have agreed to the correct appointment type. Restating the difference at this point would feel repetitive and could introduce doubt.
 
 The booking process requires the caller's name, phone number, and address. The scheduling team matches the caller with the next available technician based on location and availability. For active breakdowns like a system not cooling, the scheduling priority is higher than routine maintenance, which often means shorter wait times for an appointment.
 
-Once the current issue is diagnosed and repaired, maintenance becomes a natural next step. A system that has just been repaired is an ideal candidate for a maintenance plan because the repair technician has already evaluated the system's overall condition. If other components showed signs of wear during the diagnostic, the maintenance visit addresses those proactively. Setting up a regular maintenance schedule — typically every six months at $179 per visit for a 20-point checkup — helps prevent the exact situation the caller is experiencing now. Regular preventive service catches failing capacitors, dirty coils, refrigerant issues, and electrical problems before they cause a complete breakdown.
+Once the current issue is diagnosed and repaired, maintenance becomes a natural next step. A system that has just been repaired is an ideal candidate for a maintenance plan because the repair technician has already evaluated the system's overall condition. If other components showed signs of wear during the diagnostic, the maintenance visit addresses those proactively. Setting up a regular maintenance schedule — typically every six months at {reg_maintenance_fee} per visit for a 20-point checkup — helps prevent the exact situation the caller is experiencing now. Regular preventive service catches failing capacitors, dirty coils, refrigerant issues, and electrical problems before they cause a complete breakdown.
 
 The after-repair maintenance conversation should feel like a helpful suggestion, not a sales push. The caller just went through an unexpected breakdown and paid for a repair. Framing maintenance as a way to avoid this situation in the future resonates naturally because the caller is experiencing the consequences of not having preventive service. If they are interested, the booking can be set up on the same call. If not, no pressure — they know the option exists for whenever they are ready.`,
 };
@@ -111,7 +111,7 @@ const sections = [
 
   { // 0
     label: 'Diagnostic Price When System Not Cooling',
-    content: 'I am sorry to hear that. We can absolutely get a technician out to diagnose it. Our diagnostic service call is $89. That covers the full evaluation and the technician goes over findings and repair options with you before any work is done.',
+    content: 'I am sorry to hear that. We can absolutely get a technician out to diagnose it. Our diagnostic service call is {reg_diagnostic_fee}. That covers the full evaluation and the technician goes over findings and repair options with you before any work is done.',
     groqKey: 'price_comparison',
     callerPhrases: [
       'how much to come out and look at it',
@@ -142,7 +142,7 @@ const sections = [
 
   { // 1
     label: 'Maintenance Price Question After Hearing Diagnostic Fee',
-    content: 'Our maintenance is a 20-point checkup for $179 every six months. That service is for a system that is currently operating and needs routine servicing. Since your system is not cooling right now, you would need a diagnostic visit so the technician can properly troubleshoot the issue.',
+    content: 'Our maintenance is a 20-point checkup for {reg_maintenance_fee} every six months. That service is for a system that is currently operating and needs routine servicing. Since your system is not cooling right now, you would need a diagnostic visit so the technician can properly troubleshoot the issue.',
     groqKey: 'price_comparison',
     callerPhrases: [
       'how much is maintenance',
@@ -173,7 +173,7 @@ const sections = [
 
   { // 2
     label: 'Comparing Maintenance And Diagnostic Pricing',
-    content: 'I understand the question. Maintenance is $179 for a preventive checkup on a working system. The diagnostic is $89 for a system that has a problem. They are different services dispatched differently. For a system not cooling, the diagnostic is the correct visit.',
+    content: 'I understand the question. Maintenance is {reg_maintenance_fee} for a preventive checkup on a working system. The diagnostic is {reg_diagnostic_fee} for a system that has a problem. They are different services dispatched differently. For a system not cooling, the diagnostic is the correct visit.',
     groqKey: 'price_comparison',
     callerPhrases: [
       'why can I not just do the maintenance and get both',
@@ -186,9 +186,9 @@ const sections = [
       'why would I pay less for the diagnostic when maintenance covers more',
       'if I get the maintenance would they fix it too',
       'I will pay the higher price just do the maintenance',
-      'the $179 should cover checking the problem too',
+      'the {reg_maintenance_fee} should cover checking the problem too',
       'why not just book maintenance it costs more anyway',
-      'does the $179 checkup include troubleshooting',
+      'does the {reg_maintenance_fee} checkup include troubleshooting',
       'can I combine both into one visit',
       'why are there two separate visits',
     ],
@@ -223,7 +223,7 @@ const sections = [
       'can I switch to a maintenance appointment',
       'book me for a tune-up instead',
       'I just want the maintenance visit',
-      'can I get the maintenance instead of the $89 visit',
+      'can I get the maintenance instead of the {reg_diagnostic_fee} visit',
       'let me do the maintenance it has been a while anyway',
       'schedule me for a maintenance please not the diagnostic',
     ],
@@ -398,20 +398,20 @@ const sections = [
 
   { // 9
     label: 'Price Objection Too Expensive',
-    content: 'I understand. The $89 covers the technician coming out, evaluating the system, identifying the cause, and going over your findings and repair options before any work is done. There is no obligation beyond the evaluation.',
+    content: 'I understand. The {reg_diagnostic_fee} covers the technician coming out, evaluating the system, identifying the cause, and going over your findings and repair options before any work is done. There is no obligation beyond the evaluation.',
     groqKey: 'objection_handling',
     callerPhrases: [
-      '$89 just to come out that is too much',
+      '{reg_diagnostic_fee} just to come out that is too much',
       'that is a lot just to look at it',
       'why so expensive just to diagnose it',
-      'I am not paying $89 for someone to look at my ac',
+      'I am not paying {reg_diagnostic_fee} for someone to look at my ac',
       'that is too much for a service call',
       'can you waive the diagnostic fee',
       'do you have anything cheaper',
       'is there a less expensive option',
-      '$89 seems high for just a visit',
+      '{reg_diagnostic_fee} seems high for just a visit',
       'that is a lot of money just to tell me what is wrong',
-      'I do not want to pay $89 and still have to pay for the repair',
+      'I do not want to pay {reg_diagnostic_fee} and still have to pay for the repair',
       'can you send someone out for free',
       'other companies do free diagnostics',
       'why do I have to pay just for you to come look',
@@ -453,7 +453,7 @@ const sections = [
       'just book maintenance anyway',
       'pay more get maintenance',
       'same day urgent request',
-      'what does $89 cover',
+      'what does {reg_diagnostic_fee} cover',
       'why can I not choose',
     ],
   },
@@ -463,7 +463,7 @@ const sections = [
     content: 'I hear you on wanting someone out quickly. Maintenance is routine and usually booked in advance, not for active breakdowns. For a system not cooling, the diagnostic is the fastest proper path to getting a technician out.',
     groqKey: 'objection_handling',
     callerPhrases: [
-      'I need someone out today but not for $89',
+      'I need someone out today but not for {reg_diagnostic_fee}',
       'can I get maintenance today instead of the diagnostic',
       'I need same day service can I just do the tune-up',
       'can you send someone today for a maintenance instead',
@@ -522,23 +522,23 @@ const sections = [
 
   { // 13
     label: 'Even If I Pay More Why Not Maintenance',
-    content: 'I appreciate you being willing to pay more. But the issue is not about cost — it is about the appointment type. Maintenance is scoped for preventive service on a working system. Even at $179, the technician is not dispatched for an active breakdown.',
+    content: 'I appreciate you being willing to pay more. But the issue is not about cost — it is about the appointment type. Maintenance is scoped for preventive service on a working system. Even at {reg_maintenance_fee}, the technician is not dispatched for an active breakdown.',
     groqKey: 'objection_handling',
     callerPhrases: [
-      '$179 gets me both right',
-      'if I pay the $179 can they diagnose it too',
+      '{reg_maintenance_fee} gets me both right',
+      'if I pay the {reg_maintenance_fee} can they diagnose it too',
       'I will pay more just do the maintenance and check the problem',
       'the maintenance costs more so it should cover more',
       'I am paying more for maintenance so it should include the diagnostic',
       'if I pay the higher price will they fix the cooling issue',
-      'I do not mind paying $179 if they look at the problem too',
-      'why can I not pay the $179 and get everything checked',
+      'I do not mind paying {reg_maintenance_fee} if they look at the problem too',
+      'why can I not pay the {reg_maintenance_fee} and get everything checked',
       'even if I pay more why not just do the maintenance',
       'I will pay whatever just send someone who can fix it',
-      'let me pay the $179 and have them troubleshoot',
+      'let me pay the {reg_maintenance_fee} and have them troubleshoot',
       'the maintenance costs more why does it not include diagnosis',
       'can I pay extra for the maintenance to cover the diagnostic',
-      'for $179 they should be able to figure it out',
+      'for {reg_maintenance_fee} they should be able to figure it out',
       'I am willing to pay more so why not maintenance',
     ],
     negativeKeywords: [
@@ -609,7 +609,7 @@ const sections = [
     ],
     negativeKeywords: [
       'what is a diagnostic',
-      'what does $89 cover',
+      'what does {reg_diagnostic_fee} cover',
       'how are they dispatched',
       'tech qualification difference',
       'booking wrong visit risk',
@@ -632,7 +632,7 @@ const sections = [
       'what is the purpose of the diagnostic visit',
       'can you explain what the diagnostic involves',
       'what exactly is a diagnostic service call',
-      'what does the $89 diagnostic get me',
+      'what does the {reg_diagnostic_fee} diagnostic get me',
       'how does a diagnostic visit work',
       'what is the diagnostic process',
       'what do they check during a diagnostic',
@@ -643,7 +643,7 @@ const sections = [
       'how are they scheduled',
       'tech preparation difference',
       'wrong visit delay risk',
-      'what does $89 include',
+      'what does {reg_diagnostic_fee} include',
       'already agreed to diagnostic',
     ],
   },
@@ -743,23 +743,23 @@ const sections = [
 
   { // 20
     label: 'What The Diagnostic Fee Covers',
-    content: 'The $89 diagnostic covers a full system evaluation. The technician identifies the root cause, documents what they find, and walks you through findings and repair options with pricing before any work is done. You decide what gets fixed.',
+    content: 'The {reg_diagnostic_fee} diagnostic covers a full system evaluation. The technician identifies the root cause, documents what they find, and walks you through findings and repair options with pricing before any work is done. You decide what gets fixed.',
     groqKey: 'price_comparison',
     callerPhrases: [
-      'what does the $89 cover',
+      'what does the {reg_diagnostic_fee} cover',
       'what do I get for the diagnostic fee',
-      'what is included in the $89',
-      'what does the $89 diagnostic include',
-      'what am I paying for with the $89',
-      'does the $89 go toward the repair',
+      'what is included in the {reg_diagnostic_fee}',
+      'what does the {reg_diagnostic_fee} diagnostic include',
+      'what am I paying for with the {reg_diagnostic_fee}',
+      'does the {reg_diagnostic_fee} go toward the repair',
       'what exactly do I get for the service call fee',
-      'is the $89 just for showing up',
+      'is the {reg_diagnostic_fee} just for showing up',
       'what does the diagnostic fee pay for',
-      'do I get anything for the $89 besides the visit',
-      'what is the $89 service call all about',
+      'do I get anything for the {reg_diagnostic_fee} besides the visit',
+      'what is the {reg_diagnostic_fee} service call all about',
       'is there value in the diagnostic fee',
-      'what happens during the $89 visit',
-      'what does the technician do for the $89',
+      'what happens during the {reg_diagnostic_fee} visit',
+      'what does the technician do for the {reg_diagnostic_fee}',
       'does the diagnostic fee include any repair work',
     ],
     negativeKeywords: [
@@ -783,7 +783,7 @@ const sections = [
     callerPhrases: [
       'okay let us do the diagnostic',
       'fine book the diagnostic',
-      'alright schedule the $89 visit',
+      'alright schedule the {reg_diagnostic_fee} visit',
       'okay I will do the diagnostic',
       'go ahead and book it',
       'let us do the service call',
@@ -793,7 +793,7 @@ const sections = [
       'okay book me for the diagnostic visit',
       'yes go ahead and schedule that',
       'alright let us get someone out here',
-      'okay I will take the $89 diagnostic',
+      'okay I will take the {reg_diagnostic_fee} diagnostic',
       'fine schedule the diagnostic service call',
       'alright let us do that',
     ],
