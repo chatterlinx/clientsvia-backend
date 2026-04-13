@@ -266,17 +266,32 @@
     /* Content search match box */
     .content-match-box {
       background: #fefce8; border: 1px solid #fde68a; border-radius: 6px;
-      padding: 8px 10px; margin-bottom: 10px; font-size: 12px;
+      padding: 10px 12px; margin-bottom: 10px; font-size: 12px;
     }
     .content-match-header {
-      font-weight: 700; color: #92400e; margin-bottom: 4px; font-size: 12px;
+      font-weight: 700; color: #92400e; margin-bottom: 6px; font-size: 12px;
     }
     .content-match-item {
-      color: #78350f; padding: 2px 0; line-height: 1.4;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: #78350f; padding: 4px 0; line-height: 1.4;
+      border-bottom: 1px solid #fef3c740;
     }
-    .content-match-item strong { font-weight: 600; }
-    .content-match-more { color: #a16207; font-style: italic; margin-top: 2px; }
+    .content-match-item:last-child { border-bottom: none; }
+    .content-match-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .content-match-label strong { font-weight: 600; }
+    .content-match-idx {
+      display: inline-block; background: #f59e0b22; color: #92400e; font-weight: 700;
+      font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-right: 2px;
+      font-family: monospace;
+    }
+    .content-match-snippet {
+      font-size: 11px; color: #78350f99; margin: 2px 0 2px 22px;
+      line-height: 1.5; word-break: break-word;
+    }
+    .content-match-snippet mark {
+      background: #fbbf24; color: #78350f; font-weight: 600;
+      padding: 0 2px; border-radius: 2px;
+    }
+    .content-match-more { color: #a16207; font-style: italic; margin-top: 4px; }
 
     /* Keyword chips */
     .kc-keywords { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
@@ -1824,9 +1839,28 @@ function applyFilters() {
           ((typeof p === 'string' ? p : p?.text) || '').toLowerCase().includes(S.search)
         );
         if (inLabel || inContent || inGroq || inPhrases) {
+          // Build a snippet showing ±30 chars around the match with <mark> highlight
+          const _snip = (text, term) => {
+            if (!text) return '';
+            const lc = text.toLowerCase();
+            const pos = lc.indexOf(term);
+            if (pos === -1) return '';
+            const start = Math.max(0, pos - 30);
+            const end   = Math.min(text.length, pos + term.length + 30);
+            const pre   = (start > 0 ? '…' : '') + text.slice(start, pos);
+            const hit   = text.slice(pos, pos + term.length);
+            const post  = text.slice(pos + term.length, end) + (end < text.length ? '…' : '');
+            return `${_esc(pre)}<mark>${_esc(hit)}</mark>${_esc(post)}`;
+          };
+          // Pick the best snippet: content first, then groqContent, then label
+          const snippet = _snip(s.content, S.search)
+            || _snip(s.groqContent, S.search)
+            || _snip(s.label, S.search)
+            || '';
           matchingSections.push({
             idx: i,
             label: s.label || `Section ${i + 1}`,
+            snippet,
             where: [
               inLabel   && 'label',
               inContent && 'content',
@@ -2237,13 +2271,20 @@ function _cardHTML(c) {
   // ── Content search match badge ────────────────────────────────────────
   const contentHits = S._contentMatches?.[c._id] || [];
   const contentMatchHtml = contentHits.length ? (() => {
-    const hitLines = contentHits.slice(0, 5).map(h => {
+    const hitLines = contentHits.slice(0, 8).map(h => {
       const whereStr = h.where.map(w =>
         w === 'content' ? '📄' : w === 'groqContent' ? '📘' : w === 'phrase' ? '💬' : '🏷'
       ).join('');
-      return `<div class="content-match-item">${whereStr} <strong>${_esc(h.label)}</strong></div>`;
+      const snippetLine = h.snippet
+        ? `<div class="content-match-snippet">${h.snippet}</div>`
+        : '';
+      return `
+        <div class="content-match-item">
+          <div class="content-match-label">${whereStr} <span class="content-match-idx">#${h.idx + 1}</span> <strong>${_esc(h.label)}</strong></div>
+          ${snippetLine}
+        </div>`;
     }).join('');
-    const moreHits = contentHits.length > 5 ? `<div class="content-match-more">+${contentHits.length - 5} more</div>` : '';
+    const moreHits = contentHits.length > 8 ? `<div class="content-match-more">+${contentHits.length - 8} more sections…</div>` : '';
     return `
       <div class="content-match-box">
         <div class="content-match-header">🔍 ${contentHits.length} section${contentHits.length !== 1 ? 's' : ''} match</div>
