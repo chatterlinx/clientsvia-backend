@@ -9,36 +9,71 @@ const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CIRCUIT BREAKER: Skip ElevenLabs entirely when quota is exhausted.
-// When quota_exceeded fires, we cache that fact in Redis for 1 hour.
+// When quota_exceeded fires, we cache that fact for 1 hour.
 // All subsequent calls skip the ElevenLabs API and fall back to Twilio <Say>
 // instantly — no wasted time, no "application error" from webhook timeout.
+//
+// Two-tier: Redis (shared across instances, survives restarts) → in-memory
+// fallback (single-process, still blocks 14-error floods within one hour).
 // ═══════════════════════════════════════════════════════════════════════════
-const CIRCUIT_BREAKER_TTL = 3600; // 1 hour
-let _redis = null;
+const CIRCUIT_BREAKER_TTL = 3600; // 1 hour in seconds
 
-function _getRedis() {
-  if (_redis) return _redis;
-  try { _redis = require('../config/redis'); } catch (e) { /* no redis */ }
-  return _redis;
+// In-memory fallback: Map<key, { reason, expiresAt }>
+const _memCircuit = new Map();
+
+let _redisFactory = null;
+function _loadRedisFactory() {
+  if (_redisFactory !== null) return _redisFactory;
+  try {
+    _redisFactory = require('./redisClientFactory');
+  } catch (e) {
+    _redisFactory = false; // mark as unavailable, don't retry
+  }
+  return _redisFactory;
+}
+
+async function _getRedisClient() {
+  const factory = _loadRedisFactory();
+  if (!factory || !factory.isRedisConfigured || !factory.isRedisConfigured()) return null;
+  try { return await factory.getSharedRedisClient(); } catch (e) { return null; }
 }
 
 async function isCircuitOpen(apiKey) {
-  const redis = _getRedis();
-  if (!redis) return false;
+  const key = `elevenlabs:circuit:${(apiKey || 'global').slice(-8)}`;
+
+  // Try Redis first
   try {
-    const key = `elevenlabs:circuit:${(apiKey || 'global').slice(-8)}`;
-    return Boolean(await redis.get(key));
-  } catch (e) { return false; }
+    const redis = await _getRedisClient();
+    if (redis) {
+      const val = await redis.get(key);
+      if (val) return true;
+    }
+  } catch (e) { /* fall through to in-memory */ }
+
+  // In-memory fallback
+  const mem = _memCircuit.get(key);
+  if (mem) {
+    if (Date.now() < mem.expiresAt) return true;
+    _memCircuit.delete(key); // expired
+  }
+  return false;
 }
 
 async function openCircuit(apiKey, reason) {
-  const redis = _getRedis();
-  if (!redis) return;
+  const key = `elevenlabs:circuit:${(apiKey || 'global').slice(-8)}`;
+  const reasonStr = reason || 'quota_exceeded';
+
+  // Always set in-memory (guaranteed to work)
+  _memCircuit.set(key, { reason: reasonStr, expiresAt: Date.now() + CIRCUIT_BREAKER_TTL * 1000 });
+  logger.warn(`[ELEVENLABS CIRCUIT BREAKER] OPEN — skipping ElevenLabs for ${CIRCUIT_BREAKER_TTL}s`, { reason: reasonStr, key });
+
+  // Best-effort persist to Redis (survives restarts, shared across instances)
   try {
-    const key = `elevenlabs:circuit:${(apiKey || 'global').slice(-8)}`;
-    await redis.set(key, reason || 'quota_exceeded', 'EX', CIRCUIT_BREAKER_TTL);
-    logger.warn(`🔌 [ELEVENLABS CIRCUIT BREAKER] OPEN — skipping ElevenLabs for ${CIRCUIT_BREAKER_TTL}s`, { reason });
-  } catch (e) { /* best effort */ }
+    const redis = await _getRedisClient();
+    if (redis) {
+      await redis.set(key, reasonStr, { EX: CIRCUIT_BREAKER_TTL });
+    }
+  } catch (e) { /* in-memory is already set, this is best-effort */ }
 }
 
 function getElevenLabsApiKey(company) {

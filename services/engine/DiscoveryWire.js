@@ -137,16 +137,18 @@ class DiscoveryWire {
         turn,
       });
 
+      // When greeting rule has pre-recorded audio, response is the audio URL.
+      // We must NOT pass the URL as the response text — it would be read aloud
+      // by Polly <Say> if the audio fails. Use empty string for text; the audio
+      // URL goes in audioUrl only.
+      const isAudioGreeting = greetingResult.responseSource === 'audio';
       return {
-        response:      greetingResult.response,
+        response:      isAudioGreeting ? '' : greetingResult.response,
         matchSource:   'GREETING',
         state:         nextState,
         _exitReason:   'GREETING',
         _fallbackUsed: 'GREETING',
-        // audioUrl set only when greeting interceptor resolved a pre-recorded file
-        audioUrl: greetingResult.responseSource === 'audio'
-                    ? greetingResult.response
-                    : null,
+        audioUrl:      isAudioGreeting ? greetingResult.response : null,
       };
     }
 

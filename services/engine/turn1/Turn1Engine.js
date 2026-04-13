@@ -96,6 +96,8 @@ class Turn1Engine {
         const text = (t1Config.didntUnderstandText || '').trim()
           || "I'm sorry, I missed that — could you say that again?";
         emit('TURN1_PATH', { path: 'DIDNT_UNDERSTAND', turn: params.turn });
+        // Mark greeted so greeting interceptor one-shot guard blocks Turn 3+ replays
+        if (state.agent2) state.agent2.greeted = true;
         return {
           response:    text,
           matchSource: 'TURN1_ENGINE',
@@ -256,6 +258,9 @@ class Turn1Engine {
    */
   static _stitch(prefix, kcResult, _state) {
     const kcText = (kcResult?.response || '').trim();
+
+    // Mark greeted so greeting interceptor one-shot guard blocks Turn 3+ replays
+    if (_state?.agent2) _state.agent2.greeted = true;
 
     if (!prefix || !kcText) {
       return { ...(kcResult || {}), response: kcText, matchSource: 'TURN1_ENGINE' };

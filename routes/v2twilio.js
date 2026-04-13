@@ -6383,7 +6383,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       let ttsLatencyMs = null;
 
       try {
-        const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR';
+        const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR' || runtimeResult?.matchSource === 'GREETING';
         if (!audioUrl && isGreetingIntercept && elevenLabsVoice && responseText) {
           const status = InstantAudioService.getStatus({
             companyId: companyID,
