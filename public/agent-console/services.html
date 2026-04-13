@@ -995,6 +995,98 @@
     }
     .btn-danger:hover { background: #fee2e2; }
 
+    /* ── Find & Replace modal ──────────────────────────────────────────── */
+    .fr-box {
+      background: white; border-radius: 14px;
+      max-width: 640px; width: 94%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      display: flex; flex-direction: column;
+      max-height: 85vh;
+    }
+    .fr-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 18px 22px; border-bottom: 1px solid var(--border);
+    }
+    .fr-title { font-size: 16px; font-weight: 700; flex: 1; }
+    .fr-close {
+      width: 28px; height: 28px; border-radius: 6px; border: none;
+      background: #f1f5f9; color: #64748b; font-size: 14px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .fr-close:hover { background: #e2e8f0; color: #0f172a; }
+    .fr-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+    .fr-field { margin-bottom: 14px; }
+    .fr-label {
+      display: block; font-size: 11px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px;
+    }
+    .fr-input {
+      width: 100%; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 14px; font-family: inherit;
+      outline: none; transition: border-color .15s;
+    }
+    .fr-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+    .fr-scope {
+      display: flex; gap: 16px; margin-bottom: 14px;
+    }
+    .fr-check {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--text-muted); cursor: pointer;
+    }
+    .fr-check input { accent-color: var(--color-primary); }
+    .fr-preview-area { margin-top: 4px; }
+    .fr-preview-header {
+      font-size: 12px; font-weight: 700; color: var(--text-muted);
+      margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    }
+    .fr-preview-list {
+      max-height: 40vh; overflow-y: auto;
+    }
+    .fr-match-row {
+      padding: 8px 10px; border-radius: 6px;
+      border: 1px solid #f1f5f9; margin-bottom: 6px;
+      font-size: 12px; background: #fafbfc;
+    }
+    .fr-match-row:hover { background: #f1f5f9; }
+    .fr-match-meta {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    }
+    .fr-match-container {
+      font-weight: 700; color: var(--text-primary); font-size: 12px;
+    }
+    .fr-match-idx {
+      background: #e0f2fe; color: #0369a1; font-size: 10px;
+      font-weight: 700; font-family: monospace;
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .fr-match-label { color: var(--text-muted); font-size: 11px; }
+    .fr-match-field {
+      display: inline-block; font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .3px;
+      padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+    }
+    .fr-match-field.content { background: #dbeafe; color: #1e40af; }
+    .fr-match-field.groq { background: #e0e7ff; color: #4338ca; }
+    .fr-match-snippet {
+      font-size: 12px; line-height: 1.6; color: #475569;
+      margin-top: 3px; word-break: break-word;
+    }
+    .fr-match-snippet del {
+      background: #fee2e2; color: #dc2626; text-decoration: line-through;
+      padding: 0 2px; border-radius: 2px;
+    }
+    .fr-match-snippet ins {
+      background: #dcfce7; color: #15803d; text-decoration: none;
+      padding: 0 2px; border-radius: 2px; font-weight: 600;
+    }
+    .fr-footer {
+      display: flex; gap: 10px; justify-content: flex-end;
+      padding: 14px 22px; border-top: 1px solid var(--border);
+    }
+    .fr-progress {
+      font-size: 12px; color: var(--text-muted); padding: 10px 0; text-align: center;
+    }
+
     /* ── Toast ───────────────────────────────────────────────────────────── */
     .toast-container {
       position: fixed; bottom: 24px; right: 24px; z-index: 9999;
@@ -1445,6 +1537,9 @@
     <button class="tb-action" id="btnOptimize" onclick="optimizePriorities()" title="AI analyzes all cards and suggests optimal priority numbers">
       <span class="tb-icon">🎯</span> Priorities
     </button>
+    <button class="tb-action" onclick="openFindReplace()" title="Find and replace text across all section content">
+      <span class="tb-icon">🔄</span> Find & Replace
+    </button>
     <button class="tb-action" onclick="downloadContainersJson()" title="Download all containers as a complete JSON file (keywords, sections, all fields)">
       <span class="tb-icon">⬇️</span> Export
     </button>
@@ -1509,6 +1604,40 @@
     <div class="dialog-actions">
       <button class="btn-secondary" onclick="closeDeleteDialog()">Cancel</button>
       <button class="btn-danger" id="btnConfirmDelete" onclick="confirmDelete()">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Find & Replace modal ──────────────────────────────────────────────── -->
+<div class="dialog-overlay" id="frOverlay">
+  <div class="fr-box">
+    <div class="fr-header">
+      <span style="font-size:20px;">🔄</span>
+      <div class="fr-title">Find & Replace</div>
+      <button class="fr-close" onclick="closeFindReplace()">✕</button>
+    </div>
+    <div class="fr-body">
+      <div class="fr-field">
+        <label class="fr-label">Find</label>
+        <input type="text" class="fr-input" id="frFind" placeholder="Text to find…" oninput="frClearPreview()">
+      </div>
+      <div class="fr-field">
+        <label class="fr-label">Replace with</label>
+        <input type="text" class="fr-input" id="frReplace" placeholder="Replacement text…">
+      </div>
+      <div class="fr-scope">
+        <label class="fr-check"><input type="checkbox" id="frScopeContent" checked> Response Text</label>
+        <label class="fr-check"><input type="checkbox" id="frScopeGroq" checked> Deep Content</label>
+      </div>
+      <div class="fr-preview-area" id="frPreviewArea" style="display:none;">
+        <div class="fr-preview-header" id="frPreviewHeader"></div>
+        <div class="fr-preview-list" id="frPreviewList"></div>
+      </div>
+    </div>
+    <div class="fr-footer">
+      <button class="btn-secondary" onclick="closeFindReplace()">Cancel</button>
+      <button class="btn-primary" id="btnFrPreview" onclick="frPreview()">Preview</button>
+      <button class="btn-primary" id="btnFrApply" onclick="frApply()" disabled style="background:#0ea5e9;">Apply All</button>
     </div>
   </div>
 </div>
@@ -2529,6 +2658,197 @@ async function confirmDelete() {
     _toast('Container deactivated', 'success');
   } catch (err) {
     _toast(err.message || 'Failed to deactivate', 'error');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIND & REPLACE
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _frMatches = [];   // cached preview results
+
+function openFindReplace() {
+  const overlay = document.getElementById('frOverlay');
+  overlay.classList.add('open');
+  // Pre-fill from search box
+  const current = document.getElementById('searchInput').value.trim();
+  if (current) document.getElementById('frFind').value = current;
+  document.getElementById('frReplace').value = '';
+  document.getElementById('btnFrApply').disabled = true;
+  document.getElementById('frPreviewArea').style.display = 'none';
+  _frMatches = [];
+  setTimeout(() => document.getElementById('frFind').focus(), 100);
+}
+
+function closeFindReplace() {
+  document.getElementById('frOverlay').classList.remove('open');
+  _frMatches = [];
+}
+
+function frClearPreview() {
+  document.getElementById('btnFrApply').disabled = true;
+  document.getElementById('frPreviewArea').style.display = 'none';
+  _frMatches = [];
+}
+
+function frPreview() {
+  const find = document.getElementById('frFind').value;
+  if (!find) { _toast('Enter text to find', 'error'); return; }
+
+  const replace    = document.getElementById('frReplace').value;
+  const doContent  = document.getElementById('frScopeContent').checked;
+  const doGroq     = document.getElementById('frScopeGroq').checked;
+  if (!doContent && !doGroq) { _toast('Select at least one scope', 'error'); return; }
+
+  // Escape find text for regex
+  const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re      = new RegExp(escaped, 'gi');
+
+  _frMatches = [];
+  const containerSet = new Set();
+
+  for (const c of S.containers) {
+    const sections = c.sections || [];
+    for (let i = 0; i < sections.length; i++) {
+      const s = sections[i];
+      const fields = [];
+      if (doContent && s.content && re.test(s.content))       fields.push('content');
+      if (doGroq    && s.groqContent && re.test(s.groqContent)) fields.push('groqContent');
+      re.lastIndex = 0; // reset global regex
+
+      if (fields.length) {
+        containerSet.add(c._id);
+        for (const field of fields) {
+          const text = field === 'content' ? s.content : s.groqContent;
+          // Build before/after snippet
+          const lc   = text.toLowerCase();
+          const pos  = lc.indexOf(find.toLowerCase());
+          const start = Math.max(0, pos - 35);
+          const end   = Math.min(text.length, pos + find.length + 35);
+          const pre   = (start > 0 ? '…' : '') + text.slice(start, pos);
+          const hit   = text.slice(pos, pos + find.length);
+          const post  = text.slice(pos + find.length, end) + (end < text.length ? '…' : '');
+
+          _frMatches.push({
+            containerId:   c._id,
+            containerTitle: c.title,
+            sectionIdx:    i,
+            sectionLabel:  s.label || `Section ${i + 1}`,
+            field,
+            snippetBefore: `${_esc(pre)}<del>${_esc(hit)}</del>${_esc(post)}`,
+            snippetAfter:  `${_esc(pre)}<ins>${_esc(replace)}</ins>${_esc(post)}`,
+          });
+        }
+      }
+    }
+  }
+
+  const area   = document.getElementById('frPreviewArea');
+  const header = document.getElementById('frPreviewHeader');
+  const list   = document.getElementById('frPreviewList');
+
+  if (!_frMatches.length) {
+    area.style.display = 'block';
+    header.textContent = 'No matches found';
+    list.innerHTML = '';
+    document.getElementById('btnFrApply').disabled = true;
+    return;
+  }
+
+  header.textContent = `${_frMatches.length} match${_frMatches.length !== 1 ? 'es' : ''} in ${containerSet.size} container${containerSet.size !== 1 ? 's' : ''}`;
+
+  list.innerHTML = _frMatches.map(m => `
+    <div class="fr-match-row">
+      <div class="fr-match-meta">
+        <span class="fr-match-container">${_esc(m.containerTitle)}</span>
+        <span class="fr-match-idx">#${m.sectionIdx + 1}</span>
+        <span class="fr-match-label">${_esc(m.sectionLabel)}</span>
+        <span class="fr-match-field ${m.field === 'content' ? 'content' : 'groq'}">${m.field === 'content' ? 'response' : 'deep'}</span>
+      </div>
+      <div class="fr-match-snippet">${m.snippetBefore} → ${m.snippetAfter}</div>
+    </div>`).join('');
+
+  area.style.display = 'block';
+  document.getElementById('btnFrApply').disabled = false;
+}
+
+async function frApply() {
+  const find    = document.getElementById('frFind').value;
+  const replace = document.getElementById('frReplace').value;
+  if (!find || !_frMatches.length) return;
+
+  const doContent = document.getElementById('frScopeContent').checked;
+  const doGroq    = document.getElementById('frScopeGroq').checked;
+  const escaped   = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re        = new RegExp(escaped, 'gi');
+
+  // Group by container
+  const affected = new Map();
+  for (const m of _frMatches) {
+    if (!affected.has(m.containerId)) affected.set(m.containerId, new Set());
+    affected.get(m.containerId).add(m.field);
+  }
+
+  const btnApply   = document.getElementById('btnFrApply');
+  const btnPreview = document.getElementById('btnFrPreview');
+  btnApply.disabled  = true;
+  btnPreview.disabled = true;
+  btnApply.textContent = 'Applying…';
+
+  const total = affected.size;
+  let done = 0, sectionCount = 0, fails = 0;
+
+  for (const [containerId, fields] of affected) {
+    const container = S.containers.find(c => c._id === containerId);
+    if (!container) { done++; continue; }
+
+    // Clone sections and apply replacements
+    const updatedSections = (container.sections || []).map(s => {
+      const clone = { ...s };
+      if (doContent && fields.has('content') && clone.content) {
+        clone.content = clone.content.replace(re, replace);
+        re.lastIndex = 0;
+      }
+      if (doGroq && fields.has('groqContent') && clone.groqContent) {
+        clone.groqContent = clone.groqContent.replace(re, replace);
+        re.lastIndex = 0;
+      }
+      return clone;
+    });
+
+    try {
+      const data = await apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/${containerId}`,
+        { method: 'PATCH', body: JSON.stringify({ sections: updatedSections }) }
+      );
+      if (!data.success) throw new Error(data.error || 'Update failed');
+
+      // Count replaced sections
+      sectionCount += _frMatches.filter(m => m.containerId === containerId).length;
+      done++;
+      btnApply.textContent = `Applying… ${done}/${total}`;
+    } catch (err) {
+      fails++;
+      console.error(`[FR] Failed to update container ${containerId}:`, err);
+      if (fails >= 3) {
+        _toast('Aborted — too many failures', 'error');
+        break;
+      }
+    }
+  }
+
+  // Refresh containers and close
+  btnApply.textContent = 'Apply All';
+  btnApply.disabled    = false;
+  btnPreview.disabled  = false;
+  closeFindReplace();
+
+  if (done > 0) {
+    await loadContainers();
+    _toast(`Replaced in ${sectionCount} section${sectionCount !== 1 ? 's' : ''} across ${done} container${done !== 1 ? 's' : ''} ✓`, 'success');
+  }
+  if (fails > 0) {
+    _toast(`${fails} container${fails !== 1 ? 's' : ''} failed to update`, 'error');
   }
 }
 
