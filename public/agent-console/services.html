@@ -263,6 +263,21 @@
 
     .kc-card-body { padding: 12px 16px; flex: 1; }
 
+    /* Content search match box */
+    .content-match-box {
+      background: #fefce8; border: 1px solid #fde68a; border-radius: 6px;
+      padding: 8px 10px; margin-bottom: 10px; font-size: 12px;
+    }
+    .content-match-header {
+      font-weight: 700; color: #92400e; margin-bottom: 4px; font-size: 12px;
+    }
+    .content-match-item {
+      color: #78350f; padding: 2px 0; line-height: 1.4;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .content-match-item strong { font-weight: 600; }
+    .content-match-more { color: #a16207; font-style: italic; margin-top: 2px; }
+
     /* Keyword chips */
     .kc-keywords { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
     .kw-chip { font-size: 11px; background: #f1f5f9; color: #475569; border-radius: 4px; padding: 2px 7px; }
@@ -1409,7 +1424,7 @@
   </select>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input type="text" class="search-input" id="searchInput" placeholder="Search containers…" oninput="applySearch(this.value)">
+    <input type="text" class="search-input" id="searchInput" placeholder="Search containers & content…" oninput="applySearch(this.value)">
   </div>
   <div class="toolbar-spacer"></div>
   <button class="btn-optimize" style="background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9;" onclick="openPhraseFinder()" title="Find the best KC home for any caller phrase">
@@ -1782,16 +1797,59 @@ function applyFilters() {
   let list = [...S.containers];
   if (S.filter === 'active') list = list.filter(c => c.isActive);
   if (S.catFilter) list = list.filter(c => c.category === S.catFilter);
+
+  // Clear previous content-match annotations
+  S._contentMatches = {};
+
   if (S.search) {
-    list = list.filter(c =>
-      c.title.toLowerCase().includes(S.search) ||
-      (c.kcId || '').toLowerCase().includes(S.search) ||
-      (c.category || '').toLowerCase().includes(S.search) ||
-      (c.keywords || []).some(k => k.includes(S.search))
-    );
+    list = list.filter(c => {
+      // ── Container-level match (title, kcId, category, keywords) ──
+      const containerHit =
+        c.title.toLowerCase().includes(S.search) ||
+        (c.kcId || '').toLowerCase().includes(S.search) ||
+        (c.category || '').toLowerCase().includes(S.search) ||
+        (c.keywords || []).some(k => k.includes(S.search));
+      if (containerHit) return true;
+
+      // ── Section-level content search ──────────────────────────────
+      // Search inside section labels, content, groqContent, callerPhrases
+      const sections = c.sections || [];
+      const matchingSections = [];
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        const inLabel   = (s.label || '').toLowerCase().includes(S.search);
+        const inContent = (s.content || '').toLowerCase().includes(S.search);
+        const inGroq    = (s.groqContent || '').toLowerCase().includes(S.search);
+        const inPhrases = (s.callerPhrases || []).some(p =>
+          ((typeof p === 'string' ? p : p?.text) || '').toLowerCase().includes(S.search)
+        );
+        if (inLabel || inContent || inGroq || inPhrases) {
+          matchingSections.push({
+            idx: i,
+            label: s.label || `Section ${i + 1}`,
+            where: [
+              inLabel   && 'label',
+              inContent && 'content',
+              inGroq    && 'groqContent',
+              inPhrases && 'phrase',
+            ].filter(Boolean),
+          });
+        }
+      }
+      if (matchingSections.length) {
+        S._contentMatches[c._id] = matchingSections;
+        return true;
+      }
+      return false;
+    });
   }
+
   S.filtered = list;
-  document.getElementById('resultCount').textContent = `${list.length} container${list.length !== 1 ? 's' : ''}`;
+  const totalSectionHits = Object.values(S._contentMatches).reduce((s, a) => s + a.length, 0);
+  const countText = totalSectionHits
+    ? `${list.length} container${list.length !== 1 ? 's' : ''} · ${totalSectionHits} section${totalSectionHits !== 1 ? 's' : ''} match`
+    : `${list.length} container${list.length !== 1 ? 's' : ''}`;
+  document.getElementById('resultCount').textContent = countText;
   _renderCards();
 }
 
@@ -2176,6 +2234,23 @@ function _cardHTML(c) {
        </span>`
     : '';
 
+  // ── Content search match badge ────────────────────────────────────────
+  const contentHits = S._contentMatches?.[c._id] || [];
+  const contentMatchHtml = contentHits.length ? (() => {
+    const hitLines = contentHits.slice(0, 5).map(h => {
+      const whereStr = h.where.map(w =>
+        w === 'content' ? '📄' : w === 'groqContent' ? '📘' : w === 'phrase' ? '💬' : '🏷'
+      ).join('');
+      return `<div class="content-match-item">${whereStr} <strong>${_esc(h.label)}</strong></div>`;
+    }).join('');
+    const moreHits = contentHits.length > 5 ? `<div class="content-match-more">+${contentHits.length - 5} more</div>` : '';
+    return `
+      <div class="content-match-box">
+        <div class="content-match-header">🔍 ${contentHits.length} section${contentHits.length !== 1 ? 's' : ''} match</div>
+        ${hitLines}${moreHits}
+      </div>`;
+  })() : '';
+
   // ── Keyword chips ─────────────────────────────────────────────────────
   const kws   = c.keywords || [];
   const shown = kws.slice(0, 5);
@@ -2229,6 +2304,7 @@ function _cardHTML(c) {
       </div>
     </div>
     <div class="kc-card-body">
+      ${contentMatchHtml}
       <div class="kc-keywords">${kwHtml}</div>
       ${sectionBar}
       ${metricsRow}

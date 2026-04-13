@@ -257,13 +257,23 @@ class Turn1Engine {
    * when it follows a full stop.
    */
   static _stitch(prefix, kcResult, _state) {
-    const kcText = (kcResult?.response || '').trim();
+    let kcText = (kcResult?.response || '').trim();
 
     // Mark greeted so greeting interceptor one-shot guard blocks Turn 3+ replays
     if (_state?.agent2) _state.agent2.greeted = true;
 
     if (!prefix || !kcText) {
       return { ...(kcResult || {}), response: kcText, matchSource: 'TURN1_ENGINE' };
+    }
+
+    // ── De-duplicate empathy ────────────────────────────────────────────────
+    // When prefix already contains an apology ("I'm sorry you're still dealing
+    // with this —"), strip any leading apology phrase from the KC/Groq response
+    // so we don't produce "I'm sorry… i'm so sorry…" double-apology.
+    if (/sorry|apologize/i.test(prefix)) {
+      kcText = kcText.replace(
+        /^(i'm |i am |i'm )?(so )?(sorry|apologies)[^.!—;]*[.!—;]\s*/i, ''
+      ).trim();
     }
 
     // Prefix ends with "—" → lowercase continuation
