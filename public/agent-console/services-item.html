@@ -1983,13 +1983,13 @@ async function _saveItemVar(varName, value) {
   // Load variable values + scan section content for {placeholders}
   _loadItemVars();
 
-  // ── Embed mode: scroll to target section & listen for parent messages ──
+  // ── Scroll to target section (works in both embed and normal mode) ────
+  const sectionIdx = parseInt(params.get('sectionIdx'), 10);
+  if (!isNaN(sectionIdx) && sectionIdx >= 0) {
+    // Wait for sections to render, then scroll — 204 sections need a beat
+    setTimeout(() => _scrollToTargetSection(sectionIdx), 600);
+  }
   if (S.embedMode) {
-    const sectionIdx = parseInt(params.get('sectionIdx'), 10);
-    if (!isNaN(sectionIdx) && sectionIdx >= 0) {
-      // Wait for sections to render, then scroll
-      setTimeout(() => _scrollToTargetSection(sectionIdx), 400);
-    }
     window.addEventListener('message', e => {
       if (e.data?.type === 'pf-scroll-to' && typeof e.data.sectionIdx === 'number') {
         _scrollToTargetSection(e.data.sectionIdx);
@@ -2003,7 +2003,10 @@ function _scrollToTargetSection(idx) {
   const rows = document.querySelectorAll('#sectionsList .section-row');
   if (idx < 0 || idx >= rows.length) return;
   const target = rows[idx];
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Offset for sticky header (60px normal, 42px embed) + 12px breathing room
+  const headerH = S.embedMode ? 42 : 60;
+  const y = target.getBoundingClientRect().top + window.scrollY - headerH - 12;
+  window.scrollTo({ top: y, behavior: 'smooth' });
   target.style.transition = 'box-shadow .3s, outline .3s';
   target.style.outline = '2px solid #22c55e';
   target.style.boxShadow = '0 0 0 4px rgba(34,197,94,.15)';
