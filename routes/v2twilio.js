@@ -2581,7 +2581,32 @@ router.post('/voice', async (req, res) => {
         }
       }).catch(() => {});
     }
-    
+
+    // ── WEBHOOK_TIMING: Persist Turn-0 timing for Call Intelligence ──────
+    // Fire-and-forget — never delays TwiML delivery to Twilio.
+    if (req.body.CallSid && company?._id) {
+      const _voiceElapsedMs = Date.now() - callStartTime;
+      const CallTranscriptV2_vt = require('../models/CallTranscriptV2');
+      CallTranscriptV2_vt.appendTrace(company._id, req.body.CallSid, [{
+        kind: 'WEBHOOK_TIMING',
+        turnNumber: 0,
+        ts: new Date(),
+        payload: {
+          route: '/voice',
+          totalElapsedMs: _voiceElapsedMs,
+          breakdown: {
+            companyLoadMs: companyLookupMs || 0,
+            coreRuntimeMs: _voiceElapsedMs - (companyLookupMs || 0),
+            ttsMs: 0,
+            eventFlushMs: 0
+          },
+          atRisk: _voiceElapsedMs >= 12000,
+          timedOut: _voiceElapsedMs >= 15000,
+          voiceProviderUsed: twimlString.includes('<Play') ? 'twilio_play' : 'twilio_say'
+        }
+      }]).catch(() => {}); // fire-and-forget
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // 📝 TRANSCRIPT V2: Persist greeting (Turn 0) DURING the call (Mongo)
     // ════════════════════════════════════════════════════════════════════════════
@@ -7384,6 +7409,32 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }).catch(err => {
         logger.error('[V2 RESPOND] TWIML_SENT log failed', { error: err.message });
       });
+
+      // ── WEBHOOK_TIMING: Persist per-turn timing for Call Intelligence ──
+      // Fire-and-forget — never delays TwiML delivery to Twilio.
+      if (timings && callSid && companyID) {
+        const _wt_totalMs = timings.totalMs
+          || (timings.companyLoadMs || 0) + (timings.coreRuntimeMs || 0) + (timings.eventFlushMs || 0) + (timings.ttsMs || 0);
+        const CallTranscriptV2_wt = require('../models/CallTranscriptV2');
+        CallTranscriptV2_wt.appendTrace(companyID, callSid, [{
+          kind: 'WEBHOOK_TIMING',
+          turnNumber: turnNumber,
+          ts: new Date(),
+          payload: {
+            route: route,
+            totalElapsedMs: _wt_totalMs,
+            breakdown: {
+              companyLoadMs: timings.companyLoadMs || 0,
+              coreRuntimeMs: timings.coreRuntimeMs || 0,
+              ttsMs: timings.ttsMs || 0,
+              eventFlushMs: timings.eventFlushMs || 0
+            },
+            atRisk: _wt_totalMs >= 12000,
+            timedOut: _wt_totalMs >= 15000,
+            voiceProviderUsed: voiceProviderUsed || null
+          }
+        }]).catch(() => {}); // fire-and-forget
+      }
     };
 
     if (!mayBridge) {
@@ -9666,6 +9717,77 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
   
   res.type('text/xml');
   res.send(twiml.toString());
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// 🚨 TWILIO FALLBACK URL — Captures webhook failures (timeout, invalid TwiML)
+// ════════════════════════════════════════════════════════════════════════════════
+// Twilio calls this when the primary webhook (/voice or /v2-agent-respond) fails.
+// ErrorCode 11200 = HTTP retrieval failure, 12100 = invalid TwiML,
+// 11205 = HTTP connection failure, etc.
+//
+// CRITICAL: Return valid TwiML immediately. The caller has already heard
+// "application error" — best we can do is log the failure for post-call analysis.
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/fallback', async (req, res) => {
+  const { ErrorCode, ErrorUrl, CallSid, From, To, CallStatus } = req.body;
+
+  logger.error('[TWILIO FALLBACK] ⚠️ Primary webhook failed — Twilio hit fallback URL', {
+    errorCode: ErrorCode,
+    errorUrl: ErrorUrl,
+    callSid: CallSid,
+    from: From,
+    to: To,
+    callStatus: CallStatus
+  });
+
+  // Return valid empty TwiML immediately — do NOT delay the response
+  const twiml = new twilio.twiml.VoiceResponse();
+  res.type('text/xml');
+  res.send(twiml.toString());
+
+  // Fire-and-forget: persist error trace to CallTranscriptV2 + CallSummary
+  try {
+    const calledNumber = normalizePhoneNumber(To);
+    const company = await getCompanyByPhoneNumber(calledNumber);
+    if (company && CallSid) {
+      const CallTranscriptV2 = require('../models/CallTranscriptV2');
+      CallTranscriptV2.appendTrace(company._id, CallSid, [{
+        kind: 'TWILIO_ERROR',
+        turnNumber: null,
+        ts: new Date(),
+        payload: {
+          errorCode: ErrorCode || 'UNKNOWN',
+          errorUrl: ErrorUrl || null,
+          callStatus: CallStatus || null,
+          from: normalizePhoneNumber(From),
+          to: calledNumber,
+          source: 'twilio_fallback_url'
+        }
+      }]).catch(() => {});
+
+      // Stamp callLifecycle on CallSummary
+      const CallSummary = require('../models/CallSummary');
+      CallSummary.updateOne(
+        { companyId: company._id, twilioSid: CallSid },
+        {
+          $push: {
+            'callLifecycle.twilioErrors': {
+              errorCode: ErrorCode || 'UNKNOWN',
+              errorUrl: ErrorUrl || null,
+              ts: new Date(),
+              source: 'twilio_fallback_url'
+            }
+          }
+        }
+      ).catch(() => {});
+    }
+  } catch (persistErr) {
+    logger.warn('[TWILIO FALLBACK] Failed to persist error (non-blocking)', {
+      callSid: CallSid,
+      error: persistErr.message
+    });
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════════

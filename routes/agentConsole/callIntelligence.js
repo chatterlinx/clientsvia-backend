@@ -2011,6 +2011,11 @@ function calcHealthScore(summary, convTurns, discoveryNotes) {
   ).length;
   score -= Math.min(15, missedBooking * 5);
 
+  // Twilio errors (−30, critical infrastructure failure)
+  if (summary?.callLifecycle?.twilioErrors?.length > 0) {
+    score -= 30;
+  }
+
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
@@ -2182,6 +2187,26 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
     stg('greeting', 'Greeting Delivered', 'A',
       convTurns.length > 0 ? 'pass' : 'unknown',
       convTurns.length > 0 ? 'Call reached Turn 1' : 'No turns recorded'),
+    stg('twilio_health', 'Twilio Webhook Health', 'A',
+      (() => {
+        const _te = transcriptV2?.trace || [];
+        const errors = _te.filter(t => t.kind === 'TWILIO_ERROR').length;
+        const atRisk = _te.filter(t => t.kind === 'WEBHOOK_TIMING' && t.payload?.atRisk).length;
+        if (errors > 0) return 'fail';
+        if (atRisk > 0) return 'warn';
+        return 'pass';
+      })(),
+      (() => {
+        const _te = transcriptV2?.trace || [];
+        const errors = _te.filter(t => t.kind === 'TWILIO_ERROR').length;
+        const timings = _te.filter(t => t.kind === 'WEBHOOK_TIMING');
+        const atRisk = timings.filter(t => t.payload?.atRisk).length;
+        const maxMs = timings.length > 0 ? Math.max(...timings.map(t => t.payload?.totalElapsedMs || 0)) : 0;
+        if (errors > 0) return `${errors} Twilio error(s) captured via fallback URL`;
+        if (atRisk > 0) return `${atRisk} turn(s) near timeout (max ${maxMs}ms, limit 15000ms)`;
+        if (timings.length > 0) return `All webhooks healthy (max ${maxMs}ms)`;
+        return 'No webhook timing data (pre-instrumentation)';
+      })()),
 
     // GROUP B — Call Receipt
     stg('stt_gather', 'STT Gather (Deepgram)', 'B',
@@ -2502,6 +2527,97 @@ function buildKCAudit(convTurns, kcMap) {
   return { matched, gaps };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 📡 TWILIO HEALTH — Aggregates webhook timing + Twilio errors for the report
+// ═══════════════════════════════════════════════════════════════════════════
+function buildTwilioHealth(transcriptV2, summary, convTurns) {
+  const traceEvents = transcriptV2?.trace || [];
+
+  // ── WEBHOOK_TIMING traces ────────────────────────────────────────────
+  const timingTraces = traceEvents
+    .filter(t => t.kind === 'WEBHOOK_TIMING')
+    .sort((a, b) => (a.turnNumber || 0) - (b.turnNumber || 0));
+
+  const webhookTimings = timingTraces.map(t => ({
+    turnNumber: t.turnNumber,
+    route: t.payload?.route || null,
+    totalElapsedMs: t.payload?.totalElapsedMs || null,
+    breakdown: t.payload?.breakdown || null,
+    atRisk: t.payload?.atRisk === true,
+    timedOut: t.payload?.timedOut === true,
+    voiceProviderUsed: t.payload?.voiceProviderUsed || null
+  }));
+
+  const atRiskTurns = webhookTimings.filter(t => t.atRisk);
+  const timedOutTurns = webhookTimings.filter(t => t.timedOut);
+  const avgWebhookMs = webhookTimings.length > 0
+    ? Math.round(webhookTimings.reduce((s, t) => s + (t.totalElapsedMs || 0), 0) / webhookTimings.length)
+    : null;
+  const maxWebhookMs = webhookTimings.length > 0
+    ? Math.max(...webhookTimings.map(t => t.totalElapsedMs || 0))
+    : null;
+
+  // ── TWILIO_ERROR traces ──────────────────────────────────────────────
+  const errorTraces = traceEvents
+    .filter(t => t.kind === 'TWILIO_ERROR')
+    .map(t => ({
+      errorCode: t.payload?.errorCode || 'UNKNOWN',
+      errorUrl: t.payload?.errorUrl || null,
+      ts: t.ts,
+      source: t.payload?.source || null
+    }));
+
+  // Also read from callLifecycle.twilioErrors (CallSummary)
+  const lifecycleErrors = (summary?.callLifecycle?.twilioErrors || []).map(e => ({
+    errorCode: e.errorCode || 'UNKNOWN',
+    errorUrl: e.errorUrl || null,
+    ts: e.ts,
+    source: e.source || 'callLifecycle'
+  }));
+
+  // Deduplicate by errorCode+ts
+  const allErrors = [...errorTraces, ...lifecycleErrors];
+  const seen = new Set();
+  const twilioErrors = allErrors.filter(e => {
+    const key = `${e.errorCode}:${e.ts?.toISOString?.() || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // ── ANOMALY: Very few turns relative to call duration ────────────────
+  const durationSeconds = summary?.durationSeconds || 0;
+  const humanTurnCount = convTurns.filter(t => t.speaker === 'caller').length;
+  const abnormalTermination = durationSeconds > 20 && humanTurnCount <= 1;
+
+  // ── Voice fallback detection ─────────────────────────────────────────
+  const voiceFallbackTurns = webhookTimings.filter(t =>
+    t.voiceProviderUsed === 'twilio_say'
+  ).length;
+
+  // ── Overall health status ────────────────────────────────────────────
+  let status = 'healthy';
+  if (twilioErrors.length > 0 || timedOutTurns.length > 0) status = 'error';
+  else if (atRiskTurns.length > 0 || abnormalTermination) status = 'warning';
+
+  return {
+    status,
+    webhookTimings,
+    avgWebhookMs,
+    maxWebhookMs,
+    atRiskTurns: atRiskTurns.length,
+    timedOutTurns: timedOutTurns.length,
+    twilioErrors,
+    voiceFallbackTurns,
+    abnormalTermination,
+    durationSeconds,
+    humanTurnCount,
+    note: webhookTimings.length === 0
+      ? 'No webhook timing data available — call may predate instrumentation.'
+      : null
+  };
+}
+
 function buildLatencyProfile(summary, convTurns) {
   const turns = convTurns.map(t => ({
     turnNumber: t.turnNumber,
@@ -2597,7 +2713,7 @@ function buildEntityTimeline(discoveryNotes, convTurns) {
   };
 }
 
-function buildAutoIssues(summary, convTurns, discoveryNotes) {
+function buildAutoIssues(summary, convTurns, discoveryNotes, transcriptV2) {
   const issues = [];
   let seq = 1;
 
@@ -2680,6 +2796,78 @@ function buildAutoIssues(summary, convTurns, discoveryNotes) {
       description: `KC answered ${kcAnsweredTurns.length} turn(s) but the call ended without a booking or a booking intent signal. Check that KC cards have bookingAction=offer_to_book and that closingPrompts are set to pivot the caller toward scheduling.`,
       affectedTurns: kcAnsweredTurns.map(t => t.turnNumber),
       action: 'edit_kc'
+    });
+  }
+
+  // ── Twilio Infrastructure Issues ──────────────────────────────────────
+
+  // 1. Webhook timeout risk — any turn > 12000ms
+  const _timingTraces = (transcriptV2?.trace || []).filter(t => t.kind === 'WEBHOOK_TIMING');
+  const _atRiskTimings = _timingTraces.filter(t => t.payload?.atRisk === true);
+  if (_atRiskTimings.length > 0) {
+    const worstMs = Math.max(..._atRiskTimings.map(t => t.payload?.totalElapsedMs || 0));
+    const _timedOut = _atRiskTimings.filter(t => t.payload?.timedOut === true).length;
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: _timedOut > 0 ? 'critical' : 'high',
+      category: 'infrastructure',
+      title: _timedOut > 0
+        ? `${_timedOut} turn(s) exceeded Twilio 15s timeout`
+        : `${_atRiskTimings.length} turn(s) near Twilio timeout (>12s)`,
+      description: _timedOut > 0
+        ? `${_timedOut} webhook response(s) took longer than Twilio's 15-second limit. The caller heard "We are sorry, an application error has occurred." Worst: ${worstMs}ms.`
+        : `${_atRiskTimings.length} webhook response(s) exceeded 12s (Twilio limit: 15s). Worst: ${worstMs}ms. At risk of timeout under load.`,
+      affectedTurns: _atRiskTimings.map(t => t.turnNumber).filter(n => n != null),
+      action: null
+    });
+  }
+
+  // 2. Twilio errors captured during call
+  const _twilioErrorTraces = (transcriptV2?.trace || []).filter(t => t.kind === 'TWILIO_ERROR');
+  const _lifecycleErrors = summary?.callLifecycle?.twilioErrors || [];
+  const _totalTwilioErrors = _twilioErrorTraces.length + _lifecycleErrors.length;
+  if (_totalTwilioErrors > 0) {
+    const errorCodes = [
+      ..._twilioErrorTraces.map(t => t.payload?.errorCode),
+      ..._lifecycleErrors.map(e => e.errorCode)
+    ].filter(Boolean);
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'critical',
+      category: 'infrastructure',
+      title: `Twilio error${_totalTwilioErrors > 1 ? 's' : ''} during call (${[...new Set(errorCodes)].join(', ')})`,
+      description: `Twilio reported ${_totalTwilioErrors} error(s) via the fallback URL. The caller heard Twilio's generic "application error" message on at least one turn.`,
+      action: null
+    });
+  }
+
+  // 3. Voice provider crash recovery
+  const _crashTurns = convTurns.filter(t =>
+    t.sourceKey === 'ROUTE_CRASH' || t.sourceKey === 'COMPUTE_CRASH'
+  );
+  if (_crashTurns.length > 0) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'high',
+      category: 'infrastructure',
+      title: `${_crashTurns.length} turn(s) used crash recovery`,
+      description: `${_crashTurns.length} response(s) delivered via crash recovery (Twilio <Say> fallback) instead of the normal pipeline.`,
+      affectedTurns: _crashTurns.map(t => t.turnNumber),
+      action: null
+    });
+  }
+
+  // 4. Abnormal call termination (long duration, very few turns)
+  const _durationSec = summary?.durationSeconds || 0;
+  const _callerTurnCount = convTurns.filter(t => t.speaker === 'caller').length;
+  if (_durationSec > 20 && _callerTurnCount <= 1) {
+    issues.push({
+      id: `auto-${seq++}`,
+      severity: 'high',
+      category: 'infrastructure',
+      title: 'Abnormal call termination',
+      description: `Call lasted ${_durationSec}s but only had ${_callerTurnCount} caller turn(s). The caller likely heard Twilio's "application error" message and hung up, or the webhook timed out on a subsequent turn.`,
+      action: null
     });
   }
 
@@ -2778,8 +2966,9 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
     turns: convTurns,
     kcAudit: buildKCAudit(convTurns, kcMap),
     latencyProfile: buildLatencyProfile(summary, convTurns),
+    twilioHealth: buildTwilioHealth(transcriptV2, summary, convTurns),
     entityTimeline: buildEntityTimeline(discoveryNotes, convTurns),
-    issues: intelligence?.issues?.length ? intelligence.issues : buildAutoIssues(summary, convTurns, discoveryNotes),
+    issues: intelligence?.issues?.length ? intelligence.issues : buildAutoIssues(summary, convTurns, discoveryNotes, transcriptV2),
     recommendations: intelligence?.recommendations?.length
       ? intelligence.recommendations
       : buildAutoRecommendations(summary, convTurns, discoveryNotes, kcMap),

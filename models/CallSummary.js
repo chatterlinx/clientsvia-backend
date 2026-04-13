@@ -266,7 +266,15 @@ const CallSummarySchema = new mongoose.Schema({
       type: String,
       enum: ['twilio_callback', 'twilio_callback_fallback', 'calculated', 'unknown', null],
       default: null
-    }
+    },
+
+    /** Twilio errors captured via fallback URL or detected during call */
+    twilioErrors: [{
+      errorCode: { type: String },
+      errorUrl: { type: String },
+      ts: { type: Date },
+      source: { type: String }  // 'twilio_fallback_url' | 'webhook_timeout_detected'
+    }]
   },
   
   // ─────────────────────────────────────────────────────────────────────────
