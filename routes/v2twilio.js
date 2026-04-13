@@ -15,6 +15,14 @@ logger.debug('🚀 [V2TWILIO] ========== LOADING v2twilio.js FILE ==========');
 const { getTracer, removeTracer, STAGES } = require('../services/CallFlowTracer');
 
 const twilio = require('twilio');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TWILIO FALLBACK VOICE: Used by all <Say> verbs when ElevenLabs is down.
+// Amazon Polly Neural tier — natural sounding, ~$0.006 per response.
+// Only costs money when ElevenLabs fails; normal calls use ElevenLabs audio.
+// ═══════════════════════════════════════════════════════════════════════════
+const TWILIO_FALLBACK_VOICE = 'Polly.Matthew-Neural';
+
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const AdminSettings = require('../models/AdminSettings');
@@ -902,20 +910,20 @@ function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to
   if (transferNumber) {
     const transferMessage = getTransferMessage(company);
     logger.info('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
-    twiml.say(transferMessage);
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, transferMessage);
     twiml.dial(transferNumber);
   } else if (isTransferEnabled(company)) {
     logger.info('[AI AGENT] Transfer enabled but no number configured, connecting to team');
     // 🔥 Neutral transfer message - no generic empathy
     const configResponse = `I'm connecting you to our team.`;
-    twiml.say(configResponse);
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, configResponse);
     twiml.hangup();
   } else {
     logger.info('[AI AGENT] Transfer disabled, providing fallback message and continuing conversation');
-    
+
     // Only say fallback message if one was provided (not null)
     if (fallbackMessage) {
-      twiml.say(fallbackMessage);
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, fallbackMessage);
     }
     
     // Continue conversation instead of hanging up [[memory:8276820]]
@@ -933,7 +941,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to
     
     // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
     const finalFallback = `Thank you for calling. We'll make sure someone gets back to you as soon as possible.`;
-    twiml.say(finalFallback);
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, finalFallback);
     twiml.hangup();
   }
 }
@@ -1235,7 +1243,7 @@ router.post('/voice', async (req, res) => {
       
       // Configuration error for unconfigured numbers
       const msg = 'Configuration error: Company must configure AI Agent Logic responses';
-      twiml.say(escapeTwiML(msg));
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(msg));
       twiml.hangup();
       res.type('text/xml');
       res.send(twiml.toString());
@@ -1333,7 +1341,7 @@ router.post('/voice', async (req, res) => {
       logger.security(`🚫 [SPAM BLOCKED] Call from ${callerNumber} blocked. Reason: ${filterResult.reason}`);
       
       // Play rejection message and hangup
-      twiml.say('This call has been blocked. Goodbye.');
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, 'This call has been blocked. Goodbye.');
       twiml.hangup();
       
       res.type('text/xml');
@@ -1402,7 +1410,7 @@ router.post('/voice', async (req, res) => {
       
       // Play test greeting
       twiml.say({
-        voice: 'Polly.Matthew',
+        voice: TWILIO_FALLBACK_VOICE,
         language: 'en-US'
       }, greeting);
       
@@ -1422,7 +1430,7 @@ router.post('/voice', async (req, res) => {
       logger.info(`🎙️ [NOTIFICATION CENTER] Playing greeting: "${greeting.substring(0, 80)}..."`);
       
       twiml.say({
-        voice: 'Polly.Matthew',
+        voice: TWILIO_FALLBACK_VOICE,
         language: 'en-US'
       }, greeting);
       
@@ -1505,8 +1513,8 @@ router.post('/voice', async (req, res) => {
         speechModel: 'phone_call', // Optimized for phone calls
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
-      gather.say(greeting);
-      
+      gather.say({ voice: TWILIO_FALLBACK_VOICE }, greeting);
+
       res.type('text/xml');
       res.send(twiml.toString());
       return;
@@ -1536,7 +1544,7 @@ router.post('/voice', async (req, res) => {
         logger.info(`[NOT LIVE] Playing pre-activation message: "${preActivationMessage.substring(0, 100)}..."`);
         
         twiml.say({
-            voice: 'Polly.Matthew',
+            voice: TWILIO_FALLBACK_VOICE,
             language: 'en-US'
         }, escapeTwiML(preActivationMessage));
         
@@ -1623,12 +1631,12 @@ router.post('/voice', async (req, res) => {
           // Match: {company name}, {companyname}, {Company Name}, {CompanyName}, etc.
           suspendedMessage = suspendedMessage.replace(/\{company\s*name\}/gi, companyName);
           logger.info(`[ACCOUNT SUSPENDED] Final message: "${suspendedMessage}"`);
-          twiml.say(escapeTwiML(suspendedMessage));
+          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(suspendedMessage));
         } else {
           // No custom message - use neutral transfer message
           logger.info(`[ACCOUNT SUSPENDED] No custom message set - using neutral transfer`);
           const defaultMessage = "This service is unavailable. Please contact support.";
-          twiml.say(escapeTwiML(defaultMessage));
+          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(defaultMessage));
         }
         
         twiml.hangup();
@@ -1652,7 +1660,7 @@ router.post('/voice', async (req, res) => {
           // Match: {company name}, {companyname}, {Company Name}, {CompanyName}, etc.
           forwardMessage = forwardMessage.replace(/\{company\s*name\}/gi, companyName);
           logger.info(`[CALL FORWARD] Final message: "${forwardMessage}"`);
-          twiml.say(escapeTwiML(forwardMessage));
+          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(forwardMessage));
         } else {
           // No message in text box - forward silently (no greeting)
           logger.info(`[CALL FORWARD] No custom message set - forwarding silently (no greeting)`);
@@ -2315,10 +2323,10 @@ router.post('/voice', async (req, res) => {
               }
             } catch (ttsErr) {
               logger.error(`[GREETING] ❌ TTS fallback failed: ${ttsErr.message}`);
-              gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
+              gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
             }
           } else if (fallbackText) {
-            gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackText))));
+            gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackText))));
           } else {
             // No greeting text AND no emergency fallback configured — silent start
             logger.warn(`[GREETING] ⚠️ No greeting text or emergency fallback configured for company ${company._id}. Caller hears silence.`);
@@ -2494,13 +2502,13 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {});
           }
           
-          gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
+          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
         }
       } else {
         // Fallback to Say if no voice or greeting
         logger.debug(`⚠️ Fallback to Twilio Say - Voice: ${elevenLabsVoice ? 'SET' : 'MISSING'}, Greeting: ${initResult.greeting ? 'SET' : 'MISSING'}`);
         const fallbackGreeting = initResult.greeting || "Configuration error - no greeting configured";
-        gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackGreeting))));
+        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackGreeting))));
       }
       
       // 🚫 NEVER HANG UP - Redirect silently to continue listening
@@ -2541,7 +2549,7 @@ router.post('/voice', async (req, res) => {
         enhanced: true,
         speechModel: 'phone_call'
       });
-      gather.say(escapeTwiML(fallbackGreeting));
+      gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(fallbackGreeting));
       
       // 🚫 NEVER HANG UP - Redirect silently to continue listening
       // FEB 2026 FIX: Removed Polly.Matthew voice - was causing "creepy voice" issue
@@ -2753,7 +2761,7 @@ router.post('/voice', async (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
     
     // 🔥 Minimal error message - no generic fallback text
-    twiml.say('Service is temporarily unavailable. Please try again later.');
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, 'Service is temporarily unavailable. Please try again later.');
     twiml.hangup();
     
     res.type('text/xml');
@@ -3175,10 +3183,10 @@ router.post('/handle-speech', async (req, res) => {
           }
         } catch (err) {
           logger.error('[LOW CONFIDENCE] ElevenLabs TTS failed, falling back to <Say>:', err);
-          gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
+          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
         }
       } else {
-        gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
+        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
       }
 
       res.type('text/xml');
@@ -3241,7 +3249,7 @@ router.post('/handle-speech', async (req, res) => {
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
         });
         
-        gather.say(escapeTwiML(clarification));
+        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(clarification));
         
         // Add to conversation history
         conversationHistory.push({ role: 'user', text: speechText });
@@ -3294,10 +3302,10 @@ router.post('/handle-speech', async (req, res) => {
           gather.play(audioUrl);
         } catch (err) {
           logger.error('ElevenLabs TTS failed, falling back to <Say>:', err);
-          gather.say(escapeTwiML(cachedAnswer));
+          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cachedAnswer));
         }
       } else {
-        gather.say(escapeTwiML(cachedAnswer));
+        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cachedAnswer));
       }
 
       // Add to conversation history
@@ -3434,12 +3442,12 @@ router.post('/handle-speech', async (req, res) => {
       } catch (err) {
         logger.error('ElevenLabs synthesis failed, falling back to native TTS:', err.message);
         // Use Twilio's enhanced TTS with voice settings to maintain consistency
-        const voice = company.aiSettings?.twilioVoice || 'Polly.Matthew';
+        const voice = company.aiSettings?.twilioVoice || TWILIO_FALLBACK_VOICE;
         gather.say({ voice }, escapeTwiML(strippedAnswer));
       }
     } else {
       // Use consistent voice even when ElevenLabs is not configured
-      const voice = company.aiSettings?.twilioVoice || 'Polly.Matthew';
+      const voice = company.aiSettings?.twilioVoice || TWILIO_FALLBACK_VOICE;
       gather.say({ voice }, escapeTwiML(strippedAnswer));
     }
 
@@ -3546,7 +3554,7 @@ router.post('/:companyID/voice', async (req, res) => {
     const company = await Company.findById(companyID);
     if (!company) {
       logger.error(`[TWILIO] Company not found: ${companyID}`);
-      twiml.say('Sorry, there was a configuration error. Please try again later.');
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, 'Sorry, there was a configuration error. Please try again later.');
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -3594,7 +3602,7 @@ router.post('/:companyID/voice', async (req, res) => {
     
   } catch (err) {
     logger.error(`[TWILIO] /:companyId/voice error: ${err.message}`);
-    twiml.say('Sorry, there was a technical issue. Please try again.');
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, 'Sorry, there was a technical issue. Please try again.');
     twiml.hangup();
   }
   
@@ -3647,12 +3655,12 @@ router.post('/transfer-whisper/:companyId/:callSid', async (req, res) => {
       ? await redis.get(`transfer-brief:${companyId}:${decodeURIComponent(callSid)}`)
       : null;
 
-    twiml.say(brief || 'Incoming transferred call.');
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, brief || 'Incoming transferred call.');
     logger.info('[V2TWILIO] Transfer whisper served', {
       companyId, callSid: callSid?.slice(-8), hasCustomBrief: !!brief,
     });
   } catch (_e) {
-    twiml.say('Incoming transferred call.');
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, 'Incoming transferred call.');
   }
 
   res.type('text/xml').send(twiml.toString());
@@ -3722,7 +3730,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
         companyId, callSid: callSid?.slice(-8), reason, checkInCount
       });
 
-      twiml.say(escapeTwiML("Great — I'm ready when you are."));
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("Great — I'm ready when you are."));
       const resumeGather = twiml.gather({
         input:              'speech',
         action:             resumeToUrl,
@@ -3745,7 +3753,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
       companyId, callSid: callSid?.slice(-8), checkInCount: newCount
     });
 
-    twiml.say(escapeTwiML(prompt));
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(prompt));
     const loopGather = twiml.gather({
       input:              'speech',
       action:             holdLoopUrl,
@@ -3763,7 +3771,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
       companyId, callSid: callSid?.slice(-8), error: err.message
     });
     await LAPService.clearHoldState(companyId, callSid).catch(() => {});
-    twiml.say(escapeTwiML("Sorry about that — let's continue."));
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("Sorry about that — let's continue."));
     const errGather = twiml.gather({
       input:              'speech',
       action:             resumeToUrl,
@@ -3907,7 +3915,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           twiml.play(synthUrl);
           voiceProviderUsed = 'elevenlabs';
         } else {
-          twiml.say(escapeTwiML(cached.responseText, _mt_cached));
+          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cached.responseText, _mt_cached));
           voiceProviderUsed = 'twilio_say';
         }
       } else {
@@ -3922,7 +3930,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             twiml.play(synthUrl);
             voiceProviderUsed = 'elevenlabs';
           } else {
-            twiml.say(sayMatch[1]); // Emergency fallback only
+            twiml.say({ voice: TWILIO_FALLBACK_VOICE }, sayMatch[1]); // Emergency fallback only
             voiceProviderUsed = 'twilio_say';
           }
         } else {
@@ -4159,7 +4167,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         twiml.play(synthUrl);
         voiceProviderUsed = 'elevenlabs';
       } else {
-        twiml.say(escapeTwiML(deliverTextClean, _mt_stream));
+        twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(deliverTextClean, _mt_stream));
         voiceProviderUsed = 'twilio_say';
       }
 
@@ -4304,7 +4312,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           twiml.play(synthUrl);
           voiceProviderUsed = 'elevenlabs';
         } else {
-          twiml.say(escapeTwiML(partialText, _mt_partial));
+          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(partialText, _mt_partial));
           voiceProviderUsed = 'twilio_say';
         }
 
@@ -4425,7 +4433,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         gather.play(t3PlayUrl);
         voiceProviderUsed = t3AudioUrl ? 'elevenlabs_cached' : 'elevenlabs';
       } else {
-        gather.say(escapeTwiML(fallbackText)); // Emergency fallback only
+        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(fallbackText)); // Emergency fallback only
         voiceProviderUsed = 'twilio_say';
       }
       twimlString = twiml.toString();
@@ -4559,7 +4567,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       voiceProviderUsed = 'silence';
     } else {
       // No ElevenLabs configured — Twilio <Say> is the correct voice for this company
-      twiml.say(escapeTwiML(holdLine));
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(holdLine));
       voiceProviderUsed = 'twilio_say';
     }
 
@@ -4601,7 +4609,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       timeout: 7,
       speechTimeout: '1.5',
     });
-    crashGather.say(crashText);
+    crashGather.say({ voice: TWILIO_FALLBACK_VOICE }, crashText);
     twimlString = twiml.toString();
 
     if (callSid) {
@@ -4979,7 +4987,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Use system-level minimal safe response (not "repeat that" which frustrates callers)
       logger.error('[V2TWILIO] Company not found - cannot load UI config', { companyID });
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say("I can help you with that. One moment please.");
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, "I can help you with that. One moment please.");
       twiml.gather({
         input: 'speech',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
@@ -5187,7 +5195,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 logger.warn('[LAP GATE] ElevenLabs TTS failed, falling back to Twilio say', { error: ttsErr.message });
               }
             }
-            lapTwiml.say(escapeTwiML(cleanText));
+            lapTwiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanText));
           };
 
           // ── action: hold — play hold message, enter hold loop ───────────────
@@ -5795,10 +5803,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             gather.play(`https://${hostHeader}${_pStatus.url.replace('/audio/', '/audio-safe/')}`);
             }
           } catch (_) {
-            gather.say(escapeTwiML(checkinText));
+            gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(checkinText));
           }
         } else {
-          gather.say(escapeTwiML(checkinText));
+          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(checkinText));
         }
         
         return {
@@ -6736,7 +6744,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Play/say the screening message and hang up — no Gather, no booking.
       if (persistedState?.endCallAfterResponse === true) {
         if (audioUrl) twiml.play(audioUrl);
-        else twiml.say(escapeTwiML(responseText));
+        else twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
         twiml.hangup();
 
         if (CallLogger && callSid) {
@@ -6764,7 +6772,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // Speak the transfer announcement first (e.g. "I'm connecting you now…")
         if (responseText && responseText.trim()) {
           if (audioUrl) twiml.play(audioUrl);
-          else twiml.say(escapeTwiML(responseText));
+          else twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
         }
 
         if (transferPhone) {
@@ -6834,7 +6842,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             callSid: callSid?.slice(-8), destName: transferMeta.name,
           });
 
-          twiml.say(escapeTwiML(fallbackMsg));
+          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(fallbackMsg));
           twiml.hangup();
 
           if (CallLogger && callSid) {
@@ -6852,7 +6860,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // BookingLogicEngine fires on the redirect and immediately asks its
         // first question — no dead-air gap waiting for caller input.
         if (audioUrl) twiml.play(audioUrl);
-        else twiml.say(escapeTwiML(responseText));
+        else twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
 
         // Play Booking Bridge phrase ("Alright, lets get that scheduled for you..")
         // configured in Agent 2.0 Settings → Bridge → Booking Bridge.
@@ -6868,7 +6876,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           if (bookingBridgeAudio) {
             twiml.play(bookingBridgeAudio);
           } else {
-            twiml.say(escapeTwiML(bookingBridgePhrase));
+            twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(bookingBridgePhrase));
           }
         }
 
@@ -6899,7 +6907,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         });
 
         if (audioUrl) gather.play(audioUrl);
-        else gather.say(escapeTwiML(responseText));
+        else gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
 
         // ── BUG-28 FIX: Overwrite preflight gather config with accurate post-LLM values ──
         // Correct patience timeout and pendingFollowUp speechTimeout now that we have runtimeResult.
@@ -7320,7 +7328,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           speechTimeout: '1.5',
         });
         const _rcvText = 'I apologize for the interruption. Please go ahead and tell me how I can help.';
-        _rcvGather.say(_rcvText);
+        _rcvGather.say({ voice: TWILIO_FALLBACK_VOICE }, _rcvText);
         // Persist agent turn so the crash phrase appears in call intelligence transcript
         if (callSid) {
           const CallTranscriptV2 = require('../models/CallTranscriptV2');
@@ -7818,7 +7826,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       timeout: 7,
       speechTimeout: '1.5',
     });
-    crashGather.say(crashText);
+    crashGather.say({ voice: TWILIO_FALLBACK_VOICE }, crashText);
     twimlString = twiml.toString();
 
     // Log to CallTranscriptV2 so crash fallbacks appear in transcripts
@@ -8728,7 +8736,7 @@ router.post('/voice-test', async (req, res) => {
         const twiml = new VoiceResponse();
         
         twiml.say({
-            voice: 'Polly.Matthew',
+            voice: TWILIO_FALLBACK_VOICE,
             language: 'en-US'
         }, greeting);
         
@@ -8746,7 +8754,7 @@ router.post('/voice-test', async (req, res) => {
         // Always return valid TwiML even on error
         const VoiceResponse = twilio.twiml.VoiceResponse;
         const twiml = new VoiceResponse();
-        twiml.say('System error. Please try again later.');
+        twiml.say({ voice: TWILIO_FALLBACK_VOICE }, 'System error. Please try again later.');
         twiml.hangup();
         
         res.type('text/xml');
@@ -9584,7 +9592,7 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
         callerId: dialCallerId?.replace(/\d(?=\d{4})/g, '*')
       });
       
-      twiml.say(escapeTwiML("Connecting you now. Please hold."));
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("Connecting you now. Please hold."));
       // V111 FIX: twiml.dial(attributes) returns a Dial object — you MUST
       // call .number() to add the destination. The two-arg form dial(attrs, num)
       // is NOT supported; the second arg was silently ignored, producing an
@@ -9603,7 +9611,7 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
       if (action === 'voicemail') {
         logger.info('🚨 [CATASTROPHIC] Recording voicemail', { callSid: CallSid });
         
-        twiml.say(escapeTwiML("Please leave your message after the tone. Press pound when finished."));
+        twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("Please leave your message after the tone. Press pound when finished."));
         twiml.record({
           maxLength: 120,
           finishOnKey: '#',
@@ -9632,18 +9640,18 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
           logger.error('Failed to create callback request', { error: cbErr.message });
         }
         
-        twiml.say(escapeTwiML("We've noted your callback request. Someone will call you back as soon as possible. Goodbye."));
+        twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("We've noted your callback request. Someone will call you back as soon as possible. Goodbye."));
         twiml.hangup();
         
       } else {
         // hangup option
-        twiml.say(escapeTwiML("Thank you for calling. Please try again later. Goodbye."));
+        twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("Thank you for calling. Please try again later. Goodbye."));
         twiml.hangup();
       }
       
     } else {
       // Invalid input - repeat menu or end
-      twiml.say(escapeTwiML("I didn't understand that option. Please try again later. Goodbye."));
+      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("I didn't understand that option. Please try again later. Goodbye."));
       twiml.hangup();
     }
     
@@ -9652,7 +9660,7 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
       error: err.message,
       callSid: CallSid
     });
-    twiml.say(escapeTwiML("An error occurred. Please try again later."));
+    twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML("An error occurred. Please try again later."));
     twiml.hangup();
   }
   
