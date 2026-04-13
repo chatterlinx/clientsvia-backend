@@ -271,11 +271,13 @@
     .content-match-header {
       font-weight: 700; color: #92400e; margin-bottom: 6px; font-size: 12px;
     }
-    .content-match-item {
-      color: #78350f; padding: 4px 0; line-height: 1.4;
-      border-bottom: 1px solid #fef3c740;
+    a.content-match-item {
+      display: block; color: #78350f; padding: 6px 6px; line-height: 1.4;
+      border-bottom: 1px solid #fef3c740; text-decoration: none;
+      border-radius: 4px; cursor: pointer; transition: background 0.15s;
     }
-    .content-match-item:last-child { border-bottom: none; }
+    a.content-match-item:hover { background: #fef08a55; }
+    a.content-match-item:last-child { border-bottom: none; }
     .content-match-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .content-match-label strong { font-weight: 600; }
     .content-match-idx {
@@ -2270,6 +2272,7 @@ function _cardHTML(c) {
 
   // ── Content search match badge ────────────────────────────────────────
   const contentHits = S._contentMatches?.[c._id] || [];
+  const editBase = `/agent-console/services-item.html?companyId=${S.companyId}&itemId=${c._id}`;
   const contentMatchHtml = contentHits.length ? (() => {
     const hitLines = contentHits.slice(0, 8).map(h => {
       const whereStr = h.where.map(w =>
@@ -2278,11 +2281,12 @@ function _cardHTML(c) {
       const snippetLine = h.snippet
         ? `<div class="content-match-snippet">${h.snippet}</div>`
         : '';
+      const sectionUrl = `${editBase}&sectionIdx=${h.idx}`;
       return `
-        <div class="content-match-item">
+        <a class="content-match-item" href="${sectionUrl}" title="Open section #${h.idx + 1} in editor">
           <div class="content-match-label">${whereStr} <span class="content-match-idx">#${h.idx + 1}</span> <strong>${_esc(h.label)}</strong></div>
           ${snippetLine}
-        </div>`;
+        </a>`;
     }).join('');
     const moreHits = contentHits.length > 8 ? `<div class="content-match-more">+${contentHits.length - 8} more sections…</div>` : '';
     return `
