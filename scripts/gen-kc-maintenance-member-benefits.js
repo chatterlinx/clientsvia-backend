@@ -1,0 +1,849 @@
+#!/usr/bin/env node
+/**
+ * gen-kc-maintenance-member-benefits.js
+ * Generates kc-maintenance-member-benefits.json for "Maintenance Member Benefits" card.
+ *
+ * WORKFLOW:
+ *   1. Create empty container titled "Maintenance Member Benefits" in services.html
+ *   2. Run: node scripts/gen-kc-maintenance-member-benefits.js
+ *   3. Import kc-maintenance-member-benefits.json into the container via services.html
+ *   4. Re-score All → Fix All → Generate Missing Audio
+ *
+ * 20 sections covering:
+ *   - Member identification & benefits overview (0-3)
+ *   - Free service call / diagnostic waiver specifics (4-7)
+ *   - Parts & labor clarity (8-10)
+ *   - Plan details & enrollment (11-14)
+ *   - Member value & retention (15-17)
+ *   - Edge cases & clarifications (18-19)
+ *
+ * Handles the specific scenario where a caller identifies as a maintenance
+ * member or asks about their maintenance plan benefits. Penguin Air has ONE
+ * tier only — no silver/bronze/gold. Key benefit: free service calls on all
+ * repairs (diagnostic fee waived), caller pays parts + labor only.
+ */
+const fs = require('fs');
+const path = require('path');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GROQ CONTENT CATEGORIES — reusable deep content templates (~350-400 words)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const groqCat = {
+
+  member_benefits_core: `The maintenance membership is a comprehensive service plan designed to reward customers who invest in regular preventive care for their HVAC system. Members receive priority benefits that non-members do not have access to, with the most significant benefit being free service calls on all repairs throughout the year.
+
+When a maintenance member needs a repair, the standard diagnostic service call fee of {reg_diagnostic_fee} is completely waived. This means the technician comes to the property, evaluates the system, identifies the root cause of the problem, and presents findings and repair options — all without the diagnostic fee that non-members pay. The member only pays for the actual parts and labor required to complete the approved repair. This eliminates the upfront cost barrier that sometimes causes homeowners to delay getting a problem evaluated, which often leads to more expensive damage.
+
+The membership includes annual preventive maintenance visits where a licensed technician performs a comprehensive inspection covering all electrical, mechanical, refrigerant, airflow, and safety components. These visits are the foundation of the program because regular maintenance catches small issues before they become expensive failures, keeps the system running efficiently to reduce energy costs, and helps protect the manufacturer warranty which typically requires annual professional service.
+
+Members also receive the peace of mind that comes with knowing they can call anytime a problem arises without worrying about a service call fee. Whether the issue is no cooling in summer, no heat in winter, unusual noises, water leaks, or any other system concern, the diagnostic visit is covered. The technician evaluates the problem and presents repair options with transparent pricing for parts and labor before any work is done. There is never an obligation to approve a repair.
+
+The program is straightforward with no hidden fees, no complicated tier structures, and no fine print. One membership level covers everything. The annual cost of the plan is typically recovered in just one or two service calls that would otherwise carry the diagnostic fee, making it an excellent value for any homeowner who wants to protect their HVAC investment and avoid unexpected costs when problems arise.
+
+Maintenance members are valued preferred customers and the company appreciates their commitment to taking care of their system. Every interaction should reflect that appreciation.`,
+
+  free_service_call: `The most valuable benefit of the maintenance membership is the complete waiver of the diagnostic service call fee on all repairs. For non-members, the standard diagnostic fee is {reg_diagnostic_fee} and covers the technician coming to the property to evaluate the system, identify the root cause of the problem, and present findings and repair options before any work is done. For maintenance members, this fee is waived entirely.
+
+This benefit applies to every repair visit throughout the membership period, regardless of the type of issue. Whether the system is not cooling, not heating, making unusual noises, leaking water, cycling on and off, or experiencing any other problem, the diagnostic service call is free for members. There is no limit on the number of service calls a member can make during their membership period.
+
+The practical impact of this benefit is significant. Many homeowners hesitate to call for service when they first notice a minor issue because they do not want to pay a diagnostic fee for something that might resolve on its own. This delay often allows a small, inexpensive problem to escalate into a major, expensive failure. A weak capacitor that would cost a fraction to replace during a routine service call can fail completely during peak demand, potentially damaging the compressor and turning a minor repair into a major one. A small refrigerant leak that could be found and sealed early can drain the system over weeks, forcing the compressor to work harder and eventually fail.
+
+With the diagnostic fee waived, members have no financial barrier to calling at the first sign of trouble. This encourages early intervention, which typically results in simpler, less expensive repairs and prevents the cascading failures that come from ignoring early warning signs.
+
+The diagnostic waiver applies only to the service call fee itself. Parts and labor for approved repairs are billed separately at standard rates. The technician always presents findings and repair options with pricing before any work begins, and the member decides what to approve. There is never an obligation to proceed with a repair. Even if the member declines the repair, there is no charge for the diagnostic visit.
+
+This benefit alone can recover the cost of the annual membership in just one or two service calls, making the program an excellent value for homeowners who want to eliminate the guesswork and upfront cost of getting their system evaluated when something goes wrong.`,
+
+  parts_and_labor: `The maintenance membership waives the diagnostic service call fee on all repairs, but parts and labor for approved repairs are billed separately at standard rates. This is an important distinction that ensures members understand exactly what they are paying for and what is covered.
+
+When a member calls for a repair, the process works like this: the technician arrives at no charge for the service call, evaluates the system, identifies the root cause of the problem, and presents the findings along with repair options and pricing for parts and labor. The member reviews the options and decides what to approve. If they approve a repair, the cost covers only the parts needed and the labor to install them. If they decline, they owe nothing — the diagnostic visit was free.
+
+For non-members, the same visit starts with a {reg_diagnostic_fee} service call fee before any repair costs. So a non-member facing a capacitor replacement would pay {reg_diagnostic_fee} for the diagnostic plus the cost of the capacitor and labor to install it. A member facing the same repair pays only the capacitor and labor — the {reg_diagnostic_fee} diagnostic fee is eliminated entirely.
+
+This structure keeps the program honest and sustainable. Parts have actual costs from manufacturers and distributors. Labor reflects the time and expertise of a licensed technician performing the repair. These costs exist regardless of membership status. What the membership eliminates is the diagnostic fee — the charge for the technician to come out, evaluate the system, and identify what needs to be fixed.
+
+Some members initially expect that the membership covers all repair costs including parts and labor. This is not the case, and it is important to clarify this clearly and respectfully so there are no surprises. The membership provides free diagnostic visits and annual preventive maintenance. Repair costs for parts and labor are separate and are always presented with full transparency before any work begins.
+
+The value of the program is in the elimination of the diagnostic barrier. Members call sooner, problems get caught earlier, repairs tend to be simpler and less expensive, and the system stays healthier over its lifetime. Combined with the annual maintenance visits that catch issues before they cause breakdowns, the membership provides a comprehensive approach to HVAC care that saves money over time even though parts and labor on individual repairs are at standard rates.`,
+
+  plan_details: `The maintenance plan is a straightforward annual program with one membership level that covers everything. There are no tiers, no complicated structures, and no hidden fees. The annual cost is {plan_annual_fee} and includes scheduled preventive maintenance visits plus the diagnostic fee waiver on all repair calls throughout the membership period.
+
+The preventive maintenance visits are the foundation of the program. During each visit, a licensed technician performs a comprehensive inspection covering every critical component of the HVAC system. On the cooling side, the checklist includes checking refrigerant levels and pressures, cleaning the condenser coil, inspecting the evaporator coil, testing the compressor amperage and capacitor values, verifying contactor operation, clearing the condensate drain line, inspecting electrical connections, and measuring the temperature split between supply and return air. On the heating side, the checklist covers the heat exchanger for cracks or corrosion, the ignition sequence, the flame sensor, gas pressure, burner condition, the inducer motor and pressure switch, and the flue and venting.
+
+Beyond the mechanical inspection, the technician evaluates airflow by checking the blower wheel and motor, inspecting the air filter, and verifying that return and supply vents are unobstructed. The thermostat is tested for calibration accuracy and proper cycling behavior. Every measurement and observation is documented, and the technician reviews findings with the homeowner at the end of the visit.
+
+The purpose of these visits is to catch small issues before they become expensive failures. A weak capacitor, a dirty coil, a loose electrical connection, or a developing refrigerant leak — these are all conditions that can be identified and addressed during routine maintenance for a fraction of what they cost when they fail during peak demand.
+
+The diagnostic fee waiver runs continuously throughout the membership period. There is no limit on the number of repair calls a member can make. Whether the member needs one repair visit or five during their membership year, every diagnostic service call is free. Parts and labor for approved repairs are billed separately at standard rates with full pricing transparency before any work begins.
+
+Enrollment is simple and can be set up during any call or visit. The membership begins immediately and the first maintenance visit can be scheduled right away.`,
+
+  enrollment: `Enrolling in the maintenance membership is a simple process that can be completed during any phone call or during a technician visit to the property. There is no application, no credit check, and no long-term contract. The membership is an annual plan that renews each year, and the member can cancel at any time.
+
+The annual cost is {plan_annual_fee} and covers scheduled preventive maintenance visits plus free diagnostic service calls on all repairs throughout the membership period. The membership begins immediately upon enrollment, and the first maintenance visit can be scheduled right away.
+
+New homeowners and first-time callers are excellent candidates for the membership because they often have no service history on their system and want to establish a baseline understanding of the equipment condition. The first maintenance visit gives them a complete picture of where their system stands, what needs attention now, and what to watch for in the future. Starting with professional maintenance from day one protects the manufacturer warranty, establishes a service record, and gives the homeowner confidence that their system is being properly cared for.
+
+Existing customers who have been paying the diagnostic fee on individual service calls often realize that the membership would have saved them money. A single diagnostic visit at {reg_diagnostic_fee} is a meaningful portion of the annual membership cost. Two diagnostic visits in a year would exceed the membership price, meaning the maintenance visits themselves are essentially free for anyone who needed more than one service call.
+
+The enrollment conversation should feel like a helpful recommendation, not a sales pitch. The membership genuinely benefits homeowners who want to protect their HVAC investment, reduce unexpected costs, and ensure their system receives regular professional attention. For callers who are not ready to enroll, there is no pressure. The option is always available whenever they decide it makes sense for them.
+
+Current maintenance members who call in should be recognized and thanked for their membership. They are valued preferred customers who have made a smart investment in their home comfort system. Every interaction should reflect that appreciation and reinforce the value of their decision to enroll.`,
+
+  member_value: `The maintenance membership delivers measurable value through three primary channels: eliminated diagnostic fees, preventive maintenance that reduces repair frequency and severity, and extended equipment lifespan.
+
+The diagnostic fee savings are the most immediately visible benefit. Every time a member needs a repair, they save the {reg_diagnostic_fee} diagnostic service call fee that non-members pay. A homeowner who needs two service calls in a year saves the equivalent of the diagnostic fees on both visits, which alone can offset a significant portion of the annual membership cost. Over a five-year period, the cumulative savings on diagnostic fees can be substantial, especially for older systems that tend to need more frequent attention.
+
+The preventive maintenance benefit is less visible in the short term but more valuable over the life of the equipment. Regular professional inspection catches developing issues before they cause breakdowns. A capacitor that is drifting from its rated value gets flagged and replaced during a maintenance visit for a fraction of what an emergency replacement costs. A refrigerant leak gets detected and sealed before it drains the system and damages the compressor. Electrical connections get tightened before resistance buildup causes a wiring failure. These preventive catches add up to thousands of dollars in avoided emergency repairs over the life of the system.
+
+Equipment lifespan is directly tied to maintenance frequency. Industry data consistently shows that well-maintained HVAC systems operate reliably for 15 to 20 years or more, while neglected systems often start experiencing frequent failures after 8 to 10 years. The difference in lifespan represents thousands of dollars in premature replacement costs that maintenance members avoid.
+
+Energy efficiency is another ongoing benefit. A clean system with properly charged refrigerant, calibrated components, and unrestricted airflow uses less energy to produce the same output. The difference in monthly energy costs between a maintained and unmaintained system is measurable and compounds over time.
+
+Manufacturer warranty protection is an additional safeguard. Most manufacturers require annual professional maintenance to keep warranty coverage active on major components like compressors and heat exchangers. Maintaining the membership satisfies this requirement automatically, ensuring the homeowner has full warranty protection throughout the coverage period.
+
+The membership is one of the most cost-effective investments a homeowner can make in their property. It pays for itself through diagnostic fee savings, reduced repair costs, lower energy bills, and extended equipment life.`,
+
+  single_tier: `The maintenance program is designed with simplicity as a core principle. There is one membership level that includes everything. There are no silver, bronze, gold, or platinum tiers to compare, no confusing feature matrices, and no pressure to upgrade to a higher level for better coverage.
+
+This single-tier approach exists because the company believes every customer deserves the same level of care and attention. A homeowner with a basic system receives the same thorough inspection, the same diagnostic fee waiver, and the same preferred customer treatment as a homeowner with a premium system. The quality of service does not change based on which package someone purchased because there is only one package and it includes everything.
+
+Some HVAC companies structure their maintenance programs with multiple tiers where the basic level includes only a minimal inspection and higher tiers add more thorough service, priority scheduling, extended hours, diagnostic fee waivers, and other benefits. This tiered approach can create confusion about what is actually covered and leave customers on lower tiers feeling like they are receiving inferior service. It also creates an ongoing upsell dynamic where every interaction becomes an opportunity to push the customer toward a more expensive tier.
+
+The single-tier model eliminates all of that complexity. When a member calls, they receive full benefits immediately. Free diagnostic service call, comprehensive preventive maintenance, preferred customer status. No checking which tier they are on. No limitations based on plan level. No conversations about upgrading to unlock additional benefits.
+
+The annual cost of {plan_annual_fee} covers everything the program offers. Scheduled preventive maintenance visits with a full inspection checklist, free diagnostic service calls on all repairs with no limit on the number of calls, and preferred customer recognition. Parts and labor for approved repairs are billed separately at standard rates, which is consistent regardless of membership status.
+
+This straightforward structure makes the program easy to explain, easy to understand, and easy to trust. Members know exactly what they are getting, there are no surprises, and every interaction reinforces the value of their investment.`,
+
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const sections = [
+
+  // ════════════════════════════════════════════════════════════════════════
+  // MEMBER IDENTIFICATION & BENEFITS OVERVIEW (0-3)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 0
+    label: 'Caller Identifies As Maintenance Member',
+    content: 'Thank you so much for being one of our maintenance members. We really appreciate your loyalty. How can I help you today? As a preferred member, your diagnostic service calls are covered at no charge.',
+    groqKey: 'member_benefits_core',
+    callerPhrases: [
+      'i am a maintenance member',
+      'i am on your maintenance plan',
+      'i have a maintenance membership with you',
+      'i am one of your maintenance customers',
+      'i am enrolled in your maintenance program',
+      'i have a maintenance agreement with you',
+      'i am a preferred maintenance customer',
+      'i am on the annual maintenance plan',
+      'i signed up for your maintenance membership',
+      'i have a service agreement with you',
+      'i think i am on your maintenance plan',
+      'i pay for the maintenance membership every year',
+      'i am a member of your maintenance program',
+      'we have a maintenance plan with your company',
+      'i am a current maintenance plan member',
+    ],
+    negativeKeywords: [
+      'how do i sign up for maintenance',
+      'what does the plan cost',
+      'do you have a maintenance plan',
+      'i want to cancel my plan',
+      'what tiers do you offer',
+      'how much is the membership',
+    ],
+  },
+
+  { // 1
+    label: 'What Are My Maintenance Member Benefits',
+    content: 'As a maintenance member, your biggest benefit is free service calls on all repairs. You never pay the diagnostic fee. When you need a repair, the technician comes out at no charge and you only pay for parts and labor.',
+    groqKey: 'member_benefits_core',
+    callerPhrases: [
+      'what are my benefits as a maintenance member',
+      'what does my maintenance plan include',
+      'what do i get with my maintenance membership',
+      'what are the benefits of being on the maintenance plan',
+      'what is included in my membership',
+      'can you remind me what my plan covers',
+      'what does my maintenance agreement include',
+      'what are the perks of the maintenance membership',
+      'what benefits do i have as a member',
+      'what exactly does my maintenance plan cover',
+      'can you go over my membership benefits',
+      'what am i getting with my maintenance plan',
+      'what do maintenance members get',
+      'what does the membership give me',
+      'what is covered under my maintenance plan',
+    ],
+    negativeKeywords: [
+      'what does a tune-up include',
+      'how much is a repair',
+      'does the plan cover parts',
+      'how do i join the plan',
+      'what tiers are available',
+      'when is my next visit scheduled',
+    ],
+  },
+
+  { // 2
+    label: 'Member Asking About Repair Coverage',
+    content: 'Great news. As a maintenance member, the diagnostic service call fee is completely waived for you. The technician comes out at no charge, evaluates the system, and goes over your options. You only pay for approved parts and labor.',
+    groqKey: 'free_service_call',
+    callerPhrases: [
+      'am i covered for this repair',
+      'does my plan cover this service call',
+      'is this repair covered by my membership',
+      'do i have to pay for the service call',
+      'will there be a charge for the technician to come out',
+      'is the diagnostic covered by my plan',
+      'do maintenance members pay for service calls',
+      'does my membership cover the diagnostic fee',
+      'will i be charged for the visit',
+      'is there a fee for the technician since i am a member',
+      'do i still pay the service call fee as a member',
+      'is the evaluation covered under my plan',
+      'does my plan cover the cost of the visit',
+      'am i covered for a diagnostic as a member',
+      'do maintenance members pay for diagnostics',
+    ],
+    negativeKeywords: [
+      'does the plan cover parts',
+      'is labor included in the plan',
+      'what does the tune-up include',
+      'how much is the plan',
+      'how do i sign up',
+      'do you have different plan levels',
+    ],
+  },
+
+  { // 3
+    label: 'Thank You For Being A Loyal Member',
+    content: 'We really appreciate you being a loyal preferred member. Customers like you who take care of their system year after year are the ones who avoid the big surprises. We are glad to have you with us.',
+    groqKey: 'member_value',
+    callerPhrases: [
+      'i have been on the plan for a few years now',
+      'i have been a member for a while',
+      'we have been using your plan for years',
+      'i have been on the membership since we bought the house',
+      'i renewed my plan again this year',
+      'i always keep my maintenance plan going',
+      'we have been members for a long time',
+      'i signed up for the plan a couple years ago',
+      'i have had the membership for several years',
+      'we have been loyal customers for years',
+      'i have been a member since you started the plan',
+      'i have been with you on the maintenance plan for years',
+      'we renewed our membership recently',
+      'i make sure to keep my maintenance plan active',
+      'i have been on the plan since i moved in',
+    ],
+    negativeKeywords: [
+      'want to cancel membership',
+      'thinking about dropping the plan',
+      'not sure the plan is worth it',
+      'how much to renew',
+      'what benefits am i missing',
+      'can i switch to a different plan',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // FREE SERVICE CALL / DIAGNOSTIC WAIVER SPECIFICS (4-7)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 4
+    label: 'Diagnostic Fee Waived For Members',
+    content: 'Absolutely. As a maintenance member, the {reg_diagnostic_fee} diagnostic fee is completely waived. The technician comes out, evaluates the system, and presents repair options — all at no charge for the visit itself.',
+    groqKey: 'free_service_call',
+    callerPhrases: [
+      'do i still pay the diagnostic fee as a member',
+      'is the {reg_diagnostic_fee} fee waived for me',
+      'do maintenance members get free diagnostics',
+      'is the service call free for members',
+      'do i have to pay the diagnostic fee',
+      'is the {reg_diagnostic_fee} waived with my plan',
+      'am i exempt from the diagnostic fee',
+      'does my membership waive the service call fee',
+      'do members pay for the diagnostic visit',
+      'is the evaluation free for maintenance members',
+      'does my plan eliminate the diagnostic charge',
+      'is there a diagnostic fee for members',
+      'do i pay anything for the technician to come out',
+      'is the service call covered by my membership',
+      'do maintenance plan members pay the diagnostic',
+    ],
+    negativeKeywords: [
+      'are parts covered too',
+      'is labor included',
+      'what does maintenance visit include',
+      'how much is the plan',
+      'how do i join',
+      'different tier coverage',
+    ],
+  },
+
+  { // 5
+    label: 'Member Needs A Repair Right Now',
+    content: 'Let us get that taken care of for you. Since you are on the maintenance plan, there is no diagnostic fee. We just need your name, address, and phone number and we can get a technician scheduled.',
+    groqKey: 'free_service_call',
+    callerPhrases: [
+      'i am a member and my ac is not working',
+      'my system stopped cooling and i am on the maintenance plan',
+      'i need a repair and i am a maintenance member',
+      'my ac broke and i have the maintenance membership',
+      'i am a member and i need someone to come out',
+      'my heater is not working and i am on the plan',
+      'i need a technician and i am a maintenance member',
+      'my system is down and i have a maintenance plan',
+      'i need service and i am enrolled in the maintenance program',
+      'something is wrong with my ac and i am a member',
+      'my unit is making a noise and i am on the maintenance plan',
+      'i need a repair visit as a maintenance member',
+      'i have a problem with my system and i am on the plan',
+      'my ac is blowing warm air and i am a member',
+      'i need help with my system i am a maintenance member',
+    ],
+    negativeKeywords: [
+      'schedule a tune-up visit',
+      'how much is a repair',
+      'not a member yet',
+      'want to sign up first',
+      'need a replacement quote',
+      'cancel my membership',
+    ],
+  },
+
+  { // 6
+    label: 'How Many Free Service Calls Do I Get',
+    content: 'There is no limit. As a maintenance member, every diagnostic service call is free for the entire membership period. Whether you need one visit or several, the diagnostic fee is always waived.',
+    groqKey: 'free_service_call',
+    callerPhrases: [
+      'how many free service calls do i get',
+      'is there a limit on free service calls',
+      'how many times can i call without paying',
+      'do i get unlimited service calls',
+      'is there a cap on free diagnostics',
+      'how many repair visits are covered',
+      'can i call as many times as i need',
+      'is there a maximum number of free visits',
+      'how often can i use the free diagnostic',
+      'am i limited on how many times i can call',
+      'what is the limit on service calls for members',
+      'can i call multiple times in one year',
+      'do free service calls run out',
+      'is there a set number of covered visits',
+      'how many diagnostic visits are free per year',
+    ],
+    negativeKeywords: [
+      'are parts included',
+      'is there a deductible',
+      'what does the plan cost',
+      'how do i renew',
+      'does it cover parts and labor',
+      'what are the other benefits',
+    ],
+  },
+
+  { // 7
+    label: 'Member Comparing To Non-Member Cost',
+    content: 'Without the membership, the diagnostic fee would be {reg_diagnostic_fee} each time. With your plan, every service call is free. That savings alone can pay for the membership if you need even one or two visits.',
+    groqKey: 'member_value',
+    callerPhrases: [
+      'how much would this cost without the plan',
+      'what would i pay without the membership',
+      'how much is the diagnostic for non-members',
+      'what would i be paying without the maintenance plan',
+      'what is the cost difference between members and non-members',
+      'how much do non-members pay for a service call',
+      'what does the diagnostic cost for people without the plan',
+      'how much am i saving with the membership',
+      'what would this visit cost without the plan',
+      'am i actually saving money with the membership',
+      'what is the regular price without the plan',
+      'how much do people without the plan pay',
+      'would this cost {reg_diagnostic_fee} without the membership',
+      'what is the savings compared to not having the plan',
+      'how much does the membership save me per visit',
+    ],
+    negativeKeywords: [
+      'how much are repairs',
+      'what does the plan cost annually',
+      'how do i sign up',
+      'do you have different levels',
+      'is there a deductible',
+      'what is included in maintenance visit',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PARTS & LABOR CLARITY (8-10)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 8
+    label: 'What Do I Pay For Repairs As A Member',
+    content: 'As a member, you pay only for parts and labor on approved repairs. The diagnostic fee is waived. The technician presents findings and pricing for any recommended work, and you decide what gets done. No surprises.',
+    groqKey: 'parts_and_labor',
+    callerPhrases: [
+      'what do i pay for repairs as a member',
+      'what will i be charged for the repair',
+      'how much do members pay for repairs',
+      'what costs do i have as a member for a repair',
+      'do i still have to pay for the repair itself',
+      'what out of pocket costs do members have for repairs',
+      'is there a cost for repairs even with the plan',
+      'do members get a discount on repairs',
+      'what is my cost for parts and labor as a member',
+      'how much will the repair be for a member',
+      'do i pay full price for repairs on the plan',
+      'what does the repair cost with the membership',
+      'am i charged differently for repairs as a member',
+      'what repair costs do maintenance members have',
+      'do members pay less for repairs',
+    ],
+    negativeKeywords: [
+      'does the plan cover everything',
+      'is there a deductible',
+      'do i get free parts',
+      'how much is the diagnostic',
+      'what does the plan cost',
+      'different coverage levels',
+    ],
+  },
+
+  { // 9
+    label: 'Does The Plan Cover Parts And Labor',
+    content: 'The plan covers the diagnostic service call fee, which is the charge for the technician to come out and evaluate the system. Parts and labor for approved repairs are separate and billed at standard rates with full pricing transparency.',
+    groqKey: 'parts_and_labor',
+    callerPhrases: [
+      'does the plan cover parts',
+      'does my membership cover parts and labor',
+      'are parts included in the maintenance plan',
+      'does the membership include repair costs',
+      'is labor covered under the plan',
+      'does the plan pay for parts and labor',
+      'are repairs fully covered by the membership',
+      'does the maintenance plan cover everything',
+      'do i get free parts with the membership',
+      'is the full repair covered under the plan',
+      'does the membership include the cost of parts',
+      'are replacement parts covered by my plan',
+      'does the plan cover the total repair cost',
+      'is the entire repair free for members',
+      'does the membership cover all repair expenses',
+    ],
+    negativeKeywords: [
+      'how much is the diagnostic fee',
+      'is the service call free',
+      'how many visits are covered',
+      'how much is the plan',
+      'how do i enroll',
+      'what does the tune-up include',
+    ],
+  },
+
+  { // 10
+    label: 'Member Thinks Everything Is Free',
+    content: 'I completely understand the question. The membership waives the diagnostic fee so the visit itself is free. For any repairs, the technician goes over parts and labor pricing before doing any work. You always know the cost upfront and decide what to approve.',
+    groqKey: 'parts_and_labor',
+    callerPhrases: [
+      'i thought everything was covered',
+      'i thought the plan covered all repairs',
+      'why am i being charged if i am a member',
+      'i thought the membership meant free repairs',
+      'should not repairs be free with the plan',
+      'i did not realize i still have to pay for parts',
+      'i thought the membership covered everything',
+      'why do i have to pay for parts if i am on the plan',
+      'i assumed repairs were included in the membership',
+      'i thought the plan covered parts and labor too',
+      'why is there a charge if i have the maintenance plan',
+      'i was under the impression repairs were covered',
+      'i thought being a member meant no repair costs',
+      'i did not know i would still have to pay for repairs',
+      'why do members still pay for parts',
+    ],
+    negativeKeywords: [
+      'want to cancel the plan',
+      'this is not what i was told',
+      'i was lied to about coverage',
+      'want a refund on membership',
+      'switching to another company',
+      'filing a complaint',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PLAN DETAILS & ENROLLMENT (11-14)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 11
+    label: 'How Much Is The Maintenance Plan',
+    content: 'The maintenance plan is {plan_annual_fee} per year. That covers your scheduled maintenance visits plus free diagnostic service calls on all repairs throughout the year. No limits on service calls.',
+    groqKey: 'plan_details',
+    callerPhrases: [
+      'how much is the maintenance plan',
+      'what does the membership cost',
+      'how much is the annual maintenance membership',
+      'what is the price of the maintenance plan',
+      'how much do you charge for the maintenance program',
+      'what does it cost to be on the maintenance plan',
+      'how much is the yearly membership',
+      'what is the annual cost of the plan',
+      'how much to sign up for the maintenance plan',
+      'what is the membership fee',
+      'how much per year for the maintenance membership',
+      'what does the plan run annually',
+      'can you tell me the cost of the maintenance plan',
+      'how much is it to enroll in the maintenance program',
+      'what is the price for the annual maintenance plan',
+    ],
+    negativeKeywords: [
+      'how much is a tune-up',
+      'what is the diagnostic fee',
+      'how much are repairs',
+      'what does the plan include',
+      'do you have different tiers',
+      'is there a monthly option',
+    ],
+  },
+
+  { // 12
+    label: 'How Do I Sign Up For The Plan',
+    content: 'We can get you signed up right now on this call. The plan is {plan_annual_fee} per year, starts immediately, and your first maintenance visit can be scheduled right away. I just need a few details to get you enrolled.',
+    groqKey: 'enrollment',
+    callerPhrases: [
+      'how do i sign up for the maintenance plan',
+      'i want to enroll in the maintenance membership',
+      'how do i join the maintenance program',
+      'can i sign up for the plan today',
+      'i would like to get on the maintenance plan',
+      'how do i become a maintenance member',
+      'i want to sign up for the membership',
+      'can you enroll me in the maintenance plan',
+      'how do i get started with the maintenance program',
+      'i am interested in joining the maintenance plan',
+      'what do i need to do to sign up',
+      'can i start the maintenance membership today',
+      'i want to get enrolled in the plan',
+      'how do i get on the maintenance plan',
+      'sign me up for the maintenance membership',
+    ],
+    negativeKeywords: [
+      'how much is the plan',
+      'what does the plan include',
+      'what are the benefits',
+      'do you have different levels',
+      'can i cancel anytime',
+      'when does it renew',
+    ],
+  },
+
+  { // 13
+    label: 'Do You Have Different Plan Levels',
+    content: 'We keep it simple — one plan that covers everything. No tiers, no confusing packages, no upgrading needed. Every member gets the same full benefits: maintenance visits, free diagnostic calls, and preferred customer status.',
+    groqKey: 'single_tier',
+    callerPhrases: [
+      'do you have different plan levels',
+      'are there different tiers of membership',
+      'do you have silver gold or platinum plans',
+      'is there a basic and premium plan',
+      'do you offer different levels of coverage',
+      'are there different packages to choose from',
+      'do you have a higher tier with more benefits',
+      'is there an upgraded plan available',
+      'what are the different plan options',
+      'do you have multiple membership levels',
+      'is there a more comprehensive plan',
+      'are there different maintenance packages',
+      'do members have different levels of benefits',
+      'is there a higher level plan i can get',
+      'do you offer tiered maintenance plans',
+    ],
+    negativeKeywords: [
+      'how much is the plan',
+      'what does the plan include',
+      'how do i sign up',
+      'does the plan cover parts',
+      'how many service calls',
+      'can i cancel anytime',
+    ],
+  },
+
+  { // 14
+    label: 'When Does My Membership Renew',
+    content: 'Your membership runs on an annual cycle from the date you enrolled. When it comes time to renew, we will reach out to you. Renewing keeps your free service calls and maintenance visits going without any gap in coverage.',
+    groqKey: 'plan_details',
+    callerPhrases: [
+      'when does my membership renew',
+      'when is my plan up for renewal',
+      'does the membership auto-renew',
+      'when does my maintenance plan expire',
+      'how long does the membership last',
+      'is my plan still active',
+      'when do i need to renew my membership',
+      'how do i renew my maintenance plan',
+      'does my plan renew automatically',
+      'when is my plan expiring',
+      'is my maintenance membership still current',
+      'do i need to do anything to renew',
+      'when was my membership last renewed',
+      'how do i know when my plan needs renewing',
+      'what happens if my membership lapses',
+    ],
+    negativeKeywords: [
+      'cancel my membership',
+      'how much to renew',
+      'what are the benefits',
+      'upgrade my plan',
+      'change my plan level',
+      'sign up for a new plan',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // MEMBER VALUE & RETENTION (15-17)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 15
+    label: 'Is The Maintenance Plan Worth It',
+    content: 'It absolutely is. The diagnostic fee alone is {reg_diagnostic_fee} per visit for non-members. If you need even one or two service calls a year, the plan pays for itself. Plus you get your annual maintenance visits and peace of mind.',
+    groqKey: 'member_value',
+    callerPhrases: [
+      'is the maintenance plan worth it',
+      'is the membership a good deal',
+      'do i really save money with the plan',
+      'is the plan actually worth the cost',
+      'does the maintenance plan save me money',
+      'am i better off with or without the plan',
+      'is the membership worth the annual fee',
+      'why should i pay for the maintenance plan',
+      'what is the value of the maintenance membership',
+      'is it really worth being on the plan',
+      'do members actually save money',
+      'what do i really get out of the membership',
+      'is the plan a good investment',
+      'should i keep my maintenance plan',
+      'is the membership really worth it in the long run',
+    ],
+    negativeKeywords: [
+      'want to cancel the plan',
+      'too expensive to renew',
+      'do not use it enough',
+      'never needed a repair',
+      'thinking about dropping it',
+      'what other companies charge',
+    ],
+  },
+
+  { // 16
+    label: 'Thinking About Canceling Membership',
+    content: 'I understand wanting to review expenses. Keep in mind, without the plan, each service call is {reg_diagnostic_fee} and you would not have scheduled maintenance included. The plan keeps your system protected and saves on every repair visit.',
+    groqKey: 'member_value',
+    callerPhrases: [
+      'i am thinking about canceling the plan',
+      'i might drop my maintenance membership',
+      'is it worth keeping the plan',
+      'i am not sure i need the membership anymore',
+      'should i cancel the maintenance plan',
+      'i do not know if i want to renew',
+      'i am considering dropping the membership',
+      'i am not sure the plan is worth keeping',
+      'do i really need the maintenance membership',
+      'i am thinking about not renewing',
+      'i might cancel my maintenance plan',
+      'i do not know if the plan is saving me money',
+      'should i keep the plan or cancel it',
+      'i have not used the plan much this year',
+      'i am on the fence about renewing',
+    ],
+    negativeKeywords: [
+      'how do i sign up',
+      'what does the plan include',
+      'how much is the plan',
+      'schedule a tune-up',
+      'need a repair right now',
+      'different plan levels',
+    ],
+  },
+
+  { // 17
+    label: 'Non-Member Interested In Joining',
+    content: 'Great question. The maintenance plan gives you free service calls on all repairs, scheduled maintenance visits, and preferred customer status. The annual cost is {plan_annual_fee} and you can start today. Would you like to get enrolled?',
+    groqKey: 'enrollment',
+    callerPhrases: [
+      'do you have a maintenance plan',
+      'tell me about your maintenance program',
+      'what maintenance plans do you offer',
+      'do you offer a service agreement',
+      'is there a way to get free service calls',
+      'do you have a membership program',
+      'i heard you have a maintenance plan',
+      'can i get a plan that covers service calls',
+      'what kind of maintenance programs do you have',
+      'is there a way to avoid the diagnostic fee',
+      'do you have any service plans available',
+      'i want to learn about your maintenance membership',
+      'does your company offer a maintenance agreement',
+      'what are my options for a maintenance plan',
+      'i am interested in your maintenance program',
+    ],
+    negativeKeywords: [
+      'already a member',
+      'want to cancel',
+      'renew my plan',
+      'what are my benefits',
+      'check my membership status',
+      'member scheduling repair',
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // EDGE CASES & CLARIFICATIONS (18-19)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 18
+    label: 'Does Membership Transfer To New Owner',
+    content: 'The membership is tied to the homeowner, not the property. If you are a new homeowner, we can absolutely get you set up with your own membership today. The plan is {plan_annual_fee} per year.',
+    groqKey: 'enrollment',
+    callerPhrases: [
+      'does the membership transfer if i sell the house',
+      'does the previous owner plan carry over to me',
+      'i just bought a house that had a maintenance plan',
+      'does the maintenance plan transfer to new owners',
+      'i moved into a new house did the plan transfer',
+      'can i take over the previous owner maintenance plan',
+      'does the membership follow the property',
+      'i am a new homeowner does the old plan still apply',
+      'the old owner had a maintenance plan do i still have it',
+      'does the plan stay with the house when sold',
+      'i just moved in and the seller mentioned a maintenance plan',
+      'can i inherit the previous owner service agreement',
+      'does the plan transfer when the house changes hands',
+      'is the maintenance plan tied to the address or the person',
+      'the previous owner was a member can i keep the plan',
+    ],
+    negativeKeywords: [
+      'how do i cancel',
+      'how much is the plan',
+      'what does the plan include',
+      'renew my plan',
+      'schedule a tune-up',
+      'different plan levels',
+    ],
+  },
+
+  { // 19
+    label: 'Member Grateful For Free Service Call',
+    content: 'That is exactly why the plan is such a smart investment. You needed help today and there was no hesitation, no diagnostic fee to worry about. We got you taken care of right away. That is what being a member is all about.',
+    groqKey: 'member_value',
+    callerPhrases: [
+      'i am glad i have the maintenance plan',
+      'the plan really saved me this time',
+      'i am happy i signed up for the membership',
+      'the free service call really helps',
+      'i am so glad i do not have to pay the diagnostic fee',
+      'the membership was worth it just for this',
+      'i am glad i kept the plan',
+      'thank goodness i have the maintenance membership',
+      'the plan really paid for itself today',
+      'i am glad i am a member this would have cost me more',
+      'the membership saved me money on this call',
+      'it is nice not having to worry about the service call fee',
+      'i appreciate not having to pay the diagnostic',
+      'this is why i keep the maintenance plan going',
+      'the plan is already paying for itself',
+    ],
+    negativeKeywords: [
+      'want to cancel plan',
+      'plan is too expensive',
+      'not worth it',
+      'thinking about dropping it',
+      'switching to another company',
+      'want a refund',
+    ],
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILD & VALIDATE JSON
+// ═══════════════════════════════════════════════════════════════════════════
+
+const output = {
+  kcTitle: 'Maintenance Member Benefits',
+  kcId: null,
+  exportedAt: new Date().toISOString(),
+  sectionCount: sections.length,
+  sections: sections.map((s, i) => ({
+    index: i,
+    label: s.label,
+    content: s.content,
+    groqContent: groqCat[s.groqKey] || null,
+    callerPhrases: s.callerPhrases,
+    negativeKeywords: s.negativeKeywords,
+    isFixed: true,
+    hasAudio: false,
+    isActive: true,
+  })),
+};
+
+// ── Validation ───────────────────────────────────────────────────────────
+let errors = 0;
+for (const s of output.sections) {
+  const wc = s.content.split(/\s+/).length;
+  if (wc < 10 || wc > 50) {
+    console.warn(`⚠ Section ${s.index} "${s.label}" content: ${wc} words (target 35-42, min 10 for short closes)`);
+  }
+  if (!s.groqContent) {
+    console.error(`✗ Section ${s.index} "${s.label}" missing groqContent`);
+    errors++;
+  } else {
+    const gwc = s.groqContent.split(/\s+/).length;
+    if (gwc < 300 || gwc > 450) {
+      console.warn(`⚠ Section ${s.index} "${s.label}" groqContent: ${gwc} words (target 350-400)`);
+    }
+  }
+  if (s.callerPhrases.length !== 15) {
+    console.error(`✗ Section ${s.index} "${s.label}" has ${s.callerPhrases.length} phrases (need exactly 15)`);
+    errors++;
+  }
+  if (s.negativeKeywords.length !== 6) {
+    console.warn(`⚠ Section ${s.index} "${s.label}" has ${s.negativeKeywords.length} negativeKeywords (need exactly 6)`);
+  }
+  // Check for empty phrases
+  const emptyPhrases = s.callerPhrases.filter(p => !p.trim());
+  if (emptyPhrases.length) {
+    console.error(`✗ Section ${s.index} "${s.label}" has ${emptyPhrases.length} empty phrases`);
+    errors++;
+  }
+}
+
+if (errors > 0) {
+  console.error(`\n✗ ${errors} error(s) found. Fix before importing.`);
+  process.exit(1);
+}
+
+// ── Write output ─────────────────────────────────────────────────────────
+const outPath = path.join(__dirname, 'kc-maintenance-member-benefits.json');
+fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
+
+console.log(`\n✅ Generated ${outPath}`);
+console.log(`   ${output.sectionCount} sections`);
+console.log(`   ${output.sections.reduce((n, s) => n + s.callerPhrases.length, 0)} total callerPhrases`);
+console.log(`   ${new Set(output.sections.map(s => s.groqContent)).size} unique groqContent templates`);
+
+// Stats
+const contentWords = output.sections.map(s => s.content.split(/\s+/).length);
+const groqWords = output.sections.filter(s => s.groqContent).map(s => s.groqContent.split(/\s+/).length);
+console.log(`   Content words: min=${Math.min(...contentWords)} max=${Math.max(...contentWords)} avg=${Math.round(contentWords.reduce((a,b)=>a+b,0)/contentWords.length)}`);
+console.log(`   GroqContent words: min=${Math.min(...groqWords)} max=${Math.max(...groqWords)} avg=${Math.round(groqWords.reduce((a,b)=>a+b,0)/groqWords.length)}`);
+
+console.log('\nNEXT STEPS:');
+console.log('  1. Create empty "Maintenance Member Benefits" container in services.html');
+console.log('  2. Import kc-maintenance-member-benefits.json into the container');
+console.log('  3. Re-score All → Fix All → Generate Missing Audio');

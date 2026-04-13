@@ -705,6 +705,10 @@ function _isLikelyOffTopic(userInput, step) {
   // Explicit question mark is the strongest signal
   if (trimmed.endsWith('?')) return true;
 
+  // Pricing / cost keywords — even short phrases like "how much" are questions, not data
+  const lc = trimmed.toLowerCase();
+  if (/\b(?:how much|price|pricing|cost|charge|fee|rate|expensive|afford)\b/.test(lc)) return true;
+
   // Long sentence at a data-collection step — almost certainly not a name/time/etc.
   if (wordCount >= 6) return true;
 
@@ -740,6 +744,9 @@ function _isClearQuestion(userInput) {
 
   // Explicit question mark anywhere → caller is asking a question
   if (lc.includes('?')) return true;
+
+  // Pricing / cost keywords — even without ?, these are unambiguously questions, not data
+  if (/\b(?:how much|price|pricing|cost|charge|fee|rate|what do you charge|what does it cost)\b/.test(lc)) return true;
 
   // Strong question/confusion lead-ins
   const CLEAR_SIGNALS = [

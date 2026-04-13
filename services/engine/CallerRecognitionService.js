@@ -93,10 +93,15 @@ function _normalizePhone(phone) {
 async function _findCustomer(companyId, callerPhone) {
   if (!callerPhone) return null;
   const variants = _normalizePhone(callerPhone);
+  // Query both top-level phone AND phoneNumbers[].number for broader matching
+  const phoneMatches = variants.flatMap(p => [
+    { phone: p },
+    { 'phoneNumbers.number': p }
+  ]);
   return Customer.findOne({
     companyId,
-    $or: variants.map(p => ({ phone: p }))
-  }).select('_id name firstName lastName phone discoveryNotes callerProfile').lean();
+    $or: phoneMatches
+  }).select('_id name firstName lastName phone discoveryNotes callerProfile callHistory').lean();
 }
 
 // ============================================================================

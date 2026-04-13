@@ -1041,6 +1041,61 @@ class EntityExtractionEngine {
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // PATTERN 3b: "this is [Name]" — single name, no surname
+    //   Catches: "this is Mark", "hey this is Mark and I was wondering..."
+    //   Pattern 3 requires TWO words after "this is" and rejects if the
+    //   second word fails isValidSurnameCandidate (e.g. "and", "I").
+    //   This fallback accepts the first name alone.
+    // ════════════════════════════════════════════════════════════════════════
+
+    if (!entities.firstName) {
+      // Match "this is <Word>" followed by a non-alpha boundary (end, punct, space + blocklisted word)
+      const thisIsSinglePattern = /\bthis is (\w+)\b/i;
+      const thisIsSingleMatch = text.match(thisIsSinglePattern);
+
+      if (thisIsSingleMatch && thisIsSingleMatch[1]) {
+        const candidate = thisIsSingleMatch[1];
+        // Skip if the "name" is a blocklisted connector/filler or too short
+        const lcCandidate = candidate.toLowerCase();
+        const FILLER_BLOCK = new Set([
+          ...ScrabEngine.SURNAME_CONNECTOR_BLOCKLIST,
+          'the', 'a', 'an', 'um', 'uh', 'like', 'actually', 'basically',
+          'really', 'not', 'going', 'here', 'there', 'now', 'very', 'well',
+          'okay', 'ok', 'yes', 'yeah', 'no', 'nah', 'hey', 'hi', 'hello',
+          'john', // agent's name — caller saying "this is John from Penguin Air" is the GREETING
+        ]);
+
+        if (candidate.length >= 2 && !FILLER_BLOCK.has(lcCandidate)) {
+          const capitalized = this.capitalizeFirst(candidate);
+
+          if (context.GlobalHubService) {
+            const firstMatch = await context.GlobalHubService.matchFirstName(capitalized);
+            entities.firstName = firstMatch.value;
+            entities.firstNameMeta = firstMatch;
+            validations.push({
+              scenario: 'this_is_single',
+              first_candidate: { value: capitalized, ...firstMatch },
+              source: 'GlobalShare'
+            });
+            extractions.push({
+              type: 'firstName', value: firstMatch.value, pattern: 'this_is_single',
+              confidence: firstMatch.match ? 0.85 : 0.70,
+              validated: firstMatch.match,
+              verificationMode: firstMatch.verificationMode,
+              correctedFrom: firstMatch.correctedFrom || null
+            });
+          } else {
+            entities.firstName = capitalized;
+            extractions.push({
+              type: 'firstName', value: capitalized, pattern: 'this_is_single',
+              confidence: 0.80
+            });
+          }
+        }
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // PATTERN 4: "call me [Name]"
     // ════════════════════════════════════════════════════════════════════════
 

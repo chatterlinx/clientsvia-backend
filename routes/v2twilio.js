@@ -6646,7 +6646,30 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.warn('[V2 RESPOND] Agent2 instant audio check failed', { error: e.message });
       }
 
-      if (!audioUrl && elevenLabsVoice && responseText) {
+      // ── Time-budget guard: skip ElevenLabs if webhook time nearly blown ──
+      // Twilio hard-kills webhooks at 15s. ElevenLabs typically takes 2-5s.
+      // If we've already burned 12s+ on company load + LLM + events, attempting
+      // TTS will almost certainly push us past 15s → "application error".
+      // Fall through to the Polly <Say> fallback instead.
+      const _elapsedBeforeTts = Date.now() - T0;
+      if (!audioUrl && elevenLabsVoice && responseText && _elapsedBeforeTts >= 12000) {
+        logger.warn('[V2 RESPOND] Time-budget guard: skipping ElevenLabs TTS', {
+          callSid, turn: turnNumber, elapsedMs: _elapsedBeforeTts,
+          reason: 'Webhook time budget nearly exhausted (>=12s). Falling back to Polly <Say>.'
+        });
+        if (CallLogger) {
+          CallLogger.logEvent({
+            callId: callSid, companyId: companyID, type: 'TTS_SKIPPED_TIME_BUDGET',
+            turn: turnNumber,
+            data: { elapsedMs: _elapsedBeforeTts, threshold: 12000 }
+          }).catch(() => {});
+        }
+        localVoiceProviderUsed = 'polly_time_budget_guard';
+        vd_elevenLabsAttempted = false;
+        // audioUrl stays null → falls through to <Say> with Polly.Matthew-Neural
+      }
+
+      if (!audioUrl && elevenLabsVoice && responseText && localVoiceProviderUsed !== 'polly_time_budget_guard') {
         vd_elevenLabsAttempted = true;
         const ttsStartTime = Date.now();
         try {
