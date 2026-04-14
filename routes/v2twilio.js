@@ -5180,6 +5180,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // 🔍 ENTITY EXTRACTION — discoveryNotes parallel walk
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Fire-and-forget on EVERY turn. Captures names, phones, addresses from
+    // caller speech into discoveryNotes.temp. Never awaited — zero latency.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (speechResult && callSid && companyID) {
+      const EntityExtractionService = require('../services/discoveryNotes/EntityExtractionService');
+      EntityExtractionService.extractAndUpdate(companyID, callSid, speechResult).catch(() => {});
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // 🎧 LAP GATE — ListenerActParser
     // ═══════════════════════════════════════════════════════════════════════════
     // Fires on EVERY turn, EVERY objective state, before ConversationEngine,
