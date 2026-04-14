@@ -123,6 +123,28 @@ async function getRedis() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 🎙️ SPEECH DETECTION — Single source of truth (NEVER hardcode)
+// Reads from company.aiAgentSettings.agent2.speechDetection
+// Schema default: 1.0s (v2Company.js). Twilio Gather requires string.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _getSpeechDetection(company) {
+  return company?.aiAgentSettings?.agent2?.speechDetection
+      || company?.aiAgentSettings?.voiceSettings?.speechDetection
+      || {};
+}
+
+/**
+ * Returns the company's speechTimeout as a string for Twilio Gather.
+ * opts.pendingFollowUp = true → returns '2' (longer wait when agent asked a question)
+ */
+function _speechTimeout(company, opts) {
+  if (opts?.pendingFollowUp) return '2';
+  const sd = _getSpeechDetection(company);
+  return sd.speechTimeout ? sd.speechTimeout.toString() : '1';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 🗑️ TEMP AUDIO CLEANUP — Auto-delete per-call MP3s after Twilio fetches them
 // ═══════════════════════════════════════════════════════════════════════════
 // Temp audio files (ai_respond, s0, s1..., patience_checkin) are written to
@@ -931,7 +953,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to
       input: 'speech',
       actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
       timeout: 7,
-      speechTimeout: 'auto',
+      speechTimeout: _speechTimeout(company),
       speechModel: 'phone_call',
       action: `/api/twilio/v2-agent-respond/${companyID || 'unknown'}`,
       method: 'POST'
@@ -1508,7 +1530,7 @@ router.post('/voice', async (req, res) => {
         method: 'POST',
         actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
         timeout: 7, // Initial timeout (how long to wait for ANY speech)
-        speechTimeout: 'auto', // Auto speech timeout - let Twilio decide when user is done
+        speechTimeout: _speechTimeout(company), // Auto speech timeout - let Twilio decide when user is done
         enhanced: true, // Enhanced speech recognition
         speechModel: 'phone_call', // Optimized for phone calls
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
@@ -2060,7 +2082,7 @@ router.post('/voice', async (req, res) => {
         actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech detected (prevents infinite loop)
         bargeIn: speechDetection.bargeIn ?? false,
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
+        speechTimeout: _speechTimeout(company),
         enhanced: enhancedEnabled,
         speechModel: activeSpeechModel,
         hints: hints,
@@ -2545,7 +2567,7 @@ router.post('/voice', async (req, res) => {
         actionOnEmptyResult: true,
         bargeIn: false,
         timeout: 7,
-        speechTimeout: 'auto',
+        speechTimeout: _speechTimeout(company),
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -3144,7 +3166,7 @@ router.post('/handle-speech', async (req, res) => {
         actionOnEmptyResult: true,
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
+        speechTimeout: _speechTimeout(company),
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -3268,7 +3290,7 @@ router.post('/handle-speech', async (req, res) => {
           actionOnEmptyResult: true,
           bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
           timeout: speechDetection.initialTimeout ?? 7,
-          speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
+          speechTimeout: _speechTimeout(company),
           enhanced: speechDetection.enhancedRecognition ?? true,
           speechModel: speechDetection.speechModel ?? 'phone_call',
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -3296,7 +3318,7 @@ router.post('/handle-speech', async (req, res) => {
         actionOnEmptyResult: true,
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : '1.5',
+        speechTimeout: _speechTimeout(company),
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -3410,7 +3432,7 @@ router.post('/handle-speech', async (req, res) => {
       actionOnEmptyResult: true,
       bargeIn: speechDetection.bargeIn ?? false,
       timeout: speechDetection.initialTimeout ?? 7,
-      speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
+      speechTimeout: _speechTimeout(company),
       enhanced: speechDetection.enhancedRecognition ?? true,
       speechModel: speechDetection.speechModel ?? 'phone_call',
       partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -3614,7 +3636,7 @@ router.post('/:companyID/voice', async (req, res) => {
       method: 'POST',
       actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
       timeout: 7,
-      speechTimeout: 'auto',
+      speechTimeout: _speechTimeout(company),
       enhanced: true,
       speechModel: 'phone_call'
     });
@@ -3728,7 +3750,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
         method:             'POST',
         actionOnEmptyResult: true,
         timeout:            7,
-        speechTimeout:      '1.5',
+        speechTimeout: _speechTimeout(company),
         speechModel:        'phone_call',
       });
       fallbackGather.pause({ length: 1 });
@@ -3762,7 +3784,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
         method:             'POST',
         actionOnEmptyResult: true,
         timeout:            7,
-        speechTimeout:      '1.5',
+        speechTimeout: _speechTimeout(company),
         speechModel:        'phone_call',
       });
       resumeGather.pause({ length: 1 });
@@ -3785,7 +3807,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
       method:             'POST',
       actionOnEmptyResult: true,
       timeout:            hc.deadAirCheckSeconds || 8,
-      speechTimeout:      '1.5',
+      speechTimeout: _speechTimeout(company),
       speechModel:        'phone_call',
     });
     loopGather.pause({ length: 1 });
@@ -3803,7 +3825,7 @@ router.post('/lap-hold-loop/:companyId/:callSid', async (req, res) => {
       method:             'POST',
       actionOnEmptyResult: true,
       timeout:            7,
-      speechTimeout:      '1.5',
+      speechTimeout: _speechTimeout(company),
       speechModel:        'phone_call',
     });
     errGather.pause({ length: 1 });
@@ -3991,10 +4013,9 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         } catch (_) {}
       }
 
-      const _sdCached = company?.aiAgentSettings?.agent2?.speechDetection
-        || company?.aiAgentSettings?.voiceSettings?.speechDetection || {};
+      const _sdCached = _getSpeechDetection(company);
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`
-        + `?st=${encodeURIComponent(_sdCached.speechTimeout || '1.5')}`
+        + `?st=${encodeURIComponent(_speechTimeout(company))}`
         + `&bi=${_sdCached.bargeIn ? '1' : '0'}`
         + `&en=${_sdCached.enhancedRecognition !== false ? '1' : '0'}`
         + `&sm=${encodeURIComponent(_sdCached.speechModel || 'phone_call')}`;
@@ -4223,10 +4244,9 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         } catch (_) {}
       }
 
-      const _sdStream = company?.aiAgentSettings?.agent2?.speechDetection
-        || company?.aiAgentSettings?.voiceSettings?.speechDetection || {};
+      const _sdStream = _getSpeechDetection(company);
       const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`
-        + `?st=${encodeURIComponent(_sdStream.speechTimeout || '1.5')}`
+        + `?st=${encodeURIComponent(_speechTimeout(company))}`
         + `&bi=${_sdStream.bargeIn ? '1' : '0'}`
         + `&en=${_sdStream.enhancedRecognition !== false ? '1' : '0'}`
         + `&sm=${encodeURIComponent(_sdStream.speechModel || 'phone_call')}`;
@@ -4367,10 +4387,9 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
           } catch (_) {}
         }
 
-        const _sdPartial = company?.aiAgentSettings?.agent2?.speechDetection
-          || company?.aiAgentSettings?.voiceSettings?.speechDetection || {};
+        const _sdPartial = _getSpeechDetection(company);
         const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`
-          + `?st=${encodeURIComponent(_sdPartial.speechTimeout || '1.5')}`
+          + `?st=${encodeURIComponent(_speechTimeout(company))}`
           + `&bi=${_sdPartial.bargeIn ? '1' : '0'}`
           + `&en=${_sdPartial.enhancedRecognition !== false ? '1' : '0'}`
           + `&sm=${encodeURIComponent(_sdPartial.speechModel || 'phone_call')}`;
@@ -4450,7 +4469,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         action: `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
         timeout: 5,
-        speechTimeout: 'auto',
+        speechTimeout: _speechTimeout(company),
         actionOnEmptyResult: false,
       });
 
@@ -4632,7 +4651,7 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       method: 'POST',
       actionOnEmptyResult: true,
       timeout: 7,
-      speechTimeout: '1.5',
+      speechTimeout: _speechTimeout(company),
     });
     crashGather.say({ voice: TWILIO_FALLBACK_VOICE }, crashText);
     twimlString = twiml.toString();
@@ -4710,7 +4729,7 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
         method:                   'POST',
         actionOnEmptyResult:      true,
         timeout:                  gatherCfg?.timeout ?? 7,
-        speechTimeout:            gatherCfg?.speechTimeout ?? '1.5',
+        speechTimeout:            gatherCfg?.speechTimeout ?? _speechTimeout(company),
         bargeIn:                  gatherCfg?.bargeIn ?? false,
         enhanced:                 gatherCfg?.enhanced ?? true,
         speechModel:              gatherCfg?.speechModel || 'phone_call',
@@ -4792,7 +4811,7 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
           method:                   'POST',
           actionOnEmptyResult:      true,
           timeout:                  gatherCfg?.timeout ?? 7,
-          speechTimeout:            gatherCfg?.speechTimeout ?? '1.5',
+          speechTimeout:            gatherCfg?.speechTimeout ?? _speechTimeout(company),
           bargeIn:                  gatherCfg?.bargeIn ?? false,
           enhanced:                 gatherCfg?.enhanced ?? true,
           speechModel:              gatherCfg?.speechModel || 'phone_call',
@@ -4901,7 +4920,7 @@ router.post('/v2-agent-listen/:companyID', async (req, res) => {
       method: 'POST',
       actionOnEmptyResult: true,
       timeout: 7,
-      speechTimeout: 'auto'
+      speechTimeout: _speechTimeout(company)
     });
     twimlString = twiml.toString();
     res.type('text/xml');
@@ -5019,7 +5038,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         method: 'POST',
         actionOnEmptyResult: true,
         timeout: 7,
-        speechTimeout: 'auto',
+        speechTimeout: _speechTimeout(company),
         speechModel: 'phone_call'
       });
       twimlString = twiml.toString();
@@ -5242,7 +5261,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               method:              'POST',
               actionOnEmptyResult: true,
               timeout:             hc.deadAirCheckSeconds || 8,
-              speechTimeout:       '1.5',
+              speechTimeout:       _speechTimeout(company),
               speechModel:         'phone_call',
             });
             holdGather.pause({ length: 1 });  // brief silence while waiting
@@ -5266,7 +5285,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               method:              'POST',
               actionOnEmptyResult: true,
               timeout:             7,
-              speechTimeout:       '1.5',
+              speechTimeout:       _speechTimeout(company),
               speechModel:         'phone_call',
             });
             repeatGather.pause({ length: 1 });
@@ -5281,7 +5300,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               method:              'POST',
               actionOnEmptyResult: true,
               timeout:             7,
-              speechTimeout:       '1.5',
+              speechTimeout:       _speechTimeout(company),
               speechModel:         'phone_call',
             });
             respondGather.pause({ length: 1 });
@@ -5796,7 +5815,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           method: 'POST',
           actionOnEmptyResult: true,
           timeout: nextTimeout,
-          speechTimeout: 'auto',
+          speechTimeout: _speechTimeout(company),
           speechModel: 'phone_call',
           partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
           partialResultCallbackMethod: 'POST'
@@ -5939,10 +5958,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
         // Return fresh Gather TwiML — silently re-open listener for caller
         // Use 2s when a pending question is active (avoid cutting mid-sentence).
-        // Otherwise use admin-configured speechTimeout (default 1.5s).
-        const ghostSpeechDet = company.aiAgentSettings?.agent2?.speechDetection
-          || company.aiAgentSettings?.voiceSettings?.speechDetection
-          || {};
+        // Otherwise use admin-configured speechTimeout via _speechTimeout(company).
         const twiml = new twilio.twiml.VoiceResponse();
         const gather = twiml.gather({
           input: 'speech',
@@ -5950,7 +5966,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           method: 'POST',
           actionOnEmptyResult: true,
           timeout: 7,
-          speechTimeout: hasAnyPendingQ ? '2' : (ghostSpeechDet.speechTimeout?.toString() || '1.5'),
+          speechTimeout: _speechTimeout(company, { pendingFollowUp: hasAnyPendingQ }),
           bargeIn: ghostSpeechDet.bargeIn ?? false,
           enhanced: ghostSpeechDet.enhancedRecognition ?? true,
           speechModel: ghostSpeechDet.speechModel || 'phone_call',
@@ -6026,7 +6042,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         redis.set(`a2sentence:gather:${callSid}:${turnNumber}`, JSON.stringify({
           action:        `/api/twilio/v2-agent-respond/${companyID}`,
           timeout:       7,         // default; overwritten after runtimeResult with patience value
-          speechTimeout: '1.5',    // default; overwritten after runtimeResult if pendingFollowUp
+          speechTimeout: _speechTimeout(company),    // default; overwritten after runtimeResult if pendingFollowUp
           bargeIn:       _preflightSpeechDet.bargeIn ?? false,
           enhanced:      _preflightSpeechDet.enhancedRecognition ?? true,
           speechModel:   _preflightSpeechDet.speechModel || 'phone_call',
@@ -6763,9 +6779,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
       // FOLLOW-UP MODE: When a pending follow-up question is active, use a
       // fixed 2s speechTimeout so Twilio doesn't cut off mid-sentence pauses.
-      // Otherwise use the admin-configured value (default 1.5s).
+      // Otherwise use the admin-configured value via _speechTimeout(company).
       const hasPendingFollowUp = !!persistedState?.agent2?.discovery?.pendingFollowUpQuestion;
-      const speechTimeoutValue = hasPendingFollowUp ? '2' : (speechDet.speechTimeout?.toString() || '1.5');
+      const speechTimeoutValue = _speechTimeout(company, { pendingFollowUp: hasPendingFollowUp });
 
       // ── BOOKING HANDOFF REDIRECT ──────────────────────────────────────────────
       // When this turn JUST transitioned to BOOKING mode (HANDOFF_BOOKING fired),
@@ -7373,7 +7389,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           method: 'POST',
           actionOnEmptyResult: true,
           timeout: 7,
-          speechTimeout: '1.5',
+          speechTimeout: _speechTimeout(company),
         });
         const _rcvText = 'I apologize for the interruption. Please go ahead and tell me how I can help.';
         _rcvGather.say({ voice: TWILIO_FALLBACK_VOICE }, _rcvText);
@@ -7898,7 +7914,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       method: 'POST',
       actionOnEmptyResult: true,
       timeout: 7,
-      speechTimeout: '1.5',
+      speechTimeout: _speechTimeout(company),
     });
     crashGather.say({ voice: TWILIO_FALLBACK_VOICE }, crashText);
     twimlString = twiml.toString();
@@ -8385,7 +8401,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
         method: 'POST',
         actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
         timeout: 7,
-        speechTimeout: 'auto',
+        speechTimeout: _speechTimeout(company),
         enhanced: true,
         speechModel: 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
@@ -8407,7 +8423,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
         method: 'POST',
         actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
         timeout: 7,
-        speechTimeout: 'auto',
+        speechTimeout: _speechTimeout(company),
         enhanced: true,
         speechModel: 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
@@ -9840,7 +9856,7 @@ router.post('/test-gather-twiml', (req, res) => {
     method: 'POST',
     actionOnEmptyResult: true,
     timeout: 7,
-    speechTimeout: 'auto'
+    speechTimeout: _speechTimeout(company)
   });
   gather.say('Say anything after this message, then wait.');
   
