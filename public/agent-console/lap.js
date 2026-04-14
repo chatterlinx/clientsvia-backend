@@ -33,11 +33,15 @@
     document.getElementById('header-company-id').textContent = S.companyId.slice(-6);
     document.getElementById('header-company-id').title = S.companyId;
 
-    // Load company name
+    // Load company name from truth endpoint (same pattern as index.js)
     try {
-      const co = await AgentConsoleAuth.apiFetch(`/api/company/${S.companyId}/profile`);
-      if (co?.name) document.getElementById('header-company-name').textContent = co.name;
-    } catch (_) {}
+      const truth = await AgentConsoleAuth.apiFetch(`/api/company/${S.companyId}/truth`);
+      const name = truth?.companyProfile?.businessName ||
+                   truth?.companyProfile?.companyName || 'Company';
+      document.getElementById('header-company-name').textContent = name;
+    } catch (_) {
+      document.getElementById('header-company-name').textContent = 'Company';
+    }
 
     // Back button
     document.getElementById('btn-back-to-profile')?.addEventListener('click', () => {
