@@ -142,9 +142,11 @@ function _getSpeechDetection(company) {
 
 /**
  * Returns the company's speechTimeout as a string for Twilio Gather.
+ * opts.turn1          = true → returns 'auto' (caller explaining their problem — let them finish)
  * opts.pendingFollowUp = true → returns '2' (longer wait when agent asked a question)
  */
 function _speechTimeout(company, opts) {
+  if (opts?.turn1) return 'auto';
   if (opts?.pendingFollowUp) return '2';
   const sd = _getSpeechDetection(company);
   return sd.speechTimeout ? sd.speechTimeout.toString() : '1';
@@ -2088,7 +2090,7 @@ router.post('/voice', async (req, res) => {
         actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech detected (prevents infinite loop)
         bargeIn: speechDetection.bargeIn ?? false,
         timeout: speechDetection.initialTimeout ?? 7,
-        speechTimeout: _speechTimeout(company),
+        speechTimeout: _speechTimeout(company, { turn1: true }),
         enhanced: enhancedEnabled,
         speechModel: activeSpeechModel,
         hints: hints,

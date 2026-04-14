@@ -365,14 +365,25 @@ async function invalidateGlobalFirstNames() {
 
 async function prewarmForCall(companyId) {
   const trace = createPerfTrace(`prewarm_${companyId}`);
-  
+
   logger.info(`[${MODULE_ID}] Pre-warming configs for call`, { companyId });
-  
+
+  // BridgeService warm: build phraseIndex + phoneticIndex from MongoDB if Redis
+  // is cold (e.g., first call after deploy). Runs in parallel with config loads.
+  // Graceful — .catch prevents blocking the greeting if bridge build fails.
+  const BridgeService = require('./engine/kc/BridgeService');
+
   const results = await Promise.all([
     getAgent2Config(companyId, trace),
     getBookingConfig(companyId, trace),
     getCalendarStatus(companyId, trace),
-    getGlobalFirstNames(trace)
+    getGlobalFirstNames(trace),
+    BridgeService.load(companyId).catch(err => {
+      logger.warn(`[${MODULE_ID}] BridgeService pre-warm failed (non-blocking)`, {
+        companyId, err: err.message
+      });
+      return null;
+    })
   ]);
   
   const perfData = trace.toObject();
