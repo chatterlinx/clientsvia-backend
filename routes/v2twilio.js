@@ -108,8 +108,14 @@ try {
 
 // ─── Speculative LLM pre-warm (fires during partialResultCallback) ─────────────
 const { runSpeculativeLLM, checkSpeculativeResult } = require('../services/speculative/SpeculativeLLMService');
-// In-memory debounce: prevents firing LLM on every partial burst.
-// Single-process safe (Render runs one Node instance).
+// UAP runs on every partial (<1ms) to detect confident matches EARLY.
+// When UAP first hits ≥0.80 confidence, we fire the speculative LLM immediately
+// (no debounce). If the match changes on a later partial, we fire again.
+// By the time the caller finishes speaking, the response is already in Redis.
+const UtteranceActParser = require('../services/engine/kc/UtteranceActParser');
+const UAP_PARTIAL_CONFIDENCE = 0.80; // same as KC pipeline threshold
+const _uapPartialMatch = new Map();  // callSid → { matchKey, firedAt }
+// Legacy debounce kept as fallback for when UAP never matches (confidence < 0.80)
 const _speculativeDebounce = new Map(); // callSid → timer handle
 
 // Helper: Get Redis client safely (returns null if unavailable)
@@ -6136,14 +6142,28 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         callSid, speechResult, callState.turnCount || 0, redis
       );
       if (_specPrewarm) {
-        // Cancel any in-flight debounce timer for this call — turn is done
+        // Cancel any in-flight debounce timer and UAP partial match for this call
         if (_speculativeDebounce.has(callSid)) {
           clearTimeout(_speculativeDebounce.get(callSid));
           _speculativeDebounce.delete(callSid);
         }
+        _uapPartialMatch.delete(callSid);
         // Signal fast path immediately — bridge will either not fire or
         // bridge-continue will find audio almost instantly (TTS still starts now)
         _fastPathResolve?.();
+
+        logger.info('[SPEC_PRE_WARM] 🚀 Using UAP-gated pre-warm result', {
+          callSid: callSid.slice(-8),
+          turnCount: callState.turnCount,
+          path: _specPrewarm?._123rp?.lastPath || '?',
+        });
+      } else {
+        // No speculative hit — clean up tracking (turn is starting fresh)
+        _uapPartialMatch.delete(callSid);
+        if (_speculativeDebounce.has(callSid)) {
+          clearTimeout(_speculativeDebounce.get(callSid));
+          _speculativeDebounce.delete(callSid);
+        }
       }
 
       // ═══════════════════════════════════════════════════════════════════════════
@@ -8037,22 +8057,76 @@ router.post('/v2-agent-partial/:companyId', async (req, res) => {
         }
       }
 
-      // ── Speculative LLM pre-warm ────────────────────────────────────────────
-      // Fire the LLM now, while the caller is still speaking, so the response
-      // is ready (or nearly ready) when the final transcript arrives.
-      // Debounced 350ms so rapid partial bursts only trigger ONE LLM call.
-      // Only fire on substantial partials (>15 chars) — short fragments aren't useful.
+      // ══════════════════════════════════════════════════════════════════════════
+      // UAP-GATED SPECULATIVE PRE-WARM
+      // ══════════════════════════════════════════════════════════════════════════
+      // UAP runs on EVERY partial (<1ms). The moment it detects a confident match
+      // (≥0.80), we fire the full speculative LLM pipeline IMMEDIATELY — no debounce.
+      // This gives Groq a 10-15 second head start while the caller is still talking.
+      //
+      // OLD: debounced 350ms from LAST partial → speculative always fires too late
+      // NEW: fires on FIRST confident UAP match → response ready before caller finishes
+      //
+      // If the UAP match CHANGES on a later partial, we fire again (overwrite).
+      // If UAP never matches (confidence < 0.80), fall back to debounce.
+      // ══════════════════════════════════════════════════════════════════════════
       if (CallSid && StableSpeechResult.length > 15) {
-        // Clear previous timer for this call (sliding window debounce)
-        if (_speculativeDebounce.has(CallSid)) clearTimeout(_speculativeDebounce.get(CallSid));
-        const _sid = CallSid;
-        const _cid = companyId;
-        const _txt = StableSpeechResult;
-        _speculativeDebounce.set(_sid, setTimeout(() => {
-          _speculativeDebounce.delete(_sid);
-          // Fire-and-forget — any error is swallowed inside runSpeculativeLLM
-          runSpeculativeLLM(_sid, _cid, _txt).catch(() => {});
-        }, 350));
+        let uapFired = false;
+
+        try {
+          const uapResult = await UtteranceActParser.parse(companyId, StableSpeechResult);
+
+          if (uapResult && uapResult.confidence >= UAP_PARTIAL_CONFIDENCE) {
+            const matchKey = `${uapResult.containerId}:${uapResult.sectionIdx ?? '-'}`;
+            const prev = _uapPartialMatch.get(CallSid);
+
+            // Only fire if this is a NEW match (first hit or different section)
+            if (!prev || prev.matchKey !== matchKey) {
+              _uapPartialMatch.set(CallSid, { matchKey, firedAt: Date.now() });
+
+              logger.info('[V2 PARTIAL] 🎯 UAP MATCH — firing speculative NOW', {
+                callSid: CallSid.slice(-8),
+                matchType: uapResult.matchType,
+                confidence: uapResult.confidence,
+                kcId: uapResult.kcId,
+                section: uapResult.sectionLabel,
+                textLen: StableSpeechResult.length,
+                isNewMatch: !prev,
+              });
+
+              // Cancel any legacy debounce timer
+              if (_speculativeDebounce.has(CallSid)) {
+                clearTimeout(_speculativeDebounce.get(CallSid));
+                _speculativeDebounce.delete(CallSid);
+              }
+
+              // Fire speculative IMMEDIATELY — no debounce
+              runSpeculativeLLM(CallSid, companyId, StableSpeechResult).catch(() => {});
+              uapFired = true;
+            }
+            // Same match as before — don't re-fire, speculative is already running
+          }
+        } catch (uapErr) {
+          // UAP error is non-fatal — fall through to debounce
+          logger.debug('[V2 PARTIAL] UAP parse failed (non-fatal)', {
+            callSid: CallSid.slice(-8),
+            error: uapErr.message,
+          });
+        }
+
+        // ── Debounce fallback — only when UAP doesn't match ──────────────────
+        // If UAP never reaches 0.80 confidence, the debounce ensures we still
+        // attempt a speculative pre-warm on the last substantial partial.
+        if (!uapFired && !_uapPartialMatch.has(CallSid)) {
+          if (_speculativeDebounce.has(CallSid)) clearTimeout(_speculativeDebounce.get(CallSid));
+          const _sid = CallSid;
+          const _cid = companyId;
+          const _txt = StableSpeechResult;
+          _speculativeDebounce.set(_sid, setTimeout(() => {
+            _speculativeDebounce.delete(_sid);
+            runSpeculativeLLM(_sid, _cid, _txt).catch(() => {});
+          }, 350));
+        }
       }
     }
 
