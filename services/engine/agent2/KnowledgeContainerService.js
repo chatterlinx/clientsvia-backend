@@ -800,14 +800,18 @@ function findContainer(containers, input, context = null) {
     }
 
     // ── Path B: Score container.title (implicit keywords) ────────────────
+    // Title match updates the container score (determines which CONTAINER wins),
+    // but does NOT reset bestSection/bestSIdx — those are preserved for Groq
+    // section targeting. Without this, a 204-section container sends ALL sections
+    // to Groq when the title wins, causing 5-8s latency instead of ~500ms.
     if (container.title) {
       const titleNorm = container.title.toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
       const titleScore = _scorePhrase(titleNorm, norm, inputWords);
       const weighted = Math.round(titleScore * 0.8);
       if (weighted > containerBestScore) {
-        containerBestScore   = weighted;
-        containerBestSection = null; // title match → no specific section
-        containerBestSIdx    = null;
+        containerBestScore = weighted;
+        // Preserve bestSection/bestSIdx from Path A for Groq targeting.
+        // Title winning = container-level match. Section = Groq focus hint.
       }
     }
 
@@ -832,8 +836,15 @@ function findContainer(containers, input, context = null) {
   }
 
   // ── ANCHOR FLOOR ───────────────────────────────────────────────────────
+  // Safety net: when the anchor has ZERO keyword overlap but no real competitor
+  // matched above threshold, keep the anchor in play for call continuity.
+  //
+  // FIX: Old behavior fired when bestScore < 24, which suppressed real matches
+  // (e.g., Diagnostic Fee scoring 15 for "service call charge" would lose to
+  // anchor No Cooling at score 24 despite zero relevance). Now only fires when
+  // competitors scored below MIN_THRESHOLD — real matches always win.
   const ANCHOR_FLOOR = 24;
-  if (_anchorContainer && _anchorRawScore === 0 && bestScore < ANCHOR_FLOOR) {
+  if (_anchorContainer && _anchorRawScore === 0 && bestScore < MIN_THRESHOLD) {
     bestMatch = { container: _anchorContainer, score: ANCHOR_FLOOR, anchorFloor: true };
     bestScore = ANCHOR_FLOOR;
   }
@@ -865,13 +876,21 @@ function findContainer(containers, input, context = null) {
       }
 
       // Score title with augmented input
+      // Same principle as Path B: title updates container score but preserves
+      // any section found from keyword matching above for Groq targeting.
       if (container.title) {
         const titleNorm = container.title.toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
         const s = _scorePhrase(titleNorm, augNorm, augWords);
         const weighted = Math.round(s * 0.8);
         if (weighted > bestScore) {
           bestScore = weighted;
-          bestMatch = { container, score: weighted, contextAssisted: true };
+          bestMatch = {
+            container,
+            score: weighted,
+            bestSection:    bestMatch?.bestSection    || null,
+            bestSectionIdx: bestMatch?.bestSectionIdx ?? null,
+            contextAssisted: true,
+          };
         }
       }
     }
