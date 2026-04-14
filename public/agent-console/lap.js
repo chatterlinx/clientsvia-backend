@@ -35,7 +35,7 @@
 
     // Load company name from truth endpoint (same pattern as index.js)
     try {
-      const truth = await AgentConsoleAuth.apiFetch(`/api/company/${S.companyId}/truth`);
+      const truth = await AgentConsoleAuth.apiFetch(`/api/agent-console/${S.companyId}/truth`);
       const name = truth?.companyProfile?.businessName ||
                    truth?.companyProfile?.companyName || 'Company';
       document.getElementById('header-company-name').textContent = name;
