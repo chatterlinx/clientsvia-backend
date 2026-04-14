@@ -1023,24 +1023,36 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
     } catch (_) { /* non-fatal */ }
 
     // ── Path 2: Semantic embedding match ──────────────────────────────────
+    // Process one container at a time to avoid OOM — embedding arrays are huge.
     try {
-      const embContainers = await CompanyKnowledgeContainer
-        .find({ companyId, isActive: true })
-        .select('+sections.callerPhrases.embedding +sections.contentEmbedding')
-        .lean();
-      const semResult = await SemanticMatchService.findBestSection(companyId, utterance, embContainers);
-      if (semResult) {
-        const semKcId = semResult.container.kcId || null;
-        results.semantic = {
-          containerId:    String(semResult.container._id),
-          containerTitle: semResult.container.title,
-          sectionIdx:     semResult.sectionIdx,
-          sectionLabel:   semResult.section?.label || null,
-          sectionKcId:    semKcId && semResult.sectionIdx != null ? `${semKcId}-${String(semResult.sectionIdx + 1).padStart(2, '0')}` : null,
-          sectionContent: semResult.section?.content || null,
-          similarity:     semResult.similarity,
-          matchSource:    semResult.matchSource,
-        };
+      const utteranceVec = await SemanticMatchService.embedText(utterance);
+      if (utteranceVec) {
+        let bestSem = null;
+        const containerIds = containers.map(c => c._id);
+        for (const cId of containerIds) {
+          const [embDoc] = await CompanyKnowledgeContainer
+            .find({ _id: cId, isActive: true })
+            .select('+sections.callerPhrases.embedding +sections.contentEmbedding')
+            .lean();
+          if (!embDoc) continue;
+          const semResult = await SemanticMatchService.findBestSection(companyId, utterance, [embDoc], utteranceVec);
+          if (semResult && (!bestSem || semResult.similarity > bestSem.similarity)) {
+            bestSem = semResult;
+          }
+        }
+        if (bestSem) {
+          const semKcId = bestSem.container.kcId || null;
+          results.semantic = {
+            containerId:    String(bestSem.container._id),
+            containerTitle: bestSem.container.title,
+            sectionIdx:     bestSem.sectionIdx,
+            sectionLabel:   bestSem.section?.label || null,
+            sectionKcId:    semKcId && bestSem.sectionIdx != null ? `${semKcId}-${String(bestSem.sectionIdx + 1).padStart(2, '0')}` : null,
+            sectionContent: bestSem.section?.content || null,
+            similarity:     bestSem.similarity,
+            matchSource:    bestSem.matchSource,
+          };
+        }
       }
     } catch (_) { /* non-fatal */ }
 
@@ -2510,6 +2522,8 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
     const cleanPhrases = phrases.map(p => `${p}`.trim()).filter(Boolean);
 
     // ── Load ALL containers with embeddings + caller phrases ────────────
+    // Exclude callerPhrases.embedding (512-dim arrays) — only .text and
+    // .anchorWords are needed here. Prevents OOM on large KC sets.
     const allDocs = await CompanyKnowledgeContainer.collection.find(
       { companyId, isActive: { $ne: false } },
       { projection: {
@@ -2519,7 +2533,8 @@ router.post('/:companyId/knowledge/cross-scan', async (req, res) => {
         'sections.content': 1,
         'sections.contentEmbedding': 1,
         'sections.isActive': 1,
-        'sections.callerPhrases': 1,
+        'sections.callerPhrases.text': 1,
+        'sections.callerPhrases.anchorWords': 1,
       } }
     ).toArray();
 

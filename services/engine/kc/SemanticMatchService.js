@@ -178,12 +178,12 @@ function cosineSimilarity(a, b) {
  * @param {Object[]} containers  — lean KC containers with sections (must include embeddings via +select)
  * @returns {Promise<{section, sectionIdx, container, similarity, matchSource}|null>}
  */
-async function findBestSection(companyId, utterance, containers) {
+async function findBestSection(companyId, utterance, containers, precomputedVec = null) {
   if (!_getOpenAI()) return null;
   if (!utterance?.trim() || !containers?.length) return null;
 
-  // 1. Embed the caller utterance
-  const utteranceVec = await embedText(utterance);
+  // 1. Embed the caller utterance (skip if pre-computed vector supplied)
+  const utteranceVec = precomputedVec || await embedText(utterance);
   if (!utteranceVec) return null;
 
   let best = null;
