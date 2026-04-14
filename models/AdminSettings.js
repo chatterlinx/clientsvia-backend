@@ -1024,30 +1024,27 @@ const adminSettingsSchema = new mongoose.Schema({
         },
 
         // ────────────────────────────────────────────────────────────────────
-        // LAP Keyword Groups (ListenerActParser)
+        // LAP Entries (ListenerActParser) — Phrase-Response Table
         // ────────────────────────────────────────────────────────────────────
-        // System-level keyword groups inherited by ALL companies.
-        // Companies add their own keywords on top — system keywords are never
-        // modified by company-level saves.
+        // Global phrase-response entries inherited by ALL companies.
+        // Each entry = one phrase + 1-3 response texts (rotated randomly).
+        // Audio is per-company (LAPResponseAudio model).
         //
-        // Three built-in groups (seeded via scripts/seed-lap-groups.js):
-        //   connection_distress — "hello", "are you there" → responds
-        //   hold_request        — "wait", "hold on"       → hold loop
-        //   repeat_request      — "what", "come again"   → repeat last
+        // Seeded via scripts/seed-lap-entries.js
         //
-        // Schema per group:
-        //   { id, name, systemKeywords[], defaultClosedQuestion,
-        //     action: 'respond'|'hold'|'repeat_last',
-        //     defaultHoldConfig: { maxHoldSeconds, deadAirCheckSeconds,
-        //                          deadAirPrompt, resumeKeywords[] } }
+        // Schema per entry:
+        //   { id, phrase, action: 'respond'|'hold'|'repeat_last',
+        //     responses: [String], holdConfig: { maxHoldSeconds,
+        //     deadAirCheckSeconds, deadAirPrompt, resumeKeywords[] },
+        //     enabled: bool, sortOrder: Number }
         // ────────────────────────────────────────────────────────────────────
-        lapGroups: {
+        lapEntries: {
             type:        mongoose.Schema.Types.Mixed,
             default:     [],
-            description: 'LAP system keyword groups — global, inherited by all companies'
+            description: 'LAP phrase-response entries — global, all companies inherit'
         },
-        lapGroupsUpdatedAt: { type: Date,   default: null },
-        lapGroupsUpdatedBy: { type: String, default: null },
+        lapEntriesUpdatedAt: { type: Date,   default: null },
+        lapEntriesUpdatedBy: { type: String, default: null },
 
         // ────────────────────────────────────────────────────────────────────
         // PHRASE INTELLIGENCE — Global English-language rules for reducing

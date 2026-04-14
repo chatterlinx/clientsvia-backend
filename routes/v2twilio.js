@@ -5186,12 +5186,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // KC, and BookingLogicEngine. Detects attention signals (connection distress,
     // hold requests, repeat requests) and returns recovery TwiML immediately.
     //
-    // System keywords:  globalHub.lapGroups  (admin-managed, all companies)
-    // Custom keywords:  company.lapConfig.groups[n].customKeywords
-    // Effective match:  system ∪ custom  (~0ms Redis lookup)
+    // Global entries:  AdminSettings.lapEntries  (phrase-response table)
+    // Audio:           LAPResponseAudio  (per-company, pre-cached)
     //
-    // Voice: ElevenLabs (same voice settings as main pipeline). Falls back to
-    //        Twilio TTS if ElevenLabs is unavailable.
+    // Voice: Pre-cached LAPResponseAudio → ElevenLabs live TTS → Polly fallback.
     // Logging: Both caller + agent turns written to CallTranscriptV2 so LAP
     //          intercepts appear in call intelligence.
     //
@@ -5208,15 +5206,34 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           const lapActionUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`;
           let   lapResponseText = null;
 
-          // ── ElevenLabs TTS helper — synthesize text, write to disk, <Play> ──
-          // Falls back to Twilio say() if voice not configured or TTS fails.
+          // ── Audio helper — pre-cached LAPResponseAudio → InstantAudio → TTS → Say ──
           const lapSayOrPlay = async (text) => {
             if (!text) return;
             const cleanText = cleanTextForTTS(stripMarkdown(text));
             const _vs = company.aiAgentSettings?.voiceSettings || {};
+
+            // ── 1. Check LAPResponseAudio (MongoDB-backed, deploy-proof) ──
+            try {
+              const LAPResponseAudio = require('../models/LAPResponseAudio');
+              const textHash = LAPResponseAudio.hashText(cleanText);
+              const fileHash = textHash.substring(textHash.length - 16);
+              const audioDoc = await LAPResponseAudio.findAudioDataByHash(companyID, fileHash);
+              if (audioDoc?.audioUrl) {
+                // Ensure file on disk (restore from MongoDB if missing)
+                const diskPath = require('path').join(__dirname, '..', 'public', audioDoc.audioUrl);
+                if (!fs.existsSync(diskPath) && audioDoc.audioData) {
+                  const dir = require('path').dirname(diskPath);
+                  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                  fs.writeFileSync(diskPath, audioDoc.audioData);
+                }
+                lapTwiml.play(`${getSecureBaseUrl(req)}${audioDoc.audioUrl}`);
+                return;
+              }
+            } catch (_lapAudioErr) { /* fall through to InstantAudio / TTS */ }
+
+            // ── 2. InstantAudioService cache (disk-based, fast) ──
             if (_vs.voiceId) {
               try {
-                // ── Check InstantAudioService cache — LAP responses are static text ──
                 const _lapIAS = require('../services/instantAudio/InstantAudioService');
                 const _lapStatus = _lapIAS.getStatus({
                   companyId: companyID, kind: 'LAP_RESPONSE', text: cleanText, voiceSettings: _vs,
@@ -5237,7 +5254,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   optimize_streaming_latency: _vs.streamingLatency,
                   company,
                 });
-                // Cache for next call — LAP text is static, pays ElevenLabs once
                 try { fs.writeFileSync(_lapStatus.filePath, lapBuf); } catch (_) {}
                 lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
                 return;
@@ -5245,6 +5261,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 logger.warn('[LAP GATE] ElevenLabs TTS failed, falling back to Twilio say', { error: ttsErr.message });
               }
             }
+            // ── 3. Polly fallback ──
             lapTwiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanText));
           };
 
@@ -5259,8 +5276,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               holdConfig: hc,
             });
 
-            lapResponseText = lapMatch.closedQuestion || null;
-            await lapSayOrPlay(lapMatch.closedQuestion);
+            lapResponseText = lapMatch.response || null;
+            await lapSayOrPlay(lapMatch.response);
             const holdGather = lapTwiml.gather({
               input:               'speech',
               action:              holdLoopUrl,
@@ -5296,10 +5313,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             });
             repeatGather.pause({ length: 1 });
 
-          // ── action: respond — play closed question, return to pipeline ───────
+          // ── action: respond — play response, return to pipeline ─────────────
           } else {
-            lapResponseText = lapMatch.closedQuestion || null;
-            await lapSayOrPlay(lapMatch.closedQuestion);
+            lapResponseText = lapMatch.response || null;
+            await lapSayOrPlay(lapMatch.response);
             const respondGather = lapTwiml.gather({
               input:               'speech',
               action:              lapActionUrl,
@@ -5332,24 +5349,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               {
                 speaker:         'agent',
                 kind:            'CONVERSATION_AGENT',
-                text:            lapResponseText || lapMatch.name,
+                text:            lapResponseText || lapMatch.phrase,
                 turnNumber:      lapTurnNum,
                 ts:              new Date(),
                 sourceKey:       'LAP_INTERCEPT',
                 provenanceType:  'SYSTEM',
                 provenanceLabel: 'LAP Intercept',
-                provenancePath:  `LAP_INTERCEPT/${lapMatch.groupId || lapMatch.name}`,
+                provenancePath:  `LAP_INTERCEPT/${lapMatch.entryId || lapMatch.phrase}`,
                 flags: [
                   { type: 'LAP_ACTION',  value: lapMatch.action },
-                  { type: 'LAP_GROUP',   value: lapMatch.name },
-                  { type: 'LAP_KEYWORD', value: lapMatch.keyword || '' },
+                  { type: 'LAP_PHRASE',  value: lapMatch.phrase },
+                  { type: 'LAP_ENTRY',   value: lapMatch.entryId || '' },
                 ],
               },
             ]);
           } catch (_lapLogErr) { /* non-fatal — call must not crash on log failure */ }
 
-          logger.info('[LAP GATE] ✅ Intercepted — returning recovery TwiML', {
-            companyId: companyID, callSid, action: lapMatch.action, group: lapMatch.name,
+          logger.info('[LAP GATE] Intercepted — returning recovery TwiML', {
+            companyId: companyID, callSid, action: lapMatch.action, phrase: lapMatch.phrase,
             voiceMode: (company.aiAgentSettings?.voiceSettings?.voiceId) ? 'elevenlabs' : 'twilio_say',
           });
           twimlString = lapTwiml.toString();

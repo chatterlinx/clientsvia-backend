@@ -9,16 +9,15 @@
  *   Pre-pipeline attention-signal detector.
  *   Fires on EVERY call turn, EVERY objective state, before ConversationEngine,
  *   KC, or BookingLogicEngine. Catches: connection distress, hold requests,
- *   repeat requests — and any custom groups the company defines.
+ *   repeat requests.
  *
  * ARCHITECTURE:
- *   Two-layer keyword system:
- *     systemKeywords[]  — global, admin-managed in GlobalShare
- *     customKeywords[]  — per-company additions on top of system list
- *   Effective keywords = systemKeywords ∪ customKeywords  (merged at runtime)
+ *   Global phrase-response entries (AdminSettings.lapEntries).
+ *   Each entry = one phrase + 1-3 response texts (rotated randomly).
+ *   Audio is per-company (LAPResponseAudio model).
  *
- *   Three built-in actions:
- *     'respond'     → play closedQuestion → Gather → normal pipeline resumes
+ *   Three actions:
+ *     'respond'     → play selected response → Gather → normal pipeline resumes
  *     'hold'        → play hold message → silent Gather loop with dead-air timer
  *     'repeat_last' → read CallSummary.liveProgress.lastResponse → play it
  *
@@ -27,8 +26,8 @@
  *   if (lapMatch?.matched) → return recovery TwiML immediately
  *
  * REDIS:
- *   globalHub:lapGroups           → system groups (no TTL, event-synced by admin)
- *   lap-config:{companyId}        → merged effective groups (TTL 1h)
+ *   globalHub:lapEntries          → global entries (no TTL, event-synced by admin)
+ *   lap-config:{companyId}        → cached enabled entries (TTL 1h)
  *   lap-hold:{companyId}:{callSid}→ hold loop state (TTL 5min)
  *
  * GRACEFUL DEGRADE:
@@ -47,7 +46,7 @@ const { getSharedRedisClient } = require('../../redisClientFactory');
 const CONFIG = {
   CACHE_KEY_PREFIX:  'lap-config',
   HOLD_KEY_PREFIX:   'lap-hold',
-  CACHE_TTL:         60 * 60,         // 1 hour — invalidated on PATCH lapConfig
+  CACHE_TTL:         60 * 60,         // 1 hour — invalidated on settings change
   HOLD_TTL:          5  * 60,         // 5 min  — hold state clears after 5 min idle
   MAX_HOLD_CHECKINS: 3,               // max dead-air check-ins before force-resume
 };
@@ -78,24 +77,18 @@ function _textMatchesKeyword(normalizedText, keyword) {
   return re.test(normalizedText);
 }
 
-// ── Core: effective group resolution ─────────────────────────────────────────
+// ── Core: effective entries resolution ───────────────────────────────────────
 
 /**
- * getEffectiveGroups — build the runtime-ready group list for a company.
+ * getEffectiveEntries — build the runtime-ready entry list for a company.
  *
- * Each group = {
- *   groupId, name, action, enabled,
- *   effectiveKeywords: Set<string>,   ← system + custom merged, normalized
- *   closedQuestion,
- *   holdConfig
- * }
- *
+ * Loads global entries, filters by company enabled state.
  * Result cached in Redis at lap-config:{companyId} for 1 hour.
  *
  * @param {string} companyId
  * @returns {Promise<Array>}
  */
-async function getEffectiveGroups(companyId) {
+async function getEffectiveEntries(companyId) {
   if (!companyId) return [];
 
   const redis = await getSharedRedisClient().catch(() => null);
@@ -106,105 +99,40 @@ async function getEffectiveGroups(companyId) {
     try {
       const cached = await redis.get(cacheKey);
       if (cached) {
-        const parsed = JSON.parse(cached);
-        // Restore Set from cached array
-        return parsed.map(g => ({
-          ...g,
-          effectiveKeywords: new Set(g.effectiveKeywords || [])
-        }));
+        return JSON.parse(cached);
       }
     } catch (_e) { /* fall through */ }
   }
 
-  // ── 2. Load system groups from GlobalHub ──────────────────────────────────
-  const systemGroups = await GlobalHubService.getLapGroups();
+  // ── 2. Load global entries from GlobalHub ─────────────────────────────────
+  const allEntries = await GlobalHubService.getLapEntries();
 
-  // ── 3. Load company lapConfig ─────────────────────────────────────────────
-  let companyGroups = [];
-  try {
-    const Company = require('../../../models/v2Company');
-    const company = await Company.findById(companyId).select('lapConfig').lean();
-    companyGroups = company?.lapConfig?.groups || [];
-  } catch (err) {
-    logger.warn('[LAPService] Could not load company lapConfig', { companyId, error: err.message });
-  }
+  // ── 3. Filter: only enabled entries with non-empty phrase ─────────────────
+  const effective = allEntries
+    .filter(e => e.enabled !== false && e.phrase?.trim())
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-  // ── 4. Build company config map (groupId → company overrides) ─────────────
-  const companyMap = new Map();
-  for (const cg of companyGroups) {
-    const key = cg.groupId || `custom:${cg.name}`;
-    companyMap.set(key, cg);
-  }
-
-  // ── 5. Merge system groups with company overrides ─────────────────────────
-  const effectiveGroups = [];
-
-  for (const sg of systemGroups) {
-    const override = companyMap.get(sg.id) || {};
-    const enabled  = override.enabled !== false;  // default on
-
-    // Merge keywords: system + company additions (normalized, deduped)
-    const allKws = new Set([
-      ...(sg.systemKeywords || []).map(_normalize),
-      ...(override.customKeywords || []).map(_normalize)
-    ]);
-    allKws.delete('');  // remove empty strings
-
-    effectiveGroups.push({
-      groupId:          sg.id,
-      name:             sg.name,
-      action:           sg.action,
-      enabled,
-      effectiveKeywords: allKws,
-      closedQuestion:   override.closedQuestion || sg.defaultClosedQuestion || null,
-      holdConfig:       override.holdConfig     || sg.defaultHoldConfig     || null,
-    });
-  }
-
-  // ── 6. Append custom groups (company-created, no system parent) ───────────
-  for (const cg of companyGroups) {
-    if (!cg.isCustom) continue;
-    if (!cg.name || !cg.enabled) continue;
-
-    const allKws = new Set((cg.customKeywords || []).map(_normalize));
-    allKws.delete('');
-
-    effectiveGroups.push({
-      groupId:          null,
-      name:             cg.name,
-      action:           cg.action || 'respond',
-      enabled:          true,
-      effectiveKeywords: allKws,
-      closedQuestion:   cg.closedQuestion || null,
-      holdConfig:       cg.holdConfig     || null,
-    });
-  }
-
-  // ── 7. Cache result (serialize Set → Array for JSON) ──────────────────────
+  // ── 4. Cache result ───────────────────────────────────────────────────────
   if (redis) {
     try {
-      const serializable = effectiveGroups.map(g => ({
-        ...g,
-        effectiveKeywords: [...g.effectiveKeywords]
-      }));
-      await redis.set(cacheKey, JSON.stringify(serializable), { EX: CONFIG.CACHE_TTL });
+      await redis.set(cacheKey, JSON.stringify(effective), { EX: CONFIG.CACHE_TTL });
     } catch (_e) { /* non-fatal */ }
   }
 
-  return effectiveGroups;
+  return effective;
 }
 
 // ── Core: match ───────────────────────────────────────────────────────────────
 
 /**
- * match — check transcript against all enabled LAP groups for this company.
+ * match — check transcript against all enabled LAP entries for this company.
  *
- * Returns the first matching group result, or { matched: false }.
- * Any error → graceful degrade: { matched: false }.
+ * Returns the first matching entry result with a randomly selected response,
+ * or { matched: false }. Any error → graceful degrade: { matched: false }.
  *
  * @param {string} companyId
  * @param {string} transcript  — raw STT text from Twilio
- * @returns {Promise<{ matched, groupId, name, action, closedQuestion, holdConfig }>}
+ * @returns {Promise<{ matched, entryId, phrase, action, response, holdConfig, audioHash }>}
  */
 async function match(companyId, transcript) {
   try {
@@ -213,31 +141,44 @@ async function match(companyId, transcript) {
     const normalized = _normalize(transcript);
     if (!normalized) return { matched: false };
 
-    const groups = await getEffectiveGroups(companyId);
+    const entries = await getEffectiveEntries(companyId);
 
-    for (const group of groups) {
-      if (!group.enabled) continue;
-      if (!group.effectiveKeywords.size) continue;
+    for (const entry of entries) {
+      if (_textMatchesKeyword(normalized, entry.phrase)) {
+        // Pick random response from the list (if any)
+        const responses = entry.responses || [];
+        const response = responses.length > 0
+          ? responses[Math.floor(Math.random() * responses.length)]
+          : null;
 
-      for (const kw of group.effectiveKeywords) {
-        if (_textMatchesKeyword(normalized, kw)) {
-          logger.info('[LAP] ✅ Match', {
-            companyId,
-            groupId: group.groupId,
-            name:    group.name,
-            action:  group.action,
-            keyword: kw,
-            transcript: transcript.substring(0, 80),
-          });
-          return {
-            matched:        true,
-            groupId:        group.groupId,
-            name:           group.name,
-            action:         group.action,
-            closedQuestion: group.closedQuestion,
-            holdConfig:     group.holdConfig,
-          };
+        // Generate audioHash for pre-cached audio lookup
+        let audioHash = null;
+        if (response) {
+          try {
+            const crypto = require('crypto');
+            audioHash = crypto.createHash('sha256').update(response.trim()).digest('hex');
+          } catch (_e) { /* non-fatal */ }
         }
+
+        logger.info('[LAP] Match', {
+          companyId,
+          entryId:  entry.id,
+          phrase:   entry.phrase,
+          action:   entry.action,
+          keyword:  entry.phrase,
+          response: response?.substring(0, 60),
+          transcript: transcript.substring(0, 80),
+        });
+
+        return {
+          matched:    true,
+          entryId:    entry.id,
+          phrase:     entry.phrase,
+          action:     entry.action,
+          response,
+          holdConfig: entry.holdConfig || null,
+          audioHash,
+        };
       }
     }
 
@@ -255,9 +196,6 @@ async function match(companyId, transcript) {
 
 /**
  * setHoldState — write hold state to Redis when a hold-request fires.
- * @param {string} companyId
- * @param {string} callSid
- * @param {object} state  — { actionUrl, objective, holdConfig, checkInCount }
  */
 async function setHoldState(companyId, callSid, state) {
   try {
@@ -275,7 +213,6 @@ async function setHoldState(companyId, callSid, state) {
 
 /**
  * getHoldState — load hold state for a call.
- * @returns {Promise<object|null>}
  */
 async function getHoldState(companyId, callSid) {
   try {
@@ -290,7 +227,6 @@ async function getHoldState(companyId, callSid) {
 
 /**
  * incrementHoldCheckIn — bump checkInCount, refresh TTL.
- * @returns {Promise<number>} new checkInCount
  */
 async function incrementHoldCheckIn(companyId, callSid) {
   try {
@@ -324,8 +260,7 @@ async function clearHoldState(companyId, callSid) {
 // ── Cache invalidation ────────────────────────────────────────────────────────
 
 /**
- * invalidate — clear the merged-group cache for a company.
- * Called when company PATCH /lap-config saves new settings.
+ * invalidate — clear the cached entries for a company.
  */
 async function invalidate(companyId) {
   try {
@@ -339,8 +274,7 @@ async function invalidate(companyId) {
 }
 
 /**
- * invalidateAll — clear LAP cache for ALL companies (called when admin updates system keywords).
- * Uses Redis SCAN to find and delete all lap-config:* keys.
+ * invalidateAll — clear LAP cache for ALL companies (called when admin updates global entries).
  */
 async function invalidateAll() {
   try {
@@ -378,10 +312,10 @@ module.exports = {
 
   // ── Cache management ──────────────────────────────────────────────────────
   invalidate,           // called by PATCH /lap-config per company
-  invalidateAll,        // called by PATCH /lap-groups (system keyword change)
+  invalidateAll,        // called by admin save (global entry change)
 
   // ── Exposed for tests ─────────────────────────────────────────────────────
-  getEffectiveGroups,
+  getEffectiveEntries,
   _normalize,
   _textMatchesKeyword,
 };

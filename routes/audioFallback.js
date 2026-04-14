@@ -33,6 +33,7 @@ const logger = require('../utils/logger');
 const TriggerAudio = require('../models/TriggerAudio');
 const GreetingAudio = require('../models/GreetingAudio');
 const KCResponseAudio = require('../models/KCResponseAudio');
+const LAPResponseAudio = require('../models/LAPResponseAudio');
 
 const PUBLIC_AUDIO_DIR = path.join(__dirname, '../public/audio');
 const INSTANT_LINES_DIR = path.join(PUBLIC_AUDIO_DIR, 'instant-lines');
@@ -244,6 +245,40 @@ router.get('/instant-lines/:filename', async (req, res) => {
       }
 
       logger.warn('[AudioFallback] KC response audio not found in MongoDB', { filename });
+    }
+
+    // ── LAP Response audio fallback ─────────────────────────────────────────
+    // LAP pre-recorded audio files use the prefix fd_LAP_RESPONSE_.
+    // Check LAPResponseAudio collection.
+    if (filename.startsWith('fd_LAP_RESPONSE_')) {
+      logger.debug('[AudioFallback] Checking LAPResponseAudio for LAP file', { filename });
+
+      // Try 1: Exact audioUrl match
+      audioDoc = await LAPResponseAudio.findOne({
+        audioUrl: `/audio-safe/instant-lines/${filename}`,
+        isValid: true
+      }).select('audioData').lean();
+
+      if (audioDoc?.audioData) {
+        logger.info('[AudioFallback] Found LAP audio via audioUrl', { filename, bytes: audioDoc.audioData.length });
+        return audioDoc.audioData;
+      }
+
+      // Try 2: Match by fileHash (last 16 hex chars before .mp3)
+      const lapHash = filename.match(/([a-f0-9]{16})\.mp3$/);
+      if (lapHash) {
+        audioDoc = await LAPResponseAudio.findOne({
+          fileHash: lapHash[1],
+          isValid: true
+        }).select('audioData').lean();
+
+        if (audioDoc?.audioData) {
+          logger.info('[AudioFallback] Found LAP audio via fileHash', { filename, hash: lapHash[1] });
+          return audioDoc.audioData;
+        }
+      }
+
+      logger.warn('[AudioFallback] LAP response audio not found in MongoDB', { filename });
     }
 
     return null;

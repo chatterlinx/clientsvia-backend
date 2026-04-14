@@ -1145,24 +1145,24 @@ async function healthCheck() {
 }
 
 // ============================================================================
-// LAP KEYWORD GROUPS  (ListenerActParser — global system groups)
+// LAP ENTRIES  (ListenerActParser — global phrase-response table)
 // ============================================================================
-// Redis key: globalHub:lapGroups  (JSON string, no TTL, event-synced)
-// Fallback:  AdminSettings.globalHub.lapGroups
+// Redis key: globalHub:lapEntries  (JSON string, no TTL, event-synced)
+// Fallback:  AdminSettings.globalHub.lapEntries
 //
-// These are the SYSTEM keyword lists shared by all companies.
-// Per-company customKeywords are merged at runtime in LAPService.
+// Each entry = one phrase + 1-3 response texts (rotated randomly at runtime).
+// Audio is per-company (LAPResponseAudio model).
 // ============================================================================
 
-const LAP_REDIS_KEY = 'globalHub:lapGroups';
+const LAP_REDIS_KEY = 'globalHub:lapEntries';
 
 /**
- * getLapGroups — load system LAP keyword groups.
+ * getLapEntries — load global LAP phrase-response entries.
  * Fast path: Redis JSON.parse.
  * Fallback: MongoDB AdminSettings (Redis unavailable or key missing).
- * @returns {Promise<Array>} array of group objects
+ * @returns {Promise<Array>} array of entry objects
  */
-async function getLapGroups() {
+async function getLapEntries() {
   try {
     const redis = await getSharedRedisClient().catch(() => null);
     if (redis) {
@@ -1177,26 +1177,26 @@ async function getLapGroups() {
   try {
     const AdminSettings = require('../models/AdminSettings');
     const settings = await AdminSettings.getSettings();
-    return settings?.globalHub?.lapGroups || [];
+    return settings?.globalHub?.lapEntries || [];
   } catch (err) {
-    logger.warn('[GlobalHub] getLapGroups: MongoDB fallback failed', { error: err.message });
+    logger.warn('[GlobalHub] getLapEntries: MongoDB fallback failed', { error: err.message });
     return [];
   }
 }
 
 /**
- * syncLapGroupsToRedis — persist LAP groups to Redis after admin save.
+ * syncLapEntriesToRedis — persist LAP entries to Redis after admin save.
  * No TTL — event-driven invalidation only.
- * @param {Array} groups
+ * @param {Array} entries
  */
-async function syncLapGroupsToRedis(groups) {
+async function syncLapEntriesToRedis(entries) {
   try {
     const redis = await getSharedRedisClient().catch(() => null);
     if (!redis) return;
-    await redis.set(LAP_REDIS_KEY, JSON.stringify(groups || []));
-    logger.info('[GlobalHub] syncLapGroupsToRedis: synced', { count: groups?.length });
+    await redis.set(LAP_REDIS_KEY, JSON.stringify(entries || []));
+    logger.info('[GlobalHub] syncLapEntriesToRedis: synced', { count: entries?.length });
   } catch (err) {
-    logger.warn('[GlobalHub] syncLapGroupsToRedis: failed', { error: err.message });
+    logger.warn('[GlobalHub] syncLapEntriesToRedis: failed', { error: err.message });
   }
 }
 
@@ -1246,9 +1246,9 @@ module.exports = {
     // Health check
     healthCheck,
 
-    // LAP keyword groups (ListenerActParser — system-level groups)
-    getLapGroups,
-    syncLapGroupsToRedis,
+    // LAP entries (ListenerActParser — global phrase-response table)
+    getLapEntries,
+    syncLapEntriesToRedis,
 
     // Constants (for external reference)
     REDIS_KEYS

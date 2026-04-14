@@ -436,6 +436,9 @@
       case 'uap':
         window.location.href = `${baseUrl}/uap.html${companyParam}`;
         break;
+      case 'lap':
+        window.location.href = `${baseUrl}/lap.html${companyParam}`;
+        break;
       case 'turn1':
         window.location.href = `${baseUrl}/turn1.html${companyParam}`;
         break;
