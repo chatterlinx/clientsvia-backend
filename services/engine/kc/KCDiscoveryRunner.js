@@ -247,6 +247,112 @@ function _cueScanPhrases(cueFrame, scorableContainers, userInput) {
   return bestMatch;
 }
 
+// ── Section pre-filter constants ─────────────────────────────────────────────
+const GAP_MAX_SECTIONS = 5;  // max sections sent to Groq on section gap
+
+/**
+ * _scoreSectionsForGap — Pre-filter for KC_SECTION_GAP path
+ *
+ * When a container matched but no section was targeted, we need to narrow
+ * 200+ sections down to the most relevant handful before handing to Groq.
+ *
+ * Scoring per section:
+ *   - callerPhrase word overlap (best phrase wins):  phrase word hits × 3
+ *   - contentKeywords overlap:                       keyword hits × 2
+ *   - label word overlap:                            label word hits × 4
+ *   - negativeKeyword penalty:                       -1000 (disqualify)
+ *   - cueFrame pattern substring in callerPhrase:    +2 per cue hit
+ *
+ * Returns the top GAP_MAX_SECTIONS sections, each decorated with _gapScore.
+ * Returns [] if no section scores above 0.
+ *
+ * @param {Array}   sections   — container.sections (full array)
+ * @param {string}  userInput  — raw caller utterance
+ * @param {Object}  cueFrame   — CueExtractor output (may be null)
+ * @returns {Array<Object>}    — top sections (shallow copies with _gapScore)
+ */
+function _scoreSectionsForGap(sections, userInput, cueFrame) {
+  if (!sections || sections.length === 0 || !userInput) return [];
+
+  const inputLower = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const inputWords = new Set(inputLower.split(/\s+/).filter(w => w.length >= 3));
+  const inputStems = new Set([...inputWords].map(_stem));
+
+  // Collect active cue patterns for bonus scoring
+  const cuePatterns = [];
+  if (cueFrame) {
+    const { CUE_FIELDS } = CueExtractorService;
+    for (const field of CUE_FIELDS) {
+      if (cueFrame[field]) cuePatterns.push(cueFrame[field]);
+    }
+  }
+
+  const scored = [];
+
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i];
+    if (section.isActive === false) continue;
+
+    let score = 0;
+
+    // ── Negative keyword exclusion ──
+    const negKws = section.negativeKeywords || [];
+    const negHit = negKws.some(nk => {
+      const nkLower = (nk || '').toLowerCase().trim();
+      return nkLower && inputLower.includes(nkLower);
+    });
+    if (negHit) continue;  // disqualified
+
+    // ── Label word overlap (×4) ──
+    const labelWords = (section.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
+    for (const lw of labelWords) {
+      if (inputWords.has(lw) || inputStems.has(_stem(lw))) score += 4;
+    }
+
+    // ── callerPhrase word overlap (best phrase × 3) ──
+    let bestPhraseScore = 0;
+    for (const phrase of (section.callerPhrases || [])) {
+      const phraseWords = (phrase.text || phrase || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
+      if (phraseWords.length === 0) continue;
+
+      let hits = 0;
+      for (const pw of phraseWords) {
+        if (inputWords.has(pw) || inputStems.has(_stem(pw))) hits++;
+      }
+      // Normalize by phrase length so short phrases don't auto-win
+      const phraseScore = hits;
+      if (phraseScore > bestPhraseScore) bestPhraseScore = phraseScore;
+    }
+    score += bestPhraseScore * 3;
+
+    // ── contentKeywords overlap (×2) ──
+    for (const kw of (section.contentKeywords || [])) {
+      const kwLower = (kw || '').toLowerCase().trim();
+      if (!kwLower) continue;
+      // contentKeywords can be bigrams — check substring
+      if (inputLower.includes(kwLower)) score += 2;
+    }
+
+    // ── Cue pattern bonus: cue patterns found in callerPhrases (+2 each) ──
+    if (cuePatterns.length > 0) {
+      for (const phrase of (section.callerPhrases || [])) {
+        const phraseLower = (phrase.text || phrase || '').toLowerCase();
+        for (const pattern of cuePatterns) {
+          if (phraseLower.includes(pattern)) { score += 2; break; }  // 1 bonus per pattern
+        }
+      }
+    }
+
+    if (score > 0) {
+      scored.push({ section, index: i, _gapScore: score });
+    }
+  }
+
+  // Sort descending by score, take top N
+  scored.sort((a, b) => b._gapScore - a._gapScore);
+  return scored.slice(0, GAP_MAX_SECTIONS);
+}
+
 /**
  * _buildContextBrief — Build the warm-transfer agent whisper brief.
  *
@@ -1393,7 +1499,43 @@ class KCDiscoveryRunner {
         }],
       }).catch(() => {});
 
-      // Fall through to _handleKCMatch — Groq reads all sections and synthesizes
+      // ── Section pre-filter: narrow N sections before Groq ────────────
+      // Instead of dumping 200+ sections into Groq, score them against the
+      // caller utterance and send only the top GAP_MAX_SECTIONS. Groq still
+      // synthesizes from deep content — but from a focused window.
+      const _allSections = match.container.sections || [];
+      if (_allSections.length > GAP_MAX_SECTIONS) {
+        const _topSections = _scoreSectionsForGap(_allSections, userInput, cueFrame);
+
+        if (_topSections.length > 0) {
+          // Shallow-clone container with only top-scoring sections
+          match.container = {
+            ...match.container,
+            sections: _topSections.map(s => s.section),
+            _gapFiltered:     true,
+            _gapOriginalCount: _allSections.length,
+            _gapFilteredCount: _topSections.length,
+            _gapTopScores:     _topSections.map(s => ({
+              label: s.section.label,
+              idx:   s.index,
+              score: s._gapScore,
+            })),
+          };
+
+          logger.info('[KC_ENGINE] SECTION GAP — pre-filtered for Groq', {
+            companyId, callSid, turn,
+            containerTitle: _gapContainerTitle,
+            originalSections: _allSections.length,
+            filteredTo:       _topSections.length,
+            topSections:      _topSections.map(s => `${s.section.label} (${s._gapScore})`).join(', '),
+          });
+        } else {
+          logger.debug('[KC_ENGINE] SECTION GAP — no sections scored > 0, Groq gets all', {
+            companyId, callSid, turn, sectionCount: _allSections.length,
+          });
+        }
+      }
+      // Fall through to _handleKCMatch — Groq reads filtered (or all) sections
     }
 
     // ── MATCH → DIRECT ANSWER ─────────────────────────────────────────────
