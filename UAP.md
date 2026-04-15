@@ -693,3 +693,62 @@ GATE 4     LLM Fallback Claude    async, ~800ms     → KC_LLM_FALLBACK
 ```
 
 **The system is self-improving:** More callerPhrases → better UAP routing → fewer LLM fallbacks → faster, cheaper, more accurate responses. Fuzzy Recovery catches edge cases. Calibration Dashboard shows where the gaps are. Gaps & Todo page shows exactly which utterances fell through and why.
+
+---
+
+## 10. Turn 1 Preamble Stripping (April 2026)
+
+**Problem:** On Turn 1, callers front-load their utterance with greetings, self-intros, filler words, and conversational context. Example:
+
+> "Hi John. This is Mark. Um you guys been here a few times and I'm still having air conditioning problems."
+
+The intent clause is "I'm still having air conditioning problems" but KC routing scores the FULL 19-word utterance, causing generic words like "air conditioning" to bias toward the wrong container.
+
+**Solution:** `Turn1Engine._stripPreamble(input)` — sequential regex chain removes:
+1. Greeting + addressee ("Hi John.")
+2. Self-introduction ("This is Mark.")
+3. Filler words ("Um", "Uh", "So")
+4. Prior-visit context ("you guys been here a few times and")
+
+**Safety:** If stripping leaves < 3 words, the original input is returned unchanged.
+
+**Wiring:** `CALLER_WITH_INTENT` lane passes `cleanedInput` to `KCDiscoveryRunner.run()` while the original input is preserved for `_composePrefix()` (empathy detection needs the full utterance). Event `TURN1_PATH` includes `preambleStripped`, `originalLen`, `cleanedLen`, `cleanedInput` when stripping occurred.
+
+**File:** `services/engine/turn1/Turn1Engine.js`
+
+---
+
+## 11. Booking Name-Answer Escape Hatch (April 2026)
+
+**Problem:** During COLLECT_NAME, callers answer with trailing context:
+
+> "Okay, my name is Mark. I already told you that before."
+
+`parseName()` correctly extracts "Mark" → step advances. But 12 words triggers `_isLikelyOffTopic()` (threshold = 6 words), UAP matches trailing content → `uapHasAnyMatch = true` → both conditions conspire to trigger KC digression → name is rolled back → caller hears a KC response → "I didn't catch your name" on next turn.
+
+**Solution:** Name-answer escape hatch in BookingLogicEngine, positioned before the UAP signal gates:
+
+```
+if (advanced && step === COLLECT_NAME):
+  - input starts with name-answer pattern ("my name is", "I'm", "this is", etc.)
+    AND no "?" present → return stepResult (trust the name extraction)
+  - OR parseName captured a real firstName (≥ 2 chars)
+    AND no "?" present → return stepResult
+```
+
+**Event:** `BK_NAME_ANSWER_ESCAPE` — includes rawInput + captured firstName for audit.
+
+**File:** `services/engine/booking/BookingLogicEngine.js`
+
+---
+
+## 12. KC Gaps Turn 1 Visibility Fix (April 2026)
+
+**Problem:** `kcGaps.js` filtered out ALL Turn 1 qaLog entries by default (`turn > 1`). This masked real KC_SECTION_GAP events that occurred on Turn 1 — container matched but no section handled the caller's utterance. These are real routing failures, not expected Turn 1 noise.
+
+**Solution:** Changed the turn filter to use `$or`:
+- Turn > 1 events: always shown (as before)
+- Turn 1 KC_SECTION_GAP events: always shown (these are real failures)
+- Turn 1 KC_LLM_FALLBACK / KC_GRACEFUL_ACK: hidden by default, shown with `?turn1=1`
+
+**File:** `routes/admin/kcGaps.js`

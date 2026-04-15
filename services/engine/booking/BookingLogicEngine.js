@@ -439,6 +439,31 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
   // No input → nothing to interrogate
   if (!userInput?.trim()) return stepResult;
 
+  // ── Name-answer escape hatch ────────────────────────────────────────────
+  // At COLLECT_NAME, callers often add trailing conversational noise:
+  //   "Okay, my name is Mark. I already told you that before."
+  //   "It's John Smith, like I said earlier"
+  //   "Mark. I already told you"
+  // parseName extracts the name → step advances → but 12+ words trigger
+  // _isLikelyOffTopic, UAP matches trailing content → digression fires →
+  // name is rolled back → caller is asked again. False positive.
+  //
+  // Fix: if COLLECT_NAME step advanced AND input starts with a clear name-
+  // answer pattern AND no explicit question mark → trust the step result.
+  // Trailing complaints / context are NOT KC questions.
+  if (advanced && prevSnap.step === STEPS.COLLECT_NAME) {
+    const _lc = (userInput || '').toLowerCase().trim();
+    const _nameAnswerRe = /^(?:(?:ok(?:ay)?|sure|well|um+|uh+|yeah|yes|yep|yup)[,.]?\s*)*(?:my name is|i'?m|it'?s|this is|i am|the name is)\b/;
+    // Also catch: caller just states their name + trailing context (e.g. "Mark. I already told you")
+    // If parseName captured a firstName and the word count of "name words" is ≤ 3 → name answer
+    const cf = stepResult?.bookingCtx?.collectedFields || {};
+    const _hasFirstName = !!(cf.firstName && cf.firstName.length >= 2);
+    if (!_lc.includes('?') && (_nameAnswerRe.test(_lc) || _hasFirstName)) {
+      events.push({ type: 'BK_NAME_ANSWER_ESCAPE', rawInput: userInput.substring(0, 80), firstName: cf.firstName || null, timestamp: Date.now() });
+      return stepResult;
+    }
+  }
+
   // Step advanced AND UAP found nothing at all AND input doesn't look like a
   // question → caller was providing booking data.  The _isLikelyOffTopic guard
   // prevents this gate from swallowing obvious questions: "What does it include?"

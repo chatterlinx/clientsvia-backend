@@ -34,6 +34,28 @@ const _PRIOR_VISIT_RE = /\b(was\s+here|came\s+out|already\s+(came|been\s+out|sen
 const _PROBLEM_RE     = /\b(troubl|issue|problem|broken|not\s+(work|cool|heat|blow)|fail|wrong|error|leak|flood|no\s+(heat|ac|cool|hot\s+water)|still|again)/i;
 const _BOOKING_RE     = /\b(schedul|book|appoint|come\s+out|send\s+someone|service\s+call|set\s+up)/i;
 
+// ── Turn 1 preamble stripping ────────────────────────────────────────────────
+// On Turn 1, callers front-load their utterance with greetings, self-intros,
+// and conversational context ("Hi John. This is Mark. Um you guys been here
+// a few times and I'm still having air conditioning problems.").
+// Only the INTENT tail matters for KC routing.  Stripping the noise prevents
+// keyword scoring from biasing toward wrong containers.
+//
+// Each pattern is replaced sequentially; the chain is order-sensitive.
+// Fallback: if stripping removes everything, the original input is returned.
+const _PREAMBLE_PATTERNS = [
+  // Greeting + addressee:  "Hi John." / "Hello there," / "Good morning,"
+  /^(?:hi+|hey+|hello+|howdy|good\s+(?:morning|afternoon|evening))\b[^.!?\n]*[.!,]?\s*/i,
+  // Self-introduction:  "This is Mark." / "My name is Mark." / "It's Mark." / "I'm Mark."
+  /^(?:(?:this\s+is|my\s+name\s+is|i'?m|it'?s|i\s+am)\s+\w+(?:\s+\w+)?)\s*[.!,]?\s*/i,
+  // Filler words:  "Um" / "Uh" / "So" / "And" / "Yeah"
+  /^(?:um+|uh+|so|well|yeah|and|but)\b[,.]?\s*/i,
+  // Repeat filler (catch multiple in a row)
+  /^(?:um+|uh+|so|well|yeah|and|but)\b[,.]?\s*/i,
+  // Prior-visit context:  "you guys been here a few times and"
+  /^you\s+(?:guys\s+|all\s+)?(?:have\s+|had\s+|'ve\s+)?(?:been|come|came)\s+(?:here|out|over)\s+[^.!?\n]*?(?:and|but)\s+/i,
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 class Turn1Engine {
@@ -108,14 +130,28 @@ class Turn1Engine {
 
       default: { // CALLER_WITH_INTENT
         const prefix = Turn1Engine._composePrefix(dn, uapResult, userInput, callerName);
+
+        // ── Strip greeting preamble before KC routing ────────────────────
+        // The prefix captures the empathy opener ("Hi Mark! I'm sorry…").
+        // KC only needs the intent clause for accurate container routing.
+        const cleanedInput = Turn1Engine._stripPreamble(userInput);
+        const inputForKC   = cleanedInput !== userInput ? cleanedInput : userInput;
+
         emit('TURN1_PATH', {
           path:     'CALLER_WITH_INTENT',
           prefix:   prefix || null,
           uapContainerId: uapResult?.containerId || null,
           turn:     params.turn,
+          ...(cleanedInput !== userInput && {
+            preambleStripped: true,
+            originalLen:      userInput.length,
+            cleanedLen:       cleanedInput.length,
+            cleanedInput:     cleanedInput.substring(0, 120),
+          }),
         });
         // Delegate the ACTION to KCDiscoveryRunner — it handles KC/booking/transfer
-        const kcResult = await KCDiscoveryRunner.run(params);
+        // Pass cleaned input so KC scoring sees only the intent signal.
+        const kcResult = await KCDiscoveryRunner.run({ ...params, userInput: inputForKC });
         return Turn1Engine._stitch(prefix, kcResult, state);
       }
     }
@@ -289,6 +325,33 @@ class Turn1Engine {
       matchSource: 'TURN1_ENGINE',
       _exitReason: 'TURN1_CALLER_WITH_INTENT',
     };
+  }
+
+  // ── Preamble stripper ───────────────────────────────────────────────────────
+
+  /**
+   * _stripPreamble — removes greeting / self-intro / filler from Turn 1 input
+   * so KC routing sees only the intent clause.
+   *
+   * "Hi John. This is Mark. Um you guys been here a few times and
+   *  I'm still having air conditioning problems."
+   *  → "I'm still having air conditioning problems."
+   *
+   * Returns original input if stripping would empty the string or leave < 3 words.
+   */
+  static _stripPreamble(input) {
+    if (!input?.trim()) return input;
+    let cleaned = input.trim();
+
+    for (const re of _PREAMBLE_PATTERNS) {
+      cleaned = cleaned.replace(re, '').trim();
+    }
+
+    // Safety: if we stripped too much (< 3 words left), return original
+    const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
+    if (!cleaned || wordCount < 3) return input.trim();
+
+    return cleaned;
   }
 
   // ── Utility ───────────────────────────────────────────────────────────────────

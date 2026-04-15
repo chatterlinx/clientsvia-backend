@@ -67,13 +67,27 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
   const typeFilter = typeParam !== 'all' && GAP_TYPES.includes(typeParam)
     ? [typeParam]
     : GAP_TYPES;
-  // Turn 1 Engine handles the first turn by design (greet + acknowledge + action).
-  // Gaps on turn 1 are expected, not failures. Hide by default, show with ?turn1=1.
+  // Turn 1: KC_LLM_FALLBACK and KC_GRACEFUL_ACK on turn 1 are expected
+  // (Turn1Engine preamble stripping means some residual noise is normal).
+  // BUT KC_SECTION_GAP on turn 1 IS a real failure — container matched yet
+  // no section could handle the caller's utterance.  Always show SECTION_GAPs.
+  // ?turn1=1 shows ALL turn 1 events including fallback/ack.
   const includeTurn1 = req.query.turn1 === '1';
 
   const cutoff = new Date(Date.now() - RANGE_MS[range]).toISOString();
 
   try {
+    // Build turn filter: always show KC_SECTION_GAP on turn 1; hide
+    // fallback/ack on turn 1 unless ?turn1=1.
+    const turnFilter = includeTurn1
+      ? {}      // show everything
+      : {
+          $or: [
+            { 'discoveryNotes.qaLog.turn': { $gt: 1 } },
+            { 'discoveryNotes.qaLog.type': 'KC_SECTION_GAP' },
+          ],
+        };
+
     const pipeline = [
       { $match: { companyId: new mongoose.Types.ObjectId(companyId) } },
       { $unwind: { path: '$discoveryNotes', preserveNullAndEmptyArrays: false } },
@@ -83,8 +97,7 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
         $match: {
           'discoveryNotes.qaLog.type':      { $in: typeFilter },
           'discoveryNotes.qaLog.timestamp': { $gte: cutoff },
-          // Turn 1 Engine handles first turn by design — filter out unless ?turn1=1
-          ...(!includeTurn1 && { 'discoveryNotes.qaLog.turn': { $gt: 1 } }),
+          ...turnFilter,
         },
       },
       // Project flat fields
