@@ -405,6 +405,37 @@ function _detailField(label, value) {
   return `<div><div class="detail-label">${_esc(label)}</div><div class="detail-value">${_esc(value)}</div></div>`;
 }
 
+// ── Download: JSON ──────────────────────────────────────────────────────────
+function downloadJSON() {
+  if (!G.merged.length) { _toast('No gap data to download'); return; }
+
+  const payload = {
+    exported:   new Date().toISOString(),
+    companyId:  G.companyId,
+    range:      G.range,
+    typeFilter: G.typeFilter,
+    summary:    G.summary,
+    gaps:       G.merged,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `kc-gaps-${G.companyId}-${G.range}-${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  _toast('JSON downloaded');
+}
+
+// ── Download: PDF (via browser print) ───────────────────────────────────────
+function downloadPDF() {
+  if (!G.merged.length) { _toast('No gap data to download'); return; }
+  window.print();
+}
+
 function _toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
