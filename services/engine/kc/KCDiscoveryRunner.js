@@ -1194,16 +1194,17 @@ class KCDiscoveryRunner {
     // Convenience: extract priorVisit once so all handlers below can use it
     const priorVisit = notes?.priorVisit === true;
 
-    // ── CONTAINER MATCH + NO SECTION → LLM FALLBACK ────────────────────────
-    // Container topic matches but no individual section covers this utterance.
-    // Sending Groq all sections produces garbage (random pricing, wrong topic).
-    // Route to Claude LLM instead — and log the gap for admin visibility.
+    // ── SECTION GAP LOGGING ──────────────────────────────────────────────────
+    // Container matched but no specific section identified. Log the gap for
+    // the Gaps & Todo page so we know what sections to build. Groq still
+    // answers from the container's full content (groqContent) — we never
+    // abandon authored knowledge for a cold Claude fallback.
     if (match && match.container && !match.targetSection) {
       const _gapContainerTitle = match.container.title || 'Unknown';
       const _gapContainerId   = String(match.container._id || '');
       const _gapKcId          = match.container.kcId || null;
 
-      logger.warn('[KC_ENGINE] Container matched but no section — routing to LLM fallback', {
+      logger.info('[KC_ENGINE] Container matched, no section — logging gap, Groq answers from all sections', {
         companyId, callSid, turn,
         containerTitle: _gapContainerTitle,
         score: match.score,
@@ -1232,13 +1233,7 @@ class KCDiscoveryRunner {
         }],
       }).catch(() => {});
 
-      return await _handleLLMFallback({
-        userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
-        bridgeToken, redis, callerName, onSentence,
-        containers,
-        ehConfig,
-        notes,
-      });
+      // Fall through to _handleKCMatch — Groq reads all sections and synthesizes
     }
 
     // ── MATCH → DIRECT ANSWER ─────────────────────────────────────────────

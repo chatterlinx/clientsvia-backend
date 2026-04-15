@@ -38,7 +38,7 @@ const KCS                  = require('../agent2/KnowledgeContainerService');
 // BPFUQService REMOVED — Clean Sweep. Mid-booking KC questions are now stateless:
 // KC answers + re-anchor in ONE response. No state tracking, no consent gate.
 const DiscoveryNotesService = require('../../discoveryNotes/DiscoveryNotesService');
-const { classify: classifyUtterance } = require('./BookingUtteranceClassifier');
+const UAP                  = require('../kc/UtteranceActParser');
 
 const ENGINE_ID = 'BOOKING_LOGIC_ENGINE';
 const VERSION   = 'BL2.0';
@@ -374,96 +374,97 @@ function initializeContext(payload, config) {
 
 async function processCurrentStep(ctx, userInput, config, companyId, isTest, events) {
 
-  // ── STEP-FIRST ARCHITECTURE (v2 — no parallel UAP) ──────────────────────
+  // ── KC DIGRESSION: STEP-FIRST ARCHITECTURE ──────────────────────────────
   //
-  // DESIGN PRINCIPLE:
-  //   The step handler is the ONLY thing that runs on the caller's input.
-  //   UAP is NOT called during booking — it was the root cause of the
-  //   "Mark" bug where booking answers like names competed against every
-  //   KC callerPhrase in the database, causing false-positive digressions.
+  // 1. Try to process as expected step input (step handler runs first).
+  // 2. If step did NOT advance AND input looks off-topic → KC digression:
+  //      Go to KC (services.html containers) — the ONLY digression handler.
+  //      KC answers + re-anchor to current step in ONE response. Stateless.
+  //      No match → graceful re-anchor to current booking step.
+  //      No state tracking. No consent gate. No extra turn.
+  // 3. Otherwise: return step result as-is.
   //
-  // FLOW:
-  //   1. Run step handler alone (extracts booking data)
-  //   2. If step advanced → return (data captured, move forward)
-  //   3. If step did NOT advance → classify with BookingUtteranceClassifier:
-  //      - BOOKING_SIDE_Q → KC answers the question, soft follow-up
-  //      - BOOKING_ABORT  → exit booking cleanly
-  //      - BOOKING_CORRECT → step handler already tried, re-ask with hint
-  //      - BOOKING_CONFIRM → at wrong step? acknowledge + re-ask current
-  //      - BOOKING_UNCLEAR → re-ask current step
+  // DATA-ENTRY STEPS (phone, address, preferred day/time) never trigger KC
+  // digression — callers there are providing raw data, not expressing intent.
   //
-  // EXAMPLES:
-  //   "John Smith"              at COLLECT_NAME → step extracts name → done
-  //   "my first name is Mark"   at COLLECT_NAME → step extracts "Mark" → done
-  //   "How much does that cost?" at COLLECT_NAME → step fails → SIDE_Q → KC
-  //   "never mind"              at COLLECT_PHONE → ABORT → exit booking
-  //   "555-1234"                at COLLECT_PHONE → step extracts phone → done
+  // Why step-first?
+  //   "John Smith"   at COLLECT_NAME → step handler extracts name → no digression.
+  //   "Today at 10"  at OFFER_TIMES  → step handler matches slot  → no digression.
+  //   "What if I change the battery?" at COLLECT_NAME → step fails → KC answers it.
+  //   "What do you charge?"           at COLLECT_NAME → step fails → KC answers it.
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── STEP 1: Run the step handler ALONE — no parallel UAP ────────────────
+  const DATA_ENTRY_STEPS = new Set([
+    STEPS.INIT,
+    STEPS.COMPLETED,
+    STEPS.COLLECT_PHONE,
+    STEPS.COLLECT_ADDRESS,
+    STEPS.COLLECT_PREFERRED_DAY,
+    STEPS.COLLECT_PREFERRED_TIME,
+  ]);
+
+  // ── STEP 1: Run the normal step handler + UAP parse in parallel ─────────
+  // UAP fires on every booking turn at zero added latency (Promise.all).
+  // It is the authoritative KC-question detector: if the caller is asking
+  // about a service topic (pricing, warranty, scheduling, etc.) UAP will
+  // return a containerId with confidence ≥ 0.70 — far more reliable than the
+  // heuristic alone (the heuristic misses questions without "?" and short
+  // queries like "how much?" that the STT transcribes without punctuation).
   const prevSnap = _snapshotCtx(ctx);
-  const stepResult = await _runStepHandler(ctx, userInput, config, companyId, isTest, events);
+  const [stepResult, parsedAct] = await Promise.all([
+    _runStepHandler(ctx, userInput, config, companyId, isTest, events),
+    (userInput?.trim()
+      ? UAP.parse(companyId, userInput).catch(() => null)
+      : Promise.resolve(null)
+    )
+  ]);
 
   // Check if the step made progress (new data captured or step changed)
   const advanced = _didStepAdvance(prevSnap, stepResult.bookingCtx);
 
+  // UAP authority: two-tier signal computed before early-return gates.
+  //
+  // Tier 1 — uapDetectsKCQuestion: HIGH confidence (≥ 0.70) override.  Used in the
+  //   heuristic gate (line below) where the input doesn't *look* off-topic but UAP
+  //   is confident it's a KC question.
+  //
+  // Tier 2 — uapHasAnyMatch: ANY UAP match (even WORD_OVERLAP_LOW at 0.40).
+  //   Prevents the "step advanced → skip digression" gate from killing a legitimate
+  //   question.  If UAP matched callerPhrases at any confidence, the digression code
+  //   should at least get a chance to run (the actual container match quality + KC
+  //   answer gate still protect against false-positives).
+  const uapDetectsKCQuestion = !!(parsedAct?.containerId && parsedAct.confidence >= 0.70);
+  const uapHasAnyMatch       = !!parsedAct?.containerId;
+
   // No input → nothing to interrogate
   if (!userInput?.trim()) return stepResult;
 
-  // Step advanced → booking data was captured successfully. Done.
-  // No need to check for questions — the step handler got what it needed.
-  if (advanced) return stepResult;
+  // Step advanced AND UAP found nothing at all AND input doesn't look like a
+  // question → caller was providing booking data.  The _isLikelyOffTopic guard
+  // prevents this gate from swallowing obvious questions: "What does it include?"
+  // at COLLECT_NAME would be incorrectly parsed as a name (parseName is greedy),
+  // causing `advanced = true` even though no real data was collected.
+  if (advanced && !uapHasAnyMatch && !_isLikelyOffTopic(userInput, prevSnap.step)) return stepResult;
 
-  // ── STEP 2: Step did NOT advance — classify what the caller was doing ───
-  const classification = classifyUtterance(userInput, prevSnap.step);
-
-  events.push({
-    type:           'BK_UTTERANCE_CLASSIFIED',
-    step:           ctx.step,
-    input:          userInput.substring(0, 100),
-    classification: classification.type,
-    timestamp:      Date.now()
-  });
-
-  // ── BOOKING_ABORT → exit booking cleanly ────────────────────────────────
-  if (classification.type === 'BOOKING_ABORT') {
-    events.push({ type: 'BK_ABORT', step: ctx.step, timestamp: Date.now() });
-    ctx.step = STEPS.COMPLETED;
-    ctx.lastPath = 'BK_ABORT';
-    return {
-      nextPrompt: "No problem at all. If you change your mind or have any other questions, don't hesitate to call back. Have a great day!",
-      bookingCtx: ctx,
-      completed:  true,
-    };
-  }
-
-  // ── BOOKING_CONFIRM at wrong step → acknowledge + re-ask ────────────────
-  if (classification.type === 'BOOKING_CONFIRM') {
-    // Confirmation when step didn't advance = caller said "yes" but we still
-    // need data. Re-ask with gentle acknowledgment.
+  // DATA-ENTRY STEPS bypass 123RP to prevent false-positives on phone digits,
+  // address names, etc. — UNLESS the input is clearly a question/confusion
+  // signal that couldn't possibly be raw data. Example: "what are you booking?"
+  // at COLLECT_PHONE step — ignore the step result, let 123RP answer it.
+  if (DATA_ENTRY_STEPS.has(prevSnap.step) && !_isClearQuestion(userInput)) {
     return stepResult;
   }
 
-  // ── BOOKING_CORRECT → step handler already tried, re-ask with hint ──────
-  if (classification.type === 'BOOKING_CORRECT') {
-    // Caller is correcting but step didn't extract the correction.
-    // Return the step result which will re-ask the question.
+  // Combined heuristic: long sentence OR explicit "?" covers phrases UAP hasn't
+  // been trained on yet (new KC containers, uncommon phrasings).
+  if (!_isLikelyOffTopic(userInput, prevSnap.step) && !uapDetectsKCQuestion) {
     return stepResult;
   }
 
-  // ── BOOKING_UNCLEAR → re-ask current step ───────────────────────────────
-  if (classification.type === 'BOOKING_UNCLEAR') {
-    return stepResult;
-  }
-
-  // ── BOOKING_SIDE_Q → KC digression ──────────────────────────────────────
-  // Caller is asking a knowledge question mid-booking. Route to KC.
-  // KC answers + soft follow-up in ONE response. Stateless.
-
-  // ── OFFER_TIMES scheduling bypass ──────────────────────────────────────
+  // ── OFFER_TIMES scheduling bypass ────────────────────────────────────────
   // When the caller is choosing from presented time slots, short inputs or
-  // inputs containing scheduling terms are scheduling clarifications, NOT
-  // off-topic intent. Reset to day collection for fresh availability.
+  // inputs containing scheduling terms ("day", "time", "now", "when", etc.)
+  // are scheduling clarifications — NOT off-topic intent. Reset to day
+  // collection so the booking can retry with a fresh availability fetch.
   if (prevSnap.step === STEPS.OFFER_TIMES) {
     const lc              = (userInput || '').toLowerCase().trim();
     const wordCount       = lc.split(/\s+/).length;
@@ -471,6 +472,7 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
 
     if (wordCount <= 4 || hasSchedulingTerm) {
       events.push({ type: 'BK_OFFER_TIMES_SCHEDULING_ANCHOR', rawInput: userInput.substring(0, 60), timestamp: Date.now() });
+      // Reset preferences and fetch state so the next turn is a clean day-selection attempt
       ctx.step                 = STEPS.COLLECT_PREFERRED_DAY;
       ctx.preferredDay         = null;
       ctx.preferredTime        = null;
@@ -483,29 +485,95 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     }
   }
 
-  // ── KC Digression (stateless — no UAP, keyword scoring only) ───────────
-  // All caller questions mid-booking route through KC containers.
-  // No UAP — use KCS.findContainer keyword scoring directly.
-  // KC answer + soft follow-up in ONE response. Next turn, caller's input
-  // goes straight to the step handler.
+  // ── ROLLBACK: undo step-handler mutations when digression fires ─────────
+  // The step handler ran first (step-first architecture) and may have mutated
+  // ctx with garbage data — e.g. parseName("What does it include?") sets
+  // firstName="What" and _nameSubStep='SPELL_LAST'.  When we reach digression,
+  // we need a clean ctx so that:
+  //   (a) re-anchor prompts use the correct step (not an incorrectly advanced one)
+  //   (b) the next turn retries the step cleanly without stale sub-step flags
+  // Only rollback fields the step handler could have changed; preserve existing
+  // data that was collected in prior turns (prevSnap records what existed BEFORE).
+  if (advanced) {
+    ctx.step = prevSnap.step;
+    const cf = ctx.collectedFields || {};
+    if (!prevSnap.firstName)      cf.firstName = null;
+    if (!prevSnap.lastName)       cf.lastName  = null;
+    if (!prevSnap.phone)          cf.phone     = null;
+    if (!prevSnap.address)        cf.address   = null;
+    if (!prevSnap.selectedTime)   ctx.selectedTime  = null;
+    if (!prevSnap.preferredDay)   ctx.preferredDay  = null;
+    if (!prevSnap.preferredTime)  ctx.preferredTime = null;
+    if (prevSnap.addressStep !== ctx.addressStep)     ctx.addressStep    = prevSnap.addressStep;
+    if (prevSnap._addressStreet !== ctx._addressStreet) ctx._addressStreet = prevSnap._addressStreet;
+    if (prevSnap._addressCity !== ctx._addressCity)     ctx._addressCity   = prevSnap._addressCity;
+    // Clear any sub-step flags the step handler set (SPELL_FIRST, SPELL_LAST, GET_LAST, etc.)
+    delete ctx._nameSubStep;
+    events.push({ type: 'BK_KC_DIGRESSION_CTX_ROLLBACK', step: prevSnap.step, timestamp: Date.now() });
+  }
+
+  // ── STEP 2: Off-topic question — KC Digression (stateless) ──────────────
+  // All caller questions mid-booking route exclusively through KC (services.html).
+  // No triggers. No LLM fallback. No state tracking.
+  //
+  // KC answer + step re-anchor delivered in ONE response. Next turn, the
+  // caller's input goes straight to the step handler. If they ask ANOTHER
+  // question, off-topic detection fires again and chains naturally.
+  //
+  // No KC container match → clean re-anchor to current step question.
+  // ─────────────────────────────────────────────────────────────────────────
   events.push({
     type:           'BK_KC_DIGRESSION_START',
     step:           ctx.step,
     input:          userInput.substring(0, 100),
-    classification: 'BOOKING_SIDE_Q',
+    uapContainerId: parsedAct?.containerId  || null,
+    uapMatchType:   parsedAct?.matchType    || 'NONE',
+    uapConfidence:  parsedAct?.confidence   || 0,
+    uapTriggered:   uapDetectsKCQuestion,
     timestamp:      Date.now()
   });
 
   try {
     // Load containers — NO anchor context for booking digressions.
-    // The caller is explicitly going off-topic; anchor boost would bias
-    // toward the booking container even with zero keyword overlap.
+    // The caller is explicitly going off-topic; anchor 3× boost and
+    // ANCHOR_FLOOR would bias keyword scoring toward the booking container
+    // even when the question has ZERO keyword overlap (e.g. "service call fee"
+    // forced to tune-up pricing because anchor floor returned score 24 on a
+    // raw score of 0).  Let keywords stand on their own merit.
     const containers = await KCS.getActiveForCompany(companyId);
 
     if (containers.length) {
-      // Keyword scoring only — no UAP, no anchor bias
-      const match = KCS.findContainer(containers, userInput);
-      let targetSection = match?.bestSection || null;
+      // Prefer UAP match — it scores against user-configured callerPhrases
+      // which are more precise than auto-generated contentKeywords.  UAP
+      // already ran in the Promise.all above; reuse the result at any
+      // confidence (even WORD_OVERLAP_LOW) rather than re-scoring from scratch.
+      let match = null;
+      let targetSection = null;
+
+      if (parsedAct?.containerId) {
+        const uapContainer = containers.find(c => String(c._id) === String(parsedAct.containerId));
+        if (uapContainer) {
+          const sIdx = parsedAct.sectionIdx ?? null;
+          match = {
+            container:      uapContainer,
+            score:          Math.round((parsedAct.confidence || 0) * 100),
+            bestSection:    sIdx != null ? uapContainer.sections?.[sIdx] : null,
+            bestSectionIdx: sIdx,
+            uapAssisted:    true,
+          };
+          targetSection = match.bestSection || null;
+        }
+      }
+
+      // Fall back to contentKeywords scoring if UAP had no match.
+      // No anchor context — keywords must meet MIN_THRESHOLD on their own.
+      // Pass through bestSection so KCS.answer() targets the correct section —
+      // without this, useFixedResponse containers default to the first section
+      // regardless of what the caller actually asked.
+      if (!match) {
+        match = KCS.findContainer(containers, userInput);
+        if (match) targetSection = match.bestSection || null;
+      }
 
       if (match) {
         const kcResult = await KCS.answer({
@@ -516,7 +584,16 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
           company:       { _id: companyId, companyName: config.companyName },
         });
 
+        // Two gates: (1) response must exist, (2) Groq must not say NO_DATA.
+        // For fixed responses intent is always ANSWERED — the keyword threshold
+        // is their only gate (which is correct: they matched on real keywords).
         if (kcResult?.response && kcResult.intent !== 'NO_DATA') {
+          // Deliver KC answer + soft follow-up (NOT hard re-anchor).
+          // Old behavior appended the booking step prompt ("What is your name?")
+          // after every KC answer — callers felt steamrolled when asking
+          // multiple questions. Soft follow-up lets the caller decide when
+          // they're ready to book. When they respond with booking info (name,
+          // "yes", "let's book"), the step handler catches it naturally.
           const softFollowUp = 'Is there anything else I can help you with, or are you ready to get started?';
           const combined = `${kcResult.response} ${softFollowUp}`;
 
@@ -544,7 +621,9 @@ async function processCurrentStep(ctx, userInput, config, companyId, isTest, eve
     events.push({ type: 'BK_KC_DIGRESSION_ERROR', error: kcErr.message, timestamp: Date.now() });
   }
 
-  // No KC container matched — acknowledge gracefully + soft follow-up
+  // No KC container matched — acknowledge the question gracefully and
+  // soft-follow-up.  Old behavior silently re-anchored to the booking step
+  // prompt ("What is your name?"), ignoring the caller's question entirely.
   events.push({
     type:      'BK_KC_DIGRESSION_NO_MATCH',
     step:      ctx.step,
@@ -608,9 +687,83 @@ function _didStepAdvance(prevSnap, newCtx) {
   return false;
 }
 
-// _isLikelyOffTopic and _isClearQuestion REMOVED — replaced by BookingUtteranceClassifier.js
-// which provides 5-type classification (CONFIRM, CORRECT, SIDE_Q, ABORT, UNCLEAR)
-// with the same detection logic plus correction and abort handling.
+/**
+ * Heuristic: does this input look like an off-topic question rather than
+ * a valid answer to the current booking step?
+ *
+ * Conservative thresholds to minimise false-positives on real step answers:
+ *   "John Smith"           → 2 words, no ? → NOT off-topic (let step re-ask)
+ *   "Today at 10 am"       → 4 words, no ? → NOT off-topic
+ *   "What do you charge?"  → 5 words + ?   → OFF-TOPIC
+ *   "What if I change the batteries myself would that work?" → 10 words → OFF-TOPIC
+ */
+function _isLikelyOffTopic(userInput, step) {
+  if (!userInput?.trim()) return false;
+  const trimmed   = userInput.trim();
+  const wordCount = trimmed.split(/\s+/).length;
+
+  // Explicit question mark is the strongest signal
+  if (trimmed.endsWith('?')) return true;
+
+  // Pricing / cost keywords — even short phrases like "how much" are questions, not data
+  const lc = trimmed.toLowerCase();
+  if (/\b(?:how much|price|pricing|cost|charge|fee|rate|expensive|afford)\b/.test(lc)) return true;
+
+  // Long sentence at a data-collection step — almost certainly not a name/time/etc.
+  if (wordCount >= 6) return true;
+
+  // At CONFIRM step, short ambiguous inputs are still step-relevant ("yes", "no", "actually...")
+  // so we keep the threshold a bit higher there
+  if (step === STEPS.CONFIRM && wordCount < 8) return false;
+
+  return false;
+}
+
+/**
+ * _isClearQuestion — true when input is unmistakably a question or expression
+ * of confusion/doubt, not raw data being provided for a booking step.
+ *
+ * This is the narrow exception that allows 123RP to fire even at DATA_ENTRY_STEPS
+ * (phone, address, etc.) so caller questions during booking are answered rather
+ * than silently swallowed.
+ *
+ * Conservative: must match unambiguous signals only. "10" or "Smith" must NOT match.
+ * Examples that fire:
+ *   "What are you booking? I mean are you able to do the maintenance?"
+ *   "Wait, what is this for?"
+ *   "I'm confused — what are we scheduling?"
+ *   "Actually hold on, do you do maintenance?"
+ * Examples that do NOT fire:
+ *   "555-1234"  → phone number
+ *   "123 Main Street" → address
+ *   "yeah"  → short ambiguous input
+ */
+function _isClearQuestion(userInput) {
+  if (!userInput?.trim()) return false;
+  const lc = userInput.toLowerCase().trim();
+
+  // Explicit question mark anywhere → caller is asking a question
+  if (lc.includes('?')) return true;
+
+  // Pricing / cost keywords — even without ?, these are unambiguously questions, not data
+  if (/\b(?:how much|price|pricing|cost|charge|fee|rate|what do you charge|what does it cost)\b/.test(lc)) return true;
+
+  // Strong question/confusion lead-ins
+  const CLEAR_SIGNALS = [
+    'what are you booking', 'what are you scheduling', 'what is this for',
+    'what do you mean',     'what does that mean',
+    'i want to ask',        'i was wondering',        'wondering if',
+    'are you able to',      'can you do',             'do you do',
+    'do you offer',         'is that something',      'is this something',
+    'hold on',              'wait a minute',          'wait wait',
+    'actually wait',        'actually hold on',
+    'i am confused',        'im confused',            "i don't understand",
+    'i dont understand',    'not sure what',          'not sure why',
+    'what exactly',         'why are you',            'why do you',
+  ];
+
+  return CLEAR_SIGNALS.some(signal => lc.includes(signal));
+}
 
 /**
  * _writeTempField — Fire-and-forget write of one or more fields to discoveryNotes.temp.
@@ -3235,44 +3388,13 @@ async function processConfirm(ctx, userInput, config, companyId, isTest, events)
     // ── UAPB BOOKING_CONFIRM — lock all temp → confirmed in DiscoveryNotes ──
     // Single event: all temp fields lock simultaneously. This is the ONLY
     // promotion path — confirmed{} is never written mid-call per-field.
-    //
-    // PRE-SYNC: Before LOCK_ALL_TEMP, write ALL booking-collected fields to
-    // discoveryNotes.temp. This ensures the confirmed{} snapshot captures
-    // everything — discovery entities + booking fields + scheduling.
-    // Without this, some fields (altPhone, customFields, selectedTime) are
-    // only in ctx.collectedFields but never in discoveryNotes.temp.
     if (ctx.callSid) {
-      // Pre-sync: ensure all booking fields are in temp before lock
-      const preSyncPatch = {
-        firstName:     ctx.collectedFields?.firstName  || undefined,
-        lastName:      ctx.collectedFields?.lastName   || undefined,
-        phone:         ctx.collectedFields?.phone      || undefined,
-        address:       ctx.collectedFields?.address    || undefined,
-        preferredDate: ctx.preferredDay                || undefined,
-        preferredTime: ctx.preferredTime               || undefined,
-        serviceType:   ctx._discriminatorServiceType   || undefined,
-      };
-      // Filter out undefined values
-      const cleanPatch = Object.fromEntries(
-        Object.entries(preSyncPatch).filter(([, v]) => v !== undefined)
-      );
-
-      // Two-step fire-and-forget: pre-sync then lock
-      (async () => {
-        try {
-          if (Object.keys(cleanPatch).length > 0) {
-            await DiscoveryNotesService.update(companyId, ctx.callSid, { temp: cleanPatch });
-          }
-          await DiscoveryNotesService.update(companyId, ctx.callSid, {
-            confirmed:  'LOCK_ALL_TEMP',
-            objective:  'CLOSING',
-          });
-        } catch (err) {
-          logger.warn(`[${ENGINE_ID}] DN BOOKING_CONFIRM lock failed`, {
-            companyId, callSid: ctx.callSid, err: err.message
-          });
-        }
-      })();
+      DiscoveryNotesService.update(companyId, ctx.callSid, {
+        confirmed:  'LOCK_ALL_TEMP',
+        objective:  'CLOSING',
+      }).catch(err => logger.warn(`[${ENGINE_ID}] DN BOOKING_CONFIRM lock failed`, {
+        companyId, callSid: ctx.callSid, err: err.message
+      }));
     }
 
     // Build a discovery-aware closing that references what was booked and who the caller is.

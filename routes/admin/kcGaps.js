@@ -27,6 +27,7 @@
 
 const express             = require('express');
 const router              = express.Router();
+const mongoose            = require('mongoose');
 const logger              = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
 const Customer            = require('../../models/Customer');
@@ -71,7 +72,7 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
 
   try {
     const pipeline = [
-      { $match: { companyId } },
+      { $match: { companyId: new mongoose.Types.ObjectId(companyId) } },
       { $unwind: { path: '$discoveryNotes', preserveNullAndEmptyArrays: false } },
       { $unwind: { path: '$discoveryNotes.qaLog', preserveNullAndEmptyArrays: false } },
       // Only gap-type entries within the time range
