@@ -591,8 +591,24 @@ class KCDiscoveryRunner {
     // "add", "also" added to catch compound questions like:
     //   "yes, however I was wondering if we can also add a maintenance to that. Is that possible?"
     // Without this, "yes" fires BOOKING_INTENT and the question is dropped.
-    const _inputHasQuestion = (userInput || '').includes('?') ||
+    let _inputHasQuestion = (userInput || '').includes('?') ||
       /\b(what|how|why|when|which|where|does|do you|can you|can we|we can|is it|is there|is that|include|cover|tell me|explain|about|more|offer|know|wondering|possible|add|also|and also)\b/.test(_norm);
+
+    // ── Hedged-yes override: "Yes, I would... if that's possible" is a
+    // confirmation with hedging, not a real question. When the caller LEADS
+    // with an affirmative (first meaningful word is yes/yeah/sure/okay/etc.)
+    // and question words appear only AFTER, treat it as a pure booking signal.
+    // This catches: "Yes, if that's possible", "Yeah I'd like that, is that okay",
+    //               "Sure, um, if you can"
+    // Does NOT override: "Is it possible to schedule?" (question-first),
+    //                    "What about scheduling?" (no leading affirmative)
+    if (_inputHasQuestion && !(userInput || '').includes('?')) {
+      const _normCollapsed = _norm.replace(/\s+/g, ' ');
+      const LEADING_AFFIRMATIVES = /^(?:(?:um|uh|well|so|and|oh|like) )*(?:yes|yeah|yep|yup|sure|ok|okay|alright|absolutely|definitely|of course|for sure|sounds good|go ahead|please|i(?:'d| would) (?:like|love))/;
+      if (LEADING_AFFIRMATIVES.test(_normCollapsed)) {
+        _inputHasQuestion = false;
+      }
+    }
 
     // Compound intent: utterance has BOTH a booking signal AND a question/topic.
     // When true: skip immediate booking handoff, answer the KC question this turn,

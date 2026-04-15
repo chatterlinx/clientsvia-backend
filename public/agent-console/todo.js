@@ -17,12 +17,13 @@
 
 // ── State ────────────────────────────────────────────────────────────────────
 const G = {
-  companyId: null,
-  gaps:      [],      // raw from API
-  merged:    [],      // after turn-merge
-  summary:   {},      // { total, byType, range }
-  range:     '7d',
-  typeFilter:'all',
+  companyId:  null,
+  gaps:       [],      // raw from API
+  merged:     [],      // after turn-merge
+  summary:    {},      // { total, byType, range }
+  range:      '7d',
+  typeFilter: 'all',
+  showTurn1:  false,   // Turn 1 Engine events hidden by default (not real gaps)
 };
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ async function loadGaps() {
   document.getElementById('pageContent').style.display = 'none';
 
   try {
-    const qs  = `range=${G.range}&type=${G.typeFilter}`;
+    const qs  = `range=${G.range}&type=${G.typeFilter}${G.showTurn1 ? '&turn1=1' : ''}`;
     const res = await AgentConsoleAuth.apiFetch(
       `/api/admin/agent2/company/${G.companyId}/knowledge/gaps?${qs}`
     );
@@ -215,6 +216,17 @@ function _renderFilters() {
   html += '</div>';
 
   html += '</div>';
+
+  html += '<div class="filter-divider"></div>';
+
+  // Turn 1 toggle — hidden by default because Turn 1 Engine handles those
+  html += '<div class="filter-group">';
+  html += `<button class="filter-btn${G.showTurn1 ? ' active' : ''}" onclick="toggleTurn1()">`;
+  html += `${G.showTurn1 ? '✓ ' : ''}Turn 1`;
+  html += '</button>';
+  html += '</div>';
+
+  html += '</div>';
   document.getElementById('filterBar').innerHTML = html;
 }
 
@@ -313,6 +325,11 @@ function setRange(range) {
 
 function setType(type) {
   G.typeFilter = type;
+  loadGaps();
+}
+
+function toggleTurn1() {
+  G.showTurn1 = !G.showTurn1;
   loadGaps();
 }
 

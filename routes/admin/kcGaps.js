@@ -67,6 +67,9 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
   const typeFilter = typeParam !== 'all' && GAP_TYPES.includes(typeParam)
     ? [typeParam]
     : GAP_TYPES;
+  // Turn 1 Engine handles the first turn by design (greet + acknowledge + action).
+  // Gaps on turn 1 are expected, not failures. Hide by default, show with ?turn1=1.
+  const includeTurn1 = req.query.turn1 === '1';
 
   const cutoff = new Date(Date.now() - RANGE_MS[range]).toISOString();
 
@@ -80,6 +83,8 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
         $match: {
           'discoveryNotes.qaLog.type':      { $in: typeFilter },
           'discoveryNotes.qaLog.timestamp': { $gte: cutoff },
+          // Turn 1 Engine handles first turn by design — filter out unless ?turn1=1
+          ...(!includeTurn1 && { 'discoveryNotes.qaLog.turn': { $gt: 1 } }),
         },
       },
       // Project flat fields

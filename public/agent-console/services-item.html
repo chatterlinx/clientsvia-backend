@@ -3584,9 +3584,9 @@ function downloadJSON() {
   const rows  = document.querySelectorAll('#sectionsList .section-row');
 
   // ── Clean review-focused export ──────────────────────────────────────────
-  // Only fields needed to evaluate content quality.
+  // Only fields needed to evaluate content quality + routing.
   // Excludes: audioUrl paths, embeddings, scores, phraseCore, contentCore,
-  //           anchorWords, preQualify, upsell, tradeTerms, promotionLabel.
+  //           anchorWords, preQualify, upsell, promotionLabel.
   // All excluded fields are preserved on reimport (merge, not replace).
   const sections = [];
   rows.forEach((row, idx) => {
@@ -3603,6 +3603,7 @@ function downloadJSON() {
       groqContent:      (data.groqContent || '').trim() || null,
       callerPhrases:    (data.callerPhrases || []).filter(p => p.trim()),
       negativeKeywords: data.negativeKeywords || [],
+      tradeTerms:       data.tradeTerms || [],
       isFixed:          !!data.useFixedResponse,
       hasAudio:         !!(data.contentAudioUrl),
       isActive:         data.isActive !== false,
@@ -3749,6 +3750,16 @@ function _applyImportJSON(json) {
         }
       }
 
+      // Trade terms
+      if (Array.isArray(imported.tradeTerms)) {
+        const newTerms = imported.tradeTerms.filter(t => typeof t === 'string' && t.trim());
+        if (JSON.stringify(newTerms) !== JSON.stringify(data.tradeTerms || [])) {
+          data.tradeTerms = newTerms;
+          _renderSecTradeTerms(sid);
+          stats.tradeTerms = (stats.tradeTerms || 0) + 1;
+        }
+      }
+
       // isFixed toggle
       if (imported.isFixed !== undefined && !!imported.isFixed !== !!data.useFixedResponse) {
         const checkbox = document.getElementById(`sec-fixed-${sid}`);
@@ -3778,6 +3789,7 @@ function _applyImportJSON(json) {
       addSection(label, content, {
         callerPhrases:    (imported.callerPhrases || []).filter(p => typeof p === 'string' && p.trim()),
         negativeKeywords: (imported.negativeKeywords || []).filter(k => typeof k === 'string' && k.trim()),
+        tradeTerms:       (imported.tradeTerms || []).filter(t => typeof t === 'string' && t.trim()),
         useFixedResponse: !!imported.isFixed,
         groqContent:      (imported.groqContent || '').trim(),
         isActive:         imported.isActive !== false,
@@ -3793,6 +3805,7 @@ function _applyImportJSON(json) {
   if (stats.groqContent) parts.push(`${stats.groqContent} deep content`);
   if (stats.phrases)     parts.push(`${stats.phrases} phrase lists`);
   if (stats.negatives)   parts.push(`${stats.negatives} negative keywords`);
+  if (stats.tradeTerms)  parts.push(`${stats.tradeTerms} trade terms`);
   if (stats.fixed)       parts.push(`${stats.fixed} fixed toggles`);
   if (stats.active)      parts.push(`${stats.active} active toggles`);
   if (stats.added)       parts.push(`${stats.added} new sections`);
