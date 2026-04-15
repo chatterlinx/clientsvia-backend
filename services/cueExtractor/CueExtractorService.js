@@ -56,7 +56,7 @@ const logger                    = require('../../utils/logger');
 const TRADE_IDX_REDIS_PREFIX = 'cue-trade-idx';
 const TRADE_IDX_REDIS_TTL    = 3600;  // 1 hour (Redis backup; in-memory is primary)
 
-let _tradeIndexCache = {};  // { companyId: { builtAt, index } }
+let _tradeIndexCache = {};  // { companyId: { builtAt, data: { index, companyTradeKeys } } }
 const TRADE_IDX_MEM_TTL_MS  = 5 * 60 * 1000;  // 5 minutes in-memory
 
 // ── Canonical cue field names (matches GlobalShare token values) ───────────
@@ -82,7 +82,7 @@ async function _getTradeIndex(companyId) {
   // ── In-memory hot path ───────────────────────────────────────────────────
   const cached = _tradeIndexCache[companyId];
   if (cached && (Date.now() - cached.builtAt) < TRADE_IDX_MEM_TTL_MS) {
-    return cached.index;
+    return cached.data;
   }
 
   // ── Redis warm path ─────────────────────────────────────────────────────
@@ -91,30 +91,32 @@ async function _getTradeIndex(companyId) {
     if (redis) {
       const raw = await redis.get(`${TRADE_IDX_REDIS_PREFIX}:${companyId}`);
       if (raw) {
-        const index = JSON.parse(raw);
-        _tradeIndexCache[companyId] = { builtAt: Date.now(), index };
-        return index;
+        const data = JSON.parse(raw);
+        // Backward compat: old cache may be plain index without companyTradeKeys
+        const normalized = data.companyTradeKeys ? data : { index: data, companyTradeKeys: [] };
+        _tradeIndexCache[companyId] = { builtAt: Date.now(), data: normalized };
+        return normalized;
       }
     }
   } catch (_) { /* fall through to build */ }
 
   // ── Cold path — build from MongoDB ──────────────────────────────────────
-  const index = await _buildTradeIndex(companyId);
+  const data = await _buildTradeIndex(companyId);
 
   // Write to memory + Redis
-  _tradeIndexCache[companyId] = { builtAt: Date.now(), index };
+  _tradeIndexCache[companyId] = { builtAt: Date.now(), data };
   try {
     const redis = await getSharedRedisClient();
     if (redis) {
       await redis.set(
         `${TRADE_IDX_REDIS_PREFIX}:${companyId}`,
-        JSON.stringify(index),
+        JSON.stringify(data),
         { EX: TRADE_IDX_REDIS_TTL }
       );
     }
   } catch (_) { /* non-fatal */ }
 
-  return index;
+  return data;
 }
 
 /**
@@ -186,17 +188,25 @@ async function _buildTradeIndex(companyId) {
       }
     }
 
+    // ── Collect distinct trade keys across this company's containers ────
+    const companyTradeKeys = [...new Set(
+      containers.map(c => c.tradeVocabularyKey).filter(Boolean)
+    )];
+
     logger.debug('[CueExtractor] Trade index built', {
       companyId,
       termCount: Object.keys(index).length,
+      companyTradeKeys,
     });
+
+    return { index, companyTradeKeys };
   } catch (err) {
     logger.warn('[CueExtractor] Trade index build failed', {
       companyId, error: err.message,
     });
   }
 
-  return index;
+  return { index, companyTradeKeys: [] };
 }
 
 /**
@@ -278,7 +288,7 @@ async function extract(companyId, utterance) {
   }
 
   // ── FIELD 8: Trade terms ───────────────────────────────────────────────
-  const tradeIndex = await _getTradeIndex(companyId);
+  const { index: tradeIndex, companyTradeKeys } = await _getTradeIndex(companyId);
   const tradeTerms = Object.keys(tradeIndex);
 
   if (tradeTerms.length > 0) {
@@ -308,6 +318,10 @@ async function extract(companyId, utterance) {
   if (frame.tradeMatches.length > 0) count++;
   frame.fieldCount = count;
 
+  // ── Company trade context — enables single-trade bypass in GATE 2.4 ──
+  frame.companyTradeKeys = companyTradeKeys;
+  frame.isSingleTrade    = companyTradeKeys.length <= 1;
+
   const elapsedMs = Date.now() - startMs;
   if (elapsedMs > 5) {
     logger.warn('[CueExtractor] Slow extraction', {
@@ -325,4 +339,5 @@ async function extract(companyId, utterance) {
 module.exports = {
   extract,
   invalidateTradeIndex,
+  CUE_FIELDS,
 };

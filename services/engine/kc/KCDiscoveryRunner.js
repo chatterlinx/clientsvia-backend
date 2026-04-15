@@ -156,6 +156,98 @@ function _clip(str, maxLen = 80) {
 }
 
 /**
+ * _cueScanPhrases — GATE 2.4c Cue Profile Scan
+ *
+ * When CueExtractor has a strong cue signal (fieldCount >= 3) but no trade
+ * match (single-trade company, generic question), scan all callerPhrases
+ * across KC cards to find the best section match using cue pattern overlap.
+ *
+ * Each extracted cue pattern (e.g., "do i have to", "how much is", "pay")
+ * is checked as a substring against each callerPhrase text. The phrase
+ * with the most cue overlaps is the best match.
+ *
+ * Minimum 2 cue overlaps required for confidence.
+ *
+ * @param {Object}   cueFrame            — extract() result with 7 cue fields
+ * @param {Array}    scorableContainers  — loaded KC containers with sections + callerPhrases
+ * @param {string}   userInput           — raw caller utterance (for anchor confirmation)
+ * @returns {Object|null} { container, sectionIdx, section, phraseText, cueOverlap } or null
+ */
+function _cueScanPhrases(cueFrame, scorableContainers, userInput) {
+  const { CUE_FIELDS } = CueExtractorService;
+
+  // Collect non-null cue values as search patterns
+  const activeCues = [];
+  for (const field of CUE_FIELDS) {
+    if (cueFrame[field]) activeCues.push({ field, pattern: cueFrame[field] });
+  }
+  if (activeCues.length < 2) return null;
+
+  let bestMatch  = null;
+  let bestScore  = 0;
+
+  for (const container of scorableContainers) {
+    const sections = container.sections || [];
+    for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+      const section = sections[sIdx];
+      if (section.isActive === false) continue;
+
+      for (const phrase of (section.callerPhrases || [])) {
+        const lower = (phrase.text || '').toLowerCase();
+        if (!lower || lower.length < 5) continue;
+
+        let score = 0;
+        for (const { pattern } of activeCues) {
+          if (lower.includes(pattern)) score++;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = {
+            container,
+            sectionIdx:  sIdx,
+            section,
+            phraseText:  phrase.text,
+            anchorWords: phrase.anchorWords || [],
+            cueOverlap:  score,
+          };
+        }
+      }
+    }
+  }
+
+  // Require at least 2 cue pattern matches for confidence
+  if (!bestMatch || bestScore < 2) return null;
+
+  // ── Anchor confirmation — same Logic 1 as GATE 2.4b ──────────────────
+  if (bestMatch.anchorWords.length > 0) {
+    const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+    const inputStems = new Set(rawWords.map(_stem));
+    const inputExact = new Set(rawWords);
+
+    const anchors = bestMatch.anchorWords.map(w => (w || '').toLowerCase().trim()).filter(Boolean);
+    const hits    = anchors.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
+    const ratio   = hits / anchors.length;
+
+    if (ratio < ANCHOR_MATCH_THRESHOLD) {
+      // Anchor check failed — but check if ANY phrase in this section passes
+      const sectionPhrases = (bestMatch.section.callerPhrases || []).filter(p =>
+        p.anchorWords && p.anchorWords.length > 0
+      );
+      const anyAnchorPass = sectionPhrases.some(p => {
+        const a = (p.anchorWords || []).map(w => (w || '').toLowerCase().trim()).filter(Boolean);
+        if (a.length === 0) return false;
+        const h = a.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
+        return (h / a.length) >= ANCHOR_MATCH_THRESHOLD;
+      });
+      if (!anyAnchorPass) return null;  // section anchor check failed
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
  * _buildContextBrief — Build the warm-transfer agent whisper brief.
  *
  * Spoken to the RECEIVING agent before the caller is connected (Twilio whisper).
@@ -886,6 +978,58 @@ class KCDiscoveryRunner {
               sectionLabel: bestTrade.sectionLabel,
             });
           }
+        }
+      } else if (cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT && cueFrame.tradeMatches.length === 0) {
+        // ── Strong cue signal but NO trade match ─────────────────────────
+        // Two paths:
+        //   A) Single-trade company → trade is implicit, scan callerPhrases by cue overlap
+        //   B) Multi-trade company  → can't determine which trade → log for downstream
+
+        if (cueFrame.isSingleTrade) {
+          // ── PATH A: Single-trade — cue profile scan (GATE 2.4c) ──────
+          const cueScan = _cueScanPhrases(cueFrame, scorableContainers, userInput);
+          if (cueScan) {
+            logger.info('[KC_ENGINE] CUE PROFILE SCAN HIT — GATE 2.4c confirmed', {
+              companyId, callSid, turn,
+              fieldCount:    cueFrame.fieldCount,
+              phraseText:    _clip(cueScan.phraseText, 60),
+              cueOverlap:    cueScan.cueOverlap,
+              containerId:   String(cueScan.container._id || ''),
+              sectionIdx:    cueScan.sectionIdx,
+              sectionLabel:  cueScan.section?.label || '',
+            });
+            emit('KC_CUE_PROFILE_SCAN_HIT', {
+              companyId, callSid, turn,
+              fieldCount:   cueFrame.fieldCount,
+              cueOverlap:   cueScan.cueOverlap,
+              containerId:  String(cueScan.container._id || ''),
+              sectionIdx:   cueScan.sectionIdx,
+            });
+
+            match = {
+              container:        cueScan.container,
+              score:            Math.round((cueFrame.fieldCount / 8) * 100),
+              matchSource:      'CUE_PROFILE_SCAN',
+              cueFrame,
+              targetSection:    cueScan.section,
+              targetSectionIdx: cueScan.sectionIdx,
+            };
+          } else {
+            logger.debug('[KC_ENGINE] CUE PROFILE SCAN — no phrase match (single-trade), falling through', {
+              companyId, callSid, turn, fieldCount: cueFrame.fieldCount,
+            });
+          }
+        } else {
+          // ── PATH B: Multi-trade — no trade match = ambiguous trade ────
+          // Log for awareness. Downstream gates (UAP, semantic, keyword) may still route.
+          // Future: if ALL downstream gates also miss, this info enables a trade-clarification response.
+          logger.info('[KC_ENGINE] CUE EXTRACT — multi-trade, no trade match', {
+            companyId, callSid, turn,
+            fieldCount:      cueFrame.fieldCount,
+            companyTradeKeys: cueFrame.companyTradeKeys,
+            requestCue:      cueFrame.requestCue || null,
+            actionCore:      cueFrame.actionCore || null,
+          });
         }
       } else if (cueFrame.fieldCount > 0) {
         logger.debug('[KC_ENGINE] CUE EXTRACT — enrichment only (fieldCount=%d, tradeMatches=%d)',
