@@ -956,6 +956,9 @@ app.get('/health', async (req, res) => {
 // Simple health check endpoint (legacy compatibility)
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
+// Dedicated memory endpoint (lean platform telemetry)
+app.get('/health/memory', require('./utils/memoryMonitor').healthMemoryHandler);
+
 app.get('/:pageName.html', (req, res, next) => {
     const pageName = req.params.pageName;
     const filePath = path.join(__dirname, 'public', `${pageName}.html`);
@@ -1200,6 +1203,10 @@ async function startServer() {
         const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);
+
+            // Start daily memory heartbeat (platform telemetry)
+            const { startDailyHeartbeat } = require('./utils/memoryMonitor');
+            startDailyHeartbeat();
             console.log(`🌐 Admin dashboard listening at http://0.0.0.0:${PORT}`);
             console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🎯 Server ready to accept connections on port ${PORT}`);

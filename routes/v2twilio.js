@@ -5401,6 +5401,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // SECTION_S0_STATE_LOAD will show found=false or wrong turnCount.
     // The state key is ALWAYS: `call:${callSid}` - never phone, never sequence.
     // ═══════════════════════════════════════════════════════════════════════════
+    const T_stateLoad = Date.now();
     let callState = null;
     const redisKey = callSid ? `call:${callSid}` : null;
     let stateSource = 'none';
@@ -5650,6 +5651,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         });
       }
     }
+
+    timings.stateLoadMs = Date.now() - T_stateLoad;
 
     const hostHeader = req.get('host');
     const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
@@ -6447,6 +6450,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
       let audioUrl = null;
       let ttsLatencyMs = null;
+      const T_audioBlock = Date.now();
 
       try {
         const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR' || runtimeResult?.matchSource === 'GREETING';
@@ -6802,8 +6806,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
       }
 
+      timings.audioBlockMs = Date.now() - T_audioBlock;
+
+      const T_twimlBuild = Date.now();
       const twiml = new twilio.twiml.VoiceResponse();
-      
+
       // PATIENCE MODE: When caller asked to hold/wait, extend the silence
       // timeout so we don't interrupt them. Uses UI-configured timeout.
       const patienceCfg = company?.aiAgentSettings?.agent2?.discovery?.patienceSettings || {};
@@ -7335,6 +7342,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const outTwimlString = twiml.toString();
 
       timings.ttsMs = ttsLatencyMs || 0;
+      timings.twimlBuildMs = Date.now() - T_twimlBuild;
       timings.totalMs = Date.now() - T0;
 
       return {
@@ -7344,9 +7352,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         matchSource: runtimeResult.matchSource,
         timings: {
           companyLoadMs: timings.companyLoadMs || 0,
+          stateLoadMs: timings.stateLoadMs || 0,
           coreRuntimeMs: timings.coreRuntimeMs || 0,
           eventFlushMs: timings.eventFlushMs || 0,
+          audioBlockMs: timings.audioBlockMs || 0,
           ttsMs: timings.ttsMs || 0,
+          twimlBuildMs: timings.twimlBuildMs || 0,
           totalMs: timings.totalMs || 0
         },
         agentTurnForCache: (responseText && responseText.trim()) ? {
@@ -7503,7 +7514,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Fire-and-forget — never delays TwiML delivery to Twilio.
       if (timings && callSid && companyID) {
         const _wt_totalMs = timings.totalMs
-          || (timings.companyLoadMs || 0) + (timings.coreRuntimeMs || 0) + (timings.eventFlushMs || 0) + (timings.ttsMs || 0);
+          || (timings.companyLoadMs || 0) + (timings.stateLoadMs || 0) + (timings.coreRuntimeMs || 0) + (timings.eventFlushMs || 0) + (timings.audioBlockMs || 0) + (timings.twimlBuildMs || 0);
         const CallTranscriptV2_wt = require('../models/CallTranscriptV2');
         CallTranscriptV2_wt.appendTrace(companyID, callSid, [{
           kind: 'WEBHOOK_TIMING',
@@ -7514,9 +7525,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             totalElapsedMs: _wt_totalMs,
             breakdown: {
               companyLoadMs: timings.companyLoadMs || 0,
+              stateLoadMs: timings.stateLoadMs || 0,
               coreRuntimeMs: timings.coreRuntimeMs || 0,
+              eventFlushMs: timings.eventFlushMs || 0,
+              audioBlockMs: timings.audioBlockMs || 0,
               ttsMs: timings.ttsMs || 0,
-              eventFlushMs: timings.eventFlushMs || 0
+              twimlBuildMs: timings.twimlBuildMs || 0,
             },
             atRisk: _wt_totalMs >= 12000,
             timedOut: _wt_totalMs >= 15000,

@@ -1194,6 +1194,53 @@ class KCDiscoveryRunner {
     // Convenience: extract priorVisit once so all handlers below can use it
     const priorVisit = notes?.priorVisit === true;
 
+    // ── CONTAINER MATCH + NO SECTION → LLM FALLBACK ────────────────────────
+    // Container topic matches but no individual section covers this utterance.
+    // Sending Groq all sections produces garbage (random pricing, wrong topic).
+    // Route to Claude LLM instead — and log the gap for admin visibility.
+    if (match && match.container && !match.targetSection) {
+      const _gapContainerTitle = match.container.title || 'Unknown';
+      const _gapContainerId   = String(match.container._id || '');
+      const _gapKcId          = match.container.kcId || null;
+
+      logger.warn('[KC_ENGINE] Container matched but no section — routing to LLM fallback', {
+        companyId, callSid, turn,
+        containerTitle: _gapContainerTitle,
+        score: match.score,
+        inputPreview: _clip(userInput, 80),
+      });
+
+      emit('KC_SECTION_GAP', {
+        containerTitle: _gapContainerTitle,
+        containerId:    _gapContainerId,
+        kcId:           _gapKcId,
+        score:          match.score,
+        userInput:      _clip(userInput, 100),
+        turn,
+      });
+
+      // qaLog: record section gap for Gaps & Todo page
+      _writeDiscoveryNotes(companyId, callSid, {
+        qaLog: [{
+          type:           'KC_SECTION_GAP',
+          turn:           turn ?? 0,
+          question:       userInput,
+          containerTitle: _gapContainerTitle,
+          containerId:    _gapContainerId,
+          kcId:           _gapKcId,
+          timestamp:      new Date().toISOString(),
+        }],
+      }).catch(() => {});
+
+      return await _handleLLMFallback({
+        userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
+        bridgeToken, redis, callerName, onSentence,
+        containers,
+        ehConfig,
+        notes,
+      });
+    }
+
     // ── MATCH → DIRECT ANSWER ─────────────────────────────────────────────
     // Topic persistence is handled by discoveryNotes.anchorContainerId — the
     // 3× score multiplier + ANCHOR_FLOOR=24 in findContainer() ensures follow-up
