@@ -1543,6 +1543,9 @@
     <button class="tb-action" onclick="downloadContainersJson()" title="Download all containers as a complete JSON file (keywords, sections, all fields)">
       <span class="tb-icon">⬇️</span> Export
     </button>
+    <button class="tb-action" onclick="openTodo()" title="KC gap audit — see what callers asked that KC couldn't answer">
+      <span class="tb-icon">📋</span> Gaps
+    </button>
     <div class="toolbar-spacer"></div>
     <span class="toolbar-result-count" id="resultCount"></span>
   </div>
@@ -1787,6 +1790,17 @@ async function apiFetch(path, opts = {}) {
   await Promise.all([loadContainers(), loadSettings()]);
   // Fire analytics after containers so _renderCards() can be called on completion
   loadCardAnalytics();
+
+  // ── Deep-link: ?openPf=phrase → auto-open Phrase Finder with pre-filled phrase ──
+  const openPfPhrase = params.get('openPf');
+  if (openPfPhrase) {
+    openPhraseFinder();
+    const pfInput = document.getElementById('pfInput');
+    if (pfInput) {
+      pfInput.value = openPfPhrase;
+      setTimeout(() => pfScan(), 300);
+    }
+  }
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2528,6 +2542,10 @@ function openIntelligence() {
 
 function openAgentLab() {
   window.location.href = `/agent-console/agentlab.html?companyId=${S.companyId}`;
+}
+
+function openTodo() {
+  window.location.href = `/agent-console/todo.html?companyId=${S.companyId}`;
 }
 
 async function optimizePriorities() {
