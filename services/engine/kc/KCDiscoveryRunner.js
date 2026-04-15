@@ -1486,48 +1486,44 @@ class KCDiscoveryRunner {
         turn,
       });
 
-      // qaLog: record section gap for Gaps & Todo page
-      _writeDiscoveryNotes(companyId, callSid, {
-        qaLog: [{
-          type:           'KC_SECTION_GAP',
-          turn:           turn ?? 0,
-          question:       userInput,
-          containerTitle: _gapContainerTitle,
-          containerId:    _gapContainerId,
-          kcId:           _gapKcId,
-          timestamp:      new Date().toISOString(),
-        }],
-      }).catch(() => {});
-
       // ── Section pre-filter: narrow N sections before Groq ────────────
       // Instead of dumping 200+ sections into Groq, score them against the
       // caller utterance and send only the top GAP_MAX_SECTIONS. Groq still
       // synthesizes from deep content — but from a focused window.
       const _allSections = match.container.sections || [];
+      let _gapFiltered      = false;
+      let _gapOriginalCount = _allSections.length;
+      let _gapFilteredCount = _allSections.length;
+      let _gapTopSections   = [];
+
       if (_allSections.length > GAP_MAX_SECTIONS) {
         const _topSections = _scoreSectionsForGap(_allSections, userInput, cueFrame);
 
         if (_topSections.length > 0) {
+          _gapFiltered      = true;
+          _gapFilteredCount = _topSections.length;
+          _gapTopSections   = _topSections.map(s => ({
+            label: s.section.label,
+            idx:   s.index,
+            score: s._gapScore,
+          }));
+
           // Shallow-clone container with only top-scoring sections
           match.container = {
             ...match.container,
-            sections: _topSections.map(s => s.section),
-            _gapFiltered:     true,
-            _gapOriginalCount: _allSections.length,
-            _gapFilteredCount: _topSections.length,
-            _gapTopScores:     _topSections.map(s => ({
-              label: s.section.label,
-              idx:   s.index,
-              score: s._gapScore,
-            })),
+            sections:          _topSections.map(s => s.section),
+            _gapFiltered:      true,
+            _gapOriginalCount,
+            _gapFilteredCount,
+            _gapTopScores:     _gapTopSections,
           };
 
           logger.info('[KC_ENGINE] SECTION GAP — pre-filtered for Groq', {
             companyId, callSid, turn,
             containerTitle: _gapContainerTitle,
-            originalSections: _allSections.length,
-            filteredTo:       _topSections.length,
-            topSections:      _topSections.map(s => `${s.section.label} (${s._gapScore})`).join(', '),
+            originalSections: _gapOriginalCount,
+            filteredTo:       _gapFilteredCount,
+            topSections:      _gapTopSections.map(s => `${s.label} (${s.score})`).join(', '),
           });
         } else {
           logger.debug('[KC_ENGINE] SECTION GAP — no sections scored > 0, Groq gets all', {
@@ -1535,6 +1531,24 @@ class KCDiscoveryRunner {
           });
         }
       }
+
+      // qaLog: record section gap + filter metadata for Gaps & Todo page
+      _writeDiscoveryNotes(companyId, callSid, {
+        qaLog: [{
+          type:             'KC_SECTION_GAP',
+          turn:             turn ?? 0,
+          question:         userInput,
+          containerTitle:   _gapContainerTitle,
+          containerId:      _gapContainerId,
+          kcId:             _gapKcId,
+          gapFiltered:      _gapFiltered,
+          gapOriginalCount: _gapOriginalCount,
+          gapFilteredCount: _gapFilteredCount,
+          gapTopSections:   _gapTopSections,
+          timestamp:        new Date().toISOString(),
+        }],
+      }).catch(() => {});
+
       // Fall through to _handleKCMatch — Groq reads filtered (or all) sections
     }
 

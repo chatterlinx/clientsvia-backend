@@ -853,14 +853,33 @@ function renderTurnBlock(t, companyId, turnFlowMap = {}) {
   // 4) Discovery delta (caller turns — entities captured here)
   let discoveryHtml = '';
   if (isCaller && t.qaEntry) {
+    const _qa = t.qaEntry;
+    const _isGap = _qa.type === 'KC_SECTION_GAP';
+    let _gapFilterLine = '';
+    if (_isGap && _qa.gapFiltered && _qa.gapTopSections?.length) {
+      const _secNames = _qa.gapTopSections.map(s => `${esc(s.label)} (${s.score})`).join(', ');
+      _gapFilterLine = `
+          <div class="delta-row">
+            <span class="dr-key" style="color:#f59e0b;">FILTER</span>
+            <span class="dr-val">${_qa.gapOriginalCount} sections &rarr; ${_qa.gapFilteredCount} sent to Groq: ${_secNames}</span>
+          </div>`;
+    } else if (_isGap && _qa.gapOriginalCount) {
+      _gapFilterLine = `
+          <div class="delta-row">
+            <span class="dr-key" style="color:#f59e0b;">FILTER</span>
+            <span class="dr-val">${_qa.gapOriginalCount} sections (no filter — all sent to Groq)</span>
+          </div>`;
+    }
     discoveryHtml = `
       <div class="td-section">
         <div class="td-sec-title">Discovery Delta</div>
         <div class="delta-rows">
           <div class="delta-row">
-            <span class="dr-key added">+ qaLog</span>
-            <span class="dr-val">${esc(t.qaEntry.question)}: "${esc(t.qaEntry.answer)}"</span>
-          </div>
+            <span class="dr-key ${_isGap ? '' : 'added'}" style="${_isGap ? 'color:#ef4444;' : ''}">${_isGap ? 'GAP' : '+ qaLog'}</span>
+            <span class="dr-val">${_isGap && _qa.containerTitle
+              ? `${esc(_qa.containerTitle)} (${esc(_qa.kcId || '')}) — no section matched`
+              : `${esc(_qa.question || '')}: "${esc(_qa.answer || '')}"`}</span>
+          </div>${_gapFilterLine}
         </div>
       </div>`;
   }

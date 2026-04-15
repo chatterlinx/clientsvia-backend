@@ -115,11 +115,15 @@ function _mergeGapEntries(gaps) {
     // Question — prefer the one that exists
     if (g.question && !row.question) row.question = g.question;
 
-    // Container info comes from KC_SECTION_GAP
+    // Container + gap filter info comes from KC_SECTION_GAP
     if (g.type === 'KC_SECTION_GAP') {
-      row.containerTitle = g.containerTitle || row.containerTitle;
-      row.containerId    = g.containerId    || row.containerId;
-      row.kcId           = g.kcId           || row.kcId;
+      row.containerTitle   = g.containerTitle   || row.containerTitle;
+      row.containerId      = g.containerId      || row.containerId;
+      row.kcId             = g.kcId             || row.kcId;
+      row.gapFiltered      = g.gapFiltered      || row.gapFiltered      || false;
+      row.gapOriginalCount = g.gapOriginalCount || row.gapOriginalCount || null;
+      row.gapFilteredCount = g.gapFilteredCount || row.gapFilteredCount || null;
+      row.gapTopSections   = g.gapTopSections   || row.gapTopSections   || [];
     }
 
     // Answer comes from KC_LLM_FALLBACK (Claude's response)
@@ -293,6 +297,25 @@ function _renderTable() {
       html += _detailField('Merged', `${row.types.length} events from same call turn`);
     }
     html += '</div>';
+
+    // Section pre-filter info (when gap had filter applied)
+    if (row.gapFiltered && row.gapTopSections && row.gapTopSections.length > 0) {
+      html += `<div class="detail-answer" style="margin-top:8px;">`;
+      html += `<div class="detail-answer-label" style="color:var(--warning);">Section Pre-Filter</div>`;
+      html += `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">`;
+      html += `${row.gapOriginalCount} total sections &rarr; ${row.gapFilteredCount} sent to Groq</div>`;
+      html += `<div style="display:flex;flex-direction:column;gap:3px;">`;
+      for (const s of row.gapTopSections) {
+        const barW = Math.min(100, Math.max(8, Math.round((s.score / (row.gapTopSections[0]?.score || 1)) * 100)));
+        html += `<div style="display:flex;align-items:center;gap:8px;font-size:12px;">`;
+        html += `<div style="width:24px;text-align:right;color:var(--text-muted);">#${s.idx}</div>`;
+        html += `<div style="flex:0 0 ${barW}px;height:6px;background:var(--warning);border-radius:3px;"></div>`;
+        html += `<span>${_esc(s.label)}</span>`;
+        html += `<span style="color:var(--text-muted);">(${s.score})</span>`;
+        html += `</div>`;
+      }
+      html += `</div></div>`;
+    }
 
     // Full question
     if (row.question) {
