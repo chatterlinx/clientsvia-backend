@@ -6925,6 +6925,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const T_twimlBuild = Date.now();
       const twiml = new twilio.twiml.VoiceResponse();
 
+      // SPEECH DETECTION: read admin-configured settings (Agent 2.0 panel).
+      // agent2.speechDetection is the authoritative path. voiceSettings is legacy fallback.
+      // MUST be declared before gatherTimeout which reads speechDet.initialTimeout.
+      const speechDet = company.aiAgentSettings?.agent2?.speechDetection
+        || company.aiAgentSettings?.voiceSettings?.speechDetection
+        || {};
+
       // PATIENCE MODE: When caller asked to hold/wait, extend the silence
       // timeout so we don't interrupt them. Uses UI-configured timeout.
       const patienceCfg = company?.aiAgentSettings?.agent2?.discovery?.patienceSettings || {};
@@ -6944,12 +6951,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           data: { timeout: gatherTimeout, reason: 'Caller requested hold/wait' }
         }).catch(() => {});
       }
-
-      // SPEECH DETECTION: read admin-configured settings (Agent 2.0 panel).
-      // agent2.speechDetection is the authoritative path. voiceSettings is legacy fallback.
-      const speechDet = company.aiAgentSettings?.agent2?.speechDetection
-        || company.aiAgentSettings?.voiceSettings?.speechDetection
-        || {};
 
       // FOLLOW-UP MODE: When a pending follow-up question is active, use a
       // fixed 2s speechTimeout so Twilio doesn't cut off mid-sentence pauses.
