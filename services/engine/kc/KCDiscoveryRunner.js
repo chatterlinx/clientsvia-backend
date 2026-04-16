@@ -18,11 +18,20 @@
  *   Switch point:  Agent2DiscoveryRunner.js (before ScrabEngine)
  *
  * PIPELINE (in order):
- *   1. Booking intent check   (KCBookingIntentDetector — synchronous, ~0ms)
- *   2. KC container match     (KnowledgeContainerService.findContainer — ~2ms)
- *   3. Groq answer            (KnowledgeContainerService.answer — ~500ms)
- *   4. LLM fallback           (callLLMAgentForFollowUp — ~800ms, only if no KC)
- *   5. Graceful ACK           (canned response, only if LLM also unavailable)
+ *   GATE 0.5  Transfer intent    (KCTransferIntentDetector — sync ~0ms, Redis ~2ms)
+ *   GATE 0.7  Pending prequal/upsell state (Redis)
+ *   GATE 1    Booking intent     (KCBookingIntentDetector — synchronous, ~0ms)
+ *   GATE 2.4  CueExtractor       (8-field pattern match, tradeTerms — <1ms)
+ *   GATE 2.4b Anchor confirmation (≥90% anchor words — <1ms)
+ *   GATE 2.4c Cue profile scan   (single-trade callerPhrase overlap — <1ms)
+ *   GATE 2.5  UAP Layer 1        (phrase index hit ≥0.80 + Anchor Gate — <1ms)
+ *   GATE 2.8  Semantic match     (embedding similarity — ~50ms, only on UAP miss)
+ *   GATE 2.9  Negative keyword checkpoint (covers 2.4/2.5/2.8 — <1ms)
+ *   GATE 3    Keyword fallback   (contentKeywords + title scoring — <1ms)
+ *   GATE 3.5  Pre-qualify intercept (section-level)
+ *   GATE 4    LLM fallback       (callLLMAgentForFollowUp — ~800ms, only if no KC)
+ *   GATE 4.5  Upsell chain intercept (section-level)
+ *   GATE 5    Graceful ACK       (canned response, only if LLM also unavailable)
  *
  * PATH CONSTANTS (visible in Call Review Console trace):
  *   KC_DIRECT_ANSWER    — KC matched, Groq answered, conversation continues
@@ -1434,6 +1443,123 @@ class KCDiscoveryRunner {
         logger.warn('[KC_ENGINE] Semantic match error — falling through to keywords', {
           companyId, callSid, err: _semErr.message,
         });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GATE 2.9 — UNIVERSAL NEGATIVE KEYWORD CHECKPOINT  (<1ms)
+    // ══════════════════════════════════════════════════════════════════════════
+    // negativeKeywords are only enforced inside findContainer (GATE 3).
+    // Gates 2.4/2.4c/2.5/2.8 resolve matches without checking them — a phrase
+    // match or embedding similarity hit bypasses the keyword filter entirely.
+    //
+    // Example: caller says "I already told you that my AC isn't cooling."
+    //   → UAP EXACT-matches Recovery phrase "I already told you that" at 0.95
+    //   → Anchor gate passes (anchor words present)
+    //   → GATE 3 never fires → 36 HVAC negativeKeywords on Recovery never checked
+    //   → Caller gets Recovery response instead of No Cooling diagnostic
+    //
+    // FIX: If the matched section has negativeKeywords that appear in the
+    // caller's utterance, SUPPRESS the match. GATE 3 re-evaluates with its
+    // own built-in negativeKeyword check and routes to the correct container.
+    //
+    // When targetSection is null (container-level CueExtractor match), check
+    // ALL active sections — if ANY section's negativeKeywords match, suppress.
+    // Container-level matches send all sections to Groq, so a negative keyword
+    // on ANY section means the utterance contains content outside this
+    // container's domain.
+    //
+    // PERF: Pure string matching on short keyword lists. <1ms.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    if (match && match.container) {
+      const _nkInputLower = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+      const _nkInputWords = new Set(_nkInputLower.split(/\s+/).filter(Boolean));
+
+      /**
+       * Check if any negativeKeyword in the list matches the caller's utterance.
+       * Single-word keywords: whole-word match (Set lookup).
+       * Multi-word keywords: substring match (covers bigrams like "air conditioning").
+       */
+      const _negKwHit = (negKws) => {
+        if (!Array.isArray(negKws) || !negKws.length) return null;
+        for (const nk of negKws) {
+          const nkNorm = (nk || '').toLowerCase().trim();
+          if (!nkNorm) continue;
+          if (nkNorm.includes(' ')) {
+            if (_nkInputLower.includes(nkNorm)) return nkNorm;
+          } else {
+            if (_nkInputWords.has(nkNorm)) return nkNorm;
+          }
+        }
+        return null;
+      };
+
+      let _nkBlocked    = false;
+      let _nkBlockedBy  = null;
+      let _nkBlockLabel = null;
+
+      if (match.targetSection) {
+        // Section-level match — check that section's negativeKeywords
+        const hit = _negKwHit(match.targetSection.negativeKeywords);
+        if (hit) {
+          _nkBlocked    = true;
+          _nkBlockedBy  = hit;
+          _nkBlockLabel = match.targetSection.label || '(section)';
+        }
+      } else {
+        // Container-level match (no targetSection) — check ALL active sections.
+        // If ANY section's negativeKeywords match, the utterance contains content
+        // outside this container's domain — suppress and let GATE 3 re-score.
+        const _allSections = match.container.sections || [];
+        for (const _sec of _allSections) {
+          if (_sec.isActive === false) continue;
+          const hit = _negKwHit(_sec.negativeKeywords);
+          if (hit) {
+            _nkBlocked    = true;
+            _nkBlockedBy  = hit;
+            _nkBlockLabel = _sec.label || '(section)';
+            break;
+          }
+        }
+      }
+
+      if (_nkBlocked) {
+        logger.info('[KC_ENGINE] 🚫 GATE 2.9: NEGATIVE_KEYWORD_BLOCK — match suppressed', {
+          companyId, callSid, turn,
+          matchSource:    match.matchSource,
+          containerTitle: match.container.title,
+          sectionLabel:   _nkBlockLabel,
+          blockedBy:      _nkBlockedBy,
+          score:          match.score,
+          inputPreview:   _clip(userInput, 80),
+        });
+
+        emit('KC_NEGATIVE_KEYWORD_BLOCK', {
+          companyId, callSid, turn,
+          matchSource:    match.matchSource,
+          containerTitle: match.container.title,
+          sectionLabel:   _nkBlockLabel,
+          blockedBy:      _nkBlockedBy,
+        });
+
+        // Write to qaLog so Gaps & Todo page tracks suppressed matches
+        _writeDiscoveryNotes(companyId, callSid, {
+          qaLog: [{
+            type:           'NEGATIVE_KEYWORD_BLOCK',
+            turn:           turn ?? 0,
+            question:       userInput,
+            matchSource:    match.matchSource,
+            containerTitle: match.container.title,
+            containerId:    String(match.container._id || ''),
+            kcId:           match.container.kcId || null,
+            sectionLabel:   _nkBlockLabel,
+            blockedBy:      _nkBlockedBy,
+            timestamp:      new Date().toISOString(),
+          }],
+        }).catch(() => {});
+
+        match = null;  // Suppress — GATE 3 re-evaluates with its own negKw check
       }
     }
 
