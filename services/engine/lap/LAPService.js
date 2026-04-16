@@ -145,6 +145,56 @@ async function match(companyId, transcript) {
 
     for (const entry of entries) {
       if (_textMatchesKeyword(normalized, entry.phrase)) {
+
+        // ── TRAILING CONTENT GUARD (2026-04-16) ─────────────────────────
+        // BUG FIX: "wait a minute, what about? How much is your service call?"
+        // LAP matched "wait a minute" and swallowed the pricing question.
+        //
+        // Hold/respond actions should NOT intercept when there's substantive
+        // content AFTER the matched phrase. "Wait a minute" followed by a
+        // real question is a conversational pause, NOT a literal hold request.
+        //
+        // Guard: split at phrase position → check trailing content for
+        // question words, substantive words, or significant length.
+        // repeat_last is exempt — "can you repeat that, also I had a question"
+        // still means repeat the last thing first.
+        // ────────────────────────────────────────────────────────────────
+        if (entry.action !== 'repeat_last') {
+          const phraseNorm = _normalize(entry.phrase);
+          const phraseIdx = normalized.indexOf(phraseNorm);
+          if (phraseIdx >= 0) {
+            const afterPhrase = normalized.substring(phraseIdx + phraseNorm.length).trim();
+
+            // Strip filler words to see if there's real content after the phrase
+            const stripped = afterPhrase
+              .replace(/\b(um|uh|like|you know|well|so|and|but|oh|hmm|erm|ah)\b/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+
+            // Question indicators — caller is asking something, not requesting hold
+            const hasQuestion = /\b(what|how|why|when|where|which|who|does|do you|can you|can i|is it|is there|is that|how much|how long|tell me|explain)\b/.test(stripped)
+              || (transcript || '').includes('?');
+
+            // Substantive trailing content (>4 real words after stripping fillers)
+            const trailingWords = stripped.split(/\s+/).filter(Boolean);
+            const hasSubstantiveTrailing = trailingWords.length > 4;
+
+            if (hasQuestion || hasSubstantiveTrailing) {
+              logger.info('[LAP] Trailing content guard — suppressing match (caller has more to say)', {
+                companyId,
+                entryId: entry.id,
+                phrase:  entry.phrase,
+                action:  entry.action,
+                trailingWordCount: trailingWords.length,
+                hasQuestion,
+                trailingPreview: stripped.substring(0, 60),
+                transcript: transcript.substring(0, 100),
+              });
+              continue;  // Skip this entry, try next (or fall through to no match)
+            }
+          }
+        }
+
         // Pick random response from the list (if any)
         const responses = entry.responses || [];
         const response = responses.length > 0
