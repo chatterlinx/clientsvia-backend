@@ -817,12 +817,69 @@ class KCDiscoveryRunner {
       }
     }
 
+    // ── Narrative filter: protect callers telling a story from being hijacked
+    // by booking intent. Single-word affirmatives ("okay", "yeah") buried inside
+    // a longer narrative are conversational fillers — NOT booking confirmations.
+    //
+    // BUG FIX (2026-04-16): Call report showed "okay, you said a lot of things
+    // right now but yeah, um, I came in the house and..." firing booking intent
+    // because "okay"+"yeah" are in BOOKING_PHRASES and the question filter
+    // only catches question words, not narrative content.
+    //
+    // Three guards:
+    //   1. Story indicators — caller is narrating ("I came", "I noticed", "it was")
+    //   2. Trailing conjunction — caller was cut off mid-sentence ("and", "but", "so")
+    //   3. Length guard — >20 words with only filler-affirmative booking signals
+    let _inputIsNarrative = false;
+
+    // Guard 1: Story/narrative indicators — these phrases mean the caller is
+    // explaining a situation, not confirming a booking.
+    const NARRATIVE_INDICATORS = /\b(i came|i was |i had |i have |i noticed|i went|i tried|i called|i got |i walked|i heard|i saw|i checked|i looked|i turned|i woke|it was |it started|it happened|it broke|it stopped|it keeps|you guys |you said|you told|you were|they said|they told|he said|she said|last time|yesterday|this morning|the other day|couple days|few days|a while|when i got|when i came|when we|came home|got home|walked in)\b/;
+    if (NARRATIVE_INDICATORS.test(_norm)) {
+      _inputIsNarrative = true;
+    }
+
+    // Guard 2: Trailing conjunction — caller was still talking when speech-to-text
+    // captured the utterance. "okay yeah um I came in the house and" → interrupted.
+    if (!_inputIsNarrative) {
+      const _trimmed = _norm.replace(/\s+/g, ' ').trim();
+      if (/\b(and|but|so|because|then|or|like|um|uh)$/.test(_trimmed)) {
+        // Only treat trailing conjunction as narrative if utterance is substantial
+        const _wordCount = _trimmed.split(' ').length;
+        if (_wordCount > 6) {
+          _inputIsNarrative = true;
+        }
+      }
+    }
+
+    // Guard 3: Length guard — long utterances where the only booking signals are
+    // filler affirmatives ("okay", "yeah", "yes", "sure") are NOT booking confirmations.
+    // A real booking confirmation is short and direct: "Yes please", "Yeah go ahead".
+    if (!_inputIsNarrative && !_inputHasQuestion) {
+      const _words = _norm.split(/\s+/).filter(Boolean);
+      if (_words.length > 20) {
+        // Check if the booking signal comes from filler affirmatives only
+        const FILLER_AFFIRMATIVES = /^(yes|yeah|yep|yup|sure|ok|okay|alright|right|uh huh|mm hmm)$/;
+        const _bookingWords = _words.filter(w => FILLER_AFFIRMATIVES.test(w));
+        // If the ONLY booking-triggering words are fillers in a long utterance → narrative
+        if (_bookingWords.length > 0 && _bookingWords.length <= 3) {
+          _inputIsNarrative = true;
+        }
+      }
+    }
+
+    if (_inputIsNarrative) {
+      logger.debug('[KC_ENGINE] GATE 1 — narrative filter suppressed booking intent', {
+        companyId, callSid, turn, inputPreview: _clip(userInput, 60),
+      });
+    }
+
     // Compound intent: utterance has BOTH a booking signal AND a question/topic.
     // When true: skip immediate booking handoff, answer the KC question this turn,
     // then transition to BOOKING lane so v2twilio redirects after the response plays.
     const _hasCompoundBookingIntent = _inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput);
 
-    if (!_inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput)) {
+    if (!_inputHasQuestion && !_inputIsNarrative && KCBookingIntentDetector.isBookingIntent(userInput)) {
       logger.info('[KC_ENGINE] Booking intent detected — routing to KC_BOOKING_INTENT', {
         companyId, callSid, turn, inputPreview: _clip(userInput, 40),
       });
@@ -2190,8 +2247,10 @@ async function _handleKCMatch({
     nextState.sessionMode = 'BOOKING';
 
     // ── discoveryNotes: callReason + objective BOOKING for BookingLogicEngine
+    // noAnchor containers (Recovery, meta-conversation) never overwrite callReason —
+    // "Conversational Recovery" as callReason is meaningless and pollutes notes.
     _writeDiscoveryNotes(companyId, callSid, {
-      callReason:        containerTitle,
+      ...(!container.noAnchor ? { callReason: containerTitle } : {}),
       objective:         'BOOKING',
       turnNumber:        turn ?? 0,
       ...(!container.noAnchor ? { anchorContainerId: containerId } : {}),   // noAnchor containers (e.g. Recovery) never set anchor
@@ -2212,8 +2271,10 @@ async function _handleKCMatch({
 
   // ── discoveryNotes: record callReason + Q&A so BookingLogicEngine knows
   //    what the call was about when the caller eventually says "let's book" ──
+  // noAnchor containers (Recovery, meta-conversation) never overwrite callReason —
+  // "Conversational Recovery" as callReason is meaningless and pollutes notes.
   _writeDiscoveryNotes(companyId, callSid, {
-    callReason:          containerTitle,
+    ...(!container.noAnchor ? { callReason: containerTitle } : {}),
     objective:           'DISCOVERY',
     turnNumber:          turn ?? 0,
     ...(!container.noAnchor ? { anchorContainerId: containerId } : {}),   // noAnchor containers (e.g. Recovery) never set anchor
@@ -2244,7 +2305,7 @@ async function _handleKCMatch({
     nextState.agent2.discovery = nextState.agent2.discovery || {};
     nextState.agent2.discovery.pendingBookingFromKC = true;
     _writeDiscoveryNotes(companyId, callSid, {
-      callReason:        containerTitle,
+      ...(!container.noAnchor ? { callReason: containerTitle } : {}),
       objective:         'BOOKING',
       turnNumber:        turn ?? 0,
       ...(!container.noAnchor ? { anchorContainerId: containerId } : {}),   // noAnchor containers (e.g. Recovery) never set anchor

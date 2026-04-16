@@ -987,7 +987,9 @@ async function answer(opts) {
       // bookingAction and the company's bookingOfferMode so the CTA is
       // delivered even on fixed responses.
       let finalResponse = resolvedText;
-      const _bookingAction = (targetSection?.bookingAction) || container.bookingAction || 'offer_to_book';
+      // noAnchor containers (Recovery, Price Objections, etc.) NEVER offer booking.
+      // A frustrated caller hearing "Would you like to schedule?" is a disaster.
+      const _bookingAction = container.noAnchor ? 'none' : ((targetSection?.bookingAction) || container.bookingAction || 'offer_to_book');
       const _bookingMode   = kbSettings.bookingOfferMode || 'groq';
       if (_bookingAction === 'offer_to_book' && _bookingMode !== 'none') {
         const phrase = (kbSettings.bookingOfferPhrase || BUILT_IN_BOOKING_OFFER).trim();
@@ -1038,8 +1040,11 @@ async function answer(opts) {
       ? kbSettings.defaultWordLimit
       : 40;
 
-  // Resolve booking action: section override → container default
-  const effectiveBookingAction = (targetSection?.bookingAction) || container.bookingAction || 'offer_to_book';
+  // Resolve booking action: section override → container default.
+  // noAnchor containers (Recovery, Price Objections, etc.) force 'none' — meta-conversation
+  // responses must never append a booking CTA. A confused/frustrated caller hearing
+  // "Would you like to schedule?" gets more frustrated, says "okay" → false booking intent.
+  const effectiveBookingAction = container.noAnchor ? 'none' : ((targetSection?.bookingAction) || container.bookingAction || 'offer_to_book');
 
   // Build prompt components — pass targetSection so Groq reads only the matched section
   // when UAP routed to a specific section; all sections otherwise (general query).
