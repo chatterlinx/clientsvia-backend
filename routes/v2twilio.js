@@ -5903,6 +5903,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // re-open the listener. Bump the pending question turn forward so it
       // survives for the next real turn.
       // ═══════════════════════════════════════════════════════════════════════════
+      // BUG FIX (2026-04-16): ghostSpeechDet was NEVER declared — every ghost
+      // turn guard hit crashed with ReferenceError. The catch block swallowed it,
+      // so the feature appeared to work but actually fell through to crash recovery.
+      const ghostSpeechDet = _getSpeechDetection(company);
       const ghostPFUQ = callState?.agent2?.discovery?.pendingFollowUpQuestion || null;
       const ghostPFUQTurn = callState?.agent2?.discovery?.pendingFollowUpQuestionTurn;
       const ghostPQ = callState?.agent2?.discovery?.pendingQuestion || null;
@@ -5991,7 +5995,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           action: `/api/twilio/v2-agent-respond/${companyID}`,
           method: 'POST',
           actionOnEmptyResult: true,
-          timeout: 7,
+          timeout: ghostSpeechDet.initialTimeout ?? 7,
           speechTimeout: _speechTimeout(company, { pendingFollowUp: hasAnyPendingQ }),
           bargeIn: ghostSpeechDet.bargeIn ?? false,
           enhanced: ghostSpeechDet.enhancedRecognition ?? true,
@@ -6008,6 +6012,127 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           matchSource: 'GHOST_TURN_EARLY_EXIT',
           timings: { totalMs: Date.now() - T0 }
         };
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // SILENT RE-LISTEN — Caller hasn't spoken yet, just needs more time
+      // ═══════════════════════════════════════════════════════════════════════════
+      // BUG FIX (2026-04-16): When Gather's initial timeout fires with no speech
+      // (actionOnEmptyResult:true), the full pipeline ran on empty input — the agent
+      // responded to nothing, interrupting a caller who was thinking or explaining.
+      //
+      // Humans take time to formulate their thoughts. A 7-second silence does NOT
+      // mean "I'm done" — it means "I'm thinking." We track consecutive empty turns
+      // and silently re-listen up to a configurable max before gently prompting.
+      //
+      // Flow:
+      //   1st empty → silently re-listen (caller is thinking)
+      //   2nd empty → silently re-listen (still thinking)
+      //   3rd empty → falls through to pipeline (agent gently prompts)
+      //
+      // Booking lane is excluded — booking redirect arrives with empty SpeechResult.
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (speechIsEmpty && !ghostGuardIsBookingLane) {
+        const consecutiveEmpties = (callState?.agent2?.discovery?.consecutiveEmptyTurns || 0) + 1;
+
+        // Configurable max silent re-listens before prompting. Default: 2 re-listens
+        // (meaning the 3rd consecutive empty turn falls through to the pipeline).
+        const maxSilentRelistens = company?.aiAgentSettings?.agent2?.discovery?.maxSilentRelistens ?? 2;
+
+        if (consecutiveEmpties <= maxSilentRelistens) {
+          // Persist the consecutive empty count
+          callState.agent2 = callState.agent2 || {};
+          callState.agent2.discovery = callState.agent2.discovery || {};
+          callState.agent2.discovery.consecutiveEmptyTurns = consecutiveEmpties;
+
+          logger.info('[V2TWILIO] SILENT_RELISTEN — caller needs more time, re-opening listener', {
+            callSid: callSid?.slice(-8),
+            turnNumber,
+            consecutiveEmpties,
+            maxSilentRelistens,
+          });
+
+          if (CallLogger && callSid) {
+            CallLogger.logEvent({
+              callId: callSid, companyId: companyID,
+              type: 'SILENT_RELISTEN',
+              turn: turnNumber,
+              data: {
+                reason: 'Caller silent — re-opening listener (humans need time to think)',
+                consecutiveEmpties,
+                maxSilentRelistens,
+              }
+            }).catch(() => {});
+          }
+
+          // Persist transcript trace
+          try {
+            const CallTranscriptV2 = require('../models/CallTranscriptV2');
+            await CallTranscriptV2.appendTurns(companyID, callSid, [
+              {
+                speaker: 'system',
+                kind: 'SILENT_RELISTEN',
+                text: `Silent re-listen ${consecutiveEmpties}/${maxSilentRelistens} — caller needs more time`,
+                turnNumber,
+                ts: new Date(),
+                sourceKey: 'silence_guard',
+              }
+            ], { from: fromNumber || null, to: req.body.To || null });
+          } catch (mongoErr) {
+            logger.warn('[V2TWILIO] Failed to persist silent re-listen trace', {
+              callSid: callSid?.slice(-8), error: mongoErr.message
+            });
+          }
+
+          // Persist state with updated consecutive empty count
+          if (redis && redisKey) {
+            try { await redis.set(redisKey, JSON.stringify(callState), { EX: 60 * 60 * 4 }); } catch (_) {}
+          }
+
+          // Silently re-open listener — no speech, no prompt, just wait for the caller
+          const twiml = new twilio.twiml.VoiceResponse();
+          const _relistenSd = _getSpeechDetection(company);
+          const gather = twiml.gather({
+            input: 'speech',
+            action: `/api/twilio/v2-agent-respond/${companyID}`,
+            method: 'POST',
+            actionOnEmptyResult: true,
+            timeout: _relistenSd.initialTimeout ?? 7,
+            speechTimeout: _speechTimeout(company),
+            bargeIn: _relistenSd.bargeIn ?? false,
+            enhanced: _relistenSd.enhancedRecognition ?? true,
+            speechModel: _relistenSd.speechModel || 'phone_call',
+            partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+            partialResultCallbackMethod: 'POST'
+          });
+          gather.say(''); // Silent — just listen
+
+          return {
+            twimlString: twiml.toString(),
+            voiceProviderUsed: 'silent_relisten',
+            responseText: '',
+            matchSource: 'SILENT_RELISTEN',
+            timings: { totalMs: Date.now() - T0 }
+          };
+        }
+
+        // Fell through maxSilentRelistens — reset counter and let the pipeline
+        // handle it (agent will gently prompt "Are you still there?" via fallback).
+        callState.agent2 = callState.agent2 || {};
+        callState.agent2.discovery = callState.agent2.discovery || {};
+        callState.agent2.discovery.consecutiveEmptyTurns = 0;
+
+        logger.info('[V2TWILIO] SILENT_RELISTEN_EXHAUSTED — max re-listens reached, letting pipeline handle', {
+          callSid: callSid?.slice(-8),
+          turnNumber,
+          consecutiveEmpties,
+          maxSilentRelistens,
+        });
+      }
+
+      // Reset consecutive empty counter when caller actually speaks
+      if (!speechIsEmpty && callState?.agent2?.discovery?.consecutiveEmptyTurns) {
+        callState.agent2.discovery.consecutiveEmptyTurns = 0;
       }
 
       // ═══════════════════════════════════════════════════════════════════════════
@@ -6804,7 +6929,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const isPatienceMode = runtimeResult?.patienceMode === true
         || persistedState?.agent2?.discovery?.patienceMode === true;
       const patienceTimeout = Math.max(10, Math.min(180, parseInt(patienceCfg.timeoutSeconds) || 45));
-      const gatherTimeout = isPatienceMode ? patienceTimeout : 7;
+      // Use admin-configured initialTimeout (agent2.html → "Initial Wait (s)").
+      // Fallback to 7s for companies that haven't configured it yet.
+      const adminInitialTimeout = speechDet.initialTimeout ?? 7;
+      const gatherTimeout = isPatienceMode ? patienceTimeout : adminInitialTimeout;
 
       if (isPatienceMode && CallLogger) {
         CallLogger.logEvent({
