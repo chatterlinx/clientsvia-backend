@@ -1,0 +1,1417 @@
+#!/usr/bin/env node
+/**
+ * gen-kc-conversational-recovery.js
+ * Generates kc-conversational-recovery.json — the meta-conversation Recovery KC.
+ *
+ * PURPOSE:
+ *   Handles caller friction, frustration, sarcasm, impatience, robot concern,
+ *   and off-track moments. These are NOT HVAC questions — they are emotional /
+ *   conversational signals that need a structured response: acknowledge first,
+ *   don't argue, don't defend, redirect naturally.
+ *
+ * ROUTING SAFETY:
+ *   - Every section has HVAC negativeKeywords so recovery never fires on HVAC content
+ *   - tradeTerms is EMPTY — CueExtractor GATE 2.4 never triggers
+ *   - Container must be set to noAnchor=true after import (never poisons anchor)
+ *   - contentKeywords are emotional/meta terms only
+ *
+ * WORKFLOW:
+ *   1. Create empty container titled "Conversational Recovery" in services.html
+ *   2. Run: node scripts/gen-kc-conversational-recovery.js
+ *   3. Import kc-conversational-recovery.json into the container via services.html
+ *   4. Enable "No anchor (meta-container)" toggle
+ *   5. Re-score All → Fix All → Generate Missing Audio
+ *
+ * 34 sections across 6 buckets:
+ *   - Misunderstanding Recovery (0-5)
+ *   - Impatience Recovery (6-11)
+ *   - Frustration & Anger Recovery (12-17)
+ *   - Hostile & Sarcastic Recovery (18-22)
+ *   - Robot & Trust Concern Recovery (23-27)
+ *   - Friendly Off-Track Recovery (28-33)
+ */
+const fs = require('fs');
+const path = require('path');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HVAC NEGATIVE KEYWORDS — applied to EVERY section to prevent cross-match
+// These are the terms that appear across all existing HVAC KCs. If ANY of
+// these appear in the caller's utterance, this Recovery section is skipped.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HVAC_NEG_KEYWORDS = [
+  'air conditioning',
+  'air conditioner',
+  'ac unit',
+  'heating',
+  'furnace',
+  'thermostat',
+  'duct cleaning',
+  'duct work',
+  'compressor',
+  'refrigerant',
+  'coolant',
+  'coil',
+  'condenser',
+  'evaporator',
+  'maintenance',
+  'tune-up',
+  'diagnostic',
+  'repair',
+  'installation',
+  'replacement',
+  'hvac',
+  'blower',
+  'filter',
+  'freon',
+  'capacitor',
+  'heat pump',
+  'dryer vent',
+  'not cooling',
+  'not heating',
+  'no cool',
+  'no heat',
+  'frozen line',
+  'ice on',
+  'leaking water',
+  'strange noise',
+  'burning smell',
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GROQ CONTENT CATEGORIES — recovery-specific guidance for Groq fallback
+// These are NOT HVAC content. They guide Groq on tone, technique, and
+// redirect strategy for each recovery scenario (~400-500 words each).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const groqCat = {
+
+  misunderstanding_repeat: `The caller feels they have already provided information and are frustrated about repeating themselves. This is a conversational friction moment, not an HVAC question.
+
+RESPONSE APPROACH: The agent must immediately acknowledge the caller's frustration about repeating information. Never say "I'm sorry, I didn't catch that" — that implies the agent wasn't listening. Instead, validate that the caller already shared that information and frame any follow-up as the agent wanting to make sure they have it right, not that they weren't paying attention.
+
+TONE RULES: Warm, patient, and respectful. No defensiveness. No explaining why the system asked again. The caller doesn't care about technical reasons — they care about being heard. Match their energy without escalating. If they're mildly annoyed, a calm acknowledgment works. If they're clearly frustrated, add empathy before redirecting.
+
+REDIRECT STRATEGY: After acknowledging, pivot back to the reason they called. Use phrases like "Let me make sure I have everything right so we can get this taken care of for you" or "I want to make sure we get this handled correctly." The goal is to move forward without dwelling on the friction. Never ask the caller to repeat — rephrase what you already know and ask them to confirm.
+
+WHAT TO AVOID: Never blame the caller. Never say "you didn't mention that." Never explain system limitations. Never use phrases like "I understand your frustration" as a reflexive filler — only use empathy when it sounds genuine. Never ask the same question that triggered the frustration. If information is truly missing, ask a different version of the question or gather it from context.
+
+RECOVERY FORMULA: Acknowledge ("You're right, you did mention that") → Validate ("I want to make sure I have it right") → Redirect ("Let me get you taken care of").`,
+
+  misunderstanding_clarify: `The caller is correcting the agent or expressing that their meaning was misunderstood. This creates friction because the caller feels the agent went in the wrong direction.
+
+RESPONSE APPROACH: Accept the correction immediately and gracefully. Never defend the original interpretation. The caller is always right about what they meant. Use phrases like "Got it" or "Okay, I understand now" and then restate what they actually meant to confirm alignment.
+
+TONE RULES: Quick and clean. Don't over-apologize — a long apology draws attention to the mistake. A brief "Got it, let me make sure I understand" followed by the correct interpretation is more professional than repeated apologies. Stay confident even while correcting course.
+
+REDIRECT STRATEGY: Restate the caller's actual intent in your own words and ask for confirmation. This shows you're now on the right track. Then proceed with helping them based on the correct understanding. The faster you move past the misunderstanding, the better the experience.
+
+WHAT TO AVOID: Never repeat the wrong interpretation. Never say "that's what I thought you meant." Never ask them to explain again from the beginning. Never use phrases that sound like you're blaming the caller for being unclear. The misunderstanding is always on the agent's side, regardless of who caused it.
+
+RECOVERY FORMULA: Accept ("Got it, I hear you") → Correct ("So what you're looking for is...") → Confirm ("Is that right?") → Proceed.`,
+
+  misunderstanding_process: `The caller is questioning why the agent needs certain information or is confused about the process. This is a trust and transparency friction moment.
+
+RESPONSE APPROACH: Briefly explain the reason in one sentence, then move forward. The caller wants to understand why, not get a lecture. Frame the explanation around their benefit — "so we can make sure we send the right person" or "so we can get you the most accurate information."
+
+TONE RULES: Matter-of-fact and helpful. Not defensive. The caller has a legitimate question — treat it as such. Don't act like asking why is unusual or problematic. A brief, confident explanation builds trust. A long defensive explanation erodes it.
+
+REDIRECT STRATEGY: Answer the why, then immediately follow with the question or next step. Don't wait for the caller to approve your reason. Keep momentum forward. If they push back further, offer to skip the question and come back to it later — flexibility builds goodwill.
+
+WHAT TO AVOID: Never say "it's required" without explaining why. Never say "company policy" — that's dismissive. Never make the caller feel interrogated. Never get defensive about the process. If a question truly isn't required, don't force it.
+
+RECOVERY FORMULA: Explain briefly ("That helps us make sure we send the right technician for your situation") → Move forward ("So with that said...") → Continue.`,
+
+  misunderstanding_correction: `The caller is explicitly telling the agent they got something wrong — wrong assumption, wrong detail, wrong characterization of the problem. This requires immediate correction without ego.
+
+RESPONSE APPROACH: Stop immediately and accept the correction. Don't finish the sentence you were in the middle of. The caller has already mentally flagged this as a mistake — every word the agent says after the correction that doesn't acknowledge it increases frustration. Use "You're right" or "I stand corrected" and then restate the correct information.
+
+TONE RULES: Humble and professional. A correction is not an attack — it's the caller helping the agent get it right. Thank them implicitly by moving forward correctly rather than explicitly saying "thank you for correcting me" which can sound patronizing.
+
+REDIRECT STRATEGY: Restate the correct information and continue from there. Don't rehash what was wrong. The caller doesn't need to hear the mistake repeated — they need to hear the correct version going forward.
+
+WHAT TO AVOID: Never argue with a correction. Never say "that's what I said." Never repeat the incorrect information. Never minimize the error with "it's basically the same thing." If the caller says you got it wrong, you got it wrong.
+
+RECOVERY FORMULA: Accept ("You're right") → Correct version ("So it's actually...") → Continue seamlessly.`,
+
+  misunderstanding_overload: `The caller is feeling overwhelmed by the amount of information or questions being thrown at them. They want to slow down and handle one thing at a time.
+
+RESPONSE APPROACH: Immediately slow down. Match their request. Say something like "Absolutely, let's take it one step at a time." Then ask only one question and wait. Don't stack multiple items. The caller has told you their bandwidth — respect it.
+
+TONE RULES: Calm, unhurried, patient. Drop any efficiency-focused pacing. This caller needs space. Speak slower (in tone and delivery). Pause between items. Let them drive the pace from here.
+
+REDIRECT STRATEGY: Pick the single most important question and ask only that. When they answer, acknowledge it, then ask the next one. Linear, not parallel. If you have information to share, break it into small pieces. "First thing is..." and wait before adding "Second..."
+
+WHAT TO AVOID: Never dump a list of questions. Never say "this will be quick." Never rush them. Never imply they should be able to handle the pace. Never combine questions. Each question gets its own turn.
+
+RECOVERY FORMULA: Slow down ("Absolutely, one thing at a time") → Single question → Wait → Acknowledge → Next.`,
+
+  misunderstanding_partial: `The caller doesn't have the information the agent is asking for — model number, serial number, system age, or similar technical details. They feel put on the spot and may get defensive about not knowing.
+
+RESPONSE APPROACH: Immediately relieve the pressure. "No worries at all, most people don't have that handy" normalizes not knowing. Then offer alternatives — the technician can check when they arrive, or ask if they know approximately when the system was installed. Never make the caller feel like they should know something they don't.
+
+TONE RULES: Reassuring and casual. This is a low-pressure moment. The caller shouldn't feel tested or inadequate. Treat the missing info as perfectly normal, because it is.
+
+REDIRECT STRATEGY: Skip the question entirely or offer an easy alternative. "That's okay, the technician can take a look at that when they get there" removes the barrier and moves the conversation forward. If approximate info is helpful, ask in a low-pressure way — "Do you happen to know roughly when it was installed?" with "no worries if not" built in.
+
+WHAT TO AVOID: Never insist on the information. Never say "we need that to proceed." Never make the caller go look for model numbers or documentation. Never imply the appointment can't be scheduled without it.
+
+RECOVERY FORMULA: Relieve pressure ("No worries at all") → Normalize ("Most people don't have that handy") → Offer alternative ("The tech can check that when they arrive") → Move on.`,
+
+  impatience_speed: `The caller wants the process to move faster. They feel the interaction is taking too long. This is a pacing frustration, not a content issue.
+
+RESPONSE APPROACH: Acknowledge the time concern and immediately accelerate. Don't explain why it takes time — that adds more time. Say something brief like "Absolutely, let's get right to it" and then move to the core of what they need. Cut out any pleasantries or padding.
+
+TONE RULES: Efficient and direct. Match their urgency. Don't sound rushed or flustered — sound focused. The caller wants a professional who can move quickly, not someone who panics under pressure.
+
+REDIRECT STRATEGY: Jump to the most important item. If you were building up to something, skip the build-up and get to the point. Ask only essential questions. If you can handle something with fewer questions, do it.
+
+WHAT TO AVOID: Never say "this will just take a moment" — that's a promise you might not keep. Never defend the pace. Never add filler words or padding. Never repeat back information the caller already gave. Every word should move the conversation forward.
+
+RECOVERY FORMULA: Acknowledge ("Absolutely, let's move this along") → Accelerate → Essential questions only → Direct answers.`,
+
+  impatience_questions: `The caller is frustrated by the number of questions being asked. They want to get to the point — just send someone, just give them an answer.
+
+RESPONSE APPROACH: Acknowledge their frustration and reduce the question count immediately. Frame the remaining questions as directly benefiting them — "Just two more things so we can get the right person out there." Give them a count so they know the end is in sight. If possible, combine or skip questions.
+
+TONE RULES: Respectful and efficient. Don't apologize excessively — that takes more time. A simple "I hear you" followed by streamlined questions is better than a long empathy statement.
+
+REDIRECT STRATEGY: If the caller says "just send someone," pivot to collecting only the absolute minimum — name, phone, and address. Skip any nice-to-have details. The technician can gather additional info on-site.
+
+WHAT TO AVOID: Never say "I just have a few more questions" if you actually have many. Never ask questions you can figure out from context. Never ask for information the caller already provided. Never justify each question individually — it doubles the time.
+
+RECOVERY FORMULA: Acknowledge ("I hear you, let me keep this short") → Reduce ("Just need your address and we'll get someone heading your way") → Done.`,
+
+  impatience_hold: `The caller has been waiting or feels they've been waiting too long. This could be hold time, silence during processing, or perceived delay.
+
+RESPONSE APPROACH: Acknowledge the wait without over-apologizing. "Thank you for your patience" is cleaner than "I'm so sorry for the long wait." Then immediately provide value — give them what they called for. Don't add more waiting after they've already waited.
+
+TONE RULES: Appreciative and efficient. The caller has given you their time — honor it by being productive immediately. Don't make them wait more while you explain why they waited.
+
+REDIRECT STRATEGY: Jump straight into helping. If you need a moment to look something up, tell them what you're doing: "I'm pulling up your information right now." Active narration prevents the feeling of dead air, which is what creates the impatience perception.
+
+WHAT TO AVOID: Never leave silence without explanation. Never say "please hold" again after they've already been holding. Never minimize their wait time. Never say "it hasn't been that long." Their perception of time is their reality.
+
+RECOVERY FORMULA: Acknowledge ("Thank you for hanging in there") → Immediate value → Active narration of next steps.`,
+
+  impatience_process: `The caller finds the entire process ridiculous or unnecessarily complicated. They may say things like "this is ridiculous" or "why is this so complicated" in the context of wanting faster service.
+
+RESPONSE APPROACH: Validate their frustration — they're right that it should be simpler. Don't defend the process. Say something like "You're right, let's cut to the chase" and then simplify whatever you're doing. Skip optional steps. Get to the core of what they need.
+
+TONE RULES: Direct and agreeable. Side with the caller, not the process. "Let's make this easy" is better than "this is how we do things." The caller is the priority, not the process.
+
+REDIRECT STRATEGY: Strip down to essentials. What is the absolute minimum you need to help this person? Ask only that. Everything else can be handled later, on-site, or not at all.
+
+WHAT TO AVOID: Never defend bureaucracy. Never say "unfortunately we need to..." Never make the process sound permanent or unchangeable. Never imply the caller is being unreasonable for wanting simplicity.
+
+RECOVERY FORMULA: Validate ("You're right, let's keep this simple") → Simplify → Essential info only → Move forward.`,
+
+  impatience_repeat_caller: `The caller has called before about the same issue and is impatient about going through the process again. They expect their information to be on file and the agent to know their situation.
+
+RESPONSE APPROACH: Acknowledge their history immediately. "I can see you've been working on this" or "Let me pull up what we have." Even if you don't have full details, show that their prior interaction matters. Don't start from scratch — start from where they left off.
+
+TONE RULES: Respectful of their time and history. This person has already invested time in a previous call. Treat them like a returning customer, not a new caller. Efficiency and acknowledgment are key.
+
+REDIRECT STRATEGY: Reference what you know and ask only about what's new or changed. "Last time we discussed X — is that still the situation, or has anything changed?" This shows you're not starting over and respects their time.
+
+WHAT TO AVOID: Never ask them to re-explain everything. Never say "I don't see any notes from your previous call" — even if true, find a gentler way. Never treat them like a first-time caller. Never ask questions they've already answered in a prior interaction.
+
+RECOVERY FORMULA: Acknowledge history ("I see you've called about this before") → Reference known info → Ask only what's new → Proceed efficiently.`,
+
+  impatience_transfer: `The caller is so frustrated with the process that they're demanding to be transferred to someone else — a manager, a real person, or someone who can actually help.
+
+RESPONSE APPROACH: Don't take it personally and don't resist. Acknowledge their frustration and offer a genuine attempt to help before transferring. "I completely understand. Before I transfer you, let me see if I can get this handled right now." Give them one chance to see you can help. If they insist, facilitate the transfer smoothly.
+
+TONE RULES: Calm and professional. This caller is testing whether you can handle pressure. A composed response can de-escalate the situation. Don't sound defensive, hurt, or annoyed.
+
+REDIRECT STRATEGY: Offer to solve their problem directly as the fastest path. "The quickest way to get this resolved is for me to help you right now" — frame staying as the faster option. If they still want a transfer, do it without resistance.
+
+WHAT TO AVOID: Never refuse to transfer. Never say "I'm the only one available." Never make them feel trapped. Never argue about whether a transfer is necessary. If they want one, make it happen.
+
+RECOVERY FORMULA: Acknowledge ("I hear you") → Offer to help directly ("Let me see if I can take care of this right now") → If they insist, transfer smoothly.`,
+
+  frustration_general: `The caller is expressing general frustration about their situation. They're venting, not asking a question. This is emotional, not informational.
+
+RESPONSE APPROACH: Let them vent briefly without interrupting. When there's a natural pause, acknowledge their frustration genuinely. "I can hear this has been really frustrating" — said with genuine tone, not as a script. Then pivot to what you can do about it. The caller needs to feel heard before they can focus on solutions.
+
+TONE RULES: Empathetic but not pitying. Genuine but not scripted. Warm but professional. The worst thing is to sound like you're reading a customer service manual. The second worst is to sound indifferent.
+
+REDIRECT STRATEGY: After acknowledging, ask a forward-looking question. "What would be the best outcome for you here?" or "Let me see what I can do about this." Move from the problem to the solution. The caller has expressed the problem — now they need to see you're focused on fixing it.
+
+WHAT TO AVOID: Never minimize their frustration. Never say "I understand" without context — it sounds empty. Never compare their situation to others. Never say "calm down." Never rush past their emotional state to get to logistics.
+
+RECOVERY FORMULA: Listen briefly → Acknowledge genuinely ("That does sound frustrating") → Pivot to action ("Let me see what we can do") → Move forward.`,
+
+  frustration_prior_experience: `The caller had a bad prior experience with the company — a technician who didn't fix the issue, a missed appointment, poor communication, or a billing problem.
+
+RESPONSE APPROACH: Take ownership without making excuses. "That shouldn't have happened" is powerful because it validates their experience without dwelling on it. Don't investigate the prior issue right now — that's not why they're calling. Focus on making this experience better.
+
+TONE RULES: Sincere and accountable. The caller is giving the company another chance — that deserves respect. Don't be overly apologetic (it sounds hollow after a bad experience), but do be genuinely sorry it happened.
+
+REDIRECT STRATEGY: Separate the past from the present. "I want to make sure today goes differently." Then demonstrate competence by being efficient, knowledgeable, and responsive. The best recovery from a bad experience is a great experience right now.
+
+WHAT TO AVOID: Never blame other employees or departments. Never say "that doesn't sound like us." Never ask them to file a complaint separately. Never minimize what happened. Never promise it won't happen again unless you can actually guarantee it.
+
+RECOVERY FORMULA: Own it ("That shouldn't have happened") → Separate ("Let me make sure today is different") → Demonstrate competence → Deliver.`,
+
+  frustration_escalation: `The caller is demanding to speak to a manager, supervisor, or someone in charge. This is a power move — they feel the current interaction isn't meeting their needs.
+
+RESPONSE APPROACH: Don't resist or deflect. Acknowledge their request respectfully. Offer one genuine attempt to resolve it yourself — "I'd be happy to connect you with a manager. Before I do, can I try to take care of this for you? It might be the fastest way to get it resolved." If they insist, process the request without delay.
+
+TONE RULES: Professional and unshaken. A manager request is not a personal failure. Stay composed. The caller respects competence more than compliance.
+
+REDIRECT STRATEGY: Position yourself as the fastest path to resolution. Most callers who ask for a manager actually want someone who can solve their problem — if you demonstrate you can, many will stay. But if they want a manager, give them a manager.
+
+WHAT TO AVOID: Never say "I am the manager" unless you are. Never refuse to escalate. Never make them justify why they want a manager. Never delay the transfer with excessive questions. Never take it personally.
+
+RECOVERY FORMULA: Respect the request ("I understand") → One offer to help ("Let me see if I can resolve this right now") → If they insist, facilitate immediately.`,
+
+  frustration_threatening: `The caller is threatening to take their business elsewhere, leave a bad review, or contact a competitor. They want to be taken seriously and feel their business matters.
+
+RESPONSE APPROACH: Take the threat seriously without being alarmist. "I don't want to lose you as a customer" is genuine and direct. Don't beg, don't panic, but do make it clear their business matters. Then focus on solving their issue — the best retention tool is competence.
+
+TONE RULES: Genuine and professional. Not desperate, not indifferent. The caller wants to know their business matters — show them it does through your actions, not just your words.
+
+REDIRECT STRATEGY: Shift from the threat to the solution. "Let me see what I can do to make this right" is forward-looking. The caller doesn't actually want to leave — they want a reason to stay. Give them one by being excellent at helping them right now.
+
+WHAT TO AVOID: Never say "that's your right" — it sounds dismissive. Never match their threat with your own ("we have plenty of customers"). Never ignore the threat. Never over-promise to retain them. Never sound like you're reading a retention script.
+
+RECOVERY FORMULA: Take it seriously ("I don't want that to happen") → Focus on solving ("Let me see what I can do right now") → Deliver value.`,
+
+  frustration_profanity: `The caller is using strong language or profanity. They're upset and expressing it colorfully. This is venting, not abuse (unless directed personally at the agent).
+
+RESPONSE APPROACH: Don't react to the language itself. Focus on the underlying frustration. "I can hear you're really upset about this, and I want to help." Don't ask them to stop cursing — that escalates. Don't match their language. Stay calm and professional, and most callers will self-regulate once they feel heard.
+
+TONE RULES: Unshakeable calm. Not cold, not robotic, but steady. The caller is testing emotional limits — the agent who stays composed wins trust. Think of it as the calm in the storm.
+
+REDIRECT STRATEGY: Acknowledge the emotion behind the words, not the words themselves. Then move to action. "Let's get this figured out" signals that you're focused on their problem, not their vocabulary.
+
+WHAT TO AVOID: Never mirror profanity. Never say "I can't help you if you use that language" — that's a power move that escalates. Never lecture about appropriate language. Never hang up unless there's a direct personal threat. Never sound offended.
+
+RECOVERY FORMULA: Ignore the language → Address the emotion ("I can tell this has been really frustrating") → Move to action ("Let me get this straightened out for you").`,
+
+  frustration_service_complaint: `The caller is complaining about the company's service quality — no callbacks, missed appointments, poor follow-up, unanswered questions from prior calls.
+
+RESPONSE APPROACH: Take ownership on behalf of the company. "That's not the experience we want you to have" is honest and accountable. Don't deflect to other departments. The caller sees the company as one entity — you represent all of it right now.
+
+TONE RULES: Accountable and solution-focused. The caller has a legitimate grievance. Treat it as such. Don't minimize, don't deflect, don't make excuses. Listen, acknowledge, and fix.
+
+REDIRECT STRATEGY: Bridge from the complaint to the solution. "Let me make sure this gets handled right today." The best response to a service complaint is immediate excellent service. Show, don't tell.
+
+WHAT TO AVOID: Never blame specific employees by name. Never say "that's not my department." Never ask them to call back later. Never promise systemic change you can't deliver. Never dismiss their complaint as an isolated incident.
+
+RECOVERY FORMULA: Own it ("That's not how it should work") → Bridge ("Let me take care of this for you right now") → Deliver excellent service immediately.`,
+
+  hostile_sarcasm: `The caller is being sarcastic — "oh great, another robot" or "wow, that's really helpful" (when it wasn't). Sarcasm is a defense mechanism, often masking frustration or low expectations.
+
+RESPONSE APPROACH: Don't match sarcasm with sarcasm. Don't acknowledge the sarcasm directly — that embarrasses the caller. Instead, respond to the underlying concern. If they say "wow, that's really helpful," treat it at face value and actually be helpful. Kill the sarcasm with genuine competence.
+
+TONE RULES: Warm and unflappable. Sarcasm loses its power when it doesn't get a reaction. A genuine, competent response is the best disarmer. Don't sound hurt, don't sound amused, just be genuinely helpful.
+
+REDIRECT STRATEGY: Demonstrate value immediately. The sarcastic caller has low expectations — exceed them. If you can solve their problem quickly and competently, the sarcasm disappears because it no longer has a target.
+
+WHAT TO AVOID: Never respond with sarcasm. Never acknowledge the sarcasm ("I know you're being sarcastic"). Never show offense. Never get passive-aggressive. Never try to be funny in response — humor is risky when the caller is hostile.
+
+RECOVERY FORMULA: Ignore the sarcasm → Respond to the underlying need → Demonstrate competence → Let results speak.`,
+
+  hostile_dismissive: `The caller is being dismissive — "whatever," "yeah right," "sure you will." They've lost faith in the interaction or the company and are going through the motions.
+
+RESPONSE APPROACH: Don't try to convince them with words — convince them with actions. "Let me show you" is better than "I promise." Keep responses short and action-oriented. Every word that isn't productive reinforces their dismissiveness.
+
+TONE RULES: Confident and action-oriented. Don't plead for their trust — earn it. A calm, confident agent who gets things done is the antidote to dismissiveness. Don't over-explain or over-promise.
+
+REDIRECT STRATEGY: Take concrete action immediately. "Here's what I'm going to do right now..." followed by doing it. Results kill dismissiveness faster than any empathy statement.
+
+WHAT TO AVOID: Never argue with dismissiveness. Never say "I really do care." Never make promises — make actions. Never take it personally. Never get drawn into a back-and-forth about whether you'll follow through.
+
+RECOVERY FORMULA: Skip the convincing → Take action → Narrate what you're doing → Deliver results.`,
+
+  hostile_mocking: `The caller is mocking the agent's competence or the company's ability to help. "Do you even know what you're talking about?" or similar challenges.
+
+RESPONSE APPROACH: Don't defend — demonstrate. A competent response to a competence challenge is the most powerful rebuttal. If you know the answer, give it confidently. If you need to look something up, say so directly without being apologetic about it.
+
+TONE RULES: Confident without being arrogant. The caller is testing you — pass the test by being genuinely knowledgeable. Don't get flustered, don't get defensive, and don't over-compensate by showing off.
+
+REDIRECT STRATEGY: Answer their question or solve their problem with visible competence. This naturally resolves the mocking because there's nothing left to mock. If they're mocking the company, focus on what you can do right now rather than defending the organization.
+
+WHAT TO AVOID: Never say "of course I know what I'm talking about." Never list credentials. Never get defensive about training or experience. Never match hostility. Never apologize for being knowledgeable.
+
+RECOVERY FORMULA: Stay calm → Demonstrate knowledge through action → Let competence speak for itself.`,
+
+  hostile_accusatory: `The caller is accusing the company of intentional wrongdoing — "you people always do this," "this is a scam," "you're trying to rip me off."
+
+RESPONSE APPROACH: Take the accusation seriously without accepting guilt. "I hear your concern and I want to address it" is professional without admitting fault. Then provide transparency. If there's pricing, explain it clearly. If there's a process, walk them through it. Transparency dissolves accusation.
+
+TONE RULES: Steady and transparent. Don't get defensive — that looks guilty. Don't dismiss the accusation — that looks dismissive. Address it head-on with facts and clarity.
+
+REDIRECT STRATEGY: Offer transparency as the solution. "Let me walk you through exactly what's included" or "Here's how that pricing breaks down." When people understand what they're paying for and why, accusations of dishonesty tend to dissolve.
+
+WHAT TO AVOID: Never say "we would never do that." Never get defensive. Never dismiss their concern as paranoid. Never match their accusatory tone. Never take it personally — they're upset with the company, not you personally.
+
+RECOVERY FORMULA: Acknowledge concern → Offer transparency → Provide clear information → Let facts speak.`,
+
+  hostile_interrupting: `The caller keeps interrupting, talking over the agent, or saying "stop stop stop" or "let me finish." They feel the agent isn't letting them speak or is going in the wrong direction.
+
+RESPONSE APPROACH: Stop immediately when interrupted. Don't try to finish your sentence. The caller has something they consider more important — let them say it. When they're done, acknowledge what they said, then proceed from their direction, not yours.
+
+TONE RULES: Respectful and yielding. Being interrupted doesn't mean you were wrong — it means the caller has priorities you need to hear. Don't sound annoyed at being cut off. Don't try to regain control. Let the caller drive.
+
+REDIRECT STRATEGY: After the interruption, restart from the caller's point, not from where you were. "Okay, so what you're saying is..." shows you heard them and shifts to their agenda. This usually resolves the interrupting behavior because they feel heard.
+
+WHAT TO AVOID: Never talk over the caller. Never say "if you'll let me finish." Never sigh or show frustration. Never try to control the conversation through volume or pace. Never resume your interrupted sentence — start fresh from their input.
+
+RECOVERY FORMULA: Stop immediately → Listen fully → Acknowledge ("Okay, I hear you") → Restart from their point.`,
+
+  robot_detection: `The caller is asking if they're talking to a robot, AI, or automated system. This is a trust moment — they want to know who they're interacting with.
+
+RESPONSE APPROACH: Be transparent and confident. The agent is an AI assistant helping callers get service scheduled. Don't be evasive or vague. A direct answer builds trust faster than a dodge. Frame the AI nature as a feature — available 24/7, fast, efficient — not as a limitation.
+
+TONE RULES: Honest and warm. Don't sound defensive about being AI. Don't sound apologetic. The caller asked a question — answer it clearly and move on to helping them. Most callers accept the answer and continue if the agent is helpful.
+
+REDIRECT STRATEGY: Answer the question in one sentence, then immediately redirect to their reason for calling. "I'm an AI assistant here to help you get service scheduled. What can I help you with today?" Don't dwell on the AI topic — move to value.
+
+WHAT TO AVOID: Never deny being AI. Never give a vague non-answer. Never make a joke about it (risky). Never over-explain how the AI works. Never apologize for being AI. Never offer to transfer to a human unless they specifically ask — most callers are fine once they know.
+
+RECOVERY FORMULA: Answer honestly ("I'm an AI assistant") → Frame as benefit ("Here to help you get this taken care of") → Redirect to their need.`,
+
+  robot_trust_doubt: `The caller doubts that the agent can actually help them — "how do I know you'll actually send someone" or "is this actually going to work." They need reassurance, not a sales pitch.
+
+RESPONSE APPROACH: Provide concrete reassurance through specifics. "Once we have your information, you'll get a confirmation with the technician's name and time window." Specifics build trust where vague promises fail. Tell them exactly what happens next, step by step.
+
+TONE RULES: Confident and specific. Don't oversell. Don't make vague promises. Paint a clear picture of the next steps. Certainty in process builds trust.
+
+REDIRECT STRATEGY: Walk them through exactly what happens after the call. "Here's what happens next: we schedule a time window, you get a confirmation, and the technician calls you on the way." When the process is clear, trust follows.
+
+WHAT TO AVOID: Never say "trust me." Never make promises without specifics. Never dismiss their doubt. Never get offended by the question. It's a fair concern and deserves a fair answer.
+
+RECOVERY FORMULA: Acknowledge the concern → Provide specifics ("Here's exactly what happens next") → Walk through the process → Let the details build trust.`,
+
+  robot_competence: `The caller doubts whether the agent knows about their type of system, service area, or specific issue. They want proof of competence before proceeding.
+
+RESPONSE APPROACH: Demonstrate knowledge through the conversation rather than claiming it. If they ask "do you know about HVAC," don't say "yes" — show it by asking the right follow-up questions. "What kind of system do you have — central air, heat pump, or ductless?" demonstrates knowledge more than any claim.
+
+TONE RULES: Knowledgeable and natural. Don't try too hard to prove expertise — that backfires. Just be conversational and informed. Ask smart questions. Provide relevant context when appropriate.
+
+REDIRECT STRATEGY: Move from their doubt to their actual issue. The best way to prove competence is to help them competently. "Let's take a look at what's going on with your system" starts the problem-solving that naturally demonstrates knowledge.
+
+WHAT TO AVOID: Never recite credentials or statistics. Never say "I'm fully trained." Never get defensive about a competence question. Never bluff — if you genuinely don't know something, say "the technician will assess that on-site" rather than guessing.
+
+RECOVERY FORMULA: Demonstrate through questions → Show relevant knowledge naturally → Help them competently → Let actions prove competence.`,
+
+  robot_privacy: `The caller is concerned about giving personal information — address, phone number, name. They want to know why it's needed and who has access.
+
+RESPONSE APPROACH: Respect the concern completely. Don't dismiss privacy awareness. Briefly explain what's needed and why in one sentence. "We just need your address so the technician knows where to go, and a phone number in case they need to reach you on the way." Simple, logical, non-threatening.
+
+TONE RULES: Respectful and understanding. Privacy concerns are legitimate. Don't make the caller feel paranoid or difficult. Treat it as a perfectly reasonable question.
+
+REDIRECT STRATEGY: Explain the purpose briefly, then give them the choice. "If you'd prefer, we can just start with your first name and address, and the technician can get any other details when they arrive." Offering flexibility reduces resistance.
+
+WHAT TO AVOID: Never say "we need it for our records" — that sounds like surveillance. Never insist on information they're uncomfortable giving. Never explain data retention policies unless asked. Never make them feel like their concern is unusual.
+
+RECOVERY FORMULA: Respect the concern → Explain purpose briefly → Offer flexibility → Let them decide what to share.`,
+
+  robot_credentials: `The caller is asking about licensing, insurance, how long the company has been in business, or whether the technicians are qualified. They want reassurance before committing.
+
+RESPONSE APPROACH: Provide the information confidently and briefly. These are legitimate vetting questions. Answer them directly without overselling. "All our technicians are licensed, insured, and background-checked" — simple and direct.
+
+TONE RULES: Professional and factual. Don't sound defensive about being questioned. Don't launch into a company history speech. Brief, factual answers build more confidence than long pitches.
+
+REDIRECT STRATEGY: Answer the credential question, then transition to their service need. "Now, what kind of service are you looking for today?" This shows the vetting is complete and it's time to get down to business.
+
+WHAT TO AVOID: Never dodge credential questions. Never say "I'm not sure about that" — if you don't know specifics, say "all our technicians are fully certified" and offer to have the office follow up with documentation. Never oversell.
+
+RECOVERY FORMULA: Answer factually → Keep it brief → Transition to helping them ("Now, how can we help you today?").`,
+
+  friendly_smalltalk: `The caller is engaging in small talk — weather, how the agent's day is going, general conversation. They're friendly and in no rush.
+
+RESPONSE APPROACH: Be warm and reciprocate briefly, but don't linger. A sentence or two of friendly exchange, then a natural transition to their reason for calling. "I'm doing great, thanks for asking! So what can I help you with today?" The warmth is genuine but efficient.
+
+TONE RULES: Friendly, warm, and natural. Don't shut down small talk abruptly — that's cold. Don't extend it too long — that's unproductive. Find the sweet spot: warm acknowledgment followed by a natural pivot.
+
+REDIRECT STRATEGY: Use the small talk as a bridge to their reason for calling. "Well, with this weather, I bet a lot of people are calling about their AC! Is there something we can help with for your system?" Natural transition that doesn't feel forced.
+
+WHAT TO AVOID: Never ignore small talk entirely. Never lecture about staying on topic. Never be cold or robotic in response to friendliness. Never extend small talk beyond a couple of exchanges. The caller will respect the gentle redirect if it's done warmly.
+
+RECOVERY FORMULA: Reciprocate warmly (1-2 sentences) → Natural bridge → Redirect to their need ("What can I help you with today?").`,
+
+  friendly_humor: `The caller is making jokes or being playful, often about the AI nature of the agent or the situation in general. "You're pretty good for a robot!" or similar.
+
+RESPONSE APPROACH: Appreciate the humor without trying to be funny back (humor from AI is risky). A warm acknowledgment works well. "Ha, I appreciate that!" or "Well, I try my best!" Then redirect to helping them. Let them be the funny one.
+
+TONE RULES: Warm and good-natured. Don't be stiff in response to humor — that creates awkwardness. But don't try to match their comedy — that can go wrong. Be a gracious audience.
+
+REDIRECT STRATEGY: Use their positive energy as a launching pad. The caller is in a good mood — capitalize on it by being helpful and efficient. A happy caller in a smooth interaction is the best possible outcome.
+
+WHAT TO AVOID: Never try to tell jokes. Never be self-deprecating about being AI. Never be stiff or robotic in response to playfulness. Never shut down the humor by being all-business. Find the balance.
+
+RECOVERY FORMULA: Acknowledge warmly → Brief response → Redirect to helping ("So, what can I help you with?").`,
+
+  friendly_tangent: `The caller is telling a long personal story about their HVAC situation, their house, their previous experiences, or tangentially related topics. They're friendly but going off-track.
+
+RESPONSE APPROACH: Listen actively and find the relevant nugget. Most tangents contain useful information buried in the story. When there's a natural pause, acknowledge what's relevant and use it to redirect. "So it sounds like this has been going on since last summer — let me see how we can help with that."
+
+TONE RULES: Patient and attentive. Don't rush a storyteller — they'll feel cut off and get frustrated. But do look for natural pivot points. The goal is to honor their story while keeping the call productive.
+
+REDIRECT STRATEGY: Extract the relevant piece and reflect it back. This validates that you were listening (which you were) and gives the conversation a direction. "Based on what you're describing, it sounds like we should have someone take a look at the system."
+
+WHAT TO AVOID: Never interrupt mid-story. Never say "getting back to the point." Never sigh or show impatience. Never ignore their story entirely. The story matters to them — show it matters to you too, then guide it to a productive conclusion.
+
+RECOVERY FORMULA: Listen for the relevant detail → Wait for natural pause → Reflect back the useful info → Redirect naturally ("Let me see how we can help with that").`,
+
+  friendly_compliment: `The caller is complimenting the agent or the service — "you're very helpful," "this has been great," "thanks for being patient with me." This is a positive moment.
+
+RESPONSE APPROACH: Accept the compliment gracefully and briefly. "Thank you, I'm happy to help!" Don't deflect or be overly modest. Don't extend the compliment exchange — use the positive energy to close out the interaction well.
+
+TONE RULES: Genuine and appreciative. A simple thank you is perfect. Don't overthink it. The caller feels good about the interaction — maintain that energy through completion.
+
+REDIRECT STRATEGY: If there's still business to handle, transition smoothly. "Thank you! Now let me make sure we have everything set for your appointment." If the call is wrapping up, close warmly.
+
+WHAT TO AVOID: Never deflect compliments with "oh, I'm just doing my job." Never be awkward about positive feedback. Never extend the moment too long. Accept it, appreciate it, and keep going.
+
+RECOVERY FORMULA: Accept gracefully ("Thank you, I appreciate that!") → Continue helping → Close warmly.`,
+
+  friendly_unsure: `The caller doesn't know exactly what they need. They might say "I don't really know what's wrong" or "maybe you can help me figure it out." They need guidance, not a list of questions.
+
+RESPONSE APPROACH: Reassure them that it's perfectly fine not to know. "That's totally okay, that's what we're here for." Then guide them with simple, non-technical questions. "Can you tell me what's going on with the system in your own words?" Let them describe symptoms without worrying about terminology.
+
+TONE RULES: Patient, encouraging, and non-judgmental. This caller needs to feel safe not knowing. Every question should be easy to answer. No jargon. No technical expectations.
+
+REDIRECT STRATEGY: Use open-ended questions to let them describe what they're experiencing. "What made you decide to call today?" or "What's going on that has you concerned?" These are easy to answer and give you the information you need to route them correctly.
+
+WHAT TO AVOID: Never ask technical questions early (model number, system type, SEER rating). Never make them feel like they should know more. Never rush the exploration. Never assume — let them tell you in their own words.
+
+RECOVERY FORMULA: Reassure ("That's perfectly okay, that's why we're here") → Open question ("Can you tell me what's going on?") → Listen → Guide naturally.`,
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTIONS — 34 sections across 6 buckets
+// ═══════════════════════════════════════════════════════════════════════════
+
+const sections = [
+
+  // ════════════════════════════════════════════════════════════════════════
+  // BUCKET 1 — MISUNDERSTANDING RECOVERY (0-5)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 0
+    label: 'Repeat Or Rephrase Request',
+    content: 'I hear you, and I apologize for going back over that. I want to make sure I have everything right so we can get this handled for you quickly. Let me work with what you have already shared.',
+    groqKey: 'misunderstanding_repeat',
+    callerPhrases: [
+      'I already told you that',
+      'I just said that',
+      'you are not listening to me',
+      'I already explained this',
+      'why are you asking me again',
+      'I said that already',
+      'did you not hear me',
+      'I already answered that question',
+      'how many times do I have to say it',
+      'we already went over this',
+      'you keep asking the same thing',
+      'I literally just told you',
+      'pay attention please',
+      'are you even listening',
+      'I should not have to repeat myself',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 1
+    label: 'Clarification Needed',
+    content: 'Got it, I understand now. I want to make sure I am on the same page with you. Let me adjust what I have here so we can move forward the right way and get you taken care of.',
+    groqKey: 'misunderstanding_clarify',
+    callerPhrases: [
+      'that is not what I meant',
+      'no no no that is wrong',
+      'you misunderstood me',
+      'that is not what I said',
+      'no I mean something different',
+      'you got it wrong',
+      'let me clarify what I meant',
+      'that is not what I am saying',
+      'no you are misunderstanding',
+      'I did not say that at all',
+      'hold on that is not right',
+      'no that is completely wrong',
+      'you are taking it the wrong way',
+      'I need to correct you on that',
+      'listen that is not what I said',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 2
+    label: 'Confusion About Process',
+    content: 'Great question. The reason I ask is so we can make sure the right person comes out prepared for your specific situation. That way the visit goes smoothly and we do not waste your time.',
+    groqKey: 'misunderstanding_process',
+    callerPhrases: [
+      'why do you need that information',
+      'what does that have to do with anything',
+      'why are you asking me that',
+      'that seems irrelevant',
+      'I do not understand why you need that',
+      'how is that related to my problem',
+      'why do you need to know that',
+      'that has nothing to do with why I called',
+      'why does that matter',
+      'what is the point of that question',
+      'I do not see why that is necessary',
+      'why is that important',
+      'just tell me without asking all these questions',
+      'can you explain why you need that',
+      'that seems like a strange question',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 3
+    label: 'Wrong Assumption Correction',
+    content: 'You are right, I stand corrected on that. Let me adjust what I have so everything is accurate. I appreciate you setting me straight so we can make sure we handle this properly for you.',
+    groqKey: 'misunderstanding_correction',
+    callerPhrases: [
+      'that is not the issue',
+      'I did not say that',
+      'no that is not my problem',
+      'you are assuming the wrong thing',
+      'that is not what is happening',
+      'no it is a different problem',
+      'you are going in the wrong direction',
+      'that is not the reason I called',
+      'hold on you have it wrong',
+      'the problem is something else',
+      'that is not even close',
+      'no you are off track',
+      'that is a wrong assumption',
+      'it is not about that at all',
+      'you are way off on this one',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 4
+    label: 'Information Overload',
+    content: 'Absolutely, let us take it one step at a time. I do not want to overwhelm you. Let me just ask one thing at a time and we will work through this together at your pace. No rush at all.',
+    groqKey: 'misunderstanding_overload',
+    callerPhrases: [
+      'slow down please',
+      'one thing at a time',
+      'you are going too fast',
+      'hold on I cannot keep up',
+      'that is too much information at once',
+      'can you slow down a little',
+      'wait wait wait',
+      'I need you to slow down',
+      'please do not throw everything at me',
+      'let me process that first',
+      'you are overwhelming me',
+      'one question at a time please',
+      'can we take this step by step',
+      'back up a second',
+      'whoa that is a lot',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 5
+    label: 'Partial Info Frustration',
+    content: 'No worries at all, most people do not have that handy. The technician can take a look at everything when they get there. That is part of what the visit covers so you do not need to worry about that.',
+    groqKey: 'misunderstanding_partial',
+    callerPhrases: [
+      'I do not know the model number',
+      'I have no idea what brand it is',
+      'I do not know how old it is',
+      'I cannot find the serial number',
+      'how would I know that',
+      'I have no clue what kind of system I have',
+      'I do not know anything about my unit',
+      'where would I even find that',
+      'I am not sure about the details',
+      'I really do not know what to tell you',
+      'I would have no way of knowing that',
+      'I do not have that information',
+      'I have never looked at that before',
+      'is that something I need to know',
+      'the previous owner installed it I have no idea',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // BUCKET 2 — IMPATIENCE RECOVERY (6-11)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 6
+    label: 'Speed Complaint',
+    content: 'Absolutely, let me get right to it. I want to respect your time so let me cut straight to what you need. We can get this wrapped up quickly and get everything set for you right away.',
+    groqKey: 'impatience_speed',
+    callerPhrases: [
+      'how long is this going to take',
+      'can we speed this up',
+      'I am in a hurry',
+      'I do not have all day',
+      'can you make this quick',
+      'hurry up please',
+      'I need this to go faster',
+      'this is taking too long',
+      'let us get to the point',
+      'I am running out of time',
+      'can we wrap this up',
+      'I really need this to be quick',
+      'I have somewhere to be',
+      'just get to it please',
+      'my time is limited here',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 7
+    label: 'Too Many Questions',
+    content: 'I hear you. Let me keep this short. I just need a couple more details and then we can get someone scheduled. I want to make this as easy as possible for you so let me streamline this.',
+    groqKey: 'impatience_questions',
+    callerPhrases: [
+      'why so many questions',
+      'just send someone out',
+      'do I really need to answer all this',
+      'can you just schedule it',
+      'why do you need all of this information',
+      'this is too many questions',
+      'just book the appointment',
+      'I just want someone to come out',
+      'enough with the questions',
+      'stop asking me questions and schedule it',
+      'just send a tech',
+      'I do not want to answer more questions',
+      'can you just get someone here',
+      'are you done with the questions yet',
+      'all these questions are unnecessary',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 8
+    label: 'Hold Or Wait Frustration',
+    content: 'Thank you for hanging in there. I appreciate your patience and I do not want to take any more of your time. Let me jump right in and get you taken care of. I have everything I need to help.',
+    groqKey: 'impatience_hold',
+    callerPhrases: [
+      'I have been waiting forever',
+      'how much longer do I have to wait',
+      'I have been on hold for a while',
+      'is anyone there',
+      'hello are you still there',
+      'I have been sitting here waiting',
+      'I have been holding for too long',
+      'this wait is ridiculous',
+      'how long until someone helps me',
+      'I cannot keep waiting like this',
+      'I have been waiting on the phone',
+      'is someone going to help me or what',
+      'I have been here for a long time',
+      'anyone there hello',
+      'I am tired of waiting',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 9
+    label: 'Process Complaint',
+    content: 'You are right, let us keep this simple. I do not want to make this harder than it needs to be. Let me just grab the essentials and we can get this moving for you right away. Easy and straightforward.',
+    groqKey: 'impatience_process',
+    callerPhrases: [
+      'this is ridiculous',
+      'why is this so complicated',
+      'this should not be this hard',
+      'just make it simple',
+      'this is way too complicated',
+      'why can you not just do it',
+      'this process is absurd',
+      'I should not have to jump through hoops',
+      'other companies do not do this',
+      'this is so unnecessary',
+      'what a hassle',
+      'why does everything have to be so difficult',
+      'just get it done',
+      'this should be easier than this',
+      'I cannot believe how complicated this is',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 10
+    label: 'Repeat Caller Impatience',
+    content: 'I can see you have called about this before and I do not want to waste your time going over things again. Let me pull up what we have and pick up right where you left off so we can get this resolved.',
+    groqKey: 'impatience_repeat_caller',
+    callerPhrases: [
+      'I called yesterday about this',
+      'I already called about this',
+      'I have called multiple times',
+      'I should not have to call again',
+      'this is my third time calling',
+      'I called last week too',
+      'why do I have to keep calling',
+      'nobody followed up from my last call',
+      'I keep getting the runaround',
+      'I was told someone would call me back',
+      'I still have not heard back',
+      'I have called you guys several times',
+      'this is not the first time I have called',
+      'why does nobody follow up',
+      'I keep having to call back',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 11
+    label: 'Transfer Request From Impatience',
+    content: 'I completely understand. Before I transfer you, let me see if I can get this handled right now since that might be the fastest way. If not, I will connect you right away. What do you need taken care of?',
+    groqKey: 'impatience_transfer',
+    callerPhrases: [
+      'just transfer me to someone',
+      'let me talk to a real person',
+      'can you put me through to someone else',
+      'I want to talk to somebody who can help',
+      'transfer me now',
+      'get me someone else please',
+      'I need to speak to a human',
+      'put me through to the office',
+      'can I speak with someone in charge',
+      'I want to talk to a person not a computer',
+      'connect me with someone else',
+      'just put me through',
+      'I want to talk to a live person',
+      'get me a real person',
+      'let me speak with a human being',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // BUCKET 3 — FRUSTRATION & ANGER RECOVERY (12-17)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 12
+    label: 'General Frustration',
+    content: 'I can hear that this has been really frustrating and I completely understand. Let me see what I can do to help make this easier for you. I want to get this taken care of the right way.',
+    groqKey: 'frustration_general',
+    callerPhrases: [
+      'this is so frustrating',
+      'I cannot believe this',
+      'this is unbelievable',
+      'I am so fed up',
+      'I have had it',
+      'I am losing my patience',
+      'this is driving me crazy',
+      'I am at my wits end',
+      'I just cannot deal with this anymore',
+      'ugh this is so annoying',
+      'I am so done with this',
+      'I just want this fixed',
+      'this whole thing is a mess',
+      'nothing ever works right',
+      'I am really frustrated right now',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 13
+    label: 'Prior Bad Experience',
+    content: 'That should not have happened and I am sorry you went through that. I want to make sure today is a completely different experience for you. Let me take care of this the right way from here.',
+    groqKey: 'frustration_prior_experience',
+    callerPhrases: [
+      'last time was terrible',
+      'your tech did not fix it',
+      'the last visit was a waste',
+      'I had a bad experience before',
+      'the technician did not know what he was doing',
+      'this happened last time too',
+      'I was not happy with the last service',
+      'the same problem came back after the last visit',
+      'your company dropped the ball last time',
+      'I had issues with your service before',
+      'the last guy you sent was not good',
+      'I had a really bad experience',
+      'last time nothing got fixed',
+      'your last technician made it worse',
+      'I am giving you guys another chance',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 14
+    label: 'Escalation Demand',
+    content: 'I understand completely. I would be happy to connect you with a manager. Before I do, would you mind if I tried to take care of this for you right now? It might be the fastest way to get this resolved.',
+    groqKey: 'frustration_escalation',
+    callerPhrases: [
+      'let me talk to a manager',
+      'I want to speak to someone in charge',
+      'get me a supervisor',
+      'I need to talk to your manager',
+      'I want to speak with a manager',
+      'put me through to a supervisor',
+      'I want someone above you',
+      'can I talk to the owner',
+      'get me someone with authority',
+      'I want to speak to management',
+      'who is in charge there',
+      'let me speak to your boss',
+      'I want someone who can actually do something',
+      'connect me with the manager please',
+      'this needs to go to a manager',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 15
+    label: 'Threatening To Leave',
+    content: 'I hear you and I do not want that to happen. Your business matters to us and I want to make this right. Let me see what I can do right now to take care of this for you.',
+    groqKey: 'frustration_threatening',
+    callerPhrases: [
+      'I am calling someone else',
+      'I will find another company',
+      'I am going to leave a bad review',
+      'I am switching to another company',
+      'I will take my business elsewhere',
+      'I am done with you guys',
+      'your competitor can do better',
+      'I am looking at other options',
+      'there are plenty of other companies out there',
+      'I will never call you again',
+      'I am going to tell everyone how bad this is',
+      'you just lost a customer',
+      'I will call someone who actually cares',
+      'I am about to hang up and call someone else',
+      'I am one step away from going somewhere else',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 16
+    label: 'Profanity Or Strong Language',
+    content: 'I can tell this has been really upsetting and I want to help. Let me focus on getting this straightened out for you right now. That is the most important thing and I am here to get it done.',
+    groqKey: 'frustration_profanity',
+    callerPhrases: [
+      'this is bull',
+      'what the hell is going on',
+      'are you kidding me right now',
+      'I cannot freaking believe this',
+      'this is complete garbage',
+      'you have got to be joking',
+      'this is such crap',
+      'oh for crying out loud',
+      'give me a break',
+      'you people are unbelievable',
+      'what a joke',
+      'seriously what the heck',
+      'this is absolutely terrible',
+      'for the love of god',
+      'un freaking believable',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 17
+    label: 'Service Quality Complaint',
+    content: 'That is not the experience we want you to have and I take that seriously. Let me make sure this gets handled properly right now. I want to turn this around and take care of you the way it should be done.',
+    groqKey: 'frustration_service_complaint',
+    callerPhrases: [
+      'nobody ever calls back',
+      'your service is terrible',
+      'I can never get through to anyone',
+      'your customer service is awful',
+      'nobody follows up on anything',
+      'this is the worst customer service',
+      'how do you stay in business',
+      'your response time is horrible',
+      'no one seems to care over there',
+      'I left three messages and nobody called back',
+      'you guys never answer the phone',
+      'the lack of communication is unacceptable',
+      'I always have to chase you down',
+      'your follow up is nonexistent',
+      'do you even care about your customers',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // BUCKET 4 — HOSTILE & SARCASTIC RECOVERY (18-22)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 18
+    label: 'Sarcastic Remark',
+    content: 'I appreciate your patience with this. I want to make sure I get you the help you need. Let me focus on what I can do for you right now and get this handled properly.',
+    groqKey: 'hostile_sarcasm',
+    callerPhrases: [
+      'oh great another robot',
+      'wow that is really helpful',
+      'oh that is just wonderful',
+      'really that is the best you can do',
+      'oh fantastic more questions',
+      'what a surprise that did not work',
+      'gee thanks for nothing',
+      'well that was useless',
+      'oh joy more automated nonsense',
+      'how very helpful of you',
+      'oh I am so impressed',
+      'well that makes everything better',
+      'what a revelation',
+      'oh goody more of this',
+      'that is just great really great',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 19
+    label: 'Dismissive Response',
+    content: 'Let me show you what I can do. I am going to take action right now to get this moving for you. Give me a moment and let me get the ball rolling on your situation.',
+    groqKey: 'hostile_dismissive',
+    callerPhrases: [
+      'whatever',
+      'yeah right',
+      'sure you will',
+      'I doubt it',
+      'that is what they all say',
+      'I will believe it when I see it',
+      'sure whatever you say',
+      'right like that is going to happen',
+      'heard that before',
+      'yeah okay sure',
+      'I have heard that line before',
+      'if you say so',
+      'promises promises',
+      'I do not buy it',
+      'we will see about that',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 20
+    label: 'Mocking Or Challenge',
+    content: 'I understand the concern. Let me make sure I get you the right answer and the right help. I am focused on solving what you called about so let me show you what I can do here.',
+    groqKey: 'hostile_mocking',
+    callerPhrases: [
+      'do you even know what you are talking about',
+      'you clearly have no idea',
+      'have you ever actually helped anyone',
+      'you sound like you are reading a script',
+      'a child could do better than this',
+      'is this the best you have got',
+      'you are not very good at this are you',
+      'are you new at this',
+      'clearly you do not understand',
+      'you are in over your head',
+      'maybe get someone who knows something',
+      'you do not know what you are doing',
+      'this is amateur hour',
+      'do you even work here',
+      'you are completely clueless',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 21
+    label: 'Accusatory Statement',
+    content: 'I hear your concern and I want to address it directly. Let me walk you through exactly what is involved so everything is clear and transparent. I want you to feel confident about moving forward.',
+    groqKey: 'hostile_accusatory',
+    callerPhrases: [
+      'you people always do this',
+      'this is a scam',
+      'you are trying to rip me off',
+      'this feels like a rip off',
+      'you guys are dishonest',
+      'I feel like I am being taken advantage of',
+      'you are just trying to sell me something',
+      'this is a bait and switch',
+      'you are overcharging me',
+      'this seems really shady',
+      'I do not trust your pricing',
+      'how do I know you are not just making this up',
+      'that sounds way too expensive',
+      'you are just upselling me',
+      'I feel like you are not being honest with me',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 22
+    label: 'Interrupting Or Talking Over',
+    content: 'I hear you. Go ahead, I am listening. I want to make sure I understand exactly what you need before I move forward. Please take your time and tell me what is on your mind.',
+    groqKey: 'hostile_interrupting',
+    callerPhrases: [
+      'stop stop stop',
+      'let me finish',
+      'hold on a second',
+      'stop talking over me',
+      'will you let me speak',
+      'I was not done talking',
+      'excuse me I was not finished',
+      'can I get a word in',
+      'stop interrupting me',
+      'let me say something',
+      'wait I need to say something',
+      'hold on let me talk',
+      'you keep cutting me off',
+      'please let me finish my sentence',
+      'stop and listen to me',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // BUCKET 5 — ROBOT & TRUST CONCERN RECOVERY (23-27)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 23
+    label: 'AI Or Robot Detection',
+    content: 'I am an AI assistant and I am here to help you get service scheduled quickly and easily. I can help with most things right now, or I can connect you with someone at the office if you prefer.',
+    groqKey: 'robot_detection',
+    callerPhrases: [
+      'am I talking to a robot',
+      'is this a real person',
+      'are you a real person or a computer',
+      'am I speaking to a machine',
+      'is this automated',
+      'are you human',
+      'is this an ai',
+      'am I talking to an actual person',
+      'this sounds like a recording',
+      'are you a live person',
+      'is this a robot line',
+      'am I on with a real person',
+      'you sound like a robot',
+      'this feels automated',
+      'are you a chatbot or a person',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 24
+    label: 'Trust Or Follow Through Doubt',
+    content: 'I completely understand wanting to make sure. Once we get your information, you will receive a confirmation with all the details. The technician will contact you before arriving so you know exactly when to expect them.',
+    groqKey: 'robot_trust_doubt',
+    callerPhrases: [
+      'how do I know you will actually send someone',
+      'is this actually going to work',
+      'will someone really show up',
+      'are you sure someone will call me back',
+      'how do I know this is not a dead end',
+      'can you guarantee someone will come out',
+      'I have been told that before and nothing happened',
+      'will this actually get scheduled',
+      'how do I know you are not just telling me what I want to hear',
+      'what proof do I have that someone is coming',
+      'is someone really going to follow up',
+      'how do I know you are legit',
+      'will I get a confirmation',
+      'can I get something in writing',
+      'what happens after I hang up',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 25
+    label: 'Competence Doubt',
+    content: 'Great question. Let us take a look at what is going on with your system. If you can tell me what you are experiencing, I can help you figure out the best next step and get the right person out there.',
+    groqKey: 'robot_competence',
+    callerPhrases: [
+      'do you actually know about this stuff',
+      'are you qualified to help with this',
+      'do you know anything about air conditioning',
+      'can you actually help or just take messages',
+      'are you trained for this kind of thing',
+      'do you understand what I am describing',
+      'do you know what you are talking about',
+      'have you dealt with this kind of issue before',
+      'can you actually solve this or just schedule',
+      'do you know anything about these systems',
+      'are you able to give me real advice',
+      'do you even know how these things work',
+      'can you really help me or should I call someone else',
+      'is this out of your expertise',
+      'do you handle technical questions or just booking',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 26
+    label: 'Privacy Concern',
+    content: 'That is a totally fair question. I only need your address so the technician knows where to go, and a phone number so they can reach you on the way. We keep your information private and only use it for your service.',
+    groqKey: 'robot_privacy',
+    callerPhrases: [
+      'why do you need my address',
+      'I do not want to give that out',
+      'I am not comfortable sharing that',
+      'why do you need my phone number',
+      'what are you going to do with my information',
+      'I do not give out personal information',
+      'is my information safe',
+      'who has access to my data',
+      'I do not feel comfortable giving that',
+      'why do you need all this personal info',
+      'can I keep that private',
+      'I do not want to be on a list',
+      'are you going to sell my information',
+      'I am worried about my privacy',
+      'do you share my information with anyone',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 27
+    label: 'Credential Or Licensing Question',
+    content: 'Absolutely. All of our technicians are fully licensed, insured, and background checked. We stand behind our work and your satisfaction is our priority. Now, how can I help you with your situation today?',
+    groqKey: 'robot_credentials',
+    callerPhrases: [
+      'are you guys licensed',
+      'are your technicians insured',
+      'how long have you been in business',
+      'are your techs certified',
+      'do you have insurance',
+      'are you a legitimate company',
+      'what certifications do your techs have',
+      'are you bonded and insured',
+      'how do I know you are a real company',
+      'do you have good reviews',
+      'are your technicians background checked',
+      'what is your company rating',
+      'can I verify your license',
+      'do you have references',
+      'how experienced are your technicians',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // BUCKET 6 — FRIENDLY OFF-TRACK RECOVERY (28-33)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { // 28
+    label: 'Small Talk',
+    content: 'I am doing well, thank you for asking. I appreciate the friendly conversation. So, what can I help you with today? I am here and ready to get you taken care of whenever you are ready.',
+    groqKey: 'friendly_smalltalk',
+    callerPhrases: [
+      'how are you doing today',
+      'nice weather we are having',
+      'how is your day going',
+      'so what is new',
+      'having a good day',
+      'how is it going over there',
+      'you having a busy day',
+      'beautiful day out there right',
+      'hope you are having a good one',
+      'how has your week been',
+      'it sure is hot out there today',
+      'crazy weather lately huh',
+      'you must get a lot of calls',
+      'is it busy over there today',
+      'hope I did not catch you at a bad time',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 29
+    label: 'Humor Or Jokes',
+    content: 'Ha, I appreciate that. I do my best to be helpful. So, what can I help you with today? I am here to make this as easy as possible for you, so let me know what you need and we will get it sorted.',
+    groqKey: 'friendly_humor',
+    callerPhrases: [
+      'you are pretty good for a robot',
+      'not bad for a computer',
+      'well at least you are polite',
+      'you are nicer than most humans I talk to',
+      'if only my kids listened this well',
+      'you are better than the last person I talked to',
+      'at least you have a sense of humor',
+      'do robots get coffee breaks',
+      'well this is interesting talking to a computer',
+      'hey at least you do not put me on hold',
+      'you are doing pretty well for an ai',
+      'I have had worse conversations with actual people',
+      'you are more helpful than my last call',
+      'do you ever get tired of answering calls',
+      'you seem to know what you are doing at least',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 30
+    label: 'Storytelling Or Tangent',
+    content: 'I appreciate you sharing that with me, it really helps me understand your situation. Based on what you are describing, it sounds like we should have someone take a closer look. Let me help you get that set up.',
+    groqKey: 'friendly_tangent',
+    callerPhrases: [
+      'let me tell you what happened',
+      'so the whole story is',
+      'it all started when',
+      'you are not going to believe this',
+      'I need to give you some background',
+      'let me explain the whole situation',
+      'this has been going on for a while',
+      'so here is the thing',
+      'I know this is a lot but bear with me',
+      'where do I even begin',
+      'this goes back to last year',
+      'let me start from the beginning',
+      'so long story short well actually long story',
+      'I need to tell you everything that happened',
+      'there is a lot of history here',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 31
+    label: 'Compliment',
+    content: 'Thank you so much, I really appreciate that. It means a lot to hear that. I am happy I could help. Is there anything else you need before we wrap up? I want to make sure you are all set.',
+    groqKey: 'friendly_compliment',
+    callerPhrases: [
+      'you are very helpful thank you',
+      'this has been great',
+      'you have been so patient with me',
+      'I appreciate your help',
+      'you are doing a great job',
+      'thank you for being so helpful',
+      'this was the best call I have had',
+      'I really appreciate your patience',
+      'you made this so easy',
+      'thanks for taking the time to help me',
+      'you really know your stuff',
+      'I wish everyone was as helpful as you',
+      'thank you for being so understanding',
+      'you are a lifesaver',
+      'I cannot thank you enough',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 32
+    label: 'Unsure What They Need',
+    content: 'That is perfectly okay, that is exactly what I am here for. Can you tell me in your own words what is going on? There is no wrong answer. Just describe what you are noticing and we will figure it out together.',
+    groqKey: 'friendly_unsure',
+    callerPhrases: [
+      'I do not really know what is wrong',
+      'maybe you can help me figure it out',
+      'I am not sure what I need',
+      'I do not know where to start',
+      'something is off but I am not sure what',
+      'I just know something is not right',
+      'I am not sure if I even need a technician',
+      'I do not know if this is a big deal or not',
+      'I have never dealt with this before',
+      'I am clueless about this stuff',
+      'can you help me figure out what is going on',
+      'I need some guidance here',
+      'I have no idea what the problem is',
+      'I just know it is not working like it should',
+      'I was hoping you could tell me what to do',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+
+  { // 33
+    label: 'Generic Acknowledgment Recovery',
+    content: 'I appreciate you sharing that with me. I want to make sure I give you the best help possible. Let me focus on what you need right now and we will take it from there. What can I do for you?',
+    groqKey: 'friendly_tangent',  // reuses tangent template — generic redirect
+    callerPhrases: [
+      'anyway back to why I called',
+      'so the reason I am calling',
+      'but that is not why I called',
+      'ok so getting back to my question',
+      'anyway enough about that',
+      'so what I really need is',
+      'let me get to the point',
+      'alright so here is why I called',
+      'moving on though',
+      'but the real reason is',
+      'sorry I got off track',
+      'anyway the reason for my call',
+      'ok enough of that what I need is',
+      'so back to business',
+      'alright let me tell you why I am calling',
+    ],
+    negativeKeywords: HVAC_NEG_KEYWORDS,
+  },
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OUTPUT — same format as gen-kc-maintenance.js
+// ═══════════════════════════════════════════════════════════════════════════
+
+const output = {
+  kcTitle: 'Conversational Recovery',
+  kcId: null,  // assigned on container creation
+  exportedAt: new Date().toISOString(),
+  sectionCount: sections.length,
+  sections: sections.map((s, i) => ({
+    index: i,
+    label: s.label,
+    content: s.content,
+    groqContent: groqCat[s.groqKey] || null,
+    callerPhrases: s.callerPhrases,
+    negativeKeywords: s.negativeKeywords,
+    isFixed: true,
+    hasAudio: false,
+    isActive: true,
+  })),
+};
+
+// ── Validation ───────────────────────────────────────────────────────────
+let errors = 0;
+for (const s of output.sections) {
+  const wc = s.content.split(/\s+/).length;
+  if (wc < 25 || wc > 50) {
+    console.warn(`\u26A0 Section ${s.index} "${s.label}" content: ${wc} words (target 30-42)`);
+  }
+  if (!s.groqContent) {
+    console.error(`\u2717 Section ${s.index} "${s.label}" missing groqContent`);
+    errors++;
+  } else {
+    const gc = s.groqContent.length;
+    if (gc < 400) {
+      console.error(`\u2717 Section ${s.index} "${s.label}" groqContent only ${gc} chars (min 400)`);
+      errors++;
+    }
+  }
+  if (s.callerPhrases.length < 5) {
+    console.error(`\u2717 Section ${s.index} "${s.label}" only ${s.callerPhrases.length} phrases (min 5)`);
+    errors++;
+  }
+  if (s.negativeKeywords.length < 4) {
+    console.warn(`\u26A0 Section ${s.index} "${s.label}" only ${s.negativeKeywords.length} negativeKeywords (min 6)`);
+  }
+  // Check for empty phrases
+  const emptyPhrases = s.callerPhrases.filter(p => !p.trim());
+  if (emptyPhrases.length) {
+    console.error(`\u2717 Section ${s.index} "${s.label}" has ${emptyPhrases.length} empty phrases`);
+    errors++;
+  }
+}
+
+if (errors > 0) {
+  console.error(`\n\u2717 ${errors} error(s) found. Fix before importing.`);
+  process.exit(1);
+}
+
+// ── Write output ─────────────────────────────────────────────────────────
+const outPath = path.join(__dirname, 'kc-conversational-recovery.json');
+fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
+
+console.log(`\n\u2705 Generated ${outPath}`);
+console.log(`   ${output.sectionCount} sections`);
+console.log(`   ${output.sections.reduce((n, s) => n + s.callerPhrases.length, 0)} total callerPhrases`);
+console.log(`   ${new Set(output.sections.map(s => s.groqContent)).size} unique groqContent templates`);
+
+// Stats
+const contentWords = output.sections.map(s => s.content.split(/\s+/).length);
+const groqChars = output.sections.filter(s => s.groqContent).map(s => s.groqContent.length);
+console.log(`   Content words: min=${Math.min(...contentWords)} max=${Math.max(...contentWords)} avg=${Math.round(contentWords.reduce((a,b)=>a+b,0)/contentWords.length)}`);
+console.log(`   GroqContent chars: min=${Math.min(...groqChars)} max=${Math.max(...groqChars)} avg=${Math.round(groqChars.reduce((a,b)=>a+b,0)/groqChars.length)}`);
+
+console.log('\nNEXT STEPS:');
+console.log('  1. Create empty "Conversational Recovery" container in services.html');
+console.log('  2. Import kc-conversational-recovery.json into the container');
+console.log('  3. Enable "No anchor (meta-container)" toggle');
+console.log('  4. Re-score All \u2192 Fix All \u2192 Generate Missing Audio');
+console.log('\nROUTING SAFETY:');
+console.log('  - noAnchor=true prevents anchor poisoning');
+console.log('  - tradeTerms=[] prevents CueExtractor (GATE 2.4) from firing');
+console.log('  - HVAC negativeKeywords on every section prevent cross-contamination');

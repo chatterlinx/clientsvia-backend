@@ -524,6 +524,17 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
       comment: 'Sort order when multiple containers are loaded — lower = higher priority in tie-breaking'
     },
 
+    // ── No-Anchor Flag — prevents this container from becoming the anchor ──
+    // When true, this container's _id is NEVER written to anchorContainerId
+    // in discoveryNotes. Used for "meta" containers (e.g. Conversational Recovery)
+    // that handle caller friction/emotions — if these become anchor, the 3×
+    // keyword boost drowns out real HVAC matches for the rest of the call.
+    noAnchor: {
+      type:    Boolean,
+      default: false,
+      comment: 'When true, matching this container does NOT set anchorContainerId. Prevents poisoning anchor for meta-conversation containers.'
+    },
+
     // ── Trade Vocabulary Link — reference to GlobalShare trade vocabulary ──
     // Links this container to a shared industry vocabulary (e.g. "HVAC", "PLUMBING").
     // CueExtractor reads terms from the global library at runtime — no copying.

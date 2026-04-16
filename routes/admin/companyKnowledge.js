@@ -576,6 +576,37 @@ router.get('/:companyId/knowledge/active', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/routing-landscape — Lightweight routing-only view
+// Returns ONLY the fields needed for phrase conflict analysis and negativeKeyword
+// derivation: callerPhrases, contentKeywords, negativeKeywords, tradeTerms.
+// No embeddings, no content, no groqContent, no audio — minimal payload.
+// ⚠️ MUST be registered BEFORE /:id
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/routing-landscape', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const containers = await CompanyKnowledgeContainer.find({ companyId })
+      .select('title kcId isActive noAnchor sections.label sections.isActive sections.callerPhrases.text sections.callerPhrases.anchorWords sections.contentKeywords sections.negativeKeywords sections.tradeTerms')
+      .sort({ priority: 1, createdAt: 1 })
+      .lean();
+
+    let totalPhrases = 0;
+    for (const c of containers) {
+      for (const s of (c.sections || [])) {
+        totalPhrases += (s.callerPhrases || []).length;
+      }
+    }
+
+    return res.json({ success: true, containers, totalPhrases });
+  } catch (err) {
+    logger.error('[companyKnowledge] routing-landscape error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to load routing landscape' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge — Create a knowledge container
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:companyId/knowledge', async (req, res) => {

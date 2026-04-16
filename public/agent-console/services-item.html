@@ -1744,6 +1744,12 @@
       </div>
       <div class="form-hint" style="margin-top:4px;">Inactive containers still exist in the database — reactivate at any time.</div>
 
+      <div class="toggle-lg" style="margin-top:12px;">
+        <input type="checkbox" id="fNoAnchor">
+        <label for="fNoAnchor">No anchor (meta-container)</label>
+      </div>
+      <div class="form-hint" style="margin-top:4px;">When enabled, matching this container will NOT set it as the anchor. Use for conversational recovery or other meta-conversation containers that should never bias future routing.</div>
+
       <!-- Permanent delete (only shown for existing containers) -->
       <div id="hardDeleteSection" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid var(--border);">
         <div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:6px;">⚠️ Danger Zone</div>
@@ -2168,6 +2174,7 @@ function _populateForm(c) {
   document.getElementById('fCategory').value = c.category || '';
   document.getElementById('fPriority').value = c.priority || 100;
   document.getElementById('fActive').checked = c.isActive !== false;
+  document.getElementById('fNoAnchor').checked = !!c.noAnchor;
   charCount(document.getElementById('fTitle'), 120, 'ccTitle');
   charCount(document.getElementById('fCategory'), 80, 'ccCategory');
 
@@ -3541,6 +3548,7 @@ async function saveContainer({ quiet = false } = {}) {
     bookingAction:    document.querySelector('[name="bookingAction"]:checked')?.value || 'offer_to_book',
     closingPrompt:    (document.getElementById('fClosingPrompt')?.value || '').trim(),
     isActive:         document.getElementById('fActive').checked,
+    noAnchor:         document.getElementById('fNoAnchor')?.checked || false,
     priority:         parseInt(document.getElementById('fPriority').value, 10) || 100,
     tradeVocabularyKey: document.getElementById('fTradeVocab')?.value || null,
     // preQualifyQuestion and upsellChain are now per-section (inside sections[])

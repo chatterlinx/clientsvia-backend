@@ -2068,7 +2068,7 @@ async function _handleKCMatch({
       callReason:        containerTitle,
       objective:         'BOOKING',
       turnNumber:        turn ?? 0,
-      anchorContainerId: containerId,   // anchor — all subsequent KC lookups bias to this container
+      ...(!container.noAnchor ? { anchorContainerId: containerId } : {}),   // noAnchor containers (e.g. Recovery) never set anchor
       ...(callerName ? { entities: { firstName: callerName } } : {}),
     }).catch(() => {});
 
@@ -2090,7 +2090,7 @@ async function _handleKCMatch({
     callReason:          containerTitle,
     objective:           'DISCOVERY',
     turnNumber:          turn ?? 0,
-    anchorContainerId:   containerId,   // anchor — all subsequent KC lookups bias to this container
+    ...(!container.noAnchor ? { anchorContainerId: containerId } : {}),   // noAnchor containers (e.g. Recovery) never set anchor
     lastMeaningfulInput: userInput?.slice(0, 200) || null,
     ...(callerName ? { entities: { firstName: callerName } } : {}),
     qaLog: [{
@@ -2121,7 +2121,7 @@ async function _handleKCMatch({
       callReason:        containerTitle,
       objective:         'BOOKING',
       turnNumber:        turn ?? 0,
-      anchorContainerId: containerId,   // anchor for compound-booking path
+      ...(!container.noAnchor ? { anchorContainerId: containerId } : {}),   // noAnchor containers (e.g. Recovery) never set anchor
       ...(callerName ? { entities: { firstName: callerName } } : {}),
     }).catch(() => {});
   }
