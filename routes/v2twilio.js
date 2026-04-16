@@ -4648,15 +4648,17 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       companyID,
       error: error.message
     });
-    // CRASH RECOVERY: neutral text + Gather so the call continues.
-    const crashText = 'I apologize for the interruption. Please go ahead.';
+    // CRASH RECOVERY: UI-configured generalError message + Gather so the call continues.
+    const crashText = (company ? await getRecoveryMessage(company, 'generalError').catch(() => null) : null)
+      || 'I apologize for the interruption. Please go ahead.';
+    const _bridgeCrashSd = _getSpeechDetection(company);
     const twiml = new twilio.twiml.VoiceResponse();
     const crashGather = twiml.gather({
       input: 'speech',
       action: `/api/twilio/v2-agent-respond/${companyID}`,
       method: 'POST',
       actionOnEmptyResult: true,
-      timeout: 7,
+      timeout: _bridgeCrashSd.initialTimeout ?? 7,
       speechTimeout: _speechTimeout(company),
     });
     crashGather.say({ voice: TWILIO_FALLBACK_VOICE }, crashText);
@@ -7573,16 +7575,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // Signal fast-path so any pending race doesn't hang forever
         _fastPathResolve?.();
         // Return recovery TwiML with Gather so the call continues
+        // Use UI-configured generalError message (same as ROUTE_CRASH path).
         const _rcvTwiml = new twilio.twiml.VoiceResponse();
+        const _rcvSd = _getSpeechDetection(company);
         const _rcvGather = _rcvTwiml.gather({
           input: 'speech',
           action: `/api/twilio/v2-agent-respond/${companyID}`,
           method: 'POST',
           actionOnEmptyResult: true,
-          timeout: 7,
+          timeout: _rcvSd.initialTimeout ?? 7,
           speechTimeout: _speechTimeout(company),
         });
-        const _rcvText = 'I apologize for the interruption. Please go ahead and tell me how I can help.';
+        const _rcvText = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+          || 'I apologize for the interruption. Please go ahead and tell me how I can help.';
         _rcvGather.say({ voice: TWILIO_FALLBACK_VOICE }, _rcvText);
         // Persist agent turn so the crash phrase appears in call intelligence transcript
         if (callSid) {
@@ -8101,13 +8106,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // isn't happening. Include a Gather so the call continues, not dead-ends.
     const crashText = (company ? await getRecoveryMessage(company, 'generalError').catch(() => null) : null)
       || 'I apologize for the interruption. Please go ahead and tell me how I can help.';
+    const _routeCrashSd = company ? _getSpeechDetection(company) : {};
     const twiml = new twilio.twiml.VoiceResponse();
     const crashGather = twiml.gather({
       input: 'speech',
       action: `/api/twilio/v2-agent-respond/${companyID}`,
       method: 'POST',
       actionOnEmptyResult: true,
-      timeout: 7,
+      timeout: _routeCrashSd.initialTimeout ?? 7,
       speechTimeout: _speechTimeout(company),
     });
     crashGather.say({ voice: TWILIO_FALLBACK_VOICE }, crashText);
