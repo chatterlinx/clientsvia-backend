@@ -4555,22 +4555,39 @@ const companySchema = new mongoose.Schema({
                 // ═══════════════════════════════════════════════════════════
                 patienceSettings: {
                     enabled: { type: Boolean, default: true },
-                    response: { 
-                        type: String, 
-                        default: 'Take your time, I\'ll wait.', 
-                        trim: true, 
-                        maxlength: 500 
+                    response: {
+                        type: String,
+                        default: 'Take your time, I\'ll wait.',
+                        trim: true,
+                        maxlength: 500
                     },
                     waitDurationMs: { type: Number, default: 10000, min: 3000, max: 60000 },
-                    followUp: { 
-                        type: String, 
-                        default: 'I\'m still here whenever you\'re ready.', 
-                        trim: true, 
-                        maxlength: 500 
+                    followUp: {
+                        type: String,
+                        default: 'I\'m still here whenever you\'re ready.',
+                        trim: true,
+                        maxlength: 500
                     },
                     updatedAt: { type: Date, default: null }
                 },
-                
+
+                // ═══════════════════════════════════════════════════════════
+                // SILENT RE-LISTEN — How long to wait for caller to speak
+                // ═══════════════════════════════════════════════════════════
+                // When the caller goes silent (initial timeout fires with no
+                // speech), how many times to silently re-open the listener
+                // before the agent gently prompts. Humans need time to think.
+                //
+                // 0 = prompt immediately (legacy behavior)
+                // 1 = one re-listen (~7s extra patience)
+                // 2 = two re-listens (~14s total patience) — DEFAULT
+                // 3 = three re-listens (~21s total patience)
+                //
+                // Runtime: v2twilio.js SILENT_RELISTEN guard
+                // UI: agent2.html → Speech Detection section
+                // ═══════════════════════════════════════════════════════════
+                maxSilentRelistens: { type: Number, default: 2, min: 0, max: 5 },
+
                 updatedAt: { type: Date, default: null }
             },
             // ═══════════════════════════════════════════════════════════════

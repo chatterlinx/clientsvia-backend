@@ -7142,6 +7142,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           partialResultCallbackMethod: 'POST'
         });
 
+        // ── RESPONSE TIMING — UI-configurable thinking pause ──────────────
+        // personalitySystem.conversationPatterns.thinkingTime (0-3 seconds)
+        // Adds a brief pause before the agent speaks so it feels more human.
+        // 'immediate' = 0s, 'brief' = thinkingTime, 'thoughtful' = thinkingTime
+        // Only fires on non-bridge paths (bridge already has natural delay).
+        // Read from agent2.personalitySystem (PATCH endpoint saves here) → fallback to top-level schema path.
+        const _convPatterns = company?.aiAgentSettings?.agent2?.personalitySystem?.conversationPatterns
+          || company?.aiAgentSettings?.personalitySystem?.conversationPatterns
+          || {};
+        const _responseDelay = _convPatterns.responseDelay || 'brief';
+        const _thinkingTime = Math.min(3, Math.max(0, Number(_convPatterns.thinkingTime) || 0));
+        if (_responseDelay !== 'immediate' && _thinkingTime > 0) {
+          gather.pause({ length: _thinkingTime });
+        }
+
         if (audioUrl) gather.play(audioUrl);
         else gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
 
