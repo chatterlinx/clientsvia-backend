@@ -8,9 +8,15 @@
  * Fetches gap events from the kcGaps API, merges related entries (same call +
  * turn), renders stat cards / filters / table with expandable detail rows.
  *
+ * RECOMMENDATION ENGINE:
+ *   Analyzes merged gap data → generates prioritized, actionable "todo" items.
+ *   Groups section gaps by container, clusters LLM fallbacks, flags patterns.
+ *   Each recommendation tells you exactly what to do to fix the gap.
+ *
  * Actions per row:
  *   - Copy phrase to clipboard (toast confirmation)
  *   - Open Phrase Finder on services.html with the phrase pre-loaded
+ *   - Per-row action suggestion in detail panel (what to do for this gap)
  *
  * ============================================================================
  */
@@ -21,9 +27,11 @@ const G = {
   gaps:       [],      // raw from API
   merged:     [],      // after turn-merge
   summary:    {},      // { total, byType, range }
-  range:      '7d',
-  typeFilter: 'all',
-  showTurn1:  false,   // Turn 1 Engine events hidden by default (not real gaps)
+  range:             '7d',
+  typeFilter:        'all',
+  showTurn1:         false,   // Turn 1 Engine events hidden by default (not real gaps)
+  recommendations:   [],      // generated action items
+  containerGapCounts: {},     // containerId → occurrence count
 };
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -64,10 +72,16 @@ async function loadGaps() {
     G.summary = res.summary || {};
     G.merged  = _mergeGapEntries(G.gaps);
 
+    // Build prescriptive recommendations from gap data
+    const recResult       = _buildRecommendations(G.merged);
+    G.recommendations     = recResult.recommendations;
+    G.containerGapCounts  = recResult.containerGapCounts;
+
     document.getElementById('pageLoading').style.display = 'none';
     document.getElementById('pageContent').style.display = 'block';
 
     _renderSummary();
+    _renderRecommendations();
     _renderFilters();
     _renderTable();
   } catch (err) {
@@ -155,6 +169,130 @@ function _mergeGapEntries(gaps) {
   return merged;
 }
 
+// ── Recommendation Engine ────────────────────────────────────────────────
+// Analyzes merged gap data and generates prioritized, actionable
+// recommendations. This is the "todo" in "Gaps & Todo" — it tells you
+// exactly what to do to improve caller experience.
+function _buildRecommendations(merged) {
+  const recs = [];
+
+  // ── Pre-compute: container gap occurrence counts ─────────────────────
+  const containerGapCounts = {};
+  for (const row of merged) {
+    if (row.displayType === 'KC_SECTION_GAP' && row.containerId) {
+      containerGapCounts[row.containerId] = (containerGapCounts[row.containerId] || 0) + 1;
+    }
+  }
+
+  // ── 1. Group KC_SECTION_GAP by container ─────────────────────────────
+  // Same container matching but no section → needs content added
+  const containerGaps = {};
+  for (const row of merged) {
+    if (row.displayType !== 'KC_SECTION_GAP') continue;
+    const cid = row.containerId || '_unknown';
+    if (!containerGaps[cid]) {
+      containerGaps[cid] = {
+        containerTitle: row.containerTitle || 'Unknown Container',
+        containerId:    row.containerId,
+        kcId:           row.kcId,
+        phrases:        [],
+        count:          0,
+        callSids:       new Set(),
+      };
+    }
+    const cg = containerGaps[cid];
+    cg.count++;
+    if (row.callSid) cg.callSids.add(row.callSid);
+    if (row.question && row.question.trim()) {
+      cg.phrases.push(row.question.trim());
+    }
+  }
+
+  for (const cg of Object.values(containerGaps)) {
+    const uniquePhrases = [...new Set(cg.phrases)];
+    const uniqueCalls   = cg.callSids.size;
+    const priority      = cg.count >= 3 ? 'high' : cg.count >= 2 ? 'medium' : 'low';
+
+    recs.push({
+      priority,
+      type:  'section_gap',
+      title: `"${cg.containerTitle}" \u2014 ${cg.count} section gap${cg.count > 1 ? 's' : ''}`,
+      description:
+        `Container matched ${cg.count} time${cg.count > 1 ? 's' : ''} across ` +
+        `${uniqueCalls} call${uniqueCalls > 1 ? 's' : ''} but no section could answer ` +
+        `the caller\u2019s question. \u2192 Add callerPhrases to sections in this KC card, ` +
+        `or create a new section that covers these topics.`,
+      phrases:        uniquePhrases,
+      containerTitle: cg.containerTitle,
+      containerId:    cg.containerId,
+      kcId:           cg.kcId,
+      count:          cg.count,
+    });
+  }
+
+  // ── 2. Group KC_LLM_FALLBACK (no container match) ───────────────────
+  const fbPhrases  = [];
+  let   fbCount    = 0;
+  const fbCallSids = new Set();
+  for (const row of merged) {
+    if (row.displayType !== 'KC_LLM_FALLBACK') continue;
+    fbCount++;
+    if (row.callSid) fbCallSids.add(row.callSid);
+    if (row.question && row.question.trim()) {
+      fbPhrases.push(row.question.trim());
+    }
+  }
+
+  if (fbCount > 0) {
+    const uniquePhrases = [...new Set(fbPhrases)];
+    recs.push({
+      priority: fbCount >= 3 ? 'high' : 'medium',
+      type:  'no_match',
+      title: `${fbCount} question${fbCount > 1 ? 's' : ''} had no KC match`,
+      description:
+        `Agent used AI to improvise ${fbCount} response${fbCount > 1 ? 's' : ''} without ` +
+        `trained KC content. Some may be conversational fragments. ` +
+        `\u2192 Open Phrase Finder to match real questions to existing containers.`,
+      phrases: uniquePhrases,
+      count:   fbCount,
+    });
+  }
+
+  // ── 3. Group KC_GRACEFUL_ACK ────────────────────────────────────────
+  let   ackCount   = 0;
+  const ackPhrases = [];
+  for (const row of merged) {
+    if (row.displayType !== 'KC_GRACEFUL_ACK') continue;
+    ackCount++;
+    if (row.question && row.question.trim().length > 5) {
+      ackPhrases.push(row.question.trim());
+    }
+  }
+
+  if (ackCount > 0) {
+    const realPhrases = [...new Set(ackPhrases)];
+    recs.push({
+      priority: realPhrases.length >= 3 ? 'medium' : 'low',
+      type:  'graceful_ack',
+      title: `${ackCount} generic acknowledgment${ackCount > 1 ? 's' : ''}`,
+      description:
+        `Agent gave basic acknowledgment responses. Most are natural conversation ` +
+        `flow (empty utterances). ` +
+        (realPhrases.length > 0
+          ? `\u2192 Review the ${realPhrases.length} with actual phrases \u2014 these may be missed content opportunities.`
+          : `All were empty utterances \u2014 likely OK.`),
+      phrases: realPhrases,
+      count:   ackCount,
+    });
+  }
+
+  // ── Sort: high → medium → low ──────────────────────────────────────
+  const pOrder = { high: 0, medium: 1, low: 2 };
+  recs.sort((a, b) => (pOrder[a.priority] ?? 9) - (pOrder[b.priority] ?? 9));
+
+  return { recommendations: recs, containerGapCounts };
+}
+
 // ── Render: Summary stat cards ───────────────────────────────────────────────
 function _renderSummary() {
   const s   = G.summary;
@@ -234,6 +372,90 @@ function _renderFilters() {
   document.getElementById('filterBar').innerHTML = html;
 }
 
+// ── Render: Recommendations panel ────────────────────────────────────────
+function _renderRecommendations() {
+  const recs = G.recommendations;
+  const el   = document.getElementById('recommendations');
+
+  if (!recs || !recs.length) { el.innerHTML = ''; return; }
+
+  const priorityLabels = {
+    high:   '\ud83d\udd34 HIGH',   // 🔴
+    medium: '\ud83d\udfe1 MED',    // 🟡
+    low:    '\u26aa LOW',          // ⚪
+  };
+
+  let html = '<div class="rec-panel">';
+
+  // ── Header ──
+  html += '<div class="rec-header" onclick="toggleRecPanel()">';
+  html += '<div class="rec-header-left">';
+  html += '<span class="rec-icon">\ud83d\udccb</span>';   // 📋
+  html += '<span class="rec-title">Recommended Actions</span>';
+  html += `<span class="rec-count">${recs.length}</span>`;
+  html += '</div>';
+  html += '<span class="rec-toggle" id="recToggle">\u25bc</span>';
+  html += '</div>';
+
+  // ── Body ──
+  html += '<div class="rec-body" id="recBody">';
+
+  recs.forEach((rec, ri) => {
+    const pLabel = priorityLabels[rec.priority] || rec.priority;
+
+    html += `<div class="rec-card ${rec.priority}">`;
+
+    // Card header: priority + title
+    html += '<div class="rec-card-header">';
+    html += `<span class="rec-priority ${rec.priority}">${pLabel}</span>`;
+    html += `<span class="rec-card-title">${_esc(rec.title)}</span>`;
+    html += '</div>';
+
+    // Description
+    html += `<div class="rec-card-desc">${_esc(rec.description)}</div>`;
+
+    // Phrase pills
+    if (rec.phrases && rec.phrases.length > 0) {
+      html += '<div class="rec-phrases">';
+      const show = rec.phrases.slice(0, 4);
+      for (const p of show) {
+        html += `<span class="rec-phrase">\u201c${_esc(_clip(p, 50))}\u201d</span>`;
+      }
+      if (rec.phrases.length > 4) {
+        html += `<span class="rec-phrase-more">+${rec.phrases.length - 4} more</span>`;
+      }
+      html += '</div>';
+    }
+
+    // Action buttons
+    html += '<div class="rec-actions">';
+
+    if (rec.type === 'section_gap' && rec.kcId) {
+      const kcLink = `/agent-console/services.html?companyId=${G.companyId}#kc-${rec.kcId}`;
+      html += `<a class="btn-act primary" href="${kcLink}" target="_blank">Open KC Card \u2192</a>`;
+    }
+    if (rec.type === 'section_gap' && rec.phrases.length > 0) {
+      const fp = encodeURIComponent(rec.phrases[0]);
+      html += `<a class="btn-act" href="/agent-console/services.html?companyId=${G.companyId}&openPf=${fp}" target="_blank">Phrase Finder</a>`;
+    }
+    if (rec.type === 'no_match' && rec.phrases.length > 0) {
+      const fp = encodeURIComponent(rec.phrases[0]);
+      html += `<a class="btn-act primary" href="/agent-console/services.html?companyId=${G.companyId}&openPf=${fp}" target="_blank">Phrase Finder \u2192</a>`;
+    }
+    if (rec.phrases && rec.phrases.length > 0) {
+      html += `<button class="btn-act" onclick="copyRecPhrases(${ri})">Copy Phrases</button>`;
+    }
+
+    html += '</div>'; // rec-actions
+    html += '</div>'; // rec-card
+  });
+
+  html += '</div>'; // rec-body
+  html += '</div>'; // rec-panel
+
+  el.innerHTML = html;
+}
+
 // ── Render: Gap table ────────────────────────────────────────────────────────
 function _renderTable() {
   if (!G.merged.length) {
@@ -268,7 +490,13 @@ function _renderTable() {
     html += `<td class="phrase-cell">${_esc(phrase)}</td>`;
     html += `<td class="response-cell">${answer ? _esc(answer) : '<span style="color:#cbd5e1;">—</span>'}</td>`;
     html += `<td style="font-size:12px;">${_esc(container)}</td>`;
-    html += `<td>${badge}</td>`;
+    // Occurrence badge for containers with multiple section gaps
+    const _occ = (row.containerId && row.displayType === 'KC_SECTION_GAP')
+      ? (G.containerGapCounts[row.containerId] || 0)
+      : 0;
+    html += `<td>${badge}`;
+    if (_occ > 1) html += ` <span class="occ-badge">${_occ}\u00d7</span>`;
+    html += `</td>`;
     html += `<td class="actions-cell" onclick="event.stopPropagation();">`;
     html += `  <button class="btn-act" onclick="copyPhrase(${idx})" title="Copy caller phrase to clipboard">Copy</button>`;
     html += `  <button class="btn-act primary" onclick="openFinder(${idx})" title="Open in Phrase Finder">Finder &rarr;</button>`;
@@ -316,6 +544,31 @@ function _renderTable() {
       }
       html += `</div></div>`;
     }
+
+    // ── Per-row action suggestion ──
+    html += '<div class="detail-suggestion">';
+    html += '<div class="suggestion-icon">\ud83d\udca1</div>';  // 💡
+    html += '<div class="suggestion-text">';
+    if (row.displayType === 'KC_SECTION_GAP') {
+      const _gapOcc = row.containerId ? (G.containerGapCounts[row.containerId] || 1) : 1;
+      html += `<strong>Add a callerPhrase</strong> to a section in \u201c${_esc(row.containerTitle)}\u201d `;
+      html += `that covers this caller\u2019s intent.`;
+      if (_gapOcc > 1) {
+        html += ` <span class="suggestion-repeat">This container had ${_gapOcc} section gaps this period.</span>`;
+      }
+    } else if (row.displayType === 'KC_LLM_FALLBACK') {
+      html += `<strong>Use Phrase Finder</strong> to match this phrase to an existing container, `;
+      html += `or create a new KC card if this is a new topic.`;
+    } else {
+      if (row.question && row.question.trim().length > 5) {
+        html += `<strong>Review:</strong> Agent had no trained answer. Check if this is a real gap `;
+        html += `or natural conversation flow.`;
+      } else {
+        html += `<strong>Likely OK:</strong> Empty or very short utterance \u2014 probably a natural `;
+        html += `pause or acknowledgment from the caller.`;
+      }
+    }
+    html += '</div></div>';
 
     // Full question
     if (row.question) {
@@ -389,6 +642,34 @@ function openFinder(idx) {
   const phrase = encodeURIComponent(row.question);
   window.location.href =
     `/agent-console/services.html?companyId=${G.companyId}&openPf=${phrase}`;
+}
+
+// ── Recommendation actions ──────────────────────────────────────────────
+function toggleRecPanel() {
+  const body   = document.getElementById('recBody');
+  const toggle = document.getElementById('recToggle');
+  if (!body || !toggle) return;
+  if (body.classList.contains('collapsed')) {
+    body.classList.remove('collapsed');
+    toggle.textContent = '\u25bc';   // ▼
+  } else {
+    body.classList.add('collapsed');
+    toggle.textContent = '\u25b6';   // ▶
+  }
+}
+
+function copyRecPhrases(recIdx) {
+  const rec = G.recommendations[recIdx];
+  if (!rec || !rec.phrases || !rec.phrases.length) {
+    _toast('No phrases to copy');
+    return;
+  }
+  const unique = [...new Set(rec.phrases)];
+  navigator.clipboard.writeText(unique.join('\n')).then(() => {
+    _toast(`${unique.length} phrase${unique.length > 1 ? 's' : ''} copied`);
+  }).catch(() => {
+    _toast('Copy failed');
+  });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

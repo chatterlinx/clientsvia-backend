@@ -155,6 +155,75 @@
   .detail-answer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 4px; }
   .detail-answer-text { font-size: 13px; line-height: 1.6; color: var(--text-main); background: #fff; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); }
 
+  /* ── Recommendations Panel ──────────────────────────────────────────────── */
+  .rec-panel {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); margin-bottom: 24px; overflow: hidden;
+  }
+  .rec-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; cursor: pointer; user-select: none;
+    background: linear-gradient(135deg, #fefce8, #fef3c7);
+  }
+  .rec-header-left { display: flex; align-items: center; gap: 10px; }
+  .rec-icon { font-size: 18px; }
+  .rec-title { font-size: 14px; font-weight: 700; color: var(--text-main); }
+  .rec-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+    background: var(--amber); color: #fff; font-size: 11px; font-weight: 700;
+  }
+  .rec-toggle { font-size: 12px; color: var(--text-muted); transition: transform .2s; }
+  .rec-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .rec-body.collapsed { display: none; }
+
+  .rec-card {
+    padding: 14px 18px; border-radius: 10px; border-left: 4px solid;
+  }
+  .rec-card.high   { border-left-color: var(--red); background: #fef2f2; }
+  .rec-card.medium { border-left-color: var(--amber); background: #fffbeb; }
+  .rec-card.low    { border-left-color: #94a3b8; background: #f8fafc; }
+
+  .rec-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .rec-priority {
+    font-size: 10.5px; font-weight: 800; letter-spacing: .04em; white-space: nowrap;
+  }
+  .rec-priority.high   { color: #b91c1c; }
+  .rec-priority.medium { color: #92400e; }
+  .rec-priority.low    { color: #64748b; }
+  .rec-card-title { font-size: 13px; font-weight: 700; color: var(--text-main); }
+  .rec-card-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px; }
+
+  .rec-phrases { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .rec-phrase {
+    display: inline-block; padding: 3px 8px; border-radius: 5px;
+    font-size: 11.5px; color: #0369a1; background: #e0f2fe; font-style: italic;
+    max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rec-phrase-more {
+    display: inline-block; padding: 3px 8px; border-radius: 5px;
+    font-size: 11.5px; color: var(--text-muted); background: #f1f5f9;
+  }
+  .rec-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rec-actions a.btn-act { text-decoration: none; display: inline-flex; align-items: center; }
+
+  /* ── Per-row suggestion ─────────────────────────────────────────────────── */
+  .detail-suggestion {
+    display: flex; align-items: flex-start; gap: 8px; margin-top: 12px;
+    padding: 10px 14px; border-radius: 8px;
+    background: #eff6ff; border: 1px solid #bfdbfe;
+  }
+  .suggestion-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .suggestion-text { font-size: 12.5px; color: #1e40af; line-height: 1.5; }
+  .suggestion-text strong { font-weight: 700; }
+  .suggestion-repeat { color: var(--red); font-weight: 600; }
+
+  /* ── Occurrence badge ───────────────────────────────────────────────────── */
+  .occ-badge {
+    display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; background: #fecaca; color: #b91c1c; vertical-align: middle;
+  }
+
   /* Toast */
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -175,7 +244,10 @@
   @media print {
     body { background: #fff; }
     .page-header { position: static; box-shadow: none; border-bottom: 2px solid #000; }
-    .btn-refresh, .btn-download, .btn-back, .header-divider, .filter-bar, .actions-cell, .toast { display: none !important; }
+    .btn-refresh, .btn-download, .btn-back, .header-divider, .filter-bar, .actions-cell, .toast, .rec-actions { display: none !important; }
+    .rec-panel { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+    .rec-header { background: #f8f8f0; }
+    .rec-body.collapsed { display: flex !important; }
     .page-body { padding: 16px 0; max-width: 100%; }
     .gap-table th:last-child, .gap-table td:last-child { display: none; }
     .table-wrap { box-shadow: none; border: 1px solid #ccc; }
@@ -205,6 +277,7 @@
   <div id="pageLoading" class="state-loading">Loading gap data...</div>
   <div id="pageContent" style="display:none;">
     <div id="statCards"></div>
+    <div id="recommendations"></div>
     <div id="filterBar"></div>
     <div id="gapTable"></div>
   </div>
