@@ -23,6 +23,7 @@ This document describes the complete caller utterance routing pipeline from spee
 13. [Booking Intent Guards — Narrative Filter + noAnchor Semantics](#13-booking-intent-guards--narrative-filter--noanchor-semantics-april-2026)
 14. [Timing & Silence Layer — All UI, No Hardcoded](#14-timing--silence-layer--all-ui-no-hardcoded-april-2026)
 15. [LAP — ListenerActParser (Pre-Pipeline Gate)](#15-lap--listeneractparser-pre-pipeline-gate-april-2026)
+16. [Answer-From-KB LLM Posture + Enriched callContext](#16-answer-from-kb-llm-posture--enriched-callcontext-april-2026)
 
 ---
 
@@ -1027,3 +1028,114 @@ Returns `{ matched: true, action, response?, entry }` or `{ matched: false }`.
 - `matched=false` → pipeline continues to KCDiscoveryRunner.
 
 ---
+
+## 16. Answer-From-KB LLM Posture + Enriched callContext (April 2026)
+
+**Files:** `services/engine/kc/KCDiscoveryRunner.js` (`_buildCallContext` helper), `services/engine/agent2/Agent2DiscoveryRunner.js` (`callLLMAgentForFollowUp`), `config/llmAgentDefaults.js` (`composeSystemPrompt`)
+**Commit:** `a77796b05`
+
+### The Problem This Solves
+
+When KC routing missed and the conversation fell to `KC_LLM_FALLBACK`, Claude produced non-directive deflections: *"Sounds good. Let me check on that for you."* Then dead air. Caller waited. Call failed.
+
+Root causes:
+1. Prompt posture was DISCOVERY/ROUTE — Claude was told to *never quote prices* and *hand off*, not to *answer*.
+2. `callContext` carried only `firstName + callReason + urgency`. No prior visits, no staff names, no repeat-issue signal → no material for an acknowledgment.
+3. No explicit rule forbidding "let me check" as final words.
+
+### 16.1 — `_buildCallContext()` Helper (KCDiscoveryRunner.js)
+
+Packages `discoveryNotes` + pre-warmed `callerProfile` (from `CallerRecognitionService`) into a rich context object consumed by the LLM.
+
+**Fields surfaced** (all optional — omitted if absent):
+
+| Field | Source | Purpose |
+|---|---|---|
+| `caller.firstName` | `entities.firstName` / `temp.firstName` / `callerProfile.lastConfirmed.firstName` | Name for acknowledgment |
+| `issue.summary` | `notes.callReason` (fallback: `notes.objective`) | What caller is calling about |
+| `urgency.level` | `notes.urgency === 'high'` only | High-urgency flag (noise filtering) |
+| `priorVisits[]` | `callerProfile.lastCallDate`, `lastCallReason`, `lastConfirmed.staffInvolved` | "Tony was here 32 days ago for No Cooling" |
+| `visitCount` | `callerProfile.visitCount` (>1 only) | Returning-customer warmth |
+| `repeatIssue` | `callerProfile.repeatIssueDetected` + `repeatIssueReason` | Caller has called about same issue 2+ times |
+| `rejectedTopics[]` | `notes.rejectedTopics` (last 5) | Don't re-offer what caller declined this call |
+| `recentQA[]` | `notes.qaLog` (last 2 meaningful pairs) | Don't repeat yourself |
+| `behaviorBlock` | `EngineHubRuntime.formatStandaloneBCForPrompt(discoveryFlowBC)` | Engine Hub discovery_flow BC rules |
+
+### 16.2 — `mode='answer-from-kb'` in composeSystemPrompt
+
+New `mode` parameter on `composeSystemPrompt(settings, channel, mode)`:
+
+| Mode | Used By | Posture |
+|---|---|---|
+| `'discovery'` (default) | triggerFallback, consent follow-up, no-match discovery | DISCOVERY + CONSENT FUNNEL. Never quotes prices. Hands off. |
+| `'answer-from-kb'` | KC_LLM_FALLBACK (the final save) | ANSWER-FIRST. acknowledge → reflect → answer → directive. May quote prices IF in KB. |
+
+**The answer-from-kb purpose block replaces:**
+```
+"Your PRIMARY PURPOSE is DISCOVERY — find out why the customer is calling..."
+"You do NOT quote prices."
+```
+
+**With:**
+```
+"Your PRIMARY PURPOSE right now is to ANSWER THE CALLER using the KNOWLEDGE BASE."
+"Find it. Deliver it clearly. Do NOT defer. Do NOT say 'let me check' and stop —
+that creates dead air the caller cannot forgive."
+
+"RESPONSE PATTERN — MANDATORY:
+  1. ACKNOWLEDGE using CALL CONTEXT (prior visits, staff, repeat issues)
+  2. ANSWER directly from the KNOWLEDGE BASE
+  3. DIRECTIVE — end with ONE natural yes/no question
+
+ABSOLUTE RULE — NEVER end a response with 'let me check' as the final words."
+```
+
+**Conditional `noPricing` guardrail** (mode-aware):
+- `'discovery'`: *"NEVER quote prices, fees, or estimates."*
+- `'answer-from-kb'`: *"NEVER INVENT prices. You MAY state prices IF they appear in the KNOWLEDGE BASE."*
+
+### 16.3 — Enriched CALL CONTEXT Block (Agent2DiscoveryRunner.js)
+
+`callLLMAgentForFollowUp` now accepts `mode` parameter and renders enriched fields into the prompt:
+
+```
+=== CALL CONTEXT (already established) ===
+Caller name: Mark
+Issue: No Cooling
+Last visit: 32 days ago — No Cooling (technician: Tony)
+USE THIS: open with an acknowledgment that references this prior visit when relevant.
+Visit count: 3 (returning customer — treat warmly)
+REPEAT ISSUE DETECTED: caller has called about "no cooling" multiple times.
+Acknowledge the frustration before proposing the solution.
+Do NOT re-offer these (already declined this call): Maintenance Plan
+Recent conversation turns (most recent last):
+  caller: "what about the motor?"  → you said: "We can warranty that up to…"
+Do NOT repeat yourself — build on what you already said.
+=== END CALL CONTEXT ===
+```
+
+### 16.4 — Wiring Summary
+
+- **KC_LLM_FALLBACK site** (`_handleLLMFallback` in KCDiscoveryRunner.js ~line 2582): passes `callContext: _buildCallContext(notes, behaviorBlock)` and `mode: 'answer-from-kb'`.
+- **`_handleKCMatch` secondary fallback** (~line 2166): now propagates `notes` (previously lost).
+- **triggerFallback / consent / no-match paths**: unchanged — still use `mode: 'discovery'` (default).
+
+### 16.5 — What This Replaces
+
+**Before** (actual Turn 2 response from call CA951d50a2...):
+> Caller: *"Do I have to pay for another service call?"*
+> Agent: *"Sounds good. As a returning customer, let me check on that for you."* [dead air]
+
+**After** (target pattern — requires Diagnostic Fee KC content to include return-visit sections):
+> Caller: *"Do I have to pay for another service call?"*
+> Agent: *"I hear you, Mark — I see Tony was out 32 days ago for the motor repair. Since that's within our recent-service warranty window, the return-visit diagnostic is waived. Want me to get someone out today to look at the water leak?"*
+
+### 16.6 — What's Still Needed for the Full Vision
+
+Changes A+B+C unblock the acknowledge-reflect pattern. Still open (future work):
+- **Cross-container KC recovery**: when anchor container's Section GAP hits, re-score across all containers WITHOUT anchor multiplier. Would route "service call fee" question from anchored No Cooling → Diagnostic Fee container.
+- **KC semantic ranking** before injection into LLM prompt (currently all enabled cards are dumped in verbatim).
+- **`groqContent` in `composeSystemPrompt`**: currently only basic `card.content` is injected — deep content (4000 chars) is not reaching the fallback LLM.
+- **Bridge phrase library** — configurable per-company "hold while I check" phrases.
+- **Consent funnel validator** — post-generation check that response ends with yes/no.
+
