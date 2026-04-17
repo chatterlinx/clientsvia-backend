@@ -1747,6 +1747,7 @@ class KCDiscoveryRunner {
         bridgeToken, redis, onSentence, pendingBookingQuestion,
         discoveryContext, priorVisit,
         compoundBookingIntent: _hasCompoundBookingIntent,
+        notes,   // carry discoveryNotes for LLM fallback callContext enrichment
       });
     }
 
@@ -2017,6 +2018,7 @@ async function _handleKCMatch({
   discoveryContext       = null,
   priorVisit             = false,
   compoundBookingIntent  = false,
+  notes                  = null,   // discoveryNotes — carried for LLM fallback enrichment
 }) {
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
@@ -2166,6 +2168,7 @@ async function _handleKCMatch({
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel: 'call', nextState, emit,
       startMs, turn, bridgeToken, redis, callerName, onSentence,
+      notes,   // carry discoveryNotes so enriched callContext reaches Claude
     });
   }
 
@@ -2519,6 +2522,105 @@ function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, star
 }
 
 // ============================================================================
+// _buildCallContext — Enriched callContext for LLM fallback
+//
+// Packages discoveryNotes + callerProfile (from CallerRecognition pre-warm) +
+// behaviorBlock into a single rich context object consumed by Agent2 LLM
+// (Claude) via callLLMAgentForFollowUp → composeSystemPrompt.
+//
+// Why this exists: prior version only surfaced firstName + callReason + urgency.
+// That left the LLM blind to the caller's history — so when KC missed and
+// Claude fell back, it had no way to open with an acknowledgment ("I see Tony
+// was here last month") and ended up deflecting with "let me check on that"
+// (dead air). This helper surfaces the knowledge Claude needs to acknowledge
+// the caller by name, reflect on their prior visit, and answer confidently.
+//
+// Surfaces (all optional — missing fields are simply omitted):
+//   caller:         { firstName, speakable }
+//   issue:          { summary }                 — current callReason
+//   urgency:        { level, reason }           — only if 'high'
+//   priorVisits:    [{ daysAgo, reason, staff }]— last confirmed visit
+//   visitCount:     number                       — if >1
+//   repeatIssue:    { detected, reason }         — same issue 2+ times
+//   rejectedTopics: string[]                     — don't re-offer these
+//   recentQA:       [{ question, answer }]       — last 2 turns this call
+//   behaviorBlock:  string                       — Engine Hub discovery_flow BC
+// ============================================================================
+function _buildCallContext(notes, behaviorBlock) {
+  if (!notes && !behaviorBlock) return null;
+
+  const ctx = {};
+
+  // Caller identity — prefer current-call entities, fallback to pre-warmed profile
+  const firstName = notes?.entities?.firstName
+    || notes?.temp?.firstName
+    || notes?.callerProfile?.lastConfirmed?.firstName
+    || null;
+  if (firstName) {
+    ctx.caller = { firstName, speakable: true };
+  }
+
+  // Current call reason / objective
+  if (notes?.callReason) {
+    ctx.issue = { summary: notes.callReason };
+  } else if (notes?.objective && notes.objective !== 'INTAKE') {
+    ctx.issue = { summary: notes.objective };
+  }
+
+  // Urgency — surface only 'high' to avoid noise
+  if (notes?.urgency === 'high') {
+    ctx.urgency = { level: 'high', reason: notes.callReason || null };
+  }
+
+  // Prior visits — summarize last confirmed visit from pre-warmed callerProfile
+  const cp = notes?.callerProfile;
+  if (cp?.isKnown && cp?.visitCount > 0) {
+    const priorVisits = [];
+    if (cp.lastCallDate && cp.lastCallReason) {
+      const ms = Date.now() - new Date(cp.lastCallDate).getTime();
+      const daysAgo = ms > 0 ? Math.floor(ms / 86400000) : null;
+      const staff = cp.lastConfirmed?.staffInvolved || null;
+      priorVisits.push({
+        daysAgo,
+        reason: cp.lastCallReason,
+        staff,
+      });
+    }
+    if (priorVisits.length > 0) ctx.priorVisits = priorVisits;
+    if (cp.visitCount > 1) ctx.visitCount = cp.visitCount;
+  }
+
+  // Repeat-issue signal — caller has called about the same thing 2+ times
+  if (cp?.repeatIssueDetected && cp?.repeatIssueReason) {
+    ctx.repeatIssue = { detected: true, reason: cp.repeatIssueReason };
+  }
+
+  // Rejected topics — don't re-offer what the caller has pushed back on this call
+  if (Array.isArray(notes?.rejectedTopics) && notes.rejectedTopics.length > 0) {
+    ctx.rejectedTopics = notes.rejectedTopics.slice(-5);
+  }
+
+  // Recent QA — last 2 meaningful Q&A pairs from this call (skip diagnostics)
+  if (Array.isArray(notes?.qaLog) && notes.qaLog.length > 0) {
+    const recentQA = notes.qaLog
+      .filter(q => q?.question && q?.answer)
+      .slice(-2)
+      .map(q => ({
+        question: String(q.question).slice(0, 120),
+        answer:   String(q.answer).slice(0, 120),
+      }));
+    if (recentQA.length > 0) ctx.recentQA = recentQA;
+  }
+
+  // Engine Hub discovery_flow BC rules
+  if (behaviorBlock) {
+    ctx.behaviorBlock = behaviorBlock;
+  }
+
+  return Object.keys(ctx).length > 0 ? ctx : null;
+}
+
+// ============================================================================
 // HANDLER: LLM FALLBACK (Claude, bucket=COMPLEX)
 // ============================================================================
 
@@ -2576,15 +2678,11 @@ async function _handleLLMFallback({
 
   const behaviorBlock = EngineHubRuntime.formatStandaloneBCForPrompt(discoveryFlowBC);
 
-  // Build callContext from discoveryNotes so Claude has call-level awareness.
-  // behaviorBlock (Engine Hub BC rules) is included so Claude follows the
-  // discovery_flow tone + rules when no KC card is guiding the response.
-  const callContext = notes ? {
-    caller:        notes.entities?.firstName ? { firstName: notes.entities.firstName, speakable: true } : null,
-    issue:         notes.callReason ? { summary: notes.callReason } : null,
-    urgency:       notes.urgency === 'high' ? { level: 'high', reason: notes.callReason } : null,
-    behaviorBlock: behaviorBlock || null,   // Engine Hub discovery_flow BC rules
-  } : (behaviorBlock ? { behaviorBlock } : null);
+  // Build enriched callContext — surfaces caller history, prior visits, repeat
+  // issues, rejected topics, and recent QA so Claude can acknowledge the
+  // caller by name, reflect on their history, and answer confidently from KB.
+  // See _buildCallContext() above for the full field list.
+  const callContext = _buildCallContext(notes, behaviorBlock);
 
   let llmResult = null;
   try {
@@ -2602,7 +2700,8 @@ async function _handleLLMFallback({
       redis,
       callerName,
       onSentence,
-      callContext,                     // discoveryNotes context for Claude
+      callContext,                     // enriched discoveryNotes + callerProfile
+      mode:                'answer-from-kb', // shift prompt posture: ANSWER, don't defer
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] LLM fallback threw — routing to graceful ACK', {

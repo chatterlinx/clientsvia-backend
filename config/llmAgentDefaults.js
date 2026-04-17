@@ -305,9 +305,15 @@ const DEFAULT_BEHAVIOR_RULES = [
  *
  * @param {Object} settings - Merged LLM agent settings
  * @param {string} channel  - 'call' | 'sms' | 'webchat'
+ * @param {string} mode     - Posture mode (April 2026):
+ *   - 'discovery'      (default): discovery + route/handoff. Forbids pricing/scheduling.
+ *                      Used for triggerFallback, consent follow-up, no-match discovery.
+ *   - 'answer-from-kb': acknowledge → reflect → answer-from-KB → directive.
+ *                      Used when KC routing missed and LLM is the final save attempt.
+ *                      Allows pricing IF sourced from the Knowledge Base.
  * @returns {string}
  */
-function composeSystemPrompt(settings, channel = 'call') {
+function composeSystemPrompt(settings, channel = 'call', mode = 'discovery') {
   // If admin provided a full override, use it as-is
   if (settings.systemPrompt && settings.systemPrompt.trim()) {
     return settings.systemPrompt.trim();
@@ -337,26 +343,67 @@ function composeSystemPrompt(settings, channel = 'call') {
   const channelInstr = CHANNEL_INSTRUCTIONS[channel] || CHANNEL_INSTRUCTIONS.call;
   parts.push(channelInstr);
 
-  // 6. Purpose — discovery + consent funnel
-  parts.push(
-    'Your PRIMARY PURPOSE is DISCOVERY — find out why the customer is calling and route them to the right help.',
-    'You do NOT book appointments. You do NOT collect personal information. You do NOT quote prices.',
-    'Once you understand the caller\'s intent, hand off to the appropriate department or booking system.',
-    '',
-    'CONSENT FUNNEL RULE (critical):',
-    'Every response you give MUST end with ONE natural yes/no question that moves the caller toward',
-    'scheduling or confirms their intent (e.g. "Would you like me to get a technician out there?" or',
-    '"Can I schedule someone to come take a look?"). This gives the caller a clear next step.',
-    'The question must feel warm and natural — never robotic or pushy.',
-    'Do NOT skip this closing question even when acknowledging an issue or answering a query.'
-  );
+  // 6. Purpose — posture depends on mode
+  if (mode === 'answer-from-kb') {
+    // ANSWER-FIRST posture. KC routing missed — you are the final save.
+    // Caller asked a question. KB likely has the answer. Don't defer. Answer.
+    parts.push(
+      'Your PRIMARY PURPOSE right now is to ANSWER THE CALLER using the KNOWLEDGE BASE.',
+      'The caller asked a specific question. The knowledge base below very likely has the answer.',
+      'Find it. Deliver it clearly. Do NOT defer. Do NOT say "let me check on that" and stop —',
+      'that creates dead air the caller cannot forgive. If you truly do not have the answer,',
+      'say so in one sentence and offer a concrete next step (technician visit, specialist transfer,',
+      'clarifying question).',
+      '',
+      'RESPONSE PATTERN — MANDATORY (acknowledge → reflect → answer → directive):',
+      '  1. ACKNOWLEDGE the caller. Use their name if provided in CALL CONTEXT. Reflect on their',
+      '     situation using prior visits, staff mentioned, or repeat-issue signals.',
+      '     Examples: "I hear you, Mark — I see Tony was out last month for the motor."',
+      '               "That makes sense given you\'ve been dealing with this for a while."',
+      '  2. ANSWER the question directly from the KNOWLEDGE BASE. No hedging. No "I think."',
+      '     If the KB has the answer, state it with confidence.',
+      '  3. DIRECTIVE — end with ONE natural yes/no question moving the call forward.',
+      '     Examples: "Would you like me to get someone out today?"',
+      '               "Can I schedule a technician for you?"',
+      '',
+      'ABSOLUTE RULE — NEVER end a response with "let me check" or "one moment" as the final words.',
+      'If you need to check, do it in the SAME sentence that provides the answer or a real next step.',
+      '  BAD:  "Sounds good. Let me check on that for you." [caller hears silence → call fails]',
+      '  GOOD: "Since Tony was out less than 30 days ago, the return-visit diagnostic is waived',
+      '         under our recent-service policy. Want me to get someone out today to look at the',
+      '         water leak?"'
+    );
+  } else {
+    // DISCOVERY + CONSENT FUNNEL posture (default).
+    // For triggerFallback, consent follow-up, no-match discovery.
+    parts.push(
+      'Your PRIMARY PURPOSE is DISCOVERY — find out why the customer is calling and route them to the right help.',
+      'You do NOT book appointments. You do NOT collect personal information. You do NOT quote prices.',
+      'Once you understand the caller\'s intent, hand off to the appropriate department or booking system.',
+      '',
+      'CONSENT FUNNEL RULE (critical):',
+      'Every response you give MUST end with ONE natural yes/no question that moves the caller toward',
+      'scheduling or confirms their intent (e.g. "Would you like me to get a technician out there?" or',
+      '"Can I schedule someone to come take a look?"). This gives the caller a clear next step.',
+      'The question must feel warm and natural — never robotic or pushy.',
+      'Do NOT skip this closing question even when acknowledging an issue or answering a query.'
+    );
+  }
 
   // 7. Guardrails
   const guardrails = settings.guardrails || {};
   const rules = [];
   if (guardrails.noPiiCollection)  rules.push('NEVER collect personal identifying information (SSN, DOB, full address, credit cards).');
   if (guardrails.noScheduling)     rules.push('NEVER schedule, book, or confirm appointments. Inform the caller they will be connected to scheduling.');
-  if (guardrails.noPricing)        rules.push('NEVER quote prices, fees, or estimates. Say "I\'d be happy to connect you with someone who can discuss pricing."');
+  if (guardrails.noPricing) {
+    // answer-from-kb mode: you may STATE prices IF they come from the KB.
+    // discovery mode: never quote prices — always defer to a pricing specialist.
+    if (mode === 'answer-from-kb') {
+      rules.push('NEVER invent or estimate prices. You MAY state prices IF they appear in the KNOWLEDGE BASE below. If the KB has the price, give it confidently; if not, say you need to confirm and offer a follow-up.');
+    } else {
+      rules.push('NEVER quote prices, fees, or estimates. Say "I\'d be happy to connect you with someone who can discuss pricing."');
+    }
+  }
   if (guardrails.noMedicalAdvice)  rules.push('NEVER provide medical advice or diagnoses.');
   if (guardrails.noLegalAdvice)    rules.push('NEVER provide legal advice or interpretations.');
 

@@ -167,7 +167,7 @@ function deepMergeLLMAgent(target, source) {
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null, onSentence = null }) {
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null, onSentence = null, mode = 'discovery' }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -198,7 +198,9 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
     }
 
     // Build system prompt with follow-up context appended
-    const basePrompt = composeSystemPrompt(config, channel || 'call');
+    // mode='answer-from-kb' shifts posture when called from KC_LLM_FALLBACK —
+    // forces acknowledge→reflect→answer→directive pattern (no dead-air defer).
+    const basePrompt = composeSystemPrompt(config, channel || 'call', mode);
 
     const followUpParts = [
       '\n=== FOLLOW-UP CONTEXT ===',
@@ -210,7 +212,9 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       ''
     ];
 
-    // V131: Inject structured call context so LLM knows what's already established
+    // Inject structured call context so LLM knows what's already established.
+    // Enriched April 2026: priorVisits, visitCount, repeatIssue, rejectedTopics,
+    // recentQA — enables "I see Tony was here last month" acknowledgment pattern.
     if (callContext) {
       followUpParts.push('=== CALL CONTEXT (already established) ===');
       if (callContext.caller?.firstName && callContext.caller?.speakable) {
@@ -222,6 +226,36 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       }
       if (callContext.urgency?.level === 'high') {
         followUpParts.push(`Urgency: HIGH — ${callContext.urgency.reason || 'caller requested urgent service'}`);
+      }
+      // Prior visit history — surfaces the "Tony was here last month" acknowledgment signal
+      if (Array.isArray(callContext.priorVisits) && callContext.priorVisits.length > 0) {
+        const pv = callContext.priorVisits[0];
+        const when = (typeof pv.daysAgo === 'number')
+          ? (pv.daysAgo === 0 ? 'today' : (pv.daysAgo === 1 ? 'yesterday' : `${pv.daysAgo} days ago`))
+          : 'recently';
+        const staff = pv.staff ? ` (technician: ${pv.staff})` : '';
+        followUpParts.push(`Last visit: ${when} — ${pv.reason}${staff}`);
+        followUpParts.push('USE THIS: open with an acknowledgment that references this prior visit when relevant.');
+      }
+      if (typeof callContext.visitCount === 'number' && callContext.visitCount > 1) {
+        followUpParts.push(`Visit count: ${callContext.visitCount} (returning customer — treat warmly)`);
+      }
+      if (callContext.repeatIssue?.detected) {
+        followUpParts.push(`REPEAT ISSUE DETECTED: caller has called about "${callContext.repeatIssue.reason}" multiple times.`);
+        followUpParts.push('Acknowledge the frustration before proposing the solution.');
+      }
+      if (Array.isArray(callContext.rejectedTopics) && callContext.rejectedTopics.length > 0) {
+        followUpParts.push(`Do NOT re-offer these (already declined this call): ${callContext.rejectedTopics.join(', ')}`);
+      }
+      if (Array.isArray(callContext.recentQA) && callContext.recentQA.length > 0) {
+        followUpParts.push('Recent conversation turns (most recent last):');
+        for (const qa of callContext.recentQA) {
+          followUpParts.push(`  caller: "${qa.question}"  → you said: "${qa.answer}"`);
+        }
+        followUpParts.push('Do NOT repeat yourself — build on what you already said.');
+      }
+      if (callContext.behaviorBlock) {
+        followUpParts.push('', callContext.behaviorBlock);
       }
       followUpParts.push('=== END CALL CONTEXT ===');
       followUpParts.push('');
