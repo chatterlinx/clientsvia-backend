@@ -133,6 +133,108 @@ router.patch('/:companyId/llm-agent/config', authenticateJWT, async (req, res) =
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/llm-agent/preview-prompt — Render live system prompt
+//
+// Used by the Agent Studio "System Prompt" tab (C.5) to show EXACTLY what
+// Claude receives at runtime. Uses the company's real saved config.
+//
+// Body (all optional):
+//   mode:        'discovery' | 'answer-from-kb'  (default 'discovery')
+//   channel:     'call' | 'sms' | 'webchat'       (default 'call')
+//   sampleQuery: string  — if mode='answer-from-kb' this is the caller query
+//                         used to build a SAMPLE kcContext (top KC sections).
+//
+// Returns:
+//   { prompt, charCount, estimatedTokens, mode, channel, sampleKcSections }
+//
+// Token estimation: 4 chars ≈ 1 token (Anthropic rough avg). Not exact.
+// ════════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/llm-agent/preview-prompt', authenticateJWT, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { mode = 'discovery', channel = 'call', sampleQuery = '' } = req.body || {};
+
+    if (!['discovery', 'answer-from-kb'].includes(mode)) {
+      return res.status(400).json({ error: 'Invalid mode' });
+    }
+
+    const company = await v2Company.findById(companyId).lean();
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const saved = company.aiAgentSettings?.llmAgent || {};
+    const settings = deepMerge(DEFAULT_LLM_AGENT_SETTINGS, saved);
+
+    // In answer-from-kb mode we try to build a sample kcContext by ranking
+    // real KC sections against the sampleQuery. If no query supplied, we show
+    // the prompt WITHOUT kcContext so admin can see the shape.
+    let kcContext = null;
+    const sampleKcSections = [];
+    if (mode === 'answer-from-kb' && sampleQuery && sampleQuery.trim().length >= 3) {
+      try {
+        const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
+        const containers = await CompanyKnowledgeContainer.find({
+          companyId, isActive: { $ne: false },
+        }).lean();
+        // Minimal inline ranker — same signals as _scoreSectionsForGap
+        const q = sampleQuery.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+        const words = new Set(q.split(/\s+/).filter(w => w.length >= 3));
+        const ranked = [];
+        for (const c of containers) {
+          if (c.noAnchor) continue;
+          for (const s of (c.sections || [])) {
+            if (s.isActive === false) continue;
+            let score = 0;
+            // Label words
+            const lw = (s.label || '').toLowerCase().split(/\s+/).filter(x => x.length >= 3);
+            for (const w of lw) if (words.has(w)) score += 4;
+            // CallerPhrase best hit
+            let bestPhrase = 0;
+            for (const p of (s.callerPhrases || [])) {
+              const pw = (p.text || p || '').toLowerCase().split(/\s+/).filter(x => x.length >= 3);
+              const hits = pw.filter(x => words.has(x)).length;
+              if (hits > bestPhrase) bestPhrase = hits;
+            }
+            score += bestPhrase * 3;
+            // contentKeywords substring
+            for (const kw of (s.contentKeywords || [])) {
+              if (q.includes((kw || '').toLowerCase())) score += 2;
+            }
+            if (score > 0) {
+              ranked.push({ container: c, section: s, score });
+              sampleKcSections.push({
+                container: c.title, section: s.label, score,
+              });
+            }
+          }
+        }
+        ranked.sort((a, b) => b.score - a.score);
+        kcContext = ranked.slice(0, 5);
+        sampleKcSections.sort((a, b) => b.score - a.score);
+        sampleKcSections.length = Math.min(sampleKcSections.length, 5);
+      } catch (_e) {
+        // KC loading failed — render without kcContext, still useful
+      }
+    }
+
+    const prompt = composeSystemPrompt(settings, channel, mode, kcContext);
+    const charCount = prompt.length;
+    const estimatedTokens = Math.ceil(charCount / 4);
+
+    res.json({
+      prompt,
+      charCount,
+      estimatedTokens,
+      mode,
+      channel,
+      sampleKcSections,
+    });
+  } catch (error) {
+    logger.error(`[${MODULE_ID}] preview-prompt failed`, { companyId: req.params.companyId, error: error.message });
+    res.status(500).json({ error: 'Failed to render prompt preview' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // POST /:companyId/llm-agent/ping — Verify Anthropic API is live
 // Sends a minimal 1-token request so the round-trip is fast & cheap.
 // ════════════════════════════════════════════════════════════════════════════

@@ -1497,6 +1497,39 @@
     .behavior-save-status.saved   { background: var(--color-success); }
     .behavior-save-status.error   { background: var(--color-danger); }
 
+    /* Prompt Preview */
+    .pp-stat-value {
+      font-size: 20px; font-weight: 700; color: var(--color-primary);
+      padding: 10px 12px; background: #f0f9ff; border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    .pp-prompt-box {
+      grid-column: 1 / -1;
+      white-space: pre-wrap; word-wrap: break-word;
+      font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 12px; line-height: 1.6;
+      padding: 16px;
+      background: #0f172a; color: #e2e8f0;
+      border-radius: 10px;
+      max-height: 600px; overflow-y: auto;
+      margin: 0;
+    }
+    .pp-kc-section {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .pp-kc-section-score {
+      font-weight: 700; color: var(--color-primary);
+      padding: 2px 8px; background: #e0f2fe; border-radius: 999px;
+      font-size: 11px;
+    }
+    .pp-kc-section-label { color: var(--text-primary); font-weight: 600; }
+    .pp-kc-section-container { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+
     /* Modal */
     .bh-modal-overlay {
       position: fixed; inset: 0;
@@ -2401,14 +2434,87 @@
   </div>
 </div>
 
-<!-- ─── SYSTEM PROMPT PREVIEW — filled in C.5 ────────────────────────────── -->
+<!-- ─── SYSTEM PROMPT PREVIEW TAB ────────────────────────────────────────── -->
 <div id="tab-panel-prompt" class="tab-panel" role="tabpanel" aria-labelledby="tab-prompt">
-  <div class="tab-placeholder">
-    <span class="tab-placeholder-icon">📋</span>
-    <div class="tab-placeholder-title">System Prompt Preview</div>
-    <div class="tab-placeholder-sub">
-      Live rendering of the exact prompt Claude receives, using your real KC and behavior settings.
+  <div class="behavior-wrap">
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">📋</span>
+        <div>
+          <div class="behavior-card-title">Live System Prompt</div>
+          <div class="behavior-card-subtitle">The exact prompt Claude receives, rendered from your real settings + KC</div>
+        </div>
+        <div class="behavior-card-actions">
+          <button type="button" class="btn-secondary btn-sm" id="pp-copy">📋 Copy</button>
+          <button type="button" class="btn-primary btn-sm" id="pp-refresh">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="form-group">
+          <label class="form-label" for="pp-mode">Mode</label>
+          <select class="form-select" id="pp-mode">
+            <option value="discovery">Discovery (default — triggerFallback, consent follow-up)</option>
+            <option value="answer-from-kb">Answer-from-KB (KC fallback — final save)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pp-channel">Channel</label>
+          <select class="form-select" id="pp-channel">
+            <option value="call">Phone Call</option>
+            <option value="sms">SMS</option>
+            <option value="webchat">Web Chat</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label" for="pp-query">Sample Caller Query <span class="optional">(only used in Answer-from-KB mode — builds a sample kcContext)</span></label>
+          <textarea class="form-input" id="pp-query" rows="2" placeholder="e.g. do I have to pay for another service call?"></textarea>
+        </div>
+      </div>
     </div>
+
+    <div class="behavior-card" id="pp-kc-card" style="display:none;">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🧠</span>
+        <div>
+          <div class="behavior-card-title">KC Sections Injected</div>
+          <div class="behavior-card-subtitle">Top-ranked sections pulled into this prompt from your KC library</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div id="pp-kc-list" style="grid-column:1/-1;display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">📊</span>
+        <div>
+          <div class="behavior-card-title">Prompt Stats</div>
+          <div class="behavior-card-subtitle">Size of what Claude actually processes</div>
+        </div>
+      </div>
+      <div class="behavior-card-body" id="pp-stats-body">
+        <div class="form-group"><label class="form-label">Characters</label><div class="pp-stat-value" id="pp-stat-chars">—</div></div>
+        <div class="form-group"><label class="form-label">Est. Tokens (input)</label><div class="pp-stat-value" id="pp-stat-tokens">—</div></div>
+        <div class="form-group"><label class="form-label">Mode</label><div class="pp-stat-value" id="pp-stat-mode">—</div></div>
+        <div class="form-group"><label class="form-label">Channel</label><div class="pp-stat-value" id="pp-stat-channel">—</div></div>
+      </div>
+    </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">💬</span>
+        <div>
+          <div class="behavior-card-title">Raw Prompt</div>
+          <div class="behavior-card-subtitle">Everything under <code>system:</code> when Claude is called</div>
+        </div>
+      </div>
+      <div class="behavior-card-body" style="grid-template-columns:1fr;">
+        <pre id="pp-output" class="pp-prompt-box">Click Refresh to generate a live preview from your saved settings.</pre>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -6005,6 +6111,103 @@ window.addEventListener('message', e => {
 
   window.addEventListener('tab-activated', (e) => {
     if (e.detail?.tab === 'intake' || e.detail?.tab === 'model') bootstrap();
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTEM PROMPT PREVIEW TAB (C.5, April 17, 2026)
+   Calls POST /api/agent-console/:companyId/llm-agent/preview-prompt which
+   renders composeSystemPrompt with real saved config. Optional sample query
+   in answer-from-kb mode builds a sample kcContext from live KC sections.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function initPromptPreviewTab() {
+  let wired = false;
+
+  async function renderPreview() {
+    const mode    = document.getElementById('pp-mode').value;
+    const channel = document.getElementById('pp-channel').value;
+    const sampleQuery = (document.getElementById('pp-query').value || '').trim();
+    const out = document.getElementById('pp-output');
+    out.textContent = 'Loading…';
+
+    try {
+      const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/preview-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': AuthLib?.getToken?.() || '' },
+        body: JSON.stringify({ mode, channel, sampleQuery }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        out.textContent = `Error ${resp.status}: ${txt || 'preview failed'}`;
+        return;
+      }
+      const data = await resp.json();
+
+      out.textContent = data.prompt || '(empty)';
+
+      document.getElementById('pp-stat-chars').textContent   = String(data.charCount).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      document.getElementById('pp-stat-tokens').textContent  = String(data.estimatedTokens).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      document.getElementById('pp-stat-mode').textContent    = data.mode;
+      document.getElementById('pp-stat-channel').textContent = data.channel;
+
+      // KC sections injected (answer-from-kb mode)
+      const kcCard = document.getElementById('pp-kc-card');
+      const kcList = document.getElementById('pp-kc-list');
+      const sections = data.sampleKcSections || [];
+      if (mode === 'answer-from-kb' && sections.length > 0) {
+        kcCard.style.display = '';
+        kcList.innerHTML = '';
+        sections.forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'pp-kc-section';
+          row.innerHTML = `
+            <span class="pp-kc-section-score">${s.score}</span>
+            <span class="pp-kc-section-label"></span>
+            <span class="pp-kc-section-container"></span>
+          `;
+          row.querySelector('.pp-kc-section-label').textContent     = s.section;
+          row.querySelector('.pp-kc-section-container').textContent = s.container;
+          kcList.appendChild(row);
+        });
+      } else {
+        kcCard.style.display = 'none';
+      }
+    } catch (err) {
+      out.textContent = 'Network error: ' + err.message;
+    }
+  }
+
+  function wire() {
+    if (wired) return;
+    document.getElementById('pp-refresh').addEventListener('click', renderPreview);
+    document.getElementById('pp-copy').addEventListener('click', async () => {
+      const btn = document.getElementById('pp-copy');
+      const text = document.getElementById('pp-output').textContent || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '✓ Copied';
+      } catch {
+        btn.textContent = '✗ Copy failed';
+      }
+      setTimeout(() => { btn.textContent = '📋 Copy'; }, 1800);
+    });
+    ['pp-mode', 'pp-channel'].forEach(id => {
+      document.getElementById(id).addEventListener('change', renderPreview);
+    });
+    // Query: re-render on change (but debounced)
+    let tm = null;
+    document.getElementById('pp-query').addEventListener('input', () => {
+      clearTimeout(tm);
+      tm = setTimeout(renderPreview, 500);
+    });
+    wired = true;
+  }
+
+  window.addEventListener('tab-activated', (e) => {
+    if (e.detail?.tab !== 'prompt') return;
+    if (!S.companyId) return;
+    wire();
+    renderPreview();
   });
 })();
 </script>
