@@ -1717,7 +1717,16 @@ class KCDiscoveryRunner {
       const _rescueContext = { ...callContext, anchorContainerId: null };
       const _rescueMatch   = KCS.findContainer(scorableContainers, userInput, _rescueContext);
 
+      // noAnchor guard (audit fix): meta-containers (Recovery, Price Objections,
+      // Appointment Management, etc.) must NEVER win rescue. They are
+      // conversational mechanics, not knowledge answers. Without this guard a
+      // caller's real topic question could be hijacked by Recovery KC, which
+      // would then be routed through _handleKCMatch — Recovery's content would
+      // answer the topic question incorrectly and Recovery container state
+      // (even though noAnchor prevents callReason pollution) would briefly
+      // appear as the active topic for this turn.
       if (_rescueMatch?.container?._id
+          && !_rescueMatch.container.noAnchor
           && _rescueMatch.bestSection
           && String(_rescueMatch.container._id) !== String(match.container._id)) {
 
