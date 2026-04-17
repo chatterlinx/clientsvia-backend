@@ -1,6 +1,6 @@
 # UAP Engine Report — Complete A-to-Z Pipeline Reference
 
-**Last verified against code: April 15, 2026**
+**Last verified against code: April 17, 2026**
 
 This document describes the complete caller utterance routing pipeline from speech input to agent response. Paste this into any future conversation for full system context.
 
@@ -17,6 +17,12 @@ This document describes the complete caller utterance routing pipeline from spee
 7. [Answer Delivery — Fixed vs Groq](#7-answer-delivery--fixed-vs-groq)
 8. [Constants & Thresholds Reference](#8-constants--thresholds-reference)
 9. [Key Files Reference](#9-key-files-reference)
+10. [Turn 1 Preamble Stripping](#10-turn-1-preamble-stripping-april-2026)
+11. [Booking Name-Answer Escape Hatch](#11-booking-name-answer-escape-hatch-april-2026)
+12. [KC Gaps Turn 1 Visibility Fix](#12-kc-gaps-turn-1-visibility-fix-april-2026)
+13. [Booking Intent Guards — Narrative Filter + noAnchor Semantics](#13-booking-intent-guards--narrative-filter--noanchor-semantics-april-2026)
+14. [Timing & Silence Layer — All UI, No Hardcoded](#14-timing--silence-layer--all-ui-no-hardcoded-april-2026)
+15. [LAP — ListenerActParser (Pre-Pipeline Gate)](#15-lap--listeneractparser-pre-pipeline-gate-april-2026)
 
 ---
 
@@ -46,6 +52,9 @@ Caller speaks → STT → userInput (string)
                       └─ Logic 2: Core Confirmation (~50ms embed)
                           │
                     GATE 2.8  Semantic Match (~50ms)
+                          │
+                    GATE 2.9  Negative Keyword Checkpoint (<1ms)
+                      └─ suppress match if negKw present → fall through
                           │
                     GATE 3    Keyword Scoring (<1ms)
                           │
@@ -346,11 +355,16 @@ Initialized as `null`. First gate to set it wins (subsequent gates are skipped v
 
 ### GATE 1 — Booking Intent (~0ms synchronous)
 
-**Trigger:** `!_inputHasQuestion && KCBookingIntentDetector.isBookingIntent(userInput)`
+**Trigger:** `!_inputHasQuestion && !_inputIsNarrative && KCBookingIntentDetector.isBookingIntent(userInput)`
 
 **Question detection:** Input contains `?` OR matches question word regex (what/how/why/when/which/where/does/do you/can you/tell me/explain/about/offer/etc.).
 
 **Hedged-yes override:** If question words are present but NO literal `?` AND utterance starts with a leading affirmative (yes/yeah/sure/okay + fillers), `_inputHasQuestion` resets to `false` → booking fires.
+
+**Narrative filter — 3 guards (any one triggers):** Prevents callers who are narrating a story from being misread as booking intent. Full details in [Section 13](#13-booking-intent-guards--narrative-filter--noanchor-semantics-april-2026).
+- **Guard 1 — NARRATIVE_INDICATORS regex** (past-tense/story words): `i came`, `i was`, `it started`, `you guys`, `last time`, `came home`, etc. (~45 patterns).
+- **Guard 2 — Trailing conjunction**: >6 words ending in `and`/`but`/`so`/etc. — caller is mid-story.
+- **Guard 3 — Length guard**: >20 words with only filler affirmatives (yeah/okay/sure) — long narrative with incidental agreement.
 
 **Compound intent:** If both `_inputHasQuestion` AND `isBookingIntent()` are true, `_hasCompoundBookingIntent = true` — KC answers the question first, then sets booking lane after.
 
@@ -458,8 +472,34 @@ Two-pass comparison per section:
 **Threshold:** `MIN_SIMILARITY = 0.50` (env: `KC_SEMANTIC_THRESHOLD`). Best scoring section above threshold wins.
 
 **On hit:** Sets `match` with `matchSource: 'SEMANTIC'`, `score: Math.round(similarity * 100)`.
-**On miss:** Falls through to GATE 3.
+**On miss:** Falls through to GATE 2.9.
 **Note:** SemanticMatchService does NOT apply anchor multiplier. That's GATE 3 only.
+
+---
+
+### GATE 2.9 — Universal Negative Keyword Checkpoint (<1ms)
+
+**File:** `services/engine/kc/KCDiscoveryRunner.js` (~line 1507)
+**Guard:** `if (match)` — only fires if GATE 2.4 / 2.5 / 2.8 set a match. GATE 3's built-in negativeKeyword check is separate and sufficient for keyword-scored matches.
+
+**Why this gate exists:** negativeKeywords were historically only enforced inside `findContainer()` (GATE 3). If GATE 2.4 / 2.5 / 2.8 matched before GATE 3 even ran, the matched section's negativeKeywords were never checked — a Recovery KC match on "AC is not cooling" could stand even though "AC" is a Recovery negativeKeyword meant to route to HVAC.
+
+**Logic:**
+
+1. **Section-level match** (`match.targetSection` present):
+   - Check `match.targetSection.negativeKeywords` for any hit in the utterance (whole-word boundary regex).
+   - Any hit → suppress match, fall through to GATE 3 to re-score.
+
+2. **Container-level match** (`match.targetSection === null` — Groq reads all sections):
+   - Scan ALL active sections in the container.
+   - If ANY section's negativeKeywords match the utterance → suppress match → fall through to GATE 3.
+   - Rationale: a container-level match sends all sections to Groq, so ANY negative keyword hit means the utterance contains content we explicitly don't want routed here.
+
+**On suppression:** `match = null`. Logs `KC_ENGINE 🚫 GATE 2.9: NEGATIVE_KEYWORD_BLOCK` with matched keywords, matchSource, and container title. GATE 3 re-runs keyword scoring on the remaining containers.
+
+**On miss (no negativeKeyword hit):** Match stands. Pipeline proceeds to `_handleKCMatch()`.
+
+**Latency:** <1ms (whole-word regex scan over small keyword lists).
 
 ---
 
@@ -632,6 +672,11 @@ Checked first:
 | Groq model | llama-3.3-70b-versatile | KnowledgeContainerService | LLM model |
 | Embedding model | text-embedding-3-small | SemanticMatchService | OpenAI embedding model |
 | Embedding dimensions | 512 | SemanticMatchService | Vector size |
+| `initialTimeout` default | 7 sec (schema min 3 / max 15) | v2Company schema `speechDetection` | Gather initial wait for any speech — admin-tunable via Agent 2.0 UI |
+| `maxSilentRelistens` default | 2 (schema min 0 / max 5) | v2Company schema `agent2.discovery` | Silent re-listens on empty input before prompting |
+| Narrative length guard | >20 words | KCDiscoveryRunner | Blocks booking intent on long narratives with only filler affirmatives |
+| Narrative trailing conjunction | >6 words | KCDiscoveryRunner | Blocks booking intent when utterance ends in and/but/so mid-story |
+| LAP trailing content threshold | >4 substantive words | LAPService | Above this, LAP does NOT intercept — real question/content follows hold phrase |
 
 ---
 
@@ -683,6 +728,7 @@ GATE 2.5   UAP Layer 1           sync, <1ms        → UAP_LAYER1
   Logic 1  Word Gate              sync, <1ms
   Logic 2  Core Confirmation      async, ~50ms
 GATE 2.8   Semantic Match         async, ~50ms      → SEMANTIC
+GATE 2.9   Negative Keyword Check sync, <1ms        → NEGATIVE_KEYWORD_BLOCK (suppress)
 GATE 3     Keyword Scoring        sync, <1ms        → (keyword match)
 [Diag]     Section Gap            sync, ~0ms        → KC_SECTION_GAP (log only)
 GATE 3.5   Pre-Qualify            Redis, ~2ms       → KC_PREQUAL_PENDING
@@ -752,3 +798,232 @@ if (advanced && step === COLLECT_NAME):
 - Turn 1 KC_LLM_FALLBACK / KC_GRACEFUL_ACK: hidden by default, shown with `?turn1=1`
 
 **File:** `routes/admin/kcGaps.js`
+
+---
+
+## 13. Booking Intent Guards — Narrative Filter + noAnchor Semantics (April 2026)
+
+**File:** `services/engine/kc/KCDiscoveryRunner.js` (~line 820 for narrative filter, ~line 2250 for noAnchor callReason guard)
+**File:** `services/engine/agent2/KnowledgeContainerService.js` (~lines 992 + 1047 for noAnchor bookingAction guard)
+**Commit:** `5cf948f8e` (April 16, 2026)
+
+### 13.1 — Narrative Filter (3 Guards) at GATE 1
+
+**Problem:** Callers narrating their situation were being misread as booking intent. Example: "yeah you guys were here last time and Tony fixed the motor but now water is leaking" — the trailing "and" + length + affirmative "yeah" caused `isBookingIntent()` to fire, hijacking a real HVAC question into the booking flow.
+
+**Solution:** Before the booking intent check, compute `_inputIsNarrative`. If true → skip booking intent, fall through to KC routing.
+
+#### Guard 1 — NARRATIVE_INDICATORS regex (past-tense / story words)
+
+Compiled once as a large alternation. Captures ~45 patterns grouped by subject:
+- **First-person past:** `i came`, `i was `, `i had `, `i have `, `i noticed`, `i went`, `i tried`, `i called`, `i got `, `i walked`, `i heard`, `i saw`, `i checked`, `i looked`, `i turned`, `i woke`
+- **Third-person past:** `it was `, `it started`, `it happened`, `it broke`, `it stopped`, `it keeps`
+- **Quotatives:** `you guys `, `you said`, `you told`, `you were`, `they said`, `they told`, `he said`, `she said`
+- **Time references:** `last time`, `yesterday`, `this morning`, `the other day`, `couple days`, `few days`, `a while`
+- **Arrival verbs:** `when i got`, `when i came`, `when we`, `came home`, `got home`, `walked in`
+
+**Hit:** Any substring match sets `_inputIsNarrative = true`.
+
+#### Guard 2 — Trailing Conjunction
+
+**Condition:** utterance has >6 words AND ends in one of: `and`, `but`, `so`, `because`, `then`, `or`, `while`, `until`, `when`, `if`, `though`.
+
+**Rationale:** Mid-sentence cutoff during a story. The trailing conjunction is the tell.
+
+#### Guard 3 — Length Guard with Filler Affirmatives
+
+**Condition:** utterance has >20 words AND the only booking-intent signal is a leading filler affirmative (`yeah`, `yes`, `okay`, `sure`, `alright`, `mhm`).
+
+**Rationale:** "yeah so I came home and my AC is not working and you guys changed the motor last month…" has "yeah" that would normally trigger hedged-yes booking routing, but 21+ words of narrative content overrides.
+
+### 13.2 — noAnchor Container Semantics
+
+Meta-conversation containers (Recovery, Price Objections, Scheduling & Availability, Warranty & Guarantee, Appointment Management) are marked `noAnchor = true` at the container level. This flag triggers three defensive behaviors:
+
+| Behavior | Location | Purpose |
+|---|---|---|
+| **No booking CTA** | KnowledgeContainerService.js L992 (Fixed), L1047 (Groq) | `_bookingAction = container.noAnchor ? 'none' : ...` — prevents Recovery KC answer from appending "would you like to schedule?" which a caller then agrees to, causing false booking intent. |
+| **No callReason write** | KCDiscoveryRunner.js L2253, L2277, L2308 (3 `_writeDiscoveryNotes` sites) | `...(!container.noAnchor ? { callReason: containerTitle } : {})` — a Recovery match mid-call does NOT overwrite the real call reason (e.g., "No Cooling"). |
+| **No anchor container set** | KCDiscoveryRunner.js L2256, L2280, L2311 | `...(!container.noAnchor ? { anchorContainerId: containerId } : {})` — meta-containers never become the 3× scoring anchor. |
+
+**The cascade these guards break:**
+1. Caller asks an off-topic question → Recovery KC matches.
+2. Old behavior: Recovery answer appended "would you like to schedule an appointment?"
+3. Caller says "okay" → GATE 1 fired KC_BOOKING_INTENT.
+4. Old behavior: callReason was overwritten to "Conversational Recovery", poisoning downstream routing and call reports.
+
+All three guards together make noAnchor containers stateless, non-polluting, and non-triggering for booking intent.
+
+---
+
+## 14. Timing & Silence Layer — All UI, No Hardcoded (April 2026)
+
+**File:** `routes/v2twilio.js`
+**Schema:** `models/v2Company.js` → `aiAgentSettings.agent2.speechDetection` + `aiAgentSettings.agent2.discovery`
+**UI:** `public/agent-console/agent2.html` → Speech Detection card + Personality System → Conversation Patterns
+**Commits:** `7617e43d3` + `36475623d` + `79cc6eb05` + `0675caf9e`
+
+### 14.1 — speechDetection Settings (Read Pattern)
+
+**Helper:** `_getSpeechDetection(company)` — always prefers `agent2.speechDetection`, falls back to legacy `voiceSettings.speechDetection`.
+
+```javascript
+company.aiAgentSettings?.agent2?.speechDetection
+  || company.aiAgentSettings?.voiceSettings?.speechDetection
+  || {};
+```
+
+**Fields (all UI-configurable):**
+
+| Field | Default | Range | Purpose |
+|---|---|---|---|
+| `initialTimeout` | 7 sec | 3-15 | Gather initial wait for ANY speech before firing `actionOnEmptyResult` |
+| `speechTimeout` | `'auto'` or number | — | End-of-speech silence trigger |
+| `bargeIn` | false | — | Allow caller to cut off agent's speech |
+| `enhancedRecognition` | true | — | Twilio enhanced ASR |
+| `speechModel` | `phone_call` | — | Twilio speech model hint |
+
+### 14.2 — gatherTimeout — Admin-Configurable (not hardcoded)
+
+**Read order:**
+1. `speechDet.initialTimeout` (admin UI)
+2. Fallback to 7 if missing
+
+```javascript
+const adminInitialTimeout = speechDet.initialTimeout ?? 7;
+const gatherTimeout = isPatienceMode ? patienceTimeout : adminInitialTimeout;
+```
+
+**⚠️ Ordering rule (TDZ lesson from commit `0675caf9e`):** `speechDet` is declared with `const`. It MUST be declared BEFORE any code that reads `speechDet.initialTimeout` (patience mode block, gatherTimeout computation). Violating this causes `ReferenceError: Cannot access 'speechDet' before initialization` → COMPUTE_CRASH on every call.
+
+### 14.3 — Patience Mode
+
+**Trigger:** Caller said "hold on", "one minute", "let me grab" (detected by LAP hold action). A Redis key marks the call as in patience mode.
+
+**Effect:** `patienceTimeout` (UI-configurable on Agent 2.0 panel, default longer than `initialTimeout`) replaces the normal `gatherTimeout`. Typical value: 20-30 sec vs normal 7 sec.
+
+**Reset:** Any speech detection or timer expiration clears patience mode.
+
+### 14.4 — Ghost Turn Guard
+
+**File:** `routes/v2twilio.js` (~line 5908)
+
+**Problem:** If Gather's initial timeout fires with NO speech AND a pending follow-up question is active, running the full pipeline on empty input wastes compute and often triggers KC_LLM_FALLBACK incorrectly.
+
+**Fix:** Detect this state and silently re-open the Gather listener with the same pending question, preserving session state.
+
+```javascript
+const ghostSpeechDet = _getSpeechDetection(company);
+// ... re-open Gather with ghostSpeechDet.initialTimeout / bargeIn / enhanced / speechModel
+```
+
+**Bug fix record (2026-04-16):** `ghostSpeechDet` was never declared — every ghost turn silently crashed with `ReferenceError`, caught by outer try/catch and routed to COMPUTE_CRASH. Now declared explicitly.
+
+### 14.5 — Silent Re-Listen Guard (Empty Input, No Pending Question)
+
+**File:** `routes/v2twilio.js` (~line 6038)
+
+**Problem:** When Gather timeout fires with empty speech AND no pending question, the prior logic ran the full pipeline on `""` which either crashed or generated KC_GRACEFUL_ACK. Neither is what a human expects — humans expect the agent to keep listening.
+
+**Fix:** Track `consecutiveEmptyTurns` on call state. Up to `maxSilentRelistens` (UI-configurable, default 2, range 0-5), silently re-open the listener without speaking. After the limit, fall through to the pipeline which can prompt.
+
+```javascript
+const consecutiveEmpties = (callState?.agent2?.discovery?.consecutiveEmptyTurns || 0) + 1;
+const maxSilentRelistens = company?.aiAgentSettings?.agent2?.discovery?.maxSilentRelistens ?? 2;
+
+if (consecutiveEmpties <= maxSilentRelistens) {
+  // silently re-listen, return 'silent_relisten' voiceProviderUsed
+}
+// Reset counter on any real speech
+```
+
+**Schema:** `v2Company.js` line 4589 — `maxSilentRelistens: { type: Number, default: 2, min: 0, max: 5 }`.
+
+### 14.6 — responseDelay + thinkingTime (Previously Dead Code, Now Wired)
+
+**Source:** `company.aiAgentSettings.agent2.personalitySystem.conversationPatterns`
+- `responseDelay`: `'immediate' | 'brief' | 'thoughtful'`
+- `thinkingTime`: numeric seconds, clamped 0-3
+
+**Effect:** Before the agent's response, TwiML inserts `<Pause length="thinkingTime"/>` when `responseDelay !== 'immediate'` AND `thinkingTime > 0`. Gives the caller a human-like breath between question and answer.
+
+**Previously:** Fields existed in the schema and UI but zero references in v2twilio.js → UI changes did nothing. Now fully wired.
+
+### 14.7 — Crash Recovery Messages (UI-Configured, Not Hardcoded)
+
+**Helper:** `getRecoveryMessage(company, key)` where `key ∈ { 'generalError', 'timeoutError', 'routingError', ... }`.
+
+**Crash paths now wired (commit `79cc6eb05`):**
+1. COMPUTE_CRASH (~line 7585): catastrophic pipeline failure → reads `generalError`
+2. Bridge crash (~line 4652): KCDiscoveryRunner wrapper failure → reads `generalError`
+3. ROUTE_CRASH (~line 8107): Express route exception → reads `generalError`
+
+**Pattern:**
+```javascript
+const _rcvText = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+  || 'I apologize for the interruption. Could you repeat that?';
+```
+
+**Rule (multi-tenant principle):** No hardcoded business strings. Every user-facing message the caller hears on a failure path is UI-configurable. The hardcoded fallback exists ONLY as a last-resort safety net when the company object or recovery config is unavailable.
+
+### 14.8 — Timing Fields Added to Webhook Reports
+
+Webhook timing breakdown now logs `stateLoadMs`, `audioBlockMs`, `twimlBuildMs` alongside `companyLoadMs`, `coreRuntimeMs`, `eventFlushMs`, `totalMs`. Fills the previously-mystery gap between core runtime and total webhook latency. Visible in WEBHOOK_TIMING trace and call reports.
+
+---
+
+## 15. LAP — ListenerActParser (Pre-Pipeline Gate) (April 2026)
+
+**File:** `services/engine/lap/LAPService.js`
+**Pipeline position:** Runs BEFORE KCDiscoveryRunner, in the `/v2-agent-respond` handler in v2twilio.js.
+**Commit:** `f03f50148` (trailing content guard, April 16, 2026)
+
+### Purpose
+
+LAP is an attention gate. It catches conversational mechanics (hold requests, repeat requests) before they pollute KC routing. Zero LLM. Pure keyword match with a safety guard.
+
+### Entry Config
+
+On the company document:
+- `systemKeywords[]` — platform-wide defaults (e.g., "hold on", "one moment", "repeat that")
+- `customKeywords[]` — company-specific overrides
+
+Each entry has `{ phrase, action }` where `action` is one of:
+
+| Action | Behavior |
+|---|---|
+| `respond` | Return a canned acknowledgment (e.g., "Sure, take your time") |
+| `hold` | Set patience mode flag, extend silence timeout |
+| `repeat_last` | Read `CallSummary.liveProgress.lastResponse` and play it back |
+
+### match() Logic
+
+Iterates entries in order. For each:
+1. Normalize caller input and entry phrase.
+2. Check phrase substring match.
+3. **Trailing content guard** (applies to `respond` and `hold`, NOT `repeat_last`):
+   - Extract trailing content after the matched phrase.
+   - Strip fillers: `um`, `uh`, `like`, `you know`, `well`, `so`, `and`, `but`, `oh`, `hmm`, `erm`, `ah`.
+   - Check for question words (`what`, `how`, `why`, `when`, `where`, `which`, `who`, `does`, `do you`, `can you`, `can i`, `is it`, `is there`, `is that`, `how much`, `how long`, `tell me`, `explain`) OR a literal `?`.
+   - Check for >4 substantive trailing words (after filler strip).
+   - **Either condition → SKIP this entry** (fall through to next LAP entry or to KC pipeline).
+
+### Why repeat_last is Exempt
+
+`repeat_last` is often phrased as "can you repeat that" with no legitimate trailing content worth preserving. Adding a guard would over-trigger and prevent repeat requests from firing.
+
+### Why the Trailing Guard Exists
+
+**Before the guard:** Caller says "wait a minute, how much is a service call?" → LAP matched "wait a minute" → returned hold action → the real pricing question was swallowed, never reached KC.
+
+**After the guard:** Trailing content "how much is a service call" has question word `how much` → LAP skips this entry → KC handles the pricing question. The hold gesture is ignored (which is correct — the caller wasn't really asking the agent to hold, they were using "wait a minute" as a verbal tic).
+
+### Output
+
+Returns `{ matched: true, action, response?, entry }` or `{ matched: false }`.
+- `action='respond'` → route handler speaks `response`, closes turn.
+- `action='hold'` → route handler sets patience mode, re-opens listener with longer timeout.
+- `action='repeat_last'` → route handler reads `liveProgress.lastResponse` and plays it.
+- `matched=false` → pipeline continues to KCDiscoveryRunner.
+
+---
