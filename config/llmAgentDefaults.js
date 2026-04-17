@@ -303,17 +303,21 @@ const DEFAULT_BEHAVIOR_RULES = [
  * Compose the full system prompt from settings.
  * Used by test conversation endpoint AND runtime agent.
  *
- * @param {Object} settings - Merged LLM agent settings
- * @param {string} channel  - 'call' | 'sms' | 'webchat'
- * @param {string} mode     - Posture mode (April 2026):
+ * @param {Object}   settings  - Merged LLM agent settings
+ * @param {string}   channel   - 'call' | 'sms' | 'webchat'
+ * @param {string}   mode      - Posture mode (April 2026):
  *   - 'discovery'      (default): discovery + route/handoff. Forbids pricing/scheduling.
  *                      Used for triggerFallback, consent follow-up, no-match discovery.
  *   - 'answer-from-kb': acknowledge → reflect → answer-from-KB → directive.
  *                      Used when KC routing missed and LLM is the final save attempt.
  *                      Allows pricing IF sourced from the Knowledge Base.
+ * @param {Array}    kcContext - Cross-container top-ranked KC sections (April 2026):
+ *                      [{ container, section, score }] — injected into KB block.
+ *                      When provided, REPLACES legacy settings.knowledgeCards injection.
+ *                      KC is the single source of truth for company knowledge.
  * @returns {string}
  */
-function composeSystemPrompt(settings, channel = 'call', mode = 'discovery') {
+function composeSystemPrompt(settings, channel = 'call', mode = 'discovery', kcContext = null) {
   // If admin provided a full override, use it as-is
   if (settings.systemPrompt && settings.systemPrompt.trim()) {
     return settings.systemPrompt.trim();
@@ -429,15 +433,42 @@ function composeSystemPrompt(settings, channel = 'call', mode = 'discovery') {
     parts.push(`Default escalation phrase: "${handoff.escalationMessage}"`);
   }
 
-  // 9. Knowledge cards
-  const cards = (settings.knowledgeCards || []).filter(c => c.enabled !== false);
-  if (cards.length > 0) {
-    parts.push('\n=== KNOWLEDGE BASE ===');
-    for (const card of cards) {
-      parts.push(`\n--- ${card.title || 'Untitled'} ---`);
-      parts.push(card.content || '');
+  // 9. KNOWLEDGE BASE — unified single source of truth (April 2026)
+  //
+  // Priority order:
+  //   1. kcContext (KC containers, live-ranked per query) — PREFERRED
+  //   2. settings.knowledgeCards (legacy llmagent.html cards) — FALLBACK during
+  //      Phase 2 transition; will be removed once UI consolidation completes.
+  //
+  // KC content prefers `groqContent` (deep, up to 4000 chars) over `content`
+  // (short fixed response, 35-42 words). If only `content` exists, use it.
+  if (Array.isArray(kcContext) && kcContext.length > 0) {
+    parts.push('\n=== KNOWLEDGE BASE (top matches for this caller\'s question) ===');
+    for (const entry of kcContext) {
+      if (!entry?.section) continue;
+      const containerTitle = entry.container?.title || 'Knowledge';
+      const sectionLabel   = entry.section.label || 'Section';
+      // Prefer groqContent (deep) → fallback to content (fixed verbatim)
+      const body = (entry.section.groqContent && entry.section.groqContent.trim())
+        || (entry.section.content && entry.section.content.trim())
+        || '';
+      if (!body) continue;
+      parts.push(`\n--- ${containerTitle} / ${sectionLabel} ---`);
+      parts.push(body);
     }
     parts.push('\n=== END KNOWLEDGE BASE ===');
+    parts.push('Use the KNOWLEDGE BASE above to answer. If the answer is in there, give it confidently.');
+  } else {
+    // Legacy fallback — only injected when kcContext is absent (Phase 2 will remove).
+    const cards = (settings.knowledgeCards || []).filter(c => c.enabled !== false);
+    if (cards.length > 0) {
+      parts.push('\n=== KNOWLEDGE BASE ===');
+      for (const card of cards) {
+        parts.push(`\n--- ${card.title || 'Untitled'} ---`);
+        parts.push(card.content || '');
+      }
+      parts.push('\n=== END KNOWLEDGE BASE ===');
+    }
   }
 
   // 10. Behavior rules

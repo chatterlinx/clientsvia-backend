@@ -167,7 +167,7 @@ function deepMergeLLMAgent(target, source) {
  * @param {Function} params.emit        - Event emitter
  * @returns {Promise<{response: string, tokensUsed: Object, latencyMs: number}|null>}
  */
-async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null, onSentence = null, mode = 'discovery' }) {
+async function callLLMAgentForFollowUp({ company, input, followUpQuestion, triggerSource, bucket, channel, emit, callSid, turn, bridgeToken, redis, callerName = null, selfScheduling = false, callContext = null, onSentence = null, mode = 'discovery', kcContext = null }) {
   try {
     // Load company LLM Agent config, merge with defaults
     const saved = company?.aiAgentSettings?.llmAgent || {};
@@ -197,10 +197,12 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       };
     }
 
-    // Build system prompt with follow-up context appended
-    // mode='answer-from-kb' shifts posture when called from KC_LLM_FALLBACK —
-    // forces acknowledge→reflect→answer→directive pattern (no dead-air defer).
-    const basePrompt = composeSystemPrompt(config, channel || 'call', mode);
+    // Build system prompt with follow-up context appended.
+    // - mode='answer-from-kb' shifts posture when called from KC_LLM_FALLBACK
+    //   (acknowledge → reflect → answer → directive; no dead-air defer).
+    // - kcContext injects top-ranked KC sections (single source of truth);
+    //   when provided it replaces legacy settings.knowledgeCards.
+    const basePrompt = composeSystemPrompt(config, channel || 'call', mode, kcContext);
 
     const followUpParts = [
       '\n=== FOLLOW-UP CONTEXT ===',

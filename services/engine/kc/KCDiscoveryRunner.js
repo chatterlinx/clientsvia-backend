@@ -362,6 +362,55 @@ function _scoreSectionsForGap(sections, userInput, cueFrame) {
   return scored.slice(0, GAP_MAX_SECTIONS);
 }
 
+// ── LLM Fallback section ranker ──────────────────────────────────────────────
+const KC_LLM_MAX_SECTIONS = 5;   // max sections injected into LLM system prompt
+
+/**
+ * _rankTopKCSections — Rank sections across ALL containers by relevance.
+ *
+ * Used when KC routing missed (no container won) and we're falling to LLM.
+ * Instead of leaving Claude blind to company knowledge, pick the top N most
+ * relevant sections ACROSS ALL containers and inject them into the LLM prompt
+ * so it can answer with authored content instead of generic platitudes.
+ *
+ * Scoring reuses _scoreSectionsForGap (same signals: label, phrase, keyword,
+ * cue-pattern) then flattens across containers and takes the global top N.
+ *
+ * Excludes noAnchor containers (Recovery, Price Objections, etc.) because
+ * their content is conversational mechanics, not knowledge answers.
+ *
+ * @param {Array}  containers  — scorableContainers (minus rejected)
+ * @param {string} userInput   — raw caller utterance
+ * @param {Object} cueFrame    — CueExtractor output (may be null)
+ * @param {number} maxSections — cap for prompt size (default 5)
+ * @returns {Array<{container, section, score}>}
+ */
+function _rankTopKCSections(containers, userInput, cueFrame, maxSections = KC_LLM_MAX_SECTIONS) {
+  if (!Array.isArray(containers) || containers.length === 0 || !userInput) return [];
+
+  const allScored = [];
+
+  for (const container of containers) {
+    // Skip noAnchor meta-containers — conversational mechanics, not knowledge.
+    if (container.noAnchor) continue;
+
+    const sections = container.sections || [];
+    if (sections.length === 0) continue;
+
+    const scoredInContainer = _scoreSectionsForGap(sections, userInput, cueFrame);
+    for (const entry of scoredInContainer) {
+      allScored.push({
+        container,
+        section: entry.section,
+        score:   entry._gapScore,
+      });
+    }
+  }
+
+  allScored.sort((a, b) => b.score - a.score);
+  return allScored.slice(0, maxSections);
+}
+
 /**
  * _buildContextBrief — Build the warm-transfer agent whisper brief.
  *
@@ -1643,6 +1692,81 @@ class KCDiscoveryRunner {
     // Convenience: extract priorVisit once so all handlers below can use it
     const priorVisit = notes?.priorVisit === true;
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // SECTION GAP — CROSS-CONTAINER RESCUE (April 2026)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Before accepting the Section GAP (matched container has no specific
+    // section), re-score ALL containers WITHOUT the anchor multiplier. If
+    // another container's raw score wins AND has a real section match, route
+    // there instead of falling into the gap pre-filter.
+    //
+    // Why this exists: the 3× anchor boost is excellent for staying on-topic
+    // across follow-up turns ("how much is it?" stays in No Cooling). But when
+    // the caller explicitly shifts topic ("do I have to pay for another
+    // service call?"), the anchor can pin the conversation to the WRONG
+    // container. The question belongs in Diagnostic Fee — but No Cooling's 3×
+    // boost prevents Diagnostic Fee's natural score from winning.
+    //
+    // Rescue fires BEFORE gap pre-filter so we answer with a real section from
+    // a different container instead of dumping ranked sections from the wrong
+    // container into Groq.
+    //
+    // After swap: targetSection is populated → section-gap block below does
+    // not fire → _handleKCMatch proceeds with the correct container + section.
+    if (match && match.container && !match.targetSection && scorableContainers.length > 1) {
+      const _rescueContext = { ...callContext, anchorContainerId: null };
+      const _rescueMatch   = KCS.findContainer(scorableContainers, userInput, _rescueContext);
+
+      if (_rescueMatch?.container?._id
+          && _rescueMatch.bestSection
+          && String(_rescueMatch.container._id) !== String(match.container._id)) {
+
+        const _origTitle   = match.container.title || 'Unknown';
+        const _rescueTitle = _rescueMatch.container.title || 'Unknown';
+
+        logger.info('[KC_ENGINE] ✅ SECTION_GAP_RESCUED — cross-container recovery', {
+          companyId, callSid, turn,
+          originalContainer: _origTitle,
+          originalScore:     match.score,
+          rescuedContainer:  _rescueTitle,
+          rescuedScore:      _rescueMatch.score,
+          rescuedSection:    _rescueMatch.bestSection.label,
+          inputPreview:      _clip(userInput, 80),
+        });
+
+        emit('KC_SECTION_GAP_RESCUED', {
+          originalContainer: _origTitle,
+          rescuedContainer:  _rescueTitle,
+          rescuedSection:    _rescueMatch.bestSection.label,
+          originalScore:     match.score,
+          rescuedScore:      _rescueMatch.score,
+          userInput:         _clip(userInput, 100),
+          turn,
+        });
+
+        // qaLog — record the rescue for Calibration dashboard
+        _writeDiscoveryNotes(companyId, callSid, {
+          qaLog: [{
+            type:              'KC_SECTION_GAP_RESCUED',
+            turn:              turn ?? 0,
+            question:          userInput,
+            originalContainer: _origTitle,
+            rescuedContainer:  _rescueTitle,
+            rescuedSection:    _rescueMatch.bestSection.label,
+            timestamp:         new Date().toISOString(),
+          }],
+        }).catch(() => {});
+
+        // SWAP: use rescued match + hydrate targetSection for _handleKCMatch
+        match = {
+          ..._rescueMatch,
+          targetSection:    _rescueMatch.bestSection,
+          targetSectionIdx: _rescueMatch.bestSectionIdx ?? null,
+          matchSource:      'CROSS_CONTAINER_RESCUE',
+        };
+      }
+    }
+
     // ── SECTION GAP LOGGING ──────────────────────────────────────────────────
     // Container matched but no specific section identified. Log the gap for
     // the Gaps & Todo page so we know what sections to build. Groq still
@@ -1747,7 +1871,9 @@ class KCDiscoveryRunner {
         bridgeToken, redis, onSentence, pendingBookingQuestion,
         discoveryContext, priorVisit,
         compoundBookingIntent: _hasCompoundBookingIntent,
-        notes,   // carry discoveryNotes for LLM fallback callContext enrichment
+        notes,                         // carry discoveryNotes for LLM fallback
+        containers: scorableContainers,// for KC section ranking on Groq-error fallback
+        cueFrame,                      // for KC section ranking on Groq-error fallback
       });
     }
 
@@ -1761,6 +1887,7 @@ class KCDiscoveryRunner {
       containers,   // passed so fallback event records what was searched
       ehConfig,     // Engine Hub config — drives BC injection + trace logging
       notes,        // discoveryNotes for building Claude callContext
+      cueFrame,     // CueExtractor output for KC section ranking
     });
   }
 }
@@ -2019,6 +2146,8 @@ async function _handleKCMatch({
   priorVisit             = false,
   compoundBookingIntent  = false,
   notes                  = null,   // discoveryNotes — carried for LLM fallback enrichment
+  containers             = [],     // scorableContainers — for KC section ranking on fallback
+  cueFrame               = null,   // CueExtractor output — for KC section ranking on fallback
 }) {
   const container      = match.container;
   const containerTitle = container.title || 'Knowledge Container';
@@ -2168,7 +2297,9 @@ async function _handleKCMatch({
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel: 'call', nextState, emit,
       startMs, turn, bridgeToken, redis, callerName, onSentence,
-      notes,   // carry discoveryNotes so enriched callContext reaches Claude
+      notes,        // carry discoveryNotes so enriched callContext reaches Claude
+      containers,   // for KC section ranking — Claude gets knowledge context
+      cueFrame,     // for KC section ranking
     });
   }
 
@@ -2630,6 +2761,7 @@ async function _handleLLMFallback({
   containers = [],
   notes      = null,
   ehConfig   = null,   // Engine Hub runtime config (null = disabled/passive)
+  cueFrame   = null,   // CueExtractor output — used for KC section ranking
 }) {
   logger.info('[KC_ENGINE] No KC match — firing LLM fallback (Claude COMPLEX)', {
     companyId, callSid, turn, inputPreview: _clip(userInput, 40),
@@ -2684,6 +2816,27 @@ async function _handleLLMFallback({
   // See _buildCallContext() above for the full field list.
   const callContext = _buildCallContext(notes, behaviorBlock);
 
+  // ── KC KNOWLEDGE INJECTION (April 2026) ──────────────────────────────────
+  // Rank top sections across ALL containers by relevance to the caller's
+  // question, then inject them into Claude's system prompt. This is the
+  // final-save knowledge path: KC routing missed, but the answer probably
+  // lives in KC content. Don't let Claude answer blind.
+  //
+  // noAnchor containers (Recovery, etc.) are excluded — their content is
+  // conversational mechanics, not knowledge answers.
+  let kcContext = null;
+  if (containers.length > 0) {
+    const _topKc = _rankTopKCSections(containers, userInput, cueFrame);
+    if (_topKc.length > 0) {
+      kcContext = _topKc;
+      logger.info('[KC_ENGINE] 💡 LLM_FALLBACK — injecting top KC sections', {
+        companyId, callSid, turn,
+        sectionCount: _topKc.length,
+        topSections:  _topKc.slice(0, 3).map(e => `${e.container.title}/${e.section.label} (${e.score})`),
+      });
+    }
+  }
+
   let llmResult = null;
   try {
     llmResult = await callLLMAgentForFollowUp({
@@ -2702,6 +2855,7 @@ async function _handleLLMFallback({
       onSentence,
       callContext,                     // enriched discoveryNotes + callerProfile
       mode:                'answer-from-kb', // shift prompt posture: ANSWER, don't defer
+      kcContext,                       // top-N KC sections across all containers
     });
   } catch (_e) {
     logger.error('[KC_ENGINE] LLM fallback threw — routing to graceful ACK', {
