@@ -1,9 +1,10 @@
 // config/llmAgentDefaults.js
 //
-// LLM Agent — Discovery Configuration Defaults
-// ==============================================
-// Every field is UI-configurable via llmagent.html.
-// Code reads these as fallbacks when company has no saved config.
+// LLM Agent — Discovery + Answer-from-KB Configuration Defaults
+// =============================================================
+// Every field is UI-configurable via services.html (Agent Studio tabs:
+// Behavior / Intake / Model / System Prompt).
+// Code reads these as fallbacks when a company has no saved config.
 // Rule: "If it's not UI, it does not exist."
 //
 

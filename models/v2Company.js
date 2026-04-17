@@ -1125,11 +1125,11 @@ const companySchema = new mongoose.Schema({
         },
 
         // -------------------------------------------------------------------
-        // LLM AGENT — Claude-powered Discovery Agent Configuration
+        // LLM AGENT — Claude-powered Discovery + Answer-from-KB Agent
         // -------------------------------------------------------------------
         // PURPOSE: Per-company config for the live conversational agent
-        // UI: llmagent.html — all settings are UI-configurable
-        // RUNTIME: Steps in when triggers fail, handles discovery conversations
+        // UI:      services.html — Agent Studio (Behavior/Intake/Model tabs)
+        // RUNTIME: Steps in when KC misses or consent follow-up needed
         // DEFAULTS: config/llmAgentDefaults.js (merged at read time)
         llmAgent: { type: mongoose.Schema.Types.Mixed, default: {} },
 

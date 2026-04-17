@@ -335,8 +335,8 @@
         'config/llmAgentDefaults.js — composeIntakeExtractionPrompt()',
         'services/streaming/adapters/GroqStreamAdapter.js — streamFull()',
       ],
-      configIn:  'LLM Agent Settings — Intake > Split Calls',
-      configUrl: 'llmagent.html',
+      configIn:  'Agent Studio — Intake tab (services.html)',
+      configUrl: 'services.html#tab=intake',
 
       extracts: [
         { field: 'entities.firstName',  label: 'First Name',        status: 'active'  },
@@ -378,8 +378,8 @@
         'config/llmAgentDefaults.js — composeIntakeResponsePrompt()',
         'services/streaming/SentenceStreamingService.js — streamWithSentences()',
       ],
-      configIn:  'LLM Agent Settings — Intake > Split Calls',
-      configUrl: 'llmagent.html',
+      configIn:  'Agent Studio — Intake tab (services.html)',
+      configUrl: 'services.html#tab=intake',
 
       extracts: [],
 

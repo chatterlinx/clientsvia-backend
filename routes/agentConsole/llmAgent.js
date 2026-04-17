@@ -1,14 +1,22 @@
 /**
  * ============================================================================
- * LLM AGENT — Discovery Configuration Routes
+ * LLM AGENT — Agent Studio Configuration Routes (April 2026)
  * ============================================================================
+ *
+ * Consumed by services.html (Agent Studio tabs: Behavior / Intake / Model /
+ * System Prompt). All writes land on company.aiAgentSettings.llmAgent.
  *
  * ENDPOINTS:
  * - GET  /:companyId/llm-agent/config              — Read merged config (defaults + saved)
  * - PATCH /:companyId/llm-agent/config              — Partial update config
+ * - POST /:companyId/llm-agent/preview-prompt       — Render live system prompt (C.5)
+ * - POST /:companyId/llm-agent/ping                 — Verify Anthropic API is live
+ * - POST /:companyId/llm-agent/ping-groq            — Verify Groq API is live
  * - POST /:companyId/llm-agent/test-conversation    — Test message → Claude → response
- * - POST /:companyId/llm-agent/scrape-url           — Fetch URL → extract text for knowledge card
- * - GET  /:companyId/llm-agent/sync-triggers        — Pull active triggers as card drafts
+ *
+ * Removed (April 2026 clean sweep — llmagent.html retired):
+ * - POST /scrape-url      — legacy website knowledge scraper (dead)
+ * - GET  /sync-triggers   — legacy trigger→knowledgeCard bridge (dead)
  *
  * ============================================================================
  */
@@ -18,11 +26,7 @@ const router = express.Router();
 const logger = require('../../utils/logger');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
-const cheerio = require('cheerio');
 const { DEFAULT_LLM_AGENT_SETTINGS, AVAILABLE_MODELS, AVAILABLE_PROVIDERS, composeSystemPrompt } = require('../../config/llmAgentDefaults');
-const CompanyLocalTrigger   = require('../../models/CompanyLocalTrigger');
-const GlobalTrigger         = require('../../models/GlobalTrigger');
-const CompanyBookingTrigger = require('../../models/CompanyBookingTrigger');
 
 const MODULE_ID = 'LLM_AGENT_ROUTES';
 
@@ -398,220 +402,4 @@ router.post('/:companyId/llm-agent/test-conversation', authenticateJWT, async (r
     res.status(500).json({ error: 'Test conversation failed: ' + error.message });
   }
 });
-
-// ════════════════════════════════════════════════════════════════════════════
-// POST /:companyId/llm-agent/scrape-url — Scrape URL for knowledge card
-// ════════════════════════════════════════════════════════════════════════════
-router.post('/:companyId/llm-agent/scrape-url', authenticateJWT, async (req, res) => {
-  try {
-    const { url } = req.body;
-
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ error: 'url is required' });
-    }
-
-    // Basic URL validation
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return res.status(400).json({ error: 'Invalid URL format' });
-    }
-
-    // Fetch the page
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(parsedUrl.href, {
-      headers: {
-        'User-Agent': 'ClientsVia-KnowledgeBot/1.0 (business knowledge extraction)',
-        'Accept': 'text/html,application/xhtml+xml'
-      },
-      signal: controller.signal,
-      redirect: 'follow'
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return res.status(502).json({ error: `Failed to fetch URL: HTTP ${response.status}` });
-    }
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // Remove script, style, nav, footer, header elements
-    $('script, style, nav, footer, header, noscript, iframe, form, svg').remove();
-
-    // Try to find main content
-    let content = '';
-    const mainSelectors = ['main', 'article', '[role="main"]', '.content', '.main-content', '#content', '#main'];
-    for (const sel of mainSelectors) {
-      const el = $(sel);
-      if (el.length && el.text().trim().length > 100) {
-        content = el.text();
-        break;
-      }
-    }
-
-    // Fallback to body
-    if (!content) {
-      content = $('body').text();
-    }
-
-    // Clean up whitespace
-    content = content
-      .replace(/\s+/g, ' ')
-      .replace(/\n\s*\n/g, '\n')
-      .trim();
-
-    // Extract page title
-    const title = $('title').text().trim() ||
-                  $('h1').first().text().trim() ||
-                  parsedUrl.hostname;
-
-    // Truncate if too long (max ~5000 words for a knowledge card)
-    const words = content.split(/\s+/);
-    if (words.length > 5000) {
-      content = words.slice(0, 5000).join(' ') + '... (truncated)';
-    }
-
-    res.json({
-      title,
-      content,
-      wordCount: words.length,
-      sourceUrl: parsedUrl.href
-    });
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      return res.status(504).json({ error: 'URL fetch timed out after 15 seconds' });
-    }
-    logger.error(`[${MODULE_ID}] Scrape URL failed`, { error: error.message });
-    res.status(500).json({ error: 'Failed to scrape URL: ' + error.message });
-  }
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// GET /:companyId/llm-agent/sync-triggers — Pull active triggers as card drafts
-// ════════════════════════════════════════════════════════════════════════════
-router.get('/:companyId/llm-agent/sync-triggers', authenticateJWT, async (req, res) => {
-  try {
-    const { companyId } = req.params;
-
-    // Load company to get active trigger group
-    const company = await v2Company.findById(companyId).lean();
-    if (!company) return res.status(404).json({ error: 'Company not found' });
-
-    const activeGroupId = company.aiAgentSettings?.agent2?.activeTriggerGroupId;
-
-    // ── Parallel DB load — all 3 queries fire at once ─────────────────────
-    const [localTriggers, globalTriggers, bookingInfoTriggers] = await Promise.all([
-      // Company-specific triggers (enabled, published, not deleted)
-      CompanyLocalTrigger.find({
-        companyId,
-        enabled: true,
-        isDeleted: { $ne: true },
-        state: 'published',
-      }).lean(),
-
-      // Global triggers from active group (empty array if no group configured)
-      activeGroupId
-        ? GlobalTrigger.find({
-            groupId: activeGroupId,
-            enabled: true,
-            isDeleted: { $ne: true },
-            state: 'published',
-          }).lean()
-        : Promise.resolve([]),
-
-      // Booking INFO triggers — knowledge-only (promos, coupons, pricing)
-      // Visible to the discovery LLM Agent so callers can ask before/during booking.
-      CompanyBookingTrigger.find({
-        companyId,
-        enabled: true,
-        isDeleted: { $ne: true },
-        state: 'published',
-        behavior: 'INFO',
-      }).lean(),
-    ]);
-
-    // Combine and format as card drafts
-    const cardDrafts = [];
-
-    for (const t of localTriggers) {
-      const name = t.label || t.displayName || t.name || 'Local Trigger';
-      cardDrafts.push({
-        triggerId: t._id.toString(),
-        triggerName: name,
-        title: name,
-        content: formatTriggerAsKnowledge(t),
-        type: 'trigger',
-        source: 'local',
-        autoSynced: true
-      });
-    }
-
-    for (const t of globalTriggers) {
-      const name = t.label || t.displayName || t.name || 'Global Trigger';
-      cardDrafts.push({
-        triggerId: t._id.toString(),
-        triggerName: name,
-        title: name,
-        content: formatTriggerAsKnowledge(t),
-        type: 'trigger',
-        source: 'global',
-        autoSynced: true
-      });
-    }
-
-    for (const t of bookingInfoTriggers) {
-      const name = t.label || t.displayName || t.name || 'Booking Info';
-      cardDrafts.push({
-        triggerId: t._id.toString(),
-        triggerName: name,
-        title: name,
-        content: formatTriggerAsKnowledge(t),
-        type: 'booking-trigger',
-        source: 'booking',
-        autoSynced: true
-      });
-    }
-
-    res.json({
-      companyId,
-      activeGroupId,
-      triggers: cardDrafts,
-      count: cardDrafts.length
-    });
-  } catch (error) {
-    logger.error(`[${MODULE_ID}] Sync triggers failed`, { companyId: req.params.companyId, error: error.message });
-    res.status(500).json({ error: 'Failed to sync triggers' });
-  }
-});
-
-/**
- * Format a trigger document into a readable knowledge card content string.
- */
-function formatTriggerAsKnowledge(trigger) {
-  const parts = [];
-  const name = trigger.label || trigger.displayName || trigger.name;
-
-  if (name) {
-    parts.push(`Service: ${name}`);
-  }
-  if (trigger.description) {
-    parts.push(`Description: ${trigger.description}`);
-  }
-  if (trigger.answerText) {
-    parts.push(`Standard Response: ${trigger.answerText}`);
-  }
-  if (trigger.keywords && trigger.keywords.length > 0) {
-    parts.push(`Keywords: ${trigger.keywords.join(', ')}`);
-  }
-  if (trigger.phrases && trigger.phrases.length > 0) {
-    parts.push(`Trigger Phrases: ${trigger.phrases.slice(0, 5).join(', ')}`);
-  }
-
-  return parts.join('\n') || 'No details available';
-}
-
 module.exports = router;
