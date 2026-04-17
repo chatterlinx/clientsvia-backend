@@ -2196,25 +2196,208 @@
   </div>
 </div>
 
-<!-- ─── INTAKE TAB — filled in C.4 ───────────────────────────────────────── -->
+<!-- ─── INTAKE TAB ────────────────────────────────────────────────────────── -->
 <div id="tab-panel-intake" class="tab-panel" role="tabpanel" aria-labelledby="tab-intake">
-  <div class="tab-placeholder">
-    <span class="tab-placeholder-icon">🎯</span>
-    <div class="tab-placeholder-title">First-Turn Intake</div>
-    <div class="tab-placeholder-sub">
-      Entity extraction, confidence thresholds, and intake model selection.
+  <div class="behavior-wrap">
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🎯</span>
+        <div>
+          <div class="behavior-card-title">First-Turn Intake</div>
+          <div class="behavior-card-subtitle">Extract caller identity + intent from the opening utterance (Turn 1 only)</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">Enable Intake</div>
+            <div class="guard-toggle-desc">Runs a fast LLM on Turn 1 to extract entities (name, phone, issue) and pre-fill discoveryNotes before KC routing.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="ik-enabled"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
     </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🧩</span>
+        <div>
+          <div class="behavior-card-title">Entity Extraction Targets</div>
+          <div class="behavior-card-subtitle">What to pull from the caller's first utterance</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">First Name</div><div class="guard-toggle-desc">"Hi, I'm Mark…" → firstName=Mark</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-firstName"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Last Name</div><div class="guard-toggle-desc">Only when explicitly mentioned — no guessing</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-lastName"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Phone Number</div><div class="guard-toggle-desc">Callback number if volunteered in the opening</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-phone"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Address / Location</div><div class="guard-toggle-desc">Street, city, or named references</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-address"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Call Reason</div><div class="guard-toggle-desc">Core issue / intent (fills discoveryNotes.callReason)</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-callReason"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Urgency</div><div class="guard-toggle-desc">"It's an emergency" → urgency=high</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-urgency"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Technician Mentioned</div><div class="guard-toggle-desc">"Tony was here last month" → enables acknowledge-reflect</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-technicianMentioned"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Prior Visit</div><div class="guard-toggle-desc">"You guys were out a few weeks ago…" → priorVisit=true</div></div><label class="toggle-switch"><input type="checkbox" id="ik-ext-priorVisit"><span class="toggle-slider"></span></label></div>
+      </div>
+    </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">📊</span>
+        <div>
+          <div class="behavior-card-title">Confidence Thresholds</div>
+          <div class="behavior-card-subtitle">Minimum extraction confidence required to write into discoveryNotes</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="form-group full"><label class="form-label">Name threshold <span class="range-value" id="ik-conf-firstName-v">0.70</span></label><input type="range" class="range-slider" id="ik-conf-firstName" min="0.3" max="1.0" step="0.05" value="0.70"></div>
+        <div class="form-group full"><label class="form-label">Phone threshold <span class="range-value" id="ik-conf-phone-v">0.80</span></label><input type="range" class="range-slider" id="ik-conf-phone" min="0.3" max="1.0" step="0.05" value="0.80"></div>
+        <div class="form-group full"><label class="form-label">Address threshold <span class="range-value" id="ik-conf-address-v">0.60</span></label><input type="range" class="range-slider" id="ik-conf-address" min="0.3" max="1.0" step="0.05" value="0.60"></div>
+        <div class="form-group full"><label class="form-label">Call Reason threshold <span class="range-value" id="ik-conf-callReason-v">0.50</span></label><input type="range" class="range-slider" id="ik-conf-callReason" min="0.3" max="1.0" step="0.05" value="0.50"></div>
+      </div>
+    </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">⚡</span>
+        <div>
+          <div class="behavior-card-title">Intake Model</div>
+          <div class="behavior-card-subtitle">Dedicated model for ultra-fast entity extraction (typically Groq for ~30ms latency)</div>
+        </div>
+        <div class="behavior-card-actions">
+          <button type="button" class="btn-secondary btn-sm" id="ik-provider-ping">Test Connection</button>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="form-group">
+          <label class="form-label" for="ik-provider">Provider</label>
+          <select class="form-select" id="ik-provider">
+            <option value="">Use main LLM (inherit)</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="groq">Groq (Llama)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ik-model">Model</label>
+          <select class="form-select" id="ik-model"><option value="">Use main model</option></select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Temperature <span class="range-value" id="ik-temp-v">0.3</span></label>
+          <input type="range" class="range-slider" id="ik-temp" min="0" max="1" step="0.1" value="0.3">
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- ─── MODEL TAB — filled in C.4 ────────────────────────────────────────── -->
+<!-- ─── MODEL TAB ─────────────────────────────────────────────────────────── -->
 <div id="tab-panel-model" class="tab-panel" role="tabpanel" aria-labelledby="tab-model">
-  <div class="tab-placeholder">
-    <span class="tab-placeholder-icon">⚙️</span>
-    <div class="tab-placeholder-title">Model &amp; Activation</div>
-    <div class="tab-placeholder-sub">
-      LLM model, temperature, max tokens, channel activation, and handoff settings.
+  <div class="behavior-wrap">
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🔌</span>
+        <div>
+          <div class="behavior-card-title">LLM Agent Master Switch</div>
+          <div class="behavior-card-subtitle">Enable the LLM fallback + consent follow-up layer globally for this company</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">Enable LLM Agent</div>
+            <div class="guard-toggle-desc">Master switch. When OFF: KC handles everything; no Claude fallback on misses. When ON: KC remains the preferred path, but LLM steps in for out-of-KC questions and consent buckets.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="md-enabled"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
     </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🤖</span>
+        <div>
+          <div class="behavior-card-title">Primary Model</div>
+          <div class="behavior-card-subtitle">The model used for fallback answers + consent follow-up</div>
+        </div>
+        <div class="behavior-card-actions">
+          <button type="button" class="btn-secondary btn-sm" id="md-ping">Test</button>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="form-group">
+          <label class="form-label" for="md-provider">Provider</label>
+          <select class="form-select" id="md-provider">
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="groq">Groq (Llama)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="md-model">Model</label>
+          <select class="form-select" id="md-model"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Temperature <span class="range-value" id="md-temp-v">0.7</span></label>
+          <input type="range" class="range-slider" id="md-temp" min="0" max="1" step="0.1" value="0.7">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Tokens <span class="range-value" id="md-tokens-v">300</span></label>
+          <input type="range" class="range-slider" id="md-tokens" min="50" max="1000" step="50" value="300">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Model Description</label>
+          <div id="md-model-desc" style="font-size:12px;color:var(--text-muted);padding:8px 12px;background:#f8fafc;border-radius:8px;line-height:1.5;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">📡</span>
+        <div>
+          <div class="behavior-card-title">Activation</div>
+          <div class="behavior-card-subtitle">When and where the LLM agent fires</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Phone Calls</div><div class="guard-toggle-desc">Enable LLM on inbound calls (Twilio voice)</div></div><label class="toggle-switch"><input type="checkbox" id="md-ch-call"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">SMS</div><div class="guard-toggle-desc">Enable LLM on inbound SMS</div></div><label class="toggle-switch"><input type="checkbox" id="md-ch-sms"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Web Chat</div><div class="guard-toggle-desc">Enable LLM on web chat widget</div></div><label class="toggle-switch"><input type="checkbox" id="md-ch-webchat"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Trigger Fallback</div><div class="guard-toggle-desc">LLM fires when no trigger card matches (classic no-match recovery)</div></div><label class="toggle-switch"><input type="checkbox" id="md-act-triggerFallback"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Follow-up Rescue</div><div class="guard-toggle-desc">LLM classifies ambiguous consent responses (hesitant yes/no)</div></div><label class="toggle-switch"><input type="checkbox" id="md-act-followUpRescue"><span class="toggle-slider"></span></label></div>
+        <div class="form-group full"><label class="form-label">Low-Confidence Threshold <span class="range-value" id="md-act-lct-v">0.40</span></label><input type="range" class="range-slider" id="md-act-lct" min="0.1" max="0.9" step="0.05" value="0.40"></div>
+        <div class="form-group full"><label class="form-label">Max Turns Per Session <span class="range-value" id="md-act-mt-v">10</span></label><input type="range" class="range-slider" id="md-act-mt" min="3" max="20" step="1" value="10"></div>
+        <div class="form-group full"><label class="form-label">Silence Timeout (ms) <span class="range-value" id="md-act-st-v">8000</span></label><input type="range" class="range-slider" id="md-act-st" min="3000" max="15000" step="500" value="8000"></div>
+      </div>
+    </div>
+
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🤝</span>
+        <div>
+          <div class="behavior-card-title">Handoff</div>
+          <div class="behavior-card-subtitle">What happens when the LLM decides to transfer to a human</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="form-group">
+          <label class="form-label" for="md-hf-mode">Handoff Mode</label>
+          <select class="form-select" id="md-hf-mode">
+            <option value="auto">Auto (smooth transition)</option>
+            <option value="manual">Manual (summary + confirm)</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label" for="md-hf-msg">Escalation Message</label>
+          <textarea class="form-textarea" id="md-hf-msg" rows="2" placeholder="Let me connect you with someone who can help with that."></textarea>
+        </div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Pass Intent</div><div class="guard-toggle-desc">Hand the discovered intent to the next handler</div></div><label class="toggle-switch"><input type="checkbox" id="md-hf-intent"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Pass Context</div><div class="guard-toggle-desc">Hand conversation context (discoveryNotes summary)</div></div><label class="toggle-switch"><input type="checkbox" id="md-hf-context"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Pass Sentiment</div><div class="guard-toggle-desc">Hand caller sentiment (upset / calm / urgent)</div></div><label class="toggle-switch"><input type="checkbox" id="md-hf-sentiment"><span class="toggle-slider"></span></label></div>
+        <div class="guard-toggle-row"><div class="guard-toggle-meta"><div class="guard-toggle-label">Pass Conversation History</div><div class="guard-toggle-desc">Hand full conversation transcript</div></div><label class="toggle-switch"><input type="checkbox" id="md-hf-history"><span class="toggle-slider"></span></label></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -5435,6 +5618,393 @@ window.addEventListener('message', e => {
   // Lazy-load when behavior tab activated
   window.addEventListener('tab-activated', (e) => {
     if (e.detail?.tab === 'behavior') bootstrap();
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INTAKE + MODEL TABS MODULE (C.4, April 17, 2026)
+   Shares storage with Behavior tab: company.aiAgentSettings.llmAgent.
+   Lazy-loads on first 'tab-activated' event for 'intake' or 'model'.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function initIntakeModelTabs() {
+  const ST = {
+    loaded: false,
+    config: null,
+    models: [],
+    providers: [],
+    saveTimer: null,
+  };
+
+  async function loadConfig() {
+    const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
+      headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+    });
+    if (!resp.ok) throw new Error(`GET config failed: ${resp.status}`);
+    const data = await resp.json();
+    return data;
+  }
+
+  async function saveConfig(partial) {
+    const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-auth-token': AuthLib?.getToken?.() || '' },
+      body: JSON.stringify(partial),
+    });
+    if (!resp.ok) throw new Error(`PATCH config failed: ${resp.status}`);
+    return resp.json();
+  }
+
+  function showSave(state, text) {
+    const el = document.getElementById('bh-save-status');
+    const txt = document.getElementById('bh-save-text');
+    if (!el || !txt) return;
+    el.classList.remove('saving', 'saved', 'error');
+    if (state) el.classList.add(state);
+    txt.textContent = text;
+    el.classList.add('visible');
+    if (state === 'saved' || state === 'error') {
+      clearTimeout(el._hideT);
+      el._hideT = setTimeout(() => el.classList.remove('visible'), 1800);
+    }
+  }
+
+  function queueSave(patch) {
+    clearTimeout(ST.saveTimer);
+    showSave('saving', 'Saving…');
+    ST.saveTimer = setTimeout(async () => {
+      try {
+        const res = await saveConfig(patch);
+        ST.config = res.config || res;
+        showSave('saved', 'Saved');
+      } catch (err) {
+        console.error('[intake/model] save failed', err);
+        showSave('error', 'Save failed — retry');
+      }
+    }, 400);
+  }
+
+  // ── Populate model dropdown based on provider ─────────────────────────
+  function fillModelSelect(selectEl, provider, currentValue, allowInherit) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    if (allowInherit) {
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = 'Use main model';
+      selectEl.appendChild(opt);
+    }
+    const filtered = provider
+      ? ST.models.filter(m => m.provider === provider)
+      : ST.models;
+    filtered.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.label;
+      opt.dataset.description = m.description || '';
+      selectEl.appendChild(opt);
+    });
+    // Restore value if still in list
+    if (currentValue && filtered.some(m => m.id === currentValue)) {
+      selectEl.value = currentValue;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // INTAKE TAB
+  // ═══════════════════════════════════════════════════════════════════════
+  const EXTRACT_FIELDS = [
+    'firstName', 'lastName', 'phone', 'address',
+    'callReason', 'urgency', 'technicianMentioned', 'priorVisit',
+  ];
+  const CONF_FIELDS = ['firstName', 'phone', 'address', 'callReason'];
+
+  function renderIntake(cfg) {
+    const intake = cfg.intake || {};
+
+    // Enabled toggle
+    const enEl = document.getElementById('ik-enabled');
+    if (enEl) enEl.checked = !!intake.enabled;
+
+    // Extraction targets
+    const ex = intake.extract || {};
+    EXTRACT_FIELDS.forEach(f => {
+      const el = document.getElementById('ik-ext-' + f);
+      if (el) el.checked = ex[f] !== false;  // default true
+    });
+
+    // Confidence thresholds
+    const conf = intake.confidenceThresholds || intake.confidence || {};
+    CONF_FIELDS.forEach(f => {
+      const defaults = { firstName: 0.70, phone: 0.80, address: 0.60, callReason: 0.50 };
+      const val = conf[f] ?? defaults[f];
+      const sl = document.getElementById('ik-conf-' + f);
+      const lab = document.getElementById('ik-conf-' + f + '-v');
+      if (sl) sl.value = String(val);
+      if (lab) lab.textContent = Number(val).toFixed(2);
+    });
+
+    // Model override
+    const m = intake.model || {};
+    const provEl = document.getElementById('ik-provider');
+    if (provEl) provEl.value = m.provider || '';
+    fillModelSelect(document.getElementById('ik-model'), m.provider || '', m.modelId || '', true);
+    const tEl = document.getElementById('ik-temp');
+    const tV  = document.getElementById('ik-temp-v');
+    if (tEl) tEl.value = String(m.temperature ?? 0.3);
+    if (tV)  tV.textContent = Number(m.temperature ?? 0.3).toFixed(1);
+  }
+
+  function wireIntake() {
+    // Enabled
+    const enEl = document.getElementById('ik-enabled');
+    if (enEl) enEl.addEventListener('change', () => queueSave({ intake: { enabled: enEl.checked } }));
+
+    // Extraction toggles
+    EXTRACT_FIELDS.forEach(f => {
+      const el = document.getElementById('ik-ext-' + f);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        queueSave({ intake: { extract: { [f]: el.checked } } });
+      });
+    });
+
+    // Confidence sliders
+    CONF_FIELDS.forEach(f => {
+      const sl = document.getElementById('ik-conf-' + f);
+      const lab = document.getElementById('ik-conf-' + f + '-v');
+      if (!sl || !lab) return;
+      sl.addEventListener('input', () => { lab.textContent = Number(sl.value).toFixed(2); });
+      sl.addEventListener('change', () => {
+        queueSave({ intake: { confidenceThresholds: { [f]: Number(sl.value) } } });
+      });
+    });
+
+    // Model override
+    const provEl = document.getElementById('ik-provider');
+    const modEl  = document.getElementById('ik-model');
+    const tEl    = document.getElementById('ik-temp');
+    const tV     = document.getElementById('ik-temp-v');
+    if (provEl) {
+      provEl.addEventListener('change', () => {
+        fillModelSelect(modEl, provEl.value, '', true);
+        queueSave({ intake: { model: { provider: provEl.value || null, modelId: '' } } });
+      });
+    }
+    if (modEl) {
+      modEl.addEventListener('change', () => {
+        queueSave({ intake: { model: { modelId: modEl.value || null } } });
+      });
+    }
+    if (tEl && tV) {
+      tEl.addEventListener('input', () => { tV.textContent = Number(tEl.value).toFixed(1); });
+      tEl.addEventListener('change', () => {
+        queueSave({ intake: { model: { temperature: Number(tEl.value) } } });
+      });
+    }
+
+    // Ping
+    const pingBtn = document.getElementById('ik-provider-ping');
+    if (pingBtn) pingBtn.addEventListener('click', async () => {
+      const provider = document.getElementById('ik-provider').value || 'anthropic';
+      pingBtn.disabled = true;
+      pingBtn.textContent = 'Testing…';
+      try {
+        const endpoint = provider === 'groq' ? 'ping-groq' : 'ping';
+        const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/${endpoint}`, {
+          method: 'POST',
+          headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+        });
+        const j = await resp.json();
+        pingBtn.textContent = j.ok ? `✓ ${j.latencyMs || '-'}ms` : '✗ Failed';
+      } catch (e) {
+        pingBtn.textContent = '✗ Error';
+      }
+      setTimeout(() => { pingBtn.textContent = 'Test Connection'; pingBtn.disabled = false; }, 2500);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MODEL TAB (also Activation + Handoff)
+  // ═══════════════════════════════════════════════════════════════════════
+  function renderModel(cfg) {
+    // Master enable
+    const enEl = document.getElementById('md-enabled');
+    if (enEl) enEl.checked = !!cfg.enabled;
+
+    // Primary model
+    const m = cfg.model || {};
+    const provEl = document.getElementById('md-provider');
+    if (provEl) provEl.value = m.provider || 'anthropic';
+    fillModelSelect(document.getElementById('md-model'), m.provider || 'anthropic', m.modelId || '', false);
+    const tEl = document.getElementById('md-temp');
+    const tV  = document.getElementById('md-temp-v');
+    if (tEl) tEl.value = String(m.temperature ?? 0.7);
+    if (tV)  tV.textContent = Number(m.temperature ?? 0.7).toFixed(1);
+    const tokEl = document.getElementById('md-tokens');
+    const tokV  = document.getElementById('md-tokens-v');
+    if (tokEl) tokEl.value = String(m.maxTokens ?? 300);
+    if (tokV)  tokV.textContent = String(m.maxTokens ?? 300);
+    updateModelDescription();
+
+    // Activation
+    const a = cfg.activation || {};
+    const ch = a.channels || {};
+    const setCk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    setCk('md-ch-call', ch.call !== false);
+    setCk('md-ch-sms', ch.sms !== false);
+    setCk('md-ch-webchat', ch.webchat !== false);
+    setCk('md-act-triggerFallback', a.triggerFallback !== false);
+    setCk('md-act-followUpRescue', a.followUpRescue !== false);
+    const lct = a.lowConfidenceThreshold ?? 0.4;
+    const mt  = a.maxTurnsPerSession ?? 10;
+    const st  = a.silenceTimeoutMs ?? 8000;
+    document.getElementById('md-act-lct').value = String(lct);
+    document.getElementById('md-act-lct-v').textContent = Number(lct).toFixed(2);
+    document.getElementById('md-act-mt').value = String(mt);
+    document.getElementById('md-act-mt-v').textContent = String(mt);
+    document.getElementById('md-act-st').value = String(st);
+    document.getElementById('md-act-st-v').textContent = String(st);
+
+    // Handoff
+    const h = cfg.handoff || {};
+    const modeEl = document.getElementById('md-hf-mode');
+    if (modeEl) modeEl.value = h.mode || 'auto';
+    const msgEl = document.getElementById('md-hf-msg');
+    if (msgEl) msgEl.value = h.escalationMessage || '';
+    setCk('md-hf-intent', h.passIntent !== false);
+    setCk('md-hf-context', h.passContext !== false);
+    setCk('md-hf-sentiment', h.passSentiment !== false);
+    setCk('md-hf-history', h.passConversationHistory !== false);
+  }
+
+  function updateModelDescription() {
+    const sel = document.getElementById('md-model');
+    const desc = document.getElementById('md-model-desc');
+    if (!sel || !desc) return;
+    const opt = sel.options[sel.selectedIndex];
+    desc.textContent = opt?.dataset.description || '(no description)';
+  }
+
+  function wireModel() {
+    // Master enable
+    const enEl = document.getElementById('md-enabled');
+    if (enEl) enEl.addEventListener('change', () => queueSave({ enabled: enEl.checked }));
+
+    // Provider/Model/Temp/Tokens
+    const provEl = document.getElementById('md-provider');
+    const modEl  = document.getElementById('md-model');
+    const tEl    = document.getElementById('md-temp');
+    const tV     = document.getElementById('md-temp-v');
+    const tokEl  = document.getElementById('md-tokens');
+    const tokV   = document.getElementById('md-tokens-v');
+
+    if (provEl) provEl.addEventListener('change', () => {
+      fillModelSelect(modEl, provEl.value, '', false);
+      updateModelDescription();
+      queueSave({ model: { provider: provEl.value, modelId: modEl.value } });
+    });
+    if (modEl) modEl.addEventListener('change', () => {
+      updateModelDescription();
+      queueSave({ model: { modelId: modEl.value } });
+    });
+    if (tEl && tV) {
+      tEl.addEventListener('input', () => { tV.textContent = Number(tEl.value).toFixed(1); });
+      tEl.addEventListener('change', () => queueSave({ model: { temperature: Number(tEl.value) } }));
+    }
+    if (tokEl && tokV) {
+      tokEl.addEventListener('input', () => { tokV.textContent = String(tokEl.value); });
+      tokEl.addEventListener('change', () => queueSave({ model: { maxTokens: Number(tokEl.value) } }));
+    }
+
+    // Activation
+    const wireCh = (id, field) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        queueSave({ activation: { channels: { [field]: el.checked } } });
+      });
+    };
+    wireCh('md-ch-call', 'call');
+    wireCh('md-ch-sms', 'sms');
+    wireCh('md-ch-webchat', 'webchat');
+
+    const wireAct = (id, field, parse) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const lab = document.getElementById(id + '-v');
+      el.addEventListener('input', () => {
+        if (lab) lab.textContent = parse === Number ? Number(el.value).toFixed(2) : String(el.value);
+      });
+      el.addEventListener('change', () => {
+        const v = parse ? parse(el.value) : (el.type === 'checkbox' ? el.checked : el.value);
+        queueSave({ activation: { [field]: v } });
+      });
+    };
+    const wireActCk = (id, field) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => queueSave({ activation: { [field]: el.checked } }));
+    };
+    wireActCk('md-act-triggerFallback', 'triggerFallback');
+    wireActCk('md-act-followUpRescue', 'followUpRescue');
+    wireAct('md-act-lct', 'lowConfidenceThreshold', Number);
+    wireAct('md-act-mt', 'maxTurnsPerSession', v => Math.round(Number(v)));
+    wireAct('md-act-st', 'silenceTimeoutMs', v => Math.round(Number(v)));
+
+    // Handoff
+    const modeEl = document.getElementById('md-hf-mode');
+    if (modeEl) modeEl.addEventListener('change', () => queueSave({ handoff: { mode: modeEl.value } }));
+    const msgEl = document.getElementById('md-hf-msg');
+    if (msgEl) msgEl.addEventListener('change', () => queueSave({ handoff: { escalationMessage: msgEl.value } }));
+    ['intent', 'context', 'sentiment', 'history'].forEach(k => {
+      const map = { intent: 'passIntent', context: 'passContext', sentiment: 'passSentiment', history: 'passConversationHistory' };
+      const el = document.getElementById('md-hf-' + k);
+      if (!el) return;
+      el.addEventListener('change', () => queueSave({ handoff: { [map[k]]: el.checked } }));
+    });
+
+    // Ping primary model
+    const pingBtn = document.getElementById('md-ping');
+    if (pingBtn) pingBtn.addEventListener('click', async () => {
+      const provider = provEl?.value || 'anthropic';
+      pingBtn.disabled = true;
+      pingBtn.textContent = 'Testing…';
+      try {
+        const endpoint = provider === 'groq' ? 'ping-groq' : 'ping';
+        const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/${endpoint}`, {
+          method: 'POST',
+          headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+        });
+        const j = await resp.json();
+        pingBtn.textContent = j.ok ? `✓ ${j.latencyMs || '-'}ms` : '✗ Failed';
+      } catch (e) { pingBtn.textContent = '✗ Error'; }
+      setTimeout(() => { pingBtn.textContent = 'Test'; pingBtn.disabled = false; }, 2500);
+    });
+  }
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────
+  async function bootstrap() {
+    if (ST.loaded) return;
+    if (!S.companyId) return;
+    try {
+      showSave('saving', 'Loading…');
+      const data = await loadConfig();
+      ST.config = data.config || data;
+      ST.models = data.availableModels || [];
+      ST.providers = data.availableProviders || [];
+      renderIntake(ST.config);
+      renderModel(ST.config);
+      wireIntake();
+      wireModel();
+      ST.loaded = true;
+      showSave('saved', 'Loaded');
+    } catch (err) {
+      console.error('[intake/model] bootstrap failed', err);
+      showSave('error', 'Load failed — check console');
+    }
+  }
+
+  window.addEventListener('tab-activated', (e) => {
+    if (e.detail?.tab === 'intake' || e.detail?.tab === 'model') bootstrap();
   });
 })();
 </script>
