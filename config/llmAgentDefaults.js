@@ -81,19 +81,19 @@ const DEFAULT_LLM_AGENT_SETTINGS = {
   // Pre-seeded with DEFAULT_BEHAVIOR_RULES on first load (onboarding-ready)
   behaviorRules: [],
 
-  // ── Knowledge Cards ──────────────────────────────────────────────────────
-  // Each card: { id, type, title, content, enabled, priority, createdAt, updatedAt }
-  //   type: 'trigger' — auto-synced from trigger cards
-  //         'company' — manual company info (hours, services, policies)
-  //         'website' — scraped from URL
-  //         'custom'  — free-form knowledge
+  // ── Knowledge Source ─────────────────────────────────────────────────────
+  // DEPRECATED (removed April 2026): `knowledgeCards` field is no longer part
+  // of the LLM agent config. KC containers (services.html) are the single
+  // source of truth for company knowledge. At runtime, kcContext is built
+  // from live-ranked KC sections and injected into composeSystemPrompt's
+  // KNOWLEDGE BASE block. See UAP.md §17 (Agent Studio) for full design.
   //
-  // Trigger cards additionally have: { triggerId, triggerName, autoSynced: true }
-  // Website cards additionally have: { sourceUrl, scrapedAt }
-  knowledgeCards: [],
+  // If a legacy company has `knowledgeCards[]` populated in Mongo, it will
+  // be IGNORED by the runtime. A one-time audit script logs any such data:
+  //   scripts/audit-knowledge-cards.js
 
   // ── System Prompt Override ───────────────────────────────────────────────
-  // Empty = use built-in default template (composed from persona + guardrails + cards)
+  // Empty = use built-in default template (composed from persona + guardrails + KC)
   // Non-empty = full override — replaces the entire system prompt
   systemPrompt: ''
 };
@@ -435,10 +435,10 @@ function composeSystemPrompt(settings, channel = 'call', mode = 'discovery', kcC
 
   // 9. KNOWLEDGE BASE — unified single source of truth (April 2026)
   //
-  // Priority order:
-  //   1. kcContext (KC containers, live-ranked per query) — PREFERRED
-  //   2. settings.knowledgeCards (legacy llmagent.html cards) — FALLBACK during
-  //      Phase 2 transition; will be removed once UI consolidation completes.
+  // KC containers (services.html) are the ONLY knowledge source. At runtime,
+  // kcContext is built from live-ranked KC sections (see KCDiscoveryRunner
+  // _rankTopKCSections). Legacy `settings.knowledgeCards[]` has been removed
+  // (April 17, 2026) — any such data on legacy companies is IGNORED.
   //
   // KC content prefers `groqContent` (deep, up to 4000 chars) over `content`
   // (short fixed response, 35-42 words). If only `content` exists, use it.
@@ -458,17 +458,6 @@ function composeSystemPrompt(settings, channel = 'call', mode = 'discovery', kcC
     }
     parts.push('\n=== END KNOWLEDGE BASE ===');
     parts.push('Use the KNOWLEDGE BASE above to answer. If the answer is in there, give it confidently.');
-  } else {
-    // Legacy fallback — only injected when kcContext is absent (Phase 2 will remove).
-    const cards = (settings.knowledgeCards || []).filter(c => c.enabled !== false);
-    if (cards.length > 0) {
-      parts.push('\n=== KNOWLEDGE BASE ===');
-      for (const card of cards) {
-        parts.push(`\n--- ${card.title || 'Untitled'} ---`);
-        parts.push(card.content || '');
-      }
-      parts.push('\n=== END KNOWLEDGE BASE ===');
-    }
   }
 
   // 10. Behavior rules
@@ -638,15 +627,11 @@ function composeIntakeSystemPrompt(settings, intakeSettings, channel = 'call') {
     rules.forEach((r, i) => parts.push(`${i + 1}. ${r}`));
   }
 
-  // 10. Knowledge cards (brief context — limit to 5 for intake)
-  const cards = (settings.knowledgeCards || []).filter(c => c.enabled !== false);
-  if (cards.length > 0) {
-    parts.push('\n=== COMPANY CONTEXT (for understanding caller references) ===');
-    for (const card of cards.slice(0, 5)) {
-      parts.push(`- ${card.title}: ${(card.content || '').substring(0, 200)}`);
-    }
-    parts.push('=== END COMPANY CONTEXT ===');
-  }
+  // 10. Company context for intake
+  // Legacy knowledgeCards (removed April 2026) — no equivalent injection for
+  // intake because Turn 1 runs BEFORE KC routing has identified relevant
+  // knowledge. Intake's job is entity extraction, not knowledge retrieval.
+  // If future need arises, company-level summary fields could be surfaced here.
 
   // 11. JSON output format
   parts.push(
