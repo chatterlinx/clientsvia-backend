@@ -1246,6 +1246,67 @@
       .stats-bar, .toolbar, .banner-wrap, .settings-wrap { padding-left: 16px; padding-right: 16px; }
       .cards-grid { padding-left: 16px; padding-right: 16px; }
     }
+
+    /* ═════════════════════════════════════════════════════════════════════════
+       AGENT STUDIO — Tab System (April 2026)
+       services.html is the single admin destination for configuring an agent:
+       Knowledge / Behavior / Intake / Model / System Prompt
+       ═════════════════════════════════════════════════════════════════════════ */
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      padding: 0 24px;
+      margin-top: 8px;
+      border-bottom: 2px solid var(--border);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      background: var(--bg-header);
+      position: sticky;
+      top: 56px;               /* sits directly below page-header */
+      z-index: 90;
+    }
+    .tab-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s, background .15s;
+      border-radius: 8px 8px 0 0;
+    }
+    .tab-btn:hover { color: var(--text-primary); background: rgba(14,165,233,.04); }
+    .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    .tab-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    .tab-btn .tab-icon { font-size: 16px; line-height: 1; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Placeholder for panels not yet filled (C.3+ will replace these) */
+    .tab-placeholder {
+      max-width: 640px;
+      margin: 60px auto;
+      padding: 40px 28px;
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-card);
+      text-align: center;
+    }
+    .tab-placeholder-icon  { font-size: 40px; display: block; margin-bottom: 12px; line-height: 1; }
+    .tab-placeholder-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+    .tab-placeholder-sub   { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+    @media (max-width: 600px) {
+      .tab-bar { padding: 0 12px; top: 52px; }
+      .tab-btn { padding: 10px 14px; font-size: 13px; }
+    }
   </style>
 </head>
 <body>
@@ -1268,6 +1329,32 @@
     Add Container
   </a>
 </header>
+
+<!-- ═════════════════════════════════════════════════════════════════════════
+     AGENT STUDIO — Tabs (April 2026)
+     Single destination for configuring an agent. Knowledge is the default.
+     Behavior / Intake / Model / System Prompt tabs added in sub-commits C.3-C.5.
+     ═════════════════════════════════════════════════════════════════════════ -->
+<nav class="tab-bar" role="tablist" aria-label="Agent Studio sections">
+  <button type="button" class="tab-btn active" data-tab="knowledge" role="tab">
+    <span class="tab-icon">🧠</span>Knowledge
+  </button>
+  <button type="button" class="tab-btn" data-tab="behavior" role="tab">
+    <span class="tab-icon">🎭</span>Behavior
+  </button>
+  <button type="button" class="tab-btn" data-tab="intake" role="tab">
+    <span class="tab-icon">🎯</span>Intake
+  </button>
+  <button type="button" class="tab-btn" data-tab="model" role="tab">
+    <span class="tab-icon">⚙️</span>Model
+  </button>
+  <button type="button" class="tab-btn" data-tab="prompt" role="tab">
+    <span class="tab-icon">📋</span>System Prompt
+  </button>
+</nav>
+
+<!-- ─── KNOWLEDGE TAB (current content — zero regression) ────────────────── -->
+<div id="tab-panel-knowledge" class="tab-panel active" role="tabpanel" aria-labelledby="tab-knowledge">
 
 <!-- ── Stats bar ──────────────────────────────────────────────────────────── -->
 <div class="stats-bar" id="statsBar">
@@ -1706,6 +1793,52 @@
   </div>
 </div>
 
+</div><!-- /tab-panel-knowledge -->
+
+<!-- ─── BEHAVIOR TAB — filled in C.3 ─────────────────────────────────────── -->
+<div id="tab-panel-behavior" class="tab-panel" role="tabpanel" aria-labelledby="tab-behavior">
+  <div class="tab-placeholder">
+    <span class="tab-placeholder-icon">🎭</span>
+    <div class="tab-placeholder-title">Agent Behavior</div>
+    <div class="tab-placeholder-sub">
+      Persona, guardrails, and behavior rules. Loading in the next sub-commit.
+    </div>
+  </div>
+</div>
+
+<!-- ─── INTAKE TAB — filled in C.4 ───────────────────────────────────────── -->
+<div id="tab-panel-intake" class="tab-panel" role="tabpanel" aria-labelledby="tab-intake">
+  <div class="tab-placeholder">
+    <span class="tab-placeholder-icon">🎯</span>
+    <div class="tab-placeholder-title">First-Turn Intake</div>
+    <div class="tab-placeholder-sub">
+      Entity extraction, confidence thresholds, and intake model selection.
+    </div>
+  </div>
+</div>
+
+<!-- ─── MODEL TAB — filled in C.4 ────────────────────────────────────────── -->
+<div id="tab-panel-model" class="tab-panel" role="tabpanel" aria-labelledby="tab-model">
+  <div class="tab-placeholder">
+    <span class="tab-placeholder-icon">⚙️</span>
+    <div class="tab-placeholder-title">Model &amp; Activation</div>
+    <div class="tab-placeholder-sub">
+      LLM model, temperature, max tokens, channel activation, and handoff settings.
+    </div>
+  </div>
+</div>
+
+<!-- ─── SYSTEM PROMPT PREVIEW — filled in C.5 ────────────────────────────── -->
+<div id="tab-panel-prompt" class="tab-panel" role="tabpanel" aria-labelledby="tab-prompt">
+  <div class="tab-placeholder">
+    <span class="tab-placeholder-icon">📋</span>
+    <div class="tab-placeholder-title">System Prompt Preview</div>
+    <div class="tab-placeholder-sub">
+      Live rendering of the exact prompt Claude receives, using your real KC and behavior settings.
+    </div>
+  </div>
+</div>
+
 <!-- ── Toast container ────────────────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -1715,6 +1848,56 @@
 <script src="/agent-console/lib/auth.js"></script>
 <script>
 'use strict';
+
+// ═════════════════════════════════════════════════════════════════════════════
+// AGENT STUDIO — Tab Switching (April 2026)
+// services.html is the single admin destination. Tabs: Knowledge | Behavior
+// | Intake | Model | System Prompt. Initial tab from URL hash (#tab=behavior).
+// Each non-knowledge tab will lazy-render via the 'tab-activated' event in
+// sub-commits C.3-C.5.
+// ═════════════════════════════════════════════════════════════════════════════
+(function initAgentStudioTabs() {
+  const VALID_TABS = ['knowledge', 'behavior', 'intake', 'model', 'prompt'];
+
+  function activateTab(tabId) {
+    if (!VALID_TABS.includes(tabId)) tabId = 'knowledge';
+
+    document.querySelectorAll('.tab-bar .tab-btn').forEach(btn => {
+      const on = btn.dataset.tab === tabId;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === 'tab-panel-' + tabId);
+    });
+
+    // Update URL hash without scrolling
+    const newHash = '#tab=' + tabId;
+    if (window.location.hash !== newHash) {
+      history.replaceState(null, '', newHash);
+    }
+
+    // Notify downstream modules (C.3-C.5 render functions listen for this)
+    window.dispatchEvent(new CustomEvent('tab-activated', { detail: { tab: tabId } }));
+  }
+
+  function initialTabFromHash() {
+    const m = (window.location.hash || '').match(/tab=(\w+)/);
+    return m ? m[1] : 'knowledge';
+  }
+
+  // Click handlers
+  document.querySelectorAll('.tab-bar .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+  });
+
+  // Back/forward navigation
+  window.addEventListener('hashchange', () => activateTab(initialTabFromHash()));
+
+  // Initial activation (preserves current tab on refresh)
+  activateTab(initialTabFromHash());
+})();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATE
