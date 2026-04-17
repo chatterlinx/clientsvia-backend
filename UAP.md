@@ -24,6 +24,7 @@ This document describes the complete caller utterance routing pipeline from spee
 14. [Timing & Silence Layer — All UI, No Hardcoded](#14-timing--silence-layer--all-ui-no-hardcoded-april-2026)
 15. [LAP — ListenerActParser (Pre-Pipeline Gate)](#15-lap--listeneractparser-pre-pipeline-gate-april-2026)
 16. [Answer-From-KB LLM Posture + Enriched callContext](#16-answer-from-kb-llm-posture--enriched-callcontext-april-2026)
+17. [Agent Studio + Cross-Container KC Recovery](#17-agent-studio--cross-container-kc-recovery-april-2026)
 
 ---
 
@@ -1134,8 +1135,106 @@ Do NOT repeat yourself — build on what you already said.
 
 Changes A+B+C unblock the acknowledge-reflect pattern. Still open (future work):
 - **Cross-container KC recovery**: when anchor container's Section GAP hits, re-score across all containers WITHOUT anchor multiplier. Would route "service call fee" question from anchored No Cooling → Diagnostic Fee container.
-- **KC semantic ranking** before injection into LLM prompt (currently all enabled cards are dumped in verbatim).
-- **`groqContent` in `composeSystemPrompt`**: currently only basic `card.content` is injected — deep content (4000 chars) is not reaching the fallback LLM.
-- **Bridge phrase library** — configurable per-company "hold while I check" phrases.
-- **Consent funnel validator** — post-generation check that response ends with yes/no.
+- **KC semantic ranking** before injection into LLM prompt (~~currently all enabled cards are dumped in verbatim~~ ✅ shipped in §17 as `_rankTopKCSections`).
+- **`groqContent` in `composeSystemPrompt`**: ~~currently only basic `card.content` is injected~~ ✅ shipped in §17 — composeSystemPrompt now prefers `groqContent` when building kcContext.
+- **Bridge phrase library** — configurable per-company "hold while I check" phrases. (Still open.)
+- **Consent funnel validator** — post-generation check that response ends with yes/no. (Still open.)
+
+---
+
+## 17. Agent Studio + Cross-Container KC Recovery (April 2026)
+
+**Commits:** `c00e83e2d` (Phase 1 engine) + `ec1f910b5` → `59c18e1bf` (C.1-C.6 UI consolidation).
+**Plan:** `memory/agent-studio-rebuild.md` (full execution record).
+**Architecture:** `memory/agent-studio-architecture.md` (the 3-page mental model + schema + how to extend).
+
+### 17.1 — Cross-Container KC Recovery (engine)
+
+When KC routing hits a Section GAP (container matched but no specific section), the pipeline now attempts a RESCUE before falling into the gap pre-filter or LLM fallback. This fixes the anchor-overweight problem that pinned conversations to the wrong container.
+
+**File:** `services/engine/kc/KCDiscoveryRunner.js` (~line 1647)
+
+**Sequence at Section GAP:**
+1. Matched container is usually the anchored one (3× boost).
+2. Re-run `KCS.findContainer(scorableContainers, userInput, { ...callContext, anchorContainerId: null })` — NO anchor multiplier.
+3. If the rescue winner is a DIFFERENT container AND has a real section match (`bestSection !== null`) → SWAP.
+4. Log `KC_SECTION_GAP_RESCUED` + qaLog entry.
+5. Route through `_handleKCMatch` normally with the correct container.
+
+**Example it solves:**
+- Anchored on "No Cooling" (HVAC question in Turn 1).
+- Turn 4: caller asks *"Do I have to pay for another service call?"*
+- Anchor boost pins match to No Cooling — but no section covers return-visit fees.
+- Rescue: scores containers without anchor → **Diagnostic Fee** wins → routes there → real answer.
+
+### 17.2 — `_rankTopKCSections` Helper
+
+**File:** `services/engine/kc/KCDiscoveryRunner.js` (~line 385)
+
+Cross-container section ranker. Reuses `_scoreSectionsForGap` scoring (label×4, callerPhrase×3, contentKeywords×2, cue-bonus) but flattens across ALL containers to pick the global top N (default 5). Excludes `noAnchor` meta-containers (Recovery, etc.) — their content is conversational mechanics, not knowledge.
+
+Used at the LLM fallback site to inject real KC knowledge into Claude's prompt (instead of leaving Claude blind). Result: LLM fallback now produces answers sourced from KC, not generic platitudes.
+
+### 17.3 — `kcContext` Parameter on `composeSystemPrompt`
+
+**File:** `config/llmAgentDefaults.js`
+
+```javascript
+composeSystemPrompt(settings, channel, mode, kcContext)
+```
+
+New 4th parameter `kcContext = [{ container, section, score }]`. When provided, renders as:
+
+```
+=== KNOWLEDGE BASE (top matches for this caller's question) ===
+--- Diagnostic Fee / Fee For Return Visit After Recent Service ---
+[groqContent — up to 4000 chars]
+--- No Cooling / No Cooling With Water Leaking In Garage ---
+[groqContent]
+=== END KNOWLEDGE BASE ===
+Use the KNOWLEDGE BASE above to answer. If the answer is in there, give it confidently.
+```
+
+Prefers `section.groqContent` (deep, up to 4000 chars) over `section.content` (short fixed, 35-42 words). Falls back gracefully.
+
+Legacy `settings.knowledgeCards[]` was REMOVED in commit `ec1f910b5` — KC containers are the single source of truth.
+
+### 17.4 — Agent Studio Consolidation (UI)
+
+Before the rebuild, admin had to navigate between `services.html` (knowledge) and `llmagent.html` (persona/guardrails/behavior) to configure one agent. **`llmagent.html` has been deleted.** All agent configuration now lives on `services.html`, which is the **Agent Studio** — 5 tabs:
+
+| Tab | What it configures | Schema path |
+|---|---|---|
+| **Knowledge** (default) | KC containers (unchanged — original services.html) | `CompanyKnowledgeContainer` collection |
+| **Behavior** | Persona, guardrails, behavior rules | `aiAgentSettings.llmAgent.{persona, guardrails, behaviorRules}` |
+| **Intake** | Turn-1 entity extraction | `aiAgentSettings.llmAgent.intake` |
+| **Model** | LLM master switch, primary model, activation, handoff | `aiAgentSettings.llmAgent.{enabled, model, activation, handoff}` |
+| **System Prompt** | Live preview of rendered system prompt | (read-only — calls `preview-prompt` route) |
+
+**Implementation:** 4 IIFE modules at end of services.html's `<script>` block. Hash-persistent tab state (`#tab=behavior`), debounced autosave (400ms), shared floating save indicator.
+
+**API routes (reused):**
+- `GET /:companyId/llm-agent/config` — read merged config
+- `PATCH /:companyId/llm-agent/config` — partial deep-merge save
+- `POST /:companyId/llm-agent/preview-prompt` — renders `composeSystemPrompt` with live data
+- `POST /:companyId/llm-agent/ping` + `/ping-groq` — provider health checks
+- `POST /:companyId/llm-agent/test-conversation` — test harness
+
+**Clean sweep commit (`59c18e1bf`):**
+- Deleted `public/agent-console/llmagent.html` (2175 lines)
+- Deleted `public/agent-console/llmagent.js` (1780 lines)
+- Deleted `POST /llm-agent/scrape-url` (dead website scraper)
+- Deleted `GET /llm-agent/sync-triggers` (dead trigger bridge)
+- Removed `cheerio` + 3 trigger model imports (unused after route deletion)
+- Removed nav card in `index.html` + case handler in `index.js`
+- Updated all forward pointers in `discovery.js`, `models/v2Company.js`, `config/llmAgentDefaults.js`
+- Zero legacy fallback code remaining. Git history is the ghost.
+
+**Multi-tenant principle preserved:** storage path `aiAgentSettings.llmAgent` unchanged. Existing company configs load without migration.
+
+### 17.5 — What's Still Open
+
+- **Bridge phrase library** — configurable per-company "hold while I check" phrases (currently the LLM is instructed via prompt to never end with "let me check" but there's no admin UI for custom bridge phrases)
+- **Consent funnel validator** — post-generation check that response ends with yes/no (currently a prompt instruction, not a runtime enforcement)
+- **No Cooling repeat-visit sections** — the content gap from April 17 gap report (9 SECTION_GAP events, now mostly rescued by §17.1 cross-container recovery, but authoring purpose-built repeat-visit sections would still improve quality)
 
