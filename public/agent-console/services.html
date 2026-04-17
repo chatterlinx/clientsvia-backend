@@ -1307,6 +1307,228 @@
       .tab-bar { padding: 0 12px; top: 52px; }
       .tab-btn { padding: 10px 14px; font-size: 13px; }
     }
+
+    /* ═════════════════════════════════════════════════════════════════════════
+       BEHAVIOR TAB (C.3)
+       ═════════════════════════════════════════════════════════════════════════ */
+    .behavior-wrap { padding: 20px 24px 40px; max-width: 900px; margin: 0 auto; }
+    .behavior-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .behavior-card-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--border);
+    }
+    .behavior-card-icon { font-size: 22px; line-height: 1; }
+    .behavior-card-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .behavior-card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .behavior-card-actions { margin-left: auto; }
+    .behavior-card-body {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+    .behavior-card-body .form-group.full { grid-column: 1 / -1; }
+    .behavior-card-body .optional { font-weight: 400; color: var(--text-xs); text-transform: none; letter-spacing: 0; }
+
+    /* Range slider (reused) */
+    .range-slider { width: 100%; }
+    .range-value { font-size: 13px; font-weight: 700; color: var(--color-primary); margin-left: 6px; }
+    .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-xs); margin-top: 4px; }
+
+    /* Toggle switch (reused across cards) */
+    .toggle-switch {
+      position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #cbd5e1; transition: .18s; border-radius: 999px;
+    }
+    .toggle-slider::before {
+      position: absolute; content: ""; height: 16px; width: 16px; left: 3px; top: 3px;
+      background: white; transition: .18s; border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    }
+    input:checked + .toggle-slider { background: var(--color-primary); }
+    input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+    /* Guardrail rows */
+    .guard-toggle-row {
+      grid-column: 1 / -1;
+      display: flex; align-items: flex-start; gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .guard-toggle-row:last-of-type { border-bottom: none; }
+    .guard-toggle-meta { flex: 1; }
+    .guard-toggle-label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .guard-toggle-desc  { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+
+    .guard-custom-section {
+      grid-column: 1 / -1;
+      margin-top: 12px; padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .guard-custom-label { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .guard-custom-hint  { font-size: 12px; color: var(--text-muted); margin-top: 3px; margin-bottom: 10px; }
+    .guard-custom-add   { display: flex; gap: 8px; margin-top: 8px; }
+    .guard-custom-add .form-input { flex: 1; }
+    #bh-custom-rules-list { display: flex; flex-direction: column; gap: 6px; }
+    .custom-rule-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .custom-rule-row .rule-text { flex: 1; color: var(--text-primary); }
+    .custom-rule-row .btn-remove {
+      background: transparent; border: none;
+      color: var(--color-danger);
+      font-size: 18px; font-weight: 700; cursor: pointer;
+      padding: 0 4px; line-height: 1;
+    }
+
+    /* Behavior Rules cards */
+    .rule-filter-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .rule-filter-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .rule-filter-chip:hover { color: var(--text-primary); }
+    .rule-filter-chip.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+    .rule-filter-chip.active .chip-count { color: white; }
+    .chip-count {
+      background: rgba(0,0,0,.08);
+      color: var(--text-xs);
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 11px; font-weight: 700;
+    }
+    .rules-list { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
+    .rule-card {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 12px 14px;
+      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .rule-card.is-disabled { opacity: .55; }
+    .rule-card-cat {
+      font-size: 10px; font-weight: 800;
+      padding: 3px 8px; border-radius: 999px;
+      text-transform: uppercase; letter-spacing: .04em;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .rule-card-cat.emotional { background: #fee2e2; color: #991b1b; }
+    .rule-card-cat.language  { background: #d1fae5; color: #065f46; }
+    .rule-card-cat.intent    { background: #dbeafe; color: #1e40af; }
+    .rule-card-cat.flow      { background: #ede9fe; color: #5b21b6; }
+    .rule-card-cat.custom    { background: #e0e7ff; color: #3730a3; }
+    .rule-card-body  { flex: 1; min-width: 0; }
+    .rule-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .rule-card-text  { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+    .rule-card-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .rule-btn-icon {
+      background: transparent; border: none; cursor: pointer;
+      font-size: 16px; color: var(--text-muted);
+      padding: 4px 6px; border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .rule-btn-icon:hover { background: #e2e8f0; color: var(--text-primary); }
+    .rule-btn-icon.danger:hover { background: #fee2e2; color: var(--color-danger); }
+    .rules-empty {
+      grid-column: 1 / -1;
+      padding: 32px; text-align: center;
+      color: var(--text-muted); font-size: 13px;
+      background: #fafafa; border: 1px dashed var(--border); border-radius: 10px;
+    }
+
+    /* Buttons */
+    .btn-primary, .btn-secondary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      font-family: inherit;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-primary { background: var(--color-primary); color: white; }
+    .btn-primary:hover { background: var(--color-primary-dk); }
+    .btn-secondary { background: white; color: var(--text-primary); border-color: var(--border); }
+    .btn-secondary:hover { background: #f8fafc; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* Save status indicator */
+    .behavior-save-status {
+      position: fixed; bottom: 20px; right: 24px;
+      padding: 10px 16px;
+      background: rgba(15,23,42,.9);
+      color: white;
+      border-radius: 999px;
+      font-size: 12px; font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,.2);
+      z-index: 95;
+      transform: translateY(20px); opacity: 0;
+      transition: transform .25s, opacity .25s;
+      pointer-events: none;
+    }
+    .behavior-save-status.visible { transform: translateY(0); opacity: 1; }
+    .behavior-save-status.saving  { background: var(--color-primary); }
+    .behavior-save-status.saved   { background: var(--color-success); }
+    .behavior-save-status.error   { background: var(--color-danger); }
+
+    /* Modal */
+    .bh-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 20px;
+    }
+    .bh-modal-overlay[hidden] { display: none; }
+    .bh-modal {
+      background: white;
+      border-radius: 14px;
+      width: 100%; max-width: 520px;
+      max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 50px rgba(0,0,0,.3);
+    }
+    .bh-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .bh-modal-header h3 { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .bh-modal-close {
+      background: transparent; border: none; cursor: pointer;
+      font-size: 28px; line-height: 1; color: var(--text-muted);
+      padding: 0 4px;
+    }
+    .bh-modal-close:hover { color: var(--text-primary); }
+    .bh-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .bh-modal-footer {
+      display: flex; justify-content: flex-end; gap: 8px;
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      background: #fafafa;
+    }
   </style>
 </head>
 <body>
@@ -1795,13 +2017,181 @@
 
 </div><!-- /tab-panel-knowledge -->
 
-<!-- ─── BEHAVIOR TAB — filled in C.3 ─────────────────────────────────────── -->
+<!-- ─── BEHAVIOR TAB ──────────────────────────────────────────────────────── -->
 <div id="tab-panel-behavior" class="tab-panel" role="tabpanel" aria-labelledby="tab-behavior">
-  <div class="tab-placeholder">
-    <span class="tab-placeholder-icon">🎭</span>
-    <div class="tab-placeholder-title">Agent Behavior</div>
-    <div class="tab-placeholder-sub">
-      Persona, guardrails, and behavior rules. Loading in the next sub-commit.
+  <div class="behavior-wrap">
+
+    <!-- PERSONA CARD -->
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🎭</span>
+        <div>
+          <div class="behavior-card-title">Persona</div>
+          <div class="behavior-card-subtitle">How the agent introduces itself and speaks</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="form-group">
+          <label class="form-label" for="bh-persona-name">Agent Name <span class="optional">(optional)</span></label>
+          <input type="text" class="form-input" id="bh-persona-name" placeholder="e.g. Sarah — leave blank for no name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bh-persona-role">Role</label>
+          <select class="form-select" id="bh-persona-role">
+            <option value="receptionist">Receptionist</option>
+            <option value="assistant">Assistant</option>
+            <option value="concierge">Concierge</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bh-persona-tone">Tone</label>
+          <select class="form-select" id="bh-persona-tone">
+            <option value="friendly-professional">Friendly Professional</option>
+            <option value="formal">Formal</option>
+            <option value="casual">Casual</option>
+            <option value="warm">Warm</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bh-persona-language">Language</label>
+          <select class="form-select" id="bh-persona-language">
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Chattiness <span class="range-value" id="bh-chattiness-value">3</span></label>
+          <input type="range" class="range-slider" id="bh-chattiness" min="1" max="5" step="1" value="3">
+          <div class="range-labels"><span>Terse</span><span>Brief</span><span>Balanced</span><span>Conversational</span><span>Chatty</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GUARDRAILS CARD -->
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">🛡️</span>
+        <div>
+          <div class="behavior-card-title">Safety Guardrails</div>
+          <div class="behavior-card-subtitle">What the agent is not allowed to do</div>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">No PII Collection</div>
+            <div class="guard-toggle-desc">Never ask for SSN, DOB, full address, or credit card numbers</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="bh-guard-pii"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">No Scheduling</div>
+            <div class="guard-toggle-desc">Never book appointments directly (hand off to booking system)</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="bh-guard-scheduling"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">No Pricing Invention</div>
+            <div class="guard-toggle-desc">Never invent prices. In answer-from-KB mode, MAY state prices from the knowledge base.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="bh-guard-pricing"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">No Medical Advice</div>
+            <div class="guard-toggle-desc">Never provide medical advice or diagnoses</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="bh-guard-medical"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="guard-toggle-row">
+          <div class="guard-toggle-meta">
+            <div class="guard-toggle-label">No Legal Advice</div>
+            <div class="guard-toggle-desc">Never provide legal advice or interpretations</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="bh-guard-legal"><span class="toggle-slider"></span></label>
+        </div>
+
+        <!-- Custom rules -->
+        <div class="guard-custom-section">
+          <div class="guard-custom-label">Custom Guardrails</div>
+          <div class="guard-custom-hint">Additional client-specific rules. Each becomes a numbered rule in the agent's system prompt.</div>
+          <div id="bh-custom-rules-list"></div>
+          <div class="guard-custom-add">
+            <input type="text" class="form-input" id="bh-custom-rule-input" placeholder="e.g. Never promise same-day service">
+            <button type="button" class="btn-secondary" id="bh-custom-rule-add">+ Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BEHAVIOR RULES CARD -->
+    <div class="behavior-card">
+      <div class="behavior-card-header">
+        <span class="behavior-card-icon">📐</span>
+        <div>
+          <div class="behavior-card-title">Behavior Rules</div>
+          <div class="behavior-card-subtitle">How the agent handles edge cases — emotional, language, intent, flow</div>
+        </div>
+        <div class="behavior-card-actions">
+          <button type="button" class="btn-primary btn-sm" id="bh-rule-add">+ Add Rule</button>
+        </div>
+      </div>
+      <div class="behavior-card-body">
+        <div class="rule-filter-bar">
+          <button type="button" class="rule-filter-chip active" data-rule-filter="all">All <span class="chip-count" id="bh-rule-count-all">0</span></button>
+          <button type="button" class="rule-filter-chip" data-rule-filter="emotional">Emotional <span class="chip-count" id="bh-rule-count-emotional">0</span></button>
+          <button type="button" class="rule-filter-chip" data-rule-filter="language">Language <span class="chip-count" id="bh-rule-count-language">0</span></button>
+          <button type="button" class="rule-filter-chip" data-rule-filter="intent">Intent <span class="chip-count" id="bh-rule-count-intent">0</span></button>
+          <button type="button" class="rule-filter-chip" data-rule-filter="flow">Flow <span class="chip-count" id="bh-rule-count-flow">0</span></button>
+          <button type="button" class="rule-filter-chip" data-rule-filter="custom">Custom <span class="chip-count" id="bh-rule-count-custom">0</span></button>
+        </div>
+        <div id="bh-rules-list" class="rules-list"></div>
+        <div id="bh-rules-empty" class="rules-empty" style="display:none;">
+          No behavior rules yet. Click <strong>+ Add Rule</strong> to define how the agent handles an edge case.
+        </div>
+      </div>
+    </div>
+
+    <!-- Save indicator -->
+    <div class="behavior-save-status" id="bh-save-status">
+      <span id="bh-save-text">All changes saved</span>
+    </div>
+  </div>
+</div>
+
+<!-- Behavior Rule Modal -->
+<div class="bh-modal-overlay" id="bh-rule-modal" hidden>
+  <div class="bh-modal">
+    <div class="bh-modal-header">
+      <h3 id="bh-rule-modal-title">Add Behavior Rule</h3>
+      <button type="button" class="bh-modal-close" id="bh-rule-modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="bh-modal-body">
+      <div class="form-group">
+        <label class="form-label" for="bh-rule-title">Title</label>
+        <input type="text" class="form-input" id="bh-rule-title" placeholder="e.g. Frustrated Caller">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bh-rule-category">Category</label>
+        <select class="form-select" id="bh-rule-category">
+          <option value="emotional">Emotional</option>
+          <option value="language">Language</option>
+          <option value="intent">Intent</option>
+          <option value="flow">Flow</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bh-rule-text">Rule Instruction</label>
+        <textarea class="form-textarea" id="bh-rule-text" rows="4" placeholder="e.g. When the caller sounds frustrated, acknowledge their feelings before offering a solution."></textarea>
+      </div>
+    </div>
+    <div class="bh-modal-footer">
+      <button type="button" class="btn-secondary" id="bh-rule-cancel">Cancel</button>
+      <button type="button" class="btn-primary" id="bh-rule-save">Save Rule</button>
     </div>
   </div>
 </div>
@@ -4694,6 +5084,359 @@ window.addEventListener('message', e => {
     document.getElementById('pfRescanHint').style.display = '';
   }
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BEHAVIOR TAB MODULE (C.3, April 17, 2026)
+   Persona + Guardrails + Behavior Rules.
+   Storage: company.aiAgentSettings.llmAgent (PATCH deep-merge).
+   API: GET/PATCH /api/agent-console/:companyId/llm-agent/config.
+   Lazy-loaded on first 'tab-activated' event for 'behavior'.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function initBehaviorTab() {
+  const ST = {
+    loaded: false,
+    config: null,        // full LLM agent config from backend
+    ruleFilter: 'all',
+    editingRuleId: null,
+    saveTimer: null,
+  };
+
+  // Generate a stable UID for rules (so we don't depend on server-side creation)
+  function uid() {
+    return 'r_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  // ── API ────────────────────────────────────────────────────────────────
+  async function loadConfig() {
+    const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
+      headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+    });
+    if (!resp.ok) throw new Error(`GET config failed: ${resp.status}`);
+    const data = await resp.json();
+    return data.config || data;
+  }
+
+  async function saveConfig(partial) {
+    const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': AuthLib?.getToken?.() || '',
+      },
+      body: JSON.stringify(partial),
+    });
+    if (!resp.ok) throw new Error(`PATCH config failed: ${resp.status}`);
+    return resp.json();
+  }
+
+  // ── Save indicator ─────────────────────────────────────────────────────
+  function showSave(state, text) {
+    const el = document.getElementById('bh-save-status');
+    const txt = document.getElementById('bh-save-text');
+    if (!el || !txt) return;
+    el.classList.remove('saving', 'saved', 'error');
+    if (state) el.classList.add(state);
+    txt.textContent = text;
+    el.classList.add('visible');
+    if (state === 'saved' || state === 'error') {
+      clearTimeout(el._hideT);
+      el._hideT = setTimeout(() => el.classList.remove('visible'), 1800);
+    }
+  }
+
+  // ── Debounced save ─────────────────────────────────────────────────────
+  function queueSave(patch) {
+    clearTimeout(ST.saveTimer);
+    showSave('saving', 'Saving…');
+    ST.saveTimer = setTimeout(async () => {
+      try {
+        const res = await saveConfig(patch);
+        ST.config = res.config || res;
+        showSave('saved', 'Saved');
+      } catch (err) {
+        console.error('[behavior] save failed', err);
+        showSave('error', 'Save failed — retry');
+      }
+    }, 400);
+  }
+
+  // ── Persona ────────────────────────────────────────────────────────────
+  function renderPersona(cfg) {
+    const p = cfg.persona || {};
+    const nameEl = document.getElementById('bh-persona-name');
+    const roleEl = document.getElementById('bh-persona-role');
+    const toneEl = document.getElementById('bh-persona-tone');
+    const langEl = document.getElementById('bh-persona-language');
+    const chatEl = document.getElementById('bh-chattiness');
+    const chatV  = document.getElementById('bh-chattiness-value');
+    if (nameEl) nameEl.value = p.name || '';
+    if (roleEl) roleEl.value = p.role || 'receptionist';
+    if (toneEl) toneEl.value = p.tone || 'friendly-professional';
+    if (langEl) langEl.value = p.language || 'en';
+    if (chatEl) chatEl.value = String(p.chattiness ?? 3);
+    if (chatV)  chatV.textContent = String(p.chattiness ?? 3);
+  }
+
+  function wirePersona() {
+    const wire = (id, field) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        const v = (id === 'bh-chattiness') ? Number(el.value) : el.value;
+        queueSave({ persona: { [field]: v } });
+      });
+      if (id === 'bh-chattiness') {
+        el.addEventListener('input', () => {
+          document.getElementById('bh-chattiness-value').textContent = el.value;
+        });
+      }
+    };
+    wire('bh-persona-name', 'name');
+    wire('bh-persona-role', 'role');
+    wire('bh-persona-tone', 'tone');
+    wire('bh-persona-language', 'language');
+    wire('bh-chattiness', 'chattiness');
+  }
+
+  // ── Guardrails ─────────────────────────────────────────────────────────
+  const GUARD_FIELDS = [
+    ['bh-guard-pii',        'noPiiCollection'],
+    ['bh-guard-scheduling', 'noScheduling'],
+    ['bh-guard-pricing',    'noPricing'],
+    ['bh-guard-medical',    'noMedicalAdvice'],
+    ['bh-guard-legal',      'noLegalAdvice'],
+  ];
+  function renderGuardrails(cfg) {
+    const g = cfg.guardrails || {};
+    GUARD_FIELDS.forEach(([id, field]) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = !!g[field];
+    });
+    renderCustomRules(g.customRules || []);
+  }
+  function wireGuardrails() {
+    GUARD_FIELDS.forEach(([id, field]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        queueSave({ guardrails: { [field]: el.checked } });
+      });
+    });
+  }
+  function renderCustomRules(rules) {
+    const list = document.getElementById('bh-custom-rules-list');
+    if (!list) return;
+    list.innerHTML = '';
+    (rules || []).forEach((cr, idx) => {
+      const row = document.createElement('div');
+      row.className = 'custom-rule-row';
+      row.innerHTML = `
+        <span class="rule-text"></span>
+        <button type="button" class="btn-remove" aria-label="Remove">&times;</button>
+      `;
+      row.querySelector('.rule-text').textContent = cr.rule || cr;
+      row.querySelector('.btn-remove').addEventListener('click', () => {
+        const updated = (ST.config.guardrails?.customRules || []).filter((_, i) => i !== idx);
+        ST.config.guardrails = { ...(ST.config.guardrails || {}), customRules: updated };
+        renderCustomRules(updated);
+        queueSave({ guardrails: { customRules: updated } });
+      });
+      list.appendChild(row);
+    });
+  }
+  function wireCustomRuleAdd() {
+    const input = document.getElementById('bh-custom-rule-input');
+    const btn   = document.getElementById('bh-custom-rule-add');
+    if (!input || !btn) return;
+    const add = () => {
+      const v = (input.value || '').trim();
+      if (!v) return;
+      const current = ST.config.guardrails?.customRules || [];
+      const updated = [...current, { rule: v }];
+      ST.config.guardrails = { ...(ST.config.guardrails || {}), customRules: updated };
+      renderCustomRules(updated);
+      queueSave({ guardrails: { customRules: updated } });
+      input.value = '';
+    };
+    btn.addEventListener('click', add);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  }
+
+  // ── Behavior Rules ─────────────────────────────────────────────────────
+  const RULE_CATEGORIES = ['emotional', 'language', 'intent', 'flow', 'custom'];
+
+  function renderRules() {
+    const rules = ST.config.behaviorRules || [];
+    // counts
+    const counts = { all: rules.length };
+    RULE_CATEGORIES.forEach(c => {
+      counts[c] = rules.filter(r => (r.category || 'custom') === c).length;
+    });
+    Object.keys(counts).forEach(k => {
+      const el = document.getElementById('bh-rule-count-' + k);
+      if (el) el.textContent = counts[k];
+    });
+
+    const filtered = ST.ruleFilter === 'all'
+      ? rules
+      : rules.filter(r => (r.category || 'custom') === ST.ruleFilter);
+
+    const list  = document.getElementById('bh-rules-list');
+    const empty = document.getElementById('bh-rules-empty');
+    if (!list || !empty) return;
+    list.innerHTML = '';
+    empty.style.display = filtered.length === 0 ? 'block' : 'none';
+
+    filtered.forEach(rule => {
+      const card = document.createElement('div');
+      card.className = 'rule-card' + (rule.enabled === false ? ' is-disabled' : '');
+      const cat = rule.category || 'custom';
+      card.innerHTML = `
+        <span class="rule-card-cat ${cat}"></span>
+        <div class="rule-card-body">
+          <div class="rule-card-title"></div>
+          <div class="rule-card-text"></div>
+        </div>
+        <div class="rule-card-actions">
+          <button type="button" class="rule-btn-icon" data-act="toggle" title="Enable/disable">${rule.enabled === false ? '🔘' : '✅'}</button>
+          <button type="button" class="rule-btn-icon" data-act="edit" title="Edit">✏️</button>
+          <button type="button" class="rule-btn-icon danger" data-act="del" title="Delete">🗑️</button>
+        </div>
+      `;
+      card.querySelector('.rule-card-cat').textContent = cat;
+      card.querySelector('.rule-card-title').textContent = rule.title || '(untitled)';
+      card.querySelector('.rule-card-text').textContent  = rule.rule  || '';
+      card.querySelector('[data-act="toggle"]').addEventListener('click', () => toggleRule(rule.id));
+      card.querySelector('[data-act="edit"]').addEventListener('click', () => openRuleModal(rule.id));
+      card.querySelector('[data-act="del"]').addEventListener('click', () => deleteRule(rule.id));
+      list.appendChild(card);
+    });
+  }
+
+  function wireRuleFilters() {
+    document.querySelectorAll('.rule-filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        ST.ruleFilter = chip.dataset.ruleFilter;
+        document.querySelectorAll('.rule-filter-chip').forEach(c => c.classList.toggle('active', c === chip));
+        renderRules();
+      });
+    });
+  }
+
+  function toggleRule(id) {
+    const rules = (ST.config.behaviorRules || []).map(r => r.id === id
+      ? { ...r, enabled: r.enabled === false ? true : false }
+      : r);
+    ST.config.behaviorRules = rules;
+    renderRules();
+    queueSave({ behaviorRules: rules });
+  }
+
+  function deleteRule(id) {
+    const rule = (ST.config.behaviorRules || []).find(r => r.id === id);
+    if (!rule) return;
+    if (!confirm(`Delete behavior rule "${rule.title || 'untitled'}"?`)) return;
+    const rules = (ST.config.behaviorRules || []).filter(r => r.id !== id);
+    ST.config.behaviorRules = rules;
+    renderRules();
+    queueSave({ behaviorRules: rules });
+  }
+
+  function openRuleModal(id) {
+    ST.editingRuleId = id || null;
+    const modal = document.getElementById('bh-rule-modal');
+    const title = document.getElementById('bh-rule-modal-title');
+    const tEl   = document.getElementById('bh-rule-title');
+    const cEl   = document.getElementById('bh-rule-category');
+    const txtEl = document.getElementById('bh-rule-text');
+    if (id) {
+      const rule = (ST.config.behaviorRules || []).find(r => r.id === id);
+      if (!rule) return;
+      title.textContent = 'Edit Behavior Rule';
+      tEl.value = rule.title || '';
+      cEl.value = rule.category || 'custom';
+      txtEl.value = rule.rule || '';
+    } else {
+      title.textContent = 'Add Behavior Rule';
+      tEl.value = '';
+      cEl.value = 'custom';
+      txtEl.value = '';
+    }
+    modal.hidden = false;
+    setTimeout(() => tEl.focus(), 50);
+  }
+
+  function closeRuleModal() {
+    document.getElementById('bh-rule-modal').hidden = true;
+    ST.editingRuleId = null;
+  }
+
+  function saveRuleFromModal() {
+    const title = (document.getElementById('bh-rule-title').value || '').trim();
+    const cat   = document.getElementById('bh-rule-category').value;
+    const text  = (document.getElementById('bh-rule-text').value  || '').trim();
+    if (!title || !text) { alert('Title and instruction are required'); return; }
+
+    const rules = [...(ST.config.behaviorRules || [])];
+    if (ST.editingRuleId) {
+      const idx = rules.findIndex(r => r.id === ST.editingRuleId);
+      if (idx >= 0) {
+        rules[idx] = { ...rules[idx], title, category: cat, rule: text, updatedAt: new Date().toISOString() };
+      }
+    } else {
+      rules.push({
+        id: uid(), title, category: cat, rule: text,
+        enabled: true, isDefault: false, priority: rules.length + 1,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      });
+    }
+    ST.config.behaviorRules = rules;
+    renderRules();
+    queueSave({ behaviorRules: rules });
+    closeRuleModal();
+  }
+
+  function wireRuleModal() {
+    document.getElementById('bh-rule-add').addEventListener('click', () => openRuleModal(null));
+    document.getElementById('bh-rule-modal-close').addEventListener('click', closeRuleModal);
+    document.getElementById('bh-rule-cancel').addEventListener('click', closeRuleModal);
+    document.getElementById('bh-rule-save').addEventListener('click', saveRuleFromModal);
+    document.getElementById('bh-rule-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeRuleModal();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !document.getElementById('bh-rule-modal').hidden) closeRuleModal();
+    });
+  }
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────
+  async function bootstrap() {
+    if (ST.loaded) return;
+    if (!S.companyId) return; // companyId not yet populated — page init will retry
+    try {
+      showSave('saving', 'Loading…');
+      ST.config = await loadConfig();
+      renderPersona(ST.config);
+      renderGuardrails(ST.config);
+      renderRules();
+      wirePersona();
+      wireGuardrails();
+      wireCustomRuleAdd();
+      wireRuleFilters();
+      wireRuleModal();
+      ST.loaded = true;
+      showSave('saved', 'Loaded');
+    } catch (err) {
+      console.error('[behavior] bootstrap failed', err);
+      showSave('error', 'Load failed — check console');
+    }
+  }
+
+  // Lazy-load when behavior tab activated
+  window.addEventListener('tab-activated', (e) => {
+    if (e.detail?.tab === 'behavior') bootstrap();
+  });
+})();
 </script>
 </body>
 </html>
