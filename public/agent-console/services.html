@@ -353,6 +353,29 @@
     .dot-blue   { background: #3b82f6; }
     .dot-purple { background: #8b5cf6; }
     .dot-gray   { background: #94a3b8; }
+    .dot-red    { background: #ef4444; }
+
+    /* ── Per-card Scoring Health bar ───────────────────────────────────── */
+    .kc-scoring-bar {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      padding: 6px 0 8px; border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .kc-scoring-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #64748b; margin-right: 2px;
+    }
+    .kc-scoring-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600;
+      padding: 2px 7px; border-radius: 999px;
+      border: 1px solid transparent;
+      font-variant-numeric: tabular-nums;
+    }
+    .kc-sc-ok   { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+    .kc-sc-warn { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+    .kc-sc-crit { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .kc-sc-na   { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
 
     /* ── Performance metrics row ──────────────────────────────────────── */
     .kc-metrics {
@@ -3549,6 +3572,79 @@ function _cardHTML(c) {
   const promoCount     = allSections.filter(s => s.isPromotion).length;
   const offCount       = allSections.filter(s => s.isActive === false).length;
 
+  // ── Scoring Health (client-side) ──────────────────────────────────────
+  // Counts the 4 UAP foundation fields across active sections only. Powers
+  // the per-card scoring chips so admins can see which containers are lit.
+  const activeSections   = allSections.filter(s => s.isActive !== false);
+  const activeCount      = activeSections.length;
+  const hasVocabKey      = Boolean(c.tradeVocabularyKey);
+  const isMeta           = Boolean(c.noAnchor);
+
+  let coreFilled = 0, embedded = 0, anchorsOk = 0, tradeOk = 0;
+  for (const s of activeSections) {
+    if (typeof s.phraseCore === 'string' && s.phraseCore.trim().length > 0) coreFilled++;
+    const emb = s.phraseCoreEmbedding;
+    const embLen = Array.isArray(emb) ? emb.length : (emb && typeof emb.length === 'number' ? emb.length : 0);
+    if (embLen > 0) embedded++;
+    const phrases = Array.isArray(s.callerPhrases) ? s.callerPhrases : [];
+    if (phrases.length === 0) {
+      anchorsOk++; // no phrases to score — not a blocker
+    } else {
+      const allHaveAnchors = phrases.every(p =>
+        Array.isArray(p.anchorWords) && p.anchorWords.filter(Boolean).length > 0
+      );
+      if (allHaveAnchors) anchorsOk++;
+    }
+    if (Array.isArray(s.tradeTerms) && s.tradeTerms.length > 0) tradeOk++;
+  }
+
+  const pct = (n) => activeCount === 0 ? 0 : Math.round((n / activeCount) * 100);
+  const scoringChipCls = (filledCount, applicable = true) => {
+    if (!applicable) return 'kc-sc-na';
+    if (activeCount === 0) return 'kc-sc-na';
+    const p = pct(filledCount);
+    if (p >= 90) return 'kc-sc-ok';
+    if (p >= 60) return 'kc-sc-warn';
+    return 'kc-sc-crit';
+  };
+  const scoringDotFor = (cls) =>
+    cls === 'kc-sc-ok'   ? '<span class="kc-dot dot-green"></span>'
+  : cls === 'kc-sc-warn' ? '<span class="kc-dot dot-amber"></span>'
+  : cls === 'kc-sc-crit' ? '<span class="kc-dot dot-red"></span>'
+  :                        '<span class="kc-dot dot-gray"></span>';
+
+  const coreCls    = scoringChipCls(coreFilled);
+  const embedCls   = scoringChipCls(embedded);
+  const anchorCls  = scoringChipCls(anchorsOk);
+  // tradeTerms only meaningful for non-meta containers with a vocab key.
+  // Meta = noAnchor (by design no tradeTerms). No vocab key = can't allowlist.
+  const tradeApplicable = !isMeta && hasVocabKey;
+  const tradeCls   = scoringChipCls(tradeOk, tradeApplicable);
+
+  const scoringTip = [
+    `Scoring health for ${activeCount} active section${activeCount !== 1 ? 's' : ''}:`,
+    `• phraseCore filled:     ${coreFilled}/${activeCount} (${pct(coreFilled)}%)`,
+    `• phraseCore embedded:   ${embedded}/${activeCount} (${pct(embedded)}%)`,
+    `• anchorWords on all phrases: ${anchorsOk}/${activeCount} (${pct(anchorsOk)}%)`,
+    tradeApplicable
+      ? `• tradeTerms filled:     ${tradeOk}/${activeCount} (${pct(tradeOk)}%)`
+      : (isMeta
+          ? `• tradeTerms: N/A (meta-container, noAnchor=true)`
+          : `• tradeTerms: N/A (no tradeVocabularyKey set on container)`),
+    `Run the ↻ Re-score ALL toolbar button to light any dark fields.`,
+  ].join('\n');
+
+  const scoringBar = activeCount === 0
+    ? ''
+    : `
+      <div class="kc-scoring-bar" title="${_esc(scoringTip)}">
+        <span class="kc-scoring-label">Scoring</span>
+        <span class="kc-scoring-chip ${coreCls}">${scoringDotFor(coreCls)}core ${coreFilled}/${activeCount}</span>
+        <span class="kc-scoring-chip ${embedCls}">${scoringDotFor(embedCls)}embed ${embedded}/${activeCount}</span>
+        <span class="kc-scoring-chip ${anchorCls}">${scoringDotFor(anchorCls)}anchors ${anchorsOk}/${activeCount}</span>
+        <span class="kc-scoring-chip ${tradeCls}">${scoringDotFor(tradeCls)}trade ${tradeApplicable ? `${tradeOk}/${activeCount}` : 'n/a'}</span>
+      </div>`;
+
   // ── Analytics (may be null during initial load) ───────────────────────
   const stats     = S.cardAnalytics?.containerStats?.[String(c._id)];
   const hitCount  = stats?.hitCount ?? null;
@@ -3683,6 +3779,7 @@ function _cardHTML(c) {
       ${contentMatchHtml}
       <div class="kc-keywords">${kwHtml}</div>
       ${sectionBar}
+      ${scoringBar}
       ${metricsRow}
     </div>
     <div class="kc-card-footer">
