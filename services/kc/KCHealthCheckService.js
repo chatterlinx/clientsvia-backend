@@ -274,10 +274,14 @@ async function _checkPlatform(containers) {
 async function runHealthCheck(companyId) {
   const t0 = Date.now();
 
+  // companyId on CompanyKnowledgeContainer is stored as STRING (not ObjectId).
+  // Cast defensively in case caller passed an ObjectId.
+  const companyIdStr = String(companyId);
+
   // Load all containers for the company (exclude heavy fields)
   const containers = await CompanyKnowledgeContainer
     .find(
-      { companyId },
+      { companyId: companyIdStr },
       {
         title:              1,
         kcId:               1,

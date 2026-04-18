@@ -39,7 +39,7 @@
  * ============================================================================
  */
 
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient } = require('mongodb');
 
 // ──────────────────────────────────────────────────────────────────────────
 // Args
@@ -183,9 +183,10 @@ function _applyAllowlist(candidates, allowSet, labelTokens) {
       console.warn('   ⚠️  Run scripts/seed-trade-vocab-hvac.js first, then retry.');
     }
 
-    // Build filter
+    // Build filter.
+    // NOTE: companyId on CompanyKnowledgeContainer is stored as STRING (not ObjectId).
     const filter = {};
-    if (COMPANY_ID && COMPANY_ID !== 'all') filter.companyId = new ObjectId(COMPANY_ID);
+    if (COMPANY_ID && COMPANY_ID !== 'all') filter.companyId = COMPANY_ID;
 
     const cursor = containers.find(filter, {
       projection: {

@@ -25,7 +25,6 @@
 
 const express               = require('express');
 const router                = express.Router();
-const mongoose              = require('mongoose');
 const logger                = require('../../utils/logger');
 const { authenticateJWT }   = require('../../middleware/auth');
 const KCHealthCheckService  = require('../../services/kc/KCHealthCheckService');
@@ -84,9 +83,8 @@ router.get('/:companyId/knowledge/health', async (req, res) => {
       return res.json({ ...cached, cached: true });
     }
 
-    // Run fresh audit
-    const objId  = new mongoose.Types.ObjectId(companyId);
-    const report = await KCHealthCheckService.runHealthCheck(objId);
+    // Run fresh audit — companyId on CompanyKnowledgeContainer is STRING, not ObjectId
+    const report = await KCHealthCheckService.runHealthCheck(companyId);
     _cacheSet(companyId, report);
 
     return res.json({ ...report, cached: false });
@@ -106,8 +104,7 @@ router.post('/:companyId/knowledge/health/rescan', async (req, res) => {
 
   try {
     _cacheBust(companyId);
-    const objId  = new mongoose.Types.ObjectId(companyId);
-    const report = await KCHealthCheckService.runHealthCheck(objId);
+    const report = await KCHealthCheckService.runHealthCheck(companyId);
     _cacheSet(companyId, report);
 
     return res.json({ ...report, cached: false });

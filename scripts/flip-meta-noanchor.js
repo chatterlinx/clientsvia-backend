@@ -32,7 +32,7 @@
  * ============================================================================
  */
 
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient } = require('mongodb');
 
 // ──────────────────────────────────────────────────────────────────────────
 // Args
@@ -52,13 +52,15 @@ for (let i = 0; i < args.length; i++) {
 // ──────────────────────────────────────────────────────────────────────────
 // Meta-container title patterns (whitelist)
 // ──────────────────────────────────────────────────────────────────────────
+// Substring matches (not anchored) — container titles may have emoji prefixes,
+// suffixes like " KC", or numbering. Trim + case-insensitive substring is safer.
 const META_PATTERNS = [
-  /^conversational recovery$/i,
-  /^price objections?$/i,
-  /^scheduling\s*&\s*availability$/i,
-  /^warranty\s*&\s*guarantee$/i,
-  /^appointment management$/i,
-  /^spam\s*&\s*solicitation$/i,
+  /conversational recovery/i,
+  /price objections?/i,
+  /scheduling\s*&?\s*availability/i,
+  /warranty\s*&?\s*guarantee/i,
+  /appointment management/i,
+  /spam\s*&?\s*solicitation/i,
   ...EXTRA_PATTERNS.map(p => new RegExp(p, 'i')),
 ];
 
@@ -90,10 +92,11 @@ function _isMeta(title) {
     const db         = client.db('clientsvia');
     const containers = db.collection('companyKnowledgeContainers');
 
-    // Build filter: all meta-candidates, optionally scoped to companyId
+    // Build filter: all meta-candidates, optionally scoped to companyId.
+    // NOTE: companyId on CompanyKnowledgeContainer is stored as STRING (not ObjectId).
     const filter = {};
     if (COMPANY_ID && COMPANY_ID !== 'all') {
-      filter.companyId = new ObjectId(COMPANY_ID);
+      filter.companyId = COMPANY_ID;
     }
     // Use an $or of regexes — cheaper than scanning all
     filter.$or = META_PATTERNS.map(re => ({ title: { $regex: re.source, $options: re.flags } }));
