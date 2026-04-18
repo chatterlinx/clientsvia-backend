@@ -25,13 +25,61 @@ This document describes the complete caller utterance routing pipeline from spee
 15. [LAP — ListenerActParser (Pre-Pipeline Gate)](#15-lap--listeneractparser-pre-pipeline-gate-april-2026)
 16. [Answer-From-KB LLM Posture + Enriched callContext](#16-answer-from-kb-llm-posture--enriched-callcontext-april-2026)
 17. [Agent Studio + Cross-Container KC Recovery](#17-agent-studio--cross-container-kc-recovery-april-2026)
+18. [Speculative Pre-Warm — UAP Runs While Caller Is Speaking](#18-speculative-pre-warm--uap-runs-while-caller-is-speaking-april-2026)
+19. [Design Rationale + Operational Guardrails (Read This First on Every New Session)](#19-design-rationale--operational-guardrails-april-2026)
 
 ---
 
 ## 1. Architecture Overview
 
+### The Two-Path Execution Model (READ THIS FIRST)
+
+The pipeline runs in TWO places per turn — not just once. This is critical to understand:
+
+1. **Speculative path** — fires on every PARTIAL STT transcript while the caller is still speaking
+2. **Final path** — fires once when STT completes and the caller has finished speaking
+
 ```
-Caller speaks → STT → userInput (string)
+CALLER STARTS SPEAKING
+         │
+         ├── Twilio streams partials every ~300ms → /v2-agent-partial/:companyId
+         │          │
+         │          ▼
+         │   runSpeculativeLLM(callSid, companyId, partialText)
+         │          │
+         │          ▼
+         │   CallRuntime.processTurn()  ← FULL PIPELINE RUNS HERE (on partial)
+         │     GATE 0.5 → 0.7 → 1 → 2.4 → 2.5 → 2.8 → 2.9 → 3 → 3.5 → Groq → 4 → 4.5
+         │          │
+         │          ▼
+         │   Result cached in Redis (TTL=8s, key: speculative:result:{callSid})
+         │
+         │   (repeats 3-5 times as caller keeps talking — each partial overwrites cache)
+         │
+CALLER FINISHES SPEAKING (Twilio endpointing)
+         │
+         ▼
+  /v2-agent-respond/:companyID  (main handler, FINAL transcript)
+         │
+         ▼
+  checkSpeculativeResult(callSid, finalText, turnCount, redis)
+         │
+         ├── Token containment ≥ 75%?  (did partial ≈ final?)
+         │    │
+         │    ├─ YES → 🚀 Use cached response, skip pipeline, save ~1-2s
+         │    │
+         │    └─ NO → Discard cache, run pipeline fresh on final transcript
+         │
+         ▼
+  AGENT SPEAKS (Groq stream, ElevenLabs TTS, Twilio Play)
+```
+
+### KCDiscoveryRunner.run() — The Pipeline (runs in BOTH paths)
+
+Same pipeline executes speculatively AND on final. Speculative runs it on every partial; final runs it once if the speculative miss wasn't good enough.
+
+```
+Caller utterance (partial OR final) → userInput (string)
                           │
                     KCDiscoveryRunner.run()
                           │
@@ -45,11 +93,11 @@ Caller speaks → STT → userInput (string)
               [Parallel Load: Notes + Containers + Rejected IDs]
               [Rejection Detector]
                           │
-                    GATE 2.4  CueExtractor (<1ms)
+                    GATE 2.4  CueExtractor (<1ms) — 8-field grammatical cues
                       ├─ 2.4b  Trade match route
                       └─ 2.4c  Cue profile scan (single-trade)
                           │
-                    GATE 2.5  UAP Layer 1 (<1ms)
+                    GATE 2.5  UAP Layer 1 (<1ms) — phrase index lookup
                       ├─ Logic 1: Word Gate (anchor words)
                       └─ Logic 2: Core Confirmation (~50ms embed)
                           │
@@ -58,9 +106,9 @@ Caller speaks → STT → userInput (string)
                     GATE 2.9  Negative Keyword Checkpoint (<1ms)
                       └─ suppress match if negKw present → fall through
                           │
-                    GATE 3    Keyword Scoring (<1ms)
+                    GATE 3    Keyword Scoring (<1ms) — anchor 3× boost
                           │
-                    [Section Gap Detection]
+                    [Section Gap Detection + Cross-Container Rescue]
                           │
                 ┌─── match found? ───┐
                 │                    │
@@ -78,11 +126,16 @@ Caller speaks → STT → userInput (string)
           Return response
 ```
 
-**Two modes the agent operates in:**
-- **Mode 1 — Discovery (UAP + KC):** Default. Agent satisfies the caller. UAP identifies what they're saying, KC has the answers.
+### Two Modes the Agent Operates In
+
+- **Mode 1 — Discovery (UAP + 8cuecore + anchor + KC):** Default. Agent satisfies the caller. UAP+CueExtractor identify what they're saying, KC has the answers, anchor persists topic across turns.
 - **Mode 2 — Structured Requirements (Booking / Transfer):** Exception states where the business owner has requirements.
 
 Even inside structured flows, when the caller wanders and asks a question: right back to Mode 1. Stateless. No consent gates.
+
+### Why This Matters (Architectural Principle)
+
+**UAP + 8cuecore + anchor is the LATEST design — it replaced an earlier daType + daSubType classifier routing.** The earlier design is preserved in `memory/uap-kc-design.md` but is HISTORICAL — do not confuse it with current runtime. Current routing is deterministic phrase-index + grammatical cues + anchor persistence, NOT an LLM classifier. See §19 for the design rationale.
 
 ---
 
@@ -1237,4 +1290,205 @@ Before the rebuild, admin had to navigate between `services.html` (knowledge) an
 - **Bridge phrase library** — configurable per-company "hold while I check" phrases (currently the LLM is instructed via prompt to never end with "let me check" but there's no admin UI for custom bridge phrases)
 - **Consent funnel validator** — post-generation check that response ends with yes/no (currently a prompt instruction, not a runtime enforcement)
 - **No Cooling repeat-visit sections** — the content gap from April 17 gap report (9 SECTION_GAP events, now mostly rescued by §17.1 cross-container recovery, but authoring purpose-built repeat-visit sections would still improve quality)
+
+---
+
+## 18. Speculative Pre-Warm — UAP Runs While Caller Is Speaking (April 2026)
+
+**Files:**
+- `services/speculative/SpeculativeLLMService.js` — core logic
+- `routes/v2twilio.js` ~line 8190 — `POST /v2-agent-partial/:companyId` partial handler
+- `routes/v2twilio.js` Twilio Gather config — sets `partialResultCallback`
+
+**This is the single most important piece of the UAP architecture to understand. It is what lets the system feel instant to callers.** Every other section (1-17) documents the pipeline. This section explains WHERE and WHEN the pipeline fires.
+
+### The Misconception (Do Not Repeat)
+
+A casual reading of KCDiscoveryRunner suggests the pipeline runs once per turn on the final STT transcript. That is WRONG. It runs multiple times per turn:
+- Once per partial STT transcript during speaking (speculative)
+- Once more on the final transcript IF speculative didn't match
+
+A new session reading only KCDiscoveryRunner will miss this. Read this section first.
+
+### How It Works (Verified From Code)
+
+**Setup — Twilio Gather's `partialResultCallback`:**
+```javascript
+twiml.gather({
+  input:                 'speech',
+  speechTimeout:         'auto',
+  partialResultCallback: `https://${host}/api/twilio/v2-agent-partial/${companyID}`,
+  ...
+});
+```
+Twilio streams partial transcripts to this endpoint every ~300ms as the caller speaks.
+
+**The partial handler:**
+```javascript
+// routes/v2twilio.js — POST /v2-agent-partial/:companyId
+router.post('/v2-agent-partial/:companyId', async (req, res) => {
+  res.sendStatus(200);   // ACK Twilio immediately — non-blocking
+  runSpeculativeLLM(CallSid, companyId, StableSpeechResult)
+    .catch(() => {});    // Fire-and-forget — caller never blocked
+});
+```
+
+**`runSpeculativeLLM()` (SpeculativeLLMService.js):**
+1. Sanity checks: callSid + companyId + non-empty partialText.
+2. Loads callState from Redis.
+3. Loads company (lean).
+4. Calls `CallRuntime.processTurn(aiAgentSettings, callState, partialText, {...})` — **the FULL pipeline. Every gate. Every match. Groq synthesis. Claude fallback if needed.**
+5. Stores result in Redis: `speculative:result:{callSid}` with TTL=8s.
+6. Does NOT flush event buffer. Does NOT write callState back. Caller never blocked.
+7. Best-effort — any error is swallowed.
+
+**Stability requirement:** Twilio fires partial callbacks on unstable (interim) and stable (confirmed) partial transcripts. Speculative runs only on stable partials (`StableSpeechResult` flag from Twilio), otherwise we'd thrash on every word boundary.
+
+**Final handler consumption — `checkSpeculativeResult()`:**
+When `POST /v2-agent-respond/:companyID` fires with the final transcript:
+```javascript
+const preWarm = await checkSpeculativeResult(callSid, finalText, expectedTurnCount, redis);
+if (preWarm?.response) {
+  // HIT — use cached response directly, skip the pipeline entirely.
+  return preWarm;
+}
+// MISS — run the pipeline fresh on final transcript.
+```
+
+**The 75% token-containment threshold:**
+```javascript
+function _tokenContainment(partial, final) {
+  // What fraction of the partial's tokens appear in final?
+  // Partial is always a prefix of final → containment ≈ 1.0 on normal flows.
+}
+```
+If `containment >= 0.75` → cache HIT → pre-computed response is used.
+If `containment < 0.75` → cache DISCARDED → pipeline runs fresh on final.
+
+Rationale: the caller may change their mind mid-utterance. Partial at 2-second mark: *"what's your pricing"* → pipeline answers pricing. Caller finishes at 5 seconds: *"never mind, I'll call back"* → low containment → pre-warm discarded → pipeline correctly handles the "never mind" on final.
+
+### Why This Matters Economically
+
+Every partial triggers a full pipeline run. For a 5-second caller utterance with 3 stable partials, `runSpeculativeLLM()` fires 3 times. On complex turns, this can include Groq AND Claude calls.
+
+**Operational metric to monitor:** speculative hit rate (% of turns where `checkSpeculativeResult` returns a cached response). If hit rate is high (>40%), the economics are excellent — you save ~1-2s of perceived latency per call at modest extra API cost. If hit rate is low (<20%), you're burning Groq/Claude spend on speculation that gets discarded. Tune by:
+- Raising the stability bar (only run on fully stable partials, not interim)
+- Adding a "partial confidence gate" — skip speculation if partial is too short or too noisy
+- Adding a "fast-gate short-circuit" — skip Groq/Claude on partials that don't hit UAP Layer 1
+
+### Why This Matters Architecturally
+
+**Speculative pre-warm is why UAP + 8cuecore + anchor replaced daType+daSubType routing.** An LLM classifier on every partial would be prohibitively expensive and slow. Deterministic phrase-index + grammatical cues at <1ms per gate makes running the full pipeline on every partial viable.
+
+In other words: the move from daType+daSubType to phrase-index wasn't primarily about simplicity or owner burden — it was about making speculative pre-warm computationally feasible. The architecture choice in the match layer unlocked the architecture choice in the execution model.
+
+### Fire-and-Forget Invariants
+
+Speculative execution has strict rules to prevent side effects:
+- **Never flush event buffer** — that's the main handler's job on cache HIT
+- **Never write callState back to Redis** — main handler owns state
+- **Never persist discoveryNotes updates** — those fire on the final path only
+- **Never affect booking/transfer/upsell Redis keys** — state changes belong to final
+- **8s TTL** — stale results auto-expire before the next turn could fire
+
+### Cache Key Format
+
+```
+Redis key: speculative:result:{callSid}
+TTL:       8 seconds
+Value:     JSON { input, result, turnCount, latencyMs, ts }
+```
+
+`turnCount` guards against using a Turn-N pre-warm for Turn-N+1 — they're always distinct turns. Mismatch → cache discarded, pipeline runs fresh.
+
+### Events Emitted
+
+Look for these in Call Intelligence logs:
+- `[SPEC_LLM] ✅ Pre-warm stored` — speculative run completed, result cached
+- `[SPEC_CHECK] 🚀 HIT — using pre-warm` — final handler used cached response
+- `[SPEC_CHECK] Low similarity (X%) — discarding pre-warm` — containment too low, fresh pipeline fired
+- `[SPEC_CHECK] Turn mismatch — discarding` — stale cache from previous turn
+
+---
+
+## 19. Design Rationale + Operational Guardrails (April 2026)
+
+**Read this section first on any new session.** It captures the architectural decisions that define current UAP, the trade-offs accepted, and the metrics/behaviors to watch. A month from now, this will be the map that prevents flying blind.
+
+### 19.1 — Why UAP + 8cuecore + Anchor Replaced daType + daSubType
+
+The earlier design (`memory/uap-kc-design.md`, March 2026) specified an LLM classifier producing `ParsedUtterance { daType, daSubTypes[] }` that routed to KC subTopics via a Bridge table. **That design was never fully built. It was superseded.**
+
+Current design replaces the classifier layer with three cooperating deterministic mechanisms:
+
+| Layer | Replaces | Latency | Rationale |
+|---|---|---|---|
+| **UAP Layer 1 (phrase index)** | daType classification | <1ms | Matches on authored callerPhrases — no LLM, no misclassification, no taxonomy maintenance. The authored phrases ARE the taxonomy. |
+| **8-Field CueExtractor** | daSubType routing | <1ms | 1,832 grammatical patterns (requestCue, permissionCue, infoCue, directiveCue, actionCore, urgencyCore, modifierCore, tradeMatches). Cue profile distinguishes "can I pay with credit card" from "do I have to pay" even when topic words overlap. |
+| **Anchor container (3× + ANCHOR_FLOOR=24)** | Bridge state persistence | <1ms | Keeps conversation on topic across turns without a state machine. `noAnchor` escape hatch prevents meta-containers from poisoning persistence. Cross-container rescue (§17.1) handles legitimate topic switches. |
+
+**Why this swap was architecturally necessary:** see §18. An LLM classifier on every partial STT transcript would be prohibitively expensive. Deterministic <1ms layers make speculative pre-warm viable. The match layer architecture enabled the execution model architecture.
+
+### 19.2 — Accepted Trade-Offs (Know These Going In)
+
+**1. Phrase-index brittleness to novel phrasings.**
+The system matches on authored callerPhrases. Novel caller phrasings don't match. Mitigations:
+- UAP Pass 4A — SYNONYM expansion (GlobalShare synonymGroups, 0.75 confidence)
+- UAP Pass 4B — FUZZY_PHONETIC (Double Metaphone, 0.65-0.70 confidence)
+- GATE 2.8 — Semantic embedding match (~50ms, threshold 0.50)
+- GATE 4 — Claude LLM fallback (answer-from-kb mode with top-ranked KC sections injected as kcContext, §17)
+
+These catch most misses. The remaining tail requires gap report triage and authoring new callerPhrases. See `public/agent-console/todo.html` for the workflow.
+
+**2. Complexity budget is high.**
+~15 gates, 6 fallback layers, speculative pre-warm, narrative filter, noAnchor semantics, cross-container rescue, pre-qualify/upsell state, patience mode, ghost-turn guard, silent re-listen. Each is individually justified. **Onboarding a new engineer will take weeks. Debugging edge cases requires deep context.** This is manageable today; it is a scaling risk if engineering team grows.
+
+**3. Anchor can pin too hard.**
+The 3× multiplier is aggressive. The cross-container rescue (§17.1, shipped `c00e83e2d` + noAnchor guard `2aa733fce`) is the safety valve for Section GAP cases. But rescue only fires when `match.targetSection` is null — if the anchor-boosted container wins with a WRONG section match, rescue never fires. Watch gap reports for this signature.
+
+**4. Speculative pre-warm economics are pay-for-performance.**
+See §18. Every partial fires a full pipeline run (potentially including Groq + Claude). If hit rate drops below ~40%, API spend exceeds latency savings. Monitor `[SPEC_CHECK] 🚀 HIT` vs `[SPEC_CHECK] Low similarity` ratio.
+
+### 19.3 — Operational Metrics to Monitor (Add to Admin Dashboard Someday)
+
+| Metric | Signal | Target | Where to find today |
+|---|---|---|---|
+| Speculative hit rate | Pre-warm effectiveness | ≥40% | Grep `[SPEC_CHECK] 🚀 HIT` vs `Low similarity` in logs |
+| KC_SECTION_GAP rate | Missing authored content | ↓ over time | `public/agent-console/todo.html` |
+| KC_LLM_FALLBACK rate | Complete KC miss | ↓ over time | `todo.html` |
+| KC_GRACEFUL_ACK rate | Everything failed, canned response played | near 0 | `todo.html` |
+| KC_SECTION_GAP_RESCUED count | Cross-container recovery firing | Healthy signal (rescue working) | qaLog, `todo.html` |
+| Anchor container pin-rate | How often anchor wins vs natural match | Balance — neither 0% nor 100% | Call reports |
+| Webhook total latency | End-to-end time | <2s p95 | `WEBHOOK_TIMING` log events |
+| Turn 1 response time | First impression | <3s p95 | Call reports |
+
+### 19.4 — Do-Not-Break Invariants
+
+These have bitten before. Do not regress:
+
+1. **Speculative path is fire-and-forget.** Never flush event buffer, never write callState back, never persist discoveryNotes mutations in the speculative path. Only the final path owns state.
+2. **`speechDet` must be declared BEFORE `gatherTimeout`.** TDZ bug killed every call for a morning (commit `0675caf9e`). See §14.2.
+3. **`/audio-safe/` URLs for all pre-recorded audio that must survive deploys.** `/audio/` is ephemeral (express.static) — no MongoDB fallback. See MEMORY.md "Audio URL Architecture."
+4. **All pre-recorded audio path checks must pass `synthesizeSpeech` full voice settings.** Provenance tracking (UI_OWNED / LLM_GENERATED / HARDCODED) must be preserved.
+5. **Multi-tenant filter on every Redis key + every Mongo query.** Missing companyId = tenant data leak. No exceptions.
+6. **Schema fields must have UI.** "If it's not UI, it doesn't exist." Dead config fields (like a removed `knowledgeCards`) must be surgically excised, not left as orphans.
+7. **noAnchor containers never become the anchor, never write callReason, never offer booking.** Guarded at 6 sites: KnowledgeContainerService L992+L1047 (bookingAction), KCDiscoveryRunner L2253+L2277+L2308 (callReason + anchor), rescue guard L1721 (rescue candidacy). Regressing any one opens the 3-bug cascade documented in §13.
+
+### 19.5 — The Mental Model in One Paragraph
+
+*The caller speaks. Twilio streams partial transcripts every 300ms. On each stable partial, the entire KC pipeline runs speculatively — UAP phrase-index lookup, 8cuecore grammatical parsing, anchor persistence scoring, Groq answer synthesis, Claude fallback if needed — and caches the result in Redis. When the caller stops talking, Twilio sends the final transcript. If the final is ≥75% token-contained by the last speculative partial, the cached response is used instantly. Otherwise the pipeline runs fresh. Groq is the voice of authored KC content. Claude is the fallback brain when no KC matched. BackupModel (if wired) retries Claude on API errors. All layers are deterministic, multi-tenant-isolated, and <1ms per gate except the two async calls (Groq ~500ms, Claude ~800ms). The anchor container is the topic memory that holds the conversation together across turns.*
+
+That's the system. If a future session remembers only that paragraph, they'll be oriented.
+
+### 19.6 — Where to Start When Something Is Wrong
+
+1. **Caller experience issue** → call report JSON in Call Intelligence → qaLog + events
+2. **"Wrong container answered"** → check `KC_SECTION_GAP_RESCUED`, anchor pin, negativeKeywords
+3. **"Dead air / let me check"** → Section GAP? Claude fallback without kcContext? See §16 + §17
+4. **"Agent didn't hear me"** → ghost turn guard, silent re-listen, speechTimeout/initialTimeout — §14
+5. **"Call crashed / COMPUTE_CRASH"** → check TDZ invariants (§14.2), `ghostSpeechDet`, `speechDet` ordering
+6. **"Booking loop / asking same question twice"** → narrative filter, noAnchor guards — §13
+7. **"LAP swallowed a question"** → trailing content guard — §15
+
+Start with the call report, then the specific section. Don't read the whole pipeline — find the symptom's section first.
 
