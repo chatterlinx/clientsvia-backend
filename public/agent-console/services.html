@@ -1896,6 +1896,26 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════════
+     Foundation Coverage Strip — always-visible UAP engine health readout
+     Populated by _loadFoundationStrip() from /knowledge/health. Shows 4
+     coverage bars (tradeTerms, phraseCore, embeddings, anchorWords) + outstanding
+     severity counts. Clickable refresh forces /knowledge/health/rescan.
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div id="foundationStrip" class="fdn-strip" style="display:none;" aria-label="UAP Foundation Coverage">
+  <div class="fdn-strip-inner">
+    <div class="fdn-strip-title">
+      <span class="fdn-strip-icon">🧭</span>
+      <span>UAP Foundation</span>
+      <span class="fdn-strip-hint" id="fdnStripHint">loading…</span>
+    </div>
+    <div class="fdn-strip-bars" id="fdnStripBars"></div>
+    <div class="fdn-strip-severity" id="fdnStripSeverity"></div>
+    <button type="button" class="fdn-strip-refresh" id="fdnStripRefresh" onclick="_loadFoundationStrip(true)" title="Force rescan — busts 5-min Config Health cache">↻</button>
+    <a class="fdn-strip-detail" href="#" onclick="openTodo(); return false;" title="Open full Config Health report">Details →</a>
+  </div>
+</div>
+
 <!-- ── Improvement banner (populated by loadCardAnalytics) ────────────────── -->
 <div id="improvementBanner"></div>
 
@@ -2086,6 +2106,130 @@
 .brs-btn-danger    { background: #dc2626; color: #fff; }
 .brs-btn-danger:hover:not(:disabled) { background: #b91c1c; }
 .brs-btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Foundation Coverage Strip ────────────────────────────────────────── */
+.fdn-strip {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 8px 0 12px 0;
+}
+.fdn-strip-inner {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 18px;
+  align-items: center;
+}
+.fdn-strip-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: #1e293b;
+  white-space: nowrap;
+}
+.fdn-strip-icon { font-size: 14px; }
+.fdn-strip-hint {
+  font-weight: 400; font-size: 11px; color: #64748b; margin-left: 6px;
+}
+.fdn-strip-bars {
+  display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 14px;
+}
+.fdn-bar { font-size: 11px; }
+.fdn-bar-label {
+  display: flex; justify-content: space-between; margin-bottom: 3px;
+  color: #475569;
+}
+.fdn-bar-pct {
+  font-variant-numeric: tabular-nums; font-weight: 600; color: #1e293b;
+}
+.fdn-bar-track {
+  height: 6px; background: #e2e8f0;
+  border-radius: 999px; overflow: hidden;
+}
+.fdn-bar-fill {
+  height: 100%; border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.fdn-bar-fill.ok   { background: linear-gradient(90deg, #10b981, #059669); }
+.fdn-bar-fill.warn { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.fdn-bar-fill.crit { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+.fdn-strip-severity {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.fdn-sev-pill {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.fdn-sev-crit { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+.fdn-sev-high { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.fdn-sev-med  { background: #fefce8; color: #854d0e; border-color: #fde68a; }
+.fdn-sev-low  { background: #f0f9ff; color: #075985; border-color: #bae6fd; }
+.fdn-sev-zero { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+
+.fdn-strip-refresh {
+  width: 26px; height: 26px; border-radius: 6px;
+  background: #fff; border: 1px solid #e2e8f0;
+  cursor: pointer; color: #64748b; font-size: 13px;
+  transition: background 0.12s, color 0.12s;
+}
+.fdn-strip-refresh:hover { background: #eef2ff; color: #4338ca; }
+.fdn-strip-refresh.spinning { animation: fdnSpin 0.8s linear infinite; color: #4f46e5; }
+@keyframes fdnSpin { to { transform: rotate(360deg); } }
+
+.fdn-strip-detail {
+  font-size: 11px; color: #4f46e5; font-weight: 500;
+  text-decoration: none; white-space: nowrap;
+}
+.fdn-strip-detail:hover { text-decoration: underline; }
+
+/* Done-pane delta table (used after bulk Re-score) */
+.brs-delta {
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 6px;
+  margin-bottom: 16px;
+}
+.brs-delta-section { margin-bottom: 10px; }
+.brs-delta-section:last-of-type { margin-bottom: 0; }
+.brs-delta-h {
+  font-size: 10px; font-weight: 700;
+  color: #475569; text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.brs-delta-row {
+  display: grid; grid-template-columns: 1fr auto auto auto;
+  gap: 10px; align-items: baseline;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.brs-delta-row:last-child { border-bottom: 0; }
+.brs-delta-lbl { color: #334155; }
+.brs-delta-before {
+  font-variant-numeric: tabular-nums; color: #64748b; font-size: 12px;
+}
+.brs-delta-arrow { color: #94a3b8; }
+.brs-delta-after {
+  font-variant-numeric: tabular-nums; color: #1e293b;
+  font-weight: 600; font-size: 12px;
+}
+.brs-delta-pos  { color: #15803d; font-weight: 600; }
+.brs-delta-neg  { color: #b91c1c; font-weight: 600; }
+.brs-delta-flat { color: #94a3b8; font-weight: 500; }
+.brs-delta-foot {
+  margin-top: 8px; padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px; color: #64748b; text-align: center;
+}
+.brs-delta-foot a { color: #4f46e5; text-decoration: none; font-weight: 500; }
+.brs-delta-foot a:hover { text-decoration: underline; }
 </style>
 
 <!-- ── Container cards ────────────────────────────────────────────────────── -->
@@ -2844,6 +2988,8 @@ async function apiFetch(path, opts = {}) {
   await Promise.all([loadContainers(), loadSettings()]);
   // Fire analytics after containers so _renderCards() can be called on completion
   loadCardAnalytics();
+  // Foundation Coverage strip — non-blocking, shows UAP engine health at a glance
+  _loadFoundationStrip(false);
 
   // ── Deep-link: ?openPf=phrase → auto-open Phrase Finder with pre-filled phrase ──
   const openPfPhrase = params.get('openPf');
@@ -3775,6 +3921,8 @@ async function _brsStart() {
   _BRS.consecutiveFails = 0;
   _BRS.containersSeen   = new Set();
   _BRS.startedAt        = Date.now();
+  _BRS.preSnapshot      = null;
+  _BRS.postSnapshot     = null;
   _BRS.tickHandle       = setInterval(_brsTick, 1000);
 
   // Disable toolbar button so people can't double-click to run a second pass
@@ -3788,6 +3936,17 @@ async function _brsStart() {
   _brsShowPane('running');
   _brsUpdateStats();
   _brsLogLine(`▶ Starting re-score — ${_BRS.plan.length} sections across ${_BRS.containerSet.size} containers`, 'hdr');
+
+  // Capture BEFORE snapshot (force rescan so we compare fresh state, not cache)
+  _brsLogLine(`  · capturing foundation snapshot (before)…`, 'hdr');
+  try {
+    _BRS.preSnapshot = await apiFetch(
+      `/api/admin/agent2/company/${S.companyId}/knowledge/health/rescan`,
+      { method: 'POST' }
+    );
+  } catch (err) {
+    _brsLogLine(`  · (snapshot capture failed: ${err?.message || err})`, 'skip');
+  }
 
   let lastContainerId = null;
   let abortedReason   = null;
@@ -3881,16 +4040,202 @@ async function _brsStart() {
     if (titleEl) titleEl.textContent = 'Re-score complete';
   }
 
+  // Capture AFTER snapshot — force rescan so caller sees fresh truth
+  if (!abortedReason) {
+    _brsLogLine(`\n  · capturing foundation snapshot (after)…`, 'hdr');
+    try {
+      _BRS.postSnapshot = await apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/health/rescan`,
+        { method: 'POST' }
+      );
+    } catch (err) {
+      _brsLogLine(`  · (post-snapshot capture failed: ${err?.message || err})`, 'skip');
+    }
+  }
+
   if (detailEl) {
-    detailEl.innerHTML =
+    const runLine =
       `<strong>${_BRS.scored}</strong> scored · ` +
       `<strong>${_BRS.skipped}</strong> skipped · ` +
       `<strong>${_BRS.failed}</strong> failed<br>` +
-      `${_BRS.containersSeen.size} / ${_BRS.containerSet.size} containers touched · ${elapsedTxt} elapsed<br>` +
-      `<span style="font-size:12px;color:#64748b;">Open Config Health on the Gaps page to verify phraseCoreEmbedded coverage.</span>`;
+      `${_BRS.containersSeen.size} / ${_BRS.containerSet.size} containers touched · ${elapsedTxt} elapsed`;
+
+    const deltaHtml = _brsRenderDelta(_BRS.preSnapshot, _BRS.postSnapshot);
+    detailEl.innerHTML = runLine + (deltaHtml || '');
+  }
+
+  // Refresh the always-visible Foundation strip with the fresh post-snapshot.
+  // If post-snapshot exists we can render it directly without re-fetching.
+  if (_BRS.postSnapshot && _BRS.postSnapshot.success) {
+    _renderFoundationStrip(_BRS.postSnapshot);
+    const strip = document.getElementById('foundationStrip');
+    if (strip) strip.style.display = '';
+    _FDN.last = _BRS.postSnapshot;
+  } else {
+    // Fallback — hit the cached endpoint
+    _loadFoundationStrip(false);
   }
 
   _brsShowPane('done');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FOUNDATION COVERAGE STRIP — always-visible engine health readout
+// Fetches /knowledge/health (cached 5min) or /knowledge/health/rescan (forced)
+// and renders 4 coverage bars + outstanding severity pills in the toolbar area.
+// ─────────────────────────────────────────────────────────────────────────────
+const _FDN = { last: null };
+
+async function _loadFoundationStrip(forceRescan = false) {
+  if (!S.companyId) return;
+  const strip = document.getElementById('foundationStrip');
+  if (!strip) return;
+  const refreshBtn = document.getElementById('fdnStripRefresh');
+  if (refreshBtn) refreshBtn.classList.add('spinning');
+
+  try {
+    const url = forceRescan
+      ? `/api/admin/agent2/company/${S.companyId}/knowledge/health/rescan`
+      : `/api/admin/agent2/company/${S.companyId}/knowledge/health`;
+    const opts = forceRescan ? { method: 'POST' } : {};
+    const rep  = await apiFetch(url, opts);
+    if (!rep || !rep.success) throw new Error(rep?.error || 'Health endpoint failed');
+    _renderFoundationStrip(rep);
+    strip.style.display = '';
+    _FDN.last = rep;
+  } catch (err) {
+    console.warn('[services.html] _loadFoundationStrip error:', err);
+    // Don't leave the strip blank if we had a prior successful render
+    if (!_FDN.last) {
+      const hintEl = document.getElementById('fdnStripHint');
+      if (hintEl) hintEl.textContent = '(unable to load — retry)';
+      strip.style.display = '';
+    }
+  } finally {
+    if (refreshBtn) refreshBtn.classList.remove('spinning');
+  }
+}
+
+function _renderFoundationStrip(rep) {
+  const cov    = rep?.summary?.coverage       || {};
+  const sev    = rep?.summary?.severityCounts || {};
+  const barsEl = document.getElementById('fdnStripBars');
+  const sevEl  = document.getElementById('fdnStripSeverity');
+  const hintEl = document.getElementById('fdnStripHint');
+
+  if (hintEl) {
+    const ts      = rep?.generatedAt ? new Date(rep.generatedAt) : new Date();
+    const cached  = rep?.cached ? ' · cached' : '';
+    const totals  = rep?.summary ? ` · ${rep.summary.totalContainers || 0} containers · ${rep.summary.activeSections || 0} active sections` : '';
+    hintEl.textContent = `scanned ${ts.toLocaleTimeString()}${cached}${totals}`;
+  }
+
+  if (barsEl) {
+    const bars = [
+      { lbl: 'tradeTerms',     pct: Number(cov.tradeTermsFilledPct       || 0) },
+      { lbl: 'phraseCore',     pct: Number(cov.phraseCoreFilledPct       || 0) },
+      { lbl: 'embeddings',     pct: Number(cov.phraseCoreEmbeddedPct     || 0) },
+      { lbl: 'anchorWords',    pct: Number(cov.anchorWordsFilledPct      || 0) },
+    ];
+    barsEl.innerHTML = bars.map(b => {
+      const cls = b.pct >= 90 ? 'ok' : (b.pct >= 60 ? 'warn' : 'crit');
+      const w   = Math.max(0, Math.min(100, b.pct));
+      return `
+        <div class="fdn-bar">
+          <div class="fdn-bar-label">
+            <span>${b.lbl}</span>
+            <span class="fdn-bar-pct">${Math.round(b.pct)}%</span>
+          </div>
+          <div class="fdn-bar-track">
+            <div class="fdn-bar-fill ${cls}" style="width:${w}%;"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  if (sevEl) {
+    const pill = (label, count, cls) =>
+      count ? `<span class="fdn-sev-pill ${cls}">${label}: ${count}</span>` : '';
+    let html = '';
+    html += pill('CRIT', sev.CRITICAL || 0, 'fdn-sev-crit');
+    html += pill('HIGH', sev.HIGH     || 0, 'fdn-sev-high');
+    html += pill('MED',  sev.MED      || 0, 'fdn-sev-med');
+    html += pill('LOW',  sev.LOW      || 0, 'fdn-sev-low');
+    if (!html) html = '<span class="fdn-sev-pill fdn-sev-zero">✓ all clear</span>';
+    sevEl.innerHTML = html;
+  }
+}
+
+// Coverage delta row — uses percentage points
+function _fdnCoverageDeltaRow(lbl, before, after) {
+  const b = Number(before || 0);
+  const a = Number(after  || 0);
+  const delta = a - b;
+  const abs   = Math.round(Math.abs(delta) * 10) / 10;
+  let deltaTxt;
+  if (Math.abs(delta) < 0.1) {
+    deltaTxt = `<span class="brs-delta-flat">±0</span>`;
+  } else if (delta > 0) {
+    deltaTxt = `<span class="brs-delta-pos">+${abs}pt</span>`;
+  } else {
+    deltaTxt = `<span class="brs-delta-neg">−${abs}pt</span>`;
+  }
+  return `
+    <div class="brs-delta-row">
+      <div class="brs-delta-lbl">${lbl}</div>
+      <div class="brs-delta-before">${Math.round(b)}%</div>
+      <div class="brs-delta-arrow">→</div>
+      <div class="brs-delta-after">${Math.round(a)}% ${deltaTxt}</div>
+    </div>`;
+}
+
+// Count delta row — fewer is better (so negative delta is "good" — green)
+function _fdnCountDeltaRow(lbl, before, after) {
+  const b = Number(before || 0);
+  const a = Number(after  || 0);
+  const delta = a - b;
+  let deltaTxt;
+  if (delta === 0) {
+    deltaTxt = `<span class="brs-delta-flat">±0</span>`;
+  } else if (delta < 0) {
+    deltaTxt = `<span class="brs-delta-pos">−${Math.abs(delta)} resolved</span>`;
+  } else {
+    deltaTxt = `<span class="brs-delta-neg">+${delta} new</span>`;
+  }
+  return `
+    <div class="brs-delta-row">
+      <div class="brs-delta-lbl">${lbl}</div>
+      <div class="brs-delta-before">${b}</div>
+      <div class="brs-delta-arrow">→</div>
+      <div class="brs-delta-after">${a} ${deltaTxt}</div>
+    </div>`;
+}
+
+function _brsRenderDelta(pre, post) {
+  if (!pre || !post || !pre.success || !post.success) return '';
+  const preCov  = pre?.summary?.coverage       || {};
+  const postCov = post?.summary?.coverage      || {};
+  const preSev  = pre?.summary?.severityCounts || {};
+  const postSev = post?.summary?.severityCounts|| {};
+
+  return `
+    <div class="brs-delta">
+      <div class="brs-delta-section">
+        <div class="brs-delta-h">Foundation Coverage — before → after</div>
+        ${_fdnCoverageDeltaRow('tradeTerms filled',       preCov.tradeTermsFilledPct,       postCov.tradeTermsFilledPct)}
+        ${_fdnCoverageDeltaRow('phraseCore filled',       preCov.phraseCoreFilledPct,       postCov.phraseCoreFilledPct)}
+        ${_fdnCoverageDeltaRow('phraseCore embedded',     preCov.phraseCoreEmbeddedPct,     postCov.phraseCoreEmbeddedPct)}
+        ${_fdnCoverageDeltaRow('anchorWords on phrases',  preCov.anchorWordsFilledPct,      postCov.anchorWordsFilledPct)}
+      </div>
+      <div class="brs-delta-section">
+        <div class="brs-delta-h">Outstanding Issues — before → after</div>
+        ${_fdnCountDeltaRow('CRITICAL', preSev.CRITICAL, postSev.CRITICAL)}
+        ${_fdnCountDeltaRow('HIGH',     preSev.HIGH,     postSev.HIGH)}
+        ${_fdnCountDeltaRow('MED',      preSev.MED,      postSev.MED)}
+        ${_fdnCountDeltaRow('LOW',      preSev.LOW,      postSev.LOW)}
+      </div>
+      <div class="brs-delta-foot">Open <a href="#" onclick="openTodo(); return false;">Gaps &amp; Todo → Config Health</a> for per-container detail.</div>
+    </div>`;
 }
 
 async function optimizePriorities() {
