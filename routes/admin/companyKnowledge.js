@@ -2570,6 +2570,66 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
           setOps[`sections.${sectionIndex}.phraseCoreEmbedding`] = phraseCoreEmb;
         }
 
+        // ── AUTO_ANCHOR_WORDS_FILLED (server-side parity with per-section
+        //    Re-score in services-item.html) ───────────────────────────────
+        // For each phrase currently lacking anchorWords, derive a default set
+        // from: (core words, stop-word-stripped) ∪ (normalizedPatterns.token).
+        // Admin overrides are preserved — we only auto-fill when anchorWords
+        // is empty. Dot-notation $set so we never race with the full-sections
+        // replacement path (see MEMORY.md save safety rule).
+        //
+        // Why move this server-side: the per-section UI path did this in JS
+        // then called saveContainer() which replaces the full sections array
+        // (risking phraseCore/phraseCoreEmbedding wipe). Running it here as
+        // an atomic dot-notation write eliminates the race AND lets the
+        // platform-level bulk Re-score orchestrator populate anchors without
+        // needing extra client roundtrips.
+        try {
+          const StopWords = require('../../utils/stopWords');
+          const ANCHOR_STOP = StopWords.getStopWords();
+          let anchorFilledCount = 0;
+          for (const [phraseText, scoreData] of Object.entries(scores)) {
+            if (!scoreData?.core) continue;                    // no core → nothing to derive from
+            const idx = phraseIdxMap[phraseText];
+            if (idx === undefined) continue;
+            const existingPhrase = (targetSection.callerPhrases || [])[idx];
+            const existingAnchors = Array.isArray(existingPhrase?.anchorWords)
+              ? existingPhrase.anchorWords.filter(Boolean)
+              : [];
+            if (existingAnchors.length > 0) continue;          // admin override — preserve
+
+            // Core words: stop-word stripped, alphanumerics only
+            const coreWords = `${scoreData.core}`
+              .toLowerCase()
+              .split(/\s+/)
+              .map(w => w.replace(/[^a-z0-9]/g, ''))
+              .filter(w => w && !ANCHOR_STOP.has(w));
+
+            // Intent tokens: NOT stop-word-stripped — they are routing keys
+            // (requestCue, permissionCue, actionCore, etc.) produced by
+            // PhraseReducerService, carried through scoreData.normalizedPatterns.
+            const intentTokens = (scoreData.normalizedPatterns || [])
+              .map(p => (p && typeof p.token === 'string' ? p.token.toLowerCase().trim() : ''))
+              .filter(Boolean);
+
+            const merged = [...new Set([...coreWords, ...intentTokens])];
+            if (!merged.length) continue;                      // nothing meaningful derived
+
+            setOps[`sections.${sectionIndex}.callerPhrases.${idx}.anchorWords`] = merged;
+            anchorFilledCount++;
+          }
+          if (anchorFilledCount > 0) {
+            logger.info('[companyKnowledge] AUTO_ANCHOR_WORDS_FILLED', {
+              companyId, containerId, sectionIndex,
+              phrasesFilled: anchorFilledCount,
+            });
+          }
+        } catch (anchorErr) {
+          logger.warn('[companyKnowledge] AUTO_ANCHOR_WORDS_FILLED failed (non-fatal)', {
+            companyId, containerId, sectionIndex, error: anchorErr.message,
+          });
+        }
+
         // ── AUTO_TRADETERMS_FILLED (Phase 5b safety net) ─────────────────
         // If the section's tradeTerms is empty AND the container has a
         // tradeVocabularyKey, derive phrase-only terms and auto-fill.

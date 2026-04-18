@@ -1888,7 +1888,7 @@
     <button class="tb-action" onclick="openTodo()" title="KC gap audit — see what callers asked that KC couldn't answer">
       <span class="tb-icon">📋</span> Gaps
     </button>
-    <button class="tb-action" id="btnBulkRescoreAll" onclick="_bulkRescoreAllContainers()" title="Loop EVERY active section of EVERY container and run Re-score. Populates phraseCore, phraseCoreEmbedding, anchorWords, auto-fills tradeTerms. Enterprise-grade operation — can take several minutes.">
+    <button class="tb-action" id="btnBulkRescoreAll" onclick="_bulkRescoreAllContainers()" title="Loop EVERY active section of EVERY container and run Re-score. Populates phraseCore + phraseCoreEmbedding (Logic 2), anchorWords (Logic 1), auto-fills tradeTerms. Enterprise-grade operation — can take several minutes.">
       <span class="tb-icon">↻</span> Re-score ALL
     </button>
     <div class="toolbar-spacer"></div>
@@ -1922,9 +1922,10 @@
           <div class="brs-confirm-title">Full platform re-score</div>
           <div class="brs-confirm-detail" id="brsPlanSummary">Counting sections…</div>
           <ul class="brs-confirm-list">
-            <li>Populates <strong>phraseCore</strong>, <strong>phraseCoreEmbedding</strong>, <strong>anchorWords</strong> on every active section</li>
-            <li>Auto-fills <strong>tradeTerms</strong> on sections whose container has a trade vocabulary</li>
-            <li>Safe to re-run — existing admin overrides are preserved</li>
+            <li>Populates <strong>phraseCore</strong> + <strong>phraseCoreEmbedding</strong> → lights up Logic 2 (Core Confirmation gate)</li>
+            <li>Auto-fills <strong>anchorWords</strong> on every empty phrase → lights up Logic 1 (Word Gate) — admin overrides preserved</li>
+            <li>Auto-fills <strong>tradeTerms</strong> on sections whose container has a trade vocabulary (Phase 5b)</li>
+            <li>Safe to re-run — all admin-set values are preserved</li>
             <li>Runs sequentially to avoid hammering the embedding service</li>
             <li>Can take <strong>several minutes</strong> on large companies — leave this tab open</li>
           </ul>
