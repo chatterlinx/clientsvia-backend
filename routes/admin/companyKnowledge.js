@@ -248,6 +248,69 @@ function _extractContentKeywords(label, content) {
 }
 
 /**
+ * _deriveTradeTermsFromPhrases — PHRASE-ONLY tradeTerms derivation.
+ *
+ * ARCHITECTURAL INVARIANT (locked): UAP reads phrases. Groq reads responses.
+ * This helper sources terms ONLY from phrase-side fields (label, callerPhrases.text,
+ * callerPhrases.anchorWords). It NEVER reads section.content or section.groqContent.
+ *
+ * Intersects candidates with the container's GlobalShare tradeVocabulary allowlist
+ * (passed in as allowSet) so only curated trade vocabulary survives — not noisy
+ * phrase tokens. This is the same algorithm as scripts/backfill-trade-terms.js.
+ *
+ * @param {Object}  section   — section doc with label + callerPhrases[]
+ * @param {Set}     allowSet  — lowercase terms from GlobalShare tradeVocabulary
+ * @returns {string[]}        — max 15 terms sorted by freq desc, then length desc
+ */
+function _deriveTradeTermsFromPhrases(section, allowSet) {
+  if (!allowSet || allowSet.size === 0) return [];
+
+  const STOP = require('../../utils/stopWords').getStopWords();
+  const normalize = s => `${s || ''}`.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const tokens    = s => normalize(s).split(' ').filter(w => w.length >= 4 && !STOP.has(w));
+
+  const candidates = new Map(); // term → freq
+  const addFromText = (text, weight = 1) => {
+    const toks = tokens(text);
+    const seen = new Set();
+    for (const w of toks) {
+      if (seen.has(w)) continue;
+      seen.add(w);
+      candidates.set(w, (candidates.get(w) || 0) + weight);
+    }
+    for (let i = 0; i < toks.length - 1; i++) {
+      const bg = `${toks[i]} ${toks[i + 1]}`;
+      if (seen.has(bg)) continue;
+      seen.add(bg);
+      candidates.set(bg, (candidates.get(bg) || 0) + weight);
+    }
+  };
+
+  // Phrase-side sources only
+  if (section.label) addFromText(section.label, 2);
+  for (const p of (section.callerPhrases || [])) {
+    if (p?.text) addFromText(p.text, 1);
+  }
+  for (const p of (section.callerPhrases || [])) {
+    for (const aw of (p?.anchorWords || [])) {
+      const n = normalize(aw);
+      if (n.length >= 4 && !STOP.has(n)) {
+        candidates.set(n, (candidates.get(n) || 0) + 1);
+      }
+    }
+  }
+
+  const labelTokens = new Set(tokens(section.label || ''));
+  const out = [];
+  for (const [term, freq] of candidates.entries()) {
+    if (!allowSet.has(term)) continue;
+    if (freq >= 2 || labelTokens.has(term)) out.push({ term, freq });
+  }
+  out.sort((a, b) => (b.freq - a.freq) || (b.term.length - a.term.length));
+  return out.slice(0, 15).map(x => x.term);
+}
+
+/**
  * _sanitiseBody — Strip fields not in ALLOWED_FIELDS and clean values.
  * Sections are validated minimally. contentKeywords auto-extracted on save.
  *
@@ -306,6 +369,18 @@ function _sanitiseBody(body) {
           section.negativeKeywords = [...new Set(
             s.negativeKeywords.map(k => `${k}`.toLowerCase().trim()).filter(Boolean)
           )];
+        }
+
+        // Per-section tradeTerms — GATE 2.4 Field 8 (tradeCore) allowlist.
+        // PHRASE-ONLY derivation invariant — admin-curated terms only.
+        // Runtime CueExtractor reads this directly; empty means Field 8 dark.
+        // Strings: trim + lowercase + dedupe, cap at 15 (matches backfill script).
+        if (Array.isArray(s.tradeTerms)) {
+          section.tradeTerms = [...new Set(
+            s.tradeTerms
+              .map(t => `${t}`.toLowerCase().trim())
+              .filter(t => t && t.length >= 3 && t.length <= 60)
+          )].slice(0, 15);
         }
 
         // Per-section booking action override
@@ -2247,9 +2322,21 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
 
   try {
     // ── Load target section (callerPhrases.text for fresh T1 embedding) ──
+    // Also load tradeVocabularyKey + tradeTerms + anchorWords to support the
+    // AUTO_TRADETERMS_FILLED fallback (Phase 5b) — when tradeTerms is empty
+    // and the container has a vocab key, derive phrase-only after scoring.
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
       _resolveRawQuery(containerId, companyId),
-      { projection: { 'sections.contentEmbedding': 1, 'sections.callerPhrases.text': 1, 'sections.isActive': 1, 'sections.label': 1, 'sections.content': 1 } }
+      { projection: {
+        tradeVocabularyKey: 1,
+        'sections.contentEmbedding': 1,
+        'sections.callerPhrases.text': 1,
+        'sections.callerPhrases.anchorWords': 1,
+        'sections.isActive': 1,
+        'sections.label': 1,
+        'sections.content': 1,
+        'sections.tradeTerms': 1,
+      } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
 
@@ -2482,6 +2569,50 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         if (phraseCoreEmb?.length) {
           setOps[`sections.${sectionIndex}.phraseCoreEmbedding`] = phraseCoreEmb;
         }
+
+        // ── AUTO_TRADETERMS_FILLED (Phase 5b safety net) ─────────────────
+        // If the section's tradeTerms is empty AND the container has a
+        // tradeVocabularyKey, derive phrase-only terms and auto-fill.
+        // PHRASE-ONLY invariant: reads label + callerPhrases + anchorWords
+        // ONLY — never content/groqContent. Intersected with GlobalShare
+        // tradeVocabulary allowlist. Prevents GATE 2.4 Field 8 from going
+        // dark after Re-score on containers with empty tradeTerms.
+        const currentTerms = Array.isArray(targetSection.tradeTerms) ? targetSection.tradeTerms : [];
+        if (currentTerms.length === 0 && targetRaw.tradeVocabularyKey) {
+          try {
+            const AdminSettingsModel = require('../../models/AdminSettings');
+            const adminDoc = await AdminSettingsModel.findOne({}, {
+              'globalHub.phraseIntelligence.tradeVocabularies': 1,
+            }).lean();
+            const vocabs = adminDoc?.globalHub?.phraseIntelligence?.tradeVocabularies || [];
+            const vocab  = vocabs.find(v => v?.tradeKey === targetRaw.tradeVocabularyKey);
+            if (vocab?.terms?.length) {
+              const allowSet = new Set(
+                vocab.terms
+                  .map(t => `${t || ''}`.toLowerCase().trim())
+                  .filter(Boolean)
+              );
+              // targetSection has: label + callerPhrases[{text, anchorWords}]
+              const derived = _deriveTradeTermsFromPhrases(targetSection, allowSet);
+              if (derived.length) {
+                setOps[`sections.${sectionIndex}.tradeTerms`] = derived;
+                logger.info('[companyKnowledge] AUTO_TRADETERMS_FILLED', {
+                  companyId,
+                  containerId,
+                  sectionIndex,
+                  tradeVocabularyKey: targetRaw.tradeVocabularyKey,
+                  termCount:          derived.length,
+                  sampleTerms:        derived.slice(0, 5),
+                });
+              }
+            }
+          } catch (deriveErr) {
+            logger.warn('[companyKnowledge] AUTO_TRADETERMS_FILLED derivation failed (non-fatal)', {
+              companyId, containerId, sectionIndex, error: deriveErr.message,
+            });
+          }
+        }
+
         if (Object.keys(setOps).length) {
           await CompanyKnowledgeContainer.collection.updateOne(
             _resolveRawQuery(containerId, companyId),

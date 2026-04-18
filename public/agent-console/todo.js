@@ -32,6 +32,11 @@ const G = {
   showTurn1:         false,   // Turn 1 Engine events hidden by default (not real gaps)
   recommendations:   [],      // generated action items
   containerGapCounts: {},     // containerId → occurrence count
+
+  // ── Config Health tab state ──────────────────────────────────────────
+  activeTab:    'gaps',   // 'gaps' | 'health'
+  healthLoaded: false,
+  health:       null,     // last /health response
 };
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -762,4 +767,320 @@ function _toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONFIG HEALTH TAB (Structural Audit)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(tabId) {
+  G.activeTab = tabId;
+
+  // Update tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+
+  // Update panels
+  document.getElementById('panelGaps').classList.toggle('active',   tabId === 'gaps');
+  document.getElementById('panelHealth').classList.toggle('active', tabId === 'health');
+
+  // Lazy-load health on first switch
+  if (tabId === 'health' && !G.healthLoaded) {
+    loadHealth();
+  }
+}
+
+function refreshActiveTab() {
+  if (G.activeTab === 'health') rescanHealth();
+  else loadGaps();
+}
+
+// ── Fetch health from API ────────────────────────────────────────────────────
+async function loadHealth() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true; btn.textContent = 'Loading…';
+
+  document.getElementById('healthLoading').style.display = 'block';
+  document.getElementById('healthContent').style.display = 'none';
+
+  try {
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/health`
+    );
+
+    if (!res.success) throw new Error(res.error || 'API error');
+
+    G.health       = res;
+    G.healthLoaded = true;
+
+    document.getElementById('healthLoading').style.display = 'none';
+    document.getElementById('healthContent').style.display = 'block';
+
+    _renderHealthSeverity();
+    _renderHealthCoverage();
+    _renderHealthPlatform();
+    _renderHealthContainers();
+    _updateHealthTabCount();
+  } catch (err) {
+    document.getElementById('healthLoading').innerHTML =
+      `<span style="color:#dc2626;">Error: ${_esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Refresh';
+  }
+}
+
+// ── Force re-run (bust cache) ────────────────────────────────────────────────
+async function rescanHealth() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true; btn.textContent = 'Rescanning…';
+
+  document.getElementById('healthLoading').style.display = 'block';
+  document.getElementById('healthContent').style.display = 'none';
+
+  try {
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/health/rescan`,
+      { method: 'POST' }
+    );
+
+    if (!res.success) throw new Error(res.error || 'API error');
+
+    G.health       = res;
+    G.healthLoaded = true;
+
+    document.getElementById('healthLoading').style.display = 'none';
+    document.getElementById('healthContent').style.display = 'block';
+
+    _renderHealthSeverity();
+    _renderHealthCoverage();
+    _renderHealthPlatform();
+    _renderHealthContainers();
+    _updateHealthTabCount();
+    _toast('Health rescan complete');
+  } catch (err) {
+    document.getElementById('healthLoading').innerHTML =
+      `<span style="color:#dc2626;">Error: ${_esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Refresh';
+  }
+}
+
+// ── Update tab count badge (shows total issue count) ─────────────────────────
+function _updateHealthTabCount() {
+  if (!G.health || !G.health.summary) return;
+  const c = G.health.summary.severityCounts || {};
+  const total = (c.CRITICAL || 0) + (c.HIGH || 0) + (c.MED || 0);
+  const el = document.getElementById('tabCountHealth');
+  if (el) el.textContent = String(total);
+}
+
+// Also keep the Runtime Gaps tab count in sync (patched into loadGaps via summary)
+// NOTE: This hooks on every gaps load via the existing _renderSummary wrapper.
+(function patchGapsCount() {
+  const orig = _renderSummary;
+  window._renderSummary = function() {
+    orig();
+    const el = document.getElementById('tabCountGaps');
+    if (el && G.summary) el.textContent = String(G.summary.total || 0);
+  };
+})();
+
+// ── Severity pills ───────────────────────────────────────────────────────────
+function _renderHealthSeverity() {
+  const c = (G.health.summary && G.health.summary.severityCounts) || {};
+  const html = `
+    <div class="sev-row">
+      <div class="sev-card critical">
+        <div class="stat-label">Critical</div>
+        <div class="stat-value">${c.CRITICAL || 0}</div>
+      </div>
+      <div class="sev-card high">
+        <div class="stat-label">High</div>
+        <div class="stat-value">${c.HIGH || 0}</div>
+      </div>
+      <div class="sev-card med">
+        <div class="stat-label">Medium</div>
+        <div class="stat-value">${c.MED || 0}</div>
+      </div>
+      <div class="sev-card low">
+        <div class="stat-label">Low</div>
+        <div class="stat-value">${c.LOW || 0}</div>
+      </div>
+      <div class="sev-card info">
+        <div class="stat-label">Info</div>
+        <div class="stat-value">${c.INFO || 0}</div>
+      </div>
+    </div>`;
+  document.getElementById('healthSeverityRow').innerHTML = html;
+}
+
+// ── Coverage bars ────────────────────────────────────────────────────────────
+function _covClass(pct) {
+  if (pct >= 80) return 'good';
+  if (pct >= 40) return 'ok';
+  return 'bad';
+}
+
+function _covBar(label, pct, rawLabel) {
+  const cls = _covClass(pct);
+  const width = Math.max(0, Math.min(100, pct));
+  return `
+    <div class="cov-row">
+      <div class="cov-label">${_esc(label)}</div>
+      <div class="cov-bar-track">
+        <div class="cov-bar-fill ${cls}" style="width:${width}%"></div>
+      </div>
+      <div class="cov-value ${cls}">${rawLabel || (pct + '%')}</div>
+    </div>`;
+}
+
+function _renderHealthCoverage() {
+  const s  = G.health.summary || {};
+  const cv = s.coverage || {};
+
+  // noAnchorCorrectness is "N/M" — parse into pct
+  let noAnchorPct = 100;
+  let noAnchorRaw = cv.noAnchorCorrectness || '0/0';
+  const m = /^(\d+)\/(\d+)$/.exec(noAnchorRaw);
+  if (m) {
+    const num = +m[1], den = +m[2];
+    noAnchorPct = den === 0 ? 100 : Math.round((num / den) * 100);
+  }
+
+  const html = `
+    <div class="coverage-panel">
+      <div class="coverage-title">
+        <span>\ud83d\udcca</span>
+        <span>UAP Foundation Coverage</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11px;color:var(--text-muted);font-weight:500;">
+          ${s.totalContainers || 0} containers &middot;
+          ${s.totalSections || 0} sections &middot;
+          ${s.totalPhrases || 0} phrases
+        </span>
+      </div>
+      ${_covBar('tradeTerms filled',        cv.tradeTermsFilledPct  || 0)}
+      ${_covBar('phraseCore filled',        cv.phraseCoreFilledPct  || 0)}
+      ${_covBar('phraseCore embedded',      cv.phraseCoreEmbeddedPct|| 0)}
+      ${_covBar('anchorWords on phrases',   cv.anchorWordsFilledPct || 0)}
+      ${_covBar('noAnchor on meta-containers', noAnchorPct, noAnchorRaw)}
+    </div>`;
+  document.getElementById('healthCoverage').innerHTML = html;
+}
+
+// ── Platform checks ──────────────────────────────────────────────────────────
+function _renderHealthPlatform() {
+  const p      = G.health.platform || {};
+  const checks = p.checks || [];
+
+  if (checks.length === 0) {
+    document.getElementById('healthPlatform').innerHTML = `
+      <div class="platform-panel clean">
+        <div class="platform-title" style="color:#065f46;">
+          \u2713 Platform (GlobalShare) &mdash; clean
+        </div>
+        <div style="font-size:12px;color:#047857;">
+          ${p.cuePatternCount || 0} cue patterns &middot;
+          ${(p.tradeVocabKeys || []).length} trade vocabulary key${(p.tradeVocabKeys || []).length === 1 ? '' : 's'}
+          (${(p.tradeVocabKeys || []).join(', ') || '—'})
+        </div>
+      </div>`;
+    return;
+  }
+
+  let html = '<div class="platform-panel">';
+  html += `<div class="platform-title" style="color:#991b1b;">Platform (GlobalShare) &mdash; ${checks.length} issue${checks.length === 1 ? '' : 's'}</div>`;
+  for (const chk of checks) {
+    html += `<div class="chk-row">`;
+    html += `<span class="chk-sev ${chk.severity}">${chk.severity}</span>`;
+    html += `<div class="chk-msg"><span class="chk-id">${_esc(chk.id)}</span>${_esc(chk.message)}</div>`;
+    html += `</div>`;
+  }
+  html += `<div style="margin-top:10px;font-size:11.5px;color:var(--text-muted);">`;
+  html += `${p.cuePatternCount || 0} cue patterns &middot; vocab keys: ${(p.tradeVocabKeys || []).join(', ') || '—'}`;
+  html += `</div>`;
+  html += '</div>';
+  document.getElementById('healthPlatform').innerHTML = html;
+}
+
+// ── Container cards ──────────────────────────────────────────────────────────
+function _renderHealthContainers() {
+  const containers = G.health.containers || [];
+  const el = document.getElementById('healthContainers');
+
+  if (containers.length === 0) {
+    el.innerHTML = `
+      <div class="state-empty">
+        <span class="icon">&#10003;</span>
+        <h2>No containers configured</h2>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+  containers.forEach((c, idx) => {
+    const counts = { CRITICAL: 0, HIGH: 0, MED: 0, LOW: 0, INFO: 0 };
+    for (const chk of (c.checks || [])) counts[chk.severity] = (counts[chk.severity] || 0) + 1;
+
+    let topSev = 'clean';
+    if (counts.CRITICAL) topSev = 'critical';
+    else if (counts.HIGH) topSev = 'high';
+    else if (counts.MED)  topSev = 'med';
+    else if (counts.LOW)  topSev = 'low';
+    else if (counts.INFO) topSev = 'info';
+
+    html += `<div class="kc-card sev-${topSev}">`;
+
+    // Head
+    html += `<div class="kc-card-head" onclick="toggleKcCard(${idx})">`;
+    html += `<div style="flex:1;">`;
+    html += `<div class="kc-card-title">${_esc(c.title || '(untitled)')}</div>`;
+    html += `<div class="kc-card-meta">`;
+    html += `${c.sectionCount || 0} sections &middot; ${c.activeSectionCount || 0} active`;
+    if (c.kcId) html += ` &middot; <code style="font-size:10.5px;">${_esc(c.kcId)}</code>`;
+    html += `</div>`;
+    html += `</div>`;
+
+    html += `<div class="kc-badges">`;
+    if (c.isMeta)              html += `<span class="kc-badge meta">Meta</span>`;
+    if (c.noAnchor)            html += `<span class="kc-badge noanchor">noAnchor</span>`;
+    if (c.tradeVocabularyKey)  html += `<span class="kc-badge vocab">${_esc(c.tradeVocabularyKey)}</span>`;
+    if (!c.isActive)           html += `<span class="kc-badge inactive">Inactive</span>`;
+    if (counts.CRITICAL) html += `<span class="kc-badge count-crit">${counts.CRITICAL} crit</span>`;
+    if (counts.HIGH)     html += `<span class="kc-badge count-high">${counts.HIGH} high</span>`;
+    if (counts.MED)      html += `<span class="kc-badge count-med">${counts.MED} med</span>`;
+    if (counts.LOW)      html += `<span class="kc-badge count-low">${counts.LOW} low</span>`;
+    html += `</div>`;
+    html += `</div>`; // kc-card-head
+
+    // Body — open by default if CRITICAL/HIGH
+    const openCls = (counts.CRITICAL || counts.HIGH) ? ' open' : '';
+    html += `<div class="kc-card-body${openCls}" id="kcBody-${idx}">`;
+
+    if (!c.checks || c.checks.length === 0) {
+      html += `<div class="kc-clean">\u2713 All checks passed</div>`;
+    } else {
+      // Sort checks by severity rank
+      const SEV_RANK = { CRITICAL: 4, HIGH: 3, MED: 2, LOW: 1, INFO: 0 };
+      const sorted = [...c.checks].sort((a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0));
+      for (const chk of sorted) {
+        html += `<div class="chk-row">`;
+        html += `<span class="chk-sev ${chk.severity}">${chk.severity}</span>`;
+        html += `<div class="chk-msg"><span class="chk-id">${_esc(chk.id)}</span>${_esc(chk.message)}</div>`;
+        html += `</div>`;
+      }
+    }
+
+    html += `</div>`; // kc-card-body
+    html += `</div>`; // kc-card
+  });
+
+  el.innerHTML = html;
+}
+
+function toggleKcCard(idx) {
+  const body = document.getElementById(`kcBody-${idx}`);
+  if (body) body.classList.toggle('open');
 }
