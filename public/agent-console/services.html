@@ -1888,6 +1888,9 @@
     <button class="tb-action" onclick="openTodo()" title="KC gap audit — see what callers asked that KC couldn't answer">
       <span class="tb-icon">📋</span> Gaps
     </button>
+    <button class="tb-action" id="btnBulkRescoreAll" onclick="_bulkRescoreAllContainers()" title="Loop EVERY active section of EVERY container and run Re-score. Populates phraseCore, phraseCoreEmbedding, anchorWords, auto-fills tradeTerms. Enterprise-grade operation — can take several minutes.">
+      <span class="tb-icon">↻</span> Re-score ALL
+    </button>
     <div class="toolbar-spacer"></div>
     <span class="toolbar-result-count" id="resultCount"></span>
   </div>
@@ -1895,6 +1898,194 @@
 
 <!-- ── Improvement banner (populated by loadCardAnalytics) ────────────────── -->
 <div id="improvementBanner"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     Bulk Re-score ALL Containers — Progress Overlay
+     Enterprise-grade bulk op: loops every active section in every container,
+     runs the same /phrase-score call as the per-section Re-score button.
+     Populates phraseCore + phraseCoreEmbedding + anchorWords + auto-fills
+     tradeTerms (when the container has a tradeVocabularyKey).
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div id="bulkRescoreOverlay" class="brs-overlay" style="display:none;" aria-hidden="true">
+  <div class="brs-modal" role="dialog" aria-labelledby="brsTitle">
+    <div class="brs-header">
+      <span class="brs-icon">↻</span>
+      <div class="brs-title" id="brsTitle">Re-score ALL Containers</div>
+      <button type="button" class="brs-close" id="brsCloseBtn" onclick="_brsClose()" title="Close">✕</button>
+    </div>
+
+    <!-- Pre-flight confirm pane -->
+    <div class="brs-pane" id="brsPaneConfirm">
+      <div class="brs-confirm-body">
+        <div class="brs-warn-icon">⚠️</div>
+        <div class="brs-confirm-text">
+          <div class="brs-confirm-title">Full platform re-score</div>
+          <div class="brs-confirm-detail" id="brsPlanSummary">Counting sections…</div>
+          <ul class="brs-confirm-list">
+            <li>Populates <strong>phraseCore</strong>, <strong>phraseCoreEmbedding</strong>, <strong>anchorWords</strong> on every active section</li>
+            <li>Auto-fills <strong>tradeTerms</strong> on sections whose container has a trade vocabulary</li>
+            <li>Safe to re-run — existing admin overrides are preserved</li>
+            <li>Runs sequentially to avoid hammering the embedding service</li>
+            <li>Can take <strong>several minutes</strong> on large companies — leave this tab open</li>
+          </ul>
+        </div>
+      </div>
+      <div class="brs-actions">
+        <button type="button" class="brs-btn brs-btn-secondary" onclick="_brsClose()">Cancel</button>
+        <button type="button" class="brs-btn brs-btn-primary" id="brsStartBtn" onclick="_brsStart()">Start Re-score</button>
+      </div>
+    </div>
+
+    <!-- Running progress pane -->
+    <div class="brs-pane" id="brsPaneRunning" style="display:none;">
+      <div class="brs-progress-head">
+        <div class="brs-progress-label" id="brsCurrentLabel">Preparing…</div>
+        <div class="brs-progress-count" id="brsProgressCount">0 / 0</div>
+      </div>
+      <div class="brs-progress-bar-outer">
+        <div class="brs-progress-bar-inner" id="brsProgressBar" style="width:0%;"></div>
+      </div>
+      <div class="brs-stats-row">
+        <div class="brs-stat"><span class="brs-stat-num" id="brsStatContainers">0/0</span><span class="brs-stat-lbl">Containers</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="brsStatScored">0</span><span class="brs-stat-lbl">Scored</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="brsStatSkipped">0</span><span class="brs-stat-lbl">Skipped</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="brsStatFailed">0</span><span class="brs-stat-lbl">Failed</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="brsStatElapsed">0s</span><span class="brs-stat-lbl">Elapsed</span></div>
+      </div>
+      <div class="brs-log" id="brsLog"></div>
+      <div class="brs-actions">
+        <button type="button" class="brs-btn brs-btn-danger" id="brsStopBtn" onclick="_brsRequestStop()">Stop</button>
+      </div>
+    </div>
+
+    <!-- Done / summary pane -->
+    <div class="brs-pane" id="brsPaneDone" style="display:none;">
+      <div class="brs-done-icon" id="brsDoneIcon">✅</div>
+      <div class="brs-done-title" id="brsDoneTitle">Re-score complete</div>
+      <div class="brs-done-detail" id="brsDoneDetail"></div>
+      <div class="brs-actions">
+        <button type="button" class="brs-btn brs-btn-primary" onclick="_brsCloseAndReload()">Reload containers</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Bulk Re-score overlay — enterprise-polished */
+.brs-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.brs-modal {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+  width: 100%; max-width: 640px;
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.brs-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #fff;
+}
+.brs-icon { font-size: 22px; }
+.brs-title { flex: 1; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.brs-close {
+  background: rgba(255,255,255,0.18);
+  border: 0; color: #fff;
+  width: 28px; height: 28px; border-radius: 6px;
+  cursor: pointer; font-size: 14px;
+  transition: background 0.15s;
+}
+.brs-close:hover { background: rgba(255,255,255,0.3); }
+
+.brs-pane { padding: 22px; }
+
+.brs-confirm-body { display: flex; gap: 16px; align-items: flex-start; }
+.brs-warn-icon { font-size: 32px; }
+.brs-confirm-text { flex: 1; }
+.brs-confirm-title { font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
+.brs-confirm-detail { color: #475569; font-size: 13px; margin-bottom: 10px; }
+.brs-confirm-list { margin: 8px 0 0 0; padding-left: 18px; font-size: 13px; color: #475569; line-height: 1.6; }
+.brs-confirm-list strong { color: #1e293b; }
+
+.brs-progress-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.brs-progress-label { font-size: 13px; font-weight: 500; color: #1e293b; }
+.brs-progress-count { font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; }
+
+.brs-progress-bar-outer {
+  height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-bottom: 16px;
+}
+.brs-progress-bar-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1 0%, #4f46e5 100%);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.brs-stats-row {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 8px; margin-bottom: 16px;
+}
+.brs-stat {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+.brs-stat-num {
+  display: block; font-size: 15px; font-weight: 600;
+  color: #1e293b; font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+.brs-stat-lbl { display: block; font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.brs-log {
+  background: #0f172a; color: #cbd5e1;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  font-size: 11px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  height: 140px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.brs-log .brs-log-line { white-space: pre-wrap; }
+.brs-log .brs-log-ok   { color: #86efac; }
+.brs-log .brs-log-skip { color: #fbbf24; }
+.brs-log .brs-log-err  { color: #fca5a5; }
+.brs-log .brs-log-hdr  { color: #a5b4fc; font-weight: 600; margin-top: 4px; }
+
+.brs-done-icon { font-size: 48px; text-align: center; margin-bottom: 8px; }
+.brs-done-title { font-size: 18px; font-weight: 600; text-align: center; color: #1e293b; margin-bottom: 6px; }
+.brs-done-detail { color: #475569; font-size: 13px; text-align: center; margin-bottom: 16px; line-height: 1.6; }
+
+.brs-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.brs-btn {
+  padding: 9px 16px;
+  border-radius: 6px;
+  font-size: 13px; font-weight: 500;
+  border: 0; cursor: pointer;
+  transition: all 0.15s;
+}
+.brs-btn-primary   { background: #4f46e5; color: #fff; }
+.brs-btn-primary:hover:not(:disabled) { background: #4338ca; }
+.brs-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.brs-btn-secondary { background: #f1f5f9; color: #334155; }
+.brs-btn-secondary:hover { background: #e2e8f0; }
+.brs-btn-danger    { background: #dc2626; color: #fff; }
+.brs-btn-danger:hover:not(:disabled) { background: #b91c1c; }
+.brs-btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
 
 <!-- ── Container cards ────────────────────────────────────────────────────── -->
 <div class="cards-grid" id="cardsGrid">
@@ -3408,6 +3599,297 @@ function openAgentLab() {
 
 function openTodo() {
   window.location.href = `/agent-console/todo.html?companyId=${S.companyId}`;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// BULK RE-SCORE ALL CONTAINERS — Platform-level orchestrator
+//
+// Loops every active section of every container and calls the existing
+// per-section /phrase-score endpoint. No backend changes required — the
+// scoring endpoint already persists phraseCore, phraseCoreEmbedding,
+// contentCore, contentEmbedding, and auto-fills tradeTerms when the
+// container has a tradeVocabularyKey (Phase 5b AUTO_TRADETERMS_FILLED).
+//
+// Anchor word auto-population happens in save paths during normal operation.
+// This orchestrator only drives the phrase-score scoring flow — it does NOT
+// modify sections, phrases, or anchor words directly.
+//
+// Design:
+//   • Sequential — avoids hammering the embedding service (OpenAI quota)
+//   • Per-section fire-and-forget persist happens server-side
+//   • 3-consecutive-failure circuit breaker aborts the run
+//   • User can Stop the run at any time (resumable — just click again)
+//   • Safe to re-run: existing scores / tradeTerms overrides are preserved
+//   • Pure client-side: uses only the existing /phrase-score endpoint
+// ═════════════════════════════════════════════════════════════════════════════
+
+const _BRS = {
+  running:      false,
+  stopRequested: false,
+  plan:         [],      // [{ containerId, containerTitle, sectionIndex, sectionLabel, phrases: [] }]
+  containerSet: new Set(),
+  startedAt:    0,
+  tickHandle:   null,
+  done:         0,
+  scored:       0,
+  skipped:      0,
+  failed:       0,
+  consecutiveFails: 0,
+  containersSeen: new Set(),
+};
+
+/** Entry point — called by the "Re-score ALL" toolbar button. */
+function _bulkRescoreAllContainers() {
+  if (_BRS.running) { _brsShow(); return; }          // already running — just show overlay
+  if (!S.containers?.length) {
+    _toast('No containers loaded yet — try again in a moment.', 'error');
+    return;
+  }
+
+  // Build work plan from the currently loaded containers
+  const plan = [];
+  const containerSet = new Set();
+  let totalPhrases = 0;
+  for (const c of S.containers) {
+    if (c.isActive === false) continue;
+    const sections = c.sections || [];
+    for (let i = 0; i < sections.length; i++) {
+      const s = sections[i];
+      if (s.isActive === false) continue;
+      const phrases = (s.callerPhrases || [])
+        .map(p => (typeof p === 'string' ? p : (p?.text || '')))
+        .map(t => `${t}`.trim())
+        .filter(Boolean);
+      if (!phrases.length) continue;                 // skip empty phrase sections
+      plan.push({
+        containerId:    c._id,
+        containerTitle: c.title || '(untitled)',
+        sectionIndex:   i,
+        sectionLabel:   s.label || `Section ${i + 1}`,
+        phrases,
+      });
+      containerSet.add(c._id);
+      totalPhrases += phrases.length;
+    }
+  }
+
+  if (!plan.length) {
+    _toast('No active sections with phrases found to re-score.', 'info');
+    return;
+  }
+
+  _BRS.plan         = plan;
+  _BRS.containerSet = containerSet;
+
+  // Populate confirm pane
+  const summary = document.getElementById('brsPlanSummary');
+  if (summary) {
+    summary.innerHTML =
+      `You are about to re-score <strong>${plan.length}</strong> section${plan.length !== 1 ? 's' : ''} ` +
+      `across <strong>${containerSet.size}</strong> container${containerSet.size !== 1 ? 's' : ''} ` +
+      `(<strong>${totalPhrases.toLocaleString()}</strong> phrase${totalPhrases !== 1 ? 's' : ''} total).`;
+  }
+  _brsShowPane('confirm');
+  _brsShow();
+}
+
+function _brsShow() {
+  const o = document.getElementById('bulkRescoreOverlay');
+  if (o) { o.style.display = 'flex'; o.setAttribute('aria-hidden', 'false'); }
+}
+
+function _brsClose() {
+  if (_BRS.running) {
+    if (!confirm('A re-score is running. Close anyway? The operation will continue in the background until you stop it.')) return;
+  }
+  const o = document.getElementById('bulkRescoreOverlay');
+  if (o) { o.style.display = 'none'; o.setAttribute('aria-hidden', 'true'); }
+}
+
+function _brsCloseAndReload() {
+  _brsClose();
+  loadContainers();
+  loadCardAnalytics();
+}
+
+function _brsShowPane(which) {
+  ['Confirm', 'Running', 'Done'].forEach(k => {
+    const el = document.getElementById(`brsPane${k}`);
+    if (el) el.style.display = (k.toLowerCase() === which.toLowerCase()) ? 'block' : 'none';
+  });
+}
+
+function _brsRequestStop() {
+  if (!_BRS.running) return;
+  _BRS.stopRequested = true;
+  const btn = document.getElementById('brsStopBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Stopping…'; }
+  _brsLogLine('⏸ Stop requested — will halt after current section…', 'skip');
+}
+
+function _brsLogLine(text, kind = '') {
+  const log = document.getElementById('brsLog');
+  if (!log) return;
+  const div = document.createElement('div');
+  div.className = 'brs-log-line' + (kind ? ` brs-log-${kind}` : '');
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  // Cap log to ~400 lines to prevent DOM bloat on massive runs
+  while (log.children.length > 400) log.removeChild(log.firstChild);
+}
+
+function _brsTick() {
+  if (!_BRS.startedAt) return;
+  const s = Math.floor((Date.now() - _BRS.startedAt) / 1000);
+  const el = document.getElementById('brsStatElapsed');
+  if (el) el.textContent = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+function _brsUpdateStats() {
+  const total = _BRS.plan.length;
+  const pct = total ? Math.floor((_BRS.done / total) * 100) : 0;
+  const pbar = document.getElementById('brsProgressBar');
+  if (pbar) pbar.style.width = `${pct}%`;
+  const pc = document.getElementById('brsProgressCount');
+  if (pc) pc.textContent = `${_BRS.done} / ${total}`;
+  const sc = document.getElementById('brsStatContainers');
+  if (sc) sc.textContent = `${_BRS.containersSeen.size}/${_BRS.containerSet.size}`;
+  const ss = document.getElementById('brsStatScored');
+  if (ss) ss.textContent = _BRS.scored;
+  const sk = document.getElementById('brsStatSkipped');
+  if (sk) sk.textContent = _BRS.skipped;
+  const sf = document.getElementById('brsStatFailed');
+  if (sf) sf.textContent = _BRS.failed;
+}
+
+async function _brsStart() {
+  if (_BRS.running) return;
+  _BRS.running          = true;
+  _BRS.stopRequested    = false;
+  _BRS.done             = 0;
+  _BRS.scored           = 0;
+  _BRS.skipped          = 0;
+  _BRS.failed           = 0;
+  _BRS.consecutiveFails = 0;
+  _BRS.containersSeen   = new Set();
+  _BRS.startedAt        = Date.now();
+  _BRS.tickHandle       = setInterval(_brsTick, 1000);
+
+  // Disable toolbar button so people can't double-click to run a second pass
+  const tbBtn = document.getElementById('btnBulkRescoreAll');
+  if (tbBtn) tbBtn.disabled = true;
+
+  // Reset log
+  const log = document.getElementById('brsLog');
+  if (log) log.innerHTML = '';
+
+  _brsShowPane('running');
+  _brsUpdateStats();
+  _brsLogLine(`▶ Starting re-score — ${_BRS.plan.length} sections across ${_BRS.containerSet.size} containers`, 'hdr');
+
+  let lastContainerId = null;
+  let abortedReason   = null;
+
+  for (const task of _BRS.plan) {
+    if (_BRS.stopRequested) { abortedReason = 'stopped_by_user'; break; }
+
+    if (task.containerId !== lastContainerId) {
+      lastContainerId = task.containerId;
+      _BRS.containersSeen.add(task.containerId);
+      _brsLogLine(`\n▸ ${task.containerTitle}`, 'hdr');
+    }
+
+    const curLbl = document.getElementById('brsCurrentLabel');
+    if (curLbl) curLbl.textContent = `${task.containerTitle} — ${task.sectionLabel}`;
+
+    try {
+      const resp = await apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/phrase-score`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            containerId:  task.containerId,
+            sectionIndex: task.sectionIndex,
+            phrases:      task.phrases,
+          }),
+        }
+      );
+
+      if (resp && resp.success) {
+        _BRS.scored++;
+        _BRS.consecutiveFails = 0;
+        _brsLogLine(`  ✓ ${task.sectionLabel} — ${task.phrases.length} phrase${task.phrases.length !== 1 ? 's' : ''} scored`, 'ok');
+      } else {
+        _BRS.failed++;
+        _BRS.consecutiveFails++;
+        _brsLogLine(`  ✗ ${task.sectionLabel} — ${resp?.error || 'unknown error'}`, 'err');
+      }
+    } catch (err) {
+      _BRS.failed++;
+      _BRS.consecutiveFails++;
+      _brsLogLine(`  ✗ ${task.sectionLabel} — ${err?.message || err}`, 'err');
+    }
+
+    _BRS.done++;
+    _brsUpdateStats();
+
+    // 3-consecutive-failure circuit breaker
+    if (_BRS.consecutiveFails >= 3) {
+      abortedReason = 'circuit_breaker';
+      _brsLogLine(`\n⛔ Aborted — 3 consecutive failures. Server may be unreachable or rate-limited.`, 'err');
+      break;
+    }
+
+    // Tiny yield so the browser can paint + stay responsive
+    await new Promise(r => setTimeout(r, 15));
+  }
+
+  // Mark any remaining tasks as skipped if aborted
+  if (abortedReason) {
+    const remaining = _BRS.plan.length - _BRS.done;
+    if (remaining > 0) _BRS.skipped += remaining;
+  }
+  _brsUpdateStats();
+
+  clearInterval(_BRS.tickHandle);
+  _BRS.tickHandle = null;
+  _BRS.running    = false;
+  if (tbBtn) tbBtn.disabled = false;
+
+  // Build summary
+  const elapsedSec = Math.floor((Date.now() - _BRS.startedAt) / 1000);
+  const elapsedTxt = elapsedSec < 60 ? `${elapsedSec}s` : `${Math.floor(elapsedSec/60)}m ${elapsedSec%60}s`;
+
+  const iconEl  = document.getElementById('brsDoneIcon');
+  const titleEl = document.getElementById('brsDoneTitle');
+  const detailEl = document.getElementById('brsDoneDetail');
+
+  if (abortedReason === 'circuit_breaker') {
+    if (iconEl)  iconEl.textContent  = '⛔';
+    if (titleEl) titleEl.textContent = 'Stopped — server unreachable';
+  } else if (abortedReason === 'stopped_by_user') {
+    if (iconEl)  iconEl.textContent  = '⏸';
+    if (titleEl) titleEl.textContent = 'Stopped by user';
+  } else if (_BRS.failed > 0) {
+    if (iconEl)  iconEl.textContent  = '⚠️';
+    if (titleEl) titleEl.textContent = 'Completed with errors';
+  } else {
+    if (iconEl)  iconEl.textContent  = '✅';
+    if (titleEl) titleEl.textContent = 'Re-score complete';
+  }
+
+  if (detailEl) {
+    detailEl.innerHTML =
+      `<strong>${_BRS.scored}</strong> scored · ` +
+      `<strong>${_BRS.skipped}</strong> skipped · ` +
+      `<strong>${_BRS.failed}</strong> failed<br>` +
+      `${_BRS.containersSeen.size} / ${_BRS.containerSet.size} containers touched · ${elapsedTxt} elapsed<br>` +
+      `<span style="font-size:12px;color:#64748b;">Open Config Health on the Gaps page to verify phraseCoreEmbedded coverage.</span>`;
+  }
+
+  _brsShowPane('done');
 }
 
 async function optimizePriorities() {
